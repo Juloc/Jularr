@@ -29,6 +29,18 @@ Migration never keeps a legacy source model as a second long-term authority.
 
 Migration is also the owning Admin surface for **external-manager coexistence and handover state** when a supported adapter remains connected after the initial import. This must not create a second canonical media/acquisition model.
 
+## Backup / Restore boundary
+
+Migration and Backup/Restore are separate Admin owners.
+
+Route source material as follows:
+- a recognized current/versioned Jularr backup archive -> **Backup & Restore**;
+- a legacy `AcquisitionBackupBundle` -> **Backup & Restore** legacy Acquisition-only restore/import flow;
+- an old Jularr database/configuration/layout that is not a supported backup archive -> **Migration Center**;
+- Sonarr/Radarr/Readarr/Plex/Jellyfin/Emby/folder/JSON/CSV source migration -> **Migration Center**.
+
+Migration adapters may be reused internally by restore/version-upgrade code, but the UI must not offer the same artifact as two competing import/restore workflows.
+
 ## Current Sonarr implementation on dev
 
 The existing Sonarr integration already has production-relevant safety behavior that must be preserved while Migration Center is generalized:

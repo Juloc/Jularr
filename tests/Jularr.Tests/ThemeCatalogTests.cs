@@ -8,10 +8,10 @@ namespace Jularr.Tests;
 public sealed class ThemeCatalogTests
 {
     [TestMethod]
-    public void BuiltInCatalogHasOneOriginalAndFourCleanThemes()
+    public void BuiltInCatalogHasOriginalAndCleanPurpleOnly()
     {
         CollectionAssert.AreEqual(
-            new[] { ThemeCatalog.Original, ThemeCatalog.CleanPurple, ThemeCatalog.CleanSummit, ThemeCatalog.CleanOrbit, ThemeCatalog.CleanHorizon },
+            new[] { ThemeCatalog.Original, ThemeCatalog.CleanPurple },
             ThemeCatalog.All.Select(theme => theme.Id).ToArray());
         Assert.IsTrue(ThemeCatalog.All.Single(theme => theme.Id == ThemeCatalog.Original).UsesOriginalArtwork);
         Assert.IsTrue(ThemeCatalog.All.Where(theme => theme.Id != ThemeCatalog.Original).All(theme => !theme.UsesOriginalArtwork));
@@ -25,7 +25,10 @@ public sealed class ThemeCatalogTests
     }
 
     [TestMethod]
-    [DataRow(" CLEAN-ORBIT ", ThemeCatalog.CleanOrbit)]
+    [DataRow(" CLEAN-PURPLE ", ThemeCatalog.CleanPurple)]
+    [DataRow("clean-summit", ThemeCatalog.Original)]
+    [DataRow("clean-orbit", ThemeCatalog.Original)]
+    [DataRow("clean-horizon", ThemeCatalog.Original)]
     [DataRow("not-a-theme", ThemeCatalog.Original)]
     [DataRow(null, ThemeCatalog.Original)]
     public void ThemeIdsAreNormalizedToTheVettedCatalog(string? input, string expected)
@@ -50,15 +53,15 @@ public sealed class ThemeCatalogTests
             Assert.AreEqual(InstanceAppearanceSettings.Default, await instanceStore.LoadAsync(CancellationToken.None));
 
             var saved = await instanceStore.SaveAsync(
-                new InstanceAppearanceSettings(ThemeCatalog.CleanOrbit, false, false),
+                new InstanceAppearanceSettings(ThemeCatalog.CleanPurple, false, false),
                 CancellationToken.None);
-            Assert.AreEqual(new InstanceAppearanceSettings(ThemeCatalog.CleanOrbit, false, false), saved);
+            Assert.AreEqual(new InstanceAppearanceSettings(ThemeCatalog.CleanPurple, false, false), saved);
             Assert.AreEqual(saved, await instanceStore.LoadAsync(CancellationToken.None));
 
             var profileStore = new ProfileAppearanceStore(db);
-            await profileStore.SetThemeIdAsync("alice", ThemeCatalog.CleanHorizon, CancellationToken.None);
+            await profileStore.SetThemeIdAsync("alice", ThemeCatalog.CleanPurple, CancellationToken.None);
             await profileStore.SetAccentAsync("alice", "#2C55A8", CancellationToken.None);
-            Assert.AreEqual(ThemeCatalog.CleanHorizon, (await profileStore.GetAsync("alice", CancellationToken.None)).ThemeId);
+            Assert.AreEqual(ThemeCatalog.CleanPurple, (await profileStore.GetAsync("alice", CancellationToken.None)).ThemeId);
 
             await profileStore.SetThemeIdAsync("alice", null, CancellationToken.None);
             Assert.IsNull((await profileStore.GetAsync("alice", CancellationToken.None)).ThemeId);

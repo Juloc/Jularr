@@ -1,27 +1,39 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Jularr.Web.Features.Library;
 
 public enum MediaAnalysisStatus
 {
-    // The last attempt could not run ffprobe (missing tool, timeout); retried by the next
-    // reconciliation or use once MediaInventoryService.PendingRetryDelay has passed.
     Pending = 0,
     Succeeded = 1,
-    // ffprobe rejected the file; kept until the source identity or probe version changes.
     Failed = 2
 }
 
-public enum MediaStreamKind
+/// <summary>
+/// Canonical embedded stream kind. Audio/Subtitle retain their historical numeric values so the
+/// in-place MediaAnalysisStream -> MediaTrack migration preserves existing rows exactly.
+/// </summary>
+public enum MediaTrackKind
 {
     Audio = 0,
-    Subtitle = 1
+    Subtitle = 1,
+    Video = 2
 }
 
-// Canonical technical analysis of one MediaFile. The Source* columns record which version of the
-// file (size, mtime, bounded content fingerprint) the analysis describes; the MediaFile row keeps
-// the scanner-observed identity. A mismatch or a ProbeVersion change makes the analysis stale.
-public sealed class MediaAnalysis
+/// <summary>Canonical technical analysis of one physical StoredFile.</summary>
+public sealed class MediaTechnicalAnalysis
 {
+    // The compatibility property name stays mapped while the database column is renamed to StoredFileId.
+    // Existing callers therefore keep compiling while the persisted relation is canonical.
     public Guid MediaFileId { get; set; }
+
+    [NotMapped]
+    public Guid StoredFileId
+    {
+        get => MediaFileId;
+        set => MediaFileId = value;
+    }
+
     public MediaAnalysisStatus Status { get; set; }
     public int ProbeVersion { get; set; }
     public long SourceSizeBytes { get; set; }
@@ -40,11 +52,20 @@ public sealed class MediaAnalysis
     public string? DynamicRange { get; set; }
 }
 
-public sealed class MediaAnalysisStream
+/// <summary>Canonical embedded video/audio/subtitle stream of a StoredFile.</summary>
+public sealed class MediaTrack
 {
     public Guid MediaFileId { get; set; }
+
+    [NotMapped]
+    public Guid StoredFileId
+    {
+        get => MediaFileId;
+        set => MediaFileId = value;
+    }
+
     public int StreamIndex { get; set; }
-    public MediaStreamKind Kind { get; set; }
+    public MediaTrackKind Kind { get; set; }
     public string? Codec { get; set; }
     public string? Language { get; set; }
     public string? Title { get; set; }
@@ -61,11 +82,12 @@ public sealed record MediaVideoInfo(
     int? Height,
     string? PixelFormat,
     int? BitDepth,
-    string? DynamicRange);
+    string? DynamicRange,
+    int? StreamIndex = null);
 
 public sealed record MediaStreamInfo(
     int Index,
-    MediaStreamKind Kind,
+    MediaTrackKind Kind,
     string? Codec,
     string? Language,
     string? Title,
@@ -74,9 +96,8 @@ public sealed record MediaStreamInfo(
     bool IsDefault,
     bool IsForced)
 {
-    // Text (and styled ASS) subtitles can be extracted as cues; see SubtitleFormats.
     public bool IsText =>
-        Kind == MediaStreamKind.Subtitle &&
+        Kind == MediaTrackKind.Subtitle &&
         Jularr.Web.Features.Subtitles.SubtitleFormats.IsText(Codec);
 }
 
@@ -87,20 +108,22 @@ public sealed record MediaTechnicalInfo(
     IReadOnlyList<MediaStreamInfo> Streams)
 {
     public IReadOnlyList<MediaStreamInfo> AudioStreams =>
-        [.. Streams.Where(x => x.Kind == MediaStreamKind.Audio)];
+        [.. Streams.Where(x => x.Kind == MediaTrackKind.Audio)];
 
     public IReadOnlyList<MediaStreamInfo> SubtitleStreams =>
-        [.. Streams.Where(x => x.Kind == MediaStreamKind.Subtitle)];
+        [.. Streams.Where(x => x.Kind == MediaTrackKind.Subtitle)];
 }
 
-// Technical is set only for Succeeded analyses.
 public sealed record MediaInventoryEntry(
     Guid MediaFileId,
     MediaAnalysisStatus Status,
     int ProbeVersion,
     DateTime AnalyzedAt,
     string? Diagnostic,
-    MediaTechnicalInfo? Technical);
+    MediaTechnicalInfo? Technical)
+{
+    public Guid StoredFileId => MediaFileId;
+}
 
 public sealed record MediaInventoryReconciliation(
     int Unchanged,

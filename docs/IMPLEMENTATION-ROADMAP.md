@@ -107,13 +107,22 @@ Implement against Phase 6/Job contracts:
 
 ## Phase 8 — Admin platform/configuration UI
 
-1. Storage + safe Path Browser.
-2. Provider Settings.
-3. AI Admin.
-4. Users & Permissions.
-5. System/Diagnostics.
-6. Backup/Restore.
-7. Setup Wizard for fresh instances.
+Implementation pack for navigation/route ownership:
+- `docs/implementation/admin-navigation-route-consolidation.md`
+
+Order:
+1. Admin navigation Phase A: make `UiNavigationCatalog.Admin` the single Admin navigation source without changing behavior/stores.
+2. Storage + safe Path Browser.
+3. Provider Settings.
+4. AI Admin.
+5. Users & Permissions.
+6. System/Diagnostics, then consolidate Resources/Health/Logs compatibility routes.
+7. Devices & Sessions consolidation.
+8. Backup/Restore.
+9. Setup Wizard for fresh instances.
+10. Add Migration/Notifications/General navigation only when those real routes exist.
+
+Legacy route redirects are parity-gated; do not replace a functioning page with a redirect before its canonical owner can perform the same supported work.
 
 ## Phase 9 — Controlled legacy migration
 

@@ -319,24 +319,6 @@
     --clean-tint: #f1ecff;
 }
 
-:root[data-app-theme-id="clean-summit"] {
-    --radius-card: 20px;
-    --shadow-card: 0 10px 28px rgba(49, 108, 181, .09);
-    --clean-tint: #e7f2ff;
-}
-
-:root[data-app-theme-id="clean-orbit"] {
-    --radius-card: 24px;
-    --shadow-card: 0 14px 36px rgba(36, 111, 204, .12);
-    --clean-tint: #eef0ff;
-}
-
-:root[data-app-theme-id="clean-horizon"] {
-    --radius-card: 16px;
-    --shadow-card: 0 12px 30px rgba(25, 73, 134, .14);
-    --clean-tint: #e6f2f8;
-}
-
 :root[data-app-theme-id^="clean-"][data-app-theme="dark"] {
     --shadow-card: 0 12px 32px rgba(0, 0, 0, .32);
 }

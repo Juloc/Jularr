@@ -22,6 +22,12 @@ The screen must answer:
 - What completed successfully?
 - Which concrete media/file/job is affected?
 
+## Navigation ownership
+
+Activity / To-Do is the permanent Admin operational destination. **History is its third tab**, not a second permanent sidebar destination.
+
+A compatibility/deep-link route such as `/Admin/History` may remain for large-history workflows, but it must render/use the same History contract and canonical event model.
+
 ## Primary tabs
 
 Use three primary tabs:
@@ -49,7 +55,7 @@ Use three primary tabs:
    - cancelled work
    - past import outcomes
 
-Do not create separate top-level tabs for Running, Failed, Imports and History when the same information can be expressed through Activity / To-Do / History plus filters.
+Do not create separate top-level tabs for Running, Failed or Imports when the same information can be expressed through Activity / To-Do / History plus filters.
 
 Filters may still expose states such as Running, Failed, Queued, Importing, Downloading, Completed and Cancelled.
 

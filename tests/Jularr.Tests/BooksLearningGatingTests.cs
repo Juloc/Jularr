@@ -84,6 +84,30 @@ public sealed class BooksLearningGatingTests
     }
 
     [TestMethod]
+    public async Task ReaderKeepsLanguageAffordanceWhenOnlyAnotherChapterIsTranslated()
+    {
+        // A whole-book translation can be partially complete (for example
+        // 20/50 chapters/pages). Opening one of the unfinished chapters must
+        // not make the Reader's language control disappear.
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.SeedCachedTranslationForOtherChapterAsync("de", "Bereits übersetzt.");
+
+        var reader = fixture.CreateReadModel(Profile);
+        await reader.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
+
+        Assert.IsFalse(reader.TranslationEnabled);
+        Assert.IsNull(reader.Reader.Translation, "The currently open chapter is intentionally untranslated.");
+        Assert.IsTrue(
+            reader.HasWorkTranslationLanguage,
+            "A cached target-language translation elsewhere in the book must keep the language affordance visible.");
+
+        var view = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Read.cshtml"));
+        StringAssert.Contains(view, "Model.HasWorkTranslationLanguage");
+        StringAssert.Contains(view, "disabled=\"@(!hasAlternate)\"");
+    }
+
+    [TestMethod]
     public async Task LanguageToolsAndStudyEnableTranslationByDefault()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -329,6 +353,35 @@ public sealed class BooksLearningGatingTests
             Db.NovelTranslations.Add(new NovelTranslation
             {
                 ChapterId = ChapterId,
+                TargetLanguage = BookLanguageCatalog.Normalize(targetLanguage),
+                ProviderId = $"book-v{BookCatalogService.TranslationPromptVersion}-efficient",
+                PromptVersion = BookCatalogService.TranslationPromptVersion,
+                SourceHash = chapter.SourceHash,
+                Text = text
+            });
+            await Db.SaveChangesAsync();
+            Db.ChangeTracker.Clear();
+        }
+
+        public async Task SeedCachedTranslationForOtherChapterAsync(string targetLanguage, string text)
+        {
+            var chapter = new NovelChapter
+            {
+                WorkId = WorkId,
+                VolumeId = await Db.NovelVolumes
+                    .Where(x => x.WorkId == WorkId)
+                    .Select(x => x.Id)
+                    .SingleAsync(),
+                Number = 2,
+                Title = "Chapter Two",
+                SourceUrl = "book://books-gating-test/2",
+                OriginalText = "Second chapter.",
+                SourceHash = "hash-2"
+            };
+            Db.NovelChapters.Add(chapter);
+            Db.NovelTranslations.Add(new NovelTranslation
+            {
+                ChapterId = chapter.Id,
                 TargetLanguage = BookLanguageCatalog.Normalize(targetLanguage),
                 ProviderId = $"book-v{BookCatalogService.TranslationPromptVersion}-efficient",
                 PromptVersion = BookCatalogService.TranslationPromptVersion,

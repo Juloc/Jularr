@@ -69,7 +69,7 @@ public sealed class TvLibraryService(
     }
 
     /// <summary>Upserts one episode of a series into the universal season/episode structure.</summary>
-    public async Task EnsureEpisodeAsync(
+    public async Task<WorkEpisode> EnsureEpisodeAsync(
         Guid workId,
         int seasonNumber,
         int episodeNumber,
@@ -79,7 +79,7 @@ public sealed class TvLibraryService(
         await EnsureEnabledAsync(cancellationToken);
 
         var season = await structure.AddOrUpdateSeasonAsync(workId, seasonNumber, title: null, cancellationToken);
-        await structure.AddOrUpdateEpisodeAsync(
+        return await structure.AddOrUpdateEpisodeAsync(
             workId,
             seasonNumber,
             episodeNumber,

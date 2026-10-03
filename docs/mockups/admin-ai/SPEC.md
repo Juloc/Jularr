@@ -276,6 +276,8 @@ Control who may use instance AI and which AI capabilities are available.
 
 ### Global AI switches
 
+These are AI-service policy settings, not a substitute for the canonical Instance module system. Do not expose an AI InstanceModule toggle unless a complete runtime gate actually exists.
+
 Possible instance settings:
 - AI globally enabled
 - admin-only mode
@@ -301,17 +303,24 @@ Feature list must come from registered capabilities/task contracts rather than s
 
 ### Users & groups
 
-Policy table:
-- subject type
-- user/group
-- role/policy
-- allowed features
-- limits
-- status
+Subjects, groups, roles and base authorization come from `admin-users-permissions`; Admin AI must not create a second account/group/role store.
 
-Rules can grant or restrict AI-specific capabilities for users/groups.
+The effective rule is:
 
-General account/role management stays in `admin-users-permissions`.
+`Account/Profile capability from Users & Permissions ∩ AI service policy/limits`
+
+Admin AI may expose a focused projection of the same subjects for AI-specific restrictions/limits:
+
+- subject type;
+- user/group;
+- effective AI eligibility;
+- allowed AI feature categories;
+- AI-specific limits/budget;
+- status/explanation.
+
+Base grants such as whether a role/account may use shared instance AI are owned by Users & Permissions. Admin AI may only narrow or parameterize that access through its AI-specific policy contract. Any inline editing must write the same canonical authorization/policy records rather than a disconnected permission model.
+
+General account/role membership management stays in `admin-users-permissions`.
 
 ### Limits
 
@@ -404,6 +413,12 @@ Generated artifacts may receive technical provenance tags such as:
 Tags should be informational and not visually dominant in user UI.
 
 ---
+
+## Operational-record boundary
+
+**Jobs & Nutzung** is a domain-focused projection of AI execution plus AI-specific usage/cost telemetry. It must not create a second global Activity/History job store.
+
+Canonical operational state remains shared with Activity / To-Do / History; AI may keep additional AI-specific usage/provenance records where required.
 
 ## 6. Jobs & Nutzung
 

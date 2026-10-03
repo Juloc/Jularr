@@ -80,7 +80,7 @@ Examples:
 - software/installers
 - archives
 - datasets
-- backups
+- downloaded backup/archive files that are merely generic content, **not** Jularr Backup/Restore archives
 - other uncategorized/admin-generic content
 
 Example path:
@@ -90,11 +90,20 @@ This is different from the temporary Native Download Workspace.
 
 #### Other managed roles
 Future/optional roles may include:
-- backup target
-- cache/temp
-- transcode workspace
+- backup target;
+- cache/temp;
+- transcode workspace;
+- restricted Games BIOS/Firmware storage when the Games runtime subsystem requires it.
 
 These must remain explicit roles rather than being confused with LibraryRoots.
+
+### Games BIOS/Firmware role boundary
+
+When Games needs BIOS/Firmware artifacts:
+- Storage owns the restricted managed path, capacity/availability and safe file access;
+- Games Admin owns BIOS/Firmware requirements, validation, artifact binding and runtime compatibility;
+- BIOS/Firmware is never a Games LibraryRoot and never a Generic Downloads destination;
+- Games screens reference the Storage-managed role and do not expose arbitrary host paths.
 
 ## Native downloader storage flow
 
@@ -243,7 +252,7 @@ Choose exactly one primary path role:
 - **Generic Downloads**
   - final destination for generic/unclassified downloads
 - **Other**
-  - explicit managed role such as backup/cache/transcode where supported
+  - explicit managed role such as backup/cache/transcode or restricted Games BIOS/Firmware storage where supported
 
 The role determines which settings appear in Step 3.
 

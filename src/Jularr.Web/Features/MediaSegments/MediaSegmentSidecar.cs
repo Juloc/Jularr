@@ -260,7 +260,7 @@ public sealed class MediaSegmentSidecarImporter(
             where media.LibraryRootId == rootId
             orderby media.Path
             select new MediaRow(
-                media.EpisodeId,
+                episode.Id,
                 media.Path,
                 episode.SeasonNumber,
                 episode.Number))

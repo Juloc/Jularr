@@ -31,12 +31,6 @@ public static class UiTranslationResources
         M("theme.catalog.original.description", "Jularr ink, paper and optional Sakura", "Shell", "Appearance", "Concise description of the original Jularr visual theme.", "short theme description", 54, null, ["Jularr", "Sakura"]),
         M("theme.catalog.cleanPurple.name", "Clean Purple", "Shell", "Appearance", "Name of the default clean, lilac Jularr visual theme.", "short theme name", 24),
         M("theme.catalog.cleanPurple.description", "Soft lilac surfaces with a violet accent", "Shell", "Appearance", "Concise description of the default Clean Purple visual theme.", "short theme description", 58),
-        M("theme.catalog.cleanSummit.name", "Clean Summit", "Shell", "Appearance", "Name of the clean, blue Jularr visual theme.", "short theme name", 24),
-        M("theme.catalog.cleanSummit.description", "Clear blue surfaces and compact media chrome", "Shell", "Appearance", "Concise description of the Clean Summit visual theme.", "short theme description", 58),
-        M("theme.catalog.cleanOrbit.name", "Clean Orbit", "Shell", "Appearance", "Name of the clean, layered Jularr visual theme.", "short theme name", 24),
-        M("theme.catalog.cleanOrbit.description", "Soft blue layers with restrained surfaces", "Shell", "Appearance", "Concise description of the Clean Orbit visual theme.", "short theme description", 54),
-        M("theme.catalog.cleanHorizon.name", "Clean Horizon", "Shell", "Appearance", "Name of the clean, high-contrast Jularr visual theme.", "short theme name", 24),
-        M("theme.catalog.cleanHorizon.description", "Cool blue depth with crisp controls", "Shell", "Appearance", "Concise description of the Clean Horizon visual theme.", "short theme description", 48),
         M("theme.switchAria", "Theme: {mode}. Activate to switch appearance.", "Shell", "Accessibility", "Accessible label for the three-state theme cycle button.", "concise accessible instruction", 72, new Dictionary<string, string> { ["mode"] = "Current theme mode label." }),
         M("shell.version", "Version", "Shell", "Build", "Owner-only label shown before the exact running application version.", "short metadata label", 18),
 

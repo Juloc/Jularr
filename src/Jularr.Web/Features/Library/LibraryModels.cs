@@ -38,17 +38,6 @@ public sealed class Episode
     public DateTime DiscoveredAt { get; set; } = DateTime.UtcNow;
 }
 
-public sealed class MediaFile
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid LibraryRootId { get; set; }
-    public Guid EpisodeId { get; set; }
-    public string Path { get; set; } = "";
-    public long SizeBytes { get; set; }
-    public DateTime LastWriteTimeUtc { get; set; }
-    public DateTime DiscoveredAt { get; set; } = DateTime.UtcNow;
-}
-
 public sealed class MediaOptions
 {
     public const string SectionName = "Media";

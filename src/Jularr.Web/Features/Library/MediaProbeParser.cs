@@ -42,7 +42,7 @@ public static partial class MediaProbeParser
                     // Cover art is exposed as an attached-picture video stream; it is not the programme video.
                     if (video is null && !ReadDisposition(stream, "attached_pic"))
                     {
-                        video = ParseVideo(stream);
+                        video = ParseVideo(stream, index);
                     }
                 }
                 else if (string.Equals(type, "audio", StringComparison.OrdinalIgnoreCase))
@@ -63,7 +63,7 @@ public static partial class MediaProbeParser
             [.. streams.OrderBy(x => x.Index)]);
     }
 
-    private static MediaVideoInfo ParseVideo(JsonElement stream)
+    private static MediaVideoInfo ParseVideo(JsonElement stream, int streamIndex)
     {
         var pixelFormat = ReadString(stream, "pix_fmt");
         return new MediaVideoInfo(
@@ -73,7 +73,8 @@ public static partial class MediaProbeParser
             ReadInt(stream, "height"),
             pixelFormat,
             ReadBitDepth(stream, pixelFormat),
-            ReadDynamicRange(stream));
+            ReadDynamicRange(stream),
+            streamIndex);
     }
 
     private static MediaStreamInfo ParseStream(

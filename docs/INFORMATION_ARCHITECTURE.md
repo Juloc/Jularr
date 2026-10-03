@@ -227,10 +227,33 @@ equivalent. **Exists** (reading media here, anime on Mapping Review).
 
 ## 4. Admin navigation
 
-Target groups per #510 ("Dashboard, Library, Acquisition, Wanted/Missing, Queue, Downloads,
-Metadata & Mapping, Subtitles, Media Processing, Playback & Sessions, Storage, Calendar/Releases,
-Jobs/Activity, Integrations, Users & Permissions, Settings, Diagnostics") against the current
-catalog in `src/Jularr.Web/Features/Localization/UiShellNavigation.cs`:
+The binding target Admin information architecture is `docs/UX.md` §17 plus the individual Admin screen specs.
+
+Permanent owning destinations are consolidated around:
+- Dashboard;
+- Activity / To-Do, with History as the third tab;
+- Library, Wanted and Requests;
+- Downloader;
+- Providers;
+- Acquisition Profiles;
+- Storage;
+- AI;
+- Users & Permissions;
+- Devices & Sessions;
+- Notifications;
+- Backup & Restore;
+- Migration;
+- System & Diagnostics;
+- Instance;
+- General Settings;
+- Appearance;
+- conditional Games administration when Games is available.
+
+Manual Search, Media Detail, assignment/reconciliation editors, Setup and Games editors/import-resolution are contextual flows rather than extra permanent sidebar destinations.
+
+Legacy `/Admin/Resources`, `/Admin/Health`, `/Admin/Logs`, `/Admin/Sessions`, `/Admin/Devices`, `/Admin/History`, `/Admin/Usenet`, `/Admin/Sonarr`, `/Admin/Scans` and older `/Settings/*` configuration routes are implementation migration inputs. They may redirect/deep-link into their target owner after feature parity; they do not define target ownership.
+
+The table below is therefore a **current implementation inventory against the older #510 grouping**, not the target navigation contract:
 
 | Target group | Current route | State |
 | --- | --- | --- |
@@ -242,7 +265,7 @@ catalog in `src/Jularr.Web/Features/Localization/UiShellNavigation.cs`:
 | Metadata & Mapping | `/Settings/MappingReview`, `/Settings/MappingSegments` (admin-mapping) | Exists — configurable provider roles and the anime range-mapping apply/preview/audit workflow, see §3 |
 | Subtitles | `/Admin/Subtitles`, `/Settings/Subtitles` (admin-subtitles) | Exists |
 | Media Processing | no dedicated nav entry (optimizer/trickplay/segments run as background Operations, surfaced only in `/Admin/Operations`) | Partial |
-| Playback & Sessions | **missing** — no admin sessions page exists (`Features/PlaybackSessions` has the hub/coordinator/store but no admin view) | Missing. #518 |
+| Playback & Sessions | `/Admin/Sessions`, `/Admin/Devices` | Exists as separate current surfaces; target consolidation into **Devices & Sessions** is pending. #518 |
 | Storage | `/Admin/System` (admin-system, roots/wake/health); the container-aware folder browser behind the path fields of `/Settings/Acquisition` (`Features/Storage/FolderBrowse`, #604); `/Admin/Storage` storage insights (#414: usage per root and media type from the library inventory, largest files, Jularr cache use and a previewed safe cleanup of unusable cache leftovers), linked from the `/Admin` overview and not from the shell nav catalog | Exists |
 | Calendar / Releases | consumer `/Calendar` only; no admin releases nav entry | Partial |
 | Jobs / Activity | `/Admin/Operations`, `/Admin/Scans`, `/Admin/Logs` (admin-operations, admin-scans, admin-logs) | Exists |

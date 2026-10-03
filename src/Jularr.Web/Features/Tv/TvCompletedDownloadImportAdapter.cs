@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Library;
 
 namespace Jularr.Web.Features.Tv;
 
@@ -20,7 +21,8 @@ public sealed partial class TvCompletedDownloadImportAdapter(
     MediaAcquisitionRegistry registry,
     AnimeImportSettingsStore importSettings,
     IHardLinkCreator hardLinks,
-    ILogger<TvCompletedDownloadImportAdapter> logger)
+    ILogger<TvCompletedDownloadImportAdapter> logger,
+    CanonicalMediaStorageService? canonicalStorage = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     /// <summary>Why a finished download did not become an episode; the next release is tried.</summary>
@@ -59,6 +61,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             var placer = new LibraryFilePlacer(new ImportFileTransfer(hardLinks));
 
             var imported = 0;
+            var canonicalAttachments = new List<CanonicalVideoAttachment>();
             CompletedDownloadPlacement? placement = null;
             foreach (var video in videos)
             {
@@ -69,7 +72,10 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 
                 var entry = await series.EnsureSeriesAsync(
                     meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, seriesFolder, cancellationToken);
-                await series.EnsureEpisodeAsync(entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
+                var workEpisode = await series.EnsureEpisodeAsync(
+                    entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
+                var storedVideoPath = Path.GetFullPath(video.Path);
+                var storageRootPath = Path.GetDirectoryName(storedVideoPath);
 
                 if (library is not null)
                 {
@@ -85,10 +91,22 @@ public sealed partial class TvCompletedDownloadImportAdapter(
                         placer.Place(new LibraryFilePlacement(video.Path, destination, action, allowFallback, sidecars, []));
                     }
 
+                    storedVideoPath = Path.GetFullPath(destination);
+                    storageRootPath = Path.GetFullPath(library.LibraryRoot!);
                     placement = new CompletedDownloadPlacement(seriesFolder!, mode);
                 }
 
+                canonicalAttachments.Add(new CanonicalVideoAttachment(
+                    entry.WorkId,
+                    workEpisode.Id,
+                    storedVideoPath,
+                    storageRootPath));
                 imported++;
+            }
+
+            if (canonicalStorage is not null)
+            {
+                await canonicalStorage.AttachVideosAsync(canonicalAttachments, cancellationToken);
             }
 
             await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, $"Imported {imported} episode(s).");
@@ -119,6 +137,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         }
 
         var imported = 0;
+        var canonicalAttachments = new List<CanonicalVideoAttachment>();
         foreach (var file in files)
         {
             if (!CompletedDownloadFiles.IsVideo(file.Path) || IsExcluded(file.Path, excludedFolders))
@@ -129,8 +148,19 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             var meta = ResolveMetadata(request: null, file.Path);
             var entry = await series.EnsureSeriesAsync(
                 meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, Path.GetDirectoryName(file.Path), cancellationToken);
-            await series.EnsureEpisodeAsync(entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
+            var workEpisode = await series.EnsureEpisodeAsync(
+                entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
+            canonicalAttachments.Add(new CanonicalVideoAttachment(
+                entry.WorkId,
+                workEpisode.Id,
+                file.Path,
+                inboxRoot));
             imported++;
+        }
+
+        if (canonicalStorage is not null)
+        {
+            await canonicalStorage.AttachVideosAsync(canonicalAttachments, cancellationToken);
         }
 
         return new MediaInboxImportResult(

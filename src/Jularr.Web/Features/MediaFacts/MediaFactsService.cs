@@ -75,8 +75,10 @@ public sealed class MediaFactsService(AppDbContext db)
         var embedded = await (
             from stream in db.MediaAnalysisStreams.AsNoTracking()
             join media in db.MediaFiles.AsNoTracking() on stream.MediaFileId equals media.Id
-            where episodeIds.Contains(media.EpisodeId) && stream.Language != null
-            select new { media.EpisodeId, stream.Kind, stream.Language })
+            where media.EpisodeId.HasValue &&
+                  episodeIds.Contains(media.EpisodeId.GetValueOrDefault()) &&
+                  stream.Language != null
+            select new { EpisodeId = media.EpisodeId.GetValueOrDefault(), stream.Kind, stream.Language })
             .ToListAsync(cancellationToken);
 
         var sidecar = await db.SubtitleTracks

@@ -28,7 +28,7 @@ When a download/import finishes successfully, it leaves Activity and appears in 
 
 When a job needs intervention, it moves to To-Do. After resolution/import success, its final outcome appears in History.
 
-The History tab may be embedded in the Activity / To-Do screen. A deep-linkable Admin History route may exist for large-history workflows, but it must use the same underlying event model.
+History is the third tab of the Activity / To-Do operational destination. A deep-linkable `/Admin/History` route may remain for compatibility or large-history workflows, but after shell consolidation it is **not** a separate permanent sidebar destination and must use the same underlying event model.
 
 ## Category filters
 

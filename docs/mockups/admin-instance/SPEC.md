@@ -99,7 +99,7 @@ The selected mode persists across:
 - Providers
 - AI
 - Users & Permissions
-- Activity / History
+- Activity / To-Do / History
 - Wanted / Requests / Manual Search
 - Backup / Restore
 - Migration

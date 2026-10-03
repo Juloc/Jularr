@@ -22,7 +22,7 @@
     var hasAlternate = translatedParagraphs.Count > 0;
     var canTranslate = Model.TranslationEnabled && !sourceIsTarget && !hasAlternate;
     // The language menu only exists when there is something to switch to.
-    var hasLanguageChoice = !isPdf && (hasAlternate || canTranslate || Model.CachedTranslationLanguages.Count > 0);
+    var hasLanguageChoice = !isPdf && (hasAlternate || canTranslate || Model.HasWorkTranslationLanguage || Model.CachedTranslationLanguages.Count > 0);
     var defaultView = Model.RequestedView switch
     {
         "original" => "original",
@@ -165,9 +165,9 @@
                         <span>@ui.Format("books.read.viewOriginal", ("language", sourceName))</span>
                         <partial name="_ReaderIcon" model="@("check")" />
                     </button>
-                    @if (!sourceIsTarget && (hasAlternate || canTranslate))
+                    @if (!sourceIsTarget && (hasAlternate || canTranslate || Model.HasWorkTranslationLanguage))
                     {
-                        <button type="button" role="menuitemradio" data-book-view="translated" aria-checked="false" hidden="@(!hasAlternate)">
+                        <button type="button" role="menuitemradio" data-book-view="translated" aria-checked="false" disabled="@(!hasAlternate)">
                             <span>@targetName</span>
                             <partial name="_ReaderIcon" model="@("check")" />
                         </button>

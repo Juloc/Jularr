@@ -23,7 +23,7 @@ public static class AnimeEpisodeMediaQuery
             join analysis in db.MediaAnalyses.AsNoTracking() on media.Id equals analysis.MediaFileId into analyses
             from analysis in analyses.DefaultIfEmpty()
             where episode.AnimeId == animeId
-            select new { media.EpisodeId, Duration = analysis == null ? null : analysis.DurationSeconds })
+            select new { EpisodeId = episode.Id, Duration = analysis == null ? null : analysis.DurationSeconds })
             .ToListAsync(cancellationToken);
 
         var streams = await (
@@ -31,7 +31,7 @@ public static class AnimeEpisodeMediaQuery
             join media in db.MediaFiles.AsNoTracking() on stream.MediaFileId equals media.Id
             join episode in db.Episodes.AsNoTracking() on media.EpisodeId equals episode.Id
             where episode.AnimeId == animeId && stream.Language != null
-            select new { media.EpisodeId, stream.Kind, stream.Language })
+            select new { EpisodeId = episode.Id, stream.Kind, stream.Language })
             .ToListAsync(cancellationToken);
 
         var sidecar = await (

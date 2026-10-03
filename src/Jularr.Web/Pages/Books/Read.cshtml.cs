@@ -59,6 +59,15 @@ public sealed class ReadModel(
     /// Reading them is always allowed (#369); the language menu links to them.
     /// </summary>
     public IReadOnlyList<string> CachedTranslationLanguages { get; private set; } = [];
+
+    /// <summary>
+    /// Whether this book already has at least one current cached translation in
+    /// the requested target language. This is work-level state: it keeps the
+    /// Reader language affordance stable while a whole-book translation is only
+    /// partially complete and the currently open chapter is not translated yet.
+    /// </summary>
+    public bool HasWorkTranslationLanguage { get; private set; }
+
     public string? RequestedView { get; private set; }
     public bool IsOwner => account.IsOwner;
 
@@ -136,6 +145,7 @@ public sealed class ReadModel(
                 .AsNoTracking()
                 .CountAsync(x => x.WorkId == reader.Work.Id, cancellationToken);
             CachedTranslationLanguages = await GetCachedTranslationLanguagesAsync(reader, cancellationToken);
+            HasWorkTranslationLanguage = await HasWorkTranslationLanguageAsync(reader, cancellationToken);
             ReaderDocument = ReaderDocumentDescriptor.Create(
                 reader.Work.Id,
                 ReaderContentType.Book,
@@ -643,6 +653,28 @@ public sealed class ReadModel(
             cancellationToken);
 
         return new JsonResult(new { hits });
+    }
+
+    private async Task<bool> HasWorkTranslationLanguageAsync(
+        BookReaderChapter reader,
+        CancellationToken cancellationToken)
+    {
+        if (reader.SourceLanguage.Equals(
+                reader.TargetLanguage,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return await (
+            from translation in db.NovelTranslations.AsNoTracking()
+            join chapter in db.NovelChapters.AsNoTracking()
+                on translation.ChapterId equals chapter.Id
+            where chapter.WorkId == reader.Work.Id
+                && translation.TargetLanguage == reader.TargetLanguage
+                && translation.SourceHash == chapter.SourceHash
+            select translation.Id)
+            .AnyAsync(cancellationToken);
     }
 
     private async Task<IReadOnlyList<string>> GetCachedTranslationLanguagesAsync(
