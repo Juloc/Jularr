@@ -83,3 +83,4 @@
 }
 .notification-settings-copy { min-width: 0; display: grid; gap: 2px; }
 .notification-settings-copy small { color: var(--muted); font-size: 11px; }
+.notification-settings-save { margin-top: 14px; }
