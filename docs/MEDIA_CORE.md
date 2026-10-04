@@ -109,6 +109,21 @@ In Free mode with multi-language coverage enabled, a new profile locale creates 
 
 Opening a Work never waits for a bulk backfill. Missing preferred-locale metadata renders from the best local fallback immediately and promotes/enqueues that specific `(Work, locale)` job at interactive priority.
 
+Locale resolution is deterministic and family-aware: exact locale -> parent/base language -> configured fallback (exact then parent) -> English -> original/source language -> best locally available value. Duplicate steps are skipped.
+
+The spool is operationally bounded:
+- deduplicate equivalent `(Work, locale)` jobs;
+- enforce global and per-provider concurrency/rate budgets;
+- integrate provider health/backoff;
+- remember provider language/field/artwork capabilities so known-unsupported work is not repeatedly queued;
+- cache valid negative results separately from transient failures, with bounded expiry/revalidation;
+- refresh only missing/stale data rather than refetching fresh data on normal reads;
+- preserve last-known-good data when refresh fails.
+
+When both text and artwork are missing, prioritize visible/identity-relevant localized text first, then essential poster/cover, then larger/nonessential artwork such as backdrops/banners/logos.
+
+Locales no longer required by active profile policy stop receiving bulk work but are not immediately deleted. Persisted variants enter a retention/cleanup lifecycle and are reused if the locale becomes required again before cleanup.
+
 Discovery stays outside bulk persistence:
 - remote provider candidates are locale-aware bounded cache/evidence;
 - they are not materialized into every configured locale;
