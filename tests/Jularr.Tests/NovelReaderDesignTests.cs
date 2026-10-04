@@ -374,14 +374,12 @@ public sealed class NovelReaderDesignTests
     }
 
     [TestMethod]
-    public void LanguageMenuHostsTheTranslateGemmaTrackOnlyWhenAvailable()
+    public void LanguageMenuIsAlwaysRenderedAndHostsTheTranslateSlot()
     {
         var root = FindRepositoryRoot();
         var view = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Novels", "Read.cshtml"));
 
-        StringAssert.Contains(
-            view,
-            "var hasLanguageChoice = hasTranslation || canTranslate || Model.TranslateGemmaAvailable;");
+        Assert.IsFalse(view.Contains("hasLanguageChoice", StringComparison.Ordinal));
         // The slot always exists inside the menu, so novel-translation.js adds the
         // AI / local source switch there instead of above the text.
         var menu = view.IndexOf("data-reader-menu=\"language\"", StringComparison.Ordinal);

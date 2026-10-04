@@ -80,9 +80,6 @@
             : -1;
     var supportsTts = Model.ReaderDocument.Capabilities.SupportsTts;
     var canTranslate = !hasTranslation && Model.TranslationEnabled && Model.IsOwner;
-    // The TranslateGemma track adds its source switch to the language menu only
-    // when it is configured or already cached (novel-translation.js).
-    var hasLanguageChoice = hasTranslation || canTranslate || Model.TranslateGemmaAvailable;
     // A chapter that opens with an illustration shows it as the chapter header.
     var openingImage = Model.JapaneseBlocks
         .TakeWhile(block => block.IsImage || block.IsHeading)
@@ -166,44 +163,41 @@
         </div>
 
         <div class="reader-frame-actions">
-            @if (hasLanguageChoice)
-            {
-                <div class="reader-menu-anchor">
-                    <button class="reader-frame-icon reader-frame-desktop" type="button"
-                            data-reader-menu-toggle="language"
-                            aria-haspopup="menu" aria-expanded="false" aria-controls="novel-menu-language"
-                            aria-label="@ui["reader.frame.language"]" title="@ui["reader.frame.language"]">
-                        <partial name="_ReaderIcon" model="@("translate")" />
+            <div class="reader-menu-anchor">
+                <button class="reader-frame-icon reader-frame-desktop" type="button"
+                        data-reader-menu-toggle="language"
+                        aria-haspopup="menu" aria-expanded="false" aria-controls="novel-menu-language"
+                        aria-label="@ui["reader.frame.language"]" title="@ui["reader.frame.language"]">
+                    <partial name="_ReaderIcon" model="@("translate")" />
+                </button>
+                <div class="reader-menu" id="novel-menu-language" data-reader-menu="language" role="menu" aria-label="@ui["novels.read.readingLanguageAria"]" hidden>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-reader-view="ja">
+                        <span>@ui["novels.read.japaneseAria"]</span>
+                        <partial name="_ReaderIcon" model="@("check")" />
                     </button>
-                    <div class="reader-menu" id="novel-menu-language" data-reader-menu="language" role="menu" aria-label="@ui["novels.read.readingLanguageAria"]" hidden>
-                        <button type="button" role="menuitemradio" aria-checked="false" data-reader-view="ja">
-                            <span>@ui["novels.read.japaneseAria"]</span>
-                            <partial name="_ReaderIcon" model="@("check")" />
-                        </button>
-                        <button type="button" role="menuitemradio" aria-checked="false" data-reader-view="de" hidden="@(!hasTranslation)">
-                            <span>@ui["novels.read.germanAria"]</span>
-                            <partial name="_ReaderIcon" model="@("check")" />
-                        </button>
-                        <button type="button" role="menuitemradio" aria-checked="false" data-reader-view="both" hidden="@(!hasTranslation)">
-                            <span>@ui["novels.read.japaneseAndGermanAria"]</span>
-                            <partial name="_ReaderIcon" model="@("check")" />
-                        </button>
-                        @* Generating a translation is gated behind the Learning capability;
-                           reading a cached one never is (#369). *@
-                        <div class="reader-menu-translate" data-translation-slot>
-                            @if (canTranslate)
-                            {
-                                <form method="post"
-                                      asp-page-handler="Translate"
-                                      asp-route-id="@chapter.Id"
-                                      data-translate-form>
-                                    <button class="novel-translation-state" type="submit" role="menuitem">@ui["novels.reader.translateIntoGerman"]</button>
-                                </form>
-                            }
-                        </div>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-reader-view="de" hidden="@(!hasTranslation)">
+                        <span>@ui["novels.read.germanAria"]</span>
+                        <partial name="_ReaderIcon" model="@("check")" />
+                    </button>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-reader-view="both" hidden="@(!hasTranslation)">
+                        <span>@ui["novels.read.japaneseAndGermanAria"]</span>
+                        <partial name="_ReaderIcon" model="@("check")" />
+                    </button>
+                    @* Generating a translation is gated behind the Learning capability;
+                       reading a cached one never is (#369). *@
+                    <div class="reader-menu-translate" data-translation-slot>
+                        @if (canTranslate)
+                        {
+                            <form method="post"
+                                  asp-page-handler="Translate"
+                                  asp-route-id="@chapter.Id"
+                                  data-translate-form>
+                                <button class="novel-translation-state" type="submit" role="menuitem">@ui["novels.reader.translateIntoGerman"]</button>
+                            </form>
+                        }
                     </div>
                 </div>
-            }
+            </div>
 
             <div class="reader-menu-anchor">
                 <button class="reader-frame-icon reader-frame-desktop" type="button"
@@ -631,13 +625,10 @@
                 <span class="reader-frame-glyph-inline" aria-hidden="true"></span>
                 <span>@ui["reader.frame.appearance"]</span>
             </button>
-            @if (hasLanguageChoice)
-            {
-                <button type="button" data-reader-menu-toggle="language" aria-haspopup="menu" aria-expanded="false" aria-controls="novel-menu-language">
-                    <partial name="_ReaderIcon" model="@("translate")" />
-                    <span>@ui["reader.frame.language"]</span>
-                </button>
-            }
+            <button type="button" data-reader-menu-toggle="language" aria-haspopup="menu" aria-expanded="false" aria-controls="novel-menu-language">
+                <partial name="_ReaderIcon" model="@("translate")" />
+                <span>@ui["reader.frame.language"]</span>
+            </button>
             <button type="button" data-reader-menu-toggle="more" aria-haspopup="menu" aria-expanded="false" aria-controls="novel-menu-more">
                 <partial name="_ReaderIcon" model="@("more")" />
                 <span>@ui["reader.frame.more"]</span>
