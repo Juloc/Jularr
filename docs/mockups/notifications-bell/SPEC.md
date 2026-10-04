@@ -376,23 +376,28 @@ Use the Desktop Quick View when width and input model give it enough room. At ph
 
 ## Visual contract
 
-Use Jularr Clean Light Mode as the reference.
+Use Jularr Clean Light Mode as the approved reference.
+
+The approved composition is a normal Jularr consumer screen with the global Bell opened over the existing page. The underlying page remains fully recognizable and is not replaced by a dedicated notification page or heavily dimmed modal backdrop.
 
 Binding direction:
 
-- white/near-white surface;
+- white/near-white popover surface;
 - thin neutral border;
-- restrained shadow only to establish popover elevation;
-- Jularr purple for unread/action emphasis;
-- compact typography;
-- subtle row dividers;
-- no gradients;
-- no glow;
-- no oversized cards;
+- restrained elevation shadow only to separate the floating surface from the page;
+- medium corner radius consistent with other Jularr popovers;
+- Jularr purple only for unread dots, badge and primary interactive emphasis;
+- dark navy primary text and quiet gray secondary text;
+- compact typography and dense-but-readable spacing;
+- subtle horizontal row dividers;
+- no gradients or glow inside the Quick View;
+- no card around each notification;
 - no dashboard widgets;
-- no duplicate icons/images.
+- no category chips or filters;
+- no duplicate image/icon decoration;
+- no permanent large text buttons per row.
 
-The Quick View should look like a natural shell surface, not a separate mini-application.
+The Quick View should feel like part of the shell, not a separate mini-application.
 
 ## Architecture ownership
 
@@ -430,23 +435,87 @@ The finished implementation should evolve this toward:
 
 Do not retain two competing Bell implementations during migration.
 
-## Mockup contract
+## Approved mockup composition
 
-The approved reference should be uploaded as:
+The approved reference is a single Desktop Light Mode composition.
+
+### Background context
+
+Use a normal Jularr consumer page as context, preferably Home/Dashboard or Library:
+
+- normal left navigation;
+- normal top search;
+- Bell and account controls in the shell;
+- real media content remains visible behind the Quick View.
+
+The background exists only to demonstrate placement and scale. It must not be redesigned specifically for Notifications.
+
+Do not darken or blur the whole application. The Quick View itself provides enough elevation.
+
+### Popover placement and size
+
+The Quick View:
+
+- is visibly anchored below/right of the global Bell;
+- occupies roughly the upper-right quarter to third of a 16:9 desktop screen;
+- is wide enough to show artwork/icon, two compact text lines, time and one quick action without cramped wrapping;
+- remains clearly smaller than the full Notification Center;
+- may scroll internally if more recent items exist than the bounded visible set.
+
+The approved visual target is approximately 4–6 visible items.
+
+### Header
+
+Top row:
+
+- `Benachrichtigungen` on the left;
+- compact overflow `…` on the right.
+
+No subtitle, filter tabs, search field or large unread statistic inside the popover.
+
+### Approved representative rows
+
+The reference should show a useful mix such as:
+
+1. media release with artwork and **Play** quick action;
+2. completed import with media artwork and **Open** quick action;
+3. Learning reminder with semantic Learning icon and **Start** action;
+4. approved request with semantic status icon and **Open** action;
+5. failed import with Warning icon, occurrence count such as `3×`, and **Details** action.
+
+Exact titles/artwork are illustrative; the information hierarchy and action pattern are binding.
+
+### Row geometry
+
+Each row uses:
+
+- optional unread dot at the far left;
+- one artwork **or** semantic icon;
+- title;
+- concise subject/context;
+- compact time aligned toward the right;
+- one circular/compact icon-first quick action at the far right.
+
+Descriptions may appear only when they still keep the row compact. The approved reference allows a short second explanatory line for the most important items, but Quick View rows must remain denser than full Notification Center rows.
+
+No per-row `…` is required in the approved default composition. Inbox-management actions stay in the Quick View header overflow or the full Notification Center.
+
+### Footer
+
+One full-width footer row:
+
+`Alle Benachrichtigungen →`
+
+It is visually separated from the recent list by a divider and opens the full Notification Center.
+
+No second footer action.
+
+## Mockup file
+
+Upload the approved visual reference as:
 
 `docs/mockups/notifications-bell/image.png`
 
-Expected composition:
-
-- Light Mode;
-- one Desktop Jularr screen with the Bell Quick View open and visibly anchored to the global Bell;
-- unread badge;
-- approximately 4–6 representative recent items;
-- media artwork where appropriate;
-- semantic icons for non-media events;
-- at least one Play/Read/Start/Details quick action;
-- clear `Alle Benachrichtigungen` footer;
-- no filters/dashboard widgets inside the Quick View;
-- optional small Mobile shell reference may show Bell + unread badge only, because tapping it opens the already-specified full Notification Center rather than a second Mobile Quick View.
+A separate Mobile Quick View mockup is intentionally not required. On phone-sized layouts the Bell opens the full Notification Center directly.
 
 The image is a visual reference only. This specification remains the binding behavioral contract.
