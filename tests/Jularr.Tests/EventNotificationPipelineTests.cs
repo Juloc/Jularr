@@ -124,13 +124,66 @@ public sealed class EventNotificationPipelineTests
     }
 
     [TestMethod]
-    public async Task ProfileAudienceEventWithNoProfileFallsBackToAdminsUntilPhaseFour()
+    public void ProfileEventCreationRequiresExplicitProfile()
+    {
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            JularrEvent.Create(JularrEventCategory.ImportCompleted, profileId: null));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            JularrEvent.Create(JularrEventCategory.ReleaseAvailable, profileId: "   "));
+    }
+
+    [TestMethod]
+    public void AdminEventCreationRejectsProfileId()
+    {
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            JularrEvent.Create(JularrEventCategory.StorageProblem, profileId: "reader"));
+    }
+
+    [TestMethod]
+    public async Task PublisherRejectsManuallyConstructedAudienceMismatchBeforeAuditLog()
     {
         await using var fixture = await Fixture.CreateAsync();
+        var invalid = new JularrEvent(
+            Guid.NewGuid(),
+            JularrEventCategory.ReleaseAvailable,
+            JularrEventAudience.Admin,
+            ProfileId: null,
+            MediaType: null,
+            SubjectId: null,
+            MessageParams: null,
+            JularrEventSeverity.Info,
+            DeepLink: null,
+            DedupKey: null,
+            RelatedOperationId: null,
+            DateTime.UtcNow);
 
-        await fixture.Publisher.PublishAsync(JularrEvent.Create(JularrEventCategory.ImportCompleted, profileId: null));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => fixture.Publisher.PublishAsync(invalid));
 
-        Assert.AreEqual(1, (await fixture.Notifications.ListAsync("owner", unreadOnly: false)).Count);
+        Assert.AreEqual(0, (await fixture.EventLog.ListRecentAsync(10)).Count);
+        Assert.AreEqual(0, (await fixture.Notifications.ListAsync("owner", unreadOnly: false)).Count);
+    }
+
+    [TestMethod]
+    public async Task PublisherRejectsManuallyConstructedSeverityMismatchBeforeAuditLog()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var invalid = new JularrEvent(
+            Guid.NewGuid(),
+            JularrEventCategory.ReleaseAvailable,
+            JularrEventAudience.Profile,
+            "reader",
+            MediaType: null,
+            SubjectId: null,
+            MessageParams: null,
+            JularrEventSeverity.Critical,
+            DeepLink: null,
+            DedupKey: null,
+            RelatedOperationId: null,
+            DateTime.UtcNow);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => fixture.Publisher.PublishAsync(invalid));
+
+        Assert.AreEqual(0, (await fixture.EventLog.ListRecentAsync(10)).Count);
         Assert.AreEqual(0, (await fixture.Notifications.ListAsync("reader", unreadOnly: false)).Count);
     }
 
