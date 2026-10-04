@@ -96,9 +96,7 @@ public sealed class ProfileNotificationSettingsTests
 
             var context = new DefaultHttpContext
             {
-                User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, ProfileId), new Claim(ClaimTypes.Role, AccountRoles.User)],
-                    "test"))
+                User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, ProfileId), new Claim(ClaimTypes.Role, AccountRoles.User)], "test"))
             };
 
             return new Fixture(context, db);
@@ -106,10 +104,7 @@ public sealed class ProfileNotificationSettingsTests
 
         public NotificationsModel Page(params (JularrEventCategory Category, string Value)[] values)
         {
-            var form = values.ToDictionary(
-                value => $"delivery.{value.Category}",
-                value => new StringValues(value.Value),
-                StringComparer.Ordinal);
+            var form = values.ToDictionary(value => $"delivery.{value.Category}", value => new StringValues(value.Value), StringComparer.Ordinal);
             _context.Features.Set<IFormFeature>(new FormFeature(new FormCollection(form)));
 
             var page = new NotificationsModel(_db, Store, _account)
