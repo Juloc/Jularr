@@ -23,8 +23,8 @@ public enum VideoRequestScope
 }
 
 /// <summary>
-/// Durable request/search state for Movie and TV. TV structural selection is expressed only with
-/// canonical WorkEpisode ids; future monitoring is a property of the same Scope, never a second
+/// Durable request/search state for Movie and TV. TV structural selection uses canonical WorkSeason
+/// and WorkEpisode ids; future monitoring is a property of the same Scope, never a second
 /// consumer-facing toggle.
 /// </summary>
 public sealed record VideoRequestPayload(
@@ -36,7 +36,8 @@ public sealed record VideoRequestPayload(
     bool MonitorFuture,
     Guid? ActiveWorkEpisodeId = null,
     int? ActiveSeasonNumber = null,
-    int? ActiveEpisodeNumber = null) : ReleaseRequestPayload;
+    int? ActiveEpisodeNumber = null,
+    Guid[]? SelectedSeasonIds = null) : ReleaseRequestPayload;
 
 /// <summary>Owns the per-kind generic monitoring stores without registering two ambiguous MonitoringStore instances.</summary>
 public sealed class VideoAcquisitionMonitoringStores
@@ -347,6 +348,7 @@ public sealed class VideoAcquisitionEngine(
     {
         var store = monitoring.For(request.Kind);
         var key = WorkKey(payload.WorkId);
+        Dictionary<int, bool> seasonOverrides = [];
         Dictionary<string, bool> episodeOverrides = new(StringComparer.OrdinalIgnoreCase);
         var monitored = true;
 
@@ -354,7 +356,7 @@ public sealed class VideoAcquisitionEngine(
         {
             var episodes = await db.WorkEpisodes.AsNoTracking()
                 .Where(x => x.WorkId == payload.WorkId)
-                .Select(x => new { x.Id, x.SeasonNumber, x.EpisodeNumber, x.AiredAt })
+                .Select(x => new { x.Id, x.SeasonId, x.SeasonNumber, x.EpisodeNumber, x.AiredAt })
                 .ToListAsync(cancellationToken);
 
             if (payload.Scope == VideoRequestScope.FutureOnly)
@@ -367,10 +369,23 @@ public sealed class VideoAcquisitionEngine(
             else if (payload.Scope == VideoRequestScope.Custom)
             {
                 monitored = payload.MonitorFuture;
-                var selected = payload.SelectedEpisodeIds.ToHashSet();
+                var selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
+                var selectedSeasonIds = (payload.SelectedSeasonIds ?? []).ToHashSet();
+                var selectedSeasonNumbers = selectedSeasonIds.Count == 0
+                    ? []
+                    : (await db.WorkSeasons.AsNoTracking()
+                        .Where(x => x.WorkId == payload.WorkId && selectedSeasonIds.Contains(x.Id))
+                        .Select(x => x.SeasonNumber)
+                        .ToListAsync(cancellationToken))
+                    .ToHashSet();
+                foreach (var seasonNumber in selectedSeasonNumbers)
+                {
+                    seasonOverrides[seasonNumber] = true;
+                }
+
                 foreach (var episode in episodes)
                 {
-                    var explicitSelection = selected.Contains(episode.Id);
+                    var explicitSelection = selectedEpisodes.Contains(episode.Id) || selectedSeasonNumbers.Contains(episode.SeasonNumber);
                     var wasCurrentAtRequest = episode.AiredAt is null || episode.AiredAt <= request.CreatedAt;
                     if (explicitSelection)
                     {
@@ -392,7 +407,7 @@ public sealed class VideoAcquisitionEngine(
                 key,
                 monitored,
                 SearchOnAdd: true,
-                SeasonOverrides: [],
+                SeasonOverrides: seasonOverrides,
                 EpisodeOverrides: episodeOverrides,
                 IndexerIds: previous?.IndexerIds,
                 TagIds: previous?.TagIds,
@@ -418,11 +433,12 @@ public sealed class VideoAcquisitionEngine(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
-        var selected = payload.SelectedEpisodeIds.ToHashSet();
+        var selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
+        var selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
 
         return episodes
             .Where(x => !x.HasFile)
-            .Where(x => IsIncludedTvUnit(request, payload, selected, x))
+            .Where(x => IsIncludedTvUnit(request, payload, selectedEpisodes, selectedSeasons, x))
             .Where(x => x.AiredAt is null || x.AiredAt <= now)
             .OrderBy(x => x.SeasonNumber)
             .ThenBy(x => x.EpisodeNumber)
@@ -436,10 +452,11 @@ public sealed class VideoAcquisitionEngine(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
-        var selected = payload.SelectedEpisodeIds.ToHashSet();
+        var selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
+        var selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
         var missingIncluded = episodes
             .Where(x => !x.HasFile)
-            .Where(x => IsIncludedTvUnit(request, payload, selected, x))
+            .Where(x => IsIncludedTvUnit(request, payload, selectedEpisodes, selectedSeasons, x))
             .ToArray();
         var hasMissingDue = missingIncluded.Any(x => x.AiredAt is null || x.AiredAt <= now);
 
@@ -471,7 +488,7 @@ public sealed class VideoAcquisitionEngine(
             .Where(x => x.WorkId == workId)
             .OrderBy(x => x.SeasonNumber)
             .ThenBy(x => x.EpisodeNumber)
-            .Select(x => new { x.Id, x.SeasonNumber, x.EpisodeNumber, x.AiredAt })
+            .Select(x => new { x.Id, x.SeasonId, x.SeasonNumber, x.EpisodeNumber, x.AiredAt })
             .ToListAsync(cancellationToken);
 
         if (episodes.Count == 0)
@@ -492,6 +509,7 @@ public sealed class VideoAcquisitionEngine(
 
         return episodes.Select(x => new VideoUnit(
                 x.Id,
+                x.SeasonId,
                 x.SeasonNumber,
                 x.EpisodeNumber,
                 x.AiredAt,
@@ -502,7 +520,8 @@ public sealed class VideoAcquisitionEngine(
     private static bool IsIncludedTvUnit(
         AcquisitionRequest request,
         VideoRequestPayload payload,
-        HashSet<Guid> selected,
+        HashSet<Guid> selectedEpisodes,
+        HashSet<Guid> selectedSeasons,
         VideoUnit unit) =>
         payload.Scope switch
         {
@@ -510,7 +529,8 @@ public sealed class VideoAcquisitionEngine(
             VideoRequestScope.FutureOnly =>
                 unit.AiredAt is not null && unit.AiredAt > request.CreatedAt,
             VideoRequestScope.Custom =>
-                selected.Contains(unit.Id)
+                selectedEpisodes.Contains(unit.Id)
+                || unit.SeasonId is { } seasonId && selectedSeasons.Contains(seasonId)
                 || (payload.MonitorFuture
                     && unit.AiredAt is not null
                     && unit.AiredAt > request.CreatedAt),
@@ -706,6 +726,7 @@ public sealed class VideoAcquisitionEngine(
 
     private sealed record VideoUnit(
         Guid Id,
+        Guid? SeasonId,
         int SeasonNumber,
         int EpisodeNumber,
         DateTime? AiredAt,
