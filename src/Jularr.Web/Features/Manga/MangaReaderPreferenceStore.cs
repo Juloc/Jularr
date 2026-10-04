@@ -53,10 +53,12 @@ public static class MangaReaderPreferenceStore
     public static async Task<MangaReaderPreset> GetAsync(
         AppDbContext db,
         string profileId,
-        Guid seriesId,
+        Guid workId,
+        Guid legacySeriesId,
         CancellationToken cancellationToken)
     {
-        var seriesScope = SeriesScope(seriesId);
+        var workScope = ReaderPreferenceScopes.Work(workId);
+        var legacySeriesScope = LegacySeriesScope(legacySeriesId);
         var preferences = await db.ReaderPreferences
             .AsNoTracking()
             .Where(x =>
@@ -64,7 +66,8 @@ public static class MangaReaderPreferenceStore
                 (x.ScopeKey == ReaderPreferenceRules.UserDefaultScope ||
                  x.ScopeKey == LegacyMediaScope ||
                  x.ScopeKey == MediaScope ||
-                 x.ScopeKey == seriesScope))
+                 x.ScopeKey == workScope ||
+                 x.ScopeKey == legacySeriesScope))
             .ToListAsync(cancellationToken);
 
         var user = preferences.FirstOrDefault(
@@ -72,31 +75,36 @@ public static class MangaReaderPreferenceStore
         var legacyMedia = preferences.FirstOrDefault(
             x => x.ScopeKey == LegacyMediaScope);
         var media = preferences.FirstOrDefault(x => x.ScopeKey == MediaScope);
-        var series = preferences.FirstOrDefault(x => x.ScopeKey == seriesScope);
+        var series = preferences.FirstOrDefault(x => x.ScopeKey == workScope ||
+                 x.ScopeKey == legacySeriesScope);
 
         var readingMode = ReaderPreferenceRules.NormalizeReadingMode(
             First(
-                series?.ReadingMode,
+                work?.ReadingMode
+                ?? legacySeries?.ReadingMode,
                 media?.ReadingMode,
                 legacyMedia?.ReadingMode,
                 user?.ReadingMode,
                 "paged"));
         var transition = ReaderPreferenceRules.NormalizePageTransition(
             First(
-                series?.PageTransition,
+                work?.PageTransition
+                ?? legacySeries?.PageTransition,
                 media?.PageTransition,
                 legacyMedia?.PageTransition,
                 user?.PageTransition,
                 "slide"));
         var twoPageSpread =
-            series?.TwoPageSpread
+            work?.TwoPageSpread
+                ?? legacySeries?.TwoPageSpread
             ?? media?.TwoPageSpread
             ?? legacyMedia?.TwoPageSpread
             ?? user?.TwoPageSpread
             ?? true;
         var bookmarkColor = ReaderPreferenceRules.NormalizeBookmarkColor(
             First(
-                series?.BookmarkColor,
+                work?.BookmarkColor
+                ?? legacySeries?.BookmarkColor,
                 media?.BookmarkColor,
                 legacyMedia?.BookmarkColor,
                 user?.BookmarkColor,
@@ -108,68 +116,78 @@ public static class MangaReaderPreferenceStore
             transition,
             bookmarkColor,
             ReaderPreferenceRules.NormalizeImageFlowMode(First(
-                series?.ImageFlowMode,
+                work?.ImageFlowMode
+                ?? legacySeries?.ImageFlowMode,
                 media?.ImageFlowMode,
                 legacyMedia?.ImageFlowMode,
                 user?.ImageFlowMode,
                 "continuous")),
             ReaderPreferenceRules.NormalizeImagePageDirection(First(
-                series?.ImagePageDirection,
+                work?.ImagePageDirection
+                ?? legacySeries?.ImagePageDirection,
                 media?.ImagePageDirection,
                 legacyMedia?.ImagePageDirection,
                 user?.ImagePageDirection,
                 "auto")),
             ReaderPreferenceRules.NormalizeImageFit(First(
-                series?.ImageFit,
+                work?.ImageFit
+                ?? legacySeries?.ImageFit,
                 media?.ImageFit,
                 legacyMedia?.ImageFit,
                 user?.ImageFit,
                 "height")),
             ReaderPreferenceRules.NormalizeImageZoomPercent(
-                series?.ImageZoomPercent
+                work?.ImageZoomPercent
+                ?? legacySeries?.ImageZoomPercent
                 ?? media?.ImageZoomPercent
                 ?? legacyMedia?.ImageZoomPercent
                 ?? user?.ImageZoomPercent
                 ?? 100),
             ReaderPreferenceRules.NormalizeImagePageGapPx(
-                series?.ImagePageGapPx
+                work?.ImagePageGapPx
+                ?? legacySeries?.ImagePageGapPx
                 ?? media?.ImagePageGapPx
                 ?? legacyMedia?.ImagePageGapPx
                 ?? user?.ImagePageGapPx
                 ?? 8),
-            series?.ImageFirstPageAlone
+            work?.ImageFirstPageAlone
+                ?? legacySeries?.ImageFirstPageAlone
                 ?? media?.ImageFirstPageAlone
                 ?? legacyMedia?.ImageFirstPageAlone
                 ?? user?.ImageFirstPageAlone
                 ?? false,
-            series?.AutoContinueChapters
+            work?.AutoContinueChapters
+                ?? legacySeries?.AutoContinueChapters
                 ?? media?.AutoContinueChapters
                 ?? legacyMedia?.AutoContinueChapters
                 ?? user?.AutoContinueChapters
                 ?? true,
-            series?.ImageSharpen
+            work?.ImageSharpen
+                ?? legacySeries?.ImageSharpen
                 ?? media?.ImageSharpen
                 ?? legacyMedia?.ImageSharpen
                 ?? user?.ImageSharpen
                 ?? false,
-            series?.ImageCropBorders
+            work?.ImageCropBorders
+                ?? legacySeries?.ImageCropBorders
                 ?? media?.ImageCropBorders
                 ?? legacyMedia?.ImageCropBorders
                 ?? user?.ImageCropBorders
                 ?? false,
             ReaderPreferenceRules.NormalizeImageColorScheme(First(
-                series?.ImageColorScheme,
+                work?.ImageColorScheme
+                ?? legacySeries?.ImageColorScheme,
                 media?.ImageColorScheme,
                 legacyMedia?.ImageColorScheme,
                 user?.ImageColorScheme,
                 "auto")),
-            series is not null);
+            work is not null || legacySeries is not null);
     }
 
     public static async Task SaveAsync(
         AppDbContext db,
         string profileId,
-        Guid? seriesId,
+        Guid? workId,
         MangaReaderPreferenceInput input,
         string? changedKey,
         CancellationToken cancellationToken)
@@ -179,7 +197,7 @@ public static class MangaReaderPreferenceStore
         var preference = await FindOrCreateAsync(
             db,
             profileId,
-            seriesId,
+            workId,
             cancellationToken);
 
         if (string.IsNullOrWhiteSpace(changedKey))
@@ -212,38 +230,79 @@ public static class MangaReaderPreferenceStore
     public static async Task SaveModeAsync(
         AppDbContext db,
         string profileId,
-        Guid? seriesId,
+        Guid? workId,
         string? uiMode,
         CancellationToken cancellationToken)
     {
         await SaveAsync(
             db,
             profileId,
-            seriesId,
+            workId,
             new MangaReaderPreferenceInput { Mode = uiMode },
             changedKey: "mode",
             cancellationToken);
     }
 
-    public static async Task ResetSeriesAsync(
+    public static async Task ResetWorkAsync(
         AppDbContext db,
         string profileId,
-        Guid seriesId,
+        Guid workId,
+        Guid legacySeriesId,
         CancellationToken cancellationToken)
     {
-        var scope = SeriesScope(seriesId);
-        var preference = await db.ReaderPreferences
-            .SingleOrDefaultAsync(
-                x => x.ProfileId == profileId && x.ScopeKey == scope,
-                cancellationToken);
+        var workScope = ReaderPreferenceScopes.Work(workId);
+        var legacySeriesScope = LegacySeriesScope(legacySeriesId);
+        var preferences = await db.ReaderPreferences
+            .Where(x =>
+                x.ProfileId == profileId &&
+                (x.ScopeKey == workScope || x.ScopeKey == legacySeriesScope))
+            .ToListAsync(cancellationToken);
 
-        if (preference is null)
+        if (preferences.Count == 0)
         {
             return;
         }
 
-        db.ReaderPreferences.Remove(preference);
+        db.ReaderPreferences.RemoveRange(preferences);
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public static async Task MigrateLegacyScopesAsync(
+        AppDbContext db,
+        string profileId,
+        Guid workId,
+        Guid legacySeriesId,
+        CancellationToken cancellationToken)
+    {
+        var workScope = ReaderPreferenceScopes.Work(workId);
+        var legacySeriesScope = LegacySeriesScope(legacySeriesId);
+        var scopes = new[] { LegacyMediaScope, MediaScope, legacySeriesScope, workScope };
+        var preferences = await db.ReaderPreferences
+            .Where(x => x.ProfileId == profileId && scopes.Contains(x.ScopeKey))
+            .ToListAsync(cancellationToken);
+
+        var legacyMedia = preferences.FirstOrDefault(x => x.ScopeKey == LegacyMediaScope);
+        var media = preferences.FirstOrDefault(x => x.ScopeKey == MediaScope);
+        if (legacyMedia is not null)
+        {
+            media ??= CreatePreference(profileId, MediaScope, workId: null, db);
+            CopyMissingImageReaderFields(media, legacyMedia);
+            db.ReaderPreferences.Remove(legacyMedia);
+        }
+
+        var legacySeries = preferences.FirstOrDefault(x => x.ScopeKey == legacySeriesScope);
+        var work = preferences.FirstOrDefault(x => x.ScopeKey == workScope);
+        if (legacySeries is not null)
+        {
+            work ??= CreatePreference(profileId, workScope, workId, db);
+            CopyMissingImageReaderFields(work, legacySeries);
+            db.ReaderPreferences.Remove(legacySeries);
+        }
+
+        if (legacyMedia is not null || legacySeries is not null)
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private static void ApplyField(
@@ -325,11 +384,11 @@ public static class MangaReaderPreferenceStore
     private static async Task<ReaderPreference> FindOrCreateAsync(
         AppDbContext db,
         string profileId,
-        Guid? seriesId,
+        Guid? workId,
         CancellationToken cancellationToken)
     {
-        var scope = seriesId is Guid id
-            ? SeriesScope(id)
+        var scope = workId is Guid id
+            ? ReaderPreferenceScopes.Work(id)
             : MediaScope;
 
         var preference = await db.ReaderPreferences
@@ -337,22 +396,47 @@ public static class MangaReaderPreferenceStore
                 x => x.ProfileId == profileId && x.ScopeKey == scope,
                 cancellationToken);
 
-        if (preference is not null)
-        {
-            return preference;
-        }
+        return preference ?? CreatePreference(profileId, scope, workId, db);
+    }
 
-        preference = new ReaderPreference
+    private static ReaderPreference CreatePreference(
+        string profileId,
+        string scope,
+        Guid? workId,
+        AppDbContext db)
+    {
+        var preference = new ReaderPreference
         {
             ProfileId = profileId,
             ScopeKey = scope,
-            WorkId = null
+            WorkId = workId
         };
         db.ReaderPreferences.Add(preference);
         return preference;
     }
 
-    private static string SeriesScope(Guid seriesId) =>
+    private static void CopyMissingImageReaderFields(
+        ReaderPreference target,
+        ReaderPreference source)
+    {
+        target.ReadingMode ??= source.ReadingMode;
+        target.PageTransition ??= source.PageTransition;
+        target.TwoPageSpread ??= source.TwoPageSpread;
+        target.BookmarkColor ??= source.BookmarkColor;
+        target.ImageFlowMode ??= source.ImageFlowMode;
+        target.ImagePageDirection ??= source.ImagePageDirection;
+        target.ImageFit ??= source.ImageFit;
+        target.ImageZoomPercent ??= source.ImageZoomPercent;
+        target.ImagePageGapPx ??= source.ImagePageGapPx;
+        target.ImageFirstPageAlone ??= source.ImageFirstPageAlone;
+        target.AutoContinueChapters ??= source.AutoContinueChapters;
+        target.ImageSharpen ??= source.ImageSharpen;
+        target.ImageCropBorders ??= source.ImageCropBorders;
+        target.ImageColorScheme ??= source.ImageColorScheme;
+        target.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static string LegacySeriesScope(Guid seriesId) =>
         $"media:manga:series:{seriesId:N}";
 
     private static string First(params string?[] values) =>
