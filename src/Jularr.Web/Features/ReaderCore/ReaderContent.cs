@@ -33,6 +33,56 @@ public enum ReaderTextBlockKind
     Formula
 }
 
+public enum ReaderVariantKind
+{
+    Original,
+    OfficialTranslation,
+    GeneratedTranslation,
+    LegacyTranslation
+}
+
+public sealed record ReaderDocumentVariant
+{
+    public ReaderDocumentVariant(
+        string key,
+        string languageTag,
+        ReaderVariantKind kind,
+        bool supportsSourceMapping,
+        string? providerId = null,
+        string? version = null)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new ArgumentException("Reader variant requires a stable key.", nameof(key));
+        }
+
+        if (string.IsNullOrWhiteSpace(languageTag))
+        {
+            throw new ArgumentException("Reader variant requires a language tag.", nameof(languageTag));
+        }
+
+        Key = key.Trim();
+        LanguageTag = languageTag.Trim().Replace('_', '-').ToLowerInvariant();
+        Kind = kind;
+        SupportsSourceMapping = supportsSourceMapping;
+        ProviderId = string.IsNullOrWhiteSpace(providerId) ? null : providerId.Trim();
+        Version = string.IsNullOrWhiteSpace(version) ? null : version.Trim();
+    }
+
+    public string Key { get; }
+
+    public string LanguageTag { get; }
+
+    public ReaderVariantKind Kind { get; }
+
+    public bool SupportsSourceMapping { get; }
+
+    public string? ProviderId { get; }
+
+    public string? Version { get; }
+}
+
+
 /// <summary>
 /// Canonical identity of the readable document variant. Layout and visual page
 /// numbers are deliberately excluded so relayout does not create a new identity.
@@ -293,10 +343,19 @@ public sealed record ReaderFixedRegionContentNode : ReaderContentNode
 /// </summary>
 public sealed record ReaderDocument
 {
-    private ReaderDocument(ReaderDocumentDescriptor descriptor, ReaderDocumentIdentity identity, IReadOnlyList<ReaderContentNode> content)
+    private ReaderDocument(
+        ReaderDocumentDescriptor descriptor,
+        ReaderDocumentIdentity identity,
+        string sourceLanguage,
+        ReaderDocumentVariant selectedVariant,
+        IReadOnlyList<ReaderDocumentVariant> availableVariants,
+        IReadOnlyList<ReaderContentNode> content)
     {
         Descriptor = descriptor;
         Identity = identity;
+        SourceLanguage = sourceLanguage;
+        SelectedVariant = selectedVariant;
+        AvailableVariants = availableVariants;
         Content = content;
     }
 
@@ -304,9 +363,21 @@ public sealed record ReaderDocument
 
     public ReaderDocumentIdentity Identity { get; }
 
+    public string SourceLanguage { get; }
+
+    public ReaderDocumentVariant SelectedVariant { get; }
+
+    public IReadOnlyList<ReaderDocumentVariant> AvailableVariants { get; }
+
     public IReadOnlyList<ReaderContentNode> Content { get; }
 
-    public static ReaderDocument Create(ReaderDocumentDescriptor descriptor, ReaderDocumentIdentity identity, IReadOnlyList<ReaderContentNode>? content = null)
+    public static ReaderDocument Create(
+        ReaderDocumentDescriptor descriptor,
+        ReaderDocumentIdentity identity,
+        IReadOnlyList<ReaderContentNode>? content = null,
+        string sourceLanguage = "und",
+        ReaderDocumentVariant? selectedVariant = null,
+        IReadOnlyList<ReaderDocumentVariant>? availableVariants = null)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(identity);
@@ -314,6 +385,29 @@ public sealed record ReaderDocument
         if (descriptor.WorkId != identity.WorkId)
         {
             throw new ArgumentException("Reader descriptor and document identity must target the same Work.", nameof(identity));
+        }
+
+        var normalizedSourceLanguage = string.IsNullOrWhiteSpace(sourceLanguage)
+            ? "und"
+            : sourceLanguage.Trim().Replace('_', '-').ToLowerInvariant();
+        var selected = selectedVariant
+            ?? new ReaderDocumentVariant("original", normalizedSourceLanguage, ReaderVariantKind.Original, supportsSourceMapping: true);
+        var variants = (availableVariants ?? [selected]).ToArray();
+        if (variants.Length == 0
+            || variants.Select(variant => variant.Key).Distinct(StringComparer.Ordinal).Count() != variants.Length)
+        {
+            throw new ArgumentException("Reader variants require unique stable keys.", nameof(availableVariants));
+        }
+
+        if (!variants.Any(variant => string.Equals(variant.Key, selected.Key, StringComparison.Ordinal)))
+        {
+            throw new ArgumentException("Selected Reader variant must be part of the available variants.", nameof(selectedVariant));
+        }
+
+        if (identity.VariantKey is not null
+            && !string.Equals(identity.VariantKey, selected.Key, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Reader document identity variant must match the selected variant.", nameof(identity));
         }
 
         var nodes = content is null ? Array.Empty<ReaderContentNode>() : content.ToArray();
@@ -326,6 +420,12 @@ public sealed record ReaderDocument
             }
         }
 
-        return new ReaderDocument(descriptor, identity, nodes);
+        return new ReaderDocument(
+            descriptor,
+            identity,
+            normalizedSourceLanguage,
+            selected,
+            variants,
+            nodes);
     }
 }
