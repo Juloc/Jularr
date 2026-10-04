@@ -23,12 +23,19 @@
         (DiscoveryMode.Trending, "discover.tabs.trending"),
         (DiscoveryMode.Top, "discover.tabs.top")
     };
-    if (query.Category == DiscoveryCategory.Book)
+    if (query.Category is DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
     {
         browseModes.Add((DiscoveryMode.New, "discover.tabs.new"));
     }
 
-    browseModes.Add((DiscoveryMode.MyList, "discover.tabs.myAniList"));
+    if (query.Category is DiscoveryCategory.Movie or DiscoveryCategory.Series)
+    {
+        browseModes.Add((DiscoveryMode.Upcoming, "discover.tabs.upcoming"));
+    }
+    else
+    {
+        browseModes.Add((DiscoveryMode.MyList, "discover.tabs.myAniList"));
+    }
 
     var availabilities = new[]
     {
