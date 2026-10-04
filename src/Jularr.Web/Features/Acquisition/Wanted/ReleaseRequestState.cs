@@ -249,4 +249,10 @@ public abstract class ReleaseRequestWantedHandler(
             request.Id,
             cancellationToken);
     }
+
+    public virtual Task<AcquisitionExecution?> AfterCompletedImportAsync(
+        AcquisitionRequest request,
+        DateTime nowUtc,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<AcquisitionExecution?>(null);
 }
