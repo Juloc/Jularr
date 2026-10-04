@@ -439,36 +439,58 @@ public sealed class VideoProgressService(AppDbContext db)
         CancellationToken cancellationToken = default)
     {
         ValidateProfile(profileId);
-        var sql = target.WorkEpisodeId.HasValue
-            ? """
-              INSERT INTO "MediaPlaybackHistory"
-                  ("Id", "ProfileId", "WorkId", "WorkEpisodeId", "StartedAt", "LastPlayedAt", "PositionMs", "DurationMs", "ReachedEnd")
-              VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8})
-              ON CONFLICT ("Id") DO NOTHING
-              """
-            : """
-              INSERT INTO "MediaPlaybackHistory"
-                  ("Id", "ProfileId", "WorkId", "WorkEpisodeId", "StartedAt", "LastPlayedAt", "PositionMs", "DurationMs", "ReachedEnd")
-              VALUES ({0}, {1}, {2}, NULL, {3}, {4}, {5}, {6}, {7})
-              ON CONFLICT ("Id") DO NOTHING
-              """;
-
         if (target.WorkEpisodeId is { } episodeId)
         {
-            await ExecuteDurationAwareAsync(
-                sql,
-                durationMs,
-                [id, profileId, target.WorkId, episodeId, startedAt, lastPlayedAt, Math.Max(0, positionMs)],
-                reachedEnd,
+            if (durationMs.HasValue)
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    """
+                    INSERT INTO "MediaPlaybackHistory"
+                        ("Id", "ProfileId", "WorkId", "WorkEpisodeId", "StartedAt", "LastPlayedAt", "PositionMs", "DurationMs", "ReachedEnd")
+                    VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8})
+                    ON CONFLICT ("Id") DO NOTHING
+                    """,
+                    [id, profileId, target.WorkId, episodeId, startedAt, lastPlayedAt, Math.Max(0, positionMs), durationMs.Value, reachedEnd],
+                    cancellationToken);
+            }
+            else
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    """
+                    INSERT INTO "MediaPlaybackHistory"
+                        ("Id", "ProfileId", "WorkId", "WorkEpisodeId", "StartedAt", "LastPlayedAt", "PositionMs", "DurationMs", "ReachedEnd")
+                    VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, NULL, {7})
+                    ON CONFLICT ("Id") DO NOTHING
+                    """,
+                    [id, profileId, target.WorkId, episodeId, startedAt, lastPlayedAt, Math.Max(0, positionMs), reachedEnd],
+                    cancellationToken);
+            }
+
+            return;
+        }
+
+        if (durationMs.HasValue)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO "MediaPlaybackHistory"
+                    ("Id", "ProfileId", "WorkId", "WorkEpisodeId", "StartedAt", "LastPlayedAt", "PositionMs", "DurationMs", "ReachedEnd")
+                VALUES ({0}, {1}, {2}, NULL, {3}, {4}, {5}, {6}, {7})
+                ON CONFLICT ("Id") DO NOTHING
+                """,
+                [id, profileId, target.WorkId, startedAt, lastPlayedAt, Math.Max(0, positionMs), durationMs.Value, reachedEnd],
                 cancellationToken);
         }
         else
         {
-            await ExecuteDurationAwareAsync(
-                sql,
-                durationMs,
-                [id, profileId, target.WorkId, startedAt, lastPlayedAt, Math.Max(0, positionMs)],
-                reachedEnd,
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO "MediaPlaybackHistory"
+                    ("Id", "ProfileId", "WorkId", "WorkEpisodeId", "StartedAt", "LastPlayedAt", "PositionMs", "DurationMs", "ReachedEnd")
+                VALUES ({0}, {1}, {2}, NULL, {3}, {4}, {5}, NULL, {6})
+                ON CONFLICT ("Id") DO NOTHING
+                """,
+                [id, profileId, target.WorkId, startedAt, lastPlayedAt, Math.Max(0, positionMs), reachedEnd],
                 cancellationToken);
         }
     }
@@ -659,18 +681,7 @@ public sealed class VideoProgressService(AppDbContext db)
         DateTime now,
         CancellationToken cancellationToken)
     {
-        var latest = target.WorkEpisodeId is { } episodeId
-            ? await db.Database.SqlQueryRaw<HistoryIdentityDbRow>(
-                    """
-                    SELECT "Id", "WorkId", "WorkEpisodeId", "LastPlayedAt", "DurationMs", "ReachedEnd"
-                    FROM "MediaPlaybackHistory"
-                    WHERE "ProfileId" = {0}
-                    ORDER BY "LastPlayedAt" DESC
-                    LIMIT 1
-                    """,
-                    profileId)
-                .SingleOrDefaultAsync(cancellationToken)
-            : await db.Database.SqlQueryRaw<HistoryIdentityDbRow>(
+        var latest = await db.Database.SqlQueryRaw<HistoryIdentityDbRow>(
                     """
                     SELECT "Id", "WorkId", "WorkEpisodeId", "LastPlayedAt", "DurationMs", "ReachedEnd"
                     FROM "MediaPlaybackHistory"
@@ -752,30 +763,6 @@ public sealed class VideoProgressService(AppDbContext db)
                 [id],
                 cancellationToken);
         }
-    }
-
-    private async Task ExecuteDurationAwareAsync(
-        string sql,
-        long? durationMs,
-        object[] prefix,
-        bool reachedEnd,
-        CancellationToken cancellationToken)
-    {
-        object[] args;
-        if (durationMs.HasValue)
-        {
-            args = [.. prefix, durationMs.Value, reachedEnd];
-        }
-        else
-        {
-            sql = sql.Replace(
-                prefix.Length == 7 ? "{7}" : "{6}",
-                "NULL",
-                StringComparison.Ordinal);
-            args = [.. prefix, reachedEnd];
-        }
-
-        await db.Database.ExecuteSqlRawAsync(sql, args, cancellationToken);
     }
 
     private static void ValidateProfile(string profileId)
