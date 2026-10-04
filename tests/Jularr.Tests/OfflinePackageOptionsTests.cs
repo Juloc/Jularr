@@ -147,14 +147,14 @@ public sealed class OfflinePackageOptionsTests
         db.ChangeTracker.Clear();
 
         var modules = NewInstanceModules();
-        await modules.SetAsync(InstanceModule.Movie, enabled: false, CancellationToken.None);
+        await modules.SetAsync(InstanceModule.Movie, enabled: false, cancellationToken: CancellationToken.None);
         var service = new ClientApiOfflinePackageOptionsService(db, modules);
         var target = new ClientOfflinePackageTarget(ClientApiOfflinePackageContract.WorkTarget, WorkId: work.Id);
 
         var result = await service.GetOptionsAsync(target, ClientApiOfflinePackageContract.WatchIntent, CancellationToken.None);
 
-        Assert.AreEqual(ClientOfflinePackageQueryStatus.Unavailable, result.Status);
-        Assert.AreEqual("offline_not_supported", result.ErrorCode);
+        Assert.AreEqual(ClientOfflinePackageQueryStatus.NotFound, result.Status);
+        Assert.AreEqual("offline_target_not_found", result.ErrorCode);
         Assert.IsFalse(db.ChangeTracker.HasChanges());
     }
 
