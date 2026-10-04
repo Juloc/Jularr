@@ -100,6 +100,7 @@ public sealed record ClientCanonicalVideoPlayerBootstrap(
     IReadOnlyList<ClientMediaTrack> SubtitleTracks,
     string? DefaultAudioTrackId,
     string? DefaultSubtitleTrackId,
+    ClientPlayerDefaults Defaults,
     ClientVideoProgressResponse Progress,
     ClientPlayerControls Controls,
     string PlaybackPlanUrl,
@@ -481,9 +482,17 @@ public static class ClientApiPlaybackPlanEndpoints
             .OrderBy(x => x.Index)
             .Select(ToClientTrack)
             .ToArray();
+        var playbackTracks = PlaybackProbeResult.From(technical).Tracks ?? [];
         var defaultAudio = technical.AudioStreams.FirstOrDefault(x => x.IsDefault)
             ?? technical.AudioStreams.FirstOrDefault();
         var defaultSubtitle = technical.SubtitleStreams.FirstOrDefault(x => x.IsDefault && !x.IsForced);
+        var initialAudio = PlaybackTrackSelection.ResolveAudio(
+            playbackTracks,
+            snapshot.Preferences.PreferredAudioLanguage);
+        var initialSubtitle = PlaybackTrackSelection.ResolveSubtitle(
+            playbackTracks,
+            hasLearningCues: false,
+            snapshot.Preferences.PreferredSubtitleLanguage);
         var durationMs = technical.DurationSeconds is > 0 and < (long.MaxValue / 1000d)
             ? (long?)Math.Round(technical.DurationSeconds.Value * 1000d)
             : null;
@@ -519,6 +528,12 @@ public static class ClientApiPlaybackPlanEndpoints
             subtitles,
             defaultAudio is null ? null : PlaybackTrackIds.Format(defaultAudio.Index),
             defaultSubtitle is null ? null : PlaybackTrackIds.Format(defaultSubtitle.Index),
+            new ClientPlayerDefaults(
+                initialAudio is null ? null : PlaybackTrackIds.Format(initialAudio.StreamIndex),
+                initialSubtitle.ModeName,
+                initialSubtitle.TrackId,
+                snapshot.Preferences.DefaultPlaybackSpeed,
+                ClientApiMappings.ToClientPreferences(snapshot.Preferences)),
             new ClientVideoProgressResponse(
                 new ClientVideoTarget(snapshot.Progress.WorkId, snapshot.Progress.WorkEpisodeId),
                 snapshot.Progress.PositionMs,
