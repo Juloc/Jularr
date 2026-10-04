@@ -29,6 +29,25 @@ Migration never keeps a legacy source model as a second long-term authority.
 
 Migration is also the owning Admin surface for **external-manager coexistence and handover state** when a supported adapter remains connected after the initial import. This must not create a second canonical media/acquisition model.
 
+
+## Physical Storage migration boundary
+
+Migration Center owns migration **from external/legacy systems into Jularr** and external-manager coexistence/handover.
+
+It does not own moving already-canonical Jularr media between LibraryRoots.
+
+Physical LibraryRoot migration, cold tiering and evacuation are owned by Admin Storage / #414 and reuse the Storage safe-transfer contract.
+
+Importing/mapping an external Sonarr/Radarr/etc. root:
+- may map/create the appropriate Jularr LibraryRoot;
+- must not implicitly move existing media;
+- must not silently trigger a #414 lifecycle policy.
+
+After the external-state migration is complete, an admin may separately launch Storage's preview-first physical migration workflow.
+
+Both flows preserve canonical Work identity and have independent Dry Run/history/audit.
+
+
 ## Backup / Restore boundary
 
 Migration and Backup/Restore are separate Admin owners.
