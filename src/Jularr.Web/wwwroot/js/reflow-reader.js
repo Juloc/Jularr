@@ -38,6 +38,36 @@ export const scrollTopForPermille = (permille, scrollHeight, viewportHeight) => 
     return max * clamp(permille, 0, 1000) / 1000;
 };
 
+export const measurePagedSequence = ({
+    scrollWidth,
+    columnStride,
+    pagesPerView = 1,
+    extraExtent = 0,
+    trailingCompensation = 0,
+    rounding = "ceil"
+}) => {
+    const stride = Math.max(1, Number(columnStride) || 1);
+    const visiblePages = Math.max(1, Math.round(Number(pagesPerView) || 1));
+    const extent = Math.max(
+        0,
+        Number(scrollWidth)
+            + Number(extraExtent || 0)
+            - Number(trailingCompensation || 0));
+    const rawPages = extent / stride;
+    const pageCount = Math.max(
+        1,
+        rounding === "round" ? Math.round(rawPages) : Math.ceil(rawPages));
+    return {
+        pageCount,
+        viewCount: Math.max(1, Math.ceil(pageCount / visiblePages))
+    };
+};
+
+export const viewIndexForDisplayPage = (pageNumber, pagesPerView = 1) =>
+    Math.floor(
+        (Math.max(1, Math.round(Number(pageNumber) || 0)) - 1)
+        / Math.max(1, Math.round(Number(pagesPerView) || 1)));
+
 const paragraphIndex = paragraph => {
     const value = paragraph?.dataset?.index ?? paragraph?.dataset?.bookParagraph;
     const parsed = Number(value);
