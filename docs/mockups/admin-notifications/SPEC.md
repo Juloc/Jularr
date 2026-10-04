@@ -3,7 +3,8 @@
 Status: approved planning direction. Existing notification/event infrastructure on `dev` is the starting point. Approved mockups uploaded to this folder are visual references; this text remains binding.
 
 Global UX rules: `docs/UX.md`.
-User notification settings: `docs/mockups/user-settings/SPEC.md`.
+User notification settings: `docs/mockups/notifications-settings/SPEC.md`.
+Canonical notification architecture: `docs/NOTIFICATIONS.md`.
 
 If an image and this specification conflict, this specification wins.
 
@@ -352,9 +353,11 @@ A channel failure must still never replay the original media/business operation.
 
 User/Profile Notification Settings owns:
 
-- which event categories this profile wants;
-- available delivery mode for this profile;
-- personal quiet-hours/digest choices when implemented.
+- whether an event is enabled for this profile;
+- selected available profile channels;
+- Immediate vs Digest timing;
+- personal channel gates;
+- Quiet Hours and Digest schedule.
 
 Admin Notifications owns:
 
