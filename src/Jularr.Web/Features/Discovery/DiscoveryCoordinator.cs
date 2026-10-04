@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.MediaCore;
@@ -423,13 +424,18 @@ public sealed class DiscoveryCoordinator(
 
         var tmdbMatches = tmdbIds.Length == 0
             ? new Dictionary<(WorkMediaType MediaType, string ExternalId), Guid>()
-            : (await db.WorkExternalIdentities
-                .AsNoTracking()
-                .Where(x =>
-                    x.Provider == TmdbDiscoveryProvider.ProviderKey &&
-                    (x.MediaType == WorkMediaType.Movie || x.MediaType == WorkMediaType.Series) &&
-                    tmdbIds.Contains(x.ExternalId))
-                .Select(x => new { x.MediaType, x.ExternalId, x.WorkId })
+            : (await (
+                    from identity in db.WorkExternalIdentities.AsNoTracking()
+                    join asset in db.MediaAssets.AsNoTracking()
+                        on identity.WorkId equals asset.WorkId
+                    join file in db.StoredFiles.AsNoTracking()
+                        on (Guid?)asset.Id equals file.MediaAssetId
+                    where identity.Provider == TmdbDiscoveryProvider.ProviderKey
+                          && (identity.MediaType == WorkMediaType.Movie || identity.MediaType == WorkMediaType.Series)
+                          && tmdbIds.Contains(identity.ExternalId)
+                          && asset.Kind == MediaAssetKind.Video
+                    select new { identity.MediaType, identity.ExternalId, identity.WorkId })
+                .Distinct()
                 .ToListAsync(cancellationToken))
                 .GroupBy(x => (x.MediaType, x.ExternalId))
                 .ToDictionary(x => x.Key, x => x.First().WorkId);
