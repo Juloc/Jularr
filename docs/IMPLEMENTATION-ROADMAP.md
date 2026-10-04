@@ -36,6 +36,8 @@ Exit gate: clients do not need EF/legacy table shapes.
 
 ## Phase 3 — Consumer read/browse verticals
 
+Current first-video vertical audit: `docs/implementation/request-to-play-readiness-audit.md`.
+
 Implement approved specs using canonical reads only:
 1. Login/Profile Selection and authenticated consumer shell.
 2. Home.
