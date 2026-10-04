@@ -1239,13 +1239,20 @@
                     return;
                 }
 
-                const selector = shortcuts[event.key.toLowerCase()];
+                const shortcutKey = event.key.toLowerCase();
+                const selector = shortcuts[shortcutKey];
                 if (selector) {
                     const button = Array.from(root.querySelectorAll(selector)).find(isShown);
-                    if (!button) return;
-                    event.preventDefault();
-                    button.click();
-                    return;
+                    if (button) {
+                        event.preventDefault();
+                        button.click();
+                        return;
+                    }
+                    if (shortcutKey === "b") {
+                        event.preventDefault();
+                        root.dispatchEvent(new CustomEvent("jularr:reader-bookmark"));
+                        return;
+                    }
                 }
 
                 if (readingMode() !== "paged" || overlayOpen()) return;
@@ -1652,7 +1659,8 @@
                 if (selection && !selection.isCollapsed && selection.toString().trim()) return;
 
                 if (readingMode() === "paged") {
-                    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+                    if (root.dataset.readerPanGesture !== "true" &&
+                        Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.25) {
                         dispatchPhysicalPage(dx < 0 ? 1 : -1);
                         return;
                     }
