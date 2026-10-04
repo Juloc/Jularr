@@ -88,6 +88,26 @@ public sealed class ReaderDocumentTests
     }
 
     [TestMethod]
+    public void ReflowContentPreservesInlineRubyAndHeadingSemantics()
+    {
+        var paragraph = new ReaderTextContentNode(
+            "p:1",
+            ReaderTextBlockKind.Paragraph,
+            [
+                new ReaderInlineRun("漢字", ruby: "かんじ", emphasis: true),
+                new ReaderInlineRun("です。", strong: true)
+            ]);
+        var heading = new ReaderTextContentNode("h:1", ReaderTextBlockKind.Heading, "Chapter", headingLevel: 2);
+
+        Assert.AreEqual("漢字です。", paragraph.Text);
+        Assert.AreEqual("かんじ", paragraph.Runs[0].Ruby);
+        Assert.IsTrue(paragraph.Runs[0].Emphasis);
+        Assert.IsTrue(paragraph.Runs[1].Strong);
+        Assert.AreEqual(2, heading.HeadingLevel);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ReaderTextContentNode("bad", ReaderTextBlockKind.Heading, "Heading"));
+    }
+
+    [TestMethod]
     public void BuiltInPresetsDifferByTypeWithoutChangingTheEngine()
     {
         var book = ReaderPresetCatalog.For(ReaderContentType.Book);
