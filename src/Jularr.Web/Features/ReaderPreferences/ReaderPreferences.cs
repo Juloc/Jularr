@@ -133,6 +133,16 @@ public sealed class ReaderSettingsInput
     public bool? ParagraphIndent { get; set; }
     public bool? AutoContinueChapters { get; set; }
 
+    public string? ImageFlowMode { get; set; }
+    public string? ImagePageDirection { get; set; }
+    public string? ImageFit { get; set; }
+    public int? ImageZoomPercent { get; set; }
+    public int? ImagePageGapPx { get; set; }
+    public bool? ImageFirstPageAlone { get; set; }
+    public bool? ImageSharpen { get; set; }
+    public bool? ImageCropBorders { get; set; }
+    public string? ImageColorScheme { get; set; }
+
     public string? TtsProviderId { get; set; } = "auto";
     /// <summary>JSON object: language tag -> voice id (the effective map the client posts back).</summary>
     public string? TtsVoiceIds { get; set; }
@@ -187,6 +197,16 @@ public sealed record ReaderSettingsSnapshot(
     public bool ShowIllustrations { get; init; } = true;
     public bool ParagraphIndent { get; init; } = true;
     public bool AutoContinueChapters { get; init; }
+
+    public string ImageFlowMode { get; init; } = "continuous";
+    public string ImagePageDirection { get; init; } = "auto";
+    public string ImageFit { get; init; } = "height";
+    public int ImageZoomPercent { get; init; } = 100;
+    public int ImagePageGapPx { get; init; } = 8;
+    public bool ImageFirstPageAlone { get; init; }
+    public bool ImageSharpen { get; init; }
+    public bool ImageCropBorders { get; init; }
+    public string ImageColorScheme { get; init; } = "auto";
 
     public string ContentTypeKey { get; init; } = "light-novel";
     public bool HasTypeOverride { get; init; }
@@ -754,6 +774,15 @@ public static class ReaderPreferenceStore
             ShowIllustrations = ResolveValue("showIllustrations", x => x.ShowIllustrations, true),
             ParagraphIndent = ResolveValue("paragraphIndent", x => x.ParagraphIndent, true),
             AutoContinueChapters = ResolveValue("autoContinueChapters", x => x.AutoContinueChapters, false),
+            ImageFlowMode = ReaderPreferenceRules.NormalizeImageFlowMode(ResolveString("imageFlowMode", x => x.ImageFlowMode, "continuous")),
+            ImagePageDirection = ReaderPreferenceRules.NormalizeImagePageDirection(ResolveString("imagePageDirection", x => x.ImagePageDirection, "auto")),
+            ImageFit = ReaderPreferenceRules.NormalizeImageFit(ResolveString("imageFit", x => x.ImageFit, "height")),
+            ImageZoomPercent = ReaderPreferenceRules.NormalizeImageZoomPercent(ResolveValue("imageZoomPercent", x => x.ImageZoomPercent, 100)),
+            ImagePageGapPx = ReaderPreferenceRules.NormalizeImagePageGapPx(ResolveValue("imagePageGapPx", x => x.ImagePageGapPx, 8)),
+            ImageFirstPageAlone = ResolveValue("imageFirstPageAlone", x => x.ImageFirstPageAlone, false),
+            ImageSharpen = ResolveValue("imageSharpen", x => x.ImageSharpen, false),
+            ImageCropBorders = ResolveValue("imageCropBorders", x => x.ImageCropBorders, false),
+            ImageColorScheme = ReaderPreferenceRules.NormalizeImageColorScheme(ResolveString("imageColorScheme", x => x.ImageColorScheme, "auto")),
             TtsProviderId = ReaderPreferenceRules.NormalizeTtsProviderId(
                 ResolveString("ttsProviderId", x => x.TtsProviderId, preset.TtsProviderId)),
             TtsVoiceIds = ttsVoiceIds,
@@ -1029,6 +1058,15 @@ public static class ReaderPreferenceStore
         if (input.ShowIllustrations is bool showIllustrationsValue) preference.ShowIllustrations = showIllustrationsValue;
         if (input.ParagraphIndent is bool paragraphIndentValue) preference.ParagraphIndent = paragraphIndentValue;
         if (input.AutoContinueChapters is bool autoContinueChaptersValue) preference.AutoContinueChapters = autoContinueChaptersValue;
+        if (input.ImageFlowMode is not null) preference.ImageFlowMode = ReaderPreferenceRules.NormalizeImageFlowMode(input.ImageFlowMode);
+        if (input.ImagePageDirection is not null) preference.ImagePageDirection = ReaderPreferenceRules.NormalizeImagePageDirection(input.ImagePageDirection);
+        if (input.ImageFit is not null) preference.ImageFit = ReaderPreferenceRules.NormalizeImageFit(input.ImageFit);
+        if (input.ImageZoomPercent is int imageZoomPercent) preference.ImageZoomPercent = ReaderPreferenceRules.NormalizeImageZoomPercent(imageZoomPercent);
+        if (input.ImagePageGapPx is int imagePageGapPx) preference.ImagePageGapPx = ReaderPreferenceRules.NormalizeImagePageGapPx(imagePageGapPx);
+        if (input.ImageFirstPageAlone is bool imageFirstPageAlone) preference.ImageFirstPageAlone = imageFirstPageAlone;
+        if (input.ImageSharpen is bool imageSharpen) preference.ImageSharpen = imageSharpen;
+        if (input.ImageCropBorders is bool imageCropBorders) preference.ImageCropBorders = imageCropBorders;
+        if (input.ImageColorScheme is not null) preference.ImageColorScheme = ReaderPreferenceRules.NormalizeImageColorScheme(input.ImageColorScheme);
         preference.TtsProviderId =
             ReaderPreferenceRules.NormalizeTtsProviderId(input.TtsProviderId);
         preference.TtsVoiceIds =
@@ -1211,6 +1249,33 @@ public static class ReaderPreferenceStore
             case "autoContinueChapters":
                 preference.AutoContinueChapters = input.AutoContinueChapters ?? false;
                 break;
+            case "imageFlowMode":
+                preference.ImageFlowMode = ReaderPreferenceRules.NormalizeImageFlowMode(input.ImageFlowMode);
+                break;
+            case "imagePageDirection":
+                preference.ImagePageDirection = ReaderPreferenceRules.NormalizeImagePageDirection(input.ImagePageDirection);
+                break;
+            case "imageFit":
+                preference.ImageFit = ReaderPreferenceRules.NormalizeImageFit(input.ImageFit);
+                break;
+            case "imageZoomPercent":
+                preference.ImageZoomPercent = ReaderPreferenceRules.NormalizeImageZoomPercent(input.ImageZoomPercent ?? 100);
+                break;
+            case "imagePageGapPx":
+                preference.ImagePageGapPx = ReaderPreferenceRules.NormalizeImagePageGapPx(input.ImagePageGapPx ?? 8);
+                break;
+            case "imageFirstPageAlone":
+                preference.ImageFirstPageAlone = input.ImageFirstPageAlone ?? false;
+                break;
+            case "imageSharpen":
+                preference.ImageSharpen = input.ImageSharpen ?? false;
+                break;
+            case "imageCropBorders":
+                preference.ImageCropBorders = input.ImageCropBorders ?? false;
+                break;
+            case "imageColorScheme":
+                preference.ImageColorScheme = ReaderPreferenceRules.NormalizeImageColorScheme(input.ImageColorScheme);
+                break;
             case "ttsProviderId":
                 preference.TtsProviderId =
                     ReaderPreferenceRules.NormalizeTtsProviderId(input.TtsProviderId);
@@ -1282,6 +1347,15 @@ public static class ReaderPreferenceStore
             case "showIllustrations": preference.ShowIllustrations = null; break;
             case "paragraphIndent": preference.ParagraphIndent = null; break;
             case "autoContinueChapters": preference.AutoContinueChapters = null; break;
+            case "imageFlowMode": preference.ImageFlowMode = null; break;
+            case "imagePageDirection": preference.ImagePageDirection = null; break;
+            case "imageFit": preference.ImageFit = null; break;
+            case "imageZoomPercent": preference.ImageZoomPercent = null; break;
+            case "imagePageGapPx": preference.ImagePageGapPx = null; break;
+            case "imageFirstPageAlone": preference.ImageFirstPageAlone = null; break;
+            case "imageSharpen": preference.ImageSharpen = null; break;
+            case "imageCropBorders": preference.ImageCropBorders = null; break;
+            case "imageColorScheme": preference.ImageColorScheme = null; break;
             case "ttsProviderId": preference.TtsProviderId = null; break;
             case "ttsRate": preference.TtsRate = null; break;
             case "ttsPitch": preference.TtsPitch = null; break;
