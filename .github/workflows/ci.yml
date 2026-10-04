@@ -12,12 +12,14 @@ on:
     branches: [main, dev]
     paths-ignore:
       - "clients/android/**"
-      - "docs/ANDROID_CLIENTS.md"
+      - "docs/**"
+      - "**/*.md"
       - ".github/workflows/android.yml"
   pull_request:
     paths-ignore:
       - "clients/android/**"
-      - "docs/ANDROID_CLIENTS.md"
+      - "docs/**"
+      - "**/*.md"
       - ".github/workflows/android.yml"
 
 # Least privilege by default. Only publish (packages: write) and release
@@ -38,26 +40,33 @@ env:
 
 jobs:
   release-info:
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     outputs:
       is_release: ${{ steps.release.outputs.is_release }}
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
+      source_sha: ${{ steps.release.outputs.source_sha }}
+      source_run_id: ${{ steps.release.outputs.source_run_id }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Resolve release intent
+      - name: Resolve release intent and tested dev source
         id: release
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref }}
           RELEASE_INPUT: ${{ inputs.release || false }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           VERSION_FILE="src/Jularr.Web/Jularr.Web.csproj"
@@ -75,6 +84,8 @@ jobs:
           if [[ "${IS_RELEASE}" != "true" ]]; then
             echo "version=" >> "${GITHUB_OUTPUT}"
             echo "tag=" >> "${GITHUB_OUTPUT}"
+            echo "source_sha=" >> "${GITHUB_OUTPUT}"
+            echo "source_run_id=" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -87,14 +98,57 @@ jobs:
           print(version.strip())
           PY
           )"
+
+          read -ra PARENTS <<< "$(git rev-list --parents -n 1 HEAD)"
+          if (( ${#PARENTS[@]} < 3 )); then
+            echo "::error::Release main commit must be a merge commit from dev."
+            exit 1
+          fi
+          SOURCE_SHA="${PARENTS[2]}"
+          if ! git diff --quiet "${SOURCE_SHA}" HEAD -- .; then
+            echo "::error::Release merge tree differs from its dev parent; refusing to publish an untested tree."
+            exit 1
+          fi
+
+          RUN_ID=""
+          while IFS=$'\t' read -r candidate_run candidate_sha; do
+            [[ -n "${candidate_run}" && -n "${candidate_sha}" ]] || continue
+            git cat-file -e "${candidate_sha}^{commit}" 2>/dev/null || continue
+            git merge-base --is-ancestor "${candidate_sha}" "${SOURCE_SHA}" || continue
+            if git diff --quiet "${candidate_sha}" "${SOURCE_SHA}" -- . \
+              ':(exclude)clients/android/**' \
+              ':(exclude)docs/**' \
+              ':(exclude)**/*.md' \
+              ':(exclude).github/workflows/android.yml'; then
+              artifact_count="$(gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run}/artifacts" \
+                --jq '[.artifacts[] | select(.name == "jularr-image" and .expired == false)] | length')"
+              if [[ "${artifact_count}" != "0" ]]; then
+                RUN_ID="${candidate_run}"
+                break
+              fi
+            fi
+          done < <(
+            gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=dev&event=push&status=success&per_page=100" \
+              --jq '.workflow_runs[] | [.id, .head_sha] | @tsv'
+          )
+
+          if [[ -z "${RUN_ID}" ]]; then
+            echo "::error::No successful dev CI image artifact covers release source ${SOURCE_SHA}."
+            exit 1
+          fi
+
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "source_sha=${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "source_run_id=${RUN_ID}" >> "${GITHUB_OUTPUT}"
 
   build-test:
+    needs: release-info
+    if: always() && (github.ref != 'refs/heads/main' || needs.release-info.outputs.is_release != 'true')
     runs-on: ubuntu-latest
-    # Tests run against a real PostgreSQL with an isolated database per test (#570), which is
-    # slower than the former in-process SQLite; the ceiling is generous so a loaded runner has room.
-    timeout-minutes: 60
+    timeout-minutes: 20
 
     # The test suite runs against a real PostgreSQL (#570). The password is a throwaway CI value.
     env:
@@ -117,24 +171,16 @@ jobs:
           --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=3221225472
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24.x
-          cache: npm
-
-      - run: npm ci
-      - run: npm run check
-
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.NUGET_PACKAGES }}
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets', '**/NuGet.Config') }}
@@ -316,8 +362,10 @@ jobs:
           ! docker compose config | grep -q '/media/anime'
 
   image:
+    needs: release-info
+    if: always() && (github.ref != 'refs/heads/main' || needs.release-info.outputs.is_release != 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     # The app now requires PostgreSQL at startup (#570). The smoke-test containers reach a
     # throwaway PostgreSQL container by name on a shared user-defined network.
@@ -325,7 +373,7 @@ jobs:
       PG_CONN: "Host=jularr-ci-pg;Port=5432;Database=jularr;Username=jularr;Password=jularr_ci"
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -512,9 +560,7 @@ jobs:
       # publish pushes exactly this smoke-tested image instead of rebuilding it
       # on another runner, where a cache miss or newer apt package could differ.
       - name: Export tested image
-        if: >-
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         run: |
           set -euo pipefail
           # Content fingerprint (layer diff IDs + image config) that survives
@@ -524,9 +570,7 @@ jobs:
           docker save "${IMAGE}:${GITHUB_SHA}" | zstd -T0 -3 -q -o "${RUNNER_TEMP}/jularr-image.tar.zst"
 
       - name: Upload tested image
-        if: >-
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.IMAGE_ARTIFACT }}
@@ -541,20 +585,22 @@ jobs:
     if: needs.release-info.outputs.is_release == 'true'
     needs:
       - release-info
-      - build-test
-      - image
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      actions: read
       contents: read
       packages: write
 
     steps:
-      - name: Download tested image
+      - name: Download tested dev image
         uses: actions/download-artifact@v8
         with:
           name: ${{ env.IMAGE_ARTIFACT }}
           path: ${{ runner.temp }}/jularr-image
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.release-info.outputs.source_run_id }}
 
       - name: Load tested image
         shell: bash
@@ -563,12 +609,14 @@ jobs:
           DIR="${RUNNER_TEMP}/jularr-image"
           zstd -dc -q "${DIR}/jularr-image.tar.zst" | docker load
           EXPECTED="$(cat "${DIR}/jularr-image.fingerprint")"
-          ACTUAL="$(docker image inspect --format '{{json .RootFS.Layers}}{{json .Config}}' "${IMAGE}:${GITHUB_SHA}" \
+          SOURCE_SHA="${{ needs.release-info.outputs.source_sha }}"
+          ACTUAL="$(docker image inspect --format '{{json .RootFS.Layers}}{{json .Config}}' "${IMAGE}:${SOURCE_SHA}" \
             | sha256sum | cut -d' ' -f1)"
           if [[ "${EXPECTED}" != "${ACTUAL}" ]]; then
-            echo "::error::Loaded image fingerprint ${ACTUAL} does not match the smoke-tested image ${EXPECTED}."
+            echo "::error::Loaded image fingerprint ${ACTUAL} does not match the smoke-tested dev image ${EXPECTED}."
             exit 1
           fi
+          docker tag "${IMAGE}:${SOURCE_SHA}" "${IMAGE}:${GITHUB_SHA}"
           rm -rf "${DIR}"
 
       - name: Log in to GHCR
