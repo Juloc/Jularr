@@ -12,6 +12,13 @@ public partial class NotificationPreferencesTargetModel : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
+        migrationBuilder.Sql(
+            """
+            ALTER TABLE "NotificationSubscriptions"
+                ALTER COLUMN "UpdatedAtUtc" TYPE timestamp with time zone
+                USING "UpdatedAtUtc"::timestamp with time zone;
+            """);
+
         migrationBuilder.AddColumn<bool>(
             name: "Enabled",
             table: "NotificationSubscriptions",
@@ -144,5 +151,12 @@ public partial class NotificationPreferencesTargetModel : Migration
         migrationBuilder.DropCheckConstraint(name: "CK_NotificationSubscriptions_Timing", table: "NotificationSubscriptions");
         migrationBuilder.DropColumn(name: "Enabled", table: "NotificationSubscriptions");
         migrationBuilder.DropColumn(name: "Timing", table: "NotificationSubscriptions");
+
+        migrationBuilder.Sql(
+            """
+            ALTER TABLE "NotificationSubscriptions"
+                ALTER COLUMN "UpdatedAtUtc" TYPE text
+                USING "UpdatedAtUtc"::text;
+            """);
     }
 }
