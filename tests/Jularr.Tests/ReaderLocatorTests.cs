@@ -21,6 +21,19 @@ public sealed class ReaderLocatorTests
         Assert.AreEqual(41.5, locator.FallbackPercent);
     }
 
+
+    [TestMethod]
+    public void ReflowLocatorCanMapToSourceItemWithoutPageIdentity()
+    {
+        var identity = new ReaderDocumentIdentity(Guid.NewGuid(), editionId: Guid.NewGuid(), variantKey: "translated");
+        var source = new ReaderSourceItemReference("source-paragraph:17");
+        var locator = new ReflowTextReaderLocator(identity, "translated-paragraph:17", source: source);
+
+        var itemSource = locator.Source as ReaderSourceItemReference;
+        Assert.IsNotNull(itemSource);
+        Assert.AreEqual("source-paragraph:17", itemSource.SourceItemId);
+    }
+
     [TestMethod]
     public void ImageLocatorUsesLogicalPageAndOptionalViewport()
     {
