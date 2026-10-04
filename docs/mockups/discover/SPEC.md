@@ -105,6 +105,24 @@ The visual system may use icon + short code/color, but must remain understandabl
 
 Detailed audio/subtitle/edition language information belongs in the preview/detail surface.
 
+## Request / acquisition state
+
+Discover uses the same canonical Request contract for every requestable media type, including Audiobooks.
+
+For Audiobooks specifically:
+
+- the card/detail target resolves to canonical Audiobook/Book-Work identity before Request is created;
+- Request is the only consumer acquisition action when the audiobook is not already playable;
+- capability policy may leave the Request pending for approval or auto-approve it immediately;
+- after approval/auto-approval, Jularr automatically searches all enabled audiobook acquisition providers;
+- direct/public sources may complete without SABnzbd; otherwise the shared indexer/download-client path is used;
+- the card action remains layout-stable while acquisition runs and shows live Request/Operation state for Searching, Downloading and Importing;
+- completed acquisition replaces Request/progress with Listen / Continue Listening / Open when a playable result exists;
+- compatible duplicate Requests collapse onto the same canonical acquisition state;
+- provider, indexer, download-client, file and release internals remain Admin-only.
+
+The live control is stateful but does not make Discover a Downloads dashboard. It shows only the consumer-relevant stage/progress and terminal action.
+
 ## Media Preview / Quick View
 
 Binding shared specification: `docs/mockups/media-preview/SPEC.md`.
