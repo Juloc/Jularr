@@ -51,6 +51,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
       source_sha: ${{ steps.release.outputs.source_sha }}
+      artifact_sha: ${{ steps.release.outputs.artifact_sha }}
       source_run_id: ${{ steps.release.outputs.source_run_id }}
 
     steps:
@@ -75,9 +76,12 @@ jobs:
           if [[ "${EVENT_NAME}" == "workflow_dispatch" && "${REF_NAME}" == "refs/heads/main" && "${RELEASE_INPUT}" == "true" ]]; then
             IS_RELEASE=true
           elif [[ "${EVENT_NAME}" == "push" && "${REF_NAME}" == "refs/heads/main" ]] \
-            && git rev-parse --verify HEAD^ >/dev/null 2>&1 \
-            && ! git diff --quiet HEAD^ HEAD -- "${VERSION_FILE}"; then
-            IS_RELEASE=true
+            && git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            SUBJECT="$(git log -1 --pretty=%s)"
+            if ! git diff --quiet HEAD^ HEAD -- "${VERSION_FILE}" \
+              || [[ "${SUBJECT}" == release:\ retry* ]]; then
+              IS_RELEASE=true
+            fi
           fi
 
           echo "is_release=${IS_RELEASE}" >> "${GITHUB_OUTPUT}"
@@ -85,6 +89,7 @@ jobs:
             echo "version=" >> "${GITHUB_OUTPUT}"
             echo "tag=" >> "${GITHUB_OUTPUT}"
             echo "source_sha=" >> "${GITHUB_OUTPUT}"
+            echo "artifact_sha=" >> "${GITHUB_OUTPUT}"
             echo "source_run_id=" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -111,7 +116,602 @@ jobs:
           fi
 
           RUN_ID=""
-          while IFS=$'\t' read -r candidate_run candidate_sha; do
+          ARTIFACT_SHA=""
+          while IFS=
+            [[ -n "${candidate_run}" && -n "${candidate_sha}" ]] || continue
+            git cat-file -e "${candidate_sha}^{commit}" 2>/dev/null || continue
+            git merge-base --is-ancestor "${candidate_sha}" "${SOURCE_SHA}" || continue
+            if git diff --quiet "${candidate_sha}" "${SOURCE_SHA}" -- . \
+              ':(exclude)clients/android/**' \
+              ':(exclude)docs/**' \
+              ':(exclude)**/*.md' \
+              ':(exclude).github/workflows/android.yml' \
+              ':(exclude).github/workflows/ci.yml'; then
+              artifact_count="$(gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run}/artifacts" \
+                --jq '[.artifacts[] | select(.name == "jularr-image" and .expired == false)] | length')"
+              if [[ "${artifact_count}" != "0" ]]; then
+                RUN_ID="${candidate_run}"
+                ARTIFACT_SHA="${candidate_sha}"
+                break
+              fi
+            fi
+          done < <(
+            gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=dev&event=push&status=success&per_page=100" \
+              --jq '.workflow_runs[] | [.id, .head_sha] | @tsv'
+          )
+
+          if [[ -z "${RUN_ID}" || -z "${ARTIFACT_SHA}" ]]; then
+            echo "::error::No successful dev CI image artifact covers release source ${SOURCE_SHA}."
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "source_sha=${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_sha=${ARTIFACT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "source_run_id=${RUN_ID}" >> "${GITHUB_OUTPUT}"
+
+  build-test:
+    needs: release-info
+    if: always() && (github.ref != 'refs/heads/main' || needs.release-info.outputs.is_release != 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The test suite runs against a real PostgreSQL (#570). The password is a throwaway CI value.
+    env:
+      JULARR_TEST_DB: "Host=localhost;Port=5432;Username=jularr;Password=jularr_ci;Include Error Detail=true"
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jularr
+          POSTGRES_PASSWORD: jularr_ci
+          POSTGRES_DB: jularr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jularr -d jularr"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+          --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=3221225472
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets', '**/NuGet.Config') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - run: dotnet restore Jularr.sln
+      - run: dotnet build Jularr.sln --no-restore --configuration Release
+      - name: Tune ephemeral PostgreSQL for parallel tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}' | head -n 1)"
+          test -n "${PG_CONTAINER}"
+          docker exec -i "${PG_CONTAINER}" psql -U jularr -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER SYSTEM SET fsync = off;
+          ALTER SYSTEM SET synchronous_commit = off;
+          ALTER SYSTEM SET full_page_writes = off;
+          ALTER SYSTEM SET max_wal_size = '256MB';
+          ALTER SYSTEM SET min_wal_size = '80MB';
+          SELECT pg_reload_conf();
+          SQL
+
+      - name: Run tests in three PostgreSQL-isolated shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIST_FILE="${RUNNER_TEMP}/jularr-tests.list"
+          SHARD_DIR="${RUNNER_TEMP}/jularr-test-shards"
+          mkdir -p "${SHARD_DIR}"
+
+          dotnet test tests/Jularr.Tests/Jularr.Tests.csproj \
+            --no-build --configuration Release --list-tests > "${LIST_FILE}"
+
+          python3 - "${LIST_FILE}" "${SHARD_DIR}" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          list_file = Path(sys.argv[1])
+          shard_dir = Path(sys.argv[2])
+          lines = list_file.read_text().splitlines()
+          try:
+              start = next(i for i, line in enumerate(lines) if "The following Tests are available:" in line) + 1
+          except StopIteration:
+              raise SystemExit("dotnet test --list-tests did not return a test list")
+
+          discovered = [line.strip() for line in lines[start:] if line.strip()]
+          if not discovered:
+              raise SystemExit("No tests discovered")
+          (shard_dir / "expected-total.txt").write_text(str(len(discovered)))
+
+          class_pattern = re.compile(
+              r"\[TestClass(?:Attribute)?\][\s\S]{0,800}?\b(?:public|internal)\s+"
+              r"(?:(?:sealed|partial|static|abstract)\s+)*class\s+([A-Za-z_]\w*)"
+          )
+          namespace_pattern = re.compile(r"\bnamespace\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*[;{]")
+
+          weighted_classes = []
+          seen = set()
+          for path in sorted(Path("tests/Jularr.Tests").rglob("*.cs")):
+              source = path.read_text(errors="ignore")
+              class_names = class_pattern.findall(source)
+              if not class_names:
+                  continue
+              namespace_match = namespace_pattern.search(source)
+              if not namespace_match:
+                  raise SystemExit(f"TestClass without namespace in {path}")
+              namespace = namespace_match.group(1)
+              weight = max(
+                  1,
+                  source.count("[TestMethod")
+                  + source.count("[DataTestMethod")
+                  + source.count("[DataRow")
+                  + source.count("[DynamicData"),
+              )
+              per_class = max(1, weight // len(class_names))
+              for class_name in class_names:
+                  full_name = f"{namespace}.{class_name}"
+                  if full_name in seen:
+                      raise SystemExit(f"Duplicate test class discovered: {full_name}")
+                  seen.add(full_name)
+                  weighted_classes.append((full_name, per_class))
+
+          if not weighted_classes:
+              raise SystemExit("No TestClass declarations discovered")
+
+          shard_count = 3
+          shards = [[] for _ in range(shard_count)]
+          loads = [0] * shard_count
+          for class_name, weight in sorted(weighted_classes, key=lambda item: (-item[1], item[0])):
+              target = min(range(shard_count), key=lambda i: loads[i])
+              shards[target].append(class_name)
+              loads[target] += weight
+
+          for index, classes in enumerate(shards):
+              if not classes:
+                  raise SystemExit(f"Shard {index + 1} is empty")
+              filter_expression = "|".join(f"FullyQualifiedName~{name}." for name in classes)
+              (shard_dir / f"filter-{index + 1}.txt").write_text(filter_expression)
+
+          print(
+              f"Discovered {len(discovered)} tests and {len(weighted_classes)} test classes; "
+              f"estimated shard weights: {loads}"
+          )
+          PY
+
+          list_pids=()
+          for shard in 1 2 3; do
+            filter="$(cat "${SHARD_DIR}/filter-${shard}.txt")"
+            (
+              dotnet test tests/Jularr.Tests/Jularr.Tests.csproj \
+                --no-build --configuration Release \
+                --filter "${filter}" \
+                --list-tests
+            ) > "${SHARD_DIR}/list-${shard}.txt" 2>&1 &
+            list_pids+=("$!")
+          done
+
+          for index in 0 1 2; do
+            wait "${list_pids[${index}]}"
+          done
+
+          python3 - "${LIST_FILE}" "${SHARD_DIR}" <<'PY'
+          from collections import Counter
+          from pathlib import Path
+          import sys
+
+          def listed_tests(path: Path):
+              lines = path.read_text(errors="ignore").splitlines()
+              try:
+                  start = next(i for i, line in enumerate(lines) if "The following Tests are available:" in line) + 1
+              except StopIteration:
+                  raise SystemExit(f"{path} did not contain a test list")
+              return [line.strip() for line in lines[start:] if line.strip()]
+
+          expected = Counter(listed_tests(Path(sys.argv[1])))
+          actual = Counter()
+          shard_dir = Path(sys.argv[2])
+          for shard in range(1, 4):
+              actual.update(listed_tests(shard_dir / f"list-{shard}.txt"))
+
+          if actual != expected:
+              missing = list((expected - actual).elements())[:10]
+              extra = list((actual - expected).elements())[:10]
+              raise SystemExit(f"Shard discovery mismatch. Missing={missing} Extra={extra}")
+
+          print(f"Shard discovery coverage verified: {sum(actual.values())} listed tests")
+          PY
+
+          pids=()
+          for shard in 1 2 3; do
+            filter="$(cat "${SHARD_DIR}/filter-${shard}.txt")"
+            (
+              dotnet test tests/Jularr.Tests/Jularr.Tests.csproj \
+                --no-build --configuration Release \
+                --filter "${filter}" \
+                --logger "console;verbosity=minimal"
+            ) > "${SHARD_DIR}/shard-${shard}.log" 2>&1 &
+            pids+=("$!")
+          done
+
+          status=0
+          for index in 0 1 2; do
+            shard=$((index + 1))
+            if ! wait "${pids[${index}]}"; then
+              status=1
+            fi
+            echo "===== test shard ${shard} ====="
+            cat "${SHARD_DIR}/shard-${shard}.log"
+          done
+
+          exit "${status}"
+
+      - name: Validate single-container Compose
+        run: |
+          test "$(docker compose config --services)" = "jularr"
+          test "$(docker compose config --images)" = "ghcr.io/juloc/jularr:latest"
+          ! docker compose config | grep -q '/media/anime'
+
+  image:
+    needs: release-info
+    if: always() && (github.ref != 'refs/heads/main' || needs.release-info.outputs.is_release != 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The app now requires PostgreSQL at startup (#570). The smoke-test containers reach a
+    # throwaway PostgreSQL container by name on a shared user-defined network.
+    env:
+      PG_CONN: "Host=jularr-ci-pg;Port=5432;Database=jularr;Username=jularr;Password=jularr_ci"
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image and refresh dev cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: src/Jularr.Web/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=jularr-docker
+          cache-to: type=gha,mode=min,scope=jularr-docker
+
+      - name: Build Docker image
+        if: github.event_name != 'push' || github.ref != 'refs/heads/dev'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: src/Jularr.Web/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=jularr-docker
+
+      - name: Start PostgreSQL for smoke tests
+        run: |
+          set -euo pipefail
+          docker network create jularr-ci >/dev/null
+          docker run -d --name jularr-ci-pg --network jularr-ci \
+            -e POSTGRES_USER=jularr -e POSTGRES_PASSWORD=jularr_ci -e POSTGRES_DB=jularr \
+            --health-cmd "pg_isready -U jularr -d jularr" \
+            --health-interval 3s --health-timeout 5s --health-retries 20 \
+            postgres:18 >/dev/null
+          for _ in {1..40}; do
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' jularr-ci-pg)" = healthy ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs jularr-ci-pg
+          exit 1
+
+      - name: Smoke test startup without NAS
+        run: |
+          docker run -d --name jularr-no-nas \
+            --network jularr-ci -e "ConnectionStrings__Default=${PG_CONN}" \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -p 127.0.0.1:18097:8080 "${IMAGE}:${GITHUB_SHA}"
+          trap 'docker rm -f jularr-no-nas >/dev/null 2>&1 || true' EXIT
+
+          for _ in {1..30}; do
+            if curl -fsS http://127.0.0.1:18097/Account/Setup >/dev/null; then
+              test "$(docker exec jularr-no-nas id -un)" = "jularr"
+              test "$(docker exec jularr-no-nas id -u)" = "1654"
+              test "$(docker exec jularr-no-nas id -g)" = "1654"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs jularr-no-nas
+          exit 1
+
+      - name: Smoke test dynamic NAS mount gateway
+        run: |
+          set -euo pipefail
+          HOST_PARENT="${RUNNER_TEMP}/jularr-media-parent"
+          HOST_NAS="${HOST_PARENT}/arr_bay4_media"
+          NAS_CONTENT="${RUNNER_TEMP}/jularr-media-content"
+          mkdir -p "${HOST_NAS}" "${NAS_CONTENT}/anime"
+          printf 'online\n' > "${NAS_CONTENT}/anime/online-marker"
+
+          cleanup() {
+            docker rm -f jularr-media-gateway >/dev/null 2>&1 || true
+            sudo umount "${HOST_NAS}" >/dev/null 2>&1 || true
+            sudo umount "${HOST_PARENT}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          # The parent stays mounted while a NAS submount may appear/disappear.
+          # rslave makes those host-side submount changes visible in the already
+          # running container without giving the container mount capabilities.
+          sudo mount --bind "${HOST_PARENT}" "${HOST_PARENT}"
+          sudo mount --make-rshared "${HOST_PARENT}"
+
+          docker run -d --name jularr-media-gateway \
+            --network jularr-ci -e "ConnectionStrings__Default=${PG_CONN}" \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -e 'JULARR_MEDIA_ROOT=/host-mounts/arr_bay4_media' \
+            --mount "type=bind,source=${HOST_PARENT},target=/host-mounts,bind-propagation=rslave" \
+            "${IMAGE}:${GITHUB_SHA}"
+
+          for _ in {1..30}; do
+            if docker exec jularr-media-gateway test -L /media; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec jularr-media-gateway test -L /media
+          ! docker exec jularr-media-gateway test -e /media/anime/online-marker
+
+          sudo mount --bind "${NAS_CONTENT}" "${HOST_NAS}"
+          for _ in {1..20}; do
+            if docker exec jularr-media-gateway test -f /media/anime/online-marker; then
+              break
+            fi
+            sleep 0.25
+          done
+          test "$(docker exec jularr-media-gateway cat /media/anime/online-marker)" = "online"
+
+          sudo umount "${HOST_NAS}"
+          for _ in {1..20}; do
+            if ! docker exec jularr-media-gateway test -e /media/anime/online-marker; then
+              break
+            fi
+            sleep 0.25
+          done
+          ! docker exec jularr-media-gateway test -e /media/anime/online-marker
+
+          # Existing deployments may still bind a permanently available root
+          # directly to /media; that contract remains supported.
+          docker run --rm --entrypoint sh \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            --mount "type=bind,source=${NAS_CONTENT},target=/media,readonly" \
+            "${IMAGE}:${GITHUB_SHA}" -c 'test -r /media/anime/online-marker'
+
+      - name: Smoke test upgrade from a root-owned /data
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker rm -f jularr-legacy >/dev/null 2>&1 || true
+            docker volume rm -f jularr-legacy-data >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          # Simulate /data written by an earlier image that still ran as root.
+          docker volume create jularr-legacy-data >/dev/null
+          docker run --rm --user 0:0 --entrypoint sh -v jularr-legacy-data:/data "${IMAGE}:${GITHUB_SHA}" \
+            -c 'mkdir -p /data/keys && touch /data/keys/legacy-root-file && chown -R 0:0 /data && chmod 0755 /data'
+
+          # The jularr user/group are fixed at UID/GID 1654:1654 (renamed
+          # from, or matching, the aspnet base image's own "app" user), so an
+          # operator's existing `chown -R 1654:1654` fix keeps working.
+          JULARR_UID="$(docker run --rm --entrypoint id "${IMAGE}:${GITHUB_SHA}" -u jularr)"
+          JULARR_GID="$(docker run --rm --entrypoint id "${IMAGE}:${GITHUB_SHA}" -g jularr)"
+          test "${JULARR_UID}" = "1654"
+          test "${JULARR_GID}" = "1654"
+
+          if docker run --rm -v jularr-legacy-data:/data "${IMAGE}:${GITHUB_SHA}" > "${RUNNER_TEMP}/legacy.log" 2>&1; then
+            cat "${RUNNER_TEMP}/legacy.log"
+            echo "::error::The image started with a root-owned /data."
+            exit 1
+          fi
+          cat "${RUNNER_TEMP}/legacy.log"
+          grep -q "Jularr startup aborted" "${RUNNER_TEMP}/legacy.log"
+          grep -qF "chown -v <jularr-data>:/data ghcr.io/juloc/jularr:latest -R 1654:1654 /data" "${RUNNER_TEMP}/legacy.log"
+
+          # The documented one-time fix (with the image under test instead of :latest).
+          docker run --rm --user 0:0 --entrypoint chown -v jularr-legacy-data:/data "${IMAGE}:${GITHUB_SHA}" -R 1654:1654 /data
+
+          docker run -d --name jularr-legacy \
+            --network jularr-ci -e "ConnectionStrings__Default=${PG_CONN}" \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -v jularr-legacy-data:/data -p 127.0.0.1:18098:8080 "${IMAGE}:${GITHUB_SHA}"
+          for _ in {1..30}; do
+            if curl -fsS http://127.0.0.1:18098/Account/Setup >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs jularr-legacy
+          exit 1
+
+      - name: Stop smoke-test PostgreSQL
+        if: always()
+        run: |
+          docker rm -f jularr-ci-pg >/dev/null 2>&1 || true
+          docker network rm jularr-ci >/dev/null 2>&1 || true
+
+      # publish pushes exactly this smoke-tested image instead of rebuilding it
+      # on another runner, where a cache miss or newer apt package could differ.
+      - name: Export tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        run: |
+          set -euo pipefail
+          # Content fingerprint (layer diff IDs + image config) that survives
+          # save/load with both the classic and the containerd image store.
+          docker image inspect --format '{{json .RootFS.Layers}}{{json .Config}}' "${IMAGE}:${GITHUB_SHA}" \
+            | sha256sum | cut -d' ' -f1 > "${RUNNER_TEMP}/jularr-image.fingerprint"
+          docker save "${IMAGE}:${GITHUB_SHA}" | zstd -T0 -3 -q -o "${RUNNER_TEMP}/jularr-image.tar.zst"
+
+      - name: Upload tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.IMAGE_ARTIFACT }}
+          path: |
+            ${{ runner.temp }}/jularr-image.tar.zst
+            ${{ runner.temp }}/jularr-image.fingerprint
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    if: needs.release-info.outputs.is_release == 'true'
+    needs:
+      - release-info
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download tested dev image
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.IMAGE_ARTIFACT }}
+          path: ${{ runner.temp }}/jularr-image
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.release-info.outputs.source_run_id }}
+
+      - name: Load tested image
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIR="${RUNNER_TEMP}/jularr-image"
+          zstd -dc -q "${DIR}/jularr-image.tar.zst" | docker load
+          EXPECTED="$(cat "${DIR}/jularr-image.fingerprint")"
+          ARTIFACT_SHA="${{ needs.release-info.outputs.artifact_sha }}"
+          ACTUAL="$(docker image inspect --format '{{json .RootFS.Layers}}{{json .Config}}' "${IMAGE}:${ARTIFACT_SHA}" \
+            | sha256sum | cut -d' ' -f1)"
+          if [[ "${EXPECTED}" != "${ACTUAL}" ]]; then
+            echo "::error::Loaded image fingerprint ${ACTUAL} does not match the smoke-tested dev image ${EXPECTED}."
+            exit 1
+          fi
+          docker tag "${IMAGE}:${ARTIFACT_SHA}" "${IMAGE}:${GITHUB_SHA}"
+          rm -rf "${DIR}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish commit, latest and versioned images
+        env:
+          VERSION: ${{ needs.release-info.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -n "${VERSION}"
+          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:latest"
+          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:${VERSION}"
+          docker push "${IMAGE}:${GITHUB_SHA}"
+          docker push "${IMAGE}:latest"
+          docker push "${IMAGE}:${VERSION}"
+
+  release:
+    if: needs.release-info.outputs.is_release == 'true'
+    needs:
+      - release-info
+      - publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.release-info.outputs.tag }}
+          VERSION: ${{ needs.release-info.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -n "${VERSION}"
+          gh release create "${RELEASE_TAG}" \
+            --target "${GITHUB_SHA}" \
+            --title "Jularr ${VERSION}" \
+            --prerelease \
+            --generate-notes
+
+  android-release:
+    if: needs.release-info.outputs.is_release == 'true'
+    needs:
+      - release-info
+    uses: ./.github/workflows/android.yml
+    with:
+      release: true
+      attach: false
+    secrets: inherit
+    permissions:
+      contents: write
+
+  attach-android-release:
+    if: needs.release-info.outputs.is_release == 'true'
+    needs:
+      - release-info
+      - release
+      - android-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download signed Android release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: jularr-android-release-assets
+          path: dist
+
+      - name: Attach Android assets to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.release-info.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "${RELEASE_TAG}" dist/*.apk dist/*.sha256 --clobber
+\t' read -r candidate_run candidate_sha; do
             [[ -n "${candidate_run}" && -n "${candidate_sha}" ]] || continue
             git cat-file -e "${candidate_sha}^{commit}" 2>/dev/null || continue
             git merge-base --is-ancestor "${candidate_sha}" "${SOURCE_SHA}" || continue
