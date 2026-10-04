@@ -82,7 +82,7 @@ public sealed record ReaderCapabilities(
                 SupportsAutoScroll: false,
                 SupportsTypography: false,
                 SupportsTextSelection: false,
-                SupportsHighlights: true,
+                SupportsHighlights: false,
                 SupportsBookmarks: true,
                 SupportsDualLanguage: false,
                 SupportsTranslation: false,
