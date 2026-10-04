@@ -26,7 +26,7 @@ public sealed class ReaderPersonalizationTests
                 Defaults(font: "book-serif", paper: "cream"),
                 CancellationToken.None);
 
-            await ReaderPreferenceStore.SaveBookOverrideAsync(
+            await ReaderPreferenceStore.SaveWorkOverrideAsync(
                 db,
                 "reader-a",
                 work.Id,
@@ -63,7 +63,7 @@ public sealed class ReaderPersonalizationTests
             Assert.AreEqual("system-sans", afterDefaultChange.FontFamily);
             Assert.AreEqual("sepia", afterDefaultChange.PaperStyle);
 
-            await ReaderPreferenceStore.ResetBookAsync(
+            await ReaderPreferenceStore.ResetWorkAsync(
                 db,
                 "reader-a",
                 work.Id,
