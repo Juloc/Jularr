@@ -15,10 +15,7 @@ namespace Jularr.Web.Features.Notifications;
 /// </summary>
 public sealed class NotificationSubscriptionStore(AppDbContext db)
 {
-    public async Task<NotificationEventPreference> GetEventPreferenceAsync(
-        string profileId,
-        JularrEventCategory category,
-        CancellationToken cancellationToken = default)
+    public async Task<NotificationEventPreference> GetEventPreferenceAsync(string profileId, JularrEventCategory category, CancellationToken cancellationToken = default)
     {
         profileId = NormalizeProfileId(profileId);
         EnsureCategory(category);
@@ -79,9 +76,7 @@ public sealed class NotificationSubscriptionStore(AppDbContext db)
     }
 
     /// <summary>Returns every catalog category, resolving missing explicit rows from its built-in event policy.</summary>
-    public async Task<IReadOnlyDictionary<JularrEventCategory, NotificationEventPreference>> GetAllEventPreferencesAsync(
-        string profileId,
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyDictionary<JularrEventCategory, NotificationEventPreference>> GetAllEventPreferencesAsync(string profileId, CancellationToken cancellationToken = default)
     {
         profileId = NormalizeProfileId(profileId);
 
@@ -141,28 +136,15 @@ public sealed class NotificationSubscriptionStore(AppDbContext db)
                     continue;
                 }
 
-                var channels = channelsByCategory.TryGetValue(category, out var selectedChannels)
-                    ? selectedChannels.ToFrozenSet()
-                    : Array.Empty<NotificationChannel>().ToFrozenSet();
-                result[category] = new NotificationEventPreference(
-                    profileId,
-                    category,
-                    explicitPreference.Enabled,
-                    channels,
-                    explicitPreference.Timing,
-                    explicitPreference.UpdatedAtUtc,
-                    true);
+                var channels = channelsByCategory.TryGetValue(category, out var selectedChannels) ? selectedChannels.ToFrozenSet() : Array.Empty<NotificationChannel>().ToFrozenSet();
+                result[category] = new NotificationEventPreference(profileId, category, explicitPreference.Enabled, channels, explicitPreference.Timing, explicitPreference.UpdatedAtUtc, true);
             }
 
             return result;
         }, cancellationToken);
     }
 
-    public Task SetEventPreferenceAsync(
-        string profileId,
-        JularrEventCategory category,
-        NotificationEventPreferenceUpdate update,
-        CancellationToken cancellationToken = default)
+    public Task SetEventPreferenceAsync(string profileId, JularrEventCategory category, NotificationEventPreferenceUpdate update, CancellationToken cancellationToken = default)
     {
         profileId = NormalizeProfileId(profileId);
         EnsureCategory(category);
@@ -227,10 +209,7 @@ public sealed class NotificationSubscriptionStore(AppDbContext db)
         }, cancellationToken);
     }
 
-    public Task ResetEventPreferenceAsync(
-        string profileId,
-        JularrEventCategory category,
-        CancellationToken cancellationToken = default)
+    public Task ResetEventPreferenceAsync(string profileId, JularrEventCategory category, CancellationToken cancellationToken = default)
     {
         profileId = NormalizeProfileId(profileId);
         EnsureCategory(category);
@@ -269,9 +248,7 @@ public sealed class NotificationSubscriptionStore(AppDbContext db)
         }, cancellationToken);
     }
 
-    public async Task<IReadOnlyDictionary<NotificationChannel, NotificationProfileChannelPreference>> GetProfileChannelPreferencesAsync(
-        string profileId,
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyDictionary<NotificationChannel, NotificationProfileChannelPreference>> GetProfileChannelPreferencesAsync(string profileId, CancellationToken cancellationToken = default)
     {
         profileId = NormalizeProfileId(profileId);
 
@@ -300,19 +277,13 @@ public sealed class NotificationSubscriptionStore(AppDbContext db)
         var result = new Dictionary<NotificationChannel, NotificationProfileChannelPreference>();
         foreach (var channel in Enum.GetValues<NotificationChannel>())
         {
-            result[channel] = saved.TryGetValue(channel, out var preference)
-                ? preference
-                : NotificationProfileChannelPreference.FromDefault(profileId, channel);
+            result[channel] = saved.TryGetValue(channel, out var preference) ? preference : NotificationProfileChannelPreference.FromDefault(profileId, channel);
         }
 
         return result;
     }
 
-    public Task SetProfileChannelEnabledAsync(
-        string profileId,
-        NotificationChannel channel,
-        bool enabled,
-        CancellationToken cancellationToken = default)
+    public Task SetProfileChannelEnabledAsync(string profileId, NotificationChannel channel, bool enabled, CancellationToken cancellationToken = default)
     {
         profileId = NormalizeProfileId(profileId);
         EnsureChannel(channel);
