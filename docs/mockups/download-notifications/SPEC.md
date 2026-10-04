@@ -1,6 +1,6 @@
 # Download Toasts & Notification Events
 
-This specification defines how consumer offline-download events are surfaced through in-app toasts/snackbars, the existing Notification/Bell surface, and supported operating-system notifications.
+This specification defines the **Offline-domain event semantics and context** for consumer offline downloads. Canonical Notification infrastructure owns the durable inbox/Bell projection, transient attention/Toast policy, foreground/background deduplication and supported operating-system delivery.
 
 Approved visual references for this surface live in this folder. If image and text conflict, this specification wins.
 
@@ -9,7 +9,7 @@ Related:
 - `docs/mockups/download-quick-view/SPEC.md` — live operational download state
 - `docs/mockups/downloads-offline/SPEC.md` — full current-device manager
 - `docs/mockups/offline-settings/SPEC.md` — notification category entry point and offline policy
-- existing Jularr Notification/Bell contracts — durable user-facing event history
+- canonical Jularr Notification contracts — durable inbox/Bell, Toast attention, action resolution and external delivery. When the dedicated Notifications planning work is integrated, its `docs/NOTIFICATIONS.md` and notification surface specs are authoritative for shared presentation behavior.
 
 ## 1. Product role
 
@@ -41,6 +41,26 @@ Do not create:
 - a second download-status owner;
 - page-local notification state;
 - duplicate durable Bell entries for the same event.
+
+## 2.1 Shared Notification ownership boundary
+
+Offline owns:
+- the fact that a local Offline transition occurred;
+- subject/media identity needed for user-facing context;
+- safe domain actions such as Retry or opening Downloads;
+- severity/action-required meaning specific to Offline state.
+
+The canonical Notification system owns:
+- profile subscription/preferences;
+- durable inbox persistence;
+- read/unread/dismissal;
+- Bell count and Bell/Center queries;
+- transient Toast queue/dedup/attention policy;
+- foreground/background and immersive-mode suppression;
+- Quiet Hours/Digest/external delivery;
+- canonical notification action resolution.
+
+Do not create an Offline-specific NotificationStore, Bell model or Toast presenter.
 
 ## 3. Channel responsibilities
 
@@ -360,12 +380,14 @@ It must not cover:
 - critical modal actions.
 
 ### Mobile
-Use the shared snackbar/toast region above persistent bottom navigation and device safe area.
+Placement is owned by the shared canonical Notification Toast component rather than the Offline subsystem.
 
-It must not obscure:
-- bottom-navigation controls;
-- player transport;
-- sheet primary action.
+The current canonical target uses a compact **top in-app banner/toast** while Jularr is foregrounded on phone-sized layouts. It must respect the app bar/safe area and must not obscure:
+- Player/Reader immersive controls;
+- critical sheet/modal actions;
+- system safe areas.
+
+The approved Offline reference that shows a bottom snackbar remains an **event-content example**, not placement authority. Canonical Notification layout wins when the two planning branches are integrated.
 
 ## 20. Toast content anatomy
 
