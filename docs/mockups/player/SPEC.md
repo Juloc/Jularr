@@ -769,6 +769,54 @@ Adaptation rules:
 - if true multi-rendition ABR is unavailable, a quality change may request a new PlaybackPlan/delivery at the same absolute position while preserving ActiveSession, selected tracks and progress;
 - the Player reports measurements; it does not locally become a second quality-decision engine.
 
+## 10a. Audio/video sync correction
+
+A/V sync is a first-class playback correction, not an undocumented FFmpeg workaround.
+
+### User correction
+When audio is visibly early/late, the Player exposes **Audio sync** inside the Audio/settings surface:
+- adjustment in milliseconds with clear direction semantics;
+- small-step controls suitable for lip-sync correction, plus direct reset to 0 ms;
+- applies to the current ActiveSession immediately without changing canonical progress;
+- session-only by default;
+- an authenticated user may optionally remember a personal correction for the exact Version/File + selected audio Track; that preference must not affect other users.
+
+The active correction must remain stable across pause/resume, seek, quality changes, remux/transcode fallback, fullscreen/PiP and restoration of the same ActiveSession. Seeking must never accumulate the delay a second time.
+
+A non-zero correction becomes an explicit PlaybackPlan input/reason. If the current Direct Play client cannot apply the requested correction reliably while leaving the original untouched, Direct Play is ruled out with a machine-readable reason and Jularr selects the lightest valid processing path. The client must not silently pretend the adjustment is active.
+
+### Source/admin repair
+Admin diagnostics for the canonical File/Track must distinguish:
+- source/container timing anomaly;
+- selected audio-track offset/delay metadata;
+- timestamp discontinuity/non-zero or negative stream starts;
+- delivery/remux/transcode timing regression;
+- client-only playback behavior.
+
+The media analysis should retain timing facts required for diagnosis where ffprobe exposes them, including stream/container start times, time bases and relevant timestamp/disposition metadata.
+
+Admin actions:
+- **Analyze A/V timing** without modifying the source;
+- preview/test a correction;
+- store an explicit canonical timing override for the affected File + audio Track when the source is known to be wrong;
+- create/use a lossless repaired derivative/remux when timestamp/container repair is sufficient;
+- mark the Version/source as bad and trigger the normal replacement/re-request workflow when repair is not trustworthy.
+
+Original media stays read-only. Jularr must not destructively rewrite the only source file.
+
+Automatic repair may normalize objectively broken timestamp structure when the condition is deterministic and reversible. Jularr must not automatically guess subjective lip-sync from picture/speech content and persist that guess as truth.
+
+### Verification
+Regression coverage must include at least:
+- positive and negative audio offsets;
+- non-zero/negative stream start timestamps;
+- Direct Play versus remux versus audio-convert/transcode behavior;
+- seek before/after a correction;
+- HLS/fMP4 segment boundaries;
+- track switches;
+- repeated re-plan/fallback without cumulative drift;
+- a source that is already synchronized and therefore remains at 0 ms.
+
 ## 11. Playback mode status and diagnostics
 
 Normal UI may show a compact status in overflow/details:
