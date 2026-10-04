@@ -87,8 +87,11 @@ public sealed class TmdbDiscoveryTests
         });
         var provider = Provider(db, client);
 
+        Assert.IsTrue(TmdbDiscoveryProvider.TryNormalizeExternalId("00550", out var normalizedId));
+        Assert.AreEqual("550", normalizedId);
+
         var first = await provider.EnsureCanonicalWorkAsync(
-            TmdbDiscoveryMediaType.Movie, "550", CancellationToken.None);
+            TmdbDiscoveryMediaType.Movie, "00550", CancellationToken.None);
         var second = await provider.EnsureCanonicalWorkAsync(
             TmdbDiscoveryMediaType.Movie, "550", CancellationToken.None);
 
@@ -110,6 +113,34 @@ public sealed class TmdbDiscoveryTests
             && x.SourceId == legacy.Id));
         Assert.IsTrue(await db.WorkFieldProvenance.AnyAsync(x =>
             x.WorkId == first.Id && x.FieldKey == "title" && x.Source == ProviderKeys.Tmdb));
+    }
+
+    [TestMethod]
+    public async Task TmdbFailureOnlyDegradesTheRequestedMovieFeed()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var client = Client(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        var tmdb = Provider(db, client);
+        var coordinator = new DiscoveryCoordinator(
+            null!,
+            null!,
+            null!,
+            tmdb,
+            null!,
+            db,
+            NullLogger<DiscoveryCoordinator>.Instance);
+
+        var response = await coordinator.GetAsync(
+            DiscoveryRequest.Parse(null, "movie", "trending"),
+            $"tmdb-outage-{Guid.NewGuid():N}",
+            isOwner: false,
+            includeAniList: false,
+            includeBooks: false,
+            CancellationToken.None);
+
+        Assert.AreEqual(0, response.Items.Count);
+        Assert.AreEqual(1, response.Warnings.Count);
+        StringAssert.Contains(response.Warnings[0], "TMDB movie");
     }
 
     [TestMethod]
