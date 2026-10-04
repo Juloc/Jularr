@@ -656,7 +656,6 @@
     };
 
     const setChrome = visible => {
-        root.classList.remove("manga-chrome-hidden");
         root.dispatchEvent(new CustomEvent("jularr:reader-chrome", {
             detail: { visible }
         }));
