@@ -234,7 +234,7 @@ Permanent owning destinations are consolidated around:
 - Activity / To-Do, with History as the third tab;
 - Library, Wanted and Requests;
 - Downloader;
-- Providers;
+- Providers, including the Reading Sources family and its enablement/priority/fallback configuration;
 - Acquisition Profiles;
 - Storage;
 - AI;
@@ -250,6 +250,8 @@ Permanent owning destinations are consolidated around:
 - conditional Games administration when Games is available.
 
 Manual Search, Media Detail, assignment/reconciliation editors, Setup and Games editors/import-resolution are contextual flows rather than extra permanent sidebar destinations.
+
+Reading Sources do not get another permanent Admin destination. The current `/Admin/ReadingSources` surface is an implementation-migration input to `Admin → Providers → Reading Sources`; future reading-source adapters must extend that shared Provider family instead of adding pages.
 
 Legacy `/Admin/Resources`, `/Admin/Health`, `/Admin/Logs`, `/Admin/Sessions`, `/Admin/Devices`, `/Admin/History`, `/Admin/Usenet`, `/Admin/Sonarr`, `/Admin/Scans` and older `/Settings/*` configuration routes are implementation migration inputs. They may redirect/deep-link into their target owner after feature parity; they do not define target ownership.
 
@@ -372,7 +374,7 @@ each row's Where.
 | Acquisition (search/download/import) | Exists | `Features/ReadingAcquisition`, `AcquisitionRequestService` | — |
 | Monitoring/wanted | Exists | `WantedAcquisitionService` | — |
 | Metadata/provider mapping | Exists (AniList) | Manga/Novel AniList match services | — |
-| Configurable Light Novel search sources | Exists — the owner enables and prioritises sources (Narou, AniList, BOOK☆WALKER, WebNovel, Internet Archive) at `/Admin/ReadingSources`; each has a capability (public full text, published edition, preview, external reference), a licensing note and in-memory health. Discovery-only sources list results and link out, and cannot be added; Internet Archive lists only open or lendable items. See [READING_ACQUISITION.md](READING_ACQUISITION.md#reading-sources). **Follow-up:** the settings page is only linked from the Light Novel Add dialog, not from the Admin navigation | `Features/ReadingSources`, `Features/ReadingDiscovery`, `Pages/Admin/ReadingSources.cshtml` | #477 |
+| Configurable Light Novel search sources | Exists for current enable/disable + priority — Narou, AniList, BOOK☆WALKER, WebNovel and Internet Archive are configured at `/Admin/ReadingSources`, with capability/licensing/health and rights-aware Internet Archive filtering. **Target:** consolidate this into `Admin → Providers → Reading Sources`, add explicit Normal vs Fallback-only participation (including Internet Archive as a configurable fallback), media/language applicability and schema-driven future adapters without new pages. Acquisition Profiles may narrow/prefer the configured providers but cannot override adapter rights/capability limits. See [READING_ACQUISITION.md](READING_ACQUISITION.md#reading-sources) and [admin-providers/SPEC.md](mockups/admin-providers/SPEC.md). | `Features/ReadingSources`, `Features/ReadingDiscovery`, `Pages/Admin/ReadingSources.cshtml` | #477, #438 |
 | Naming/organization | Exists — one naming-template profile per reading media type (Books, Manga, Light Novels), applied when a release is placed into its NAS library root; live preview and token reference on `/Settings/ReadingNaming` (sibling of anime's `/Settings/Naming`) | `Features/Naming`, `Pages/Settings/ReadingNaming.cshtml(.cs)` | — |
 | Reading progress | Exists | `NovelProgress`, `MangaProgressItem`, bookmarks/highlights | — |
 | Multiple editions/formats | Exists (Books) | `BookEdition`/`BookFile` (EPUB, PDF) | — |
