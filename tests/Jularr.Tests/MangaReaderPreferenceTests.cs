@@ -19,6 +19,7 @@ public sealed class MangaReaderPreferenceTests
         {
             await using var db = await CreateDatabaseAsync(path);
             var seriesId = Guid.NewGuid();
+            var workId = Guid.NewGuid();
 
             db.ReaderPreferences.Add(new ReaderPreference
             {
@@ -38,6 +39,7 @@ public sealed class MangaReaderPreferenceTests
             var inherited = await MangaReaderPreferenceStore.GetAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
             Assert.AreEqual("webtoon", inherited.UiMode);
@@ -49,7 +51,7 @@ public sealed class MangaReaderPreferenceTests
             await MangaReaderPreferenceStore.SaveAsync(
                 db,
                 "reader-a",
-                seriesId,
+                workId,
                 new MangaReaderPreferenceInput { ImageZoomPercent = 175 },
                 "imageZoomPercent",
                 CancellationToken.None);
@@ -57,6 +59,7 @@ public sealed class MangaReaderPreferenceTests
             var overridden = await MangaReaderPreferenceStore.GetAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
             Assert.AreEqual(180, overridden.ImageZoomPercent);
@@ -69,12 +72,14 @@ public sealed class MangaReaderPreferenceTests
             await MangaReaderPreferenceStore.ResetSeriesAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
 
             var reset = await MangaReaderPreferenceStore.GetAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
             Assert.AreEqual(120, reset.ImageZoomPercent);
@@ -97,11 +102,12 @@ public sealed class MangaReaderPreferenceTests
         {
             await using var db = await CreateDatabaseAsync(path);
             var seriesId = Guid.NewGuid();
+            var workId = Guid.NewGuid();
 
             await MangaReaderPreferenceStore.SaveAsync(
                 db,
                 "reader-a",
-                seriesId: null,
+                workId: null,
                 new MangaReaderPreferenceInput
                 {
                     Mode = "horizontal",
@@ -121,6 +127,7 @@ public sealed class MangaReaderPreferenceTests
             var settings = await MangaReaderPreferenceStore.GetAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
 
