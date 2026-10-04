@@ -35,16 +35,16 @@ public sealed class MangaReaderPreferenceTests
             });
             await db.SaveChangesAsync();
 
-            var inherited = await MangaReaderPreferenceStore.GetAsync(db, "reader-a", workId, seriesId, CancellationToken.None);
+            var inherited = await MangaReaderPreferences.GetAsync(db, "reader-a", workId, CancellationToken.None);
             Assert.AreEqual("webtoon", inherited.UiMode);
             Assert.AreEqual("width", inherited.ImageFit);
             Assert.AreEqual(120, inherited.ImageZoomPercent);
             Assert.AreEqual("sepia", inherited.ImageColorScheme);
             Assert.IsFalse(inherited.AutoContinueChapters);
 
-            await MangaReaderPreferenceStore.SaveAsync(db, "reader-a", workId, new MangaReaderPreferenceInput { ImageZoomPercent = 175 }, "imageZoomPercent", CancellationToken.None);
+            await MangaReaderPreferences.SaveAsync(db, "reader-a", workId, new MangaReaderPreferenceInput { ImageZoomPercent = 175 }, "imageZoomPercent", CancellationToken.None);
 
-            var overridden = await MangaReaderPreferenceStore.GetAsync(db, "reader-a", workId, seriesId, CancellationToken.None);
+            var overridden = await MangaReaderPreferences.GetAsync(db, "reader-a", workId, CancellationToken.None);
             Assert.AreEqual(180, overridden.ImageZoomPercent);
             Assert.AreEqual("width", overridden.ImageFit);
             Assert.AreEqual("sepia", overridden.ImageColorScheme);
@@ -52,9 +52,9 @@ public sealed class MangaReaderPreferenceTests
             Assert.IsFalse(overridden.AutoContinueChapters);
             Assert.IsTrue(overridden.HasSeriesOverride);
 
-            await MangaReaderPreferenceStore.ResetWorkAsync(db, "reader-a", workId, seriesId, CancellationToken.None);
+            await MangaReaderPreferences.ResetWorkAsync(db, "reader-a", workId, CancellationToken.None);
 
-            var reset = await MangaReaderPreferenceStore.GetAsync(db, "reader-a", workId, seriesId, CancellationToken.None);
+            var reset = await MangaReaderPreferences.GetAsync(db, "reader-a", workId, CancellationToken.None);
             Assert.AreEqual(120, reset.ImageZoomPercent);
             Assert.IsFalse(reset.HasSeriesOverride);
         }
@@ -88,9 +88,9 @@ public sealed class MangaReaderPreferenceTests
                 ImageColorScheme = "dark"
             };
 
-            await MangaReaderPreferenceStore.SaveAsync(db, "reader-a", workId: null, input, changedKey: null, CancellationToken.None);
+            await MangaReaderPreferences.SaveAsync(db, "reader-a", workId: null, input, changedKey: null, CancellationToken.None);
 
-            var settings = await MangaReaderPreferenceStore.GetAsync(db, "reader-a", workId, seriesId, CancellationToken.None);
+            var settings = await MangaReaderPreferences.GetAsync(db, "reader-a", workId, CancellationToken.None);
             Assert.AreEqual("horizontal", settings.UiMode);
             Assert.AreEqual("ltr", settings.PageDirection);
             Assert.AreEqual("width", settings.ImageFit);
@@ -109,49 +109,24 @@ public sealed class MangaReaderPreferenceTests
     }
 
     [TestMethod]
-    public async Task LegacyMangaScopesMigrateToCanonicalTypeAndWorkScopes()
+    public void MangaPreferenceAdapterHasNoPersistenceOwnership()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"jularr-manga-pref-migrate-{Guid.NewGuid():N}.db");
+        var root = RepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "Jularr.Web",
+            "Features",
+            "Manga",
+            "MangaReaderPreferences.cs"));
 
-        try
-        {
-            await using var db = await CreateDatabaseAsync(path);
-            var seriesId = Guid.NewGuid();
-            var workId = Guid.NewGuid();
-            db.ReaderPreferences.AddRange(
-                new ReaderPreference
-                {
-                    ProfileId = "reader-a",
-                    ScopeKey = "media:manga",
-                    ReadingMode = "continuous",
-                    ImageFlowMode = "webtoon",
-                    ImagePageGapPx = 14
-                },
-                new ReaderPreference
-                {
-                    ProfileId = "reader-a",
-                    ScopeKey = $"media:manga:series:{seriesId:N}",
-                    ImageZoomPercent = 170,
-                    ImageColorScheme = "dark"
-                });
-            await db.SaveChangesAsync();
-
-            await MangaReaderPreferenceStore.MigrateLegacyScopesAsync(db, "reader-a", workId, seriesId, CancellationToken.None);
-
-            var preferences = await db.ReaderPreferences.AsNoTracking().Where(x => x.ProfileId == "reader-a").ToListAsync();
-            Assert.IsFalse(preferences.Any(x => x.ScopeKey.StartsWith("media:manga", StringComparison.Ordinal)));
-            var type = preferences.Single(x => x.ScopeKey == ReaderPreferenceScopes.Type(ReaderContentType.Manga));
-            var work = preferences.Single(x => x.ScopeKey == ReaderPreferenceScopes.Work(workId));
-            Assert.AreEqual("webtoon", type.ImageFlowMode);
-            Assert.AreEqual(14, type.ImagePageGapPx);
-            Assert.AreEqual(170, work.ImageZoomPercent);
-            Assert.AreEqual("dark", work.ImageColorScheme);
-            Assert.AreEqual(workId, work.WorkId);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        StringAssert.Contains(source, "ReaderPreferenceStore.GetAsync");
+        StringAssert.Contains(source, "ReaderPreferenceStore.SaveScopeFieldsAsync");
+        StringAssert.Contains(source, "ReaderPreferenceStore.ResetWorkAsync");
+        Assert.IsFalse(source.Contains("db.ReaderPreferences", StringComparison.Ordinal));
+        Assert.IsFalse(source.Contains("Microsoft.EntityFrameworkCore", StringComparison.Ordinal));
+        Assert.IsFalse(source.Contains("media:manga", StringComparison.Ordinal));
+        Assert.IsFalse(source.Contains("MigrateLegacyScopes", StringComparison.Ordinal));
     }
 
     [TestMethod]
