@@ -221,7 +221,9 @@ public sealed record PlaybackPreferencesUpdate(
 /// </summary>
 public sealed class EpisodeProgressService(
     AppDbContext db,
-    CurrentAccountContext currentAccount)
+    CurrentAccountContext currentAccount,
+    VideoProgressService? videoProgress = null,
+    CanonicalVideoTargetResolver? canonicalTargets = null)
 {
     /// <summary>Playback at or beyond this share of the duration marks the episode watched.</summary>
     public const double CompletionThreshold = 0.95;
@@ -251,6 +253,28 @@ public sealed class EpisodeProgressService(
         Guid episodeId,
         CancellationToken cancellationToken = default)
     {
+        if (videoProgress is not null && canonicalTargets is not null)
+        {
+            var target = await canonicalTargets.ResolveLegacyEpisodeAsync(episodeId, cancellationToken);
+            if (target is null)
+            {
+                return null;
+            }
+
+            var canonical = await videoProgress.GetAsync(
+                currentAccount.ProfileId,
+                target,
+                cancellationToken);
+            return canonical is null
+                ? null
+                : new EpisodeProgressSnapshot(
+                    episodeId,
+                    canonical.PositionMs,
+                    canonical.DurationMs,
+                    canonical.IsCompleted,
+                    canonical.UpdatedAt);
+        }
+
         var row = await (
             from episode in db.Episodes.AsNoTracking()
             join progressValue in db.EpisodeProgress
@@ -308,6 +332,26 @@ public sealed class EpisodeProgressService(
         EpisodeProgressUpdate update,
         CancellationToken cancellationToken = default)
     {
+        MediaProgressSnapshot? canonicalSnapshot = null;
+        if (videoProgress is not null && canonicalTargets is not null)
+        {
+            var target = await canonicalTargets.ResolveLegacyEpisodeAsync(episodeId, cancellationToken);
+            if (target is null)
+            {
+                return null;
+            }
+
+            canonicalSnapshot = await videoProgress.UpdateAsync(
+                currentAccount.ProfileId,
+                target,
+                new MediaProgressUpdate(update.PositionMs, update.DurationMs, update.Completed),
+                cancellationToken);
+            if (canonicalSnapshot is null)
+            {
+                return null;
+            }
+        }
+
         var episodeExists = await db.Episodes
             .AsNoTracking()
             .AnyAsync(x => x.Id == episodeId, cancellationToken);
@@ -379,7 +423,14 @@ public sealed class EpisodeProgressService(
             await TrimHistoryAsync(cancellationToken);
         }
 
-        return ToSnapshot(progress);
+        return canonicalSnapshot is null
+            ? ToSnapshot(progress)
+            : new EpisodeProgressSnapshot(
+                episodeId,
+                canonicalSnapshot.PositionMs,
+                canonicalSnapshot.DurationMs,
+                canonicalSnapshot.IsCompleted,
+                canonicalSnapshot.UpdatedAt);
     }
 
     /// <summary>
@@ -398,6 +449,26 @@ public sealed class EpisodeProgressService(
         if (!episodeExists)
         {
             return null;
+        }
+
+        MediaProgressSnapshot? canonicalSnapshot = null;
+        if (videoProgress is not null && canonicalTargets is not null)
+        {
+            var target = await canonicalTargets.ResolveLegacyEpisodeAsync(episodeId, cancellationToken);
+            if (target is null)
+            {
+                return null;
+            }
+
+            canonicalSnapshot = await videoProgress.SetCompletedAsync(
+                currentAccount.ProfileId,
+                target,
+                watched,
+                cancellationToken);
+            if (canonicalSnapshot is null)
+            {
+                return null;
+            }
         }
 
         var progress = await db.EpisodeProgress
@@ -426,7 +497,14 @@ public sealed class EpisodeProgressService(
         progress.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync(cancellationToken);
-        return ToSnapshot(progress);
+        return canonicalSnapshot is null
+            ? ToSnapshot(progress)
+            : new EpisodeProgressSnapshot(
+                episodeId,
+                canonicalSnapshot.PositionMs,
+                canonicalSnapshot.DurationMs,
+                canonicalSnapshot.IsCompleted,
+                canonicalSnapshot.UpdatedAt);
     }
 
     /// <summary>
