@@ -43,9 +43,9 @@ public sealed class BookReaderPdfTests
         StringAssert.Contains(script, "\"Translate\"");
     }
 
-    /// <summary>The drawn PDF page stays readable until the translation is ready; failures offer a retry and generated text is labelled.</summary>
+    /// <summary>Partial PDF translation never overlays the source page: pending keeps the original readable and ready content replaces it.</summary>
     [TestMethod]
-    public void PdfPageTranslationKeepsTheOriginalReadableOffersRetryAndLabelsGeneratedText()
+    public void PdfPageTranslationUsesReplacementWithOriginalFallbackInsteadOfOverlay()
     {
         var page = Read("src", "Jularr.Web", "Pages", "Books", "Read.cshtml");
         var script = Read("src", "Jularr.Web", "wwwroot", "js", "books-reader.js");
@@ -55,8 +55,10 @@ public sealed class BookReaderPdfTests
         StringAssert.Contains(page, "books.read.generatedTranslation");
         StringAssert.Contains(script, "books.read.translationRetry");
         StringAssert.Contains(script, "books.read.translationNotReady");
-        StringAssert.Contains(styles, ".book-pdf-translation[data-state=\"ready\"]");
+        StringAssert.Contains(styles, ".book-reader-page[data-book-format=\"pdf\"] .book-stage:has(> .book-pdf-translation[data-state=\"ready\"]:not([hidden])) > .book-pdf-spread");
+        StringAssert.Contains(styles, ".book-pdf-translation {\n    position: relative;");
         StringAssert.Contains(styles, ".book-pdf-translation[data-state=\"pending\"]");
+        Assert.IsFalse(styles.Contains(".book-pdf-translation {\n    position: absolute;", StringComparison.Ordinal));
     }
 
     [TestMethod]
