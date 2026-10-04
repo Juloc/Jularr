@@ -276,7 +276,12 @@ Handle:
 - different page dimensions;
 - missing/corrupt page assets;
 - nested archive paths and deterministic page order at import;
-- optional OCR text as an overlay/capability without replacing page identity.
+- optional OCR text as an overlay/capability without replacing page identity;
+- optional panel detection/guided view as a derived navigation projection; the
+  canonical durable locator remains the page/source position rather than a
+  detector-specific panel id;
+- ultra-tall Webtoon/long-strip images must use bounded/tiled rendering rather
+  than decoding an unbounded surface at once.
 
 `ComicInfo.xml` or equivalent metadata may be consumed by the import layer when supported. The Reader consumes normalized page/structure metadata.
 
@@ -392,6 +397,12 @@ Minimum locator semantics:
 - enough mapping to switch to Original and back without forking progress.
 
 The rendered page number is never durable identity for reflowable text.
+
+When an Edition/File/document is replaced or reanalysed, progress keeps the
+canonical Work/structure identity and attempts deterministic source-anchor
+mapping. If the exact locator no longer resolves, fall back explicitly to the
+best valid mapped anchor/percentage; never silently mark content completed or
+attach an annotation to unrelated text.
 
 Keep separate:
 - CurrentItem;
@@ -574,6 +585,8 @@ Exit: PDF has two views, not two Reader products.
 - safe CBR/CB7 adapter when dependencies are accepted;
 - magazine/artbook profiles;
 - explicit unsupported states for MOBI/AZW/DJVU until supported;
+- future text/document adapters such as HTML/TXT/FB2, if ever added, emit the
+  same reflow/fixed document contract rather than another Reader;
 - import/render regression corpus for malformed/large/mixed documents.
 
 ### Phase 11 — legacy deletion
