@@ -146,27 +146,12 @@ public sealed class ReadModel(
 
         // Reader preferences use canonical MediaCore identity. The bridge is
         // idempotent and only supplies the canonical Work for legacy MangaSeries.
-        var workId = await workBridge.EnsureWorkForMangaSeriesAsync(
-            chapter.SeriesId,
-            chapter.SeriesTitle,
-            nativeTitle: null,
-            aniListId: null,
-            cancellationToken);
-        await MangaReaderPreferenceStore.MigrateLegacyScopesAsync(
-            db,
-            account.ProfileId,
-            workId,
-            chapter.SeriesId,
-            cancellationToken);
+        var workId = await workBridge.EnsureWorkForMangaSeriesAsync(chapter.SeriesId, chapter.SeriesTitle, nativeTitle: null, aniListId: null, cancellationToken);
+        await MangaReaderPreferenceStore.MigrateLegacyScopesAsync(db, account.ProfileId, workId, chapter.SeriesId, cancellationToken);
 
         // Local-only: the reader never waits on AniList. Remote progress and
         // the Operations-backed sync are on the series page's lazy card.
-        ReaderSettings = await MangaReaderPreferenceStore.GetAsync(
-            db,
-            account.ProfileId,
-            workId,
-            chapter.SeriesId,
-            cancellationToken);
+        ReaderSettings = await MangaReaderPreferenceStore.GetAsync(db, account.ProfileId, workId, chapter.SeriesId, cancellationToken);
 
         var requested = page
             ?? (progress?.ChapterId == chapter.Id ? progress.PageIndex : 0);
@@ -199,31 +184,15 @@ public sealed class ReadModel(
             nativeTitle: null,
             aniListId: null,
             cancellationToken);
-        await MangaReaderPreferenceStore.MigrateLegacyScopesAsync(
-            db,
-            account.ProfileId,
-            workId,
-            chapter.SeriesId,
-            cancellationToken);
+        await MangaReaderPreferenceStore.MigrateLegacyScopesAsync(db, account.ProfileId, workId, chapter.SeriesId, cancellationToken);
 
         var preferenceWorkId = string.Equals(scope, "media", StringComparison.OrdinalIgnoreCase)
             ? (Guid?)null
             : workId;
 
-        await MangaReaderPreferenceStore.SaveAsync(
-            db,
-            account.ProfileId,
-            preferenceWorkId,
-            input,
-            changedKey,
-            cancellationToken);
+        await MangaReaderPreferenceStore.SaveAsync(db, account.ProfileId, preferenceWorkId, input, changedKey, cancellationToken);
 
-        var resolved = await MangaReaderPreferenceStore.GetAsync(
-            db,
-            account.ProfileId,
-            workId,
-            chapter.SeriesId,
-            cancellationToken);
+        var resolved = await MangaReaderPreferenceStore.GetAsync(db, account.ProfileId, workId, chapter.SeriesId, cancellationToken);
         return new JsonResult(resolved);
     }
 
@@ -244,19 +213,9 @@ public sealed class ReadModel(
             nativeTitle: null,
             aniListId: null,
             cancellationToken);
-        await MangaReaderPreferenceStore.ResetWorkAsync(
-            db,
-            account.ProfileId,
-            workId,
-            chapter.SeriesId,
-            cancellationToken);
+        await MangaReaderPreferenceStore.ResetWorkAsync(db, account.ProfileId, workId, chapter.SeriesId, cancellationToken);
 
-        var settings = await MangaReaderPreferenceStore.GetAsync(
-            db,
-            account.ProfileId,
-            workId,
-            chapter.SeriesId,
-            cancellationToken);
+        var settings = await MangaReaderPreferenceStore.GetAsync(db, account.ProfileId, workId, chapter.SeriesId, cancellationToken);
 
         return new JsonResult(settings);
     }
