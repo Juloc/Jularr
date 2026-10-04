@@ -1,6 +1,7 @@
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
@@ -242,6 +243,32 @@ public static class ClientApiPlaybackPlanEndpoints
                 snapshot.IsCompleted,
                 snapshot.UpdatedAt,
                 snapshot.ResumePositionMs));
+        });
+
+        group.MapGet("/media/{mediaFileId:guid}/trickplay", async (
+            Guid mediaFileId,
+            CanonicalPlayerNavigationAssetService navigationAssets,
+            CancellationToken cancellationToken) =>
+        {
+            var descriptor = await navigationAssets.DescribeAsync(mediaFileId, cancellationToken);
+            return Results.Ok(ToCanonicalTrickplay(mediaFileId, descriptor));
+        });
+
+        group.MapGet("/media/{mediaFileId:guid}/trickplay/{fileName}", async (
+            Guid mediaFileId,
+            string fileName,
+            CanonicalPlayerNavigationAssetService navigationAssets,
+            CancellationToken cancellationToken) =>
+        {
+            var asset = await navigationAssets.GetAssetAsync(
+                mediaFileId,
+                fileName,
+                cancellationToken);
+            return asset is null
+                ? Results.NotFound(new ClientErrorResponse(
+                    "trickplay_asset_not_found",
+                    "The seek preview asset is unavailable."))
+                : Results.File(asset.Path, asset.ContentType);
         });
 
         group.MapGet("/stream-sessions/{sessionId:guid}/stream", (
@@ -502,7 +529,40 @@ public static class ClientApiPlaybackPlanEndpoints
                 snapshot.Progress.ResumePositionMs),
             new ClientPlayerControls(PlaybackPreferenceRules.Speeds, PlaybackQuality.Names),
             ClientApiRoutes.VideoPlaybackPlan,
-            ClientApiRoutes.VideoProgress);
+            ClientApiRoutes.VideoProgress,
+            ClientApiMappings.ToClientSegments(snapshot.Segments),
+            ToCanonicalTrickplay(snapshot.File.StoredFileId, snapshot.Trickplay));
+    }
+
+    private static ClientTrickplayDescriptor ToCanonicalTrickplay(
+        Guid mediaFileId,
+        TrickplayDescriptor descriptor)
+    {
+        var index = descriptor.IsReady ? descriptor.Index : null;
+        var state = descriptor.State switch
+        {
+            TrickplayState.Ready when index is not null => "ready",
+            TrickplayState.Queued or TrickplayState.Generating => "generating",
+            _ => "unavailable"
+        };
+
+        return new ClientTrickplayDescriptor(
+            state,
+            descriptor.Message,
+            TrickplayGenerator.GeneratorVersion,
+            index?.IntervalMs,
+            index?.TileWidth,
+            index?.TileHeight,
+            index?.Columns,
+            index?.Rows,
+            index?.ThumbnailCount,
+            index is null
+                ? []
+                : index.Sprites
+                    .Select(sprite =>
+                        $"{ClientApiRoutes.MediaTrickplayAsset(mediaFileId, sprite)}?v={index.MediaIdentity[..Math.Min(16, index.MediaIdentity.Length)]}-{index.GeneratorVersion}")
+                    .ToArray(),
+            ClientApiRoutes.MediaTrickplay(mediaFileId));
     }
 
     private static ClientMediaTrack ToClientTrack(MediaStreamInfo track) =>
