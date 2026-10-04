@@ -253,7 +253,7 @@ public sealed class VideoProgressService(AppDbContext db)
             .Distinct()
             .ToArray();
 
-        var playableEpisodes = completedEpisodeWorkIds.Length == 0
+        List<EpisodeCandidate> playableEpisodes = completedEpisodeWorkIds.Length == 0
             ? []
             : await db.WorkEpisodes
                 .AsNoTracking()
