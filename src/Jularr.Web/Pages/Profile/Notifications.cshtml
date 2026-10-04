@@ -24,14 +24,14 @@
             var current = Model.Preferences[category];
             var inAppSelected = current.Enabled && current.Channels.Contains(NotificationChannel.InApp);
             <div class="notification-settings-row">
-                <div class="notification-settings-copy">
+                <label class="notification-settings-copy" for="delivery-@category">
                     <strong>@ui[meta.LabelKey]</strong>
                     @if (meta.Audience == JularrEventAudience.Admin)
                     {
                         <small>@ui["notifications.settings.adminNote"]</small>
                     }
-                </div>
-                <select name="delivery.@category">
+                </label>
+                <select id="delivery-@category" name="delivery.@category">
                     <option value="@NotificationsModel.OffFormValue" selected="@(!inAppSelected)">@ui["notifications.settings.modeOff"]</option>
                     <option value="@NotificationsModel.InAppFormValue" selected="@inAppSelected">@ui["notifications.settings.modeInApp"]</option>
                 </select>
@@ -39,5 +39,5 @@
         }
     </div>
 
-    <button class="button button-primary" type="submit" style="margin-top:14px;">@ui["notifications.settings.save"]</button>
+    <button class="button button-primary notification-settings-save" type="submit">@ui["notifications.settings.save"]</button>
 </form>
