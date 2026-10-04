@@ -173,6 +173,9 @@ Consumer Library is distinct from Discover and Admin:
 ### Aligned with the target when interpreted through current specs
 
 - #403 playback: use current Player + PlaybackPlan/ActiveSession/File/Track/MediaProgress contracts.
+- #596 is re-scoped to post-Request live progress/progressive availability; Play/Read/Listen never silently starts acquisition for unavailable media.
+- #812 now has Movie/TV executors/Wanted handlers on dev and is a closure-verification issue rather than a missing-engine design task.
+- #813 remains the final Anime/Movie/TV end-to-end completion gate.
 - #662 progress: exact resume and completed-through remain separate semantics inside canonical MediaProgress.
 - #389 acquisition/import: all media types converge on the shared Wanted/Download/Import pipeline.
 - #396 Wanted/monitoring: target canonical Work/unit/Edition references, not permanent per-media roots.
