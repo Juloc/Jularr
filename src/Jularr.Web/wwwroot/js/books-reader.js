@@ -1,4 +1,4 @@
-(() => {
+(async () => {
     "use strict";
 
     // Books reader (reader frame, see docs/UNIFIED_READER.md "Reader frame").
@@ -11,6 +11,18 @@
 
     const root = document.querySelector("[data-book-reader]");
     if (!root) return;
+
+    const scriptUrl = document.currentScript?.src;
+    if (!scriptUrl) return;
+    const {
+        clamp,
+        permilleForIndex,
+        indexForPermille,
+        scrollPermille: reflowScrollPermille,
+        scrollTopForPermille,
+        captureContinuousAnchor,
+        capturePagedRectAnchor
+    } = await import(new URL("reflow-reader.js", scriptUrl).href);
 
     const readJson = (selector, fallback) => {
         try {
@@ -366,55 +378,46 @@
     const topBarBottom = () =>
         root.querySelector("[data-reader-chrome-primary]")?.getBoundingClientRect().bottom || 0;
 
-    const scrollPermille = () => {
-        const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        return Math.max(0, Math.min(1000, Math.round(window.scrollY / max * 1000)));
-    };
+    const scrollPermille = () =>
+        reflowScrollPermille(
+            window.scrollY,
+            document.documentElement.scrollHeight,
+            window.innerHeight);
 
-    const currentPermille = () => {
-        if (!layout.paged) return scrollPermille();
-        return layout.viewCount <= 1
-            ? 0
-            : Math.round(currentView / (layout.viewCount - 1) * 1000);
-    };
+    const currentPermille = () =>
+        layout.paged
+            ? permilleForIndex(currentView, layout.viewCount)
+            : scrollPermille();
 
     const viewForPermille = permille =>
-        layout.viewCount <= 1
-            ? 0
-            : Math.max(0, Math.min(
-                layout.viewCount - 1,
-                Math.round(Number(permille) / 1000 * (layout.viewCount - 1))));
+        indexForPermille(permille, layout.viewCount);
 
-    // First paragraph of the active language on screen; used to keep the
-    // reading position when the layout changes (mode, font, window size).
+    // One canonical anchor algorithm is shared with Novel/LN. Books supplies
+    // its paper-spread geometry, while the reflow runtime owns anchor semantics.
     function captureAnchor() {
         const list = paragraphsOf(activeColumn());
         if (!list.length) return null;
+
         if (layout.paged) {
-            // Positions relative to the column box and the current page window,
-            // independent of any running transform.
             const origin = columns.getBoundingClientRect().left;
-            const start = currentView * layout.stride;
-            const end = start + flow.clientWidth;
-            const inside = rect =>
-                rect.right - origin > start + 1 && rect.left - origin < end - 1;
-            for (let index = 0; index < list.length; index++) {
-                const rects = Array.from(list[index].getClientRects());
-                const part = rects.findIndex(inside);
-                if (part < 0) continue;
-                // A paragraph continued from the previous page is a weak anchor;
-                // prefer the next one when it starts on this page.
-                const next = list[index + 1]?.getClientRects()[0];
-                if (part > 0 && next && inside(next)) {
-                    return { index: Number(list[index + 1].dataset.bookParagraph), part: 0 };
-                }
-                return { index: Number(list[index].dataset.bookParagraph), part };
-            }
-            return null;
+            const viewOfRect = rect => {
+                const page = Math.floor(
+                    (rect.left - origin + 2) / Math.max(1, layout.columnStride));
+                return Math.floor(page / Math.max(1, layout.pages));
+            };
+            const anchor = capturePagedRectAnchor(
+                list,
+                currentView,
+                viewOfRect);
+            return anchor
+                ? { index: anchor.index, part: anchor.part || 0 }
+                : null;
         }
-        const line = topBarBottom() + 8;
-        const found = list.find(paragraph => paragraph.getBoundingClientRect().bottom > line);
-        return found ? { index: Number(found.dataset.bookParagraph) } : null;
+
+        const anchor = captureContinuousAnchor(
+            list,
+            topBarBottom() + 8);
+        return anchor ? { index: anchor.index } : null;
     }
 
     const paragraphAt = index =>
@@ -437,8 +440,6 @@
         void paragraph.offsetWidth;
         paragraph.classList.add("book-paragraph-flash");
     };
-
-    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
     function scheduleLayout(anchor) {
         if (anchor && !pendingAnchor) pendingAnchor = anchor;
@@ -472,8 +473,13 @@
                 }
             } else if (anchor === null && restoring) {
                 const initial = Number(root.dataset.progress || "0");
-                const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-                window.scrollTo({ top: max * initial / 1000, behavior: "auto" });
+                window.scrollTo({
+                    top: scrollTopForPermille(
+                        initial,
+                        document.documentElement.scrollHeight,
+                        window.innerHeight),
+                    behavior: "auto"
+                });
             }
             renderPageNumbers();
             emitLocation();
@@ -821,8 +827,13 @@
             goToView(viewForPermille(permille), { animate: false });
             return;
         }
-        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-        window.scrollTo({ top: max * Number(permille) / 1000, behavior: "auto" });
+        window.scrollTo({
+            top: scrollTopForPermille(
+                permille,
+                document.documentElement.scrollHeight,
+                window.innerHeight),
+            behavior: "auto"
+        });
     };
 
     function finishRestore() {
