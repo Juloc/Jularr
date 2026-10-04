@@ -762,9 +762,16 @@ Do not run old direct-sink delivery and new planner delivery in parallel for the
 
 Existing `/Profile/Notifications` and `/Notifications` should move to the approved canonical screens/surfaces without retaining a second legacy preferences model.
 
-## 27. Implementation phases
+## 27. Implementation backlog and phases
 
-### Phase A — canonical policy + preference model
+Focused implementation issues:
+
+- #835 — event policy, explicit audience and multi-channel profile preferences;
+- #836 — inbox semantics, dismissal, shared query service and action resolver;
+- #837 — durable delivery scheduler, Push/E-Mail, Quiet Hours and Digest;
+- #838 — Bell/Toast/live attention surfaces and persistent Banners.
+
+### Phase A — canonical policy + preference model (#835)
 
 - extend event catalog metadata;
 - fail-closed audience validation;
@@ -772,7 +779,7 @@ Existing `/Profile/Notifications` and `/Notifications` should move to the approv
 - add profile channel preference/capability resolution;
 - keep In-App delivery working.
 
-### Phase B — inbox correctness
+### Phase B — inbox correctness (#836)
 
 - split LastOccurredAt from ReadAt;
 - add DismissedAt;
@@ -781,7 +788,7 @@ Existing `/Profile/Notifications` and `/Notifications` should move to the approv
 - shared notification query service;
 - shared action resolver.
 
-### Phase C — delivery infrastructure
+### Phase C — delivery infrastructure (#837)
 
 - channel registry/config capability;
 - durable delivery intents/results;
@@ -789,7 +796,7 @@ Existing `/Profile/Notifications` and `/Notifications` should move to the approv
 - retry/idempotency;
 - Admin delivery diagnostics.
 
-### Phase D — scheduling
+### Phase D — scheduling (#837)
 
 - Quiet Hours;
 - restart-safe deferral;
@@ -797,7 +804,7 @@ Existing `/Profile/Notifications` and `/Notifications` should move to the approv
 - disable-resolution flow;
 - burst/grouping.
 
-### Phase E — attention surfaces
+### Phase E — attention surfaces (#838)
 
 - Desktop Bell Quick View;
 - Toast presenter + action feedback unification;
@@ -805,7 +812,7 @@ Existing `/Profile/Notifications` and `/Notifications` should move to the approv
 - immersive suppression;
 - live updates.
 
-### Phase F — persistent conditions
+### Phase F — persistent conditions (#838)
 
 - BannerConditionProvider;
 - BannerPolicy;
