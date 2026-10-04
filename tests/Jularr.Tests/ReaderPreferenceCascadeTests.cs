@@ -45,7 +45,7 @@ public sealed class ReaderPreferenceCascadeTests
                 new ReaderSettingsInput { PaperStyle = "oled" },
                 CancellationToken.None);
 
-            await ReaderPreferenceStore.SaveBookOverrideAsync(
+            await ReaderPreferenceStore.SaveWorkOverrideAsync(
                 db,
                 "profile",
                 work.Id,
