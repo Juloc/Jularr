@@ -67,8 +67,8 @@ public sealed class VideoAcquisitionRequestExecutorTests
         var request = await host.StartAsync();
 
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
-        var payload = VideoAcquisitionEngine.ReadPayload(request);
-        Assert.IsNotNull(payload);
+        var payload = VideoAcquisitionEngine.ReadPayload(request)
+            ?? throw new AssertFailedException("Expected video request payload.");
         Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, payload.Scope);
         Assert.IsTrue(payload.MonitorFuture);
         Assert.AreEqual(host.EpisodeId, payload.ActiveWorkEpisodeId);
@@ -86,9 +86,40 @@ public sealed class VideoAcquisitionRequestExecutorTests
         Assert.IsTrue(await host.HasPlayableAsync(host.EpisodeId));
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "Future monitoring must not duplicate the imported episode.");
 
-        var storedPayload = VideoAcquisitionEngine.ReadPayload(monitoring);
-        Assert.IsNotNull(storedPayload?.NextSearchUtc);
+        var storedPayload = VideoAcquisitionEngine.ReadPayload(monitoring)
+            ?? throw new AssertFailedException("Expected persisted TV monitoring payload.");
+        Assert.IsNotNull(storedPayload.NextSearchUtc);
         Assert.IsNull(storedPayload.ActiveWorkEpisodeId);
+    }
+
+    [TestMethod]
+    public async Task TvCustomScopeSearchesOnlyTheSelectedCanonicalEpisode()
+    {
+        await using var host = await Host.CreateAsync(
+            MediaAcquisitionKind.Tv,
+            "Severance",
+            2022,
+            "95396",
+            "Severance.S01E02.1080p.WEB-DL.x264-GROUP",
+            addEpisode: true,
+            addSecondEpisode: true);
+
+        var custom = new VideoRequestPayload(
+            host.Work.Id,
+            host.Work.CanonicalTitle,
+            host.Work.Year,
+            VideoRequestScope.Custom,
+            [host.SecondEpisodeId!.Value],
+            MonitorFuture: false);
+
+        var request = await host.StartAsync(custom);
+        var payload = VideoAcquisitionEngine.ReadPayload(request)
+            ?? throw new AssertFailedException("Expected video request payload.");
+
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
+        Assert.AreEqual(host.SecondEpisodeId, payload.ActiveWorkEpisodeId);
+        Assert.AreEqual(2, payload.ActiveEpisodeNumber);
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
     }
 
     [TestMethod]
@@ -141,7 +172,8 @@ public sealed class VideoAcquisitionRequestExecutorTests
             RecordingVideoImporter importer,
             MediaAcquisitionKind kind,
             Work work,
-            Guid? episodeId)
+            Guid? episodeId,
+            Guid? secondEpisodeId)
         {
             Environment = environment;
             this.services = services;
@@ -149,6 +181,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
             Kind = kind;
             Work = work;
             EpisodeId = episodeId;
+            SecondEpisodeId = secondEpisodeId;
         }
 
         public SabnzbdTestEnvironment Environment { get; }
@@ -156,6 +189,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
         public MediaAcquisitionKind Kind { get; }
         public Work Work { get; }
         public Guid? EpisodeId { get; }
+        public Guid? SecondEpisodeId { get; }
         public OperationStore Operations => new(Environment.Db);
         public AcquisitionAccessStore Requests => new(Environment.Db);
 
@@ -166,7 +200,8 @@ public sealed class VideoAcquisitionRequestExecutorTests
             string tmdbId,
             string firstRelease,
             string? secondRelease = null,
-            bool addEpisode = false)
+            bool addEpisode = false,
+            bool addSecondEpisode = false)
         {
             var environment = await SabnzbdTestSupport.CreateEnvironmentAsync();
             var directory = environment.Directory;
@@ -190,6 +225,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
             });
 
             WorkEpisode? episode = null;
+            WorkEpisode? secondEpisode = null;
             if (addEpisode)
             {
                 episode = new WorkEpisode
@@ -200,6 +236,18 @@ public sealed class VideoAcquisitionRequestExecutorTests
                     AiredAt = DateTime.UtcNow.AddDays(-7)
                 };
                 db.WorkEpisodes.Add(episode);
+            }
+
+            if (addSecondEpisode)
+            {
+                secondEpisode = new WorkEpisode
+                {
+                    WorkId = work.Id,
+                    SeasonNumber = 1,
+                    EpisodeNumber = 2,
+                    AiredAt = DateTime.UtcNow.AddDays(-6)
+                };
+                db.WorkEpisodes.Add(secondEpisode);
             }
 
             await db.SaveChangesAsync();
@@ -271,10 +319,10 @@ public sealed class VideoAcquisitionRequestExecutorTests
                     .AddSingleton<IWantedRequestHandler, TvWantedRequestHandler>();
             }
 
-            return new Host(environment, services.BuildServiceProvider(), importer, kind, work, episode?.Id);
+            return new Host(environment, services.BuildServiceProvider(), importer, kind, work, episode?.Id, secondEpisode?.Id);
         }
 
-        public async Task<AcquisitionRequest> StartAsync()
+        public async Task<AcquisitionRequest> StartAsync(VideoRequestPayload? payload = null)
         {
             var created = await Requests.CreateAsync(
                 new AcquisitionRequestDraft(
@@ -283,7 +331,8 @@ public sealed class VideoAcquisitionRequestExecutorTests
                     Kind == MediaAcquisitionKind.Movie ? "438631" : "95396",
                     Work.CanonicalTitle,
                     null,
-                    null),
+                    null,
+                    payload?.Serialize()),
                 "owner",
                 AcquisitionRequestStatus.Approved,
                 "owner",
