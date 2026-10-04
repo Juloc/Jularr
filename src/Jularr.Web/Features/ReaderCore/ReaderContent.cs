@@ -114,12 +114,29 @@ public sealed record ReaderSourceRegion
 }
 
 /// <summary>
-/// Optional mapping from derived/semantic Reader content back to the immutable
-/// source document. SourcePageIndex is zero-based.
+/// Mapping from derived/variant Reader content back to its immutable source.
+/// Reflow sources use stable item ids; fixed sources use zero-based source pages.
 /// </summary>
-public sealed record ReaderSourceReference
+public abstract record ReaderSourceReference;
+
+public sealed record ReaderSourceItemReference : ReaderSourceReference
 {
-    public ReaderSourceReference(int sourcePageIndex, ReaderSourceRegion? region = null, string? sourceItemId = null)
+    public ReaderSourceItemReference(string sourceItemId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceItemId))
+        {
+            throw new ArgumentException("Source item reference requires a stable id.", nameof(sourceItemId));
+        }
+
+        SourceItemId = sourceItemId.Trim();
+    }
+
+    public string SourceItemId { get; }
+}
+
+public sealed record ReaderSourcePageReference : ReaderSourceReference
+{
+    public ReaderSourcePageReference(int sourcePageIndex, ReaderSourceRegion? region = null, string? sourceItemId = null)
     {
         if (sourcePageIndex < 0)
         {
@@ -199,7 +216,7 @@ public sealed record ReaderSceneBreakContentNode : ReaderContentNode
 
 public sealed record ReaderFixedRegionContentNode : ReaderContentNode
 {
-    public ReaderFixedRegionContentNode(string stableId, ReaderSourceReference source) : base(stableId, source)
+    public ReaderFixedRegionContentNode(string stableId, ReaderSourcePageReference source) : base(stableId, source)
     {
     }
 }
