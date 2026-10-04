@@ -41,10 +41,7 @@ public sealed class NotificationPreferenceStoreTests
             NotificationChannel.Email
         };
 
-        await store.SetEventPreferenceAsync(
-            "reader",
-            JularrEventCategory.ReleaseAvailable,
-            new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Digest));
+        await store.SetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable, new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Digest));
 
         var saved = await store.GetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable);
         Assert.IsTrue(saved.IsExplicit);
@@ -71,10 +68,7 @@ public sealed class NotificationPreferenceStoreTests
             NotificationChannel.Push
         };
 
-        await store.SetEventPreferenceAsync(
-            "reader",
-            JularrEventCategory.RequestApproved,
-            new NotificationEventPreferenceUpdate(false, selected, NotificationDeliveryTiming.Immediate));
+        await store.SetEventPreferenceAsync("reader", JularrEventCategory.RequestApproved, new NotificationEventPreferenceUpdate(false, selected, NotificationDeliveryTiming.Immediate));
 
         var saved = await store.GetEventPreferenceAsync("reader", JularrEventCategory.RequestApproved);
 
@@ -93,10 +87,7 @@ public sealed class NotificationPreferenceStoreTests
             NotificationChannel.Push
         };
 
-        await store.SetEventPreferenceAsync(
-            "reader",
-            JularrEventCategory.ReleaseAvailable,
-            new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Immediate));
+        await store.SetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable, new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Immediate));
         await store.SetProfileChannelEnabledAsync("reader", NotificationChannel.Push, true);
         await store.SetProfileChannelEnabledAsync("reader", NotificationChannel.Push, false);
 
@@ -115,16 +106,10 @@ public sealed class NotificationPreferenceStoreTests
         var store = new NotificationSubscriptionStore(db);
         IReadOnlySet<NotificationChannel> selected = new HashSet<NotificationChannel> { NotificationChannel.InApp };
 
-        await store.SetEventPreferenceAsync(
-            "reader",
-            JularrEventCategory.ImportFailed,
-            new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Immediate));
+        await store.SetEventPreferenceAsync("reader", JularrEventCategory.ImportFailed, new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Immediate));
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            store.SetEventPreferenceAsync(
-                "reader",
-                JularrEventCategory.ImportFailed,
-                new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Digest)));
+            store.SetEventPreferenceAsync("reader", JularrEventCategory.ImportFailed, new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Digest)));
 
         var saved = await store.GetEventPreferenceAsync("reader", JularrEventCategory.ImportFailed);
         Assert.IsTrue(saved.Enabled);
@@ -139,10 +124,7 @@ public sealed class NotificationPreferenceStoreTests
         var store = new NotificationSubscriptionStore(db);
         IReadOnlySet<NotificationChannel> selected = new HashSet<NotificationChannel> { NotificationChannel.Email };
 
-        await store.SetEventPreferenceAsync(
-            "reader",
-            JularrEventCategory.RequestDenied,
-            new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Digest));
+        await store.SetEventPreferenceAsync("reader", JularrEventCategory.RequestDenied, new NotificationEventPreferenceUpdate(true, selected, NotificationDeliveryTiming.Digest));
 
         var preferences = await store.GetAllEventPreferencesAsync("reader");
 
