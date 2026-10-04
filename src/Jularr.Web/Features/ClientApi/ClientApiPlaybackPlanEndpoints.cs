@@ -48,7 +48,7 @@ public sealed record ClientPlaybackPlanResponse(
     long ResumePositionMs);
 
 public sealed record ClientVideoProgressUpdate(
-    ClientVideoTarget Target,
+    ClientVideoTarget? Target,
     long PositionMs,
     long? DurationMs,
     bool Completed);
@@ -149,9 +149,10 @@ public static class ClientApiPlaybackPlanEndpoints
                     "A valid canonical video target and non-negative progress values are required."));
             }
 
+            var target = update.Target!;
             var snapshot = await progress.UpdateAsync(
                 currentAccount.ProfileId,
-                new MediaProgressTarget(update.Target.WorkId, update.Target.WorkEpisodeId),
+                new MediaProgressTarget(target.WorkId, target.WorkEpisodeId),
                 new MediaProgressUpdate(update.PositionMs, update.DurationMs, update.Completed),
                 cancellationToken);
             if (snapshot is null)
@@ -369,9 +370,10 @@ public static class ClientApiPlaybackPlanEndpoints
         return endpoints;
     }
 
-    private static bool ValidTarget(ClientVideoTarget target) =>
+    private static bool ValidTarget(ClientVideoTarget? target) =>
+        target is not null &&
         target.WorkId != Guid.Empty &&
-        target.WorkEpisodeId != Guid.Empty;
+        (target.WorkEpisodeId is null || target.WorkEpisodeId != Guid.Empty);
 
     private static ClientPlaybackPlanResponse ToResponse(
         PlaybackPlanOutcome outcome,
