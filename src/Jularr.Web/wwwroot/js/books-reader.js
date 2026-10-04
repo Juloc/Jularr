@@ -21,7 +21,8 @@
         scrollPermille: reflowScrollPermille,
         scrollTopForPermille,
         captureContinuousAnchor,
-        capturePagedRectAnchor
+        capturePagedRectAnchor,
+        createReflowTextRenderer
     } = await import(new URL("reflow-reader.js", scriptUrl).href);
 
     const readJson = (selector, fallback) => {
@@ -129,6 +130,7 @@
 
     let view = root.dataset.view || "original";
     let restoring = true;
+    let reflowRenderer = null;
 
     const toast = message => {
         if (!toastElement || !message) return;
@@ -456,6 +458,8 @@
         root.classList.toggle("reader-frame-fixed", paged);
 
         if (!paged) {
+            reflowRenderer?.setMode("continuous");
+            reflowRenderer?.setPageState(0, 1);
             columns.style.transform = "";
             spread.style.cssText = "";
             layout.pages = 1;
@@ -524,6 +528,8 @@
         const contentWidth = columns.scrollWidth;
         layout.pageCount = Math.max(1, Math.round((contentWidth + gap) / layout.columnStride));
         layout.viewCount = Math.max(1, Math.ceil(layout.pageCount / pages));
+        reflowRenderer?.setMode("paged");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
 
         let target;
         currentView = 0;
@@ -623,6 +629,7 @@
         const next = clamp(target, 0, layout.viewCount - 1);
         const direction = Math.sign(next - currentView);
         currentView = next;
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
         const transition = reduceMotion.matches ? "none" : settings.pageTransition;
         const animated = animate && direction !== 0 && transition !== "none";
 
@@ -665,25 +672,26 @@
         return true;
     };
 
-    const turn = (direction, { fromUser = true } = {}) => {
-        if (!layout.paged) {
+    reflowRenderer = createReflowTextRenderer({
+        initialMode: isPaged() ? "paged" : "continuous",
+        goToPage: page => goToView(page),
+        turnContinuous: direction => {
             window.scrollBy({
                 top: direction * window.innerHeight * 0.85,
                 behavior: reduceMotion.matches ? "auto" : "smooth"
             });
-            return;
-        }
-        const next = currentView + direction;
-        if (next < 0) {
-            if (fromUser) openChapter("previous", true);
-            return;
-        }
-        if (next >= layout.viewCount) {
-            if (fromUser) openChapter("next", false);
-            return;
-        }
-        goToView(next);
-    };
+        },
+        onPageEdge: direction => {
+            const speaking =
+                root.dataset.readerTts && root.dataset.readerTts !== "idle";
+            if (speaking) return;
+            if (direction < 0) openChapter("previous", true);
+            else openChapter("next", false);
+        },
+        getScrollPermille: scrollPermille,
+        scrollToPermille: jumpToPermille,
+        captureAnchor
+    });
 
     // ---- Interactive page-turn drag (#446) -----------------------------------------
     // Holding and dragging a page follows the pointer instead of jumping straight to
@@ -854,15 +862,23 @@
             pdf?.turn(direction);
             return;
         }
-        // Read-aloud follows the voice within the chapter; it never changes chapters.
-        turn(direction, { fromUser: !(root.dataset.readerTts && root.dataset.readerTts !== "idle") });
+
+        reflowRenderer?.setMode(layout.paged ? "paged" : "continuous");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
+        reflowRenderer?.turn(direction);
     });
 
     root.addEventListener("jularr:reader-seek", event => {
         const value = Number(event.detail?.value || 0);
-        if (pdfContainer) pdf?.seek(value);
-        else if (layout.paged) goToView(viewForSliderPage(value), { animate: false });
-        else jumpToPermille(value);
+        if (pdfContainer) {
+            pdf?.seek(value);
+            return;
+        }
+
+        reflowRenderer?.setMode(layout.paged ? "paged" : "continuous");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
+        if (layout.paged) reflowRenderer?.seekPage(viewForSliderPage(value));
+        else reflowRenderer?.seekPermille(value);
     });
 
     // After a drag the slider snaps to the page actually shown.
