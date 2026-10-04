@@ -128,18 +128,12 @@ public sealed class TmdbDiscoveryProvider(
     {
         var locale = CurrentLocale();
         var path = BrowsePath(mediaType, mode);
-        var key = $"tmdb:browse:{mediaType}:{mode}:{locale}:{genre}";
+        var query = BrowseQuery(mediaType, mode, locale, genre);
+        var key = $"tmdb:browse:{mediaType}:{mode}:{locale}:{genre}:{string.Join('&', query.Select(x => x.Value))}";
         var page = await cache.GetOrFetchAsync(
             key,
             TimeSpan.FromMinutes(10),
-            ct => GetPageAsync(
-                path,
-                [
-                    ("language", locale),
-                    ("page", "1")
-                ],
-                mediaType,
-                ct),
+            ct => GetPageAsync(path, query, mediaType, ct),
             cancellationToken);
 
         return FilterGenre(page.Results, mediaType, genre)
@@ -176,13 +170,13 @@ public sealed class TmdbDiscoveryProvider(
                 .Where(x => x.TmdbId == canonicalExternalId)
                 .Take(2)
                 .ToListAsync(cancellationToken)
-            : [];
+            : new List<Jularr.Web.Features.Movies.Movie>();
         var legacySeries = mediaType == TmdbDiscoveryMediaType.Series
             ? await db.TvSeries
                 .Where(x => x.TmdbId == canonicalExternalId)
                 .Take(2)
                 .ToListAsync(cancellationToken)
-            : [];
+            : new List<Jularr.Web.Features.Tv.TvSeries>();
 
         if (legacyMovie.Count > 1 || legacySeries.Count > 1)
         {
@@ -455,24 +449,25 @@ public sealed class TmdbDiscoveryProvider(
         CancellationToken cancellationToken)
     {
         EnsureConfigured();
-        return await executor.ExecuteAsync(
+        using var response = await executor.SendAsync(
             ProviderKey,
-            async ct =>
+            client,
+            () =>
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri(path, query));
+                var request = new HttpRequestMessage(HttpMethod.Get, BuildUri(path, query));
                 var token = configuration["Providers:Tmdb:ReadAccessToken"];
                 if (!string.IsNullOrWhiteSpace(token))
                 {
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Trim());
                 }
 
-                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-                response.EnsureSuccessStatusCode();
-                await using var stream = await response.Content.ReadAsStreamAsync(ct);
-                return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, ct)
-                    ?? throw new InvalidDataException("TMDB returned an empty JSON response.");
+                return request;
             },
             cancellationToken: cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, cancellationToken)
+            ?? throw new InvalidDataException("TMDB returned an empty JSON response.");
     }
 
     private string BuildUri(string path, IReadOnlyList<(string Key, string Value)> query)
@@ -507,10 +502,60 @@ public sealed class TmdbDiscoveryProvider(
         return mode switch
         {
             DiscoveryMode.Top => $"{type}/popular",
-            DiscoveryMode.New => mediaType == TmdbDiscoveryMediaType.Movie ? "movie/now_playing" : "tv/on_the_air",
-            DiscoveryMode.Upcoming => mediaType == TmdbDiscoveryMediaType.Movie ? "movie/upcoming" : "tv/on_the_air",
+            DiscoveryMode.New when mediaType == TmdbDiscoveryMediaType.Movie => "movie/now_playing",
+            DiscoveryMode.New => "discover/tv",
+            DiscoveryMode.Upcoming when mediaType == TmdbDiscoveryMediaType.Movie => "movie/upcoming",
+            DiscoveryMode.Upcoming => "discover/tv",
             _ => $"trending/{type}/day"
         };
+    }
+
+    private static IReadOnlyList<(string Key, string Value)> BrowseQuery(
+        TmdbDiscoveryMediaType mediaType,
+        DiscoveryMode mode,
+        string locale,
+        string genre)
+    {
+        var query = new List<(string Key, string Value)>
+        {
+            ("language", locale),
+            ("page", "1")
+        };
+
+        if (mediaType == TmdbDiscoveryMediaType.Series && mode is DiscoveryMode.New or DiscoveryMode.Upcoming)
+        {
+            var today = DateTime.UtcNow.Date;
+            if (mode == DiscoveryMode.New)
+            {
+                query.Add(("first_air_date.gte", today.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                query.Add(("first_air_date.lte", today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                query.Add(("sort_by", "first_air_date.desc"));
+            }
+            else
+            {
+                query.Add(("first_air_date.gte", today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                query.Add(("sort_by", "first_air_date.asc"));
+                query.Add(("include_null_first_air_dates", "false"));
+            }
+        }
+
+        if (GenreId(mediaType, genre) is { } genreId)
+        {
+            query.Add(("with_genres", genreId.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        return query;
+    }
+
+    private static int? GenreId(TmdbDiscoveryMediaType mediaType, string genre)
+    {
+        if (string.IsNullOrWhiteSpace(genre))
+        {
+            return null;
+        }
+
+        var map = mediaType == TmdbDiscoveryMediaType.Movie ? MovieGenres : TvGenres;
+        return map.TryGetValue(genre.Trim(), out var id) ? id : null;
     }
 
     private static IEnumerable<TmdbDiscoveryCandidate> FilterGenre(
