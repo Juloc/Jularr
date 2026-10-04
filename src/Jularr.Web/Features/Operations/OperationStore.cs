@@ -725,6 +725,15 @@ public sealed class OperationStore(AppDbContext db, IJularrEventPublisher? event
             return;
         }
 
+        var policy = JularrEventCategories.Of(category);
+        if (policy.Audience == JularrEventAudience.Profile && string.IsNullOrWhiteSpace(snapshot.ProfileId))
+        {
+            // System/background operations remain canonical Activity/History records, but a
+            // profile-scoped notification must never widen to Admin merely because no profile
+            // owns the operation. A real Admin condition needs its own Admin-audience category.
+            return;
+        }
+
         var messageParams = new Dictionary<string, string>
         {
             ["title"] = snapshot.Subject ?? snapshot.Title
