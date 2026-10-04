@@ -173,7 +173,7 @@ public sealed class NotificationSubscriptionStore(AppDbContext db)
                 Add(preferenceCommand, "@category", (int)category);
                 Add(preferenceCommand, "@enabled", update.Enabled);
                 Add(preferenceCommand, "@timing", (int)update.Timing);
-                Add(preferenceCommand, "@now", Format(now));
+                Add(preferenceCommand, "@now", now);
                 await preferenceCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
@@ -400,8 +400,6 @@ public sealed class NotificationSubscriptionStore(AppDbContext db)
             }
         }
     }
-
-    private static string Format(DateTime value) => value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
     private static void Add(DbCommand command, string name, object? value)
     {
