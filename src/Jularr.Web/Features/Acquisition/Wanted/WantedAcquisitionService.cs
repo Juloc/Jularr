@@ -23,6 +23,16 @@ public interface IWantedRequestHandler
         AcquisitionRequest request,
         string problem,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Optional continuation after a successful import. Most media complete the Request; structured
+    /// future-monitoring media can return a new execution state while staying on this same scheduler.
+    /// </summary>
+    Task<AcquisitionExecution?> AfterCompletedImportAsync(
+        AcquisitionRequest request,
+        DateTime nowUtc,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<AcquisitionExecution?>(null);
 }
 
 /// <summary>
@@ -265,12 +275,16 @@ public sealed class WantedAcquisitionService(
             switch (result.Disposition)
             {
                 case CompletedDownloadImportDisposition.Completed:
+                    var continuation = await handler.AfterCompletedImportAsync(
+                        request,
+                        nowUtc,
+                        cancellationToken);
                     await store.UpdateStatusAsync(
                         request.Id,
-                        AcquisitionRequestStatus.Completed,
-                        result.Message,
-                        operation.Id,
-                        result.ResultUrl,
+                        continuation?.Status ?? AcquisitionRequestStatus.Completed,
+                        continuation?.Message ?? result.Message,
+                        continuation?.OperationId ?? operation.Id,
+                        continuation?.ResultUrl ?? result.ResultUrl,
                         decidedByProfileId: null,
                         cancellationToken);
                     advanced++;
