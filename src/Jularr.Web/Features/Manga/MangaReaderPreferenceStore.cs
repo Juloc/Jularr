@@ -9,14 +9,38 @@ public sealed record MangaReaderPreset(
     bool TwoPageSpread,
     string PageTransition,
     string BookmarkColor,
+    string ImageFlowMode,
+    string PageDirection,
+    string ImageFit,
+    int ImageZoomPercent,
+    int ImagePageGapPx,
+    bool ImageFirstPageAlone,
+    bool AutoContinueChapters,
+    bool ImageSharpen,
+    bool ImageCropBorders,
+    string ImageColorScheme,
     bool HasSeriesOverride)
 {
     public string UiMode =>
         ReadingMode == "continuous"
-            ? "continuous"
+            ? ImageFlowMode
             : TwoPageSpread
                 ? "double"
                 : "single";
+}
+
+public sealed class MangaReaderPreferenceInput
+{
+    public string? Mode { get; set; }
+    public string? PageDirection { get; set; }
+    public string? ImageFit { get; set; }
+    public int ImageZoomPercent { get; set; } = 100;
+    public int ImagePageGapPx { get; set; } = 8;
+    public bool ImageFirstPageAlone { get; set; }
+    public bool AutoContinueChapters { get; set; } = true;
+    public bool ImageSharpen { get; set; }
+    public bool ImageCropBorders { get; set; }
+    public string? ImageColorScheme { get; set; }
 }
 
 public static class MangaReaderPreferenceStore
@@ -73,7 +97,96 @@ public static class MangaReaderPreferenceStore
             twoPageSpread,
             transition,
             bookmarkColor,
+            ReaderPreferenceRules.NormalizeImageFlowMode(First(
+                series?.ImageFlowMode,
+                media?.ImageFlowMode,
+                user?.ImageFlowMode,
+                "continuous")),
+            ReaderPreferenceRules.NormalizeImagePageDirection(First(
+                series?.ImagePageDirection,
+                media?.ImagePageDirection,
+                user?.ImagePageDirection,
+                "auto")),
+            ReaderPreferenceRules.NormalizeImageFit(First(
+                series?.ImageFit,
+                media?.ImageFit,
+                user?.ImageFit,
+                "height")),
+            ReaderPreferenceRules.NormalizeImageZoomPercent(
+                series?.ImageZoomPercent
+                ?? media?.ImageZoomPercent
+                ?? user?.ImageZoomPercent
+                ?? 100),
+            ReaderPreferenceRules.NormalizeImagePageGapPx(
+                series?.ImagePageGapPx
+                ?? media?.ImagePageGapPx
+                ?? user?.ImagePageGapPx
+                ?? 8),
+            series?.ImageFirstPageAlone
+                ?? media?.ImageFirstPageAlone
+                ?? user?.ImageFirstPageAlone
+                ?? false,
+            series?.AutoContinueChapters
+                ?? media?.AutoContinueChapters
+                ?? user?.AutoContinueChapters
+                ?? true,
+            series?.ImageSharpen
+                ?? media?.ImageSharpen
+                ?? user?.ImageSharpen
+                ?? false,
+            series?.ImageCropBorders
+                ?? media?.ImageCropBorders
+                ?? user?.ImageCropBorders
+                ?? false,
+            ReaderPreferenceRules.NormalizeImageColorScheme(First(
+                series?.ImageColorScheme,
+                media?.ImageColorScheme,
+                user?.ImageColorScheme,
+                "auto")),
             series is not null);
+    }
+
+    public static async Task SaveAsync(
+        AppDbContext db,
+        string profileId,
+        Guid? seriesId,
+        MangaReaderPreferenceInput input,
+        string? changedKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var preference = await FindOrCreateAsync(
+            db,
+            profileId,
+            seriesId,
+            cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(changedKey))
+        {
+            ApplyMode(preference, input.Mode);
+            preference.ImagePageDirection =
+                ReaderPreferenceRules.NormalizeImagePageDirection(input.PageDirection);
+            preference.ImageFit =
+                ReaderPreferenceRules.NormalizeImageFit(input.ImageFit);
+            preference.ImageZoomPercent =
+                ReaderPreferenceRules.NormalizeImageZoomPercent(input.ImageZoomPercent);
+            preference.ImagePageGapPx =
+                ReaderPreferenceRules.NormalizeImagePageGapPx(input.ImagePageGapPx);
+            preference.ImageFirstPageAlone = input.ImageFirstPageAlone;
+            preference.AutoContinueChapters = input.AutoContinueChapters;
+            preference.ImageSharpen = input.ImageSharpen;
+            preference.ImageCropBorders = input.ImageCropBorders;
+            preference.ImageColorScheme =
+                ReaderPreferenceRules.NormalizeImageColorScheme(input.ImageColorScheme);
+        }
+        else
+        {
+            ApplyField(preference, changedKey, input);
+        }
+
+        preference.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     public static async Task SaveModeAsync(
@@ -83,40 +196,13 @@ public static class MangaReaderPreferenceStore
         string? uiMode,
         CancellationToken cancellationToken)
     {
-        var normalizedUiMode = uiMode?.Trim().ToLowerInvariant() switch
-        {
-            "continuous" => "continuous",
-            "double" => "double",
-            _ => "single"
-        };
-
-        var scope = seriesId is Guid id
-            ? SeriesScope(id)
-            : MediaScope;
-
-        var preference = await db.ReaderPreferences
-            .SingleOrDefaultAsync(
-                x => x.ProfileId == profileId && x.ScopeKey == scope,
-                cancellationToken);
-
-        if (preference is null)
-        {
-            preference = new ReaderPreference
-            {
-                ProfileId = profileId,
-                ScopeKey = scope,
-                WorkId = null
-            };
-            db.ReaderPreferences.Add(preference);
-        }
-
-        preference.ReadingMode =
-            normalizedUiMode == "continuous" ? "continuous" : "paged";
-        preference.TwoPageSpread = normalizedUiMode == "double";
-        preference.PageTransition ??= "slide";
-        preference.UpdatedAt = DateTime.UtcNow;
-
-        await db.SaveChangesAsync(cancellationToken);
+        await SaveAsync(
+            db,
+            profileId,
+            seriesId,
+            new MangaReaderPreferenceInput { Mode = uiMode },
+            changedKey: "mode",
+            cancellationToken);
     }
 
     public static async Task ResetSeriesAsync(
@@ -138,6 +224,112 @@ public static class MangaReaderPreferenceStore
 
         db.ReaderPreferences.Remove(preference);
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static void ApplyField(
+        ReaderPreference preference,
+        string changedKey,
+        MangaReaderPreferenceInput input)
+    {
+        switch (changedKey.Trim())
+        {
+            case "mode":
+                ApplyMode(preference, input.Mode);
+                break;
+            case "pageDirection":
+                preference.ImagePageDirection =
+                    ReaderPreferenceRules.NormalizeImagePageDirection(input.PageDirection);
+                break;
+            case "imageFit":
+                preference.ImageFit =
+                    ReaderPreferenceRules.NormalizeImageFit(input.ImageFit);
+                break;
+            case "imageZoomPercent":
+                preference.ImageZoomPercent =
+                    ReaderPreferenceRules.NormalizeImageZoomPercent(input.ImageZoomPercent);
+                break;
+            case "imagePageGapPx":
+                preference.ImagePageGapPx =
+                    ReaderPreferenceRules.NormalizeImagePageGapPx(input.ImagePageGapPx);
+                break;
+            case "imageFirstPageAlone":
+                preference.ImageFirstPageAlone = input.ImageFirstPageAlone;
+                break;
+            case "autoContinueChapters":
+                preference.AutoContinueChapters = input.AutoContinueChapters;
+                break;
+            case "imageSharpen":
+                preference.ImageSharpen = input.ImageSharpen;
+                break;
+            case "imageCropBorders":
+                preference.ImageCropBorders = input.ImageCropBorders;
+                break;
+            case "imageColorScheme":
+                preference.ImageColorScheme =
+                    ReaderPreferenceRules.NormalizeImageColorScheme(input.ImageColorScheme);
+                break;
+            default:
+                throw new InvalidOperationException("Unknown image reader setting.");
+        }
+    }
+
+    private static void ApplyMode(
+        ReaderPreference preference,
+        string? uiMode)
+    {
+        var normalized = uiMode?.Trim().ToLowerInvariant() switch
+        {
+            "double" => "double",
+            "continuous" => "continuous",
+            "horizontal" => "horizontal",
+            "webtoon" => "webtoon",
+            _ => "single"
+        };
+
+        if (normalized is "single" or "double")
+        {
+            preference.ReadingMode = "paged";
+            preference.TwoPageSpread = normalized == "double";
+        }
+        else
+        {
+            preference.ReadingMode = "continuous";
+            preference.TwoPageSpread = false;
+            preference.ImageFlowMode =
+                ReaderPreferenceRules.NormalizeImageFlowMode(normalized);
+        }
+
+        preference.PageTransition ??= "slide";
+    }
+
+    private static async Task<ReaderPreference> FindOrCreateAsync(
+        AppDbContext db,
+        string profileId,
+        Guid? seriesId,
+        CancellationToken cancellationToken)
+    {
+        var scope = seriesId is Guid id
+            ? SeriesScope(id)
+            : MediaScope;
+
+        var preference = await db.ReaderPreferences
+            .SingleOrDefaultAsync(
+                x => x.ProfileId == profileId && x.ScopeKey == scope,
+                cancellationToken);
+
+        if (preference is not null)
+        {
+            return preference;
+        }
+
+        preference = new ReaderPreference
+        {
+            ProfileId = profileId,
+            ScopeKey = scope,
+            WorkId = null
+        };
+        db.ReaderPreferences.Add(preference);
+        return preference;
     }
 
     private static string SeriesScope(Guid seriesId) =>
