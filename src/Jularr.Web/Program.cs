@@ -406,6 +406,10 @@ builder.Services.AddSingleton<TrickplayGenerator>();
 builder.Services.AddSingleton<SeasonSegmentDetectionQueue>();
 builder.Services.AddScoped<MediaSegmentService>();
 builder.Services.AddScoped<MediaSegmentSidecarImporter>();
+builder.Services.AddScoped<VideoProgressService>();
+builder.Services.AddScoped<CanonicalVideoTargetResolver>();
+builder.Services.AddScoped<CanonicalVideoProgressBackfillService>();
+builder.Services.AddScoped<ActiveSessionService>();
 builder.Services.AddScoped<EpisodeProgressService>();
 builder.Services.AddScoped<ClientApiService>();
 builder.Services.AddScoped<ClientApiOfflineService>();
@@ -808,6 +812,13 @@ static async Task InitializeDatabaseAsync(
     if (backfilledVideoFiles > 0)
     {
         log($"Backfilled {backfilledVideoFiles} legacy Anime file(s) into canonical video Assets.");
+    }
+
+    var canonicalProgressBackfill = scope.ServiceProvider.GetRequiredService<CanonicalVideoProgressBackfillService>();
+    var backfilledProgress = await canonicalProgressBackfill.BackfillLegacyAnimeAsync(CancellationToken.None);
+    if (backfilledProgress > 0)
+    {
+        log($"Backfilled {backfilledProgress} legacy Anime progress row(s) into canonical MediaProgress.");
     }
 
     if (await db.LibraryRoots.AnyAsync())
