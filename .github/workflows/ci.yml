@@ -155,8 +155,8 @@ jobs:
             --no-build --configuration Release --list-tests > "${LIST_FILE}"
 
           python3 - "${LIST_FILE}" "${SHARD_DIR}" <<'PY'
-          from collections import Counter
           from pathlib import Path
+          import re
           import sys
 
           list_file = Path(sys.argv[1])
@@ -167,28 +167,53 @@ jobs:
           except StopIteration:
               raise SystemExit("dotnet test --list-tests did not return a test list")
 
-          tests = [line.strip() for line in lines[start:] if line.startswith(("    ", "\t")) and line.strip()]
-          if not tests:
+          discovered = [line.strip() for line in lines[start:] if line.startswith(("    ", "\t")) and line.strip()]
+          if not discovered:
               raise SystemExit("No tests discovered")
+          (shard_dir / "expected-total.txt").write_text(str(len(discovered)))
 
-          counts = Counter()
-          for test in tests:
-              base = test.split("(", 1)[0].strip()
-              if "." not in base:
-                  raise SystemExit(f"Cannot derive test class from: {test}")
-              class_name = base.rsplit(".", 1)[0]
-              counts[class_name] += 1
+          class_pattern = re.compile(
+              r"\[TestClass(?:Attribute)?\][\s\S]{0,800}?\b(?:public|internal)\s+"
+              r"(?:(?:sealed|partial|static|abstract)\s+)*class\s+([A-Za-z_]\w*)"
+          )
+          namespace_pattern = re.compile(r"\bnamespace\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*[;{]")
+
+          weighted_classes = []
+          seen = set()
+          for path in sorted(Path("tests/Jularr.Tests").rglob("*.cs")):
+              source = path.read_text(errors="ignore")
+              class_names = class_pattern.findall(source)
+              if not class_names:
+                  continue
+              namespace_match = namespace_pattern.search(source)
+              if not namespace_match:
+                  raise SystemExit(f"TestClass without namespace in {path}")
+              namespace = namespace_match.group(1)
+              weight = max(
+                  1,
+                  source.count("[TestMethod")
+                  + source.count("[DataTestMethod")
+                  + source.count("[DataRow")
+                  + source.count("[DynamicData"),
+              )
+              per_class = max(1, weight // len(class_names))
+              for class_name in class_names:
+                  full_name = f"{namespace}.{class_name}"
+                  if full_name in seen:
+                      raise SystemExit(f"Duplicate test class discovered: {full_name}")
+                  seen.add(full_name)
+                  weighted_classes.append((full_name, per_class))
+
+          if not weighted_classes:
+              raise SystemExit("No TestClass declarations discovered")
 
           shard_count = 3
           shards = [[] for _ in range(shard_count)]
           loads = [0] * shard_count
-          for class_name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+          for class_name, weight in sorted(weighted_classes, key=lambda item: (-item[1], item[0])):
               target = min(range(shard_count), key=lambda i: loads[i])
               shards[target].append(class_name)
-              loads[target] += count
-
-          if sum(loads) != len(tests):
-              raise SystemExit("Shard planning lost tests")
+              loads[target] += weight
 
           for index, classes in enumerate(shards):
               if not classes:
@@ -196,7 +221,10 @@ jobs:
               filter_expression = "|".join(f"FullyQualifiedName~{name}." for name in classes)
               (shard_dir / f"filter-{index + 1}.txt").write_text(filter_expression)
 
-          print(f"Discovered {len(tests)} tests across {len(counts)} classes; shard loads: {loads}")
+          print(
+              f"Discovered {len(discovered)} tests and {len(weighted_classes)} test classes; "
+              f"estimated shard weights: {loads}"
+          )
           PY
 
           pids=()
@@ -220,6 +248,27 @@ jobs:
             echo "===== test shard ${shard} ====="
             cat "${SHARD_DIR}/shard-${shard}.log"
           done
+
+          python3 - "${SHARD_DIR}" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          shard_dir = Path(sys.argv[1])
+          expected = int((shard_dir / "expected-total.txt").read_text())
+          actual = 0
+          for shard in range(1, 4):
+              log = (shard_dir / f"shard-{shard}.log").read_text(errors="ignore")
+              totals = re.findall(r"Total:\s+(\d+)", log)
+              if not totals:
+                  raise SystemExit(f"Shard {shard} did not report a test total")
+              actual += int(totals[-1])
+
+          if actual != expected:
+              raise SystemExit(f"Shard coverage mismatch: expected {expected} tests, ran {actual}")
+          print(f"Shard coverage verified: {actual}/{expected} tests")
+          PY
+
           exit "${status}"
 
       - name: Validate single-container Compose
