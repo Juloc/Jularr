@@ -73,9 +73,9 @@ public sealed class BookReaderPageTurnTests
         StringAssert.Contains(script, "DRAG_FLICK_PX_MS");
         Assert.IsFalse(script.Contains("> 0.5)", StringComparison.Ordinal));
 
-        // Existing tap-zone/swipe/keyboard navigation (reader-shell.js dispatching
-        // jularr:reader-page-edge, and the keydown handler below) is untouched: the
-        // drag only swallows the pointerup it actually turned into a page-turn.
+        // Shared tap/swipe/keyboard navigation dispatches jularr:reader-page-edge
+        // from reader-shell.js. The renderer-specific visual drag only swallows
+        // the pointerup it actually committed, so one gesture still turns once.
         StringAssert.Contains(script, "event.stopPropagation()");
         StringAssert.Contains(script, "jularr:reader-page-edge");
     }
