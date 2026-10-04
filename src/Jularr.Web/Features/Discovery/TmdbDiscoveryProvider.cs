@@ -579,7 +579,7 @@ public sealed class TmdbDiscoveryProvider(
         var map = mediaType == TmdbDiscoveryMediaType.Movie ? MovieGenres : TvGenres;
         return map.TryGetValue(genre.Trim(), out var id)
             ? rows.Where(x => x.GenreIds.Contains(id))
-            : rows;
+            : [];
     }
 
     private static string CurrentLocale()
