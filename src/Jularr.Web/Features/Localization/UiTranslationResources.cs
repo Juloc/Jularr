@@ -2735,7 +2735,7 @@ public static class UiTranslationResources
             "Body",
             "Owner diagnostics of a PDF's analysis in the library management section.",
             "compact technical summary",
-            150,
+            200,
             new Dictionary<string, string>
             {
                 ["class"] = "PDF type.",
