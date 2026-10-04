@@ -448,20 +448,19 @@ public sealed class VideoAcquisitionEngine(
             return new TvContinuation(true, true, null);
         }
 
-        if (!payload.MonitorFuture)
-        {
-            return new TvContinuation(false, false, null);
-        }
-
         var nextKnown = missingIncluded
             .Where(x => x.AiredAt is DateTime airedAt && airedAt > now)
             .Select(x => x.AiredAt)
             .OrderBy(x => x)
             .FirstOrDefault();
-        return new TvContinuation(
-            KeepOpen: true,
-            HasMissingDue: false,
-            NextSearchUtc: nextKnown ?? now.AddHours(24));
+        if (nextKnown is not null)
+        {
+            return new TvContinuation(true, false, nextKnown);
+        }
+
+        return payload.MonitorFuture
+            ? new TvContinuation(true, false, now.AddHours(24))
+            : new TvContinuation(false, false, null);
     }
 
     private async Task<IReadOnlyList<VideoUnit>> LoadTvUnitsAsync(
