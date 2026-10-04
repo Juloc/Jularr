@@ -69,7 +69,12 @@ public sealed class BookReaderPdfTests
 
         StringAssert.Contains(page, "data-reader-frame");
         StringAssert.Contains(page, "data-book-pdf");
+        StringAssert.Contains(page, "~/js/fixed-page-reader.js");
         StringAssert.Contains(page, "~/js/books-reader-pdf.js");
+        Assert.IsTrue(
+            page.IndexOf("~/js/fixed-page-reader.js", StringComparison.Ordinal) <
+            page.IndexOf("~/js/books-reader-pdf.js", StringComparison.Ordinal),
+            "The canonical fixed-page runtime must load before the PDF adapter.");
         StringAssert.Contains(page, "/lib/pdfjs/pdf.min.mjs");
         StringAssert.Contains(page, "/lib/pdfjs/pdf.worker.min.mjs");
         foreach (var source in new[] { page, adapter })
