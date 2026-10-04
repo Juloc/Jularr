@@ -9,7 +9,7 @@ public sealed class ReaderLocatorTests
     public void ReflowLocatorKeepsLogicalAnchorIndependentOfRenderedPages()
     {
         var identity = new ReaderDocumentIdentity(Guid.NewGuid(), chapterId: Guid.NewGuid(), editionId: Guid.NewGuid(), variantKey: "de-generated");
-        var source = new ReaderSourceReference(11, new ReaderSourceRegion(.1, .2, .7, .3), "pdf:block:42");
+        var source = new ReaderSourcePageReference(11, new ReaderSourceRegion(.1, .2, .7, .3), "pdf:block:42");
         var locator = new ReflowTextReaderLocator(identity, "paragraph:17", characterOffset: 83, source: source, fallbackPercent: 41.5);
 
         Assert.AreEqual("paragraph:17", locator.BlockId);
