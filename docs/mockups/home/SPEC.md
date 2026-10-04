@@ -7,7 +7,7 @@ Status: approved UX direction for the Jularr Home page.
 Expected baseline references in this folder:
 
 - existing Home platform reference(s), including `home-clean-platforms.png`;
-- approved additional Offline cold-start reference: **`offline-cold-start.png`** (Desktop + Mobile composition).
+- approved additional Offline cold-start reference is present in this folder (Desktop + Mobile composition).
 
 Each platform mockup must cover both **Light and Dark** behavior over the complete product set. A comparison sheet may show multiple platforms/themes side-by-side. The Offline cold-start reference may use the dark/media-led Home composition because it validates state hierarchy rather than replacing the normal Home platform/theme references.
 
