@@ -84,6 +84,14 @@ public sealed class TmdbDiscoveryProvider(
         !string.IsNullOrWhiteSpace(configuration["Providers:Tmdb:ReadAccessToken"])
         || !string.IsNullOrWhiteSpace(configuration["Providers:Tmdb:ApiKey"]);
 
+    public static bool TryNormalizeExternalId(string? value, out string normalized)
+    {
+        normalized = "";
+        return int.TryParse(value?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+               && id > 0
+               && (normalized = id.ToString(CultureInfo.InvariantCulture)).Length > 0;
+    }
+
     public async Task<IReadOnlyList<TmdbDiscoveryCandidate>> SearchAsync(
         TmdbDiscoveryMediaType mediaType,
         string query,
@@ -151,7 +159,8 @@ public sealed class TmdbDiscoveryProvider(
         string externalId,
         CancellationToken cancellationToken)
     {
-        if (!int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdbId) || tmdbId <= 0)
+        if (!TryNormalizeExternalId(externalId, out var canonicalExternalId)
+            || !int.TryParse(canonicalExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdbId))
         {
             throw new ArgumentException("A positive TMDB id is required.", nameof(externalId));
         }
@@ -164,7 +173,6 @@ public sealed class TmdbDiscoveryProvider(
         var title = details.DisplayTitle(mediaType);
         var year = Year(details.ReleaseDate(mediaType));
 
-        var canonicalExternalId = tmdbId.ToString(CultureInfo.InvariantCulture);
         var legacyMovie = mediaType == TmdbDiscoveryMediaType.Movie
             ? await db.Movies
                 .Where(x => x.TmdbId == canonicalExternalId)
