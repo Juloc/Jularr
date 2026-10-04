@@ -123,6 +123,68 @@ public sealed class VideoAcquisitionRequestExecutorTests
     }
 
     [TestMethod]
+    public async Task TvCustomScopeKeepsSelectedFutureEpisodeOpenWithoutFutureMonitoring()
+    {
+        await using var host = await Host.CreateAsync(
+            MediaAcquisitionKind.Tv,
+            "Severance",
+            2022,
+            "95396",
+            "Severance.S01E02.1080p.WEB-DL.x264-GROUP",
+            addEpisode: true,
+            addSecondEpisode: true);
+
+        var selectedEpisodeId = host.SecondEpisodeId!.Value;
+        var selectedEpisode = await host.Environment.Db.WorkEpisodes.SingleAsync(x => x.Id == selectedEpisodeId);
+        selectedEpisode.AiredAt = DateTime.UtcNow.AddDays(2);
+        await host.Environment.Db.SaveChangesAsync();
+
+        var custom = new VideoRequestPayload(
+            host.Work.Id,
+            host.Work.CanonicalTitle,
+            host.Work.Year,
+            VideoRequestScope.Custom,
+            [selectedEpisodeId],
+            MonitorFuture: false);
+
+        var request = await host.StartAsync(custom);
+        var payload = VideoAcquisitionEngine.ReadPayload(request)
+            ?? throw new AssertFailedException("Expected video request payload.");
+
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status);
+        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
+        Assert.IsNotNull(payload.NextSearchUtc);
+        Assert.IsNull(payload.ActiveWorkEpisodeId);
+        StringAssert.Contains(request.StatusMessage ?? "", "Waiting for the next requested TV episode");
+    }
+
+    [TestMethod]
+    public async Task FailedMovieDownloadRetriesTheNextUntriedReleaseOnlyOnce()
+    {
+        await using var host = await Host.CreateAsync(
+            MediaAcquisitionKind.Movie,
+            "Dune",
+            2021,
+            "438631",
+            "Dune.2021.1080p.WEB-DL.x264-GROUP",
+            "Dune.2021.1080p.BluRay.x264-SECOND");
+
+        var request = await host.StartAsync();
+        var firstOperation = request.OperationId!.Value;
+
+        await host.Operations.MarkFailedAsync(firstOperation, "Out of retention");
+        await host.ProcessAsync(DateTime.UtcNow);
+
+        var retried = await host.GetAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, retried.Status);
+        Assert.AreNotEqual(firstOperation, retried.OperationId);
+        Assert.AreEqual(2, host.Environment.Client.Grabs.Count);
+
+        await host.ProcessAsync(DateTime.UtcNow.AddMinutes(1));
+        Assert.AreEqual(2, host.Environment.Client.Grabs.Count, "An active retry must not submit the same request again.");
+    }
+
+    [TestMethod]
     public async Task CancelledMovieDownloadNeverGrabsAReplacement()
     {
         await using var host = await Host.CreateAsync(
