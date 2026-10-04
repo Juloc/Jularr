@@ -75,7 +75,7 @@ public sealed class LibraryScannerMediaInventoryTests
             await scanner.ScanAsync(root.Id, CancellationToken.None);
 
             Assert.AreEqual(2, await db.MediaAnalyses.CountAsync(), "Removed media drops its analysis.");
-            Assert.AreEqual(2, await db.MediaAnalysisStreams.CountAsync());
+            Assert.AreEqual(4, await db.MediaAnalysisStreams.CountAsync(), "Each surviving video stores one video and one audio track.");
         }
         finally
         {
