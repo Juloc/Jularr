@@ -337,57 +337,6 @@ public sealed class NotificationSubscriptionStore(AppDbContext db)
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Compatibility projection for the current dispatcher. Phase 3 removes this once sinks route by
-    /// effective <see cref="NotificationChannel"/> values.
-    /// </summary>
-    public async Task<NotificationMode> GetModeAsync(string profileId, JularrEventCategory category, CancellationToken cancellationToken = default) =>
-        ToLegacyMode(await GetEventPreferenceAsync(profileId, category, cancellationToken));
-
-    /// <summary>Compatibility projection for the current settings page until its target editor lands.</summary>
-    public async Task<IReadOnlyDictionary<JularrEventCategory, NotificationMode>> GetAllAsync(string profileId, CancellationToken cancellationToken = default)
-    {
-        var preferences = await GetAllEventPreferencesAsync(profileId, cancellationToken);
-        return preferences.ToDictionary(entry => entry.Key, entry => ToLegacyMode(entry.Value));
-    }
-
-    /// <summary>Compatibility mutation for the current Off/In-App settings page.</summary>
-    public Task SetAsync(string profileId, JularrEventCategory category, NotificationMode mode, CancellationToken cancellationToken = default)
-    {
-        var update = mode switch
-        {
-            NotificationMode.Off => new NotificationEventPreferenceUpdate(false, ChannelSet(NotificationChannel.InApp), NotificationDeliveryTiming.Immediate),
-            NotificationMode.InApp => new NotificationEventPreferenceUpdate(true, ChannelSet(NotificationChannel.InApp), NotificationDeliveryTiming.Immediate),
-            NotificationMode.Push => new NotificationEventPreferenceUpdate(true, ChannelSet(NotificationChannel.Push), NotificationDeliveryTiming.Immediate),
-            NotificationMode.Digest => new NotificationEventPreferenceUpdate(false, ChannelSet(NotificationChannel.InApp), NotificationDeliveryTiming.Digest),
-            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown legacy notification mode.")
-        };
-
-        return SetEventPreferenceAsync(profileId, category, update, cancellationToken);
-    }
-
-    private static NotificationMode ToLegacyMode(NotificationEventPreference preference)
-    {
-        if (!preference.Enabled)
-        {
-            return NotificationMode.Off;
-        }
-
-        if (preference.Channels.Contains(NotificationChannel.InApp))
-        {
-            return NotificationMode.InApp;
-        }
-
-        if (preference.Channels.Contains(NotificationChannel.Push))
-        {
-            return NotificationMode.Push;
-        }
-
-        return preference.Timing == NotificationDeliveryTiming.Digest ? NotificationMode.Digest : NotificationMode.Off;
-    }
-
-    private static FrozenSet<NotificationChannel> ChannelSet(params NotificationChannel[] channels) => channels.ToFrozenSet();
-
     private static string NormalizeProfileId(string profileId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
