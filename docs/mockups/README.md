@@ -37,6 +37,7 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 - `script-trainer/SPEC.md` — generic Script Trainer with Japanese Kana as current toolkit
 - `user-settings/SPEC.md`
 - `downloads-offline/SPEC.md` — device-local consumer downloads/offline inventory and queue management
+- `offline-settings/SPEC.md` — end-state network, quality, storage, Smart Offline, cleanup and offline privacy preferences
 - `profile-activity/SPEC.md`
 - `add-request-flow/SPEC.md`
 - `request-status-details/SPEC.md` — consumer Request status/detail sheet
