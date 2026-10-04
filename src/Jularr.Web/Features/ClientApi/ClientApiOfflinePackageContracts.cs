@@ -126,7 +126,7 @@ public static class ClientApiOfflinePackageContract
             return true;
         }
 
-        message = "Offline target kind must be "work" or "game".";
+        message = "Offline target kind must be work or game.";
         return false;
     }
 }
