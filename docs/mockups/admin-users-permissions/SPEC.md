@@ -1,6 +1,8 @@
 # Admin Users & Permissions — V1
 
-Status: planning baseline for mockups.
+Status: **binding V1 planning specification; approved mockup direction.**
+
+Text specification wins over the visual reference on conflict.
 
 ## Purpose
 Manage accounts/profiles, groups/roles and effective capabilities that derive both API authorization and visible app shell.
