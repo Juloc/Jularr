@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Canonical application/release version; a diff in this file marks release intent on push. -->
-    <Version>0.1.0-alpha.81</Version>
+    <Version>0.1.0-alpha.82</Version>
   </PropertyGroup>
 
   <ItemGroup>
