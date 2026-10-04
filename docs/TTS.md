@@ -52,6 +52,8 @@ Behavior:
 - readers that keep only the pages around the current one in the document (PDF books) answer `jularr:reader-tts-next-page` with the next page's text layer, and reading continues there until the end of the document
 - Pause cancels and Resume restarts from the last spoken word, because Web Speech `pause()` is unreliable on mobile browsers
 - switching the visible language stops reading
+- while a generated target-language view is still arriving through progressive translation (#834), TTS may read only validated completed translated blocks; it never speaks ephemeral deltas or silently falls back to a different source language
+- if TTS catches the first untranslated block in that selected target-language view, it waits at that semantic boundary while the shared translation run is still active; when the block becomes validated it may continue from the same session/locator, while cancelled/failed translation stops with a normal unavailable/error state rather than reading mixed languages
 
 Settings live in the canonical `ReaderPreference` store and use the normal scope cascade with per-field inheritance: `ttsProviderId`, `ttsRate`, `ttsPitch`, `ttsVolume`, `ttsAutoContinueChapters` and one voice per language (`ttsVoiceId:<bcp47>`, stored as a JSON map per scope in which every language entry inherits independently). The `Vorlesen` settings tab shows one voice choice per document language and explains when a stored voice is missing on this device, when no voice for the language is installed (the device default is used) or when the browser cannot speak. `ReaderSettingsSnapshot.SpeechPreferencesFor(language)` is the server-side bridge from these settings to the resolver for native clients.
 
