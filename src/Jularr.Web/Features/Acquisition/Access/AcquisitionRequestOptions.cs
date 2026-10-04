@@ -13,17 +13,23 @@ public enum RequestScope
     /// <summary>Everything the title has, now and as new episodes appear.</summary>
     WholeSeries,
 
-    /// <summary>Only the listed seasons.</summary>
+    /// <summary>Only content released after the request; current known units stay unmonitored.</summary>
+    FutureOnly,
+
+    /// <summary>Explicit season/episode selection; future monitoring is controlled by <see cref="AcquisitionRequestOptions.MonitorFuture"/>.</summary>
+    Custom,
+
+    /// <summary>Legacy custom scope: only the listed seasons, with no future monitoring.</summary>
     Seasons,
 
-    /// <summary>Only the listed episodes.</summary>
+    /// <summary>Legacy custom scope: only the listed episodes, with no future monitoring.</summary>
     Episodes
 }
 
 public sealed record RequestEpisode(int Season, int Number);
 
 /// <summary>
-/// The richer choices a requester makes for an anime title, kept in the request's payload:
+/// The richer choices a requester makes for structured video (Anime/TV), kept in the request's payload:
 /// which part of the title (whole series, seasons or single episodes), the audio and subtitle
 /// language they want, and the quality profile the owner allows requesters to pick. Audio and
 /// subtitle language are preferences the approver sees; the scope and the quality profile are
@@ -48,6 +54,9 @@ public sealed record AcquisitionRequestOptions
     public IReadOnlyList<int> Seasons { get; init; } = [];
 
     public IReadOnlyList<RequestEpisode> Episodes { get; init; } = [];
+
+    /// <summary>Whether newly discovered future units stay monitored in Custom scope.</summary>
+    public bool MonitorFuture { get; init; }
 
     /// <summary>Preferred audio language tag (for example <c>ja</c>), or null for the release default.</summary>
     public string? AudioLanguage { get; init; }
@@ -104,44 +113,55 @@ public sealed record AcquisitionRequestOptions
             QualityProfileId = profile
         };
 
+        var seasons = Seasons.Distinct().Order().ToArray();
+        if (seasons.Any(season => season is < 1 or > MaxSeasonNumber))
+        {
+            throw new ArgumentException($"Seasons are numbered 1 to {MaxSeasonNumber}.", nameof(Seasons));
+        }
+
+        var episodes = Episodes
+            .Distinct()
+            .OrderBy(episode => episode.Season)
+            .ThenBy(episode => episode.Number)
+            .ToArray();
+        if (episodes.Length > MaxSelectedEpisodes
+            || episodes.Any(episode => episode.Season is < 1 or > MaxSeasonNumber
+                || episode.Number is < 1 or > MaxEpisodeNumber))
+        {
+            throw new ArgumentException("An episode selection is out of range.", nameof(Episodes));
+        }
+
         switch (Scope)
         {
             case RequestScope.WholeSeries:
-                return common with { Seasons = [], Episodes = [] };
+                return common with { Seasons = [], Episodes = [], MonitorFuture = true };
+
+            case RequestScope.FutureOnly:
+                return common with { Seasons = [], Episodes = [], MonitorFuture = true };
+
+            case RequestScope.Custom:
+                if (seasons.Length == 0 && episodes.Length == 0 && !MonitorFuture)
+                {
+                    throw new ArgumentException("Choose content or include future releases for Custom scope.", nameof(Scope));
+                }
+
+                return common with { Seasons = seasons, Episodes = episodes };
 
             case RequestScope.Seasons:
-                var seasons = Seasons.Distinct().Order().ToArray();
                 if (seasons.Length == 0)
                 {
                     throw new ArgumentException("Choose at least one season.", nameof(Seasons));
                 }
 
-                if (seasons.Any(season => season is < 1 or > MaxSeasonNumber))
-                {
-                    throw new ArgumentException($"Seasons are numbered 1 to {MaxSeasonNumber}.", nameof(Seasons));
-                }
-
-                return common with { Seasons = seasons, Episodes = [] };
+                return common with { Seasons = seasons, Episodes = [], MonitorFuture = false };
 
             case RequestScope.Episodes:
-                var episodes = Episodes
-                    .Distinct()
-                    .OrderBy(episode => episode.Season)
-                    .ThenBy(episode => episode.Number)
-                    .ToArray();
                 if (episodes.Length == 0)
                 {
                     throw new ArgumentException("Choose at least one episode.", nameof(Episodes));
                 }
 
-                if (episodes.Length > MaxSelectedEpisodes
-                    || episodes.Any(episode => episode.Season is < 1 or > MaxSeasonNumber
-                        || episode.Number is < 1 or > MaxEpisodeNumber))
-                {
-                    throw new ArgumentException("An episode selection is out of range.", nameof(Episodes));
-                }
-
-                return common with { Seasons = [], Episodes = episodes };
+                return common with { Seasons = [], Episodes = episodes, MonitorFuture = false };
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(Scope));
