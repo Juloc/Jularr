@@ -2,8 +2,10 @@ using System.Collections.Concurrent;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Manga;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Tracking;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +16,7 @@ public sealed class DiscoveryCoordinator(
     AniListMetadataProvider animeProvider,
     NovelAniListProvider readingProvider,
     BookCatalogService books,
+    TmdbDiscoveryProvider tmdb,
     AniListAccountService aniListAccount,
     AppDbContext db,
     ILogger<DiscoveryCoordinator> logger,
@@ -23,6 +26,7 @@ public sealed class DiscoveryCoordinator(
     private const int AnimeLimit = 10;
     private const int ReadingLimit = 14;
     private const int BookLimit = 10;
+    private const int TmdbLimit = 12;
     private const int MaximumResultCount = 30;
 
     private static readonly ConcurrentDictionary<string, CacheEntry> Cache =
@@ -43,13 +47,17 @@ public sealed class DiscoveryCoordinator(
         var mangaEnabled = instance.IsEnabled(InstanceModule.Manga);
         var novelEnabled = instance.IsEnabled(InstanceModule.Novel);
         var bookEnabled = instance.IsEnabled(InstanceModule.Book);
+        var movieEnabled = instance.IsEnabled(InstanceModule.Movie);
+        var tvEnabled = instance.IsEnabled(InstanceModule.Tv);
 
         if (!CategoryAvailable(
                 request.Category,
                 animeEnabled,
                 mangaEnabled,
                 novelEnabled,
-                bookEnabled))
+                bookEnabled,
+                movieEnabled,
+                tvEnabled))
         {
             return new DiscoveryResponse(
                 request.Query,
@@ -65,8 +73,8 @@ public sealed class DiscoveryCoordinator(
         includeBooks &= bookEnabled;
 
         var cacheKey = request.CacheKey(profileId)
-            + $"|anilist:{includeAniList}|books:{includeBooks}"
-            + $"|modules:a{animeEnabled}:m{mangaEnabled}:n{novelEnabled}:b{bookEnabled}";
+            + $"|anilist:{includeAniList}|books:{includeBooks}|tmdb:{tmdb.IsConfigured}"
+            + $"|modules:a{animeEnabled}:m{mangaEnabled}:n{novelEnabled}:b{bookEnabled}:movie{movieEnabled}:tv{tvEnabled}";
         if (TryGetCached(cacheKey, out var cached))
         {
             return cached;
@@ -124,6 +132,8 @@ public sealed class DiscoveryCoordinator(
                 mangaEnabled,
                 novelEnabled,
                 bookEnabled,
+                movieEnabled,
+                tvEnabled,
                 cancellationToken);
         }
 
@@ -161,6 +171,8 @@ public sealed class DiscoveryCoordinator(
         bool mangaEnabled,
         bool novelEnabled,
         bool bookEnabled,
+        bool movieEnabled,
+        bool tvEnabled,
         CancellationToken cancellationToken)
     {
         var includeAnime = includeAniList && animeEnabled &&
@@ -171,6 +183,10 @@ public sealed class DiscoveryCoordinator(
             (request.Category is DiscoveryCategory.All or DiscoveryCategory.Manga);
         var includeBook = includeBooks && bookEnabled &&
             (request.Category is DiscoveryCategory.All or DiscoveryCategory.Book or DiscoveryCategory.BooksAndLightNovels);
+        var includeMovie = movieEnabled && tmdb.IsConfigured &&
+            (request.Category is DiscoveryCategory.All or DiscoveryCategory.Movie);
+        var includeSeries = tvEnabled && tmdb.IsConfigured &&
+            (request.Category is DiscoveryCategory.All or DiscoveryCategory.Series);
 
         var animeTask = includeAnime
             ? CaptureAsync(
@@ -226,6 +242,56 @@ public sealed class DiscoveryCoordinator(
                 cancellationToken)
             : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
 
+        var movieTask = includeMovie
+            ? CaptureAsync(
+                async () =>
+                {
+                    var rows = request.Mode == DiscoveryMode.Search
+                        ? await tmdb.SearchAsync(
+                            TmdbDiscoveryMediaType.Movie,
+                            request.Query,
+                            TmdbLimit,
+                            request.Genre,
+                            cancellationToken)
+                        : await tmdb.BrowseAsync(
+                            TmdbDiscoveryMediaType.Movie,
+                            request.Mode,
+                            TmdbLimit,
+                            request.Genre,
+                            cancellationToken);
+
+                    return rows.Select(MapTmdb).ToArray();
+                },
+                "TMDB movie discovery is temporarily unavailable.",
+                warnings,
+                cancellationToken)
+            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
+
+        var seriesTask = includeSeries
+            ? CaptureAsync(
+                async () =>
+                {
+                    var rows = request.Mode == DiscoveryMode.Search
+                        ? await tmdb.SearchAsync(
+                            TmdbDiscoveryMediaType.Series,
+                            request.Query,
+                            TmdbLimit,
+                            request.Genre,
+                            cancellationToken)
+                        : await tmdb.BrowseAsync(
+                            TmdbDiscoveryMediaType.Series,
+                            request.Mode,
+                            TmdbLimit,
+                            request.Genre,
+                            cancellationToken);
+
+                    return rows.Select(MapTmdb).ToArray();
+                },
+                "TMDB TV discovery is temporarily unavailable.",
+                warnings,
+                cancellationToken)
+            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
+
         var bookTask = includeBook
             ? CaptureAsync(
                 async () =>
@@ -250,10 +316,12 @@ public sealed class DiscoveryCoordinator(
                 cancellationToken)
             : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
 
-        await Task.WhenAll(animeTask, readingTask, bookTask);
+        await Task.WhenAll(animeTask, movieTask, seriesTask, readingTask, bookTask);
 
         return Interleave(
             animeTask.Result,
+            movieTask.Result,
+            seriesTask.Result,
             readingTask.Result,
             bookTask.Result);
     }
@@ -346,6 +414,32 @@ public sealed class DiscoveryCoordinator(
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
+        var tmdbIds = items
+            .Where(x =>
+                x.Provider == TmdbDiscoveryProvider.ProviderKey &&
+                x.Category is "movie" or "tv")
+            .Select(x => x.ExternalId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var tmdbMatches = tmdbIds.Length == 0
+            ? new Dictionary<(WorkMediaType MediaType, string ExternalId), Guid>()
+            : (await (
+                    from identity in db.WorkExternalIdentities.AsNoTracking()
+                    join asset in db.MediaAssets.AsNoTracking()
+                        on identity.WorkId equals asset.WorkId
+                    join file in db.StoredFiles.AsNoTracking()
+                        on (Guid?)asset.Id equals file.MediaAssetId
+                    where identity.Provider == TmdbDiscoveryProvider.ProviderKey
+                          && (identity.MediaType == WorkMediaType.Movie || identity.MediaType == WorkMediaType.Series)
+                          && tmdbIds.Contains(identity.ExternalId)
+                          && asset.Kind == MediaAssetKind.Video
+                    select new { identity.MediaType, identity.ExternalId, identity.WorkId })
+                .Distinct()
+                .ToListAsync(cancellationToken))
+                .GroupBy(x => (x.MediaType, x.ExternalId))
+                .ToDictionary(x => x.Key, x => x.First().WorkId);
+
         var animeMatches = new Dictionary<string, Guid>(StringComparer.Ordinal);
         if (animeIds.Length > 0)
         {
@@ -432,10 +526,51 @@ public sealed class DiscoveryCoordinator(
                     };
                 }
 
+                var tmdbType = item.Category switch
+                {
+                    "movie" => WorkMediaType.Movie,
+                    "tv" => WorkMediaType.Series,
+                    _ => (WorkMediaType?)null
+                };
+                if (item.Provider == TmdbDiscoveryProvider.ProviderKey
+                    && tmdbType is { } mediaType
+                    && tmdbMatches.TryGetValue((mediaType, item.ExternalId), out var canonicalWorkId))
+                {
+                    return item with
+                    {
+                        IsLocal = true,
+                        LocalMediaId = canonicalWorkId
+                    };
+                }
+
                 return item;
             })
             .ToArray();
     }
+
+    private static DiscoveryItem MapTmdb(TmdbDiscoveryCandidate row) =>
+        new(
+            $"tmdb:{row.Category}:{row.ExternalId}",
+            row.Category,
+            TmdbDiscoveryProvider.ProviderKey,
+            row.ExternalId,
+            row.Title,
+            row.OriginalTitle,
+            row.Description,
+            row.CoverImageUrl,
+            row.MediaType == TmdbDiscoveryMediaType.Movie ? "MOVIE" : "TV",
+            null,
+            row.Year,
+            null,
+            null,
+            null,
+            null,
+            [],
+            false,
+            null,
+            row.DetailsUrl,
+            false,
+            Rating: row.Rating);
 
     private static DiscoveryItem MapAnime(AnimeMetadataCandidate row) =>
         new(
@@ -692,26 +827,34 @@ public sealed class DiscoveryCoordinator(
             DateTimeOffset.UtcNow.Add(lifetime));
     }
 
-    private static bool CategoryAvailable(
+    private bool CategoryAvailable(
         DiscoveryCategory category,
         bool animeEnabled,
         bool mangaEnabled,
         bool novelEnabled,
-        bool bookEnabled) =>
+        bool bookEnabled,
+        bool movieEnabled,
+        bool tvEnabled) =>
         category switch
         {
             DiscoveryCategory.Anime => animeEnabled,
+            DiscoveryCategory.Movie => movieEnabled && tmdb.IsConfigured,
+            DiscoveryCategory.Series => tvEnabled && tmdb.IsConfigured,
             DiscoveryCategory.Manga => mangaEnabled,
             DiscoveryCategory.LightNovel => novelEnabled,
             DiscoveryCategory.Book => bookEnabled,
             DiscoveryCategory.BooksAndLightNovels => bookEnabled || novelEnabled,
             _ => animeEnabled || mangaEnabled || novelEnabled || bookEnabled
+                || (movieEnabled && tmdb.IsConfigured)
+                || (tvEnabled && tmdb.IsConfigured)
         };
 
     private static string CategoryName(DiscoveryCategory category) =>
         category switch
         {
             DiscoveryCategory.Anime => "anime",
+            DiscoveryCategory.Movie => "movie",
+            DiscoveryCategory.Series => "tv",
             DiscoveryCategory.LightNovel => "light-novel",
             DiscoveryCategory.Manga => "manga",
             DiscoveryCategory.Book => "book",
@@ -726,6 +869,7 @@ public sealed class DiscoveryCoordinator(
             DiscoveryMode.MyList => "my-list",
             DiscoveryMode.Search => "search",
             DiscoveryMode.New => "new",
+            DiscoveryMode.Upcoming => "upcoming",
             _ => "trending"
         };
 

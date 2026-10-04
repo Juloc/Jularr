@@ -19,7 +19,7 @@ public sealed record DiscoveryShelfPlan(
     string TitleKey,
     string MediaLabelKey)
 {
-    public bool UsesAniList => Category is not DiscoveryCategory.Book;
+    public bool UsesAniList => Category is DiscoveryCategory.Anime or DiscoveryCategory.Manga or DiscoveryCategory.LightNovel;
 
     public bool UsesBooks => Category is DiscoveryCategory.Book;
 }
@@ -32,16 +32,14 @@ public sealed record DiscoveryShelfPlan(
 public static class DiscoveryShelfComposer
 {
     /// <summary>
-    /// Media types with a readily available provider feed this wave. Movie and Series exist as media
-    /// types (#593/#594) but have no provider feed adapter yet, so they produce no rows — a clean seam
-    /// for a future TMDB-style adapter rather than an empty or fabricated row.
+    /// Media types with a provider feed behind the shared discovery coordinator.
     /// </summary>
     public static IReadOnlyList<WorkMediaType> SupportedMediaTypes { get; } =
-        [WorkMediaType.Anime, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book];
+        [WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book];
 
     /// <summary>Display order of media types across the board (anime first, books last).</summary>
     private static IReadOnlyList<WorkMediaType> DisplayOrder { get; } =
-        [WorkMediaType.Anime, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book];
+        [WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book];
 
     /// <summary>
     /// The ordered rows for a profile's visible media types. Only types the profile may at least browse
@@ -73,8 +71,12 @@ public static class DiscoveryShelfComposer
             plans.Add(Row(type, DiscoveryShelfKind.Top, DiscoveryMode.Top));
         }
 
-        // "New" (recently published) is only an honest signal for Books today (#371); other types have
-        // no recent-publication source, so this row is not duplicated for them.
+        foreach (var type in types.Where(type => type is WorkMediaType.Movie or WorkMediaType.Series))
+        {
+            plans.Add(Row(type, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
+            plans.Add(Row(type, DiscoveryShelfKind.Upcoming, DiscoveryMode.Upcoming));
+        }
+
         if (types.Contains(WorkMediaType.Book))
         {
             plans.Add(Row(WorkMediaType.Book, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
@@ -171,6 +173,7 @@ public static class DiscoveryShelfComposer
     {
         DiscoveryMode.Top => "top",
         DiscoveryMode.New => "new",
+        DiscoveryMode.Upcoming => "upcoming",
         _ => "trending"
     };
 
@@ -201,7 +204,12 @@ public static class DiscoveryShelfComposer
             : item.Id;
 
     private static bool SourceEnabled(WorkMediaType type, bool includeAniList, bool includeBooks) =>
-        type == WorkMediaType.Book ? includeBooks : includeAniList;
+        type switch
+        {
+            WorkMediaType.Book => includeBooks,
+            WorkMediaType.Movie or WorkMediaType.Series => true,
+            _ => includeAniList
+        };
 
     private static DiscoveryShelfPlan Row(WorkMediaType type, DiscoveryShelfKind kind, DiscoveryMode mode)
     {
@@ -219,6 +227,8 @@ public static class DiscoveryShelfComposer
     private static DiscoveryCategory Category(WorkMediaType type) => type switch
     {
         WorkMediaType.Anime => DiscoveryCategory.Anime,
+        WorkMediaType.Movie => DiscoveryCategory.Movie,
+        WorkMediaType.Series => DiscoveryCategory.Series,
         WorkMediaType.Manga => DiscoveryCategory.Manga,
         WorkMediaType.LightNovel => DiscoveryCategory.LightNovel,
         WorkMediaType.Book => DiscoveryCategory.Book,
@@ -230,6 +240,7 @@ public static class DiscoveryShelfComposer
         DiscoveryShelfKind.Trending => "trending",
         DiscoveryShelfKind.Top => "top",
         DiscoveryShelfKind.NewlyPublished => "new",
+        DiscoveryShelfKind.Upcoming => "upcoming",
         _ => kind.ToString().ToLowerInvariant()
     };
 
@@ -238,12 +249,15 @@ public static class DiscoveryShelfComposer
     {
         DiscoveryMode.Top => "discover.tabs.top",
         DiscoveryMode.New => "discover.tabs.new",
+        DiscoveryMode.Upcoming => "discover.tabs.upcoming",
         _ => "discover.tabs.trending"
     };
 
     private static string MediaLabelKey(WorkMediaType type) => type switch
     {
         WorkMediaType.Anime => "discover.categories.anime",
+        WorkMediaType.Movie => "search.type.movie",
+        WorkMediaType.Series => "search.type.series",
         WorkMediaType.Manga => "reading.manga.title",
         WorkMediaType.LightNovel => "discover.categories.lightNovel",
         WorkMediaType.Book => "nav.books",

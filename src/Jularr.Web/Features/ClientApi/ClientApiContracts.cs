@@ -132,6 +132,12 @@ public static class ClientApiRoutes
     public static string DirectContent(Guid mediaFileId) =>
         $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/content";
 
+    public static string MediaTrickplay(Guid mediaFileId) =>
+        $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/trickplay";
+
+    public static string MediaTrickplayAsset(Guid mediaFileId, string fileName) =>
+        $"{MediaTrickplay(mediaFileId)}/{Uri.EscapeDataString(fileName)}";
+
     public static string MediaAvailability(Guid mediaFileId) =>
         $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/availability";
 
@@ -160,6 +166,15 @@ public static class ClientApiRoutes
 
     public static string PlaybackPlan(Guid episodeId) =>
         $"{Episode(episodeId)}/playback-plan";
+
+    public static string VideoPlayer =>
+        $"{ClientApiContract.BasePath}/video/player";
+
+    public static string VideoPlaybackPlan =>
+        $"{ClientApiContract.BasePath}/video/playback-plan";
+
+    public static string VideoProgress =>
+        $"{ClientApiContract.BasePath}/video/progress";
 
     public static string StreamSession(Guid sessionId) =>
         $"{ClientApiContract.BasePath}/stream-sessions/{sessionId:D}";

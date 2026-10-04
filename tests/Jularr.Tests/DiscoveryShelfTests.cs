@@ -15,25 +15,26 @@ namespace Jularr.Tests;
 public sealed class DiscoveryShelfTests
 {
     [TestMethod]
-    public void PlanBuildsTrendingThenTopRowsPerTypeThenBooksOnlyNew()
+    public void PlanBuildsProviderBackedRowsForEverySupportedType()
     {
         var plans = DiscoveryShelfComposer.Plan(
-            [WorkMediaType.Anime, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book],
+            [WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book],
             includeAniList: true,
             includeBooks: true);
 
         CollectionAssert.AreEqual(
             new[]
             {
-                "trending-anime", "trending-manga", "trending-lightnovel", "trending-book",
-                "top-anime", "top-manga", "top-lightnovel", "top-book",
-                "new-book"
+                "trending-anime", "trending-movie", "trending-series", "trending-manga", "trending-lightnovel", "trending-book",
+                "top-anime", "top-movie", "top-series", "top-manga", "top-lightnovel", "top-book",
+                "new-movie", "upcoming-movie", "new-series", "upcoming-series", "new-book"
             },
             plans.Select(plan => plan.Id).ToArray());
 
-        // "New" (recently published) is a Books-only signal (#371); it never appears for other types.
-        Assert.AreEqual(1, plans.Count(plan => plan.Kind == DiscoveryShelfKind.NewlyPublished));
-        Assert.IsTrue(plans.Where(plan => plan.Mode == DiscoveryMode.New).All(plan => plan.Category == DiscoveryCategory.Book));
+        Assert.AreEqual(3, plans.Count(plan => plan.Kind == DiscoveryShelfKind.NewlyPublished));
+        Assert.AreEqual(2, plans.Count(plan => plan.Kind == DiscoveryShelfKind.Upcoming));
+        Assert.IsTrue(plans.Where(plan => plan.Mode == DiscoveryMode.Upcoming)
+            .All(plan => plan.Category is DiscoveryCategory.Movie or DiscoveryCategory.Series));
     }
 
     [TestMethod]
@@ -102,18 +103,23 @@ public sealed class DiscoveryShelfTests
     }
 
     [TestMethod]
-    public void PlanOmitsTypesWithoutAProviderFeed()
+    public void PlanUsesTmdbForMovieAndSeriesIndependentlyOfAniList()
     {
-        // Movie/Series exist as media types (#593/#594) but have no provider feed adapter yet: a clean
-        // seam, not an empty or fabricated row.
         var plans = DiscoveryShelfComposer.Plan(
             [WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Anime],
-            includeAniList: true,
-            includeBooks: true);
+            includeAniList: false,
+            includeBooks: false);
 
         CollectionAssert.AreEqual(
-            new[] { "trending-anime", "top-anime" },
+            new[]
+            {
+                "trending-movie", "trending-series",
+                "top-movie", "top-series",
+                "new-movie", "upcoming-movie",
+                "new-series", "upcoming-series"
+            },
             plans.Select(plan => plan.Id).ToArray());
+        Assert.IsTrue(plans.All(plan => !plan.UsesAniList && !plan.UsesBooks));
     }
 
     [TestMethod]
@@ -166,17 +172,18 @@ public sealed class DiscoveryShelfTests
     }
 
     [TestMethod]
-    public async Task BoardIsEmptyWhenNoVisibleTypeHasAFeed()
+    public async Task BoardContainsTmdbRowsForVisibleMovieAndSeriesTypes()
     {
         DiscoveryShelfService.InvalidateCache();
         var feed = new FakeFeed();
         var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Movie, WorkMediaType.Series));
 
         var board = await service.GetBoardAsync(
-            null, "no-feed", isOwner: false, includeAniList: true, includeBooks: true, CancellationToken.None);
+            null, "tmdb-feed", isOwner: false, includeAniList: true, includeBooks: true, CancellationToken.None);
 
-        Assert.IsTrue(board.IsEmpty);
-        Assert.AreEqual(0, feed.Calls, "No feed call should be made when there is nothing to show.");
+        Assert.IsFalse(board.IsEmpty);
+        Assert.IsTrue(board.Rows.All(row => row.MediaType is WorkMediaType.Movie or WorkMediaType.Series));
+        Assert.IsTrue(feed.Calls > 0);
     }
 
     [TestMethod]
@@ -203,6 +210,8 @@ public sealed class DiscoveryShelfTests
         Assert.AreEqual("/Discover", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.All, DiscoveryMode.Trending, ""));
         Assert.AreEqual("/Discover?category=anime", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Anime, DiscoveryMode.Trending, ""));
         Assert.AreEqual("/Discover?category=book&mode=new", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Book, DiscoveryMode.New, ""));
+        Assert.AreEqual("/Discover?category=movie&mode=upcoming", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Movie, DiscoveryMode.Upcoming, ""));
+        Assert.AreEqual("/Discover?category=tv&mode=top", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Series, DiscoveryMode.Top, ""));
         Assert.AreEqual("/Discover?category=light-novel&mode=top", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.LightNovel, DiscoveryMode.Top, ""));
     }
 
@@ -283,12 +292,19 @@ public sealed class DiscoveryShelfTests
             var category = request.Category switch
             {
                 DiscoveryCategory.Anime => "anime",
+                DiscoveryCategory.Movie => "movie",
+                DiscoveryCategory.Series => "tv",
                 DiscoveryCategory.Manga => "manga",
                 DiscoveryCategory.LightNovel => "light-novel",
                 DiscoveryCategory.Book => "book",
                 _ => "all"
             };
-            var provider = category == "book" ? "openlibrary" : "anilist";
+            var provider = category switch
+            {
+                "book" => "openlibrary",
+                "movie" or "tv" => "tmdb",
+                _ => "anilist"
+            };
             IReadOnlyList<DiscoveryItem> items =
             [
                 Item(category, provider, $"{category}-1", $"{category} one"),

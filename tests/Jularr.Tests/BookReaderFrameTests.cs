@@ -19,6 +19,7 @@ public sealed class BookReaderFrameTests
     public void BookReaderRendersTheSharedFrameWithWorkingControls()
     {
         var page = Read("src", "Jularr.Web", "Pages", "Books", "Read.cshtml");
+        var sheet = Read("src", "Jularr.Web", "Pages", "Shared", "_ReaderAppearanceSheet.cshtml");
 
         StringAssert.Contains(page, "data-reader-frame");
         StringAssert.Contains(page, "data-reader-chrome-primary");
@@ -43,16 +44,17 @@ public sealed class BookReaderFrameTests
             .Distinct();
         foreach (var name in toggles)
         {
-            StringAssert.Contains(page, $"data-reader-menu=\"{name}\"", $"Menu '{name}' has no panel.");
+            StringAssert.Contains(page + sheet, $"data-reader-menu=\"{name}\"", $"Menu '{name}' has no panel.");
         }
 
-        // Read-aloud entry points exist only behind the TTS capability.
-        var ttsBlocks = Regex.Matches(page, @"@if \(supportsTts\)\s*\{(?<body>.*?)\n            \}", RegexOptions.Singleline)
-            .Select(x => x.Groups["body"].Value)
-            .ToArray();
-        Assert.IsTrue(ttsBlocks.Count(x => x.Contains("data-reader-tts-toggle", StringComparison.Ordinal)) >= 2);
-        var ungated = Regex.Replace(page, @"@if \(supportsTts\)\s*\{.*?\n            \}", "", RegexOptions.Singleline);
-        Assert.IsFalse(ungated.Contains("data-reader-tts-toggle", StringComparison.Ordinal));
+        // Read-aloud lives in the More menu only, behind the TTS capability; the bottom bar carries navigation and progress.
+        var gated = Regex.Match(page, @"@if \(supportsTts\)\s*\{(?<body>.*?)\n                    \}", RegexOptions.Singleline).Groups["body"].Value;
+        StringAssert.Contains(gated, "data-reader-tts-toggle");
+        StringAssert.Contains(gated, "data-reader-settings-open=\"tts\"");
+        Assert.AreEqual(1, Regex.Matches(page, "data-reader-tts-toggle").Count);
+        var bottomBar = page[page.IndexOf("<footer class=\"reader-frame-bottom\"", StringComparison.Ordinal)..page.IndexOf("</footer>", StringComparison.Ordinal)];
+        Assert.IsFalse(bottomBar.Contains("reader-frame-tail", StringComparison.Ordinal));
+        Assert.IsFalse(bottomBar.Contains("reader-frame-play", StringComparison.Ordinal));
         Assert.IsFalse(page.Contains("<iframe", StringComparison.OrdinalIgnoreCase));
     }
 

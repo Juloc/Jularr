@@ -256,7 +256,7 @@ public static partial class ReaderPreferenceRules
         NormalizeChoice(value, ChapterStyles, "light-novel");
 
     public static string NormalizePaperStyle(string? value) =>
-        NormalizeChoice(value, PaperStyles, "midnight");
+        NormalizeChoice(value, PaperStyles, "auto");
 
     public static string NormalizeBackgroundMotionMode(string? value) =>
         NormalizeChoice(value, BackgroundMotionModes, "auto");

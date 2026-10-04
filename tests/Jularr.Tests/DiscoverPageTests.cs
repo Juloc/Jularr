@@ -62,13 +62,18 @@ public sealed class DiscoverPageTests
     }
 
     [TestMethod]
-    public void NewIsABooksOnlyOrderingAndAnUnknownValueIsIgnored()
+    public void ProviderBackedVideoModesAreAcceptedAndUnknownValuesAreIgnored()
     {
         Assert.AreEqual(DiscoveryMode.New, Parse("category=book&mode=new").Mode);
+        Assert.AreEqual(DiscoveryMode.New, Parse("category=movie&mode=new").Mode);
+        Assert.AreEqual(DiscoveryMode.New, Parse("category=tv&mode=new").Mode);
+        Assert.AreEqual(DiscoveryMode.Upcoming, Parse("category=movie&mode=upcoming").Mode);
+        Assert.AreEqual(DiscoveryMode.Upcoming, Parse("category=tv&mode=upcoming").Mode);
         Assert.AreEqual(DiscoveryMode.Trending, Parse("category=anime&mode=new").Mode);
+        Assert.AreEqual(DiscoveryMode.Trending, Parse("category=anime&mode=upcoming").Mode);
         Assert.AreEqual(DiscoveryMode.Trending, Parse("mode=search").Mode, "search is derived from the text, never asked for.");
 
-        var junk = Parse("year=abc&status=gone&avail=x&pref=0&category=movies");
+        var junk = Parse("year=abc&status=gone&avail=x&pref=0&category=games");
         Assert.IsNull(junk.Year);
         Assert.IsNull(junk.Status);
         Assert.AreEqual(DiscoverAvailabilityFilter.Any, junk.Availability);
@@ -103,7 +108,7 @@ public sealed class DiscoverPageTests
     public void TheMediaTypeSwitchOffersOnlyTypesWithADiscoverySource()
     {
         CollectionAssert.AreEqual(
-            new[] { DiscoveryCategory.All, DiscoveryCategory.Anime, DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.Manga },
+            new[] { DiscoveryCategory.All, DiscoveryCategory.Anime, DiscoveryCategory.Movie, DiscoveryCategory.Series, DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.Manga },
             DiscoverScopes.Tabs.Select(tab => tab.Category).ToArray());
 
         Assert.IsTrue(DiscoverScopes.IsActive(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.Book));
@@ -112,6 +117,8 @@ public sealed class DiscoverPageTests
         Assert.IsTrue(DiscoverScopes.Includes(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.LightNovel));
         Assert.IsTrue(DiscoverScopes.Includes(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.BooksAndLightNovels));
         Assert.IsFalse(DiscoverScopes.Includes(DiscoveryCategory.Anime, DiscoveryCategory.Manga));
+        Assert.AreEqual(DiscoveryCategory.Movie, Parse("category=movies").Category);
+        Assert.AreEqual(DiscoveryCategory.Series, Parse("category=tv").Category);
         Assert.AreEqual(DiscoveryCategory.BooksAndLightNovels, Parse("category=books-light-novels").Category);
         Assert.AreEqual("/Discover?category=books-light-novels", Parse("category=books-light-novels").Href);
         Assert.AreEqual(

@@ -425,6 +425,12 @@ builder.Services.AddScoped<Jularr.Web.Features.Speech.TtsPreferencesService>();
 builder.Services.AddSingleton(_ => new Jularr.Web.Features.Speech.SpeechModelManifestStore("/data"));
 builder.Services.AddSingleton<ReaderThemeCatalog>();
 
+builder.Services.AddHttpClient<TmdbDiscoveryProvider>(client =>
+{
+    client.BaseAddress = new Uri("https://api.themoviedb.org/3/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+});
 builder.Services.AddHttpClient<AniListMetadataProvider>(client =>
 {
     client.BaseAddress = new Uri("https://graphql.anilist.co/");
@@ -676,6 +682,7 @@ builder.Services.AddHostedService<ChapterArtworkAutoGenerator>();
 builder.Services.AddScoped<AiSentenceExplanationService>();
 
 builder.Services.AddSingleton<BackgroundJobQueue>();
+builder.Services.AddScoped<BookTranslationJobs>();
 builder.Services.AddHostedService<BackgroundJobWorker>();
 builder.Services.AddSingleton<PlaybackJobQueue>();
 builder.Services.AddHostedService<PlaybackJobWorker>();

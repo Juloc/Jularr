@@ -38,9 +38,10 @@
         }
     }
 
-    // Every PDF page is one chapter of the work (BookCatalogPdf), so a page is
-    // stored as its chapter at position 0. If the import could not read every
-    // page, pages map linearly onto the chapters (page centre -> permille).
+    // pageChapters lists the chapter of every physical page (BookCatalogService.GetPdfPageChapterIdsAsync):
+    // a page is stored as its chapter at position 0, pages that repeat an earlier page share its chapter,
+    // and a chapter opens at its first page (findIndex). If the import could not read every page, pages
+    // map linearly onto the chapters (page centre -> permille).
     const pageMap = (pageCount, pageChapters) => {
         const total = Math.max(1, pageCount);
         const chapters = Math.max(1, pageChapters.length);

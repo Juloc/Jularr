@@ -247,7 +247,7 @@
             shell.querySelectorAll("[data-reader-view]").forEach(button => {
                 const active = button.dataset.readerView === next ? "true" : "false";
                 button.setAttribute(
-                    button.getAttribute("role") === "menuitemradio" ? "aria-checked" : "aria-pressed",
+                    ["menuitemradio", "radio"].includes(button.getAttribute("role")) ? "aria-checked" : "aria-pressed",
                     active);
             });
 
@@ -297,9 +297,6 @@
             linkSelector: "a[data-novel-chapter-link]",
             contentSelector: "[data-reader-content]",
             renderer: "novel"
-        });
-        shell.addEventListener("jularr:offline-chapter-missing", () => {
-            reader.showToast(reader.t("offlineMissing", "This chapter has not been downloaded for offline reading."));
         });
     }
 

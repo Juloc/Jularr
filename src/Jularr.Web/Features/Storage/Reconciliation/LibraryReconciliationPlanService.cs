@@ -73,6 +73,16 @@ public sealed class LibraryReconciliationPlanService(AppDbContext db, FolderBrow
         return await db.LibraryRoots.AsNoTracking().Where(x => x.IsEnabled).OrderBy(x => x.Name).Select(x => new LibraryReconciliationRoot(x.Id, x.Name)).ToListAsync(cancellationToken);
     }
 
+    /// <summary>Finds the newest completed scan that is still ready for review so the wizard can resume it instead of forcing a rescan.</summary>
+    public async Task<Guid?> GetLatestReadyPlanIdAsync(CancellationToken cancellationToken)
+    {
+        return await db.LibraryReconciliationPlans.AsNoTracking()
+            .Where(x => x.Status == LibraryReconciliationPlanStatus.Ready)
+            .OrderByDescending(x => x.ScannedAtUtc)
+            .Select(x => (Guid?)x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     /// <summary>Persists one explicit organization policy for a ready plan without starting any filesystem operation.</summary>
     public async Task<LibraryReconciliationWorkAssignmentResult> SetOrganizationModeAsync(LibraryReconciliationOrganizationModeRequest request, CancellationToken cancellationToken)
     {
@@ -716,6 +726,9 @@ public sealed class LibraryReconciliationPlanService(AppDbContext db, FolderBrow
             if (plan.SkipConfidentAssignments)
             {
                 await ApplyCommittedLinksAsync(plan.LibraryRootId, items, cancellationToken);
+
+                // Rollups: restored links change file states after the folder counts were derived, so parents must be recomputed.
+                PopulateFolderCounts(items);
             }
 
             // Persistence: replace scan evidence and advance the plan state atomically after the read completes.
@@ -1114,14 +1127,19 @@ public sealed class LibraryReconciliationPlanService(AppDbContext db, FolderBrow
     public async Task<IReadOnlyList<LibraryReconciliationWorkCandidate>> SearchWorksAsync(Guid planId, string? query, CancellationToken cancellationToken)
     {
         var planExists = await db.LibraryReconciliationPlans.AnyAsync(x => x.Id == planId, cancellationToken);
-        if (!planExists || string.IsNullOrWhiteSpace(query))
+        if (!planExists)
         {
             return [];
         }
 
-        // Lookup: normalize the user input so selection remains case-insensitive without inferring a mapping.
-        var searchText = query.Trim().ToUpperInvariant();
-        var matchingWorks = db.Works.AsNoTracking().Where(x => x.CanonicalTitle.ToUpper().Contains(searchText));
+        // Lookup: a blank query lists the first works alphabetically so a picker is never empty; text matching stays case-insensitive and never infers a mapping.
+        var matchingWorks = db.Works.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var searchText = query.Trim().ToUpperInvariant();
+            matchingWorks = matchingWorks.Where(x => x.CanonicalTitle.ToUpper().Contains(searchText));
+        }
+
         return await matchingWorks.OrderBy(x => x.CanonicalTitle).ThenBy(x => x.Year).Take(20).Select(x => new LibraryReconciliationWorkCandidate(x.Id, x.CanonicalTitle, x.Year)).ToListAsync(cancellationToken);
     }
 

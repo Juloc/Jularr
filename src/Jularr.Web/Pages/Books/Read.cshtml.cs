@@ -118,14 +118,9 @@ public sealed class ReadModel(
         var source = new ReaderDocumentLanguage(reader.SourceLanguage, BookLanguageCatalog.GetName(reader.SourceLanguage));
         if (BookFileFormats.IsPdf(reader.Work))
         {
-            // A PDF book is one document whose pages are the work's chapters; the
-            // reader shows the pages themselves, so it needs every page's chapter.
-            var pages = await db.NovelChapters
-                .AsNoTracking()
-                .Where(x => x.WorkId == reader.Work.Id)
-                .OrderBy(x => x.Number)
-                .Select(x => x.Id)
-                .ToListAsync(cancellationToken);
+            // A PDF book is one document whose logical pages are the work's chapters; the
+            // reader shows the physical pages, so it needs every physical page's chapter.
+            var pages = await books.GetPdfPageChapterIdsAsync(reader.Work.Id, cancellationToken);
             var file = await books.GetStoredFileAsync(reader.Work.Id, cancellationToken);
             Pdf = new BookPdfReaderDocument(
                 file is null ? null : $"/Books/File/{reader.Work.Id}",

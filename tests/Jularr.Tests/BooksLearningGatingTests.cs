@@ -235,28 +235,18 @@ public sealed class BooksLearningGatingTests
         Assert.IsFalse(
             view.Contains("Model.SourceIsTarget || Model.TranslationEnabled", StringComparison.Ordinal),
             "The translated-count summary must not depend on the resolved Learning capability.");
-
-        // The only remaining "TranslationEnabled" reference in the view is the
-        // Regenerate form; TranslateBook moved into the language/edition selector.
-        var occurrences = System.Text.RegularExpressions.Regex.Matches(
-            view, "Model\\.TranslationEnabled").Count;
-        Assert.AreEqual(
-            1,
-            occurrences,
-            "Only the Regenerate form may still gate on TranslationEnabled in the view.");
     }
 
-    /// <summary>Asserts the nearest preceding "@if" guards the given form/handler with TranslationEnabled.</summary>
+    /// <summary>Asserts the translation forms only render after the "!Model.TranslationEnabled" branch, so they never show while the capability is off.</summary>
     private static void AssertGuardPrecedesHandler(string view, string handlerMarker)
     {
         var handlerIndex = view.IndexOf(handlerMarker, StringComparison.Ordinal);
         Assert.IsTrue(handlerIndex > 0, $"'{handlerMarker}' was not found.");
 
-        var guardIndex = view.LastIndexOf("@if (", handlerIndex, StringComparison.Ordinal);
-        Assert.IsTrue(guardIndex >= 0, $"No '@if' guard precedes '{handlerMarker}'.");
-
-        var guard = view[guardIndex..handlerIndex];
-        StringAssert.Contains(guard, "Model.TranslationEnabled");
+        var guardIndex = view.LastIndexOf("@if (!Model.TranslationEnabled)", handlerIndex, StringComparison.Ordinal);
+        Assert.IsTrue(guardIndex >= 0, $"No TranslationEnabled guard precedes '{handlerMarker}'.");
+        var elseIndex = view.IndexOf("else if (!job.IsActive)", guardIndex, StringComparison.Ordinal);
+        Assert.IsTrue(elseIndex > guardIndex && elseIndex < handlerIndex, "The forms belong to the capability-enabled branch.");
     }
 
     private static string RepositoryRoot()
@@ -416,13 +406,17 @@ public sealed class BooksLearningGatingTests
                 new BackgroundJobQueue(services.GetRequiredService<IServiceScopeFactory>()),
                 Db));
 
-        public LibraryModel CreateLibraryModel(string profileId, bool owner = false) =>
-            AttachPageContext(new LibraryModel(
+        public LibraryModel CreateLibraryModel(string profileId, bool owner = false)
+        {
+            var queue = new BackgroundJobQueue(services.GetRequiredService<IServiceScopeFactory>());
+            return AttachPageContext(new LibraryModel(
                 Db,
                 NewBookCatalogService(),
                 owner ? OwnerContext(profileId) : TestAccounts.Context(profileId),
-                new BackgroundJobQueue(services.GetRequiredService<IServiceScopeFactory>()),
+                queue,
+                new BookTranslationJobs(Db, queue, NewBookCatalogService()),
                 NullLogger<LibraryModel>.Instance));
+        }
 
         /// <summary>
         /// The Ui bundle (localization PR #362) is resolved from

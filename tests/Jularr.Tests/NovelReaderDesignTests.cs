@@ -185,10 +185,8 @@ public sealed class NovelReaderDesignTests
         StringAssert.Contains(js, "if (!source) return null;");
         StringAssert.Contains(js, "button.setAttribute(\"aria-expanded\", expanded ? \"true\" : \"false\");");
 
-        // The Novel frame's mobile "Language" tool opens the language menu itself.
-        StringAssert.Contains(
-            view,
-            "<button type=\"button\" data-reader-menu-toggle=\"language\" aria-haspopup=\"menu\" aria-expanded=\"false\" aria-controls=\"novel-menu-language\">");
+        // The Novel frame's phone More menu opens the language menu itself.
+        StringAssert.Contains(view, "class=\"reader-frame-mobile\" data-reader-menu-toggle=\"language\"");
     }
 
     [TestMethod]

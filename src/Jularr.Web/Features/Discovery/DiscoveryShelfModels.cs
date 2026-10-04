@@ -115,6 +115,8 @@ public static class DiscoveryShelfLinks
     private static string CategoryParam(DiscoveryCategory category) => category switch
     {
         DiscoveryCategory.Anime => "anime",
+        DiscoveryCategory.Movie => "movie",
+        DiscoveryCategory.Series => "tv",
         DiscoveryCategory.LightNovel => "light-novel",
         DiscoveryCategory.Manga => "manga",
         DiscoveryCategory.Book => "book",
@@ -127,6 +129,7 @@ public static class DiscoveryShelfLinks
         DiscoveryMode.Top => "top",
         DiscoveryMode.MyList => "my-list",
         DiscoveryMode.New => "new",
+        DiscoveryMode.Upcoming => "upcoming",
         DiscoveryMode.Search => "search",
         _ => "trending"
     };

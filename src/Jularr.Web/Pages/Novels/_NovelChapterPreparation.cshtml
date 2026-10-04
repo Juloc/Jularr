@@ -18,7 +18,10 @@
          data-novel-chapter-preparation
          data-pending="@pending.ToString().ToLowerInvariant()"
          data-status-url="@Url.Page("/Novels/Read", "ChapterStatus", new { id = chapter.Id, prepare = preparation?.Id })"
-         data-ready-url="@returnUrl">
+         data-ready-url="@returnUrl"
+         data-failed-text="@ui["novels.read.prep.failed"]"
+         data-retry-text="@ui["novels.read.prep.retry"]"
+         data-stalled-text="@ui["novels.read.prep.stalled"]">
     <a class="back-link" href="/Novels/Work/@chapter.WorkId">← @chapter.WorkTitle</a>
 
     <header class="novel-preparation-header">

@@ -29,23 +29,28 @@
                 }
 
                 if (status.status !== "queued" && status.status !== "running") {
-                    if (message) {
-                        message.textContent = status.message ||
-                            "Das Kapitel konnte nicht heruntergeladen werden.";
-                    }
+                    if (message) message.textContent = status.message || root.dataset.failedText;
                     if (action) {
                         action.disabled = false;
-                        action.textContent = "Erneut versuchen";
+                        action.textContent = root.dataset.retryText;
                     }
                     return;
                 }
+            } else if ([401, 403, 404].includes(response.status)) {
+                // Access revoked or the chapter is gone: waiting longer cannot help.
+                if (message) message.textContent = root.dataset.failedText;
+                if (action) {
+                    action.disabled = false;
+                    action.textContent = root.dataset.retryText;
+                }
+                return;
             }
         } catch {
             // Transient network errors: keep polling.
         }
 
         if (attempt + 1 >= maxAttempts) {
-            if (message) message.textContent = "Der Download dauert länger. Seite später neu laden.";
+            if (message) message.textContent = root.dataset.stalledText;
             if (action) action.disabled = false;
             return;
         }

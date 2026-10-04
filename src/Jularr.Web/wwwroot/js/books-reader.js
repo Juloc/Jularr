@@ -128,9 +128,13 @@
         }, 2400);
     };
 
+    // The status lets the shell tell a revoked permission or missing content from a network failure.
+    const httpError = async response => Object.assign(new Error(await response.text()), { status: response.status });
+
     const failed = error => {
         console.warn(error);
-        toast(t("books.read.actionFailed", "That did not work. Please try again."));
+        if (root.readerShell) root.readerShell.reportFailure(error);
+        else toast(t("books.read.actionFailed", "That did not work. Please try again."));
     };
 
     // ---- Language views ---------------------------------------------------------
@@ -146,8 +150,8 @@
     const currentAnchorLanguage = () => view === "original" ? "original" : targetLanguage;
 
     const syncViewControls = () => {
-        root.querySelectorAll("[data-book-view]").forEach(button => {
-            button.setAttribute("aria-checked", button.dataset.bookView === view ? "true" : "false");
+        root.querySelectorAll("[data-reader-view]").forEach(button => {
+            button.setAttribute("aria-checked", button.dataset.readerView === view ? "true" : "false");
         });
         // Chapter links keep the chosen language view.
         root.querySelectorAll("a[data-book-chapter-link]").forEach(link => {
@@ -183,22 +187,10 @@
                 "aria-pressed",
                 button.dataset.bookMode === settings.readingMode ? "true" : "false");
         });
-        root.querySelectorAll("[data-book-spread-choice]").forEach(button => {
-            const spreadChoice = button.dataset.bookSpreadChoice === "true";
-            button.setAttribute(
-                "aria-checked",
-                spreadChoice === Boolean(settings.twoPageSpread) ? "true" : "false");
-        });
         root.querySelectorAll("[data-book-paper]").forEach(button => {
             button.setAttribute(
                 "aria-checked",
                 button.dataset.bookPaper === settings.paperStyle ? "true" : "false");
-        });
-        // Animated (curl/slide/fade) vs instant paging; see the drag-turn section below.
-        root.querySelectorAll("[data-book-page-turn-choice]").forEach(button => {
-            const animated = button.dataset.bookPageTurnChoice !== "none";
-            const isOn = settings.pageTransition !== "none";
-            button.setAttribute("aria-checked", animated === isOn ? "true" : "false");
         });
     };
 
@@ -291,7 +283,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const result = await response.json();
         if (result?.settings) applyServerSettings(result.settings);
     };
@@ -346,15 +338,8 @@
     root.querySelectorAll("[data-book-mode]").forEach(button => {
         button.addEventListener("click", () => setSettingControl("readingMode", button.dataset.bookMode));
     });
-    root.querySelectorAll("[data-book-spread-choice]").forEach(button => {
-        button.addEventListener("click", () =>
-            setSettingControl("twoPageSpread", button.dataset.bookSpreadChoice === "true"));
-    });
     root.querySelectorAll("[data-book-paper]").forEach(button => {
         button.addEventListener("click", () => setSettingControl("paperStyle", button.dataset.bookPaper));
-    });
-    root.querySelectorAll("[data-book-page-turn-choice]").forEach(button => {
-        button.addEventListener("click", () => setSettingControl("pageTransition", button.dataset.bookPageTurnChoice));
     });
 
     root.addEventListener("jularr:reader-settings-response", event => {
@@ -921,21 +906,6 @@
             return;
         }
         const key = event.key;
-        if (key === "b" || key === "B") {
-            event.preventDefault();
-            toggleBookmark();
-            return;
-        }
-        if (key === "n" || key === "N") {
-            event.preventDefault();
-            root.querySelector("[data-reader-contents-toggle]")?.click();
-            return;
-        }
-        if (key === "/") {
-            event.preventDefault();
-            root.querySelector('[data-reader-menu-toggle="search"]')?.click();
-            return;
-        }
         if (pdfContainer) {
             if (pdf) handlePdfKey(event, target);
             return;
@@ -1074,9 +1044,10 @@
             return paragraph;
         }));
         root.dataset.hasTranslation = "true";
-        root.querySelectorAll('[data-book-view="translated"], [data-book-view="both"]')
+        root.querySelectorAll('[data-reader-view="translated"], [data-reader-view="both"]')
             .forEach(button => {
                 button.hidden = false;
+                button.disabled = false;
             });
         translateForm?.remove();
         setView("translated");
@@ -1121,7 +1092,7 @@
                 credentials: "same-origin",
                 headers: { "X-Requested-With": "fetch" }
             });
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             void pollTranslation();
         } catch (error) {
             if (button) button.disabled = false;
@@ -1129,8 +1100,8 @@
         }
     });
 
-    root.querySelectorAll("[data-book-view]").forEach(button => {
-        button.addEventListener("click", () => setView(button.dataset.bookView));
+    root.querySelectorAll("[data-reader-view]").forEach(button => {
+        button.addEventListener("click", () => setView(button.dataset.readerView));
     });
 
     // ---- PDF translation ------------------------------------------------------------
@@ -1197,7 +1168,7 @@
                 showPdfTranslation({ message: t("books.read.pdfTranslationUnavailable", "Translation is not available for this book.") });
                 return;
             }
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             const result = await response.json();
             if (result.status === "ready") {
                 showPdfTranslation({ paragraphs: result.paragraphs });
@@ -1236,7 +1207,7 @@
                 credentials: "same-origin",
                 headers: { "X-Requested-With": "fetch" }
             });
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             pdfTranslationPolls = 0;
             waitForPdfTranslation();
         } catch (error) {
@@ -1267,7 +1238,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         return response.json();
     };
 
@@ -1285,7 +1256,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const type = response.headers.get("content-type") || "";
         return type.includes("application/json") ? response.json() : null;
     };
@@ -1352,11 +1323,6 @@
             bookmarkButton.setAttribute("aria-label", label);
             bookmarkButton.title = label;
         }
-        root.querySelectorAll("[data-book-bookmark-proxy]").forEach(button => {
-            button.setAttribute("aria-pressed", active ? "true" : "false");
-            const span = button.querySelector("span");
-            if (span) span.textContent = label;
-        });
     }
 
     async function toggleBookmark() {
@@ -1389,7 +1355,7 @@
                         chapterId,
                         chapterNumber: pdf
                             ? pdf.visiblePages()[0]
-                            : Number(root.querySelector("[data-book-chapter-number]")?.textContent || 0),
+                            : Number(root.dataset.chapterNumber || 0),
                         chapterTitle: pdf ? "" : root.querySelector("[data-book-chapter-title]")?.textContent || "",
                         positionPermille: position,
                         language: currentAnchorLanguage()
@@ -1405,9 +1371,6 @@
     }
 
     bookmarkButton?.addEventListener("click", toggleBookmark);
-    root.querySelectorAll("[data-book-bookmark-proxy]").forEach(button => {
-        button.addEventListener("click", toggleBookmark);
-    });
 
     // ---- Contents panel ---------------------------------------------------------------
 
@@ -1441,7 +1404,7 @@
             return;
         }
         const [first] = pdf.visiblePages();
-        const section = pdf.sectionFor(first);
+        const section = pdf.sectionFor(first) ?? items.filter(entry => entry.page <= first).at(-1);
         let current = null;
         for (const entry of items) {
             const item = document.createElement("li");
@@ -1948,7 +1911,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const item = await response.json();
         currentHighlights.push(item);
         if (allAnnotations) {
@@ -2028,7 +1991,7 @@
             const payload = event.detail?.payload || {};
             if (translated) translated.replaceChildren();
             root.dataset.hasTranslation = "false";
-            root.querySelectorAll('[data-book-view="translated"], [data-book-view="both"]')
+            root.querySelectorAll('[data-reader-view="translated"], [data-reader-view="both"]')
                 .forEach(button => {
                     button.hidden = true;
                 });
@@ -2037,10 +2000,11 @@
                 node.textContent = title;
             });
             if (payload.number !== undefined) {
-                const number = root.querySelector("[data-book-chapter-number]");
-                if (number) number.textContent = String(payload.number);
-                const label = root.querySelector("[data-book-chapter-label]");
-                if (label) label.textContent = t("books.chapter.number", "Chapter {number}", { number: payload.number });
+                root.dataset.chapterNumber = String(payload.number);
+                const chapterLabel = t("books.chapter.number", "Chapter {number}", { number: payload.number });
+                root.querySelectorAll("[data-book-chapter-number],[data-book-chapter-context]").forEach(node => {
+                    node.textContent = chapterLabel;
+                });
             }
             currentHighlights = [];
             chapterBookmarks = [];
@@ -2054,23 +2018,13 @@
             ensureParagraphMetadata(original);
             scheduleLayout(null);
         });
-
-        root.addEventListener("jularr:offline-chapter-missing", () => {
-            let offlineText = {};
-            try {
-                offlineText = JSON.parse(document.getElementById("offline-library-text")?.textContent || "{}");
-            } catch {
-            }
-            toast(offlineText["offlineLibrary.chapter.offlineMissing"] ||
-                t("books.read.actionFailed", "That did not work. Please try again."));
-        });
     }
 
     // ---- PDF pages -------------------------------------------------------------------
 
     function startPdf() {
         const status = root.querySelector("[data-book-pdf-status]");
-        const sectionLabels = root.querySelectorAll("[data-book-chapter-label]");
+        const positionLabel = root.querySelector("[data-book-pdf-position]");
         const sectionSteps = root.querySelectorAll("[data-book-pdf-section]");
         const pages = (readJson("[data-book-pdf-pages-json]", []) || []).map(String);
         const source = pdfContainer.dataset;
@@ -2110,9 +2064,13 @@
                     max: total,
                     percent: Math.round(last / total * 100)
                 });
-                sectionLabels.forEach(label => {
-                    label.textContent = section?.title || "";
-                });
+                if (positionLabel) {
+                    const position = t("books.read.pagePosition", "Page {page} of {total}", {
+                        page: first === last ? first : first + "–" + last,
+                        total
+                    });
+                    positionLabel.textContent = section?.title ? position + " · " + section.title : position;
+                }
                 if (!restoring) queueProgressSave();
                 if (view === "translated") void loadPdfTranslation();
             },
@@ -2134,6 +2092,10 @@
             },
             onReady: ready => {
                 finishRestore();
+                // Contents restored open before the pages were ready would otherwise stay empty.
+                if (ready && !chaptersLoaded && !root.querySelector("[data-reader-contents]")?.hidden) {
+                    void loadChapters(chapterSearch?.value);
+                }
                 if (ready) ensureAnnotations().catch(error => console.warn(error));
                 if (pdfTranslation) pdfTranslation.hidden = view !== "translated";
                 void loadPdfTranslation();

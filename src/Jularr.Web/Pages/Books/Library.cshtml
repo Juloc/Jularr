@@ -1,65 +1,91 @@
 @page "/Books/Library/{id:guid}"
+@using Jularr.Web.Features.Books
+@using Jularr.Web.Features.MediaFacts
 @using Jularr.Web.Ui
 @model Jularr.Web.Pages.Books.LibraryModel
 @{
     var ui = Model.Ui;
-    ViewData["Title"] = Model.Book.Work.MetadataTitle ?? Model.Book.Work.Title;
-    var title = Model.Book.Work.MetadataTitle ?? Model.Book.Work.Title;
-    var translatedCount = Model.Book.Chapters.Count(x => x.HasTranslation);
-    var firstChapter = Model.Book.Progress?.ChapterId
-        ?? Model.Book.Chapters.FirstOrDefault()?.Id;
-    var currentChapter = Model.Book.Progress is null
-        ? null
-        : Model.Book.Chapters.FirstOrDefault(x => x.Id == Model.Book.Progress.ChapterId);
+    var work = Model.Book.Work;
+    var title = work.MetadataTitle ?? work.Title;
+    var totalUnits = Model.Book.Chapters.Count;
+    var translatedUnits = Model.TranslatedCount;
+    var job = Model.TranslationJob;
+    var targetName = BookLanguageCatalog.GetName(Model.TargetLanguage);
+    var progressText = ui.Format(Model.IsPdf ? "books.library.pagesTranslated" : "books.library.chaptersTranslated", ("translated", translatedUnits), ("total", totalUnits));
+    var translationPercent = totalUnits == 0 ? 0 : translatedUnits * 100 / totalUnits;
+    var firstChapter = Model.Book.Progress?.ChapterId ?? Model.Book.Chapters.FirstOrDefault()?.Id;
+    var currentChapter = Model.Book.Progress is null ? null : Model.Book.Chapters.FirstOrDefault(x => x.Id == Model.Book.Progress.ChapterId);
     var progressPercent = Model.Book.Progress?.PositionPermille / 10 ?? 0;
-    var unitLabel = Model.IsPdf
-        ? ui["books.library.pagesHeading"]
-        : ui["books.library.chaptersHeading"];
-    var backLink = new ContextBackLinkModel(
-        $"/Books?lang={Model.TargetLanguage}",
-        $"← {ui["nav.books"]}",
-        "books-back");
+    var unitLabel = Model.IsPdf ? ui["books.library.pagesHeading"] : ui["books.library.chaptersHeading"];
+    var coverUrl = string.IsNullOrWhiteSpace(work.CoverImageUrl)
+        ? null
+        : work.CoverImageUrl.StartsWith("/Books/Cover/", StringComparison.Ordinal) ? work.CoverImageUrl + "?w=480" : work.CoverImageUrl;
+    var learningUrl = Url.Page("/Settings/LearningScope", new
+    {
+        mediaType = Jularr.Web.Features.Learning.LearningMediaType.Book,
+        scope = "work",
+        workKey = work.Id.ToString(),
+        label = title,
+        returnUrl = $"/Books/Library/{work.Id}?lang={Model.TargetLanguage}"
+    });
+    var languageChips = Model.EditionRows
+        .Where(x => x.IsOriginal || x.TranslatedUnits > 0)
+        .Select(x => new MediaFactsLanguageChip(
+            x.Code.ToUpperInvariant(),
+            x.IsOriginal || x.TranslatedUnits >= totalUnits ? null : ui.Format("mediaFacts.coverageFraction", ("available", x.TranslatedUnits), ("total", totalUnits)),
+            !x.IsOriginal && x.TranslatedUnits < totalUnits,
+            !x.IsOriginal && x.TranslatedUnits < totalUnits ? ui["mediaFacts.coveragePartial"] : null))
+        .ToList();
+    var facts = new MediaFactsStripModel(
+        ui["mediaFacts.factsAria"],
+        null,
+        [],
+        ui["mediaFacts.languagesAria"],
+        [new MediaFactsLanguageGroup(ui["mediaFacts.text"], MediaFactsLanguageUsage.Text, languageChips)]);
+    var backLink = new ContextBackLinkModel($"/Books?lang={Model.TargetLanguage}", $"← {ui["nav.books"]}", "books-back");
+    ViewData["Title"] = title;
 }
 @section Head {
     <link rel="stylesheet" href="~/css/books.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/media-facts.css" asp-append-version="true" />
+    @if (job.IsActive)
+    {
+        <meta http-equiv="refresh" content="8" />
+    }
 }
 @section Scripts {
     <script src="~/js/context-back-link.js" asp-append-version="true"></script>
+    <script src="~/js/book-cover-fallback.js" asp-append-version="true" defer></script>
+    <script src="~/js/book-library-detail.js" asp-append-version="true" defer></script>
 }
 
 <partial name="_ContextBackLink" model="backLink" />
 
-<header class="book-detail-header book-library-header book-reading-hero">
+<header class="book-detail-header book-reading-hero"@(coverUrl is null ? "" : Html.Raw($" style=\"--hero-cover:url('{coverUrl}')\""))>
     <div class="book-detail-cover">
-        @if (!string.IsNullOrWhiteSpace(Model.Book.Work.CoverImageUrl))
+        @if (coverUrl is not null)
         {
-            <img src="@Model.Book.Work.CoverImageUrl"
-                 alt=""
-                 referrerpolicy="no-referrer" />
+            <img src="@coverUrl" alt="" referrerpolicy="no-referrer" data-book-cover data-title="@title" />
         }
         else
         {
-            <span>B</span>
+            <span class="book-cover-placeholder">@title</span>
         }
     </div>
 
     <div class="book-detail-copy">
         <div class="reading-detail-kicker">
             <span>@unitLabel</span>
-            <span>@Model.Book.Chapters.Count</span>
-            @if (translatedCount > 0)
-            {
-                <span>@translatedCount @ui["books.library.translated"]</span>
-            }
+            <span>@totalUnits</span>
         </div>
         <h1>@title</h1>
-        @if (!string.IsNullOrWhiteSpace(Model.Book.Work.Author))
+        @if (!string.IsNullOrWhiteSpace(work.Author))
         {
-            <p class="book-author">@Model.Book.Work.Author</p>
+            <p class="book-author">@work.Author</p>
         }
-        @if (!string.IsNullOrWhiteSpace(Model.Book.Work.Description))
+        @if (!string.IsNullOrWhiteSpace(work.Description))
         {
-            <p class="book-summary">@Model.Book.Work.Description</p>
+            <p class="book-summary">@work.Description</p>
         }
         @if (Model.Book.Subjects.Count > 0)
         {
@@ -91,139 +117,239 @@
         <div class="book-actions book-reading-primary-actions">
             @if (firstChapter is Guid chapterId)
             {
-                <a class="button button-primary"
-                   href="/Books/Read/@chapterId?lang=@Model.TargetLanguage">
+                <a class="button button-primary" href="/Books/Read/@chapterId?lang=@Model.TargetLanguage">
                     @(Model.Book.Progress is null ? ui["books.library.startReading"] : ui["reader.continueReading"])
                 </a>
             }
-            <a class="button"
-               href="@Url.Page("/Settings/LearningScope", new {
-                   mediaType = Jularr.Web.Features.Learning.LearningMediaType.Book,
-                   scope = "work",
-                   workKey = Model.Book.Work.Id.ToString(),
-                   label = title,
-                   returnUrl = $"/Books/Library/{Model.Book.Work.Id}?lang={Model.TargetLanguage}"
-               })">
-                @ui["books.library.languageToolsLearning"]
-            </a>
-        </div>
-
-        <div class="book-language-row book-reading-language-row">
             @if (Model.LanguageEdition.IsMeaningful)
             {
                 <partial name="_LanguageEditionSelector" model="Model.LanguageEdition" />
             }
+            <a class="button" href="@learningUrl">@ui["books.library.languageToolsLearning"]</a>
+            <partial name="_OfflineLibraryAction" model="new Jularr.Web.Features.OfflineLibrary.OfflineLibraryActionViewModel(work.Id, title)" />
         </div>
 
-        @* Reflects the cache, not the resolved capability: showing how many
-           chapters already have a translated variant is core reader status
-           and must not depend on Learning (#369). *@
-        <div class="book-translation-summary">
-            @if (Model.SourceIsTarget)
-            {
-                <span>@ui["books.library.originalLanguageSelected"]</span>
-            }
-            else
-            {
-                <span>@ui.Format(Model.IsPdf ? "books.library.pagesTranslated" : "books.library.chaptersTranslated", ("translated", translatedCount), ("total", Model.Book.Chapters.Count))</span>
-                <div class="book-card-progress">
-                    <span style="width:@(Model.Book.Chapters.Count == 0 ? 0 : translatedCount * 100 / Model.Book.Chapters.Count)%"></span>
-                </div>
-            }
-        </div>
-
-        <partial name="_OfflineLibraryAction" model="new Jularr.Web.Features.OfflineLibrary.OfflineLibraryActionViewModel(Model.Book.Work.Id, title)" />
+        <partial name="_MediaFacts" model="facts" />
     </div>
 </header>
 
-@if (Model.IsOwner)
-{
-    <details class="book-library-management">
-        <summary>@ui["books.library.manageBook"]</summary>
-        <div class="book-library-management-actions">
-            <a class="button" href="/Books/ChapterArt/@Model.Book.Work.Id">@ui["chapterArt.title"]</a>
-            @if (!Model.SourceIsTarget && Model.TranslationEnabled)
+<div class="book-detail-body">
+    <aside class="book-detail-side">
+        <section class="book-side-card book-editions" aria-labelledby="book-editions-title">
+            <h2 id="book-editions-title">@ui["books.library.editionsHeading"]</h2>
+            <ul class="book-edition-list">
+                @foreach (var row in Model.EditionRows)
+                {
+                    var isCurrent = row.Code.Equals(Model.TargetLanguage, StringComparison.OrdinalIgnoreCase);
+                    <li>
+                        <a class="book-edition-row" href="/Books/Library/@work.Id?lang=@Uri.EscapeDataString(row.Code)" aria-current="@(isCurrent ? "true" : null)">
+                            <span class="book-edition-name">@BookLanguageCatalog.GetName(row.Code)</span>
+                            <span class="book-edition-tag" data-provenance="@(row.IsOriginal ? "official" : "generated")">@(row.IsOriginal ? ui["languageEdition.official"] : ui["languageEdition.generated"])</span>
+                            <span class="book-edition-state">
+                                @if (row.IsOriginal)
+                                {
+                                    @ui["languageEdition.originalDescription"]
+                                }
+                                else if (row.TranslatedUnits == 0)
+                                {
+                                    @ui["languageEdition.state.unavailable"]
+                                }
+                                else if (row.TranslatedUnits >= totalUnits)
+                                {
+                                    @ui["books.library.translated"]
+                                }
+                                else
+                                {
+                                    @ui.Format(Model.IsPdf ? "books.library.pagesTranslated" : "books.library.chaptersTranslated", ("translated", row.TranslatedUnits), ("total", totalUnits))
+                                }
+                            </span>
+                        </a>
+                    </li>
+                }
+            </ul>
+
+            @if (Model.SourceIsTarget)
             {
-                <form method="post"
-                      asp-page-handler="Regenerate"
-                      asp-route-id="@Model.Book.Work.Id"
-                      onsubmit="return confirm('@ui.Format("books.library.confirmRegenerate", ("language", Jularr.Web.Features.Books.BookLanguageCatalog.GetName(Model.TargetLanguage)))');">
-                    <input type="hidden" name="lang" value="@Model.TargetLanguage" />
-                    <button class="button" type="submit">
-                        @ui.Format("books.library.regenerateButton", ("language", Jularr.Web.Features.Books.BookLanguageCatalog.GetName(Model.TargetLanguage)))
-                    </button>
-                </form>
+                <div class="book-translation-control" data-state="original">
+                    <p class="book-translation-status">@ui["books.library.originalLanguageSelected"]</p>
+                    @if (Model.LanguageEdition.IsMeaningful)
+                    {
+                        <button type="button" class="button button-primary" data-language-edition-open="@Model.LanguageEdition.Id">
+                            <partial name="_ReaderIcon" model="@("translate")" />
+                            @ui["books.library.chooseTranslation"]
+                        </button>
+                    }
+                </div>
             }
+            else
+            {
+                var state = job.State switch
+                {
+                    BookTranslationJobState.Queued => "queued",
+                    BookTranslationJobState.Running => "running",
+                    BookTranslationJobState.Failed => "failed",
+                    _ => translatedUnits == 0 ? "none" : translatedUnits >= totalUnits ? "complete" : "partial"
+                };
+                <div class="book-translation-control" data-state="@state">
+                    <p class="book-translation-status">
+                        @switch (state)
+                        {
+                            case "queued":
+                                @ui["books.library.translationQueuedState"]
+                                break;
+                            case "running":
+                                @ui.Format("books.library.translationRunning", ("language", targetName))
+                                break;
+                            case "failed":
+                                @ui["books.library.translationFailed"]
+                                break;
+                            case "none":
+                                @ui.Format("books.library.translationNotStarted", ("language", targetName))
+                                break;
+                            case "complete":
+                                @ui["books.library.translated"]
+                                break;
+                            default:
+                                @ui.Format("books.library.translationPartial", ("language", targetName))
+                                break;
+                        }
+                    </p>
+                    @if (state != "none")
+                    {
+                        <div class="book-card-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@translationPercent" aria-label="@progressText">
+                            <span style="width:@translationPercent%"></span>
+                        </div>
+                        <p class="book-translation-count">@progressText</p>
+                    }
+                    @if (state == "failed" && Model.IsOwner && !string.IsNullOrWhiteSpace(job.Error))
+                    {
+                        <p class="book-translation-error">@job.Error</p>
+                    }
 
-            <form method="post"
-                  asp-page-handler="Delete"
-                  asp-route-id="@Model.Book.Work.Id"
-                  onsubmit="return confirm('@ui["books.library.confirmRemove"]');">
-                <button class="button book-danger-button" type="submit">
-                    @ui["books.library.removeButton"]
-                </button>
-            </form>
+                    @if (!Model.TranslationEnabled)
+                    {
+                        <p class="book-translation-note">
+                            @ui["books.library.translationDisabled"]
+                            @if (Model.IsOwner)
+                            {
+                                <a href="@learningUrl">@ui["books.library.languageToolsLearning"]</a>
+                            }
+                        </p>
+                    }
+                    else if (!job.IsActive)
+                    {
+                        <div class="book-translation-actions">
+                            @if (state != "complete")
+                            {
+                                <form method="post" asp-page-handler="TranslateBook" asp-route-id="@work.Id">
+                                    <input type="hidden" name="lang" value="@Model.TargetLanguage" />
+                                    <button class="button button-primary" type="submit">
+                                        <partial name="_ReaderIcon" model="@("translate")" />
+                                        @(state == "none" ? ui["books.library.startTranslation"] : state == "failed" ? ui["books.library.retryTranslation"] : ui["books.library.continueTranslation"])
+                                    </button>
+                                </form>
+                            }
+                            @if (Model.IsOwner && state != "none")
+                            {
+                                <form method="post" asp-page-handler="Regenerate" asp-route-id="@work.Id" data-confirm="@ui.Format("books.library.confirmRegenerate", ("language", targetName))">
+                                    <input type="hidden" name="lang" value="@Model.TargetLanguage" />
+                                    <button class="button" type="submit">@ui.Format("books.library.regenerateButton", ("language", targetName))</button>
+                                </form>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        @if (Model.IsOwner)
+        {
+            <section class="book-side-card book-manage" aria-labelledby="book-manage-title">
+                <h2 id="book-manage-title">@ui["books.library.manageBook"]</h2>
+                <div class="book-manage-actions">
+                    <a class="button" href="/Books/ChapterArt/@work.Id">@ui["chapterArt.title"]</a>
+                    @if (Model.IsPdf)
+                    {
+                        <form method="post" asp-page-handler="ReanalyzePdf" asp-route-id="@work.Id">
+                            <button class="button" type="submit">@ui["books.library.pdfReanalyze"]</button>
+                        </form>
+                    }
+                    <form method="post" asp-page-handler="Delete" asp-route-id="@work.Id" data-confirm="@ui["books.library.confirmRemove"]">
+                        <button class="button book-danger-button" type="submit">@ui["books.library.removeButton"]</button>
+                    </form>
+                </div>
+                @if (Model.PdfAnalysis is { } analysis)
+                {
+                    <p class="book-manage-note">
+                        @ui.Format(
+                            "books.library.pdfAnalysis",
+                            ("class", ui["books.library.pdfClass." + analysis.Classification.Class.ToString().ToLowerInvariant()]),
+                            ("confidence", (int)Math.Round(analysis.Classification.Decision.Confidence * 100)),
+                            ("logical", analysis.LogicalPages.Count),
+                            ("physical", analysis.PhysicalPageCount),
+                            ("duplicates", analysis.Diagnostics.DuplicatePagesRemoved),
+                            ("furniture", analysis.Diagnostics.FurnitureParagraphsRemoved),
+                            ("version", analysis.AnalyzerVersion))
+                    </p>
+                }
+                <p class="book-manage-note">@ui["books.library.manageNote"]</p>
+            </section>
+        }
+    </aside>
+
+    <section class="book-chapter-list">
+        <div class="books-results-heading">
+            <h2>@unitLabel</h2>
+            <span>@totalUnits</span>
         </div>
-        <p>
-            @ui["books.library.manageNote"]
-        </p>
-    </details>
-}
 
-<section class="book-chapter-list">
-    <div class="books-results-heading">
-        <strong>@(Model.IsPdf ? ui["books.library.pagesHeading"] : ui["books.library.chaptersHeading"])</strong>
-        <span>@Model.Book.Chapters.Count</span>
-    </div>
-
-    @if (Model.IsPdf)
-    {
-        @* A PDF's chapters are its pages: listed as ranges, each opening at its first page. *@
-        @foreach (var range in Model.PageRanges)
+        @if (Model.IsPdf)
         {
-            <a class="book-chapter-row book-page-range"
-               href="/Books/Read/@range.FirstChapterId?lang=@Model.TargetLanguage">
-                <strong>@ui.Format("books.library.pageRange", ("from", range.FirstPage), ("to", range.LastPage))</strong>
-                @if (Model.SourceIsTarget)
-                {
-                    <small>@ui["books.read.original"]</small>
-                }
-                else if (range.TranslatedCount == range.PageCount)
-                {
-                    <small class="ready">@ui["books.library.translated"]</small>
-                }
-                else if (range.TranslatedCount > 0)
-                {
-                    <small>@ui.Format("books.library.pagesTranslated", ("translated", range.TranslatedCount), ("total", range.PageCount))</small>
-                }
-                else
-                {
-                    <small>@ui["books.library.originalAvailable"]</small>
-                }
-            </a>
+            @* A PDF's chapters are its pages: listed as ranges, each opening at its first page. *@
+            @foreach (var range in Model.PageRanges)
+            {
+                <a class="book-chapter-row book-page-range" href="/Books/Read/@range.FirstChapterId?lang=@Model.TargetLanguage">
+                    <strong>@ui.Format("books.library.pageRange", ("from", range.FirstPage), ("to", range.LastPage))</strong>
+                    @if (Model.SourceIsTarget)
+                    {
+                        <small>@ui["books.read.original"]</small>
+                    }
+                    else if (range.TranslatedCount == range.PageCount)
+                    {
+                        <small class="ready">@ui["books.library.translated"]</small>
+                    }
+                    else if (range.TranslatedCount > 0)
+                    {
+                        <small>@ui.Format("books.library.pagesTranslated", ("translated", range.TranslatedCount), ("total", range.PageCount))</small>
+                    }
+                    else
+                    {
+                        <small>@ui["books.library.originalAvailable"]</small>
+                    }
+                </a>
+            }
         }
-    }
-    else
-    {
-        @foreach (var chapter in Model.Book.Chapters)
+        else
         {
-            <a class="book-chapter-row"
-               href="/Books/Read/@chapter.Id?lang=@Model.TargetLanguage">
-                <span class="book-chapter-number">@chapter.Number</span>
-                <strong>@chapter.Title</strong>
-                @if (Model.SourceIsTarget)
-                {
-                    <small>@ui["books.read.original"]</small>
-                }
-                else if (chapter.HasTranslation)
-                {
-                    <small class="ready">@ui["books.library.translated"]</small>
-                }
-                else
-                {
-                    <small>@ui["books.library.originalAvailable"]</small>
-                }
-            </a>
+            @foreach (var chapter in Model.Book.Chapters)
+            {
+                <a class="book-chapter-row" href="/Books/Read/@chapter.Id?lang=@Model.TargetLanguage">
+                    <span class="book-chapter-number">@chapter.Number</span>
+                    <strong>@chapter.Title</strong>
+                    @if (Model.SourceIsTarget)
+                    {
+                        <small>@ui["books.read.original"]</small>
+                    }
+                    else if (chapter.HasTranslation)
+                    {
+                        <small class="ready">@ui["books.library.translated"]</small>
+                    }
+                    else
+                    {
+                        <small>@ui["books.library.originalAvailable"]</small>
+                    }
+                </a>
+            }
         }
-    }
-</section>
+    </section>
+</div>

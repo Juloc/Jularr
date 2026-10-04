@@ -86,6 +86,8 @@ public static class DiscoverRecommendations
     public static DiscoveryCategory CategoryOf(WorkMediaType? type) => type switch
     {
         WorkMediaType.Anime => DiscoveryCategory.Anime,
+        WorkMediaType.Movie => DiscoveryCategory.Movie,
+        WorkMediaType.Series => DiscoveryCategory.Series,
         WorkMediaType.Manga => DiscoveryCategory.Manga,
         WorkMediaType.LightNovel => DiscoveryCategory.LightNovel,
         WorkMediaType.Book => DiscoveryCategory.Book,
