@@ -43,6 +43,22 @@ public sealed class BookReaderPdfTests
         StringAssert.Contains(script, "\"Translate\"");
     }
 
+    /// <summary>The drawn PDF page stays readable until the translation is ready; failures offer a retry and generated text is labelled.</summary>
+    [TestMethod]
+    public void PdfPageTranslationKeepsTheOriginalReadableOffersRetryAndLabelsGeneratedText()
+    {
+        var page = Read("src", "Jularr.Web", "Pages", "Books", "Read.cshtml");
+        var script = Read("src", "Jularr.Web", "wwwroot", "js", "books-reader.js");
+        var styles = Read("src", "Jularr.Web", "wwwroot", "css", "book-reader.css");
+
+        StringAssert.Contains(page, "data-book-pdf-translation-label");
+        StringAssert.Contains(page, "books.read.generatedTranslation");
+        StringAssert.Contains(script, "books.read.translationRetry");
+        StringAssert.Contains(script, "books.read.translationNotReady");
+        StringAssert.Contains(styles, ".book-pdf-translation[data-state=\"ready\"]");
+        StringAssert.Contains(styles, ".book-pdf-translation[data-state=\"pending\"]");
+    }
+
     [TestMethod]
     public void PdfBooksRenderInsideThePaperReaderFrame()
     {

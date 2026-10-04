@@ -1147,23 +1147,46 @@
         return url;
     };
 
-    const showPdfTranslation = ({ paragraphs = [], message = "", canTranslate = false }) => {
+    // Ready translated text covers the page; while a page is waiting, failed or not prepared the drawn
+    // original stays readable and the panel collapses into a compact state bar.
+    const pdfTranslationPollLimit = 24;
+    let pdfTranslationPolls = 0;
+
+    const showPdfTranslation = ({ paragraphs = [], message = "", canTranslate = false, retry = false }) => {
+        const ready = paragraphs.length > 0;
+        pdfTranslation.dataset.state = ready ? "ready" : "pending";
         pdfTranslation.querySelector("[data-book-pdf-translation-text]").replaceChildren(...paragraphs.map(value => {
             const paragraph = document.createElement("p");
             paragraph.textContent = value;
             return paragraph;
         }));
+        pdfTranslation.querySelector("[data-book-pdf-translation-label]").hidden = !ready;
         const status = pdfTranslation.querySelector("[data-book-pdf-translation-status]");
         status.textContent = message;
         status.hidden = !message;
-        pdfTranslateForm.hidden = !canTranslate;
-        pdfTranslateForm.querySelector("button").disabled = false;
+        pdfTranslateForm.hidden = !canTranslate && !retry;
+        const button = pdfTranslateForm.querySelector("button");
+        button.textContent = retry
+            ? t("books.read.translationRetry", "Try again")
+            : t("books.read.translateInto", "Translate into {language}").replace("{language}", button.dataset.languageName);
+        button.disabled = false;
+    };
+
+    const waitForPdfTranslation = () => {
+        pdfTranslationPolls += 1;
+        if (pdfTranslationPolls > pdfTranslationPollLimit) {
+            showPdfTranslation({ message: t("books.read.translationNotReady", "The translation is not ready yet."), retry: true });
+            return;
+        }
+        showPdfTranslation({ message: t("books.read.translationQueued", "Translation queued…") });
+        pollTimer = window.setTimeout(() => void loadPdfTranslation(true), 2500);
     };
 
     async function loadPdfTranslation(waiting = false) {
         window.clearTimeout(pollTimer);
         const chapterId = pdf?.currentPosition().chapterId;
         if (view !== "translated" || !chapterId) return;
+        if (!waiting) pdfTranslationPolls = 0;
         try {
             const response = await fetch(pdfTranslationUrl(chapterId, "TranslationStatus"), {
                 credentials: "same-origin",
@@ -1182,13 +1205,13 @@
                 return;
             }
             if (waiting) {
-                showPdfTranslation({ message: t("books.read.translationQueued", "Translation queued…") });
-                pollTimer = window.setTimeout(() => void loadPdfTranslation(true), 2500);
+                waitForPdfTranslation();
                 return;
             }
             showPdfTranslation({ canTranslate: true });
         } catch (error) {
-            failed(error);
+            console.warn(error);
+            showPdfTranslation({ message: t("books.read.translationFailed", "The translation could not be loaded."), retry: true });
         }
     }
 
@@ -1214,11 +1237,11 @@
                 headers: { "X-Requested-With": "fetch" }
             });
             if (!response.ok) throw new Error(await response.text());
-            showPdfTranslation({ message: t("books.read.translationQueued", "Translation queued…") });
-            pollTimer = window.setTimeout(() => void loadPdfTranslation(true), 2500);
+            pdfTranslationPolls = 0;
+            waitForPdfTranslation();
         } catch (error) {
-            button.disabled = false;
-            failed(error);
+            console.warn(error);
+            showPdfTranslation({ message: t("books.read.translationFailed", "The translation could not be loaded."), retry: true });
         }
     });
 

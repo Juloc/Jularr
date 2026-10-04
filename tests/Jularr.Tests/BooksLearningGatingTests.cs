@@ -104,7 +104,7 @@ public sealed class BooksLearningGatingTests
         var view = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Read.cshtml"));
         StringAssert.Contains(view, "Model.HasWorkTranslationLanguage");
-        StringAssert.Contains(view, "disabled=\"@(!hasAlternate)\"");
+        StringAssert.Contains(view, "disabled=\"@(!isPdf && !hasAlternate)\"");
     }
 
     [TestMethod]
