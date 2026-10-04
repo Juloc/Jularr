@@ -73,6 +73,7 @@ No large dashboard tiles.
 
 #### Media
 - Library & Display
+- Downloads & Offline
 - Playback
 - Audio & Subtitles
 - Reader
@@ -274,6 +275,8 @@ Do not duplicate OS accessibility controls that Jularr cannot meaningfully overr
 - show/hide completed items only if this is a genuine persistent preference
 
 Do not store a separate preference for every individual Library filter unless there is a real use case.
+
+The dedicated Downloads & Offline management surface is defined by `docs/mockups/downloads-offline/SPEC.md`. Settings owns reusable offline preferences; that screen owns the current-device queue and local offline inventory. Do not merge Admin downloader/acquisition state into either surface.
 
 ## 8. Playback
 
