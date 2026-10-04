@@ -646,26 +646,271 @@ TTS controls must not become a second permanent toolbar when inactive.
 
 ## 19. Offline reading
 
-Offline content uses the same Reader UI and source semantics.
+Offline content uses the **same Reader UI, document model, locator semantics and progress owners** as online reading.
+
+There is no separate Offline Reader.
 
 Requirements:
-- verified local content opens without network;
-- chapter navigation works for downloaded adjacent content;
+- verified local content opens without network/server availability;
+- the normal Reader frame, appearance preferences, Contents navigation, bookmarks, annotations and supported Learning interactions continue to work from the local package;
+- chapter/page navigation works across downloaded adjacent content;
 - exact progress writes locally first and synchronizes later;
-- bookmarks use the same canonical semantics;
-- Reader preferences remain available;
-- downloaded translation/edition identity remains explicit;
-- stale/corrupt/incomplete local content is not presented as valid.
+- bookmarks/highlights/notes use the same canonical semantics and queue safe writes locally;
+- downloaded Translation/Edition identity remains explicit;
+- locally packaged illustrations/pages/assets render normally;
+- stale/corrupt/incomplete local content is never presented as valid/ready;
+- reconnection must not create a second reading history or blindly overwrite newer local state with older server state.
 
-### Partial offline state
+### 19.1 Offline availability indicator
 
-If current chapter exists locally but next chapter does not:
+Working offline reading must not look like a degraded emergency mode.
+
+A restrained indicator may show:
+- **Offline verfügbar / Offline available**;
+- or a small verified-download/check icon.
+
+When opening verified local content while disconnected, a short informational status may say:
+
+**Offline lesen**  
+`Dieses Kapitel ist auf diesem Gerät gespeichert.`
+
+Do not show a large blocking **Keine Verbindung** banner while the current content is valid and readable.
+
+### 19.2 Local progress and completion
+
+While disconnected:
+- exact Reader locator/progress persists locally through the canonical Reading/MediaProgress owner;
+- completion uses the same canonical completion policy;
+- opening a chapter does not mark it complete;
+- next/previous navigation does not invent a second offline completion rule;
+- queued progress synchronizes when connectivity returns;
+- conflict resolution must preserve the newest valid user reading state rather than always preferring the last server value.
+
+A restrained informational state may expose:
+
+`Synchronisierung ausstehend`
+
+or:
+
+`Wird synchronisiert, sobald Jularr wieder verbunden ist.`
+
+This is not an error.
+
+### 19.3 Bookmarks, highlights and notes offline
+
+Actions that the canonical annotation contract declares offline-safe should update the local Reader immediately.
+
+Examples:
+- add/remove bookmark;
+- add/remove highlight;
+- create/edit a note where supported.
+
+When synchronization is pending:
+- the annotation remains visible in the Reader;
+- optional subtle pending state is allowed;
+- do not block the action solely because the server cannot currently be reached.
+
+If an annotation operation cannot be safely queued, disable only that action with concise capability copy. Do not disable the whole Reader.
+
+### 19.4 Partial offline state — next chapter missing
+
+If the current chapter exists locally but the canonical next chapter does not:
 - current chapter remains fully readable;
-- Next shows a clear unavailable/offline message;
-- do not navigate to a browser/network error page.
+- Next remains structurally understandable;
+- attempting to navigate does **not** open a browser/network error page;
+- do not show indefinite Preparing/Loading while the client is known to be offline;
+- do not silently jump to another edition/chapter.
 
-If the whole requested Work is not cached:
-- show a Reader-specific offline unavailable state with Back and downloaded-content choices when available.
+Instead show a focused contextual state:
+
+**Nächstes Kapitel nicht offline verfügbar**  
+`Kapitel 9 · A New Assignment`  
+`Dieses Kapitel wurde nicht auf dieses Gerät heruntergeladen.`
+
+Primary:
+- **Offline-Kapitel anzeigen**
+
+Secondary:
+- **Schließen**
+
+When useful, add context such as:
+
+`Du kannst Kapitel 7–8 weiterhin offline lesen.`
+
+The current chapter/document remains behind the overlay/sheet so the user does not lose reading context.
+
+When connectivity is restored and explicit download is supported from this context, a **Jetzt herunterladen** action may additionally appear. Do not show a dead action while genuinely offline.
+
+### 19.5 Previous/Next controls while partially offline
+
+Downloaded adjacent content:
+- navigates normally.
+
+Known canonical but not-downloaded content:
+- remains identifiable;
+- shows **Nicht offline verfügbar**;
+- cannot masquerade as readable.
+
+Unknown structure due insufficient local metadata:
+- do not fabricate chapter labels;
+- provide **Offline-Kapitel anzeigen** / Back based on the local manifest.
+
+### 19.6 Contents / chapter list offline state
+
+When chapter structure is known locally, Contents should show availability directly.
+
+Example:
+- `Kapitel 7` — Offline available;
+- `Kapitel 8` — Offline available · current;
+- `Kapitel 9` — Not available offline;
+- `Kapitel 10` — Not available offline.
+
+Downloaded units are immediately navigable.
+
+Not-downloaded units may remain visible for orientation but must not behave as if they can open offline.
+
+**Offline-Kapitel anzeigen** opens/focuses this Contents view on locally readable units rather than creating a second offline-only chapter browser.
+
+### 19.7 Edition / language / translation while offline
+
+The Reader preserves canonical Edition/Version/translation identity.
+
+If the local package contains:
+- German generated translation -> label it as generated;
+- official English Edition -> label it official;
+- original Japanese -> label it original.
+
+Only locally available Editions/languages may be selected while disconnected.
+
+A canonical Edition known to exist online but absent locally may remain visible with:
+
+**Nicht offline verfügbar**
+
+Do not:
+- select it and fail later with a generic network error;
+- create an `OfflineEdition` identity;
+- relabel generated translation as official.
+
+If Original + Translation were both included in the local package, switching between them works normally offline.
+
+### 19.8 Images and fixed/image-heavy reading
+
+For Books/LN with illustrations, Manga, scans, PDF pages and other image-backed Reader documents:
+- images included in the verified package render normally;
+- no broken browser-image placeholders are shown for assets known to be absent;
+- image quality follows the package selected by the Offline download contract;
+- the Reader does not re-fetch remote images simply because it is rendering an otherwise-local chapter.
+
+If a required image/page is missing from a package that claimed to be Ready:
+- treat the package/unit as incomplete/corrupt;
+- do not silently skip pages when that changes document meaning.
+
+### 19.9 Manga offline
+
+Manga uses the same Reader/offline contract.
+
+When the current downloaded chapter is open:
+- page navigation/swipe works across verified local pages;
+- previous/next downloaded chapter works normally;
+- a canonical next chapter that is not local uses the same **Nächstes Kapitel nicht offline verfügbar** state;
+- no separate Manga offline reader/store/progress model is created.
+
+The Manga variant may use image/page-specific chrome, but the offline availability semantics remain shared.
+
+### 19.10 Learning offline
+
+When the offline package contains the bounded Learning data required by the current Reader interaction:
+- supported word/sentence lookups use that local package;
+- safe Learning interactions queue locally and synchronize later through the canonical Learning path.
+
+When Learning data was not included:
+- normal reading remains fully usable;
+- Learning-specific actions are hidden/disabled with concise copy such as:
+
+`Learning-Daten für dieses Kapitel sind nicht offline verfügbar.`
+
+Do not make Reading or normal Translation dependent on Learning package availability.
+
+### 19.11 TTS offline
+
+TTS is available offline only when the current client can synthesize locally or the required local audio/speech capability is genuinely present.
+
+If TTS requires unavailable online processing:
+- disable only TTS;
+- explain **Vorlesen ist offline nicht verfügbar**;
+- do not affect reading/navigation/progress.
+
+No fake offline TTS toggle.
+
+### 19.12 Whole requested Work not local
+
+If the requested Work/chapter is not locally cached and the client is offline:
+- show a Reader-specific unavailable state;
+- preserve valid Back/navigation;
+- offer **Offline-Kapitel anzeigen** when other downloaded content for the Work exists;
+- otherwise offer **Downloads & Offline** / Back as appropriate.
+
+Do not fall through to browser/network failure UI.
+
+### 19.13 Corrupt/incomplete offline package
+
+If local verification fails or a required content asset is unavailable:
+
+**Offline-Kapitel kann nicht geöffnet werden**
+
+`Die heruntergeladene Kopie ist unvollständig oder beschädigt.`
+
+Valid actions depending on connectivity/capability:
+- **Offline-Inhalte anzeigen**;
+- **Erneut herunterladen**;
+- **Zurück**.
+
+Once invalidity is known, the item must no longer present as **Offline verfügbar**.
+
+### 19.14 Offline storage removed/unavailable
+
+If removable/managed storage containing the document disappears:
+
+**Offline-Speicher nicht verfügbar**
+
+`Der Speicher mit diesem Kapitel wurde getrennt.`
+
+Actions:
+- **Erneut prüfen**;
+- **Offline-Inhalte anzeigen**;
+- Back when needed.
+
+If enough current document content remains safely resident in memory, the Reader may continue only with what is actually available. It must not imply that later pages/chapters remain accessible.
+
+### 19.15 Restart and local recovery
+
+After browser/app/device restart:
+- locally verified Reading packages remain discoverable;
+- exact local resume locator restores from durable canonical state;
+- pending progress/bookmark/annotation sync survives according to the offline sync contract;
+- stale UI state cannot promote an unverified package to Ready;
+- the Reader resolves the same canonical Edition/Version/Chapter identity from the local manifest.
+
+### 19.16 Approved offline reference composition
+
+The approved Desktop/Mobile reference shows one representative partial-offline case:
+
+**Ascendance of a Bookworm**  
+`Band 2 · Kapitel 8`
+
+Reference semantics:
+- Chapter 8 is verified and locally readable;
+- Chapter 7 is also offline;
+- Chapter 9 exists canonically but is not downloaded;
+- Reader displays restrained **Offline verfügbar** state;
+- current progress is `63 %` with sync pending;
+- normal chapter text + illustration remain visible;
+- Desktop shows a focused **Nächstes Kapitel nicht offline verfügbar** overlay;
+- Mobile shows the equivalent bottom sheet;
+- primary recovery action is **Offline-Kapitel anzeigen**;
+- copy explains that Chapters 7–8 remain readable.
+
+The reference intentionally does not combine corrupt-package, removed-storage, missing-Learning, TTS-unavailable and sync-conflict states into one image.
 
 ## 20. Preparing / loading / partial states
 
@@ -857,8 +1102,11 @@ Create in this order:
 12. **Dark validation**  
     At minimum Desktop reflowable + Mobile Manga/reading.
 
-13. **Offline/Preparing/Error reference**  
-    One shared state reference plus responsive notes.
+13. **Desktop/Mobile Light — offline partial-reading reference**  
+    Verified local current chapter, locally available previous chapter, canonical next chapter not downloaded, restrained Offline-available state, local progress/sync-pending semantics, Desktop focused overlay and Mobile bottom sheet.
+
+14. **Preparing/Error reference**  
+    One shared state reference for non-offline preparing/render/corrupt-format errors plus responsive notes.
 
 TV Reader mockup is not required in this phase.
 
@@ -878,7 +1126,13 @@ Reader consumes view data derived from:
 - bookmarks/highlights/notes;
 - Learning capability/state;
 - TTS capability/preferences;
-- offline availability/package verification state.
+- offline availability/package verification state;
+- local package chapter/page/asset coverage;
+- locally available Edition/Version/translation choices;
+- local-first progress/sync-pending state;
+- offline-safe bookmark/highlight/note queue state;
+- local Learning/TTS capability while disconnected;
+- managed offline-storage availability.
 
 The new Reader UI must not permanently query legacy `NovelWork`, `NovelProgress`, `MangaProgress` etc. as separate domain truths once canonical migration is complete. Existing services are migration/source adapters until moved behind canonical contracts.
 
@@ -907,6 +1161,14 @@ The new Reader UI must not permanently query legacy `NovelWork`, `NovelProgress`
 - No page-local preference system competing with `ReaderPreference`.
 - No decorative theme/background behind text that reduces readability.
 - No source-provider network call during normal Reader GET solely to make missing chapter content appear synchronously.
+- No separate Offline Reader shell, progress database, chapter browser or Edition identity.
+- No browser/network error page for a known canonical next chapter that is simply not downloaded.
+- No indefinite Preparing/Loading when the client is genuinely offline and the requested next unit is known not to be local.
+- No selection of Edition/language/translation content that is known to be unavailable from the local package while disconnected.
+- No broken remote-image placeholders inside an otherwise verified local Reader document.
+- No `Offline verfügbar` state after the package/unit is known corrupt, incomplete or inaccessible.
+- No forced server connection for local progress, bookmarks or annotations that the canonical sync contract supports offline.
+- No online-only TTS/Learning capability presented as usable offline.
 
 ## 28. Mockup acceptance checklist
 
@@ -925,4 +1187,12 @@ A Reader mockup is acceptable only when:
 - Loading/Preparing/Offline/Error states are defined;
 - no manual progress-save control is required;
 - no legacy parallel core model is implied;
+- verified local content uses the normal Reader rather than a separate offline rendering path;
+- Offline availability is visible but does not dominate functioning reading;
+- local exact progress and offline-safe annotations remain immediately usable and synchronize later;
+- downloaded vs not-downloaded chapters are distinguishable in Contents/Previous/Next;
+- a missing canonical next chapter opens the focused Offline-unavailable state rather than a network error;
+- only locally packaged Editions/languages/assets/Learning capabilities are offered while disconnected;
+- corrupt/incomplete packages and unavailable removable storage have explicit recovery states;
+- Manga/image-backed reading follows the same offline contract without a second subsystem;
 - TV is not forced into an unsupported reading UX.
