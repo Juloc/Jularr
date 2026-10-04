@@ -25,6 +25,202 @@ namespace Jularr.Web.Data.Migrations
             modelBuilder.Model.RemoveEntityType("Jularr.Web.Features.Library.MediaAnalysisStream");
             modelBuilder.Model.RemoveEntityType("Jularr.Web.Features.Library.MediaAnalysis");
             modelBuilder.Model.RemoveEntityType("Jularr.Web.Features.Library.MediaFile");
+            modelBuilder.Model.RemoveEntityType("Jularr.Web.Features.ReaderPreferences.ReaderPreference");
+
+            modelBuilder.Entity("Jularr.Web.Features.ReaderPreferences.ReaderPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool?>("AutoContinueChapters")
+                        .HasColumnType("boolean");
+
+                    b.Property<double?>("AutoScrollSpeed")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("BackgroundAssetId")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<double?>("BackgroundIntensity")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("BackgroundMotionMode")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("BookmarkColor")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("BookmarkStyle")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("ChapterStyle")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("FontFamily")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<double?>("FontSizeRem")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool?>("FuriganaEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("GenreArtworkEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("GenreTheme")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<bool?>("Hyphenation")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ImageColorScheme")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<bool?>("ImageCropBorders")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("ImageFirstPageAlone")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ImageFit")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ImageFlowMode")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("ImagePageDirection")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int?>("ImagePageGapPx")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("ImageSharpen")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("ImageZoomPercent")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("LineHeight")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("PageTransition")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("PaperStyle")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool?>("ParagraphIndent")
+                        .HasColumnType("boolean");
+
+                    b.Property<double?>("ParagraphSpacingEm")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ProfileId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("ReadingMode")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<bool?>("ShowIllustrations")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("ShowPageNumbers")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("TextAlignment")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<int?>("TextWidthPx")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("ThemeBlurPx")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeBrightness")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeContrast")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeEffectStrength")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeGrainStrength")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeParallaxStrength")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeSaturation")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeTextBackdropStrength")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeTintStrength")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("ThemeVignetteStrength")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool?>("TtsAutoContinueChapters")
+                        .HasColumnType("boolean");
+
+                    b.Property<double?>("TtsPitch")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("TtsProviderId")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<double?>("TtsRate")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("TtsVoiceIds")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<double?>("TtsVolume")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool?>("TwoPageSpread")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProfileId", "ScopeKey")
+                        .IsUnique();
+
+                    b.ToTable("ReaderPreferences");
+                });
+
 
             modelBuilder.Entity("Jularr.Web.Features.Library.MediaAsset", b =>
                 {
