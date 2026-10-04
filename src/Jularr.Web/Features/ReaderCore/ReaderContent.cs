@@ -121,6 +121,17 @@ public sealed record ReaderDocumentIdentity
     public Guid? FileId { get; }
 
     public string? VariantKey { get; }
+
+    public ReaderDocumentIdentity WithVariant(string? variantKey) =>
+        new(
+            WorkId,
+            VolumeId,
+            ChapterId,
+            EditionId,
+            VersionId,
+            AssetId,
+            FileId,
+            variantKey);
 }
 
 /// <summary>
