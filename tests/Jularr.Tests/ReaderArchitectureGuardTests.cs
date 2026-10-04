@@ -12,7 +12,10 @@ public sealed class ReaderArchitectureGuardTests
         {
             Path.Combine(readerCore, "ReaderDocument.cs"),
             Path.Combine(readerCore, "ReaderContent.cs"),
-            Path.Combine(readerCore, "ReaderLocator.cs")
+            Path.Combine(readerCore, "ReaderLocator.cs"),
+            Path.Combine(root, "src", "Jularr.Web", "Features", "Books", "BookReaderDocumentAdapter.cs"),
+            Path.Combine(root, "src", "Jularr.Web", "Features", "Novels", "NovelReaderDocumentAdapter.cs"),
+            Path.Combine(root, "src", "Jularr.Web", "Features", "Manga", "MangaReaderDocumentAdapter.cs")
         };
 
         foreach (var file in contractFiles)
