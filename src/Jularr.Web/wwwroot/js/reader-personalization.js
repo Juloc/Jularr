@@ -11,7 +11,8 @@
         scrollTopForPermille,
         captureContinuousAnchor,
         capturePagedTextAnchor,
-        createReflowTextRenderer
+        createReflowTextRenderer,
+        measurePagedSequence
     } = await import(new URL("reflow-reader.js", scriptUrl).href);
 
     const settingsElement = shell.querySelector("[data-reader-settings-json]");
@@ -637,7 +638,12 @@
         // Columns advance by exactly one page width (novels.css: column gap = twice the
         // inline padding). The 2 px allowance absorbs sub-pixel rounding, which would
         // otherwise add an empty page after the last one.
-        pageCount = Math.max(1, Math.ceil((content.scrollWidth - 2) / width));
+        const measured = measurePagedSequence({
+            scrollWidth: content.scrollWidth,
+            columnStride: width,
+            trailingCompensation: 2
+        });
+        pageCount = measured.pageCount;
         currentPage = clamp(Math.round(content.scrollLeft / width), 0, pageCount - 1);
         reflowRenderer?.setMode("paged");
         reflowRenderer?.setPageState(currentPage, pageCount);
