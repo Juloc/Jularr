@@ -3,14 +3,7 @@ using Jularr.Web.Features.Events;
 namespace Jularr.Web.Features.Notifications;
 
 /// <summary>One profile's resolved preference for one event category.</summary>
-public sealed record NotificationEventPreference(
-    string ProfileId,
-    JularrEventCategory Category,
-    bool Enabled,
-    IReadOnlySet<NotificationChannel> Channels,
-    NotificationDeliveryTiming Timing,
-    DateTime? UpdatedAtUtc,
-    bool IsExplicit)
+public sealed record NotificationEventPreference(string ProfileId, JularrEventCategory Category, bool Enabled, IReadOnlySet<NotificationChannel> Channels, NotificationDeliveryTiming Timing, DateTime? UpdatedAtUtc, bool IsExplicit)
 {
     public static NotificationEventPreference FromDefault(string profileId, JularrEventCategory category)
     {
