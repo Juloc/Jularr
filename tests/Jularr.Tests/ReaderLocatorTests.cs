@@ -61,15 +61,15 @@ public sealed class ReaderLocatorTests
     {
         var identity = new ReaderDocumentIdentity(Guid.NewGuid());
 
-        Assert.ThrowsException<ArgumentException>(() => new ReflowTextReaderLocator(identity, ""));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReflowTextReaderLocator(identity, "p:1", characterOffset: -1));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ImageSequenceReaderLocator(identity, -1));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new FixedPageReaderLocator(identity, 0, -1));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ImageSequenceReaderLocator(identity, 0, fallbackPercent: 101));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReaderViewportPosition(0, 0, 0));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReaderViewportPosition(double.NaN, 0, 1));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReaderSourceRegion(.8, 0, .3, 1));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReaderSourceRegion(0, 0, double.PositiveInfinity, 1));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ImageSequenceReaderLocator(identity, 0, fallbackPercent: double.NaN));
+        Assert.ThrowsExactly<ArgumentException>(() => new ReflowTextReaderLocator(identity, ""));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ReflowTextReaderLocator(identity, "p:1", characterOffset: -1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ImageSequenceReaderLocator(identity, -1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new FixedPageReaderLocator(identity, 0, -1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ImageSequenceReaderLocator(identity, 0, fallbackPercent: 101));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ReaderViewportPosition(0, 0, 0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ReaderViewportPosition(double.NaN, 0, 1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ReaderSourceRegion(.8, 0, .3, 1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ReaderSourceRegion(0, 0, double.PositiveInfinity, 1));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new ImageSequenceReaderLocator(identity, 0, fallbackPercent: double.NaN));
     }
 }
