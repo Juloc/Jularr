@@ -1,10 +1,10 @@
 # Offline Settings — End-State Product Contract
 
-Status: **binding target-product planning specification; Clean Purple Desktop/Mobile visual direction approved, image upload pending in this folder**.
+Status: **binding target-product planning specification; approved Clean Purple Desktop/Mobile visual reference is present in this folder**.
 
 This specification defines the finished Jularr offline/download preference surface across Web/PWA, Android phone/tablet and future native desktop clients. Implementation may land in phases, but the UX contract is the end-state target and must not be reduced to today's implementation.
 
-The approved mockup direction uses the Jularr Clean Purple light visual language with one continuous consumer settings page on Desktop and a sectioned/accordion presentation on Mobile. The user will upload the approved image reference to this folder. If the image and this specification conflict, this specification wins.
+The approved mockup uses the Jularr Clean Purple light visual language with one continuous consumer settings page on Desktop and a sectioned/accordion presentation on Mobile. The approved image reference lives in this folder. If the image and this specification conflict, this specification wins.
 
 Related:
 - `docs/mockups/downloads-offline/SPEC.md` — current-device queue and offline inventory management
