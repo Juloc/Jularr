@@ -28,8 +28,8 @@ public partial class CanonicalVideoProgress : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_MediaProgress", x => x.Id);
-                table.CheckConstraint("CK_MediaProgress_PositionMs", ""PositionMs" >= 0");
-                table.CheckConstraint("CK_MediaProgress_DurationMs", ""DurationMs" IS NULL OR "DurationMs" > 0");
+                table.CheckConstraint("CK_MediaProgress_PositionMs", "\"PositionMs\" >= 0");
+                table.CheckConstraint("CK_MediaProgress_DurationMs", "\"DurationMs\" IS NULL OR \"DurationMs\" > 0");
                 table.ForeignKey(
                     name: "FK_MediaProgress_WorkEpisodes_WorkEpisodeId",
                     column: x => x.WorkEpisodeId,
@@ -61,8 +61,8 @@ public partial class CanonicalVideoProgress : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_MediaPlaybackHistory", x => x.Id);
-                table.CheckConstraint("CK_MediaPlaybackHistory_PositionMs", ""PositionMs" >= 0");
-                table.CheckConstraint("CK_MediaPlaybackHistory_DurationMs", ""DurationMs" IS NULL OR "DurationMs" > 0");
+                table.CheckConstraint("CK_MediaPlaybackHistory_PositionMs", "\"PositionMs\" >= 0");
+                table.CheckConstraint("CK_MediaPlaybackHistory_DurationMs", "\"DurationMs\" IS NULL OR \"DurationMs\" > 0");
                 table.ForeignKey(
                     name: "FK_MediaPlaybackHistory_WorkEpisodes_WorkEpisodeId",
                     column: x => x.WorkEpisodeId,
@@ -127,14 +127,14 @@ public partial class CanonicalVideoProgress : Migration
             table: "MediaProgress",
             columns: new[] { "ProfileId", "WorkId" },
             unique: true,
-            filter: ""WorkEpisodeId" IS NULL");
+            filter: "\"WorkEpisodeId\" IS NULL");
 
         migrationBuilder.CreateIndex(
             name: "IX_MediaProgress_ProfileId_WorkEpisodeId",
             table: "MediaProgress",
             columns: new[] { "ProfileId", "WorkEpisodeId" },
             unique: true,
-            filter: ""WorkEpisodeId" IS NOT NULL");
+            filter: "\"WorkEpisodeId\" IS NOT NULL");
 
         migrationBuilder.CreateIndex(
             name: "IX_MediaProgress_ProfileId_UpdatedAt",
