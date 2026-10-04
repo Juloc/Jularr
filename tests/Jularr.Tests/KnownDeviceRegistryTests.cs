@@ -223,7 +223,7 @@ public sealed class KnownDeviceRegistryTests
             deviceRegistry: registry);
         var input = new PlaybackPlanInput(null, ClientKinds.Web, chromeAgent, IPAddress.Parse("192.168.1.2"));
 
-        var outcome = await service.PlanAsync(media.EpisodeId, "reader", input, CancellationToken.None);
+        var outcome = await service.PlanAsync(media.EpisodeId!.Value, "reader", input, CancellationToken.None);
 
         Assert.IsNotNull(outcome!.Session, "The plan must open a session for this to be a real playback attempt.");
         var devices = await registry.ListForProfileAsync("reader", CancellationToken.None);
