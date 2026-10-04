@@ -1,6 +1,6 @@
 # Downloads & Offline — Consumer Download Manager
 
-Status: **binding target-product planning specification; visual reference pending upload/approval**.
+Status: **binding target-product planning specification; approved Desktop/Mobile visual reference is present in this folder**.
 
 This screen is the canonical consumer surface for device-local offline media and active offline-download work. It unifies the existing Offline Library and Offline Media capabilities without creating another download engine, progress store, media identity model or server-side acquisition queue.
 
