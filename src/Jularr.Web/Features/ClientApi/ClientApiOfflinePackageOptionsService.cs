@@ -106,7 +106,7 @@ public sealed class ClientApiOfflinePackageOptionsService(
         }
 
         var targetProvidesUnit = target!.WorkEpisodeId is not null || target.WorkChapterId is not null || target.GameReleaseId is not null;
-        if (scope is ClientApiOfflinePackageContract.SelectedScope or ClientApiOfflinePackageContract.ReleaseScope && unitIds.Length == 0 && !targetProvidesUnit)
+        if ((scope is ClientApiOfflinePackageContract.SelectedScope or ClientApiOfflinePackageContract.ReleaseScope) && unitIds.Length == 0 && !targetProvidesUnit)
         {
             return ClientOfflinePackageQueryResult<ClientOfflinePackagePreview>.Invalid(
                 "invalid_offline_scope",
