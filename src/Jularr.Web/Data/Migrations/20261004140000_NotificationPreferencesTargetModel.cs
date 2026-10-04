@@ -86,6 +86,11 @@ public partial class NotificationPreferencesTargetModel : Migration
             ON CONFLICT ("ProfileId", "Channel") DO NOTHING;
             """);
 
+        migrationBuilder.AddCheckConstraint(
+            name: "CK_NotificationSubscriptions_Timing",
+            table: "NotificationSubscriptions",
+            sql: "\"Timing\" >= 1 AND \"Timing\" <= 2");
+
         migrationBuilder.DropColumn(name: "Mode", table: "NotificationSubscriptions");
 
         migrationBuilder.Sql(
@@ -136,6 +141,7 @@ public partial class NotificationPreferencesTargetModel : Migration
 
         migrationBuilder.DropTable(name: "NotificationSubscriptionChannels");
         migrationBuilder.DropTable(name: "NotificationProfileChannels");
+        migrationBuilder.DropCheckConstraint(name: "CK_NotificationSubscriptions_Timing", table: "NotificationSubscriptions");
         migrationBuilder.DropColumn(name: "Enabled", table: "NotificationSubscriptions");
         migrationBuilder.DropColumn(name: "Timing", table: "NotificationSubscriptions");
     }
