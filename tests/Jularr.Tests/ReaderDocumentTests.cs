@@ -35,6 +35,7 @@ public sealed class ReaderDocumentTests
 
         Assert.IsTrue(fixedBook.Capabilities.SupportsZoom);
         Assert.IsFalse(fixedBook.Capabilities.SupportsTypography);
+        Assert.IsFalse(fixedBook.Capabilities.SupportsHighlights);
         Assert.IsTrue(semanticFixedDocument.Capabilities.SupportsTypography);
         Assert.IsFalse(semanticFixedDocument.Capabilities.SupportsZoom);
     }
