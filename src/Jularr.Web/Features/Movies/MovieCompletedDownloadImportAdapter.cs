@@ -165,7 +165,10 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
 
         if (request?.Request is { } acquisition)
         {
-            var requestedYear = TryParseYear(acquisition.Title) ?? release?.AirDate?.Year ?? TryParseYear(name);
+            var requestedYear = VideoAcquisitionEngine.ReadPayload(acquisition)?.Year
+                ?? TryParseYear(acquisition.Title)
+                ?? release?.AirDate?.Year
+                ?? TryParseYear(name);
             var tmdb = string.Equals(acquisition.Provider, "tmdb", StringComparison.OrdinalIgnoreCase)
                 ? acquisition.ExternalId
                 : null;
