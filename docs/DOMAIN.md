@@ -437,6 +437,27 @@ Recommendations should return canonical/resolvable target references owned by th
 
 Files reference storage roots. NAS wake/retry/availability belongs to storage infrastructure. Logical Works and metadata remain available even while a storage root is offline.
 
+Storage lifecycle changes physical availability/location; it does **not** redefine canonical Work identity.
+
+Canonical rules:
+- moving/tiering a File between compatible LibraryRoots keeps the same logical Work/Version/Asset identity where the stored-file contract permits it;
+- deleting local bytes does not delete Work metadata, provider identity, progress/history or list state by default;
+- a Work may remain in the Library as not locally available and later be reacquired through the normal acquisition pipeline;
+- low free space is input to policy evaluation, never implicit permission to delete;
+- active hard Requirements constrain version/track pruning, downgrade and optimization;
+- policy/scoring/reacquisition-risk state is operational lifecycle state, not media identity;
+- orphan file, missing reference, corrupt file and offline storage are separate states;
+- physical duplicate consolidation must not silently merge canonical Works/editions;
+- logical file size and physically reclaimable bytes may differ because of hardlinks/reflinks/dedupe/snapshots.
+
+Ownership:
+- #411 owns canonical storage availability and integrity-safety gates;
+- #815 owns LibraryRoot routing/default future import placement;
+- #414 owns lifecycle/retention/optimization/tiering/physical migration policy and audit;
+- external-stack migration remains separate (#433).
+
+Destructive lifecycle operations are explicit/audited and preserve user state unless a separate canonical domain operation intentionally changes it.
+
 ## 18. Identity and deletion rules
 
 - Stable internal IDs are never derived from filenames or provider IDs.
