@@ -31,6 +31,9 @@ public sealed class LibraryModel(
     /// <summary>A PDF book: its chapters are its pages, which the page lists in ranges.</summary>
     public bool IsPdf => BookFileFormats.IsPdf(Book.Work);
 
+    /// <summary>The derived PDF document of a PDF book, loaded for the owner's diagnostics line; null until analysed.</summary>
+    public PdfDerivedDocument? PdfAnalysis { get; private set; }
+
     /// <summary>
     /// A PDF's pages in about a dozen ranges of a round size (10, 20, 30 …); listing every
     /// page as a chapter would bury the book under hundreds of rows.
@@ -71,7 +74,12 @@ public sealed class LibraryModel(
                 TargetLanguage,
                 StringComparison.OrdinalIgnoreCase);
         TranslationEnabled = await ResolveTranslationEnabledAsync(id, cancellationToken);
-        LanguageEdition = BookLanguageEditionSelectorFactory.Create(
+        if (IsPdf && IsOwner)
+        {
+            PdfAnalysis = await books.GetPdfAnalysisAsync(id, cancellationToken);
+        }
+
+        LanguageEdition =BookLanguageEditionSelectorFactory.Create(
             "book-language-edition",
             Book.Work.MetadataTitle ?? Book.Work.Title,
             GetSourceLanguage(Book.Work),
@@ -215,6 +223,53 @@ public sealed class LibraryModel(
             ("language", BookLanguageCatalog.GetName(targetLanguage)));
 
         return RedirectToPage(new { id, lang = targetLanguage });
+    }
+
+    public async Task<IActionResult> OnPostReanalyzePdfAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+
+        if (!account.IsOwner)
+        {
+            return Forbid();
+        }
+
+        var detail = await books.GetLibraryBookAsync(
+            id,
+            account.ProfileId,
+            BookLanguageCatalog.Normalize(null),
+            cancellationToken);
+
+        if (detail is null || !BookFileFormats.IsPdf(detail.Work))
+        {
+            return NotFound();
+        }
+
+        await jobs.QueueAsync(
+            new OperationDescriptor(
+                "book-pdf-analysis",
+                "Books",
+                "Re-analyze PDF",
+                detail.Work.MetadataTitle ?? detail.Work.Title,
+                account.ProfileId,
+                OperationLane.Maintenance,
+                Retryable: true),
+            async (operation, services, workerToken) =>
+            {
+                await operation.ReportAsync(5, "Analyzing PDF pages.", cancellationToken: workerToken);
+                var service = services.GetRequiredService<BookCatalogService>();
+                var document = await service.ReanalyzePdfAsync(id, workerToken);
+                await operation.ReportAsync(
+                    100,
+                    $"{document.LogicalPages.Count} logical of {document.PhysicalPageCount} physical pages.",
+                    cancellationToken: workerToken);
+            },
+            cancellationToken);
+
+        TempData["Status"] = ui["books.library.pdfReanalyzeQueued"];
+        return RedirectToPage(new { id });
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(

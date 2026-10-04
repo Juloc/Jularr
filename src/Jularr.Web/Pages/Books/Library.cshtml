@@ -155,6 +155,13 @@
                 </form>
             }
 
+            @if (Model.IsPdf)
+            {
+                <form method="post" asp-page-handler="ReanalyzePdf" asp-route-id="@Model.Book.Work.Id">
+                    <button class="button" type="submit">@ui["books.library.pdfReanalyze"]</button>
+                </form>
+            }
+
             <form method="post"
                   asp-page-handler="Delete"
                   asp-route-id="@Model.Book.Work.Id"
@@ -164,6 +171,20 @@
                 </button>
             </form>
         </div>
+        @if (Model.PdfAnalysis is { } analysis)
+        {
+            <p>
+                @ui.Format(
+                    "books.library.pdfAnalysis",
+                    ("class", ui["books.library.pdfClass." + analysis.Classification.Class.ToString().ToLowerInvariant()]),
+                    ("confidence", (int)Math.Round(analysis.Classification.Decision.Confidence * 100)),
+                    ("logical", analysis.LogicalPages.Count),
+                    ("physical", analysis.PhysicalPageCount),
+                    ("duplicates", analysis.Diagnostics.DuplicatePagesRemoved),
+                    ("furniture", analysis.Diagnostics.FurnitureParagraphsRemoved),
+                    ("version", analysis.AnalyzerVersion))
+            </p>
+        }
         <p>
             @ui["books.library.manageNote"]
         </p>
