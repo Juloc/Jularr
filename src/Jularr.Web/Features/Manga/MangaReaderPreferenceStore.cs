@@ -75,8 +75,8 @@ public static class MangaReaderPreferenceStore
         var legacyMedia = preferences.FirstOrDefault(
             x => x.ScopeKey == LegacyMediaScope);
         var media = preferences.FirstOrDefault(x => x.ScopeKey == MediaScope);
-        var series = preferences.FirstOrDefault(x => x.ScopeKey == workScope ||
-                 x.ScopeKey == legacySeriesScope);
+        var legacySeries = preferences.FirstOrDefault(x => x.ScopeKey == legacySeriesScope);
+        var work = preferences.FirstOrDefault(x => x.ScopeKey == workScope);
 
         var readingMode = ReaderPreferenceRules.NormalizeReadingMode(
             First(
