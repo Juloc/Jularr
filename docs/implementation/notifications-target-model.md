@@ -448,6 +448,8 @@ Absence resolves through the built-in channel default.
 
 All three tables are still owned through `NotificationSubscriptionStore` / one notification-preference service boundary.
 
+PostgreSQL notification timestamps are UTC instants stored as `timestamp with time zone`. The bounded target-model migration upgrades the legacy text `NotificationSubscriptions.UpdatedAtUtc` column instead of preserving a second timestamp encoding.
+
 Do not create a second `NotificationPreferencesStore`.
 
 ## Migration mapping
