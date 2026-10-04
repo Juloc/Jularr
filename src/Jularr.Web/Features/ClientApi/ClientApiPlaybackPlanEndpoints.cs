@@ -5,9 +5,14 @@ using Jularr.Web.Features.Progress;
 
 namespace Jularr.Web.Features.ClientApi;
 
+public sealed record ClientVideoTarget(
+    Guid WorkId,
+    Guid? WorkEpisodeId);
+
 /// <summary>
 /// One playback-plan request for every client (web, PWA, Android, TV). The capability
-/// document is optional; without it the server infers a conservative one.
+/// document is optional; without it the server infers a conservative one. New video
+/// callers send <see cref="Target"/>; the legacy Anime route supplies it server-side.
 /// </summary>
 public sealed record ClientPlaybackPlanRequest(
     ClientPlaybackCapabilities? Capabilities = null,
@@ -19,7 +24,8 @@ public sealed record ClientPlaybackPlanRequest(
     PlaybackNetworkReport? Network = null,
     IReadOnlyList<PlaybackDeliveryMode>? FailedModes = null,
     Guid? ReplacesSessionId = null,
-    bool Wake = true);
+    bool Wake = true,
+    ClientVideoTarget? Target = null);
 
 /// <summary>
 /// Where and how to fetch the plan's stream. Live transports restart at a position by adding
@@ -37,7 +43,9 @@ public sealed record ClientPlaybackPlanResponse(
     PlaybackPlan Plan,
     ClientPlaybackDelivery? Delivery,
     ClientMediaAvailability? Availability,
-    bool CapabilitiesInferred);
+    bool CapabilitiesInferred,
+    ClientVideoTarget Target,
+    long ResumePositionMs);
 
 public static class ClientApiPlaybackPlanEndpoints
 {
@@ -71,14 +79,45 @@ public static class ClientApiPlaybackPlanEndpoints
             }
 
             httpContext.Response.Headers.CacheControl = "no-store";
-            return Results.Ok(new ClientPlaybackPlanResponse(
-                outcome.Session?.Id,
-                outcome.Plan,
-                outcome.Session is { } session ? Delivery(session) : null,
-                outcome.Availability is { } availability
-                    ? ClientApiMappings.ToClientAvailability(availability, currentAccount.IsOwner)
-                    : null,
-                outcome.CapabilitiesInferred));
+            return Results.Ok(ToResponse(outcome, currentAccount));
+        })
+        .RequireRateLimiting(RateLimitPolicy);
+
+        group.MapPost("/video/playback-plan", async (
+            ClientPlaybackPlanRequest request,
+            PlaybackPlanService plans,
+            CurrentAccountContext currentAccount,
+            HttpContext httpContext,
+            CancellationToken cancellationToken) =>
+        {
+            if (request.Target is not { } target ||
+                target.WorkId == Guid.Empty ||
+                target.WorkEpisodeId == Guid.Empty)
+            {
+                return Results.BadRequest(new ClientErrorResponse(
+                    "invalid_playback_target",
+                    "target.workId is required and target.workEpisodeId must be a valid id when present."));
+            }
+
+            if (!TryParseInput(request, httpContext, out var input, out var error))
+            {
+                return error!;
+            }
+
+            var outcome = await plans.PlanAsync(
+                new PlaybackVideoTarget(target.WorkId, target.WorkEpisodeId),
+                currentAccount.ProfileId,
+                input,
+                cancellationToken);
+            if (outcome is null)
+            {
+                return Results.NotFound(new ClientErrorResponse(
+                    "media_not_found",
+                    "This canonical video target does not have a playable file."));
+            }
+
+            httpContext.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(ToResponse(outcome, currentAccount));
         })
         .RequireRateLimiting(RateLimitPolicy);
 
@@ -279,6 +318,20 @@ public static class ClientApiPlaybackPlanEndpoints
 
         return endpoints;
     }
+
+    private static ClientPlaybackPlanResponse ToResponse(
+        PlaybackPlanOutcome outcome,
+        CurrentAccountContext currentAccount) =>
+        new(
+            outcome.Session?.Id,
+            outcome.Plan,
+            outcome.Session is { } session ? Delivery(session) : null,
+            outcome.Availability is { } availability
+                ? ClientApiMappings.ToClientAvailability(availability, currentAccount.IsOwner)
+                : null,
+            outcome.CapabilitiesInferred,
+            new ClientVideoTarget(outcome.Target.WorkId, outcome.Target.WorkEpisodeId),
+            outcome.ResumePositionMs);
 
     public static ClientPlaybackDelivery? Delivery(PlaybackStreamSession session) =>
         session.Plan.Transport switch
