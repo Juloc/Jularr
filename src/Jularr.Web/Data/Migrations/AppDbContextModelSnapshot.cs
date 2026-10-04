@@ -3,6 +3,7 @@ using System;
 using Jularr.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using System.Reflection;
 
 #nullable disable
 
@@ -14,7 +15,12 @@ namespace Jularr.Web.Data.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            new PreviousSnapshot().Apply(modelBuilder);
+            var migration = new GamesFoundation();
+            var buildTargetModel = typeof(GamesFoundation).GetMethod(
+                "BuildTargetModel",
+                BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Previous migration target model is unavailable.");
+            buildTargetModel.Invoke(migration, [modelBuilder]);
 
             modelBuilder.Model.RemoveEntityType("Jularr.Web.Features.Library.MediaAnalysisStream");
             modelBuilder.Model.RemoveEntityType("Jularr.Web.Features.Library.MediaAnalysis");
@@ -135,9 +141,5 @@ namespace Jularr.Web.Data.Migrations
 #pragma warning restore 612, 618
         }
 
-        private sealed class PreviousSnapshot : GamesFoundation
-        {
-            internal void Apply(ModelBuilder modelBuilder) => BuildTargetModel(modelBuilder);
-        }
     }
 }
