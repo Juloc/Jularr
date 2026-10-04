@@ -820,7 +820,7 @@ public sealed class DiscoveryCoordinator(
             DateTimeOffset.UtcNow.Add(lifetime));
     }
 
-    private static bool CategoryAvailable(
+    private bool CategoryAvailable(
         DiscoveryCategory category,
         bool animeEnabled,
         bool mangaEnabled,
