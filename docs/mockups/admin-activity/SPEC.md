@@ -281,3 +281,33 @@ Required:
 - No silent parser learning from one-off manual corrections.
 - No silent destructive source-file operations.
 - No duplicate Activity/Failed/Imports pages for the same job states.
+
+
+## Storage Lifecycle operations (#414)
+
+Long-running Storage Lifecycle work uses the same canonical Activity/Operations surface.
+
+Examples:
+- integrity scrub;
+- optimization/transcode/remux;
+- duplicate consolidation;
+- tiering;
+- LibraryRoot migration/evacuation;
+- final trash purge.
+
+Ownership remains split:
+- **Storage** owns policy, candidate/reason, Requirement impact, target root and lifecycle audit;
+- **Activity / To-Do** owns live queued/running/waiting/failed execution and actionable operation failure;
+- **History** owns completed operational runs.
+
+A Storage operation may show:
+- affected Work/root;
+- action type;
+- progress;
+- expected/measured savings where known;
+- waiting reason such as storage offline, active playback, maintenance window or resource limit;
+- link back to the exact Storage policy/review item.
+
+Do not expose another profile's private watch/read history or Requirements merely to explain an operation. Storage may provide a bounded admin-safe explanation such as `blocked by active requirement`.
+
+A failed lifecycle job does not independently change its policy mode. Retry/cancel semantics come from the underlying operation.
