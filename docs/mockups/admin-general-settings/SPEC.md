@@ -324,6 +324,53 @@ Examples:
 
 A user preference can override presentation defaults but cannot alter server-wide scheduling semantics unless that feature explicitly uses user-local time.
 
+## Binding language policy (#820)
+
+Language behavior is one canonical instance policy shared by UI localization and media-metadata localization.
+
+### Language mode
+
+Admin chooses exactly one mode:
+
+- **Fixed instance language** — one admin-selected language applies to UI and normalized media metadata for the whole instance. Personal UI/metadata-language overrides are disabled.
+- **Free / per-user languages** — the instance language is the default for new profiles/system context, while profiles may select their own UI/metadata language.
+
+Do not implement separate unrelated UI-language and metadata-language policy modes.
+
+### Fixed instance language
+
+In Fixed mode:
+- the selected instance language is the only required metadata locale;
+- Jularr does not derive a required locale set from profile preferences;
+- user language controls are hidden/disabled rather than appearing to save ignored values;
+- a provider may still fall back when a localized field does not exist, but that fallback does not enroll another profile locale or create another Work.
+
+### Free / per-user languages
+
+In Free mode:
+- profiles may select their effective UI/metadata language;
+- English is the baseline metadata fallback after any explicitly configured instance fallback, then original/source language/best locally available value;
+- Admin may enable **Keep Library metadata for all active profile languages**.
+
+When that option is enabled, the required metadata locale set is derived from the effective metadata languages currently used by profiles on the instance.
+
+A new profile language must enqueue missing durable Library metadata for that locale in the shared background metadata spool. The spool is provider-rate-aware and processes lower-priority bulk work slowly.
+
+If a user opens a Work whose preferred locale is still queued or missing, that specific `(Work, locale)` fetch is promoted to interactive priority. The page immediately renders the best locally persisted fallback and does not wait for the provider.
+
+Suggested priority:
+1. currently opened Work;
+2. Watchlist / Reading List / monitored / requested Works;
+3. imported/local and in-progress Works;
+4. recently used/recently added Works;
+5. remaining durable Library.
+
+Discover-only provider candidates are excluded from this bulk multilingual backfill. They keep bounded locale-aware candidate/artwork caches until a durable Jularr relationship exists.
+
+Changing modes/languages never duplicates a Work. Missing locale variants are queued; existing variants may remain cached until normal retention/cleanup.
+
+Detailed data-model/queue semantics are owned by #820 and `docs/MEDIA_CORE.md`.
+
 ## Setup Wizard relationship
 
 The Setup Wizard does not own duplicate settings.
@@ -472,11 +519,13 @@ Introduce one canonical general instance settings contract before page implement
 Conceptually it should own only fields belonging to this page, for example:
 
 - InstanceName
+- LanguageMode
 - DefaultUiLanguage
 - DefaultLocale
 - TimeZoneId
 - TimeFormatPreference
 - DefaultMetadataLanguage
+- KeepMetadataForActiveProfileLanguages
 - FallbackMetadataLanguage
 - DefaultTitlePresentation
 - DateFormatPreference
@@ -503,3 +552,5 @@ Use database-backed persistent configuration consistent with Jularr architecture
 - No environment-variable editor.
 - No silent reset of unsupported migrated settings.
 - No second general settings store per page/module.
+- No separate competing UI-language and metadata-language policy modes.
+- No synchronous whole-library metadata backfill inside a settings save request.
