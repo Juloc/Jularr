@@ -315,17 +315,13 @@ The final gate must verify:
 
 ## 14. Open PR handling
 
-### PR #830 — do not merge
+### PR #830 — closed as superseded
 
-The branch is heavily behind current dev and duplicates Movie/TV acquisition code already present on dev through newer commits.
+Closed on 2026-10-04. The branch was heavily behind current dev and duplicated Movie/TV acquisition code already present on dev through newer commits. #812 remains the current closure-verification owner.
 
-Action: close as superseded after recording the current dev implementation in #812.
+### PR #716 — closed as superseded
 
-### PR #716 — do not merge
-
-The branch is very stale and the current dev already contains the evolved Users & Permissions spec and visual reference.
-
-Action: close as superseded by current dev documentation.
+Closed on 2026-10-04. The branch was very stale and current dev already contained the evolved Users & Permissions spec and visual reference.
 
 ### PR #816
 
