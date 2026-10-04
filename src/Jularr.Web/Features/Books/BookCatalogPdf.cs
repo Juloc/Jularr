@@ -20,7 +20,7 @@ public sealed record BookImportHint(
 
 /// <summary>
 /// The file Jularr keeps for a Books work (today: the PDF of a PDF book). <see cref="PageCount"/>
-/// is the number of pages, which are also the work's chapters in reading order.
+/// is the number of chapters, which are the logical pages of a PDF in reading order.
 /// </summary>
 public sealed record BookStoredFile(
     Guid WorkId,
@@ -29,7 +29,8 @@ public sealed record BookStoredFile(
     string Format,
     string MediaType,
     long SizeBytes,
-    int PageCount);
+    int PageCount,
+    string ContentHash);
 
 public sealed partial class BookCatalogService
 {
@@ -159,9 +160,10 @@ public sealed partial class BookCatalogService
 
     /// <summary>
     /// Imports one PDF as a Books work like any EPUB: the file is copied into
-    /// <see cref="FilesPath"/>, every page becomes a chapter (number = page number) carrying the
-    /// page's extracted text, and page 1 gives the cover when nothing better is known. Nothing
-    /// is parsed as EPUB and nothing is converted.
+    /// <see cref="FilesPath"/>, every logical page becomes a chapter carrying its extracted text without
+    /// page furniture (see <see cref="PdfDocumentAnalyzer"/>; physical pages that repeat an earlier page
+    /// share its chapter), and page 1 gives the cover when nothing better is known. Nothing is parsed
+    /// as EPUB and nothing is converted.
     /// </summary>
     public async Task<Guid> ImportPdfFileAsync(
         string path,
@@ -348,21 +350,13 @@ public sealed partial class BookCatalogService
             work.CoverImageUrl = $"/Books/Cover/{work.Id}";
         }
 
-        // Pages are the chapters, in page order, through the canonical Novel volume write path;
+        // Logical pages are the chapters, in reading order, through the canonical Novel volume write path;
         // progress, bookmarks and "continue reading" work exactly as for EPUB chapters.
         var pages = content.Pages.Count > 0 ? content.Pages : [new PdfPageText(1, "")];
+        var analysis = PdfDocumentAnalyzer.Analyze(pages, contentHash);
         var volume = await NovelVolumeContent.EnsureImplicitVolumeAsync(db, work, NovelVolumeKinds.Book, cancellationToken);
-        await NovelVolumeContent.SyncChaptersAsync(
-            db,
-            work,
-            volume,
-            pages
-                .Select(page => new NovelVolumeChapterInput(
-                    $"book://{work.Id:N}/{page.Number.ToString(CultureInfo.InvariantCulture)}",
-                    PageTitle(page),
-                    page.Text))
-                .ToArray(),
-            cancellationToken);
+        await CreateDerivedDocumentStore().SaveAsync(analysis.Document, cancellationToken);
+        await SyncPdfChaptersAsync(work, volume, analysis, cancellationToken);
 
         await UpsertEditionAndFileAsync(
             work,
@@ -404,7 +398,7 @@ public sealed partial class BookCatalogService
         }
 
         var pages = await db.NovelChapters.CountAsync(x => x.WorkId == workId, cancellationToken);
-        return new BookStoredFile(workId, path, file.FileName, file.Format, file.MediaType, file.SizeBytes, pages);
+        return new BookStoredFile(workId, path, file.FileName, file.Format, file.MediaType, file.SizeBytes, pages, file.ContentHash);
     }
 
     /// <summary>
@@ -489,13 +483,13 @@ public sealed partial class BookCatalogService
         }
     }
 
-    /// <summary>A page's chapter title: its first line of text, or its number for pages without text.</summary>
-    private static string PageTitle(PdfPageText page)
+    /// <summary>A logical page's chapter title: its first line of text, or its number for pages without text.</summary>
+    private static string PageTitle(int pageNumber, string text)
     {
-        var firstLine = page.Text.Split('\n', 2)[0].Trim();
+        var firstLine = text.Split('\n', 2)[0].Trim();
         if (firstLine.Length == 0)
         {
-            return page.Number.ToString(CultureInfo.InvariantCulture);
+            return pageNumber.ToString(CultureInfo.InvariantCulture);
         }
 
         return firstLine.Length <= 80 ? firstLine : firstLine[..79].TrimEnd() + "…";
