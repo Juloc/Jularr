@@ -61,7 +61,6 @@
     }
     <style id="app-accent-palette">@Html.Raw(palette.ToStyleSheet())</style>
     <script type="application/json" id="app-shell-text">@Json.Serialize(ui.WithPrefix("pwa."))</script>
-    <script src="~/js/app-theme.js" asp-append-version="true" defer></script>
     <script src="~/js/sakura.js" asp-append-version="true" defer></script>
     <script src="~/js/pwa.js" asp-append-version="true" defer></script>
     @if (frontendApp.EntryScript is not null)

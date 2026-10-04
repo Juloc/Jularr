@@ -34,13 +34,13 @@
     filter: none;
 }
 
-:root[data-app-theme-id^="clean-"] :is(.sidebar-footer, .theme-cycle-button, .mobile-nav, .mobile-topbar) {
+:root[data-app-theme-id^="clean-"] :is(.sidebar-footer, .theme-cycle__button, .mobile-nav, .mobile-topbar) {
     background: var(--clean-control-bg);
     border-color: var(--clean-border);
     backdrop-filter: none;
 }
 
-:root[data-app-theme-id^="clean-"] :is(.nav-item, .theme-cycle-button, .mobile-nav-item):hover {
+:root[data-app-theme-id^="clean-"] :is(.nav-item, .theme-cycle__button, .mobile-nav-item):hover {
     background: var(--clean-control-hover);
 }
 

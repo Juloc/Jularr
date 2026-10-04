@@ -6,9 +6,9 @@
     var currentThemeLabel = ui["theme." + appTheme];
     var themeAria = ui.Format("theme.switchAria", ("mode", currentThemeLabel));
 }
-<form method="post" asp-page="/Appearance/Theme" class="theme-cycle-form" data-theme-form>
+<form method="post" asp-page="/Appearance/Theme" class="theme-cycle" data-theme-form>
     <input type="hidden" name="theme" value="@appTheme" data-theme-input />
-    <button class="theme-cycle-button"
+    <button class="theme-cycle__button"
             type="button"
             data-theme-cycle
             data-theme-mode="@appTheme"
@@ -17,12 +17,12 @@
             data-label-dark="@ui["theme.dark"]"
             data-aria-template="@ui["theme.switchAria"]"
             aria-label="@themeAria">
-        <span class="theme-cycle-copy">
+        <span class="theme-cycle__copy">
             <span>@ui["theme.label"]</span>
             <strong data-theme-current>@currentThemeLabel</strong>
         </span>
-        <span class="theme-state-dots" aria-hidden="true">
-            <i></i><i></i><i></i>
+        <span class="theme-cycle__dots" aria-hidden="true">
+            <i class="theme-cycle__dot"></i><i class="theme-cycle__dot"></i><i class="theme-cycle__dot"></i>
         </span>
     </button>
 </form>

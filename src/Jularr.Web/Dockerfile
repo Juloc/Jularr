@@ -90,6 +90,9 @@ RUN npm ci
 COPY vite.config.ts tsconfig.json ./
 COPY scripts/ scripts/
 COPY src/Jularr.Web/frontend/ src/Jularr.Web/frontend/
+# Page-local TypeScript and SCSS are first-class Vite inputs. Keep the whole Pages tree
+# available so later page migrations do not require Dockerfile changes.
+COPY src/Jularr.Web/Pages/ src/Jularr.Web/Pages/
 RUN npm run check
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
