@@ -62,6 +62,46 @@ public sealed class VideoProgressTests
     }
 
     [TestMethod]
+    public async Task ConcurrentMovieUpdatesStaySingleAndIdempotent()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Concurrent Movie" };
+        db.Works.Add(movie);
+        await db.SaveChangesAsync();
+
+        var connectionString = db.Database.GetConnectionString()
+            ?? throw new AssertFailedException("Expected a PostgreSQL test connection.");
+        await using var secondDb = new AppDbContext(
+            new DbContextOptionsBuilder<AppDbContext>()
+                .UseNpgsql(connectionString)
+                .Options);
+
+        var target = MediaProgressTarget.Movie(movie.Id);
+        var first = new VideoProgressService(db);
+        var second = new VideoProgressService(secondDb);
+
+        await Task.WhenAll(
+            first.UpdateAsync("reader", target, new MediaProgressUpdate(60_000, 120_000, Completed: false)),
+            second.UpdateAsync("reader", target, new MediaProgressUpdate(60_000, 120_000, Completed: false)));
+
+        var count = await db.Database.SqlQueryRaw<int>(
+                """
+                SELECT COUNT(*) AS "Value"
+                FROM "MediaProgress"
+                WHERE "ProfileId" = {0} AND "WorkId" = {1} AND "WorkEpisodeId" IS NULL
+                """,
+                "reader",
+                movie.Id)
+            .SingleAsync();
+        Assert.AreEqual(1, count);
+
+        var snapshot = await first.GetAsync("reader", target);
+        Assert.IsNotNull(snapshot);
+        Assert.AreEqual(60_000L, snapshot.PositionMs);
+        Assert.IsFalse(snapshot.IsCompleted);
+    }
+
+    [TestMethod]
     public async Task ContinueWatchingProjectsMovieAndTvFromOneOwner()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
@@ -109,6 +149,16 @@ public sealed class VideoProgressTests
         Assert.AreEqual(VideoContinueWatchingKind.UpNext, tvItem.Kind);
         Assert.AreEqual(episode2.Id, tvItem.WorkEpisodeId);
         Assert.AreEqual(WorkMediaType.Series, tvItem.MediaType);
+
+        var flow = await service.GetEpisodeFlowAsync(
+            MediaProgressTarget.Episode(series.Id, episode1.Id));
+        Assert.IsNotNull(flow);
+        Assert.IsNull(flow.PreviousWorkEpisodeId);
+        Assert.AreEqual(episode2.Id, flow.NextWorkEpisodeId);
+
+        Assert.IsNull(
+            await service.GetEpisodeFlowAsync(MediaProgressTarget.Movie(movie.Id)),
+            "Movies never synthesize an episode-style Next target.");
     }
 
     [TestMethod]

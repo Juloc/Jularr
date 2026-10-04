@@ -58,6 +58,12 @@ public sealed record VideoContinueWatchingItem(
     long? DurationMs,
     DateTime UpdatedAt);
 
+public sealed record VideoEpisodeFlowSnapshot(
+    Guid WorkId,
+    Guid CurrentWorkEpisodeId,
+    Guid? PreviousWorkEpisodeId,
+    Guid? NextWorkEpisodeId);
+
 public sealed record MediaPlaybackHistoryItem(
     Guid Id,
     WorkMediaType MediaType,
@@ -189,6 +195,48 @@ public sealed class VideoProgressService(AppDbContext db)
         await EnsureProgressRowAsync(profileId, target, 0, current?.DurationMs, completed, now, cancellationToken);
         await SetCompletedRowAsync(profileId, target, completed, now, cancellationToken);
         return await GetAsync(profileId, target, cancellationToken);
+    }
+
+    public async Task<VideoEpisodeFlowSnapshot?> GetEpisodeFlowAsync(
+        MediaProgressTarget target,
+        CancellationToken cancellationToken = default)
+    {
+        if (target.WorkEpisodeId is not { } currentEpisodeId ||
+            !await TargetExistsAsync(target, cancellationToken))
+        {
+            return null;
+        }
+
+        var episodes = await db.WorkEpisodes
+            .AsNoTracking()
+            .Where(episode =>
+                episode.WorkId == target.WorkId &&
+                db.MediaAssets.Any(asset =>
+                    asset.Kind == MediaAssetKind.Video &&
+                    asset.WorkId == target.WorkId &&
+                    asset.WorkEpisodeId == episode.Id &&
+                    db.StoredFiles.Any(file => file.MediaAssetId == asset.Id)))
+            .OrderBy(episode => episode.SeasonNumber)
+            .ThenBy(episode => episode.EpisodeNumber)
+            .Select(episode => new EpisodeCandidate(
+                episode.Id,
+                episode.WorkId,
+                episode.SeasonNumber,
+                episode.EpisodeNumber,
+                episode.Title))
+            .ToListAsync(cancellationToken);
+
+        var currentIndex = episodes.FindIndex(x => x.Id == currentEpisodeId);
+        if (currentIndex < 0)
+        {
+            return null;
+        }
+
+        return new VideoEpisodeFlowSnapshot(
+            target.WorkId,
+            currentEpisodeId,
+            currentIndex > 0 ? episodes[currentIndex - 1].Id : null,
+            currentIndex + 1 < episodes.Count ? episodes[currentIndex + 1].Id : null);
     }
 
     public async Task<IReadOnlyList<VideoContinueWatchingItem>> GetContinueWatchingAsync(
