@@ -4,6 +4,10 @@
 
     const scriptUrl = document.currentScript?.src;
     if (!scriptUrl) return;
+    const sourceScriptUrl = new URL(scriptUrl);
+    const reflowModuleUrl = new URL("reflow-reader.js", sourceScriptUrl);
+    const buildVersion = sourceScriptUrl.searchParams.get("v");
+    if (buildVersion) reflowModuleUrl.searchParams.set("v", buildVersion);
     const {
         clamp,
         permilleForIndex,
@@ -13,7 +17,7 @@
         capturePagedTextAnchor,
         createReflowTextRenderer,
         measurePagedSequence
-    } = await import(new URL("reflow-reader.js", scriptUrl).href);
+    } = await import(reflowModuleUrl.href);
 
     const settingsElement = shell.querySelector("[data-reader-settings-json]");
     const settingsForm = shell.querySelector("[data-reader-settings-form]");
