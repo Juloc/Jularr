@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -105,6 +106,10 @@ public sealed class VideoAcquisitionEngine(
     public static readonly TimeSpan FuturePollInterval = TimeSpan.FromHours(6);
     private static readonly int[] MovieCategories = [2000];
     private static readonly int[] TvCategories = [5000];
+    private static readonly JsonSerializerOptions PayloadJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public async Task<AcquisitionExecution> ExecuteAsync(
         AcquisitionRequest request,
@@ -270,7 +275,7 @@ public sealed class VideoAcquisitionEngine(
             {
                 return JsonSerializer.Deserialize<VideoRequestPayload>(
                            request.PayloadJson,
-                           JsonSerializerOptions.Web)
+                           PayloadJsonOptions)
                        ?? new VideoRequestPayload();
             }
             catch (JsonException)
@@ -364,7 +369,7 @@ public sealed class VideoAcquisitionEngine(
             .Where(x => x.HasValue)
             .Select(x => x!.Value)
             .ToHashSet();
-        return await db.WorkEpisodes
+        var episodes = await db.WorkEpisodes
             .AsNoTracking()
             .Where(x => x.WorkId == workId && !x.IsSpecial)
             .OrderBy(x => x.SeasonNumber)
@@ -377,7 +382,9 @@ public sealed class VideoAcquisitionEngine(
                 x.AbsoluteNumber,
                 x.AiredAt
             })
-            .AsAsyncEnumerable()
+            .ToListAsync(cancellationToken);
+
+        return episodes
             .Select(x => new MonitoredUnitInventory(
                 MonitoredUnitKey.ForEpisode(
                     WorkKey(workId),
@@ -389,7 +396,7 @@ public sealed class VideoAcquisitionEngine(
                     : null,
                 withFiles.Contains(x.Id),
                 null))
-            .ToListAsync(cancellationToken);
+            .ToArray();
     }
 
     private static async Task<MonitoringState> ApplyScopeAsync(
@@ -541,7 +548,7 @@ public sealed class VideoAcquisitionEngine(
         QualityProfile profile,
         CancellationToken cancellationToken)
     {
-        var result = new Dictionary<string, (ReleaseRequestCandidate Candidate, int Rank)>(
+        var result = new Dictionary<string, (ReleaseRequestCandidate Candidate, long Rank)>(
             StringComparer.OrdinalIgnoreCase);
 
         foreach (var unit in wanted)
@@ -588,7 +595,7 @@ public sealed class VideoAcquisitionEngine(
                     release.Identity,
                     release.Title,
                     release.InternalDownloadUri);
-                var rank = scored.QualityRank * 100_000 - scored.Score;
+                var rank = (long)scored.QualityRank * 100_000L - scored.Score;
                 if (!result.TryGetValue(release.Identity, out var previous) || rank < previous.Rank)
                 {
                     result[release.Identity] = (candidate, rank);
