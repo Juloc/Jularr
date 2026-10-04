@@ -168,8 +168,8 @@ public sealed class CanonicalPlaybackPlanTests
         Assert.IsNotNull(tvBootstrap);
         Assert.AreEqual(episode1.Id, tvBootstrap.Navigation.Previous!.Target.WorkEpisodeId);
         Assert.AreEqual(episode3.Id, tvBootstrap.Navigation.Next!.Target.WorkEpisodeId);
-        Assert.AreEqual(1, tvBootstrap.Inventory.Technical!.AudioStreams.Count);
-        Assert.AreEqual(1, tvBootstrap.Inventory.Technical.SubtitleStreams.Count);
+        Assert.AreEqual(2, tvBootstrap.Inventory.Technical!.AudioStreams.Count);
+        Assert.AreEqual(2, tvBootstrap.Inventory.Technical.SubtitleStreams.Count);
         Assert.AreEqual(series.Id, tvBootstrap.Target.WorkId);
         Assert.AreEqual(episode2.Id, tvBootstrap.Target.WorkEpisodeId);
     }
