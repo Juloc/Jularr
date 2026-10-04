@@ -959,48 +959,6 @@ body.novel-paged-body {
     background: var(--bookmark-color) !important;
 }
 
-.reader-turn-curl-next {
-    animation: reader-page-curl-next .38s ease both;
-    transform-origin: left center;
-}
-
-.reader-turn-curl-prev {
-    animation: reader-page-curl-prev .38s ease both;
-    transform-origin: right center;
-}
-
-.reader-turn-slide-next,
-.reader-turn-slide-prev {
-    animation: reader-page-slide .28s ease both;
-}
-
-.reader-turn-fade-next,
-.reader-turn-fade-prev {
-    animation: reader-page-fade .24s ease both;
-}
-
-@keyframes reader-page-curl-next {
-    0% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
-    45% { transform: perspective(1200px) rotateY(-4deg); opacity: .78; }
-    100% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
-}
-
-@keyframes reader-page-curl-prev {
-    0% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
-    45% { transform: perspective(1200px) rotateY(4deg); opacity: .78; }
-    100% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
-}
-
-@keyframes reader-page-slide {
-    0% { opacity: .65; transform: translateX(8px); }
-    100% { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes reader-page-fade {
-    0% { opacity: .35; }
-    100% { opacity: 1; }
-}
-
 @media (max-width: 760px) {
 
     .novel-settings-group label {
