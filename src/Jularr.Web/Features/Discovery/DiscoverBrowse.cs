@@ -85,9 +85,14 @@ public sealed record DiscoverBrowseQuery
         // The shared parser normalises text, scope, ordering and genre; without a text it never yields Search.
         var request = DiscoveryRequest.Parse(get("q"), get("category"), get("mode"), get("genre"));
         var parsedMode = DiscoveryRequest.Parse(null, get("category"), get("mode")).Mode;
-        var mode = parsedMode == DiscoveryMode.New && request.Category != DiscoveryCategory.Book
-            ? DiscoveryMode.Trending
-            : parsedMode;
+        var mode = parsedMode switch
+        {
+            DiscoveryMode.New when request.Category is not (DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
+                => DiscoveryMode.Trending,
+            DiscoveryMode.Upcoming when request.Category is not (DiscoveryCategory.Movie or DiscoveryCategory.Series)
+                => DiscoveryMode.Trending,
+            _ => parsedMode
+        };
 
         return new DiscoverBrowseQuery
         {
@@ -114,6 +119,8 @@ public sealed record DiscoverBrowseQuery
     public static string CategoryName(DiscoveryCategory category) => category switch
     {
         DiscoveryCategory.Anime => "anime",
+        DiscoveryCategory.Movie => "movie",
+        DiscoveryCategory.Series => "tv",
         DiscoveryCategory.LightNovel => "light-novel",
         DiscoveryCategory.Manga => "manga",
         DiscoveryCategory.Book => "book",
@@ -126,6 +133,7 @@ public sealed record DiscoverBrowseQuery
         DiscoveryMode.Top => "top",
         DiscoveryMode.MyList => "my-list",
         DiscoveryMode.New => "new",
+        DiscoveryMode.Upcoming => "upcoming",
         _ => "trending"
     };
 
@@ -201,6 +209,8 @@ public static class DiscoverScopes
     [
         (DiscoveryCategory.All, "discover.categories.all"),
         (DiscoveryCategory.Anime, "discover.categories.anime"),
+        (DiscoveryCategory.Movie, "discover.categories.movie"),
+        (DiscoveryCategory.Series, "discover.categories.tv"),
         (DiscoveryCategory.BooksAndLightNovels, "discover.categories.booksLightNovels"),
         (DiscoveryCategory.Manga, "reading.manga.title")
     ];
