@@ -31,6 +31,8 @@ public static class PlaybackDecisionRegistration
             return store;
         });
         services.AddScoped<PlaybackPlanService>();
+        services.AddScoped<CanonicalPlayerNavigationAssetService>();
+        services.AddScoped<CanonicalVideoPlayerService>();
 
         // Plans and stream starts per account: every seek of a live stream restarts it, so the
         // limit is generous but still stops a client from spawning ffmpeg in a loop.
