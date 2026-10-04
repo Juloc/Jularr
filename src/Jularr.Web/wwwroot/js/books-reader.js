@@ -222,7 +222,6 @@
 
     const applySettings = () => {
         const anchor = pdfContainer ? null : relayoutAnchor();
-        root.dataset.readingMode = settings.readingMode;
         root.dataset.paperStyle = settings.paperStyle;
         root.dataset.chapterStyle = settings.chapterStyle;
         root.dataset.pageTransition = settings.pageTransition;
@@ -897,66 +896,29 @@
         });
     }, { passive: true });
 
+    // PDF zoom is renderer-specific. Generic page navigation keys are owned by
+    // reader-shell.js and arrive here through jularr:reader-page-edge / seek.
     document.addEventListener("keydown", event => {
-        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (!pdfContainer || !pdf || event.defaultPrevented ||
+            event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+
         const target = event.target;
         if (target instanceof HTMLElement &&
             (target.matches("input, textarea, select") || target.isContentEditable ||
              target.closest("[data-reader-menu],[data-reader-contents],[data-reader-settings-container],[role='dialog']"))) {
             return;
         }
-        const key = event.key;
-        if (pdfContainer) {
-            if (pdf) handlePdfKey(event, target);
-            return;
-        }
-        if (!layout.paged) return;
-        const onControl = target instanceof HTMLElement && target.closest("button, a, summary");
-        if (key === " " && onControl) return;
-        if (key === "ArrowRight" || key === "PageDown" || (key === " " && !event.shiftKey)) {
-            event.preventDefault();
-            turn(1);
-        } else if (key === "ArrowLeft" || key === "PageUp" || (key === " " && event.shiftKey)) {
-            event.preventDefault();
-            turn(-1);
-        } else if (key === "Home") {
-            event.preventDefault();
-            goToView(0);
-        } else if (key === "End") {
-            event.preventDefault();
-            goToView(layout.viewCount - 1);
-        }
-    });
 
-    function handlePdfKey(event, target) {
-        const key = event.key;
-        if (key === "+" || key === "=") {
+        if (event.key === "+" || event.key === "=") {
             event.preventDefault();
             pdf.zoom(1);
-            return;
-        }
-        if (key === "-") {
+        } else if (event.key === "-") {
             event.preventDefault();
             pdf.zoom(-1);
-            return;
         }
-        if (!pdf.isPaged()) return;
-        const onControl = target instanceof HTMLElement && target.closest("button, a, summary");
-        if (key === " " && onControl) return;
-        if (key === "ArrowRight" || key === "PageDown" || (key === " " && !event.shiftKey)) {
-            event.preventDefault();
-            pdf.turn(1);
-        } else if (key === "ArrowLeft" || key === "PageUp" || (key === " " && event.shiftKey)) {
-            event.preventDefault();
-            pdf.turn(-1);
-        } else if (key === "Home") {
-            event.preventDefault();
-            pdf.first();
-        } else if (key === "End") {
-            event.preventDefault();
-            pdf.last();
-        }
-    }
+    });
 
     // ---- Progress -----------------------------------------------------------------
 
