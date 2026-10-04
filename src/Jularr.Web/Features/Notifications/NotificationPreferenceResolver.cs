@@ -8,10 +8,7 @@ namespace Jularr.Web.Features.Notifications;
 /// currently registered channel sinks. Effective channels preserve timing; ImmediateChannels are the
 /// subset the current dispatcher may deliver synchronously.
 /// </summary>
-public sealed record NotificationRouteResolution(
-    NotificationDeliveryTiming Timing,
-    FrozenSet<NotificationChannel> EffectiveChannels,
-    FrozenSet<NotificationChannel> ImmediateChannels);
+public sealed record NotificationRouteResolution(NotificationDeliveryTiming Timing, FrozenSet<NotificationChannel> EffectiveChannels, FrozenSet<NotificationChannel> ImmediateChannels);
 
 /// <summary>
 /// Canonical notification-route policy. Persistence remains owned by
@@ -48,10 +45,7 @@ public static class NotificationPreferenceResolver
         return new NotificationRouteResolution(preference.Timing, effective, immediate);
     }
 
-    private static bool IsProfileChannelEnabled(
-        string profileId,
-        NotificationChannel channel,
-        IReadOnlyDictionary<NotificationChannel, NotificationProfileChannelPreference> preferences)
+    private static bool IsProfileChannelEnabled(string profileId, NotificationChannel channel, IReadOnlyDictionary<NotificationChannel, NotificationProfileChannelPreference> preferences)
     {
         if (!preferences.TryGetValue(channel, out var preference))
         {
