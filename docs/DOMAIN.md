@@ -195,6 +195,20 @@ Provider result -> persist provider evidence/snapshot -> identity resolution -> 
 
 External provider data fetched for durable Jularr features should remain locally usable after fetch rather than making normal UI rendering depend on repeated provider calls.
 
+### Localized metadata policy
+
+Work identity is language-independent. Localized metadata is stored as language-tagged variants/evidence on the same Work; language-neutral facts are not duplicated per locale.
+
+The canonical instance policy is defined by #820:
+- Fixed mode: one admin-selected language for UI and required media metadata; personal language overrides are disabled.
+- Free mode: profile languages are allowed; Admin may require the Library to retain metadata for every effective profile language.
+
+When a new required locale appears, missing durable `(Work, locale)` metadata is filled through a deduplicated, provider-rate-aware background spool. Opening a Work promotes its missing locale fetch, while the page immediately renders the best locally persisted fallback.
+
+Discover candidates remain bounded locale-aware provider cache/evidence and are not bulk-materialized in every instance language.
+
+Durable artwork is likewise canonical/local-first: generic Work artwork slots may carry a locale for language-specific posters/logos, use neutral fallback, and maintain local Jularr-owned derivatives for normal Library rendering.
+
 Conceptual `ProviderEntitySnapshot`:
 - Provider;
 - EntityKind;
