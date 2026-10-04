@@ -1,8 +1,10 @@
 # Offline Settings — End-State Product Contract
 
-Status: **binding target-product planning specification; visual reference to be regenerated from this complete contract**.
+Status: **binding target-product planning specification; Clean Purple Desktop/Mobile visual direction approved, image upload pending in this folder**.
 
 This specification defines the finished Jularr offline/download preference surface across Web/PWA, Android phone/tablet and future native desktop clients. Implementation may land in phases, but the UX contract is the end-state target and must not be reduced to today's implementation.
+
+The approved mockup direction uses the Jularr Clean Purple light visual language with one continuous consumer settings page on Desktop and a sectioned/accordion presentation on Mobile. The user will upload the approved image reference to this folder. If the image and this specification conflict, this specification wins.
 
 Related:
 - `docs/mockups/downloads-offline/SPEC.md` — current-device queue and offline inventory management
@@ -37,9 +39,10 @@ Primary Settings path:
 `Profile -> Settings -> Downloads & Offline`
 
 The screen follows the standard setting-page contract:
-- contextual Back;
-- title **Downloads & Offline**;
-- concise optional description;
+- contextual Back where the shared shell uses one;
+- localized page heading **Offline-Einstellungen** / **Offline Settings**;
+- the broader navigation/family label may remain **Downloads & Offline**;
+- concise description: downloads, storage and Smart Offline for this device;
 - grouped settings rows;
 - immediate persistence for simple reversible preferences;
 - confirmation only for destructive actions.
@@ -47,16 +50,22 @@ The screen follows the standard setting-page contract:
 The current-device download manager is a separate consumer surface. Provide a clear **Manage downloads** action near the top.
 
 Desktop:
-- normal centered settings content width;
-- groups in one readable column;
-- optional compact current-device storage summary beside/above the first storage group;
-- no dashboard grid.
+- keep the normal Jularr app sidebar only; do not add a second settings sidebar;
+- use one wide, readable settings column;
+- place a compact current-device summary strip directly under/alongside the page heading;
+- stack the major settings groups vertically as full-width sections;
+- inside a section, a short title/description column may sit beside the actual controls;
+- storage and Smart Offline may use denser internal layouts, but each remains one coherent section rather than a dashboard of independent cards;
+- no dashboard grid, KPI wall or right-side analytics rail.
 
 Mobile:
 - one column;
+- show the current-device summary first, then **Manage downloads**;
+- present major groups as compact expandable sections/accordions;
+- the approved reference shows **Smart Offline** expanded to demonstrate the richer controls while other groups stay collapsed/summary-first;
 - segmented controls may wrap or use sheets;
-- destructive actions remain separated from ordinary preferences;
-- no squeezed desktop table.
+- destructive actions remain separated at the bottom;
+- no squeezed desktop table and no attempt to show all Desktop controls simultaneously.
 
 A modal can be used for sub-editors such as custom storage limit, storage location picker or per-media Smart Offline amounts. The full settings surface itself is not reduced to a tiny dialog.
 
@@ -743,26 +752,104 @@ Use consumer language:
 
 Do not expose implementation terms such as OPFS, WorkManager, ETag, manifest hash, rendition encoder or Storage Access Framework.
 
-## 35. Visual hierarchy
+## 35. Approved visual composition
 
-Recommended group order:
+The approved direction is one **single consumer settings page**, not multiple mini-pages and not an Admin dashboard.
 
-1. Current device summary + Manage downloads
-2. Network
-3. Background & power
-4. Quality
-5. Included audio/subtitles/Learning data
-6. Storage
-7. Smart Offline
-8. Automatic cleanup
-9. Updates
-10. Account & privacy
-11. Notifications / sync status
-12. Destructive storage actions
+### Desktop composition
 
-Desktop should feel like a polished settings page, not a monitoring dashboard.
+Use the normal Jularr shell with the existing left application navigation. The page body is a calm vertical stack:
 
-Mobile may collapse advanced groups, but every setting remains reachable.
+1. **Page header + current-device summary**
+   - heading **Offline-Einstellungen**;
+   - short one-line description;
+   - compact device identity;
+   - storage used vs Jularr limit;
+   - active download count when non-zero;
+   - primary **Downloads verwalten / Manage downloads** button.
+
+2. **Netzwerk & Hintergrund / Network & Background**
+   - connection policy;
+   - roaming;
+   - background downloads;
+   - charging preference for Smart Offline;
+   - one restrained informational note for automatic battery-saver behavior.
+
+3. **Qualität & Offline-Inhalte / Quality & Offline Content**
+   - video quality;
+   - audio quality;
+   - Reading/image quality;
+   - audio-track package;
+   - subtitle package;
+   - Learning data toggle.
+
+4. **Speicher / Storage**
+   - one compact storage visualization plus exact text values;
+   - category breakdown;
+   - Jularr offline limit;
+   - free-space reserve;
+   - storage location where supported;
+   - storage-management action.
+
+5. **Smart Offline**
+   - master device toggle;
+   - media-category toggles and ahead amounts;
+   - Smart Offline budget;
+   - Smart Offline video quality;
+   - metered/mobile-data allowance;
+   - replace-completed behavior;
+   - explanatory line that explicit downloads have priority.
+
+6. **Automatisierung & Updates / Automation & Updates**
+   - explicit auto-cleanup;
+   - Reading auto-update;
+   - changed video/audio replacement policy.
+
+7. **Konto, Sync & Benachrichtigungen / Account, Sync & Notifications**
+   - sign-out retention policy;
+   - sync status with details/retry only when relevant;
+   - deep-link to normal download notification preferences.
+
+8. **Gefahrenbereich / Danger zone**
+   - remove Smart Offline content;
+   - remove all offline content from this device.
+
+Do not add an inner section sidebar. Do not scatter these sections into separate dashboard cards across three columns. Horizontal space is used inside each section only to keep labels and controls aligned and readable.
+
+### Desktop density
+
+The page may show several sections within one 19:9 mockup, but each section must read as one coherent settings block. Use generous whitespace, restrained borders and shared Clean Purple controls. Avoid oversized cards, decorative metrics and duplicated explanatory copy.
+
+### Mobile composition
+
+Order:
+
+1. Back + **Offline-Einstellungen**;
+2. current-device summary;
+3. **Downloads verwalten**;
+4. expandable **Netzwerk & Hintergrund**;
+5. expandable **Qualität & Offline-Inhalte**;
+6. expandable **Speicher**;
+7. expandable **Smart Offline**;
+8. expandable **Automatisierung & Updates**;
+9. expandable **Konto, Sync & Benachrichtigungen**;
+10. separated **Gefahrenbereich**.
+
+The approved reference keeps Smart Offline expanded because it is the richest new product capability. This is a reference state, not a requirement that Smart Offline must always be the initially open accordion.
+
+### Visual language
+
+- Clean Purple light reference;
+- neutral white/light-gray surfaces;
+- purple used for selected state, toggles and primary actions;
+- red reserved for destructive actions;
+- standard Jularr outline icons;
+- no gradients/glow;
+- no Admin-table visual language;
+- no cards nested inside cards unless a focused sub-control genuinely needs containment;
+- charts always have textual values and never carry meaning alone.
+
+Dark mode must use the same hierarchy and semantics even when the approved image is Light.
 
 ## 36. What is intentionally not configurable
 
@@ -803,3 +890,7 @@ These are correctness/safety invariants.
 - [ ] Unsupported settings are hidden rather than shown as dead controls.
 - [ ] No Admin acquisition/downloader/NAS implementation details leak into the page.
 - [ ] Desktop, mobile, PWA and native capability differences are intentional and understandable.
+- [ ] Desktop renders as one continuous settings page with no inner section sidebar or dashboard grid.
+- [ ] Mobile uses compact expandable sections with the same settings semantics rather than a squeezed Desktop layout.
+- [ ] The current-device summary and Manage downloads action are visually distinct from the preference groups.
+- [ ] Smart Offline is a normal settings section, not a separate mini-dashboard.
