@@ -36,6 +36,7 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 - `progress-achievements/SPEC.md` — Learning progress, statistics and achievements
 - `script-trainer/SPEC.md` — generic Script Trainer with Japanese Kana as current toolkit
 - `user-settings/SPEC.md`
+- `downloads-offline/SPEC.md` — device-local consumer downloads/offline inventory and queue management
 - `profile-activity/SPEC.md`
 - `add-request-flow/SPEC.md`
 - `request-status-details/SPEC.md` — consumer Request status/detail sheet
