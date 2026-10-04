@@ -136,8 +136,9 @@ public sealed class ActiveSessionService(
     public async Task<ActiveSessionSnapshot?> GetAsync(
         Guid sessionId,
         string profileId,
-        CancellationToken cancellationToken = default) =>
-        await db.Database.SqlQueryRaw<ActiveSessionSnapshot>(
+        CancellationToken cancellationToken = default)
+    {
+        var row = await db.Database.SqlQueryRaw<ActiveSessionDbRow>(
                 """
                 SELECT "Id", "ProfileId", "WorkId", "WorkEpisodeId", "MediaAssetId", "StoredFileId",
                        "DeliveryMode", "ClientKind", "StartedAt", "LastUpdatedAt", "EndedAt"
@@ -148,6 +149,22 @@ public sealed class ActiveSessionService(
                 sessionId,
                 profileId)
             .SingleOrDefaultAsync(cancellationToken);
+
+        return row is null
+            ? null
+            : new ActiveSessionSnapshot(
+                row.Id,
+                row.ProfileId,
+                row.WorkId,
+                row.WorkEpisodeId,
+                row.MediaAssetId,
+                row.StoredFileId,
+                row.DeliveryMode,
+                row.ClientKind,
+                row.StartedAt,
+                row.LastUpdatedAt,
+                row.EndedAt);
+    }
 
     public async Task<bool> TouchAsync(
         Guid sessionId,
@@ -181,6 +198,19 @@ public sealed class ActiveSessionService(
             cancellationToken);
         return updated > 0;
     }
+
+    private sealed record ActiveSessionDbRow(
+        Guid Id,
+        string ProfileId,
+        Guid WorkId,
+        Guid? WorkEpisodeId,
+        Guid MediaAssetId,
+        Guid StoredFileId,
+        string DeliveryMode,
+        string ClientKind,
+        DateTime StartedAt,
+        DateTime LastUpdatedAt,
+        DateTime? EndedAt);
 
     private sealed record ActiveTargetRow(
         Guid WorkId,
