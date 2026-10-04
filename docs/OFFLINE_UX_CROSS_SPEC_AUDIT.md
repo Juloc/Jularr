@@ -64,9 +64,9 @@ No additional standalone screens are required for:
 
 Those states belong to the existing owners above.
 
-## 2. One remaining required visual/product surface
+## 2. Final required visual/product surface — completed
 
-The remaining **necessary** Offline UX reference is:
+The final necessary Offline UX reference was:
 
 ### Offline cold-start / disconnected Home shell
 
@@ -89,9 +89,9 @@ The visual belongs to the existing:
 
 `docs/mockups/home/`
 
-The existing Home spec already requires an `offline/PWA state where applicable`, but that state is not specified deeply enough for the finished Offline product and currently has no dedicated approved reference.
+The Home spec has now been expanded with the full cold-start/disconnected contract and the approved Desktop/Mobile visual reference is present in `docs/mockups/home/`.
 
-This should be the **next and final required Offline mockup** unless its planning reveals a genuinely new interaction.
+No further required Offline mockup remains after this state.
 
 ## 3. Coverage matrix
 
@@ -110,7 +110,7 @@ This should be the **next and final required Offline mockup** unless its plannin
 | Smart Offline promotion to explicit | selection/manager/Quick View | Complete |
 | Download live shell indicator | `download-quick-view` | Complete |
 | Pause/resume/retry | manager + Quick View | Complete |
-| Toast/Bell event semantics | `download-notifications` + canonical Notifications | Requires integration alignment, no new mockup |
+| Toast/Bell event semantics | `download-notifications` + canonical Notifications | Offline event ownership aligned; shared Notification branch remains canonical for presentation/runtime integration |
 | Local storage-location change | `offline-storage-location` | Complete |
 | Safe storage migration/restart | `offline-storage-location` | Complete |
 | Offline video playback | `player` | Complete |
@@ -436,7 +436,7 @@ No image move/rename is required for UX correctness.
 | Audiobook-specific selection | No — shared selection shell |
 | Offline Player | Already approved |
 | Offline Reader | Already approved |
-| **Cold-start/disconnected Home** | **Yes — final required Offline mockup** |
+| **Cold-start/disconnected Home** | **Approved and specified — no further mockup required** |
 
 ## 16. Integration order
 
@@ -447,36 +447,32 @@ Recommended order:
 1. **Reconcile branch with current `dev`**
    - preserve latest Reader/Playback architecture;
    - reapply Offline additions conflict-by-conflict.
+   - Reader/Player/index reconciliation has been performed in this planning branch; branch ancestry still needs the final dev sync/merge before integration.
 
-2. **Finish the one remaining UX reference**
-   - Home cold-start/disconnected state;
-   - approved Desktop/Mobile reference;
-   - update existing `home/SPEC.md`, not a new Home implementation.
-
-3. **Sync media-detail contracts**
+2. **Sync media-detail contracts**
    - implement #840 wording/action ownership;
    - no new mockups required.
 
-4. **Align Offline notification events with canonical Notifications**
-   - merge/use Notification planning authority;
-   - resolve mobile toast placement;
-   - map Offline events into #835/#838 policies.
+3. **Align Offline notification events with canonical Notifications**
+   - use Notification planning authority;
+   - Offline now delegates shared Toast/Bell placement and attention policy to that canonical family;
+   - map Offline events into #835/#838 implementation work.
 
-5. **Implement true local-first cold-start**
+4. **Implement true local-first cold-start**
    - #839;
    - PWA shell/repository;
    - Reader local manifests/Contents;
    - Android Reader state wiring;
    - Manga reuse.
 
-6. **Implement/finish explicit Offline download UX**
+5. **Implement/finish explicit Offline download UX**
    - selection;
    - manager;
    - Quick View;
    - settings;
    - storage migration.
 
-7. **Smart Offline**
+6. **Smart Offline**
    - #415 after explicit Offline foundations are stable.
 
 ## 17. Final audit result
@@ -485,9 +481,7 @@ The Offline UX does **not** need another family of screens.
 
 The architecture should converge on one set of canonical owners with multiple presentations.
 
-The only remaining required visual planning item is:
-
-**Home — cold-start / disconnected Offline state.**
+All required Offline visual planning items are now covered, including Home cold-start/disconnected state.
 
 Everything else found by this audit is:
 - branch reconciliation;
