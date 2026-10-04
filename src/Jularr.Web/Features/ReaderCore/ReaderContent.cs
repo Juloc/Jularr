@@ -253,7 +253,7 @@ public sealed record ReaderDocument
             throw new ArgumentException("Reader descriptor and document identity must target the same Work.", nameof(identity));
         }
 
-        var nodes = content ?? Array.Empty<ReaderContentNode>();
+        var nodes = content is null ? Array.Empty<ReaderContentNode>() : content.ToArray();
         var stableIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in nodes)
         {
