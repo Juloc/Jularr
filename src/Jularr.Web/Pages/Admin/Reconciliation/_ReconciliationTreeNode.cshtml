@@ -4,33 +4,31 @@
     var node = Model.Node;
     var isSelected = Model.SelectedPath == node.Item.RelativePath;
     var selectedClass = isSelected ? " selected" : "";
-    var stateClass = node.Item.State.ToString().ToLowerInvariant();
+    var state = Model.Present(node.Item.State);
     var expandsForSelection = Model.SelectedPath?.StartsWith(node.Item.RelativePath + "/", StringComparison.Ordinal) == true;
     var shouldExpand = node.Item.State != LibraryReconciliationItemState.Recognized || expandsForSelection || isSelected;
+    var name = node.Item.RelativePath.Split('/').Last();
+    var resolvedCount = node.Item.FileCount - node.Item.UnresolvedCount;
 }
 <li>
     @if (node.Children.Count > 0)
     {
         <details open="@shouldExpand">
             <summary>
-                <a class="admrec-tree-entry@(selectedClass)" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@Model.PlanId" asp-route-selected="@node.Item.RelativePath" asp-route-step="2">
-                    <span class="admrec-tree-kind" aria-hidden="true">▸</span>@node.Item.RelativePath.Split('/').Last()
-                </a>
-                <span class="admrec-state @stateClass">@node.Item.State</span>
+                <a class="admrec-tree-entry@(selectedClass)" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@Model.PlanId" asp-route-selected="@node.Item.RelativePath" asp-route-step="2">@name</a>
+                <span class="admrec-state @state.CssClass">@state.Text <span class="admrec-tree-count">@resolvedCount/@node.Item.FileCount</span></span>
             </summary>
             <ul>
                 @foreach (var child in node.Children)
                 {
-                    <partial name="_ReconciliationTreeNode" model="new Jularr.Web.Pages.Admin.Reconciliation.IndexModel.ReconciliationTreeNodeRender(child, Model.PlanId, Model.SelectedPath)" />
+                    <partial name="_ReconciliationTreeNode" model="new Jularr.Web.Pages.Admin.Reconciliation.IndexModel.ReconciliationTreeNodeRender(child, Model.PlanId, Model.SelectedPath, Model.Present)" />
                 }
             </ul>
         </details>
     }
     else
     {
-        <a class="admrec-tree-entry@(selectedClass)" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@Model.PlanId" asp-route-selected="@node.Item.RelativePath" asp-route-step="2">
-            <span class="admrec-tree-kind" aria-hidden="true">@(node.Item.IsDirectory ? "□" : "•")</span>@node.Item.RelativePath.Split('/').Last()
-        </a>
-        <span class="admrec-state @stateClass">@node.Item.State</span>
+        <a class="admrec-tree-entry@(selectedClass)" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@Model.PlanId" asp-route-selected="@node.Item.RelativePath" asp-route-step="2">@name</a>
+        <span class="admrec-state @state.CssClass">@state.Text</span>
     }
 </li>

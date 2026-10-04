@@ -50,13 +50,20 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
 
     public LibraryReconciliationPreviewItem? OrganizationPreviewItem { get; private set; }
 
-    public IReadOnlyList<LibraryReconciliationPlanItem> InventoryItems
-    {
-        get
-        {
-            return Plan?.OnlyUnclearItems == true ? Items.Where(x => x.State is LibraryReconciliationItemState.Unclear or LibraryReconciliationItemState.Error).ToArray() : Items;
-        }
-    }
+    /// <summary>The folder whose files form the step-3 table: the selected folder, or the parent folder of a selected file.</summary>
+    public LibraryReconciliationPlanItem? ScopeItem { get; private set; }
+
+    /// <summary>Media files below <see cref="ScopeItem"/>, including skipped ones so that a skip stays reversible.</summary>
+    public IReadOnlyList<LibraryReconciliationPlanItem> ScopeFiles { get; private set; } = [];
+
+    /// <summary>Folders that still need a decision, largest unresolved backlog first, shown as examples on the scan overview.</summary>
+    public IReadOnlyList<LibraryReconciliationPlanItem> ProblemFolders { get; private set; } = [];
+
+    /// <summary>Direct media files of the folder selected in the structure step.</summary>
+    public IReadOnlyList<LibraryReconciliationPlanItem> SelectedFolderFiles { get; private set; } = [];
+
+    /// <summary>Display labels of the canonical units already chosen for scope files, keyed by canonical unit id.</summary>
+    public IReadOnlyDictionary<Guid, string> UnitLabels { get; private set; } = new Dictionary<Guid, string>();
 
     public int FileCount => Items.Count(x => !x.IsDirectory);
 
@@ -66,7 +73,7 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
 
     public int HardErrorCount => Items.Count(x => !x.IsDirectory && x.State == LibraryReconciliationItemState.Error);
 
-    public int IgnoredCount => Items.Count(x => !x.IsDirectory && x.State == LibraryReconciliationItemState.Ignored);
+    public int Percent(int count) => FileCount == 0 ? 0 : (int)Math.Round(count * 100d / FileCount);
 
     [BindProperty(SupportsGet = true)]
     public Guid LibraryRootId { get; set; }
@@ -237,12 +244,12 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
     }
 
     /// <summary>Persists one mutually exclusive organization policy without starting a filesystem operation.</summary>
-    public async Task<IActionResult> OnPostSetOrganizationModeAsync(Guid planId, LibraryReconciliationOrganizationMode organizationMode, bool removeEmptySourceFolders, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostSetOrganizationModeAsync(Guid planId, LibraryReconciliationOrganizationMode organizationMode, bool removeEmptySourceFolders, int? returnStep, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var result = await reconciliation.SetOrganizationModeAsync(new LibraryReconciliationOrganizationModeRequest(planId, organizationMode, removeEmptySourceFolders), cancellationToken);
         TempData["Status"] = result.Succeeded ? Ui["admin.reconciliation.organizationSaved"] : result.Message ?? Ui["admin.reconciliation.error"];
-        return RedirectToPage(new { planId, step = 4 });
+        return RedirectToPage(new { planId, step = returnStep == 5 ? 5 : 4 });
     }
 
     /// <summary>Confirms and starts only the exact current conflict-free preview as an Activity-visible reconciliation operation.</summary>
@@ -310,7 +317,13 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
             review.Plan.RemoveEmptySourceFolders,
             review.Plan.ExecutionOperationId);
         Items = review.Items;
-        Tree = BuildTree(Items);
+        Tree = BuildTree(Plan.OnlyUnclearItems ? FilterToUnclear(Items) : Items);
+        ProblemFolders = Items
+            .Where(x => x.IsDirectory && x.UnresolvedCount > 0 && x.State != LibraryReconciliationItemState.Ignored)
+            .OrderByDescending(x => x.UnresolvedCount)
+            .ThenBy(x => x.RelativePath, StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToArray();
         LogicalGroups = await reconciliation.GetLogicalGroupsAsync(id, cancellationToken);
         SelectedItem = string.IsNullOrWhiteSpace(selected) ? null : Items.SingleOrDefault(x => string.Equals(x.RelativePath, selected, StringComparison.Ordinal));
         if (SelectedItem is not null)
@@ -318,6 +331,11 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
             SelectedWork = await reconciliation.GetResolvedWorkAsync(id, SelectedItem.Id, cancellationToken);
             ResolvedReleaseMetadata = await reconciliation.GetResolvedReleaseMetadataAsync(id, SelectedItem.Id, cancellationToken);
             MappingItems = GetMappingItems(Items, SelectedItem);
+            var scopePath = SelectedItem.IsDirectory ? SelectedItem.RelativePath : GetParentPath(SelectedItem.RelativePath);
+            var scopePrefix = scopePath + "/";
+            ScopeItem = Items.SingleOrDefault(x => x.IsDirectory && string.Equals(x.RelativePath, scopePath, StringComparison.Ordinal)) ?? SelectedItem;
+            ScopeFiles = Items.Where(x => !x.IsDirectory && (scopePath.Length == 0 || x.RelativePath.StartsWith(scopePrefix, StringComparison.Ordinal))).ToArray();
+            SelectedFolderFiles = SelectedItem.IsDirectory ? ScopeFiles.Where(x => string.Equals(GetParentPath(x.RelativePath), scopePath, StringComparison.Ordinal)).ToArray() : [];
             if (Plan.Status == LibraryReconciliationPlanStatus.Ready && SelectedWork is not null)
             {
                 EpisodeCandidates = await reconciliation.GetEpisodeCandidatesAsync(Plan.Id, SelectedItem.Id, cancellationToken);
@@ -325,6 +343,23 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
                 ChapterCandidates = await reconciliation.GetChapterCandidatesAsync(Plan.Id, SelectedItem.Id, cancellationToken);
                 EditionCandidates = await reconciliation.GetEditionCandidatesAsync(Plan.Id, SelectedItem.Id, cancellationToken);
                 VersionCandidates = await reconciliation.GetVersionCandidatesAsync(Plan.Id, SelectedItem.Id, cancellationToken);
+                var labels = new Dictionary<Guid, string>();
+                foreach (var episode in EpisodeCandidates)
+                {
+                    labels[episode.Id] = $"S{episode.SeasonNumber:D2} E{episode.EpisodeNumber:D2}";
+                }
+
+                foreach (var volume in VolumeCandidates)
+                {
+                    labels[volume.Id] = $"V{volume.Number:D2}";
+                }
+
+                foreach (var chapter in ChapterCandidates)
+                {
+                    labels[chapter.Id] = $"C{chapter.Number:0.##}";
+                }
+
+                UnitLabels = labels;
             }
         }
 
@@ -381,7 +416,11 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
     }
 
     /// <summary>Render context for one tree partial, including its plan and selected physical path.</summary>
-    public sealed record ReconciliationTreeNodeRender(ReconciliationTreeNode Node, Guid PlanId, string? SelectedPath);
+    public sealed record ReconciliationTreeNodeRender(
+        ReconciliationTreeNode Node,
+        Guid PlanId,
+        string? SelectedPath,
+        Func<LibraryReconciliationItemState, ReconciliationStatePresentation> Present);
 
     /// <summary>Returns localized text and a stable CSS token for every persisted reconciliation state.</summary>
     public ReconciliationStatePresentation GetStatePresentation(LibraryReconciliationItemState state)
@@ -434,6 +473,27 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
         var prefix = selectedItem.RelativePath + "/";
         var childFiles = items.Where(x => !x.IsDirectory && x.State != LibraryReconciliationItemState.Ignored && x.RelativePath.StartsWith(prefix, StringComparison.Ordinal)).ToArray();
         return [selectedItem, .. childFiles];
+    }
+
+    private static string GetParentPath(string relativePath)
+    {
+        var separator = relativePath.LastIndexOf('/');
+        return separator < 0 ? string.Empty : relativePath[..separator];
+    }
+
+    /// <summary>Keeps unclear or failed entries together with the folders that lead to them so the filtered tree stays navigable.</summary>
+    private static IReadOnlyList<LibraryReconciliationPlanItem> FilterToUnclear(IReadOnlyList<LibraryReconciliationPlanItem> items)
+    {
+        var visiblePaths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in items.Where(x => x.State is LibraryReconciliationItemState.Unclear or LibraryReconciliationItemState.Error))
+        {
+            for (var path = item.RelativePath; path.Length > 0; path = GetParentPath(path))
+            {
+                visiblePaths.Add(path);
+            }
+        }
+
+        return items.Where(x => visiblePaths.Contains(x.RelativePath)).ToArray();
     }
 
     /// <summary>Builds a physical tree from root-relative persisted paths without treating a path as canonical identity.</summary>
