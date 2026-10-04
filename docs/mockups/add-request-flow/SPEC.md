@@ -140,6 +140,23 @@ No structural Scope selector by default. The target is the Work/desired Edition.
 
 No chapter-level acquisition Scope in the normal Request flow. The target is the Work/audiobook Edition.
 
+Audiobook Request execution uses the same canonical lifecycle as the other media types:
+
+```text
+Request
+→ approval / auto-approval
+→ search enabled audiobook providers
+→ identity-match + quality/profile decision
+→ direct/free acquisition or shared download-client submission
+→ Import
+→ playable Audiobook Edition
+→ Listen / Continue Listening
+```
+
+The request may express language/edition intent where the provider data supports it. Narrator, container and technical release details are acquisition/profile concerns and are not normal consumer fields unless they represent a real user-facing edition choice.
+
+A failed direct provider may fall through to another eligible provider or the shared Usenet path. The consumer Request does not choose providers or release candidates.
+
 ### Games
 
 Games uses the same one-page Request and approval semantics.
@@ -266,6 +283,25 @@ Actions:
 - View request status when approval/status tracking is relevant
 
 Do not show technical acquisition logs.
+
+## 11a. Live acquisition continuation
+
+After Request submission, calling consumer surfaces may continue to show the same canonical Request as a compact live acquisition control.
+
+Required stages:
+
+- Pending approval;
+- Searching;
+- Downloading;
+- Importing;
+- Completed;
+- Failed / Needs attention where applicable.
+
+When an Operation exposes numeric progress, the consumer surface may show a compact percentage/ring without exposing technical logs. If no meaningful numeric progress exists, show the stage only.
+
+For Audiobooks, successful completion becomes Listen / Continue Listening / Open as soon as a playable result URL is available.
+
+Refreshing or reopening Discover/Detail must recover the persisted Request state; progress is never a browser-only timer.
 
 ## 12. Already-existing states
 
