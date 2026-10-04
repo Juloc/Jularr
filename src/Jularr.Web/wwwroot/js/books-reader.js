@@ -643,26 +643,25 @@
         const direction = Math.sign(next - currentView);
         currentView = next;
         reflowRenderer?.setPageState(currentView, layout.viewCount);
-        const transition = reduceMotion.matches ? "none" : settings.pageTransition;
-        const animated = animate && direction !== 0 && transition !== "none";
+        const animated = animate && direction !== 0 &&
+            root.dataset.readerTransitionActive !== "true" && !reduceMotion.matches;
 
         window.clearTimeout(turnTimer);
-        columns.classList.remove("is-turning", "is-fading");
-        if (animated && transition === "fade") {
-            columns.classList.add("is-fading");
-        } else if (animated) {
-            columns.classList.add("is-turning");
-        }
+        columns.classList.remove("is-turning");
+        if (animated) columns.classList.add("is-turning");
         columns.style.transform = `translate3d(${-next * layout.stride}px,0,0)`;
         if (animated) {
             turnTimer = window.setTimeout(() => {
-                columns.classList.remove("is-turning", "is-fading");
+                columns.classList.remove("is-turning");
             }, 360);
         }
 
         renderPageNumbers();
         updateStackDepth();
         emitLocation();
+        requestAnimationFrame(() => {
+            root.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
+        });
         if (save) {
             readerMoved = true;
             queueProgressSave();
@@ -788,7 +787,7 @@
                 dragState.atEnd = currentView >= layout.viewCount - 1;
                 window.getSelection()?.removeAllRanges();
                 window.clearTimeout(turnTimer);
-                columns.classList.remove("is-turning", "is-fading");
+                columns.classList.remove("is-turning");
                 columns.classList.add("is-dragging");
                 root.classList.add("book-is-dragging");
                 spread.setPointerCapture(event.pointerId);
