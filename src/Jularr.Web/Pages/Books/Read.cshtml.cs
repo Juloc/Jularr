@@ -238,9 +238,6 @@ public sealed class ReadModel(
                     db,
                     account.ProfileId,
                     scopeKey,
-                    scopeKey.StartsWith("work:", StringComparison.OrdinalIgnoreCase)
-                        ? reader.Work.Id
-                        : null,
                     input,
                     cancellationToken);
             }
@@ -278,7 +275,7 @@ public sealed class ReadModel(
             return NotFound();
         }
 
-        await ReaderPreferenceStore.ResetBookAsync(
+        await ReaderPreferenceStore.ResetWorkAsync(
             db,
             account.ProfileId,
             reader.Work.Id,
