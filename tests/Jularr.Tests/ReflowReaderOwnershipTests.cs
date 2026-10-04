@@ -16,6 +16,8 @@ public sealed class ReflowReaderOwnershipTests
         StringAssert.Contains(script, "export const capturePagedRectAnchor");
         StringAssert.Contains(script, "export const capturePagedTextAnchor");
         StringAssert.Contains(script, "export const createReflowTextRenderer");
+        StringAssert.Contains(script, "export const measurePagedSequence");
+        StringAssert.Contains(script, "export const viewIndexForDisplayPage");
         StringAssert.Contains(script, "adapter.goToPage?.(pageIndex)");
         StringAssert.Contains(script, "adapter.scrollToPermille?.(");
         StringAssert.Contains(script, "adapter.captureAnchor?.(");
@@ -42,9 +44,13 @@ public sealed class ReflowReaderOwnershipTests
             StringAssert.Contains(script, "reflow-reader.js");
             StringAssert.Contains(script, "createReflowTextRenderer");
             StringAssert.Contains(script, "captureContinuousAnchor");
+            StringAssert.Contains(script, "measurePagedSequence");
             StringAssert.Contains(script, "reflowRenderer?.turn(direction)");
             StringAssert.Contains(script, "reflowRenderer?.seek");
             Assert.IsFalse(script.Contains("const clamp =", StringComparison.Ordinal));
+            Assert.IsFalse(
+                script.Contains("Math.round(currentPage / (pageCount - 1) * 1000)", StringComparison.Ordinal),
+                "Paged progress math belongs to reflow-reader.js.");
         }
     }
 
