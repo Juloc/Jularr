@@ -39,9 +39,9 @@ Desktop:
 
 Mobile:
 
-`Bell → large bottom sheet or near-full-height sheet → optional direct action / Alle Benachrichtigungen`
+`Bell → vollständiges Notification Center`
 
-The Quick View is intentionally shallow.
+The Quick View is intentionally shallow and is a Desktop/large-screen convenience surface. On a phone, a nearly full-screen preview would duplicate the Notification Center without saving meaningful navigation or space.
 
 ## Bell placement
 
@@ -102,11 +102,11 @@ Desktop:
 
 Mobile:
 
-- selecting the Bell opens a bottom sheet or near-full-height sheet;
-- swipe/back/close affordance dismisses it;
-- the underlying page context remains preserved.
+- selecting the Bell navigates directly to the full Notification Center;
+- normal back navigation returns to the previous screen;
+- do not insert an intermediate bottom sheet that duplicates the same inbox rows and actions.
 
-Do not navigate directly away from the current screen merely to inspect recent notifications.
+Desktop preserves context with the Quick View. Mobile prefers the full Center because the available viewport no longer gives a compact preview a real UX advantage.
 
 ## Quick View hierarchy
 
@@ -134,8 +134,7 @@ Show a small bounded set of recent visible inbox items.
 
 Target:
 
-- approximately 4–6 items on Desktop;
-- approximately 5–8 items in the larger Mobile sheet depending on screen height.
+- approximately 4–6 items on Desktop/large-screen Quick View.
 
 The list remains chronological by `LastOccurredAt`.
 
@@ -189,8 +188,6 @@ Desktop popover target:
 
 Descriptions should normally be omitted in Quick View unless essential.
 
-Mobile may allow one additional concise line when space permits.
-
 The Quick View should be rapidly scannable.
 
 ## Primary quick actions
@@ -216,7 +213,7 @@ Rules:
 
 On Desktop, icon-first compact actions are preferred to large text buttons.
 
-On Mobile, use touch-friendly icon/short actions.
+On touch-capable large screens that still use the Quick View, actions remain touch-friendly.
 
 ## Opening an item
 
@@ -347,12 +344,11 @@ Desktop popover:
 - focus returns to trigger;
 - outside-click dismissal does not trap focus incorrectly.
 
-Mobile sheet:
+Mobile Bell:
 
-- has accessible title;
-- focus is constrained appropriately;
-- close/back semantics are clear;
-- touch targets >=44 px.
+- is exposed as a normal accessible navigation control to the Notification Center;
+- retains the unread count in its accessible label;
+- uses normal platform/browser back navigation after entering the Center.
 
 Unread/severity is never communicated by color alone.
 
@@ -369,17 +365,14 @@ Unread/severity is never communicated by color alone.
 
 ### Mobile
 
-- bottom sheet / near-full-height sheet;
-- one column;
-- native-feeling scrolling;
-- compact rows;
-- quick action touch targets remain usable;
-- full Center link fixed or clearly reachable at the bottom;
-- no tiny desktop popover squeezed onto phone.
+- Bell opens the full Notification Center directly;
+- no Quick View overlay/sheet;
+- no tiny Desktop popover squeezed onto phone;
+- the full Center owns mobile scrolling, filtering and actions.
 
 ### Tablet
 
-Use the Desktop popover when space and input model support it; otherwise use the Mobile sheet pattern.
+Use the Desktop Quick View when width and input model give it enough room. At phone-like widths, follow the Mobile rule and open the full Notification Center directly.
 
 ## Visual contract
 
@@ -430,7 +423,8 @@ Current `_NotificationBell.cshtml`:
 The finished implementation should evolve this toward:
 
 - shared injected canonical notification query/service;
-- Bell as a button when Quick View is supported;
+- Bell as a button when Desktop/large-screen Quick View is supported;
+- Bell as direct Center navigation on phone-sized layouts;
 - lazy Quick View loading;
 - full Center link from the Quick View.
 
@@ -445,14 +439,14 @@ The approved reference should be uploaded as:
 Expected composition:
 
 - Light Mode;
-- one Desktop Jularr screen showing the Bell Quick View open;
-- one realistic Mobile phone showing the notification sheet open;
+- one Desktop Jularr screen with the Bell Quick View open and visibly anchored to the global Bell;
 - unread badge;
 - approximately 4–6 representative recent items;
 - media artwork where appropriate;
 - semantic icons for non-media events;
 - at least one Play/Read/Start/Details quick action;
 - clear `Alle Benachrichtigungen` footer;
-- no filters/dashboard widgets inside the Quick View.
+- no filters/dashboard widgets inside the Quick View;
+- optional small Mobile shell reference may show Bell + unread badge only, because tapping it opens the already-specified full Notification Center rather than a second Mobile Quick View.
 
 The image is a visual reference only. This specification remains the binding behavioral contract.
