@@ -27,7 +27,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/dev' }}
 
 env:
   DOTNET_NOLOGO: true
@@ -37,6 +37,59 @@ env:
   IMAGE_ARTIFACT: jularr-image
 
 jobs:
+  release-info:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      is_release: ${{ steps.release.outputs.is_release }}
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Resolve release intent
+        id: release
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref }}
+          RELEASE_INPUT: ${{ inputs.release || false }}
+        run: |
+          set -euo pipefail
+          VERSION_FILE="src/Jularr.Web/Jularr.Web.csproj"
+          IS_RELEASE=false
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" && "${REF_NAME}" == "refs/heads/main" && "${RELEASE_INPUT}" == "true" ]]; then
+            IS_RELEASE=true
+          elif [[ "${EVENT_NAME}" == "push" && "${REF_NAME}" == "refs/heads/main" ]] \
+            && git rev-parse --verify HEAD^ >/dev/null 2>&1 \
+            && ! git diff --quiet HEAD^ HEAD -- "${VERSION_FILE}"; then
+            IS_RELEASE=true
+          fi
+
+          echo "is_release=${IS_RELEASE}" >> "${GITHUB_OUTPUT}"
+          if [[ "${IS_RELEASE}" != "true" ]]; then
+            echo "version=" >> "${GITHUB_OUTPUT}"
+            echo "tag=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          VERSION="$(python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("src/Jularr.Web/Jularr.Web.csproj").getroot()
+          version = root.findtext(".//Version")
+          if not version:
+              raise SystemExit("Jularr.Web.csproj has no Version.")
+          print(version.strip())
+          PY
+          )"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
+
   build-test:
     runs-on: ubuntu-latest
     # Tests run against a real PostgreSQL with an isolated database per test (#570), which is
@@ -61,6 +114,7 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 15
+          --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=2147483648
 
     steps:
       - uses: actions/checkout@v5
@@ -89,7 +143,84 @@ jobs:
 
       - run: dotnet restore Jularr.sln
       - run: dotnet build Jularr.sln --no-restore --configuration Release
-      - run: dotnet test Jularr.sln --no-build --configuration Release
+      - name: Run tests in three PostgreSQL-isolated shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIST_FILE="${RUNNER_TEMP}/jularr-tests.list"
+          SHARD_DIR="${RUNNER_TEMP}/jularr-test-shards"
+          mkdir -p "${SHARD_DIR}"
+
+          dotnet test tests/Jularr.Tests/Jularr.Tests.csproj \
+            --no-build --configuration Release --list-tests > "${LIST_FILE}"
+
+          python3 - "${LIST_FILE}" "${SHARD_DIR}" <<'PY'
+          from collections import Counter
+          from pathlib import Path
+          import sys
+
+          list_file = Path(sys.argv[1])
+          shard_dir = Path(sys.argv[2])
+          lines = list_file.read_text().splitlines()
+          try:
+              start = next(i for i, line in enumerate(lines) if "The following Tests are available:" in line) + 1
+          except StopIteration:
+              raise SystemExit("dotnet test --list-tests did not return a test list")
+
+          tests = [line.strip() for line in lines[start:] if line.startswith(("    ", "\t")) and line.strip()]
+          if not tests:
+              raise SystemExit("No tests discovered")
+
+          counts = Counter()
+          for test in tests:
+              base = test.split("(", 1)[0].strip()
+              if "." not in base:
+                  raise SystemExit(f"Cannot derive test class from: {test}")
+              class_name = base.rsplit(".", 1)[0]
+              counts[class_name] += 1
+
+          shard_count = 3
+          shards = [[] for _ in range(shard_count)]
+          loads = [0] * shard_count
+          for class_name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+              target = min(range(shard_count), key=lambda i: loads[i])
+              shards[target].append(class_name)
+              loads[target] += count
+
+          if sum(loads) != len(tests):
+              raise SystemExit("Shard planning lost tests")
+
+          for index, classes in enumerate(shards):
+              if not classes:
+                  raise SystemExit(f"Shard {index + 1} is empty")
+              filter_expression = "|".join(f"FullyQualifiedName~{name}." for name in classes)
+              (shard_dir / f"filter-{index + 1}.txt").write_text(filter_expression)
+
+          print(f"Discovered {len(tests)} tests across {len(counts)} classes; shard loads: {loads}")
+          PY
+
+          pids=()
+          for shard in 1 2 3; do
+            filter="$(cat "${SHARD_DIR}/filter-${shard}.txt")"
+            (
+              dotnet test tests/Jularr.Tests/Jularr.Tests.csproj \
+                --no-build --configuration Release \
+                --filter "${filter}" \
+                --logger "console;verbosity=minimal"
+            ) > "${SHARD_DIR}/shard-${shard}.log" 2>&1 &
+            pids+=("$!")
+          done
+
+          status=0
+          for index in 0 1 2; do
+            shard=$((index + 1))
+            if ! wait "${pids[${index}]}"; then
+              status=1
+            fi
+            echo "===== test shard ${shard} ====="
+            cat "${SHARD_DIR}/shard-${shard}.log"
+          done
+          exit "${status}"
 
       - name: Validate single-container Compose
         run: |
@@ -114,7 +245,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build Docker image
+      - name: Build Docker image and refresh dev cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -122,7 +254,17 @@ jobs:
           load: true
           tags: ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha,scope=jularr-docker
-          cache-to: type=gha,mode=max,scope=jularr-docker
+          cache-to: type=gha,mode=min,scope=jularr-docker
+
+      - name: Build Docker image
+        if: github.event_name != 'push' || github.ref != 'refs/heads/dev'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: src/Jularr.Web/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=jularr-docker
 
       - name: Start PostgreSQL for smoke tests
         run: |
@@ -309,10 +451,9 @@ jobs:
           retention-days: 1
 
   publish:
-    if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release)
+    if: needs.release-info.outputs.is_release == 'true'
     needs:
+      - release-info
       - build-test
       - image
     runs-on: ubuntu-latest
@@ -320,53 +461,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      is_release: ${{ steps.release_commit.outputs.is_release }}
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-          fetch-depth: 2
-
-      - name: Detect release version change
-        id: release_commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION_FILE="src/Jularr.Web/Jularr.Web.csproj"
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
-          elif ! git rev-parse --verify HEAD^ >/dev/null 2>&1; then
-            echo "is_release=false" >> "$GITHUB_OUTPUT"
-          elif ! git diff --quiet HEAD^ HEAD -- "${VERSION_FILE}"; then
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_release=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-
-      - name: Resolve release version
-        if: steps.release_commit.outputs.is_release == 'true'
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="$(python3 - <<'PY'
-          import xml.etree.ElementTree as ET
-          root = ET.parse("src/Jularr.Web/Jularr.Web.csproj").getroot()
-          version = root.findtext(".//Version")
-          if not version:
-              raise SystemExit("Jularr.Web.csproj has no Version.")
-          print(version.strip())
-          PY
-          )"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
-
       - name: Download tested image
         uses: actions/download-artifact@v8
         with:
@@ -395,28 +491,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish commit and latest image
+      - name: Publish commit, latest and versioned images
+        env:
+          VERSION: ${{ needs.release-info.outputs.version }}
         run: |
           set -euo pipefail
+          test -n "${VERSION}"
           docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:latest"
+          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:${VERSION}"
           docker push "${IMAGE}:${GITHUB_SHA}"
           docker push "${IMAGE}:latest"
-
-      - name: Publish versioned image
-        if: steps.release_commit.outputs.is_release == 'true'
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:${VERSION}"
           docker push "${IMAGE}:${VERSION}"
 
   release:
-    if: >-
-      needs.publish.outputs.is_release == 'true' &&
-      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release))
+    if: needs.release-info.outputs.is_release == 'true'
     needs:
+      - release-info
       - publish
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -428,8 +518,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.publish.outputs.tag }}
-          VERSION: ${{ needs.publish.outputs.version }}
+          RELEASE_TAG: ${{ needs.release-info.outputs.tag }}
+          VERSION: ${{ needs.release-info.outputs.version }}
         run: |
           set -euo pipefail
           test -n "${VERSION}"
@@ -439,20 +529,41 @@ jobs:
             --prerelease \
             --generate-notes
 
-  # Reuse the Android release workflow only after the prerelease exists. This
-  # avoids a separate workflow_run event for every CI run (most of which used
-  # to do no work), while still attaching signed APKs to real releases.
   android-release:
-    if: >-
-      needs.publish.outputs.is_release == 'true' &&
-      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release))
+    if: needs.release-info.outputs.is_release == 'true'
     needs:
-      - publish
-      - release
+      - release-info
     uses: ./.github/workflows/android.yml
     with:
       release: true
+      attach: false
     secrets: inherit
     permissions:
       contents: write
+
+  attach-android-release:
+    if: needs.release-info.outputs.is_release == 'true'
+    needs:
+      - release-info
+      - release
+      - android-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download signed Android release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: jularr-android-release-assets
+          path: dist
+
+      - name: Attach Android assets to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.release-info.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "${RELEASE_TAG}" dist/*.apk dist/*.sha256 --clobber

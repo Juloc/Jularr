@@ -4,9 +4,14 @@ on:
   workflow_call:
     inputs:
       release:
-        description: "Build and attach signed APKs to the current Jularr release"
+        description: "Build signed APKs for the current Jularr release"
         required: false
         default: false
+        type: boolean
+      attach:
+        description: "Attach signed APKs to an already-created GitHub release"
+        required: false
+        default: true
         type: boolean
   workflow_dispatch:
 
@@ -150,13 +155,14 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
 
-          if [[ "${RELEASE_INPUT}" == "true" ]]; then
+          if [[ "${RELEASE_INPUT}" == "true" && "${ATTACH_INPUT}" == "true" ]]; then
             gh release view "v${VERSION}" >/dev/null
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           RELEASE_INPUT: ${{ inputs.release }}
+          ATTACH_INPUT: ${{ inputs.attach }}
 
       - name: Stamp Android package version
         if: steps.release_commit.outputs.is_release == 'true'
@@ -224,6 +230,17 @@ jobs:
           sign_apk "${MOBILE_UNSIGNED}" "Jularr-Mobile-${VERSION}"
           sign_apk "${TV_UNSIGNED}" "Jularr-TV-${VERSION}"
 
+      - name: Upload signed release assets
+        if: steps.release_commit.outputs.is_release == 'true' && inputs.release == true
+        uses: actions/upload-artifact@v7
+        with:
+          name: jularr-android-release-assets
+          if-no-files-found: error
+          path: |
+            dist/*.apk
+            dist/*.sha256
+          retention-days: 1
+
       - name: Upload signed APKs for manual test
         if: steps.release_commit.outputs.is_release == 'true' && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
@@ -235,7 +252,7 @@ jobs:
             dist/*.sha256
 
       - name: Attach Android assets to GitHub release
-        if: steps.release_commit.outputs.is_release == 'true' && github.event_name != 'workflow_dispatch'
+        if: steps.release_commit.outputs.is_release == 'true' && inputs.release == true && inputs.attach == true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
