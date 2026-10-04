@@ -18,6 +18,7 @@ public sealed class LibraryModel(
     BookCatalogService books,
     CurrentAccountContext account,
     BackgroundJobQueue jobs,
+    BookTranslationJobs translationJobs,
     ILogger<LibraryModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
@@ -27,6 +28,17 @@ public sealed class LibraryModel(
     public bool SourceIsTarget { get; private set; }
     public LanguageEditionSelectorModel LanguageEdition { get; private set; } = null!;
     public bool IsOwner => account.IsOwner;
+
+    /// <summary>The latest whole-book translation run into <see cref="TargetLanguage"/>; idle for the original language.</summary>
+    public BookTranslationJob TranslationJob { get; private set; } = BookTranslationJob.None;
+
+    public string SourceLanguage => GetSourceLanguage(Book.Work);
+
+    /// <summary>Chapters (pages of a PDF) with a current translation into <see cref="TargetLanguage"/>.</summary>
+    public int TranslatedCount => Book.Chapters.Count(x => x.HasTranslation);
+
+    /// <summary>The original and every language that has a translation, plus the selected one, for the Editions &amp; Languages card.</summary>
+    public IReadOnlyList<LibraryEditionRow> EditionRows { get; private set; } = [];
 
     /// <summary>A PDF book: its chapters are its pages, which the page lists in ranges.</summary>
     public bool IsPdf => BookFileFormats.IsPdf(Book.Work);
@@ -79,7 +91,22 @@ public sealed class LibraryModel(
             PdfAnalysis = await books.GetPdfAnalysisAsync(id, cancellationToken);
         }
 
-        LanguageEdition =BookLanguageEditionSelectorFactory.Create(
+        if (!SourceIsTarget)
+        {
+            TranslationJob = await translationJobs.GetAsync(id, TargetLanguage, cancellationToken);
+        }
+
+        EditionRows = Book.TranslationCoverage
+            .Select(x => new LibraryEditionRow(x.Language, false, x.TranslatedChapters))
+            .Where(x => !x.Code.Equals(SourceLanguage, StringComparison.OrdinalIgnoreCase))
+            .Prepend(new LibraryEditionRow(SourceLanguage, true, Book.Chapters.Count))
+            .ToList();
+        if (!EditionRows.Any(x => x.Code.Equals(TargetLanguage, StringComparison.OrdinalIgnoreCase)))
+        {
+            EditionRows = [.. EditionRows, new LibraryEditionRow(TargetLanguage, false, 0)];
+        }
+
+        LanguageEdition = BookLanguageEditionSelectorFactory.Create(
             "book-language-edition",
             Book.Work.MetadataTitle ?? Book.Work.Title,
             GetSourceLanguage(Book.Work),
@@ -94,135 +121,19 @@ public sealed class LibraryModel(
         return Page();
     }
 
-    public async Task<IActionResult> OnPostTranslateBookAsync(
-        Guid id,
-        string? lang,
-        CancellationToken cancellationToken)
+    /// <summary>Starts, continues or retries the translation: chapters and chunks that are already cached are kept and skipped.</summary>
+    public Task<IActionResult> OnPostTranslateBookAsync(Guid id, string? lang, CancellationToken cancellationToken) =>
+        QueueTranslationAsync(id, lang, discardExisting: false, "books.library.translationQueued", cancellationToken);
+
+    /// <summary>Redo: deletes the cached translation of this book and language, then translates from the start.</summary>
+    public async Task<IActionResult> OnPostRegenerateAsync(Guid id, string? lang, CancellationToken cancellationToken)
     {
-        var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        if (!await ResolveTranslationEnabledAsync(id, cancellationToken))
-        {
-            return Forbid();
-        }
-
-        var targetLanguage = BookLanguageCatalog.Normalize(lang);
-
-        var detail = await books.GetLibraryBookAsync(
-            id,
-            account.ProfileId,
-            targetLanguage,
-            cancellationToken);
-
-        if (detail is null)
-        {
-            return NotFound();
-        }
-
-        var sourceLanguage = GetSourceLanguage(detail.Work);
-        if (sourceLanguage.Equals(
-                targetLanguage,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            TempData["Status"] = ui["books.library.alreadyInLanguage"];
-            return RedirectToPage(new { id, lang = targetLanguage });
-        }
-
-        await jobs.QueueAsync(
-            new OperationDescriptor(
-                "book-translation",
-                "Translation",
-                "Translate book",
-                detail.Work.MetadataTitle ?? detail.Work.Title,
-                account.ProfileId,
-                OperationLane.Normal,
-                Retryable: true),
-            async (operation, services, workerToken) =>
-            {
-                await operation.ReportAsync(
-                    5,
-                    $"Translating book to {BookLanguageCatalog.GetName(targetLanguage)}.",
-                    cancellationToken: workerToken);
-
-                var service = services.GetRequiredService<BookCatalogService>();
-                await service.TranslateBookAsync(
-                    id,
-                    targetLanguage,
-                    workerToken);
-
-                await operation.ReportAsync(
-                    100,
-                    "Book translation completed.",
-                    cancellationToken: workerToken);
-            },
-            cancellationToken);
-
-        TempData["Status"] = ui.Format(
-            "books.library.translationQueued",
-            ("language", BookLanguageCatalog.GetName(targetLanguage)));
-
-        return RedirectToPage(new { id, lang = targetLanguage });
-    }
-
-    public async Task<IActionResult> OnPostRegenerateAsync(
-        Guid id,
-        string? lang,
-        CancellationToken cancellationToken)
-    {
-        var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
         if (!account.IsOwner)
         {
             return Forbid();
         }
 
-        if (!await ResolveTranslationEnabledAsync(id, cancellationToken))
-        {
-            return Forbid();
-        }
-
-        var targetLanguage = BookLanguageCatalog.Normalize(lang);
-        var detail = await books.GetLibraryBookAsync(
-            id,
-            account.ProfileId,
-            targetLanguage,
-            cancellationToken);
-
-        if (detail is null)
-        {
-            return NotFound();
-        }
-
-        var sourceLanguage = GetSourceLanguage(detail.Work);
-        if (sourceLanguage.Equals(
-                targetLanguage,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            TempData["Status"] = ui["books.library.isOriginalLanguage"];
-            return RedirectToPage(new { id, lang = targetLanguage });
-        }
-
-        await books.ClearBookTranslationsAsync(
-            id,
-            targetLanguage,
-            cancellationToken);
-
-        await jobs.QueueAsync(
-            async (services, workerToken) =>
-            {
-                var service = services.GetRequiredService<BookCatalogService>();
-                await service.TranslateBookAsync(
-                    id,
-                    targetLanguage,
-                    workerToken);
-            },
-            cancellationToken);
-
-        TempData["Status"] = ui.Format(
-            "books.library.regenerateQueued",
-            ("language", BookLanguageCatalog.GetName(targetLanguage)));
-
-        return RedirectToPage(new { id, lang = targetLanguage });
+        return await QueueTranslationAsync(id, lang, discardExisting: true, "books.library.regenerateQueued", cancellationToken);
     }
 
     public async Task<IActionResult> OnPostReanalyzePdfAsync(
@@ -299,6 +210,45 @@ public sealed class LibraryModel(
         }
     }
 
+    private async Task<IActionResult> QueueTranslationAsync(
+        Guid id,
+        string? lang,
+        bool discardExisting,
+        string queuedKey,
+        CancellationToken cancellationToken)
+    {
+        var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (!await ResolveTranslationEnabledAsync(id, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var targetLanguage = BookLanguageCatalog.Normalize(lang);
+        var detail = await books.GetLibraryBookAsync(id, account.ProfileId, targetLanguage, cancellationToken);
+        if (detail is null)
+        {
+            return NotFound();
+        }
+
+        if (GetSourceLanguage(detail.Work).Equals(targetLanguage, StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["Status"] = ui["books.library.alreadyInLanguage"];
+            return RedirectToPage(new { id, lang = targetLanguage });
+        }
+
+        var queued = await translationJobs.QueueAsync(
+            id,
+            detail.Work.MetadataTitle ?? detail.Work.Title,
+            targetLanguage,
+            account.ProfileId,
+            discardExisting,
+            cancellationToken);
+        TempData["Status"] = queued
+            ? ui.Format(queuedKey, ("language", BookLanguageCatalog.GetName(targetLanguage)))
+            : ui["books.library.translationAlreadyRunning"];
+        return RedirectToPage(new { id, lang = targetLanguage });
+    }
+
     private static string GetSourceLanguage(
         Jularr.Web.Features.Novels.NovelWork work) =>
         BookFileFormats.Language(work.Format) ?? "en";
@@ -318,3 +268,6 @@ public sealed class LibraryModel(
             contentKey: null,
             cancellationToken);
 }
+
+/// <summary>One language of a book in the Editions &amp; Languages card; the original counts all of its chapters as available.</summary>
+public sealed record LibraryEditionRow(string Code, bool IsOriginal, int TranslatedUnits);

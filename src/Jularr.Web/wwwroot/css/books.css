@@ -323,23 +323,6 @@
     background: currentColor;
 }
 
-.book-language-row {
-    display: flex;
-    align-items: end;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 18px;
-}
-
-.book-translation-summary {
-    display: grid;
-    gap: 7px;
-    margin-top: 14px;
-    max-width: 420px;
-    color: var(--muted);
-    font-size: 13px;
-}
-
 .book-chapter-list {
     width: min(900px, 100%);
     margin-inline: auto;
@@ -477,54 +460,13 @@
 }
 
 
-.book-library-management {
-    margin: 1rem 0 1.25rem;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface-2);
-}
-
-.book-library-management > summary {
-    padding: .75rem .9rem;
-    cursor: pointer;
-    font-weight: 600;
-    user-select: none;
-}
-
-.book-library-management[open] > summary {
-    border-bottom: 1px solid var(--border);
-}
-
-.book-library-management-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .65rem;
-    padding: .85rem .9rem .35rem;
-}
-
-.book-library-management > p {
-    margin: 0;
-    padding: .35rem .9rem .85rem;
-    color: var(--muted);
-    font-size: .875rem;
-}
-
 .book-danger-button {
     border-color: color-mix(in srgb, var(--danger-text) 55%, transparent);
     color: var(--danger-text);
 }
 
-@media (max-width: 640px) {
-    .book-library-management-actions,
-    .book-library-management-actions form,
-    .book-library-management-actions .button {
-        width: 100%;
-    }
-}
-
-
-/* Reader detail: the primary reading state is visible without exposing the
-   owner-only controls that live below the header. */
+/* Reading detail (docs/mockups/reading-detail/SPEC.md): artwork-led hero, then the main list with a side column for
+   the translation controls. The hero backdrop is the book's own cover, blurred; without a cover it stays plain. */
 .book-reading-hero {
     position: relative;
     isolation: isolate;
@@ -539,19 +481,283 @@
 .book-reading-hero::before {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: -40px;
     z-index: -1;
-    opacity: .34;
-    background: url("/brand/hero-torii.webp") right center / cover no-repeat;
-    -webkit-mask-image: linear-gradient(90deg, transparent 26%, #000 100%);
-    mask-image: linear-gradient(90deg, transparent 26%, #000 100%);
+    background: var(--hero-cover, none) center / cover no-repeat;
+    opacity: .22;
+    filter: blur(36px) saturate(1.3);
     pointer-events: none;
 }
 
-:root[data-app-theme="dark"] .book-reading-hero::before {
-    filter: invert(1) hue-rotate(180deg) brightness(.8);
+.book-detail-cover {
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .18);
 }
 
+.book-reading-primary-actions {
+    flex-wrap: wrap;
+}
+
+.book-reading-primary-actions .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.book-reading-primary-actions .offline-library-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.book-reading-primary-actions [data-offline-save-status] {
+    font-size: 13px;
+}
+
+/* The shared facts strip is a card on other pages; inside the hero it is only a row. */
+:root[data-app-theme-id] .book-reading-hero .media-facts {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+}
+
+.book-cover-placeholder,
+.book-detail-cover > .book-cover-placeholder {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    padding: 14px;
+    box-sizing: border-box;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.3;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.book-detail-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    grid-template-areas: "main side";
+    gap: 28px;
+    align-items: start;
+    margin-top: 28px;
+}
+
+.book-detail-body > .book-chapter-list {
+    grid-area: main;
+    width: 100%;
+    margin: 0;
+}
+
+.book-detail-side {
+    grid-area: side;
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+
+.book-side-card {
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow-card);
+}
+
+.book-side-card h2,
+.book-chapter-list .books-results-heading h2 {
+    margin: 0 0 12px;
+    font-size: 18px;
+}
+
+.book-chapter-list .books-results-heading h2 {
+    margin: 0;
+    color: var(--text);
+}
+
+.book-edition-list {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 0;
+    list-style: none;
+}
+
+.book-edition-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 8px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.book-edition-row:hover {
+    background: var(--surface-2);
+}
+
+.book-edition-row[aria-current="true"] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.book-edition-name {
+    font-weight: 700;
+}
+
+.book-edition-tag {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--warning-text) 14%, transparent);
+    color: var(--warning-text);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.book-edition-tag[data-provenance="official"] {
+    background: color-mix(in srgb, var(--success-text) 14%, transparent);
+    color: var(--success-text);
+}
+
+.book-edition-state {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.book-translation-control {
+    display: grid;
+    gap: 10px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.book-translation-control p {
+    margin: 0;
+}
+
+.book-translation-status {
+    font-weight: 700;
+}
+
+.book-translation-count,
+.book-translation-note {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.book-translation-error {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    color: var(--danger-text);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.book-translation-control[data-state="failed"] .book-translation-status {
+    color: var(--danger-text);
+}
+
+.book-translation-control .book-card-progress {
+    height: 6px;
+    color: var(--accent);
+}
+
+.book-translation-actions,
+.book-manage-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.book-translation-actions form,
+.book-manage-actions form {
+    margin: 0;
+}
+
+.book-translation-control .button,
+.book-manage-actions .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.book-manage-note {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.book-manage-actions + .book-manage-note {
+    margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+    .book-detail-body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "side" "main";
+        gap: 20px;
+    }
+}
+
+/* Phones: cover beside title and author, everything else (actions, facts) across the full card width. */
+@media (max-width: 640px) {
+    .book-reading-hero .book-detail-copy {
+        display: contents;
+    }
+
+    .book-reading-hero {
+        grid-template-rows: auto auto auto 1fr;
+    }
+
+    .book-reading-hero .book-detail-cover {
+        grid-row: 1 / span 4;
+    }
+
+    .book-reading-hero .reading-detail-kicker,
+    .book-reading-hero .book-detail-copy > h1,
+    .book-reading-hero .book-author {
+        grid-column: 2;
+        align-self: start;
+    }
+
+    .book-reading-hero .book-detail-copy > :not(.reading-detail-kicker, h1, .book-author) {
+        grid-column: 1 / -1;
+    }
+
+    .book-detail-cover > .book-cover-placeholder {
+        padding: 8px;
+        font-size: 11px;
+    }
+
+    .book-reading-primary-actions {
+        margin-top: 4px;
+    }
+
+    .book-reading-primary-actions > .button,
+    .book-reading-primary-actions > .language-edition-trigger {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
+
+    .book-translation-actions > form {
+        flex: 1 1 100%;
+    }
+
+    .book-translation-actions .button {
+        width: 100%;
+        justify-content: center;
+    }
+}
 .reading-detail-kicker {
     display: flex;
     flex-wrap: wrap;
@@ -571,12 +777,6 @@
 
 .book-reading-primary-actions {
     margin-top: 18px;
-}
-
-.book-reading-language-row {
-    margin-top: 24px;
-    padding-top: 18px;
-    border-top: 1px solid var(--border);
 }
 
 .reading-progress-card {
@@ -635,12 +835,6 @@
 @media (max-width: 640px) {
     .book-reading-hero {
         padding: 16px;
-    }
-
-    .book-reading-hero::before {
-        opacity: .2;
-        -webkit-mask-image: linear-gradient(180deg, #000, transparent 70%);
-        mask-image: linear-gradient(180deg, #000, transparent 70%);
     }
 
     .reading-detail-kicker {

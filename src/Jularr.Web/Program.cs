@@ -682,6 +682,7 @@ builder.Services.AddHostedService<ChapterArtworkAutoGenerator>();
 builder.Services.AddScoped<AiSentenceExplanationService>();
 
 builder.Services.AddSingleton<BackgroundJobQueue>();
+builder.Services.AddScoped<BookTranslationJobs>();
 builder.Services.AddHostedService<BackgroundJobWorker>();
 builder.Services.AddSingleton<PlaybackJobQueue>();
 builder.Services.AddHostedService<PlaybackJobWorker>();

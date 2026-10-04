@@ -59,7 +59,7 @@ public static class BookLanguageEditionSelectorFactory
             }
 
             var action = !isComplete && translationEnabled
-                ? new EditionAction(ui["languageEdition.translate"], translateUrl, new Dictionary<string, string> { ["lang"] = language.Code })
+                ? new EditionAction(translated > 0 ? ui["books.library.continueTranslation"] : ui["languageEdition.translate"], translateUrl, new Dictionary<string, string> { ["lang"] = language.Code })
                 : null;
             var progress = translated > 0 && !isComplete
                 ? ui.Format(isPdf ? "books.library.pagesTranslated" : "books.library.chaptersTranslated", ("translated", translated), ("total", totalChapters))

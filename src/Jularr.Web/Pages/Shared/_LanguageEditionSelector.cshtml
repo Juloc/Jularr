@@ -14,6 +14,7 @@
 @{
     var ui = Model.Ui;
     var titleId = $"{Model.Id}-title";
+    var chipCodes = Model.Editions.Where(x => x.State != EditionState.Unavailable).Select(x => x.LanguageCode).Append(Model.CurrentLanguageCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
     var statusLabels = new Dictionary<EditionState, string>
     {
         [EditionState.Current] = ui["languageEdition.state.current"],
@@ -30,6 +31,7 @@
         data-language-edition-open="@Model.Id"
         aria-haspopup="dialog"
         aria-controls="@Model.Id">
+    <partial name="_ReaderIcon" model="@("translate")" />
     <span>@ui["languageEdition.title"]</span>
     <strong>@Model.CurrentLanguage.Name</strong>
 </button>
@@ -43,21 +45,33 @@
             <h2 id="@titleId">@ui["languageEdition.title"]</h2>
             <p>@Model.WorkTitle</p>
         </div>
-        <form method="dialog"><button class="button" type="submit">@ui["languageEdition.close"]</button></form>
+        <form method="dialog">
+            <button class="language-edition-close" type="submit" aria-label="@ui["languageEdition.close"]">
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
+            </button>
+        </form>
     </div>
 
-    <label class="language-edition-language">
-        <span>@ui["languageEdition.language"]</span>
-        <select data-language-edition-language>
+    <div class="language-edition-language">
+        <span class="language-edition-section" id="@Model.Id-language">@ui["languageEdition.language"]</span>
+        <div class="language-edition-chips" role="group" aria-labelledby="@Model.Id-language">
+            @foreach (var language in Model.Languages.Where(x => chipCodes.Contains(x.Code)))
+            {
+                var pressed = language.Code.Equals(Model.CurrentLanguageCode, StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+                <button type="button" class="language-edition-chip" data-language-edition-chip="@language.Code" aria-pressed="@pressed">@language.Name</button>
+            }
+        </div>
+        <select data-language-edition-language aria-labelledby="@Model.Id-language">
             @foreach (var language in Model.Languages)
             {
                 <option value="@language.Code" selected="@(language.Code.Equals(Model.CurrentLanguageCode, StringComparison.OrdinalIgnoreCase))">@language.Name</option>
             }
         </select>
-    </label>
+    </div>
 
     <p class="language-edition-error" role="alert" data-language-edition-error hidden></p>
 
+    <h3 class="language-edition-section">@ui["languageEdition.editions"]</h3>
     <ul class="language-edition-list">
         @foreach (var edition in Model.Editions)
         {
@@ -65,6 +79,7 @@
             var provenanceLabel = edition.Provenance == EditionProvenance.Official ? ui["languageEdition.official"] : ui["languageEdition.generated"];
             var stateLabel = statusLabels[edition.State];
             var rowLabel = ui.Format("languageEdition.rowLabel", ("title", edition.Title), ("provenance", provenanceLabel), ("state", stateLabel));
+            var isCurrent = edition.State == EditionState.Current;
             <li class="language-edition-row"
                 data-language-edition-row
                 data-language="@edition.LanguageCode"
@@ -77,12 +92,13 @@
                        href="@edition.SelectUrl"
                        data-edition-key="@edition.Key"
                        aria-label="@rowLabel"
-                       aria-current="@(edition.State == EditionState.Current ? "true" : null)">
+                       aria-current="@(isCurrent ? "true" : null)">
                         <span class="language-edition-name">@edition.Title</span>
                         <span class="language-edition-tag" data-provenance="@edition.Provenance.ToString().ToLowerInvariant()">@provenanceLabel</span>
                         <span class="language-edition-description">@edition.Description</span>
                         <span class="language-edition-state">@(edition.Progress ?? stateLabel)</span>
                     </a>
+                    <span class="language-edition-radio" data-checked="@(isCurrent ? "true" : "false")" aria-hidden="true"></span>
                 }
                 else
                 {
