@@ -55,7 +55,7 @@ public sealed class LocalFirstPageGetTests
             aniListId: "321",
             chapters: 3);
         await fixture.SaveMangaProgressAsync(seriesId, chapterIds[1], pageIndex: 4);
-        var page = fixture.Attach(new MangaReadModel(fixture.Db, fixture.OwnerAccount, fixture.WorkBridge()));
+        var page = fixture.Attach(new MangaReadModel(fixture.Db, fixture.OwnerAccount, new WorkQueryService(fixture.Db), fixture.WorkBridge()));
 
         var result = await page.OnGetAsync(chapterIds[1], null, CancellationToken.None);
 
