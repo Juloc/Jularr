@@ -2,27 +2,6 @@ using Jularr.Web.Features.Events;
 
 namespace Jularr.Web.Features.Notifications;
 
-/// <summary>
-/// Transitional compatibility shape used by the current dispatcher/settings page until #835 Phase 3/5
-/// convert their call sites to the canonical event preference model below. It is no longer persisted.
-/// </summary>
-public enum NotificationMode
-{
-    Off = 0,
-    InApp = 1,
-    Push = 2,
-    Digest = 3
-}
-
-/// <summary>
-/// Transitional compatibility record for the current UI. Canonical persistence is
-/// <see cref="NotificationEventPreference"/>.
-/// </summary>
-public sealed record NotificationSubscription(string ProfileId, JularrEventCategory Category, NotificationMode Mode, DateTime UpdatedAtUtc)
-{
-    public const NotificationMode DefaultMode = NotificationMode.InApp;
-}
-
 /// <summary>One profile's resolved preference for one event category.</summary>
 public sealed record NotificationEventPreference(
     string ProfileId,
