@@ -113,7 +113,7 @@
         themeTintStrength: 1,
         bookmarkStyle: "fabric",
         bookmarkColor: "#b04455",
-        hasBookOverride: false
+        hasWorkOverride: false
     }, readJson("[data-book-settings-json]", {}));
 
     const fontStacks = {
@@ -318,7 +318,7 @@
 
     const scheduleSettingSave = changedKey => {
         const scope = settingsForm?.querySelector('[name="scope"]')?.value || "work";
-        if (scope === "work") settings.hasBookOverride = true;
+        if (scope === "work") settings.hasWorkOverride = true;
         const value = settings[changedKey];
         unsavedEdits.set(changedKey, value);
         settingsSave = settingsSave
