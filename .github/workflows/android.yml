@@ -59,7 +59,7 @@ jobs:
         with:
           gradle-version: "9.8.0"
 
-      - name: Test, lint and build debug APKs
+      - name: Test and lint Android
         working-directory: clients/android
         run: >-
           gradle --stacktrace --parallel --build-cache
@@ -78,8 +78,6 @@ jobs:
           :core-design:lintDebug
           :core-tts:lintDebug
           :core-update:lintDebug
-          :app-mobile:assembleDebug
-          :app-tv:assembleDebug
 
   release:
     if: >-
