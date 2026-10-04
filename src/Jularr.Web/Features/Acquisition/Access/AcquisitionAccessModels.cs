@@ -134,8 +134,8 @@ public sealed record AcquisitionRequest(
     /// <summary>Whether an auto-approval rule (not a person) approved this request.</summary>
     public bool WasAutoApproved => AcquisitionAutoApproval.TryParseRuleId(DecidedByProfileId, out _);
 
-    /// <summary>The richer options the requester chose (anime only); the default options when none were chosen.</summary>
-    public AcquisitionRequestOptions Options => Kind == MediaAcquisitionKind.Anime
+    /// <summary>The richer structured-video options the requester chose; other media use their own payloads.</summary>
+    public AcquisitionRequestOptions Options => Kind is MediaAcquisitionKind.Anime or MediaAcquisitionKind.Tv
         ? AcquisitionRequestOptions.FromPayload(PayloadJson)
         : AcquisitionRequestOptions.Default;
 }
