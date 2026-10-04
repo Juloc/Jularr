@@ -612,6 +612,143 @@ When the next item is not locally ready but user policy allows instant acquisiti
 - keep current/ended context visible;
 - auto-start only after the normal Play/Read acquisition contract says the requested item is ready.
 
+### Offline playback and unavailable next item
+
+Offline playback is not a separate Player.
+
+When the current item has a verified device-local offline package:
+- open the normal Player using the same Work/Structure/Edition/Version/Asset/Track semantics;
+- use the local verified media bytes and packaged tracks;
+- retain the normal timeline, transport, chapters/segments, subtitle and Learning interaction model;
+- store progress through the same canonical MediaProgress/ActiveSession semantics, with local-first persistence when server connectivity is unavailable;
+- synchronize queued progress/session-safe state when connectivity returns;
+- do not create a second offline playback history or offline-only progress owner.
+
+A restrained state indicator may show:
+- **Offline available / Offline verfügbar**; or
+- a small verified-download/check icon.
+
+When playback starts while the server/network is unavailable, a short non-warning status may say:
+
+**Offline-Wiedergabe**  
+`Diese Episode wird von diesem Gerät abgespielt.`
+
+Do not show a large blocking "You are offline" banner while verified local playback is functioning normally.
+
+#### Offline audio / subtitle tracks
+
+Only tracks that are actually usable from the local offline package may be selected while offline.
+
+A track that exists canonically but was not included in the offline package must either:
+- be hidden from the active offline selector; or
+- remain visible with a clear **Nicht offline verfügbar / Not available offline** state.
+
+Do not allow selection and then fail with a generic network error.
+
+Changing locally available tracks must keep using canonical MediaTrack identity and must not create an offline-only track model.
+
+#### Offline Learning
+
+When the downloaded package includes the bounded Learning data required by the current Player interaction:
+- Learning subtitles/cues remain usable offline;
+- supported token/sentence interactions work from the local package;
+- learning writes that are safe offline queue locally and synchronize later through the canonical Learning sync path.
+
+When Learning data was not included:
+- playback remains fully usable;
+- the relevant Learning action is hidden or disabled with concise copy such as **Learning-Daten für diese Episode sind nicht offline verfügbar**;
+- do not block normal subtitles or playback.
+
+#### Local progress while disconnected
+
+During offline playback:
+- position updates persist locally first;
+- completion uses the same canonical completion policy;
+- Mark Watched, where supported, queues through the same canonical path;
+- provider write-back waits for connectivity and remains derived from canonical completed progress;
+- reconnection must not blindly overwrite newer local progress with stale server progress.
+
+A subtle sync-pending state may be exposed in diagnostics/status UI, e.g.:
+`Fortschritt wird synchronisiert, sobald Jularr wieder verbunden ist.`
+
+This is informational, not an error.
+
+#### Next episode/chapter not downloaded
+
+If the current item is locally playable but the canonical next item is **not** locally available and the client is genuinely offline:
+
+- do not start an autoplay countdown that cannot succeed;
+- do not show infinite buffering;
+- do not open a browser/network error page;
+- do not replace the completed item with a generic Player failure.
+
+Instead, keep the current/ended media context visible and show a focused overlay/card:
+
+**Nächste Episode nicht offline verfügbar**  
+`E08 · Together Again`  
+`Diese Episode wurde nicht auf dieses Gerät heruntergeladen.`
+
+Actions:
+- **Downloads anzeigen**;
+- **Schließen**.
+
+When the client is back online and the product permits explicit download from this context, a **Jetzt herunterladen** action may additionally appear. Do not show it while the request cannot actually be started.
+
+For Audiobook/chapter-based audio use equivalent canonical-next wording.
+
+#### Autoplay while offline
+
+If autoplay is enabled but the next canonical item is not offline-ready:
+- cancel/stop the autoplay transition before attempting playback;
+- preserve completion of the current item according to canonical policy;
+- surface the unavailable-next overlay;
+- resume normal autoplay semantics only after a next item becomes genuinely playable.
+
+Do not mark the next item started/completed merely because the autoplay timer fired.
+
+#### Corrupt/incomplete local package
+
+If an item previously appeared downloaded but its local package fails verification or cannot provide a valid playback descriptor:
+
+**Offline-Kopie kann nicht abgespielt werden**
+
+`Die heruntergeladene Datei ist unvollständig oder beschädigt.`
+
+Valid actions, depending on connectivity/capability:
+- **Downloads anzeigen**;
+- **Erneut herunterladen**;
+- **Zurück**.
+
+The item must not remain labeled **Offline verfügbar** once the owning offline contract knows it is invalid.
+
+#### Offline storage removed during playback
+
+If the backing removable/managed storage disappears:
+
+**Offline-Speicher nicht verfügbar**
+
+`Der Speicher mit dieser Episode wurde getrennt.`
+
+Actions:
+- **Erneut prüfen**;
+- **Zurück**.
+
+If already-buffered bytes can continue safely, playback may continue only for the data the client actually holds. Do not imply future media availability once the local source is gone.
+
+#### Offline reference composition
+
+The approved Desktop/Mobile offline reference uses:
+- normal dark media-led Player chrome;
+- Frieren S1 E07 as a verified local item;
+- a restrained **Offline verfügbar** badge;
+- normal transport/timeline at `18:42 / 24:11`;
+- a focused **Nächste Episode nicht offline verfügbar** overlay for E08;
+- Desktop modal/overlay treatment;
+- Mobile bottom-sheet treatment;
+- **Downloads anzeigen** as the primary recovery action.
+
+The reference intentionally does **not** combine corrupt-package, removed-storage, Learning-missing and sync-conflict states into one image.
+
 ## 14. Preparing / loading / partial states
 
 ### Resolving
@@ -807,6 +944,9 @@ Create mockups in this order:
 8. **Error/Preparing reference**  
    One platform reference is enough if state treatment is shared; platform-specific composition rules still apply.
 
+9. **Desktop/Mobile Dark — offline playback reference**  
+   Verified local playback with a restrained Offline-available indicator and a canonical-next item that is not downloaded locally. Desktop uses the focused overlay; Mobile uses the matching bottom sheet.
+
 Do not produce decorative variants before these behavioral references are approved.
 
 ## 22. Data / information contract shown by the UI
@@ -826,7 +966,12 @@ The screen consumes view data derived from:
 - subtitle cues / learning capability;
 - client feature capabilities;
 - asymmetric manual seek policy: **SeekBackSeconds = 10** and **SeekForwardSeconds = 30**;
-- preparing/acquisition state when Play triggered missing-media acquisition.
+- preparing/acquisition state when Play triggered missing-media acquisition;
+- verified local offline-package availability for the current item;
+- locally usable audio/subtitle/Learning package capability while disconnected;
+- canonical-next local availability;
+- local-first progress/sync-pending state when server connectivity is unavailable;
+- local storage availability/verification state.
 
 The Player must not query legacy Anime/Episode-only tables as its permanent source of truth.
 
@@ -856,6 +1001,12 @@ The Player must not query legacy Anime/Episode-only tables as its permanent sour
 - No Auto-Skip enabled by default.
 - No Auto-Skip without a canonical eligible segment marker.
 - No single symmetric seek-step setting that forces backward and forward to use the same duration; the canonical Player contract must support 10 seconds backward and 30 seconds forward independently.
+- No separate Offline Player implementation or offline-only playback progress/session model.
+- No network/server error page while a verified local item is playable.
+- No autoplay attempt, infinite buffering or fake preparing state for a next item that is known not to be locally available while genuinely offline.
+- No selection of audio/subtitle tracks that cannot actually be resolved from the local package while offline.
+- No item labeled **Offline verfügbar** after local verification has determined the package is corrupt/incomplete.
+- No forced online dependency for normal playback, local progress writes or packaged Learning interactions when the required local data exists.
 
 ## 24. Mockup acceptance checklist
 
@@ -882,4 +1033,10 @@ A Player mockup is acceptable only when:
 - preparing/loading/buffering/error states have clear treatment;
 - completion vs resume semantics are not visually conflated;
 - no legacy media model is implied;
-- no control depends on a capability the platform may not have without a fallback state.
+- no control depends on a capability the platform may not have without a fallback state;
+- verified local playback uses the normal Player rather than a separate offline UI;
+- Offline availability is visible but does not dominate working playback;
+- only locally usable tracks are selectable while disconnected;
+- offline progress/completion remain canonical and sync later;
+- unavailable canonical-next content stops autoplay cleanly and exposes **Downloads anzeigen** instead of buffering/network failure;
+- corrupt/incomplete local packages and removed storage have explicit recovery states.
