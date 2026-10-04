@@ -49,7 +49,7 @@ public sealed partial class PdfDerivedDocumentStore
     /// </summary>
     public async Task<PdfDerivedDocument?> TryLoadLatestAsync(string sourceHash, CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(rootPath))
+        if (!Directory.Exists(rootPath) || !HexHash().IsMatch(sourceHash))
         {
             return null;
         }
