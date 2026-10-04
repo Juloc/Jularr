@@ -105,6 +105,21 @@ public sealed class ClientApiOfflinePackageOptionsService(
                 "At least one selected Offline unit does not belong to this target.");
         }
 
+        var targetProvidesUnit = target!.WorkEpisodeId is not null || target.WorkChapterId is not null || target.GameReleaseId is not null;
+        if (scope is ClientApiOfflinePackageContract.SelectedScope or ClientApiOfflinePackageContract.ReleaseScope && unitIds.Length == 0 && !targetProvidesUnit)
+        {
+            return ClientOfflinePackageQueryResult<ClientOfflinePackagePreview>.Invalid(
+                "invalid_offline_scope",
+                "The selected Offline scope requires at least one unit.");
+        }
+
+        if (scope == ClientApiOfflinePackageContract.ReleaseScope && unitIds.Length > 1)
+        {
+            return ClientOfflinePackageQueryResult<ClientOfflinePackagePreview>.Invalid(
+                "invalid_offline_scope",
+                "A Game Offline package targets one canonical release at a time.");
+        }
+
         if (selection.EditionId is { } editionId && !options.Editions.Any(x => x.Id == editionId))
         {
             return ClientOfflinePackageQueryResult<ClientOfflinePackagePreview>.Invalid(
@@ -408,7 +423,12 @@ public sealed class ClientApiOfflinePackageOptionsService(
                 : Array.Empty<Guid>();
         var downloadable = selectedReleases.Length > 0
             ? await db.GameReleaseFiles.AsNoTracking().AnyAsync(x => selectedReleases.Contains(x.GameReleaseId), cancellationToken)
-            : await db.GameReleaseFiles.AsNoTracking().AnyAsync(x => db.GameReleases.AsNoTracking().Where(r => r.GameId == game.Id).Select(r => r.Id).Contains(x.GameReleaseId), cancellationToken);
+            : await (
+                    from file in db.GameReleaseFiles.AsNoTracking()
+                    join release in db.GameReleases.AsNoTracking() on file.GameReleaseId equals release.Id
+                    where release.GameId == game.Id
+                    select file.Id)
+                .AnyAsync(cancellationToken);
         var estimate = await EstimateGameAsync(target, new ClientOfflinePackageSelection(UnitIds: selectedReleases), cancellationToken);
 
         return ClientOfflinePackageQueryResult<ClientOfflinePackageOptions>.Success(new(
@@ -488,9 +508,16 @@ public sealed class ClientApiOfflinePackageOptionsService(
     {
         if (intent == ClientOfflinePackageIntent.Watch)
         {
-            return await db.MediaAssets.AsNoTracking().AnyAsync(
-                x => x.WorkId == workId && x.WorkEpisodeId == workEpisodeId && x.Kind == MediaAssetKind.Video,
-                cancellationToken);
+            if (workEpisodeId is { } episodeId)
+            {
+                return await db.MediaAssets.AsNoTracking().AnyAsync(
+                    x => x.WorkId == workId && x.WorkEpisodeId == episodeId && x.Kind == MediaAssetKind.Video,
+                    cancellationToken);
+            }
+
+            return mediaType == WorkMediaType.Movie
+                ? await db.MediaAssets.AsNoTracking().AnyAsync(x => x.WorkId == workId && x.WorkEpisodeId == null && x.Kind == MediaAssetKind.Video, cancellationToken)
+                : await db.MediaAssets.AsNoTracking().AnyAsync(x => x.WorkId == workId && x.Kind == MediaAssetKind.Video, cancellationToken);
         }
 
         if (intent == ClientOfflinePackageIntent.Read)
@@ -676,7 +703,7 @@ public sealed class ClientApiOfflinePackageOptionsService(
         }
 
         var validCount = await db.GameReleases.AsNoTracking()
-            .CountAsync(x => x.GameId == target.GameId && releaseIds.Contains(x.Id), cancellationToken);
+            .CountAsync(x => x.GameId == target.GameId!.Value && releaseIds.Contains(x.Id), cancellationToken);
         if (validCount != releaseIds.Length)
         {
             return new(ClientApiOfflinePackageContract.UnknownEstimate, null);
