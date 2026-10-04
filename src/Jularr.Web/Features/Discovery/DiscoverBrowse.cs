@@ -209,8 +209,8 @@ public static class DiscoverScopes
     [
         (DiscoveryCategory.All, "discover.categories.all"),
         (DiscoveryCategory.Anime, "discover.categories.anime"),
-        (DiscoveryCategory.Movie, "discover.categories.movie"),
-        (DiscoveryCategory.Series, "discover.categories.tv"),
+        (DiscoveryCategory.Movie, "search.type.movie"),
+        (DiscoveryCategory.Series, "search.type.series"),
         (DiscoveryCategory.BooksAndLightNovels, "discover.categories.booksLightNovels"),
         (DiscoveryCategory.Manga, "reading.manga.title")
     ];
