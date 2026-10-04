@@ -1036,8 +1036,7 @@
             shell.dataset.view === "de" && shell.dataset.hasTranslation === "true"
                 ? "de"
                 : "ja";
-        const position =
-            pageCount <= 1 ? 1000 : Math.round(currentPage / (pageCount - 1) * 1000);
+        const position = pageCount <= 1 ? 1000 : permilleForIndex(currentPage, pageCount);
         const data = new FormData(bookmarkForm);
         setFormValue(data, "positionPermille", position);
         setFormValue(data, "language", language);
