@@ -144,7 +144,56 @@ public static class JularrEventCategories
 
     static JularrEventCategories() => ValidateCatalog();
 
-    public static Meta Of(JularrEventCategory category) => All[category];
+    public static Meta Of(JularrEventCategory category)
+    {
+        if (!Enum.IsDefined(category) || !All.TryGetValue(category, out var meta))
+        {
+            throw new ArgumentOutOfRangeException(nameof(category), category, "Unknown Jularr event category.");
+        }
+
+        return meta;
+    }
+
+    /// <summary>
+    /// Validates one occurrence against the canonical category policy. This boundary is used both by
+    /// <see cref="JularrEvent.Create"/> and the publisher so manually constructed events cannot widen
+    /// audience or change severity before they reach the durable EventLog.
+    /// </summary>
+    public static void ValidateOccurrence(
+        JularrEventCategory category,
+        JularrEventAudience audience,
+        JularrEventSeverity severity,
+        string? profileId)
+    {
+        var meta = Of(category);
+
+        if (audience != meta.Audience)
+        {
+            throw new InvalidOperationException(
+                $"{category} requires audience {meta.Audience}, not {audience}.");
+        }
+
+        if (severity != meta.Severity)
+        {
+            throw new InvalidOperationException(
+                $"{category} requires severity {meta.Severity}, not {severity}.");
+        }
+
+        switch (meta.Audience)
+        {
+            case JularrEventAudience.Profile when string.IsNullOrWhiteSpace(profileId):
+                throw new InvalidOperationException($"{category} requires an explicit profile id.");
+
+            case JularrEventAudience.Admin when profileId is not null:
+                throw new InvalidOperationException($"{category} is Admin-scoped and must not carry a profile id.");
+        }
+    }
+
+    public static void ValidateOccurrence(JularrEvent domainEvent)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+        ValidateOccurrence(domainEvent.Category, domainEvent.Audience, domainEvent.Severity, domainEvent.ProfileId);
+    }
 
     /// <summary>
     /// Validates catalog invariants once at startup/type initialization and is public so focused
@@ -254,11 +303,13 @@ public sealed record JularrEvent(
         Guid? relatedOperationId = null)
     {
         var meta = JularrEventCategories.Of(category);
+        JularrEventCategories.ValidateOccurrence(category, meta.Audience, meta.Severity, profileId);
+
         return new JularrEvent(
             Guid.NewGuid(),
             category,
             meta.Audience,
-            profileId,
+            profileId?.Trim(),
             mediaType,
             subjectId,
             messageParams,
