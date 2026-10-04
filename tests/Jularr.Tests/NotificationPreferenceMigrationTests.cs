@@ -34,6 +34,19 @@ public sealed class NotificationPreferenceMigrationTests
             """);
 
         await migrator.MigrateAsync(TargetMigration);
+
+        await db.Database.OpenConnectionAsync();
+        try
+        {
+            await using var typeCommand = db.Database.GetDbConnection().CreateCommand();
+            typeCommand.CommandText = """SELECT pg_typeof("UpdatedAtUtc")::text FROM "NotificationSubscriptions" LIMIT 1;""";
+            Assert.AreEqual("timestamp with time zone", (string?)await typeCommand.ExecuteScalarAsync());
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
+
         var store = new NotificationSubscriptionStore(db);
 
         var off = await store.GetEventPreferenceAsync("off-profile", JularrEventCategory.ReleaseAvailable);
