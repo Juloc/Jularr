@@ -226,17 +226,7 @@
                         <p class="book-translation-error">@job.Error</p>
                     }
 
-                    @if (!Model.TranslationEnabled)
-                    {
-                        <p class="book-translation-note">
-                            @ui["books.library.translationDisabled"]
-                            @if (Model.IsOwner)
-                            {
-                                <a href="@learningUrl">@ui["books.library.languageToolsLearning"]</a>
-                            }
-                        </p>
-                    }
-                    else if (!job.IsActive)
+                    @if (!job.IsActive)
                     {
                         <div class="book-translation-actions">
                             @if (state != "complete")

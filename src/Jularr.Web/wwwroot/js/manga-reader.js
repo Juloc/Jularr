@@ -582,9 +582,17 @@
         root.dataset.fit = settings.fitWidth ? "width" : "height";
         root.dataset.scheme = settings.scheme;
         root.dataset.sharpen = settings.sharpen ? "true" : "false";
+        root.dataset.readerPanGesture = settings.zoomPercent > 100 ? "true" : "false";
         root.style.setProperty("--manga-zoom", String(settings.zoomPercent / 100));
         root.toggleAttribute("data-zoomed", settings.zoomPercent !== 100);
         root.style.setProperty("--manga-gap", `${settings.gap}px`);
+        root.dispatchEvent(new CustomEvent("jularr:reader-mode", {
+            detail: {
+                readingMode: isPaged() ? "paged" : "continuous",
+                pageDirection: direction,
+                immersive: true
+            }
+        }));
     };
 
     const render = () => {
@@ -648,7 +656,9 @@
     };
 
     const setChrome = visible => {
-        root.classList.toggle("manga-chrome-hidden", !visible);
+        root.dispatchEvent(new CustomEvent("jularr:reader-chrome", {
+            detail: { visible }
+        }));
     };
 
     // ---- Mode and settings changes ------------------------------------------
@@ -866,97 +876,8 @@
 
     root.addEventListener("jularr:reader-contents", () => setChrome(true));
 
-    document.addEventListener("keydown", event => {
-        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-        const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("input, textarea, select, [contenteditable='true'], .reader-menu, .reader-contents")) return;
-        if (root.dataset.readerMenuOpen) return;
-        if ((event.key === " " || event.key === "Enter") &&
-            target?.closest("a, button, summary, [role='button']")) return;
-
-        const scrolling = mode === "continuous" || mode === "webtoon";
-        switch (event.key) {
-            case "ArrowLeft":
-            case "ArrowRight": {
-                if (scrolling) return;
-                event.preventDefault();
-                const towardLeft = event.key === "ArrowLeft";
-                if ((direction === "rtl") === towardLeft) forward();
-                else back();
-                return;
-            }
-            case "PageDown":
-            case " ":
-                if (!isPaged()) return;
-                event.preventDefault();
-                forward();
-                return;
-            case "PageUp":
-                if (!isPaged()) return;
-                event.preventDefault();
-                back();
-                return;
-            case "Home":
-                event.preventDefault();
-                goTo(0);
-                return;
-            case "End":
-                event.preventDefault();
-                goTo(pageCount - 1);
-                return;
-            case "b":
-            case "B":
-                event.preventDefault();
-                void toggleBookmark();
-                return;
-            case "Escape":
-                if (root.classList.contains("manga-chrome-hidden")) setChrome(true);
-                return;
-            default:
-        }
-    });
-
-    let touch = null;
-    let suppressClick = false;
-    stage?.addEventListener("touchstart", event => {
-        const point = event.touches.length === 1 ? event.touches[0] : null;
-        touch = point ? { x: point.clientX, y: point.clientY } : null;
-    }, { passive: true });
-
-    stage?.addEventListener("touchend", event => {
-        const start = touch;
-        touch = null;
-        if (!start || !isPaged()) return;
-        const point = event.changedTouches[0];
-        if (!point) return;
-        const dx = point.clientX - start.x;
-        const dy = point.clientY - start.y;
-        if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
-        // Zoomed in: the swipe pans the page instead of turning it.
-        if (stage.scrollWidth > stage.clientWidth + 2) return;
-        suppressClick = true;
-        window.setTimeout(() => {
-            suppressClick = false;
-        }, 400);
-        if ((direction === "rtl") === (dx > 0)) forward();
-        else back();
-    }, { passive: true });
-
-    // Tap zones: the outer thirds turn pages, the middle shows or hides the bars.
-    stage?.addEventListener("click", event => {
-        const target = event.target instanceof Element ? event.target : null;
-        if (suppressClick || target?.closest("a, button, input")) return;
-        const rect = stage.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / Math.max(1, rect.width);
-        if (isPaged() && x < 1 / 3) {
-            if (direction === "rtl") forward();
-            else back();
-        } else if (isPaged() && x > 2 / 3) {
-            if (direction === "rtl") back();
-            else forward();
-        } else if (x >= 1 / 3 && x <= 2 / 3) {
-            setChrome(root.classList.contains("manga-chrome-hidden"));
-        }
+    root.addEventListener("jularr:reader-bookmark", () => {
+        void toggleBookmark();
     });
 
     // Horizontal view: a mouse wheel scrolls along the reading direction.

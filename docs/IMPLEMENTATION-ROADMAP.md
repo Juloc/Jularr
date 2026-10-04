@@ -53,10 +53,13 @@ Do not add acquisition internals to consumer pages.
 2. ActiveSession + exact progress updates.
 3. Web/Desktop/Mobile/Tablet/TV/iOS-WebKit Player compositions from the Player spec.
 4. Reader document/locator contract and exact autosave/restore.
-5. Edition/language switching and Translation integration.
-6. Implement the approved `continuation-surfaces/SPEC.md` only after canonical ActiveSession and Reader/MediaProgress state work; no separate mini-player/reading state store.
+5. Complete the Unified Reader engine consolidation from `docs/implementation/unified-reader-engine-completion.md`: one shared interaction runtime plus ReflowText, FixedPage and ImageSequence renderers selected from parsed document layout/capabilities rather than file extension.
+6. Migrate Book/LN/Manga/PDF exact reading state to canonical ReaderLocator/MediaProgress and remove legacy per-type progress runtime paths after validation.
+7. Edition/language switching and Translation integration, including official/generated variants and source mapping.
+8. Integrate #819 Smart PDF as a derived view of the same Reader/progress identity; do not build another PDF shell.
+9. Implement the approved `continuation-surfaces/SPEC.md` only after canonical ActiveSession and Reader/MediaProgress state work; no separate mini-player/reading state store.
 
-This phase resolves the foundation required by #403 and #662.
+This phase resolves the foundation required by #403, #662 and the incomplete completion gates of #289. #819 supplies PDF-derived-document semantics and remains a dependency rather than a separate Reader architecture.
 
 ## Phase 5 — Learning user flows
 

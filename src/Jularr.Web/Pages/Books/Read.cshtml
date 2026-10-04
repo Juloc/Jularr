@@ -14,14 +14,10 @@
     ViewData["Title"] = isPdf ? bookTitle : chapter.Title;
     var target = Model.Reader.TargetLanguage;
     var sourceIsTarget = Model.Reader.SourceLanguage.Equals(target, StringComparison.OrdinalIgnoreCase);
-    // Cached translated text is always readable (#369): reading an existing
-    // translated variant is core reader behaviour and must not depend on the
-    // Learning Translation capability. Only generating a *new* translation
-    // (the "Translate into" menu entry) stays gated on Model.TranslationEnabled.
     var translatedParagraphs = sourceIsTarget ? Array.Empty<string>() : Model.Reader.TranslatedParagraphs;
     var hasAlternate = translatedParagraphs.Count > 0;
     // A PDF translates page by page from its own translated-text panel, so its menu has no chapter-level translate entry.
-    var canTranslate = Model.TranslationEnabled && !sourceIsTarget && !hasAlternate && !isPdf;
+    var canTranslate = !sourceIsTarget && !hasAlternate && !isPdf;
     var defaultView = Model.RequestedView switch
     {
         "original" => "original",

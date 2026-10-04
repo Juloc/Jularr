@@ -33,7 +33,6 @@ public sealed record ReaderCapabilities(
     bool SupportsPageCurl,
     bool SupportsThemeArtwork,
     bool SupportsZoom,
-    bool SupportsVerticalReading,
     bool SupportsTts)
 {
     public static ReaderCapabilities For(
@@ -60,7 +59,6 @@ public sealed record ReaderCapabilities(
                 SupportsPageCurl: true,
                 SupportsThemeArtwork: true,
                 SupportsZoom: false,
-                SupportsVerticalReading: false,
                 SupportsTts: true),
             ReaderLayoutKind.ImageSequence => new(
                 SupportsContinuous: true,
@@ -77,7 +75,6 @@ public sealed record ReaderCapabilities(
                 SupportsPageCurl: true,
                 SupportsThemeArtwork: false,
                 SupportsZoom: true,
-                SupportsVerticalReading: true,
                 SupportsTts: false),
             _ => new(
                 SupportsContinuous: true,
@@ -85,7 +82,7 @@ public sealed record ReaderCapabilities(
                 SupportsAutoScroll: false,
                 SupportsTypography: false,
                 SupportsTextSelection: false,
-                SupportsHighlights: true,
+                SupportsHighlights: false,
                 SupportsBookmarks: true,
                 SupportsDualLanguage: false,
                 SupportsTranslation: false,
@@ -94,8 +91,8 @@ public sealed record ReaderCapabilities(
                 SupportsPageCurl: false,
                 SupportsThemeArtwork: false,
                 SupportsZoom: true,
-                SupportsVerticalReading: true,
-                // A book in fixed pages (a PDF book) reads its text layer aloud.
+                // A book in fixed pages can expose a reliable text layer. Parsed
+                // document capabilities may narrow this for scans or image-only pages.
                 SupportsTts: contentType is ReaderContentType.Book)
         };
 }
@@ -107,7 +104,10 @@ public sealed record ReaderDocumentDescriptor(
     string Title,
     IReadOnlyList<string> Genres,
     ReaderCapabilities Capabilities,
-    IReadOnlyList<ReaderDocumentLanguage> Languages)
+    IReadOnlyList<ReaderDocumentLanguage> Languages,
+    ReaderPageDirection PageDirection,
+    ReaderTextDirection TextDirection,
+    ReaderWritingMode WritingMode)
 {
     public string ContentTypeKey => ReaderContentTypes.ToKey(ContentType);
 
@@ -117,8 +117,17 @@ public sealed record ReaderDocumentDescriptor(
         string title,
         IReadOnlyList<string>? genres = null,
         ReaderLayoutKind? layoutKind = null,
-        IReadOnlyList<ReaderDocumentLanguage>? languages = null)
+        IReadOnlyList<ReaderDocumentLanguage>? languages = null,
+        ReaderCapabilities? capabilities = null,
+        ReaderPageDirection pageDirection = ReaderPageDirection.Auto,
+        ReaderTextDirection textDirection = ReaderTextDirection.Auto,
+        ReaderWritingMode writingMode = ReaderWritingMode.HorizontalTb)
     {
+        if (workId == Guid.Empty)
+        {
+            throw new ArgumentException("Reader document descriptor requires a Work.", nameof(workId));
+        }
+
         var layout = layoutKind ?? ReaderContentTypes.DefaultLayout(contentType);
         return new(
             workId,
@@ -126,8 +135,11 @@ public sealed record ReaderDocumentDescriptor(
             layout,
             title,
             genres ?? [],
-            ReaderCapabilities.For(contentType, layout),
-            ReaderDocumentLanguage.Distinct(languages));
+            capabilities ?? ReaderCapabilities.For(contentType, layout),
+            ReaderDocumentLanguage.Distinct(languages),
+            pageDirection,
+            textDirection,
+            writingMode);
     }
 }
 

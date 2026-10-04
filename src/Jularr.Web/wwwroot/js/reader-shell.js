@@ -113,11 +113,17 @@
             root.dataset.readerChrome = "visible";
         };
 
+        const readingMode = () =>
+            root.dataset.readingMode || settings.readingMode || "continuous";
+
         // Hiding the bars never changes the page area, so the logical reading
         // position is the same with and without chrome (docs/mockups/reader/SPEC.md).
+        // Image readers explicitly opt into immersive chrome through the shared
+        // runtime instead of owning a second hidden-state class.
         const frameChromeCanHide = () =>
+            root.dataset.readerImmersive === "true" ||
             proseFrame ||
-            (compactQuery.matches && (root.dataset.readingMode || settings.readingMode) !== "paged");
+            (compactQuery.matches && readingMode() !== "paged");
 
         const hideChrome = () => {
             if (frame && !frameChromeCanHide()) return;
@@ -138,8 +144,25 @@
             }));
         };
 
+        const dispatchSeek = value => {
+            root.dispatchEvent(new CustomEvent("jularr:reader-seek", {
+                detail: { value },
+                bubbles: false
+            }));
+        };
+
+        const pageDirection = () => {
+            const direction = (root.dataset.pageDirection || root.dataset.direction || "ltr")
+                .trim()
+                .toLowerCase();
+            return direction === "rtl" ? "rtl" : "ltr";
+        };
+
+        const dispatchPhysicalPage = direction =>
+            dispatchPage(pageDirection() === "rtl" ? -direction : direction);
+
         const updateModeVisibility = () => {
-            const mode = root.dataset.readingMode || settings.readingMode || "continuous";
+            const mode = readingMode();
             root.querySelectorAll("[data-reader-mode-choice]").forEach(button => {
                 const active = button.dataset.readerModeChoice === mode;
                 button.classList.toggle("is-active", active);
@@ -1200,7 +1223,9 @@
                 }
             });
 
-            // Shortcuts work only outside text input and outside open menus, sheets and dialogs.
+            // The shell is the only generic keyboard navigation owner. Renderers
+            // consume jularr:reader-page-edge / jularr:reader-seek and never bind
+            // a second Arrow/PageUp/PageDown/Space page-turn handler.
             const shortcuts = {
                 b: "[data-bookmark-button],[data-reader-bookmark]",
                 n: "[data-reader-contents-toggle]",
@@ -1208,16 +1233,50 @@
             };
             document.addEventListener("keydown", event => {
                 if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-                const selector = shortcuts[event.key.toLowerCase()];
                 const target = event.target instanceof Element ? event.target : null;
-                if (!selector || target?.closest(
+                if (target?.closest(
                     "input,textarea,select,[contenteditable='true'],[data-reader-menu],[data-reader-contents],[data-reader-settings-container],[role='dialog']")) {
                     return;
                 }
-                const button = Array.from(root.querySelectorAll(selector)).find(isShown);
-                if (!button) return;
-                event.preventDefault();
-                button.click();
+
+                const shortcutKey = event.key.toLowerCase();
+                const selector = shortcuts[shortcutKey];
+                if (selector) {
+                    const button = Array.from(root.querySelectorAll(selector)).find(isShown);
+                    if (button) {
+                        event.preventDefault();
+                        button.click();
+                        return;
+                    }
+                    if (shortcutKey === "b") {
+                        event.preventDefault();
+                        root.dispatchEvent(new CustomEvent("jularr:reader-bookmark"));
+                        return;
+                    }
+                }
+
+                if (readingMode() !== "paged" || overlayOpen()) return;
+                const onControl = target?.closest("a,button,summary,[role='button']");
+                if (event.key === " " && onControl) return;
+
+                let handled = true;
+                if (event.key === "ArrowRight") {
+                    dispatchPhysicalPage(1);
+                } else if (event.key === "ArrowLeft") {
+                    dispatchPhysicalPage(-1);
+                } else if (event.key === "PageDown" || (event.key === " " && !event.shiftKey)) {
+                    dispatchPage(1);
+                } else if (event.key === "PageUp" || (event.key === " " && event.shiftKey)) {
+                    dispatchPage(-1);
+                } else if (event.key === "Home") {
+                    dispatchSeek(Number(progressSlider?.min || 0));
+                } else if (event.key === "End") {
+                    dispatchSeek(Number(progressSlider?.max || 0));
+                } else {
+                    handled = false;
+                }
+
+                if (handled) event.preventDefault();
             });
 
             document.addEventListener("pointerdown", event => {
@@ -1514,6 +1573,9 @@
             contentsOpen: () => Boolean(contents && !contents.hidden),
             contentsTab: () => activeContentsTab,
             closeMenus,
+            showChrome,
+            hideChrome,
+            toggleChrome,
             toast,
             reportFailure: (failure, retry) => showNotice(failureKind(failure), retry)
         });
@@ -1531,6 +1593,31 @@
             setRestoring(event.detail?.active !== false);
             if (restoring) showChrome();
         });
+
+        root.addEventListener("jularr:reader-mode", event => {
+            const mode = event.detail?.readingMode;
+            if (mode === "paged" || mode === "continuous") {
+                root.dataset.readingMode = mode;
+            }
+
+            const direction = event.detail?.pageDirection;
+            if (direction === "ltr" || direction === "rtl" || direction === "auto") {
+                root.dataset.pageDirection = direction;
+            }
+
+            if (typeof event.detail?.immersive === "boolean") {
+                root.dataset.readerImmersive = event.detail.immersive ? "true" : "false";
+            }
+
+            updateModeVisibility();
+        });
+
+        root.addEventListener("jularr:reader-chrome", event => {
+            if (event.detail?.visible === true) showChrome();
+            else if (event.detail?.visible === false) hideChrome();
+            else toggleChrome();
+        });
+
         // An adapter that never reports the end of its restore must not leave the page hidden.
         window.setTimeout(() => setRestoring(false), 2500);
 
@@ -1571,20 +1658,21 @@
                 const selection = window.getSelection();
                 if (selection && !selection.isCollapsed && selection.toString().trim()) return;
 
-                if ((root.dataset.readingMode || settings.readingMode) === "paged") {
-                    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.25) {
-                        dispatchPage(dx < 0 ? 1 : -1);
+                if (readingMode() === "paged") {
+                    if (root.dataset.readerPanGesture !== "true" &&
+                        Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+                        dispatchPhysicalPage(dx < 0 ? 1 : -1);
                         return;
                     }
 
                     const rect = surface.getBoundingClientRect();
                     const x = event.clientX - rect.left;
                     if (distance < 14 && x < rect.width * .24) {
-                        dispatchPage(-1);
+                        dispatchPhysicalPage(-1);
                         return;
                     }
                     if (distance < 14 && x > rect.width * .76) {
-                        dispatchPage(1);
+                        dispatchPhysicalPage(1);
                         return;
                     }
                 }

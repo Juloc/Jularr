@@ -262,7 +262,9 @@ public sealed class RemotePathMappingTests
 
         Assert.AreEqual(MediaAcquisitionKind.Manga, settings.KindForCategory("manga"));
         Assert.AreEqual(MediaAcquisitionKind.LightNovel, settings.KindForCategory(" LightNovels "));
-        Assert.IsNull(settings.KindForCategory("movies"), "A category no media type is mapped to belongs to no media type.");
+        Assert.AreEqual(MediaAcquisitionKind.Movie, settings.KindForCategory("movies"));
+        Assert.AreEqual(MediaAcquisitionKind.Tv, settings.KindForCategory("tv"));
+        Assert.IsNull(settings.KindForCategory("not-jularr"), "A category no media type is mapped to belongs to no media type.");
         Assert.IsNull(settings.KindForCategory(null));
     }
 

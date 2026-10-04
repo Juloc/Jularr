@@ -280,11 +280,6 @@
     margin: 0 24px;
 }
 
-/* Tapping the middle of the page hides the bars for more room. */
-.manga-reader.manga-chrome-hidden > .reader-frame-top,
-.manga-reader.manga-chrome-hidden > .reader-frame-bottom {
-    display: none;
-}
 
 /* Contents: volumes with cover, chapter range and their chapters. */
 .manga-volumes {

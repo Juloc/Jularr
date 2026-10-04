@@ -1,8 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Books;
-using Jularr.Web.Features.Instance;
-using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Infrastructure;
@@ -19,8 +17,7 @@ public sealed class LibraryModel(
     CurrentAccountContext account,
     BackgroundJobQueue jobs,
     BookTranslationJobs translationJobs,
-    ILogger<LibraryModel> logger,
-    IInstanceModuleService? instanceModules = null) : PageModel
+    ILogger<LibraryModel> logger) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public BookLibraryDetail Book { get; private set; } = null!;
@@ -52,16 +49,6 @@ public sealed class LibraryModel(
     /// </summary>
     public IReadOnlyList<BookPageRange> PageRanges => BookPageRange.Group(Book.Chapters);
 
-    /// <summary>
-    /// Whether generating a whole-book translation (Translate/Regenerate) is
-    /// allowed, resolved through <see cref="LearningModuleResolver.ResolveTranslationEnabledAsync"/>
-    /// for this work's Book scope. The per-chapter "Translated" badge and the
-    /// translated-count summary reflect the cache instead: reading an already
-    /// available translated chapter is core reader behaviour and must not
-    /// depend on this capability (#369).
-    /// </summary>
-    public bool TranslationEnabled { get; private set; }
-
     public async Task<IActionResult> OnGetAsync(
         Guid id,
         string? lang,
@@ -85,7 +72,6 @@ public sealed class LibraryModel(
             .Equals(
                 TargetLanguage,
                 StringComparison.OrdinalIgnoreCase);
-        TranslationEnabled = await ResolveTranslationEnabledAsync(id, cancellationToken);
         if (IsPdf && IsOwner)
         {
             PdfAnalysis = await books.GetPdfAnalysisAsync(id, cancellationToken);
@@ -114,7 +100,6 @@ public sealed class LibraryModel(
             Book.Chapters.Count,
             IsPdf,
             Book.TranslationCoverage,
-            TranslationEnabled,
             language => $"/Books/Library/{id}?lang={Uri.EscapeDataString(language)}",
             $"/Books/Library/{id}?handler=TranslateBook",
             Ui);
@@ -218,11 +203,6 @@ public sealed class LibraryModel(
         CancellationToken cancellationToken)
     {
         var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        if (!await ResolveTranslationEnabledAsync(id, cancellationToken))
-        {
-            return Forbid();
-        }
-
         var targetLanguage = BookLanguageCatalog.Normalize(lang);
         var detail = await books.GetLibraryBookAsync(id, account.ProfileId, targetLanguage, cancellationToken);
         if (detail is null)
@@ -253,20 +233,6 @@ public sealed class LibraryModel(
         Jularr.Web.Features.Novels.NovelWork work) =>
         BookFileFormats.Language(work.Format) ?? "en";
 
-    /// <summary>
-    /// Resolves the Translation capability for this book's Book/work scope.
-    /// Shared with the Book reader through
-    /// <see cref="LearningModuleResolver.ResolveTranslationEnabledAsync"/>.
-    /// </summary>
-    private Task<bool> ResolveTranslationEnabledAsync(
-        Guid workId,
-        CancellationToken cancellationToken) =>
-        new LearningModuleResolver(db, instanceModules).ResolveTranslationEnabledAsync(
-            account.ProfileId,
-            LearningMediaType.Book,
-            workId.ToString(),
-            contentKey: null,
-            cancellationToken);
 }
 
 /// <summary>One language of a book in the Editions &amp; Languages card; the original counts all of its chapters as available.</summary>

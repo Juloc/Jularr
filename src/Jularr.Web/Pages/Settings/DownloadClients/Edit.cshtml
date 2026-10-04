@@ -51,6 +51,20 @@
             <input asp-for="AnimeCategory" placeholder="anime" />
         </label>
     }
+    @if (Model.ShowTv)
+    {
+        <label>
+            <span>@ui["admin.usenet.tvCategory"]</span>
+            <input asp-for="TvCategory" placeholder="tv" />
+        </label>
+    }
+    @if (Model.ShowMovie)
+    {
+        <label>
+            <span>@ui["admin.usenet.movieCategory"]</span>
+            <input asp-for="MovieCategory" placeholder="movies" />
+        </label>
+    }
     @if (Model.ShowManga)
     {
         <label>
