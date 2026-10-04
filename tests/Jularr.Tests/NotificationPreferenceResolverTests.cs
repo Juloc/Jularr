@@ -21,7 +21,7 @@ public sealed class NotificationPreferenceResolverTests
         var route = NotificationPreferenceResolver.Resolve(
             preference,
             profileChannels,
-            [NotificationChannel.InApp, NotificationChannel.Push]);
+            Channels(NotificationChannel.InApp, NotificationChannel.Push));
 
         CollectionAssert.AreEquivalent(
             new[] { NotificationChannel.InApp, NotificationChannel.Push },
@@ -42,7 +42,7 @@ public sealed class NotificationPreferenceResolverTests
         var route = NotificationPreferenceResolver.Resolve(
             preference,
             ProfileChannels((NotificationChannel.InApp, true), (NotificationChannel.Push, true)),
-            [NotificationChannel.InApp, NotificationChannel.Push]);
+            Channels(NotificationChannel.InApp, NotificationChannel.Push));
 
         Assert.AreEqual(0, route.EffectiveChannels.Count);
         Assert.AreEqual(0, route.ImmediateChannels.Count);
@@ -53,7 +53,7 @@ public sealed class NotificationPreferenceResolverTests
     {
         var preference = Preference(
             enabled: true,
-            [NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email],
+            Channels(NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email),
             NotificationDeliveryTiming.Digest);
         var profileChannels = ProfileChannels(
             (NotificationChannel.InApp, true),
@@ -63,7 +63,7 @@ public sealed class NotificationPreferenceResolverTests
         var route = NotificationPreferenceResolver.Resolve(
             preference,
             profileChannels,
-            [NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email]);
+            Channels(NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email));
 
         CollectionAssert.AreEquivalent(
             new[] { NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email },
@@ -78,13 +78,13 @@ public sealed class NotificationPreferenceResolverTests
     {
         var preference = Preference(
             enabled: true,
-            [NotificationChannel.InApp, NotificationChannel.Push],
+            Channels(NotificationChannel.InApp, NotificationChannel.Push),
             NotificationDeliveryTiming.Immediate);
 
         var route = NotificationPreferenceResolver.Resolve(
             preference,
             new Dictionary<NotificationChannel, NotificationProfileChannelPreference>(),
-            [NotificationChannel.InApp, NotificationChannel.Push]);
+            Channels(NotificationChannel.InApp, NotificationChannel.Push));
 
         CollectionAssert.AreEquivalent(
             new[] { NotificationChannel.InApp },
@@ -100,11 +100,11 @@ public sealed class NotificationPreferenceResolverTests
             NotificationDeliveryTiming.Immediate);
         var profileChannels = new Dictionary<NotificationChannel, NotificationProfileChannelPreference>
         {
-            [NotificationChannel.Push] = new("someone-else", NotificationChannel.Push, true, DateTime.UtcNow, true)
+            Channels(NotificationChannel.Push) = new("someone-else", NotificationChannel.Push, true, DateTime.UtcNow, true)
         };
 
         Assert.ThrowsExactly<InvalidOperationException>(() =>
-            NotificationPreferenceResolver.Resolve(preference, profileChannels, [NotificationChannel.Push]));
+            NotificationPreferenceResolver.Resolve(preference, profileChannels, Channels(NotificationChannel.Push)));
     }
 
     private static IReadOnlySet<NotificationChannel> Channels(params NotificationChannel[] channels) => channels.ToHashSet();
