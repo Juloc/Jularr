@@ -111,7 +111,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 
             await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, $"Imported {imported} episode(s).");
             return CompletedDownloadImportResult.Completed(
-                $"Imported {imported} episode(s).", resultUrl: null, placement);
+                $"Imported {imported} episode(s).", resultUrl: "/Library", placement);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
