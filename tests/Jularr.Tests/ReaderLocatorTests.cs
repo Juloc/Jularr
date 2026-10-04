@@ -14,13 +14,11 @@ public sealed class ReaderLocatorTests
 
         Assert.AreEqual("paragraph:17", locator.BlockId);
         Assert.AreEqual(83, locator.CharacterOffset);
-        var pageSource = locator.Source as ReaderSourcePageReference;
-        Assert.IsNotNull(pageSource);
+        var pageSource = (ReaderSourcePageReference)locator.Source!;
         Assert.AreEqual(11, pageSource.SourcePageIndex);
         Assert.AreEqual("pdf:block:42", pageSource.SourceItemId);
         Assert.AreEqual(41.5, locator.FallbackPercent);
     }
-
 
     [TestMethod]
     public void ReflowLocatorCanMapToSourceItemWithoutPageIdentity()
@@ -29,8 +27,7 @@ public sealed class ReaderLocatorTests
         var source = new ReaderSourceItemReference("source-paragraph:17");
         var locator = new ReflowTextReaderLocator(identity, "translated-paragraph:17", source: source);
 
-        var itemSource = locator.Source as ReaderSourceItemReference;
-        Assert.IsNotNull(itemSource);
+        var itemSource = (ReaderSourceItemReference)locator.Source!;
         Assert.AreEqual("source-paragraph:17", itemSource.SourceItemId);
     }
 
