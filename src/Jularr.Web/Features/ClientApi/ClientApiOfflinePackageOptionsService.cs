@@ -84,6 +84,13 @@ public sealed class ClientApiOfflinePackageOptionsService(
         }
 
         var options = optionsResult.Value;
+        if (!options.Downloadable)
+        {
+            return ClientOfflinePackageQueryResult<ClientOfflinePackagePreview>.Unavailable(
+                options.UnavailableReason ?? "offline_source_unavailable",
+                "This target does not currently have a downloadable Offline source.");
+        }
+
         var selection = requestedSelection ?? new ClientOfflinePackageSelection();
         var scope = string.IsNullOrWhiteSpace(selection.Scope)
             ? options.Scopes.FirstOrDefault(x => x.IsDefault)?.Key
@@ -196,9 +203,9 @@ public sealed class ClientApiOfflinePackageOptionsService(
         var requiredModule = RequiredModule(work.MediaType, intent);
         if (!await instanceModules.IsEnabledAsync(requiredModule, cancellationToken))
         {
-            return ClientOfflinePackageQueryResult<ClientOfflinePackageOptions>.Unavailable(
-                "offline_not_supported",
-                "The required media module is disabled on this Jularr server.");
+            return ClientOfflinePackageQueryResult<ClientOfflinePackageOptions>.NotFound(
+                "offline_target_not_found",
+                "The Offline target is unavailable.");
         }
 
         if (target.WorkEpisodeId is { } episodeId)
