@@ -36,6 +36,14 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 - `progress-achievements/SPEC.md` — Learning progress, statistics and achievements
 - `script-trainer/SPEC.md` — generic Script Trainer with Japanese Kana as current toolkit
 - `user-settings/SPEC.md`
+- `notifications-settings/SPEC.md` — profile notification channels/topics/delivery overview
+- `notifications-topic-editor/SPEC.md` — per-topic event/channel/timing editor
+- `notifications-quiet-hours/SPEC.md` — timezone-aware Quiet Hours
+- `notifications-digest/SPEC.md` — Digest cadence/routes and disable-resolution flow
+- `notifications-center/SPEC.md` — durable In-App Notification Center
+- `notifications-bell/SPEC.md` — global Bell + Desktop Quick View
+- `notifications-toast-popup/SPEC.md` — transient event/action feedback surfaces
+- `notifications-banner/SPEC.md` — persistent state-driven Warning/Critical banners
 - `profile-activity/SPEC.md`
 - `add-request-flow/SPEC.md`
 - `request-status-details/SPEC.md` — consumer Request status/detail sheet
