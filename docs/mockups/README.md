@@ -38,6 +38,7 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 - `user-settings/SPEC.md`
 - `downloads-offline/SPEC.md` — device-local consumer downloads/offline inventory and queue management
 - `offline-settings/SPEC.md` — end-state network, quality, storage, Smart Offline, cleanup and offline privacy preferences
+- `offline-storage-location/SPEC.md` — managed client storage selection, validation and safe migration of existing offline content
 - `download-selection/SPEC.md` — shared per-download scope, quality, tracks, Learning, storage and Smart Offline promotion dialog/sheet
 - `download-quick-view/SPEC.md` — global download indicator, current-device queue quick view and direct pause/resume/retry actions
 - `download-notifications/SPEC.md` — consumer download toast/snackbar, Bell event and OS-notification routing semantics
