@@ -76,8 +76,8 @@ public sealed class ReaderDocumentTests
         Assert.AreEqual(workId, document.Identity.WorkId);
         Assert.AreEqual("p:1", document.Content[0].StableId);
 
-        Assert.ThrowsException<ArgumentException>(() => ReaderDocument.Create(descriptor, new ReaderDocumentIdentity(Guid.NewGuid())));
-        Assert.ThrowsException<ArgumentException>(() => ReaderDocument.Create(
+        Assert.ThrowsExactly<ArgumentException>(() => ReaderDocument.Create(descriptor, new ReaderDocumentIdentity(Guid.NewGuid())));
+        Assert.ThrowsExactly<ArgumentException>(() => ReaderDocument.Create(
             descriptor,
             identity,
             [
