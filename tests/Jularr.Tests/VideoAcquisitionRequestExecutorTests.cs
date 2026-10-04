@@ -123,6 +123,60 @@ public sealed class VideoAcquisitionRequestExecutorTests
     }
 
     [TestMethod]
+    public async Task TvCustomSeasonScopeKeepsFutureEpisodesInsideSelectedCanonicalSeason()
+    {
+        await using var host = await Host.CreateAsync(
+            MediaAcquisitionKind.Tv,
+            "Severance",
+            2022,
+            "95396",
+            "Severance.S01E01.1080p.WEB-DL.x264-GROUP",
+            addEpisode: true,
+            addSecondEpisode: true);
+
+        var season = new WorkSeason { WorkId = host.Work.Id, SeasonNumber = 1 };
+        host.Environment.Db.WorkSeasons.Add(season);
+        var episodes = await host.Environment.Db.WorkEpisodes
+            .Where(x => x.WorkId == host.Work.Id)
+            .OrderBy(x => x.EpisodeNumber)
+            .ToListAsync();
+        foreach (var episode in episodes)
+        {
+            episode.SeasonId = season.Id;
+        }
+
+        episodes[1].AiredAt = DateTime.UtcNow.AddDays(2);
+        await host.Environment.Db.SaveChangesAsync();
+
+        var custom = new VideoRequestPayload(
+            host.Work.Id,
+            host.Work.CanonicalTitle,
+            host.Work.Year,
+            VideoRequestScope.Custom,
+            [],
+            MonitorFuture: false,
+            SelectedSeasonIds: [season.Id]);
+
+        var request = await host.StartAsync(custom);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
+        Assert.AreEqual(host.EpisodeId, VideoAcquisitionEngine.ReadPayload(request)?.ActiveWorkEpisodeId);
+
+        host.CompleteInSabnzbd(request, "/downloads/tv/Severance.S01E01");
+        await host.Operations.MarkSucceededAsync(request.OperationId!.Value, "Downloaded.");
+        await host.ProcessAsync(DateTime.UtcNow);
+
+        var monitoring = await host.GetAsync(request.Id);
+        var payload = VideoAcquisitionEngine.ReadPayload(monitoring)
+            ?? throw new AssertFailedException("Expected video request payload.");
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, monitoring.Status);
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
+        Assert.IsTrue(await host.HasPlayableAsync(host.EpisodeId));
+        CollectionAssert.Contains(payload.SelectedSeasonIds!, season.Id);
+        Assert.IsNotNull(payload.NextSearchUtc);
+        Assert.IsNull(payload.ActiveWorkEpisodeId);
+    }
+
+    [TestMethod]
     public async Task TvCustomScopeKeepsSelectedFutureEpisodeOpenWithoutFutureMonitoring()
     {
         await using var host = await Host.CreateAsync(
