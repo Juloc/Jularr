@@ -63,7 +63,8 @@ public static class ClientApiContract
                 TtsPreferences: true,
                 PlaybackPlan: true,
                 Watchlist: true,
-                DevicePairing: true));
+                DevicePairing: true,
+                OfflinePackages: true));
     }
 }
 
@@ -252,7 +253,8 @@ public sealed record ClientFeatureFlags(
     bool PlaybackPlan = false,
     bool Watchlist = false,
     // TV device-code pairing, "/api/client/v1/pairing/*" (#489).
-    bool DevicePairing = false);
+    bool DevicePairing = false,
+    bool OfflinePackages = false);
 
 public sealed record ClientErrorResponse(
     string Code,
