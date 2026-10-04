@@ -17,8 +17,7 @@ public sealed class NotificationDispatcher(
     IEnumerable<INotificationSink> sinks,
     ILogger<NotificationDispatcher> logger)
 {
-    private readonly IReadOnlyDictionary<NotificationChannel, INotificationSink> _sinks =
-        sinks.ToDictionary(sink => sink.Channel);
+    private readonly IReadOnlyDictionary<NotificationChannel, INotificationSink> _sinks = sinks.ToDictionary(sink => sink.Channel);
 
     public async Task DispatchAsync(JularrEvent domainEvent, CancellationToken cancellationToken = default)
     {
@@ -27,11 +26,6 @@ public sealed class NotificationDispatcher(
         foreach (var profileId in await ResolveRecipientsAsync(domainEvent, cancellationToken))
         {
             var preference = await subscriptions.GetEventPreferenceAsync(profileId, domainEvent.Category, cancellationToken);
-            if (!preference.Enabled)
-            {
-                continue;
-            }
-
             var profileChannels = await subscriptions.GetProfileChannelPreferencesAsync(profileId, cancellationToken);
             var route = NotificationPreferenceResolver.Resolve(preference, profileChannels, _sinks.Keys);
 
