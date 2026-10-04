@@ -197,9 +197,14 @@ export const createReflowTextRenderer = adapter => {
             : clamp(adapter.getScrollPermille?.() ?? 0, 0, 1000);
 
     const turn = direction => {
-        if (mode !== ReflowReadingMode.paged) return false;
         const delta = Math.sign(Number(direction) || 0);
         if (!delta) return false;
+
+        if (mode !== ReflowReadingMode.paged) {
+            adapter.turnContinuous?.(delta);
+            return true;
+        }
+
         const next = clamp(pageIndex + delta, 0, pageCount - 1);
         if (next === pageIndex) {
             adapter.onPageEdge?.(delta);
