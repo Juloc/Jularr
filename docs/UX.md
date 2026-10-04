@@ -563,6 +563,37 @@ AI provider/model configuration stays in the dedicated **AI** Admin area rather 
 - General Settings
 - Appearance
 
+
+### Storage ownership and lifecycle
+
+Binding specification:
+- `docs/mockups/admin-storage/SPEC.md`
+
+**Storage** is the only permanent Admin owner for:
+- physical Mounts and LibraryRoots;
+- capacity/free-space/reserve;
+- safe path/routing and placement capabilities;
+- storage lifecycle policies (#414);
+- Review candidates and policy conflicts;
+- optimize/tier/delete Dry Runs;
+- physical root-to-root migration/evacuation;
+- storage forecast/growth/top-waste and lifecycle history.
+
+Do not create permanent sidebar entries named Cleanup, Optimize, Tiering or Storage Migration. They are secondary Storage surfaces/contextual workflows.
+
+Admin Media Detail may expose contextual `Storage` / `Optimize` / `Keep` actions for one Work, but they open the same canonical Storage Lifecycle engine.
+
+System & Diagnostics may show read-only capacity/health summaries only. Activity / To-Do owns running/failed lifecycle operations. Migration Center owns external-system migration, not physical media movement between Jularr roots.
+
+Destructive UX requirements:
+- always show why the item is eligible and what protects/blocks it;
+- show before/after requirement coverage when a version/track may change;
+- show logical vs estimated physical savings where they differ;
+- show reversibility/grace/reacquisition state;
+- no bulk destructive confirmation without a Dry Run unless the already-enabled Automatic policy itself is executing;
+- Compact mode must never hide destructive-action context.
+
+
 ### Games
 When Games is actually available, Games-specific Admin configuration is one contextual/dedicated area with secondary surfaces for Runtimes and BIOS/Firmware. Game LibraryRoots remain in Storage, provider configuration in Providers, acquisition/downloader work in the shared acquisition areas and failures in Activity / To-Do.
 
