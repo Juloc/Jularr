@@ -65,6 +65,18 @@ public sealed class ReaderPreference
     /// <summary>Turning past the last page (or scrolling to the end) opens the next chapter.</summary>
     public bool? AutoContinueChapters { get; set; }
 
+    // Image-sequence presentation. These stay independent from text typography:
+    // Manga/comic page flow and image treatment must not overload Book/Novel fields.
+    public string? ImageFlowMode { get; set; }
+    public string? ImagePageDirection { get; set; }
+    public string? ImageFit { get; set; }
+    public int? ImageZoomPercent { get; set; }
+    public int? ImagePageGapPx { get; set; }
+    public bool? ImageFirstPageAlone { get; set; }
+    public bool? ImageSharpen { get; set; }
+    public bool? ImageCropBorders { get; set; }
+    public string? ImageColorScheme { get; set; }
+
     public string? TtsProviderId { get; set; }
     /// <summary>JSON object: normalized BCP-47 tag -> voice id. See <see cref="SpeechVoiceMap"/>.</summary>
     public string? TtsVoiceIds { get; set; }
@@ -236,6 +248,14 @@ public static partial class ReaderPreferenceRules
         {
             "fabric", "paper", "leather", "cord", "minimal"
         };
+    private static readonly HashSet<string> ImageFlowModes =
+        new(StringComparer.OrdinalIgnoreCase) { "continuous", "horizontal", "webtoon" };
+    private static readonly HashSet<string> ImagePageDirections =
+        new(StringComparer.OrdinalIgnoreCase) { "auto", "ltr", "rtl" };
+    private static readonly HashSet<string> ImageFits =
+        new(StringComparer.OrdinalIgnoreCase) { "height", "width" };
+    private static readonly HashSet<string> ImageColorSchemes =
+        new(StringComparer.OrdinalIgnoreCase) { "auto", "light", "sepia", "dark" };
     private static readonly HashSet<string> BuiltInFonts =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -277,6 +297,24 @@ public static partial class ReaderPreferenceRules
 
     public static string NormalizeBookmarkStyle(string? value) =>
         NormalizeChoice(value, BookmarkStyles, "fabric");
+
+    public static string NormalizeImageFlowMode(string? value) =>
+        NormalizeChoice(value, ImageFlowModes, "continuous");
+
+    public static string NormalizeImagePageDirection(string? value) =>
+        NormalizeChoice(value, ImagePageDirections, "auto");
+
+    public static string NormalizeImageFit(string? value) =>
+        NormalizeChoice(value, ImageFits, "height");
+
+    public static string NormalizeImageColorScheme(string? value) =>
+        NormalizeChoice(value, ImageColorSchemes, "auto");
+
+    public static int NormalizeImageZoomPercent(int value) =>
+        Math.Clamp((int)Math.Round(value / 10d) * 10, 50, 300);
+
+    public static int NormalizeImagePageGapPx(int value) =>
+        Math.Clamp((int)Math.Round(value / 2d) * 2, 0, 48);
 
     public static string NormalizeBackgroundAssetId(string? value)
     {
@@ -1290,6 +1328,15 @@ public static class ReaderPreferenceStore
         preference.ShowIllustrations is null &&
         preference.ParagraphIndent is null &&
         preference.AutoContinueChapters is null &&
+        preference.ImageFlowMode is null &&
+        preference.ImagePageDirection is null &&
+        preference.ImageFit is null &&
+        preference.ImageZoomPercent is null &&
+        preference.ImagePageGapPx is null &&
+        preference.ImageFirstPageAlone is null &&
+        preference.ImageSharpen is null &&
+        preference.ImageCropBorders is null &&
+        preference.ImageColorScheme is null &&
         preference.TtsProviderId is null &&
         preference.TtsVoiceIds is null &&
         preference.TtsRate is null &&
