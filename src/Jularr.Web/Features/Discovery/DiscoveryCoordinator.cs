@@ -4,6 +4,7 @@ using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Manga;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Tracking;
 using Microsoft.EntityFrameworkCore;
