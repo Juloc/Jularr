@@ -6,6 +6,7 @@
 .admrec-tone-unclear, .admrec-tone-error { --tone: var(--danger-text); }
 .admrec-tone-ignored, .admrec-tone-neutral { --tone: var(--muted); }
 .admrec-tone-info { --tone: var(--info-text); }
+.admrec [hidden] { display: none !important; }
 .admrec-icon { flex: none; vertical-align: middle; }
 .admrec-notice.admrec-desktop-hint { display: none; }
 .admrec .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; text-decoration: none; }

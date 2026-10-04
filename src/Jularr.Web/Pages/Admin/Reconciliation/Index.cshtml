@@ -770,7 +770,7 @@
                 </div>
             </section>
         }
-        <div class="admrec-footer">
+        <div class="admrec-footer" hidden="@(plan.Status == LibraryReconciliationPlanStatus.Completed)">
             <a class="button" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@plan.Id" asp-route-step="4"><partial name="_ReconciliationIcon" model='"arrow-left"' />@ui["common.back"]</a>
             @if (Model.Preview is { } executablePreview)
             {

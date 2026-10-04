@@ -82,7 +82,7 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
     public bool IncludeSubfolders { get; set; } = true;
 
     [BindProperty]
-    public bool SkipConfidentAssignments { get; set; }
+    public bool SkipConfidentAssignments { get; set; } = true;
 
     [BindProperty]
     public bool OnlyUnclearItems { get; set; }
@@ -500,7 +500,8 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
     private static string? FindFirstFolderNeedingReview(IReadOnlyList<LibraryReconciliationPlanItem> items)
     {
         var folders = items.Where(x => x.IsDirectory).OrderBy(x => x.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray();
-        var directFilePaths = items.Where(x => !x.IsDirectory && x.State != LibraryReconciliationItemState.Recognized && x.State != LibraryReconciliationItemState.Ignored).Select(x => GetParentPath(x.RelativePath)).ToHashSet(StringComparer.Ordinal);
+        var unresolvedFiles = items.Where(x => !x.IsDirectory && x.State is not (LibraryReconciliationItemState.Recognized or LibraryReconciliationItemState.Ignored));
+        var directFilePaths = unresolvedFiles.Select(x => GetParentPath(x.RelativePath)).ToHashSet(StringComparer.Ordinal);
         return (folders.FirstOrDefault(x => directFilePaths.Contains(x.RelativePath)) ?? folders.FirstOrDefault())?.RelativePath;
     }
 

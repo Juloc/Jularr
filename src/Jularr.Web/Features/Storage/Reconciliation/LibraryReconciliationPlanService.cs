@@ -726,6 +726,9 @@ public sealed class LibraryReconciliationPlanService(AppDbContext db, FolderBrow
             if (plan.SkipConfidentAssignments)
             {
                 await ApplyCommittedLinksAsync(plan.LibraryRootId, items, cancellationToken);
+
+                // Rollups: restored links change file states after the folder counts were derived, so parents must be recomputed.
+                PopulateFolderCounts(items);
             }
 
             // Persistence: replace scan evidence and advance the plan state atomically after the read completes.

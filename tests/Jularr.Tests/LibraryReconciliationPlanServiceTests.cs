@@ -844,6 +844,32 @@ public sealed class LibraryReconciliationPlanServiceTests
         Assert.AreEqual(correctionPlan.Plan.Id, links[0].PlanId);
     }
 
+    /// <summary>Restored confirmed links must also resolve their parent folders, otherwise the tree reports unresolved files that are already mapped.</summary>
+    [TestMethod]
+    public async Task ConfirmedLinksResolveTheFolderRollupOfALaterScan()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Media");
+        Directory.CreateDirectory(Path.Combine(root.Path, "series"));
+        await File.WriteAllTextAsync(Path.Combine(root.Path, "series", "episode.mkv"), "media");
+        var work = new Work { CanonicalTitle = "Linked series", MediaType = WorkMediaType.Series };
+        scope.Db.Works.Add(work);
+        await scope.Db.SaveChangesAsync();
+        var firstPlan = await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id), CancellationToken.None);
+        await scope.Service.ScanAsync(firstPlan.Plan!.Id, CancellationToken.None);
+        var file = await scope.Db.LibraryReconciliationPlanItems.SingleAsync(x => x.PlanId == firstPlan.Plan.Id && x.RelativePath == "series/episode.mkv");
+        await scope.Service.AssignWorkAsync(new LibraryReconciliationWorkAssignmentRequest(firstPlan.Plan.Id, [file.Id], work.Id), CancellationToken.None);
+        var firstPreview = await scope.Service.BuildPreviewAsync(firstPlan.Plan.Id, CancellationToken.None);
+        await scope.Service.ExecuteAsync(new LibraryReconciliationExecutionRequest(firstPlan.Plan.Id, firstPreview!.Fingerprint), CancellationToken.None);
+
+        var laterPlan = await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id, SkipConfidentAssignments: true), CancellationToken.None);
+        await scope.Service.ScanAsync(laterPlan.Plan!.Id, CancellationToken.None);
+        var folder = await scope.Db.LibraryReconciliationPlanItems.SingleAsync(x => x.PlanId == laterPlan.Plan.Id && x.RelativePath == "series");
+
+        Assert.AreEqual(LibraryReconciliationItemState.Recognized, folder.State);
+        Assert.AreEqual(0, folder.UnresolvedCount);
+    }
+
     /// <summary>Finds only existing canonical works for a scanned plan and never turns a search term into identity.</summary>
     [TestMethod]
     public async Task WorkSearchIsCaseInsensitiveAndNeverCreatesACanonicalWork()
