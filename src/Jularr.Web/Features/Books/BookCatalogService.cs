@@ -929,7 +929,6 @@ public sealed partial class BookCatalogService(
                     translationMode,
                     index,
                     chunk,
-                    localContext,
                     cancellationToken);
 
                 if (!string.IsNullOrWhiteSpace(cachedChunk))
@@ -1016,7 +1015,6 @@ public sealed partial class BookCatalogService(
                     translationMode,
                     index,
                     chunk,
-                    localContext,
                     candidate,
                     cancellationToken);
 

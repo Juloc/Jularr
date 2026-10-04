@@ -21,8 +21,8 @@
     var translatedParagraphs = sourceIsTarget ? Array.Empty<string>() : Model.Reader.TranslatedParagraphs;
     var hasAlternate = translatedParagraphs.Count > 0;
     var canTranslate = Model.TranslationEnabled && !sourceIsTarget && !hasAlternate;
-    // The language menu only exists when there is something to switch to.
-    var hasLanguageChoice = !isPdf && (hasAlternate || canTranslate || Model.HasWorkTranslationLanguage || Model.CachedTranslationLanguages.Count > 0);
+    // The language menu is always reachable for text books; its entries reflect what is currently possible.
+    var hasLanguageChoice = !isPdf;
     var defaultView = Model.RequestedView switch
     {
         "original" => "original",

@@ -26,7 +26,6 @@ public sealed class BookTranslationChunkStore
         AiTranslationMode mode,
         int index,
         string sourceChunk,
-        string translationContext,
         CancellationToken cancellationToken)
     {
         var path = GetPath(
@@ -37,8 +36,7 @@ public sealed class BookTranslationChunkStore
             promptVersion,
             mode,
             index,
-            sourceChunk,
-            translationContext);
+            sourceChunk);
 
         if (!File.Exists(path))
         {
@@ -66,7 +64,6 @@ public sealed class BookTranslationChunkStore
         AiTranslationMode mode,
         int index,
         string sourceChunk,
-        string translationContext,
         string translatedChunk,
         CancellationToken cancellationToken)
     {
@@ -80,8 +77,7 @@ public sealed class BookTranslationChunkStore
             promptVersion,
             mode,
             index,
-            sourceChunk,
-            translationContext);
+            sourceChunk);
 
         var directory = Path.GetDirectoryName(path)
             ?? throw new InvalidOperationException(
@@ -132,16 +128,11 @@ public sealed class BookTranslationChunkStore
         int promptVersion,
         AiTranslationMode mode,
         int index,
-        string sourceChunk,
-        string translationContext)
+        string sourceChunk)
     {
-        var cacheMaterial =
-            sourceChunk
-            + "\n---CONTEXT---\n"
-            + translationContext;
-        var chunkHash = Convert.ToHexString(
-            SHA256.HashData(
-                Encoding.UTF8.GetBytes(cacheMaterial)));
+        // The key deliberately excludes the story-memory context: that context grows as other chapters finish,
+        // and a retried chapter must resume its finished segments instead of translating them again.
+        var chunkHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sourceChunk)));
 
         return Path.Combine(
             rootPath,
