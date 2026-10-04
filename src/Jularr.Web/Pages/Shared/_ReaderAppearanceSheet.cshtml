@@ -1,0 +1,179 @@
+@model Jularr.Web.Features.ReaderCore.ReaderAppearanceSheetModel
+@using Jularr.Web.Data
+@using Jularr.Web.Features.Localization
+@inject AppDbContext SheetDb
+@*
+    Appearance, Translation and Learning of the Books and Novels readers in one sheet. Every control proxies the
+    canonical settings form (data-reader-proxy) or the reader's own language views, so the sheet owns no state.
+    It is a right-hand side sheet from tablet width and a bottom sheet on phones (reader-shell.css).
+*@
+@{
+    var ui = await UiRequestLocalization.GetBundleAsync(Context, SheetDb);
+    var capabilities = Model.Capabilities;
+    var translation = Model.Translation;
+    var prefix = Model.IdPrefix;
+    var chapterStyles = new[]
+    {
+        ("classic", "reader.settings.chapterStyle.classic"),
+        ("modern", "reader.settings.chapterStyle.modern"),
+        ("light-novel", "reader.settings.chapterStyle.lightNovel"),
+        ("minimal", "reader.settings.chapterStyle.minimal"),
+        ("decorative", "reader.settings.chapterStyle.decorative")
+    };
+}
+<div class="reader-menu reader-sheet" id="@prefix-menu-appearance" data-reader-menu="appearance" role="dialog" aria-label="@ui["reader.frame.appearance"]" hidden>
+    <section class="reader-sheet-group" aria-labelledby="@prefix-sheet-appearance">
+        <div class="reader-sheet-heading">
+            <h2 id="@prefix-sheet-appearance">@ui["reader.frame.appearance"]</h2>
+            <button class="reader-frame-icon" type="button" data-reader-menu-close aria-label="@ui["reader.frame.close"]" title="@ui["reader.frame.close"]">
+                <partial name="_ReaderIcon" model="@("close")" />
+            </button>
+        </div>
+
+        @if (capabilities.SupportsTypography)
+        {
+            <label class="reader-sheet-range">
+                <span>@ui["reader.settings.fontSize"]</span>
+                <input type="range" min=".85" max="1.8" step=".05" data-reader-proxy="fontSizeRem" />
+                <output data-reader-proxy-output="fontSizeRem" data-format="px16"></output>
+            </label>
+            <div class="reader-segmented" role="group" aria-label="@ui["reader.settings.fontFamily"]">
+                <button type="button" data-reader-proxy="fontFamily" data-value="literary-serif" aria-pressed="false">@ui["novels.reader.fontStandard"]</button>
+                <button type="button" data-reader-proxy="fontFamily" data-value="book-serif" aria-pressed="false">@ui["novels.reader.fontSerif"]</button>
+                <button type="button" data-reader-proxy="fontFamily" data-value="system-sans" aria-pressed="false">@ui["novels.reader.fontSans"]</button>
+            </div>
+        }
+
+        <div class="reader-sheet-field" role="radiogroup" aria-labelledby="@prefix-sheet-paper">
+            <span id="@prefix-sheet-paper">@ui["reader.frame.colorScheme"]</span>
+            <div class="reader-sheet-choices reader-sheet-papers">
+                @foreach (var paper in Model.Papers)
+                {
+                    <button type="button" role="radio" aria-checked="false" data-reader-proxy="paperStyle" data-value="@paper.Value">
+                        <span class="reader-sheet-swatch" data-paper="@paper.Value" aria-hidden="true"></span>
+                        <span>@paper.Label</span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (Model.BackgroundArtwork && capabilities.SupportsThemeArtwork)
+        {
+            <div class="reader-sheet-field">
+                <span id="@prefix-sheet-background">@ui["reader.settings.background"]</span>
+                <div class="reader-sheet-choices reader-sheet-backgrounds"
+                     role="group"
+                     aria-labelledby="@prefix-sheet-background"
+                     data-reader-background-choices
+                     data-labels="@Json.Serialize(new { none = ui["novels.reader.backgroundNone"], auto = ui["reader.settings.auto"] })"></div>
+            </div>
+        }
+
+        @if (capabilities.SupportsTypography)
+        {
+            <label class="reader-sheet-range">
+                <span>@ui["reader.settings.lineHeight"]</span>
+                <input type="range" min="1.4" max="2.6" step=".05" data-reader-proxy="lineHeight" />
+                <output data-reader-proxy-output="lineHeight" data-format="decimal1"></output>
+            </label>
+            <label class="reader-sheet-range">
+                <span>@ui["reader.settings.textWidth"]</span>
+                <input type="range" min="520" max="1100" step="20" data-reader-proxy="textWidthPx" />
+                <output data-reader-proxy-output="textWidthPx" data-format="px"></output>
+            </label>
+        }
+
+        @if (capabilities.SupportsContinuous || capabilities.SupportsPaged)
+        {
+            <div class="reader-sheet-field">
+                <span id="@prefix-sheet-mode">@ui["reader.frame.readingMode"]</span>
+                <div class="reader-segmented" role="group" aria-labelledby="@prefix-sheet-mode">
+                    <button type="button" data-reader-proxy="readingMode" data-value="continuous" aria-pressed="false">@ui["reader.frame.modeScroll"]</button>
+                    <button type="button" data-reader-proxy="readingMode" data-value="paged" aria-pressed="false">@ui["reader.frame.modePages"]</button>
+                </div>
+            </div>
+        }
+
+        @if (capabilities.SupportsTwoPage)
+        {
+            <label class="reader-sheet-toggle" data-reader-mode-only="paged">
+                <span>@ui["reader.settings.twoPageSpread"]</span>
+                <input type="checkbox" role="switch" data-reader-proxy="twoPageSpread" />
+            </label>
+        }
+
+        @if (capabilities.SupportsTypography)
+        {
+            <div class="reader-sheet-field">
+                <span id="@prefix-sheet-chapter-style">@ui["reader.settings.chapterStyle"]</span>
+                <div class="reader-segmented reader-sheet-wrap" role="group" aria-labelledby="@prefix-sheet-chapter-style">
+                    @foreach (var (style, styleKey) in chapterStyles)
+                    {
+                        <button type="button" data-reader-proxy="chapterStyle" data-value="@style" aria-pressed="false">@ui[styleKey]</button>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.LayoutPreferences)
+        {
+            <label class="reader-sheet-toggle">
+                <span>@ui["reader.settings.paragraphIndent"]</span>
+                <input type="checkbox" role="switch" data-reader-proxy="paragraphIndent" />
+            </label>
+            <label class="reader-sheet-toggle">
+                <span>@ui["reader.settings.hyphenation"]</span>
+                <input type="checkbox" role="switch" data-reader-proxy="hyphenation" />
+            </label>
+            <label class="reader-sheet-toggle" data-reader-mode-only="paged">
+                <span>@ui["reader.settings.showPageNumbers"]</span>
+                <input type="checkbox" role="switch" data-reader-proxy="showPageNumbers" />
+            </label>
+            <label class="reader-sheet-toggle">
+                <span>@ui["reader.settings.showIllustrations"]</span>
+                <input type="checkbox" role="switch" data-reader-proxy="showIllustrations" />
+            </label>
+            <label class="reader-sheet-toggle" data-reader-mode-only="paged">
+                <span>@ui["novels.reader.pageAnimations"]</span>
+                <input type="checkbox" role="switch" data-reader-proxy="pageTransition" data-on="slide" data-off="none" />
+            </label>
+            <label class="reader-sheet-toggle">
+                <span>@ui["reader.settings.autoContinueChapters"]</span>
+                <input type="checkbox" role="switch" data-reader-proxy="autoContinueChapters" />
+            </label>
+        }
+
+        <button type="button" class="reader-sheet-link" data-reader-settings-open="reading">@ui["novels.reader.allSettings"]</button>
+    </section>
+
+    @if (translation is not null)
+    {
+        <section class="reader-sheet-group" aria-labelledby="@prefix-sheet-translation">
+            <h2 id="@prefix-sheet-translation">@ui["reader.frame.translation"]</h2>
+            <div class="reader-segmented reader-sheet-wrap" role="radiogroup" aria-labelledby="@prefix-sheet-translation">
+                <button type="button" role="radio" aria-checked="false" data-reader-view="@translation.OriginalValue">@translation.OriginalLabel</button>
+                <button type="button" role="radio" aria-checked="false" data-reader-view="@translation.GeneratedValue" disabled="@(!translation.GeneratedAvailable)">
+                    @translation.GeneratedLabel
+                </button>
+                @if (translation.BothLabel is not null)
+                {
+                    <button type="button" role="radio" aria-checked="false" data-reader-view="@translation.BothValue" disabled="@(!translation.GeneratedAvailable)">
+                        @translation.BothLabel
+                    </button>
+                }
+            </div>
+            @if (translation.GenerateLabel is not null)
+            {
+                <button type="button" class="reader-sheet-link" data-reader-menu-toggle="language">@translation.GenerateLabel</button>
+            }
+        </section>
+    }
+
+    <section class="reader-sheet-group" data-reader-learning-group aria-labelledby="@prefix-sheet-learning" hidden>
+        <h2 id="@prefix-sheet-learning">@ui["reader.frame.learning"]</h2>
+        <label class="reader-sheet-toggle">
+            <span>@ui["reader.frame.learningMode"]</span>
+            <input type="checkbox" role="switch" data-reader-learning-toggle checked />
+        </label>
+    </section>
+</div>

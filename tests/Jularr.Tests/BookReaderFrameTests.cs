@@ -19,6 +19,7 @@ public sealed class BookReaderFrameTests
     public void BookReaderRendersTheSharedFrameWithWorkingControls()
     {
         var page = Read("src", "Jularr.Web", "Pages", "Books", "Read.cshtml");
+        var sheet = Read("src", "Jularr.Web", "Pages", "Shared", "_ReaderAppearanceSheet.cshtml");
 
         StringAssert.Contains(page, "data-reader-frame");
         StringAssert.Contains(page, "data-reader-chrome-primary");
@@ -43,7 +44,7 @@ public sealed class BookReaderFrameTests
             .Distinct();
         foreach (var name in toggles)
         {
-            StringAssert.Contains(page, $"data-reader-menu=\"{name}\"", $"Menu '{name}' has no panel.");
+            StringAssert.Contains(page + sheet, $"data-reader-menu=\"{name}\"", $"Menu '{name}' has no panel.");
         }
 
         // Read-aloud entry points exist only behind the TTS capability.

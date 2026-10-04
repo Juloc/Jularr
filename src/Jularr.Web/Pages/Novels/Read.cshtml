@@ -94,9 +94,20 @@
         ("midnight", "reader.frame.paper.midnight"),
         ("oled", "reader.frame.paper.night")
     };
+    var papers = paperStyles.Select(paper => new Jularr.Web.Features.ReaderCore.ReaderSheetPaper(paper.Item1, ui[paper.Item2])).ToList();
+    var sheetTranslation = new Jularr.Web.Features.ReaderCore.ReaderSheetTranslation(
+        "ja",
+        "de",
+        "both",
+        ui.Format("reader.frame.viewOriginal", ("language", "JA")),
+        ui.Format("reader.frame.viewGenerated", ("language", "DE")),
+        ui["reader.frame.viewBoth"],
+        hasTranslation,
+        canTranslate ? ui["novels.reader.translateIntoGerman"] : null);
+    var appearanceSheet = new Jularr.Web.Features.ReaderCore.ReaderAppearanceSheetModel("novel", Model.ReaderDocument.Capabilities, papers, sheetTranslation, true, true);
 }
 
-<div class="novel-reader-shell reader-frame"
+<div class="novel-reader-shell reader-frame reader-frame-prose"
      data-novel-reader
      data-unified-reader
      data-reader-frame
@@ -151,16 +162,11 @@
             <partial name="_ReaderIcon" model="@("back")" />
         </a>
 
-        <div class="reader-frame-title novel-frame-title">
-            <span class="novel-frame-series">@chapter.WorkTitle</span>
-            <span class="novel-frame-separator" aria-hidden="true"><partial name="_ReaderIcon" model="@("forward")" /></span>
-            <span class="novel-frame-chapter">
-                <strong>@(chapterLabel ?? chapter.Title)</strong>
-                @if (chapterLabel is not null)
-                {
-                    <span>@chapter.Title</span>
-                }
-            </span>
+        <img class="reader-frame-cover" src="/Novels/Cover/@chapter.WorkId" alt="" width="40" height="56" decoding="async" />
+
+        <div class="reader-frame-title">
+            <strong>@chapter.WorkTitle</strong>
+            <span>@(chapterLabel is null ? chapter.Title : chapterLabel + " · " + chapter.Title)</span>
         </div>
 
         <div class="reader-frame-actions">
@@ -172,7 +178,7 @@
             </button>
 
             <div class="reader-menu-anchor">
-                <button class="reader-frame-icon reader-frame-labelled reader-frame-desktop" type="button"
+                <button class="reader-frame-icon reader-frame-labelled" type="button"
                         data-reader-menu-toggle="search"
                         aria-haspopup="dialog" aria-expanded="false" aria-controls="novel-menu-search"
                         aria-label="@ui["reader.frame.search"]" title="@ui["reader.frame.search"]">
@@ -235,102 +241,10 @@
                     <span class="reader-frame-glyph-inline" aria-hidden="true"></span>
                     <span class="reader-frame-label">@ui["reader.frame.appearance"]</span>
                 </button>
-                <div class="reader-menu reader-sheet" id="novel-menu-appearance" data-reader-menu="appearance" role="dialog" aria-label="@ui["reader.frame.appearance"]" hidden>
-                    <section class="reader-sheet-card" aria-labelledby="novel-sheet-mode">
-                        <h2 id="novel-sheet-mode">@ui["reader.frame.readingMode"]</h2>
-                        <div class="reader-sheet-choices reader-sheet-modes">
-                            <button type="button" data-values='{"readingMode":"paged","chapterStyle":"classic"}' aria-pressed="false">
-                                <span class="reader-sheet-thumb reader-thumb-standard" aria-hidden="true"></span>
-                                <span>@ui["novels.reader.modeStandard"]</span>
-                            </button>
-                            <button type="button" data-values='{"readingMode":"paged","chapterStyle":"light-novel"}' aria-pressed="false">
-                                <span class="reader-sheet-thumb reader-thumb-light-novel" aria-hidden="true"></span>
-                                <span>@ui["novels.reader.modeLightNovel"]</span>
-                            </button>
-                            <button type="button" data-values='{"readingMode":"continuous"}' aria-pressed="false">
-                                <span class="reader-sheet-thumb reader-thumb-scroll" aria-hidden="true"></span>
-                                <span>@ui["reader.frame.modeScroll"]</span>
-                            </button>
-                        </div>
-                    </section>
-
-                    @if (Model.ReaderDocument.Capabilities.SupportsThemeArtwork)
-                    {
-                        <section class="reader-sheet-card" aria-labelledby="novel-sheet-background">
-                            <h2 id="novel-sheet-background">@ui["reader.settings.background"]</h2>
-                            <div class="reader-sheet-choices reader-sheet-backgrounds" data-reader-background-choices data-labels="@Json.Serialize(new { none = ui["novels.reader.backgroundNone"], auto = ui["reader.settings.auto"] })"></div>
-                        </section>
-                    }
-
-                    <section class="reader-sheet-card" aria-labelledby="novel-sheet-type">
-                        <h2 id="novel-sheet-type">@ui["reader.frame.fontLayout"]</h2>
-                        <label class="reader-sheet-range">
-                            <span>@ui["reader.settings.fontSize"]</span>
-                            <input type="range" min=".85" max="1.8" step=".05" data-reader-proxy="fontSizeRem" />
-                            <output data-reader-proxy-output="fontSizeRem" data-format="px16"></output>
-                        </label>
-                        <label class="reader-sheet-range">
-                            <span>@ui["reader.settings.lineHeight"]</span>
-                            <input type="range" min="1.4" max="2.6" step=".05" data-reader-proxy="lineHeight" />
-                            <output data-reader-proxy-output="lineHeight" data-format="decimal1"></output>
-                        </label>
-                        <label class="reader-sheet-range">
-                            <span>@ui["reader.settings.textWidth"]</span>
-                            <input type="range" min="520" max="1100" step="20" data-reader-proxy="textWidthPx" />
-                            <output data-reader-proxy-output="textWidthPx" data-format="px"></output>
-                        </label>
-                        <div class="reader-segmented" role="group" aria-label="@ui["reader.settings.fontFamily"]">
-                            <button type="button" data-reader-proxy="fontFamily" data-value="literary-serif" aria-pressed="false">@ui["novels.reader.fontStandard"]</button>
-                            <button type="button" data-reader-proxy="fontFamily" data-value="book-serif" aria-pressed="false">@ui["novels.reader.fontSerif"]</button>
-                            <button type="button" data-reader-proxy="fontFamily" data-value="system-sans" aria-pressed="false">@ui["novels.reader.fontSans"]</button>
-                        </div>
-                        <label class="reader-sheet-toggle">
-                            <span>@ui["reader.settings.paragraphIndent"]</span>
-                            <input type="checkbox" role="switch" data-reader-proxy="paragraphIndent" />
-                        </label>
-                    </section>
-
-                    <section class="reader-sheet-card" aria-labelledby="novel-sheet-colors">
-                        <h2 id="novel-sheet-colors">@ui["reader.frame.colorScheme"]</h2>
-                        <div class="reader-sheet-choices reader-sheet-papers" role="radiogroup" aria-labelledby="novel-sheet-colors">
-                            @foreach (var (paper, paperKey) in paperStyles)
-                            {
-                                <button type="button" role="radio" aria-checked="false" data-reader-proxy="paperStyle" data-value="@paper">
-                                    <span class="reader-sheet-swatch" data-paper="@paper" aria-hidden="true"></span>
-                                    <span>@ui[paperKey]</span>
-                                </button>
-                            }
-                        </div>
-                    </section>
-
-                    <section class="reader-sheet-card" aria-labelledby="novel-sheet-more">
-                        <h2 id="novel-sheet-more">@ui["novels.reader.moreSettings"]</h2>
-                        <label class="reader-sheet-toggle">
-                            <span>@ui["reader.settings.hyphenation"]</span>
-                            <input type="checkbox" role="switch" data-reader-proxy="hyphenation" />
-                        </label>
-                        <label class="reader-sheet-toggle" data-reader-mode-only="paged">
-                            <span>@ui["reader.settings.showPageNumbers"]</span>
-                            <input type="checkbox" role="switch" data-reader-proxy="showPageNumbers" />
-                        </label>
-                        <label class="reader-sheet-toggle">
-                            <span>@ui["reader.settings.showIllustrations"]</span>
-                            <input type="checkbox" role="switch" data-reader-proxy="showIllustrations" />
-                        </label>
-                        <label class="reader-sheet-toggle" data-reader-mode-only="paged">
-                            <span>@ui["novels.reader.pageAnimations"]</span>
-                            <input type="checkbox" role="switch" data-reader-proxy="pageTransition" data-on="slide" data-off="none" />
-                        </label>
-                        <label class="reader-sheet-toggle">
-                            <span>@ui["reader.settings.autoContinueChapters"]</span>
-                            <input type="checkbox" role="switch" data-reader-proxy="autoContinueChapters" />
-                        </label>
-                        <button type="button" class="reader-sheet-link" data-reader-settings-open="reading">@ui["novels.reader.allSettings"]</button>
-                    </section>
-                </div>
+                <partial name="_ReaderAppearanceSheet" model="@appearanceSheet" />
             </div>
 
-            <button class="reader-frame-icon reader-frame-desktop @(currentBookmarks.Count > 0 ? "has-bookmarks" : "")" type="button"
+            <button class="reader-frame-icon @(currentBookmarks.Count > 0 ? "has-bookmarks" : "")" type="button"
                     data-reader-bookmark
                     aria-label="@ui["novels.read.setBookmark"]"
                     title="@ui["novels.read.setBookmark"]">
@@ -346,14 +260,25 @@
                     <span class="reader-frame-label">@ui["reader.frame.more"]</span>
                 </button>
                 <div class="reader-menu reader-menu-more" id="novel-menu-more" data-reader-menu="more" role="menu" aria-label="@ui["reader.frame.more"]" hidden>
-                    <button type="button" role="menuitem" class="reader-frame-mobile" data-reader-bookmark>
-                        <partial name="_ReaderIcon" model="@("bookmark")" />
-                        <span>@ui["novels.read.setBookmark"]</span>
+                    <button type="button" role="menuitem" class="reader-frame-mobile" data-reader-contents-open="chapters">
+                        <partial name="_ReaderIcon" model="@("contents")" />
+                        <span>@ui["reader.frame.contents"]</span>
                     </button>
-                    <button type="button" role="menuitem" class="reader-frame-mobile" data-reader-menu-toggle="search">
-                        <partial name="_ReaderIcon" model="@("search")" />
-                        <span>@ui["reader.frame.search"]</span>
+                    <button type="button" role="menuitem" class="reader-frame-mobile" data-reader-menu-toggle="appearance">
+                        <span class="reader-frame-glyph-inline" aria-hidden="true"></span>
+                        <span>@ui["reader.frame.appearance"]</span>
                     </button>
+                    <button type="button" role="menuitem" class="reader-frame-mobile" data-reader-menu-toggle="language">
+                        <partial name="_ReaderIcon" model="@("translate")" />
+                        <span>@ui["reader.frame.language"]</span>
+                    </button>
+                    @if (supportsTts)
+                    {
+                        <button type="button" role="menuitem" class="reader-frame-mobile" data-reader-tts-toggle aria-pressed="false" hidden>
+                            <partial name="_ReaderIcon" model="@("headphones")" />
+                            <span>@ui["reader.frame.readAloud"]</span>
+                        </button>
+                    }
                     <button type="button" role="menuitem" data-reader-contents-open="notes">
                         <partial name="_ReaderIcon" model="@("notes")" />
                         <span>@ui["novels.read.bookmarksAndHighlights"]</span>
@@ -368,14 +293,6 @@
                             <span>@ui["novels.read.furiganaTitle"]</span>
                         </button>
                     }
-                    <div class="reader-menu-row" role="group" aria-label="@ui["reader.frame.readingMode"]">
-                        <partial name="_ReaderIcon" model="@("reading-mode")" />
-                        <span>@ui["reader.frame.readingMode"]</span>
-                        <div class="reader-segmented">
-                            <button type="button" data-reader-proxy="readingMode" data-value="continuous" aria-pressed="false">@ui["reader.frame.modeScroll"]</button>
-                            <button type="button" data-reader-proxy="readingMode" data-value="paged" aria-pressed="false">@ui["reader.frame.modePages"]</button>
-                        </div>
-                    </div>
                     <button type="button" role="menuitem" data-reader-autoscroll-toggle aria-pressed="false" data-reader-mode-only="continuous">
                         <partial name="_ReaderIcon" model="@("auto-scroll")" />
                         <span>@ui["reader.frame.autoScroll"]</span>
@@ -574,7 +491,7 @@
     <footer class="reader-frame-bottom" data-reader-chrome>
         @if (chapter.PreviousChapterId is Guid previousChapter)
         {
-            <a class="reader-frame-nav reader-frame-desktop" href="/Novels/Read/@previousChapter" data-novel-chapter-link="previous"
+            <a class="reader-frame-nav" href="/Novels/Read/@previousChapter" data-novel-chapter-link="previous"
                aria-label="@ui["reader.frame.previousChapter"]" title="@ui["reader.frame.previousChapter"]">
                 <partial name="_ReaderIcon" model="@("back")" />
                 <span class="reader-frame-label">@ui["reader.frame.previousChapter"]</span>
@@ -582,7 +499,7 @@
         }
         else
         {
-            <button class="reader-frame-nav reader-frame-desktop" type="button" disabled aria-label="@ui["reader.frame.previousChapter"]">
+            <button class="reader-frame-nav" type="button" disabled aria-label="@ui["reader.frame.previousChapter"]">
                 <partial name="_ReaderIcon" model="@("back")" />
                 <span class="reader-frame-label">@ui["reader.frame.previousChapter"]</span>
             </button>
@@ -594,20 +511,12 @@
                        data-reader-progress-slider
                        aria-label="@ui["reader.frame.progressAria"]" />
             </label>
-            <button class="reader-frame-icon reader-frame-mobile" type="button" data-reader-page-step="-1"
-                    aria-label="@ui["reader.frame.previousPage"]" title="@ui["reader.frame.previousPage"]">
-                <partial name="_ReaderIcon" model="@("back")" />
-            </button>
             <output class="reader-progress-text" data-reader-progress-text aria-live="off"></output>
-            <button class="reader-frame-icon reader-frame-mobile" type="button" data-reader-page-step="1"
-                    aria-label="@ui["reader.frame.nextPage"]" title="@ui["reader.frame.nextPage"]">
-                <partial name="_ReaderIcon" model="@("forward")" />
-            </button>
         </div>
 
         @if (chapter.NextChapterId is Guid nextChapter)
         {
-            <a class="reader-frame-nav reader-frame-desktop" href="/Novels/Read/@nextChapter" data-novel-chapter-link="next"
+            <a class="reader-frame-nav" href="/Novels/Read/@nextChapter" data-novel-chapter-link="next"
                aria-label="@ui["reader.frame.nextChapter"]" title="@ui["reader.frame.nextChapter"]">
                 <span class="reader-frame-label">@ui["reader.frame.nextChapter"]</span>
                 <partial name="_ReaderIcon" model="@("forward")" />
@@ -615,7 +524,7 @@
         }
         else
         {
-            <button class="reader-frame-nav reader-frame-desktop" type="button" disabled aria-label="@ui["reader.frame.nextChapter"]">
+            <button class="reader-frame-nav" type="button" disabled aria-label="@ui["reader.frame.nextChapter"]">
                 <span class="reader-frame-label">@ui["reader.frame.nextChapter"]</span>
                 <partial name="_ReaderIcon" model="@("forward")" />
             </button>
@@ -645,32 +554,6 @@
             </button>
         </div>
 
-        <nav class="reader-frame-tools reader-frame-mobile" aria-label="@ui["reader.frame.toolsAria"]">
-            <button type="button" data-reader-contents-toggle aria-controls="novel-reader-contents" aria-expanded="false">
-                <partial name="_ReaderIcon" model="@("contents")" />
-                <span>@ui["reader.frame.contents"]</span>
-            </button>
-            @if (supportsTts)
-            {
-                <button type="button" data-reader-tts-toggle aria-pressed="false" hidden>
-                    <span class="reader-play-icon"><partial name="_ReaderIcon" model="@("headphones")" /></span>
-                    <span class="reader-pause-icon"><partial name="_ReaderIcon" model="@("pause")" /></span>
-                    <span>@ui["reader.frame.readAloud"]</span>
-                </button>
-            }
-            <button type="button" data-reader-menu-toggle="appearance" aria-haspopup="dialog" aria-expanded="false" aria-controls="novel-menu-appearance">
-                <span class="reader-frame-glyph-inline" aria-hidden="true"></span>
-                <span>@ui["reader.frame.appearance"]</span>
-            </button>
-            <button type="button" data-reader-menu-toggle="language" aria-haspopup="menu" aria-expanded="false" aria-controls="novel-menu-language">
-                <partial name="_ReaderIcon" model="@("translate")" />
-                <span>@ui["reader.frame.language"]</span>
-            </button>
-            <button type="button" data-reader-menu-toggle="more" aria-haspopup="menu" aria-expanded="false" aria-controls="novel-menu-more">
-                <partial name="_ReaderIcon" model="@("more")" />
-                <span>@ui["reader.frame.more"]</span>
-            </button>
-        </nav>
     </footer>
 
     <div class="reader-frame-settings">

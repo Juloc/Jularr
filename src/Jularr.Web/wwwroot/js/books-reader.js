@@ -128,9 +128,13 @@
         }, 2400);
     };
 
+    // The status lets the shell tell a revoked permission or missing content from a network failure.
+    const httpError = async response => Object.assign(new Error(await response.text()), { status: response.status });
+
     const failed = error => {
         console.warn(error);
-        toast(t("books.read.actionFailed", "That did not work. Please try again."));
+        if (root.readerShell) root.readerShell.reportFailure(error);
+        else toast(t("books.read.actionFailed", "That did not work. Please try again."));
     };
 
     // ---- Language views ---------------------------------------------------------
@@ -146,8 +150,8 @@
     const currentAnchorLanguage = () => view === "original" ? "original" : targetLanguage;
 
     const syncViewControls = () => {
-        root.querySelectorAll("[data-book-view]").forEach(button => {
-            button.setAttribute("aria-checked", button.dataset.bookView === view ? "true" : "false");
+        root.querySelectorAll("[data-reader-view]").forEach(button => {
+            button.setAttribute("aria-checked", button.dataset.readerView === view ? "true" : "false");
         });
         // Chapter links keep the chosen language view.
         root.querySelectorAll("a[data-book-chapter-link]").forEach(link => {
@@ -291,7 +295,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const result = await response.json();
         if (result?.settings) applyServerSettings(result.settings);
     };
@@ -921,21 +925,6 @@
             return;
         }
         const key = event.key;
-        if (key === "b" || key === "B") {
-            event.preventDefault();
-            toggleBookmark();
-            return;
-        }
-        if (key === "n" || key === "N") {
-            event.preventDefault();
-            root.querySelector("[data-reader-contents-toggle]")?.click();
-            return;
-        }
-        if (key === "/") {
-            event.preventDefault();
-            root.querySelector('[data-reader-menu-toggle="search"]')?.click();
-            return;
-        }
         if (pdfContainer) {
             if (pdf) handlePdfKey(event, target);
             return;
@@ -1074,9 +1063,10 @@
             return paragraph;
         }));
         root.dataset.hasTranslation = "true";
-        root.querySelectorAll('[data-book-view="translated"], [data-book-view="both"]')
+        root.querySelectorAll('[data-reader-view="translated"], [data-reader-view="both"]')
             .forEach(button => {
                 button.hidden = false;
+                button.disabled = false;
             });
         translateForm?.remove();
         setView("translated");
@@ -1121,7 +1111,7 @@
                 credentials: "same-origin",
                 headers: { "X-Requested-With": "fetch" }
             });
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             void pollTranslation();
         } catch (error) {
             if (button) button.disabled = false;
@@ -1129,8 +1119,8 @@
         }
     });
 
-    root.querySelectorAll("[data-book-view]").forEach(button => {
-        button.addEventListener("click", () => setView(button.dataset.bookView));
+    root.querySelectorAll("[data-reader-view]").forEach(button => {
+        button.addEventListener("click", () => setView(button.dataset.readerView));
     });
 
     // ---- PDF translation ------------------------------------------------------------
@@ -1197,7 +1187,7 @@
                 showPdfTranslation({ message: t("books.read.pdfTranslationUnavailable", "Translation is not available for this book.") });
                 return;
             }
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             const result = await response.json();
             if (result.status === "ready") {
                 showPdfTranslation({ paragraphs: result.paragraphs });
@@ -1236,7 +1226,7 @@
                 credentials: "same-origin",
                 headers: { "X-Requested-With": "fetch" }
             });
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             pdfTranslationPolls = 0;
             waitForPdfTranslation();
         } catch (error) {
@@ -1267,7 +1257,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         return response.json();
     };
 
@@ -1285,7 +1275,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const type = response.headers.get("content-type") || "";
         return type.includes("application/json") ? response.json() : null;
     };
@@ -1352,11 +1342,6 @@
             bookmarkButton.setAttribute("aria-label", label);
             bookmarkButton.title = label;
         }
-        root.querySelectorAll("[data-book-bookmark-proxy]").forEach(button => {
-            button.setAttribute("aria-pressed", active ? "true" : "false");
-            const span = button.querySelector("span");
-            if (span) span.textContent = label;
-        });
     }
 
     async function toggleBookmark() {
@@ -1405,9 +1390,6 @@
     }
 
     bookmarkButton?.addEventListener("click", toggleBookmark);
-    root.querySelectorAll("[data-book-bookmark-proxy]").forEach(button => {
-        button.addEventListener("click", toggleBookmark);
-    });
 
     // ---- Contents panel ---------------------------------------------------------------
 
@@ -1948,7 +1930,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const item = await response.json();
         currentHighlights.push(item);
         if (allAnnotations) {
@@ -2028,7 +2010,7 @@
             const payload = event.detail?.payload || {};
             if (translated) translated.replaceChildren();
             root.dataset.hasTranslation = "false";
-            root.querySelectorAll('[data-book-view="translated"], [data-book-view="both"]')
+            root.querySelectorAll('[data-reader-view="translated"], [data-reader-view="both"]')
                 .forEach(button => {
                     button.hidden = true;
                 });
@@ -2039,6 +2021,8 @@
             if (payload.number !== undefined) {
                 const number = root.querySelector("[data-book-chapter-number]");
                 if (number) number.textContent = String(payload.number);
+                const context = root.querySelector("[data-book-chapter-context]");
+                if (context) context.textContent = t("books.chapter.number", "Chapter {number}", { number: payload.number });
                 const label = root.querySelector("[data-book-chapter-label]");
                 if (label) label.textContent = t("books.chapter.number", "Chapter {number}", { number: payload.number });
             }
@@ -2053,16 +2037,6 @@
             syncViewControls();
             ensureParagraphMetadata(original);
             scheduleLayout(null);
-        });
-
-        root.addEventListener("jularr:offline-chapter-missing", () => {
-            let offlineText = {};
-            try {
-                offlineText = JSON.parse(document.getElementById("offline-library-text")?.textContent || "{}");
-            } catch {
-            }
-            toast(offlineText["offlineLibrary.chapter.offlineMissing"] ||
-                t("books.read.actionFailed", "That did not work. Please try again."));
         });
     }
 

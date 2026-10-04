@@ -765,6 +765,136 @@ body:has([data-reader-frame]) .app-main {
     z-index: 97;
 }
 
+/* Clean reading: the bars fade away without changing the page area, so the logical position never moves.
+   Scroll mode also slides them out of the way; paged frames have a fixed height and only fade. */
+.reader-frame-prose > .reader-frame-top,
+.reader-frame-prose > .reader-frame-bottom {
+    transition: transform .22s ease, opacity .18s ease;
+}
+
+.reader-frame-prose.reader-chrome-hidden > .reader-frame-top,
+.reader-frame-prose.reader-chrome-hidden > .reader-frame-bottom {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform .22s ease, opacity .18s ease, visibility 0s .22s;
+}
+
+.reader-frame-prose.reader-chrome-hidden:not(.reader-frame-fixed) > .reader-frame-top {
+    transform: translateY(-100%);
+}
+
+.reader-frame-prose.reader-chrome-hidden:not(.reader-frame-fixed) > .reader-frame-bottom {
+    transform: translateY(100%);
+}
+
+/* The page waits for the exact resume position; a thin sweep under the top bar shows that it is loading. */
+.reader-frame-prose > .reader-frame-body {
+    transition: opacity .12s ease;
+}
+
+.reader-frame-prose[data-reader-restoring="true"] > .reader-frame-body {
+    opacity: 0;
+}
+
+.reader-frame-prose[data-reader-restoring="true"] > .reader-frame-top::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent) no-repeat -40% 0 / 40% 100%;
+    animation: reader-restore-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes reader-restore-sweep {
+    to {
+        background-position: 140% 0;
+    }
+}
+
+.reader-notice {
+    position: fixed;
+    z-index: 90;
+    left: 50%;
+    bottom: calc(86px + var(--safe-bottom, 0px));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: min(520px, calc(100vw - 24px));
+    padding: 10px 10px 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 12px 32px rgba(20, 16, 12, .24);
+    font-size: 14px;
+}
+
+.reader-notice[hidden] {
+    display: none;
+}
+
+.reader-notice p {
+    flex: 1 1 auto;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.reader-notice-action {
+    min-height: 36px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.reader-notice-action[hidden] {
+    display: none;
+}
+
+.reader-notice-close {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.reader-notice :is(button):focus-visible {
+    outline: 2px solid var(--focus-ring, var(--accent));
+    outline-offset: 2px;
+}
+
+/* Word details: a right-hand side panel from tablet width (overlaying the page margin, so the text never
+   reflows under a selection) and a compact bottom sheet that can expand on phones. */
+body:has(.reader-frame-prose) .language-inspector {
+    inset-block: calc(var(--reader-frame-bar) + 20px + var(--safe-top, 0px)) calc(86px + var(--safe-bottom, 0px));
+    inset-inline-end: calc(18px + var(--safe-right, 0px));
+    width: min(360px, calc(100vw - 28px));
+    max-height: none;
+    align-content: start;
+    border-radius: 14px;
+}
+
+.reader-detail-handle {
+    display: none;
+}
+
+html[data-reader-learning="off"] [data-li-lookup],
+html[data-reader-learning="off"] [data-language-lookup-selection] {
+    display: none !important;
+}
+
 .reader-frame-title {
     min-width: 0;
     flex: 1 1 auto;
@@ -773,19 +903,19 @@ body:has([data-reader-frame]) .app-main {
     padding-inline: 6px;
 }
 
-.reader-frame-title strong,
-.reader-frame-title span {
+.reader-frame-title > strong,
+.reader-frame-title > span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.reader-frame-title strong {
+.reader-frame-title > strong {
     font-size: 15px;
     font-weight: 650;
 }
 
-.reader-frame-title span {
+.reader-frame-title > span {
     color: var(--muted);
     font-size: 12px;
 }
@@ -853,6 +983,16 @@ body:has([data-reader-frame]) .app-main {
     white-space: nowrap;
 }
 
+.reader-frame-cover {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 50px;
+    border-radius: 5px;
+    object-fit: cover;
+    background: var(--surface-2);
+    box-shadow: 0 1px 4px rgba(20, 16, 12, .22);
+}
+
 .reader-frame-icon.reader-frame-chip {
     width: auto;
     padding: 0 12px;
@@ -906,6 +1046,10 @@ body:has([data-reader-frame]) .app-main {
     .reader-frame-nav .reader-frame-label {
         display: none;
     }
+}
+
+.reader-frame-nav[aria-disabled="true"] {
+    opacity: .45;
 }
 
 .reader-menu-tag {
@@ -1226,7 +1370,8 @@ body:has([data-reader-frame]) .app-main {
     cursor: pointer;
 }
 
-.reader-segmented button[aria-pressed="true"] {
+.reader-segmented button[aria-pressed="true"],
+.reader-segmented button[aria-checked="true"] {
     background: var(--surface);
     color: var(--accent-text, var(--accent));
     box-shadow: 0 1px 5px rgba(20, 16, 12, .16);
@@ -1626,52 +1771,73 @@ body:has([data-reader-frame]) .app-main {
     bottom: calc(84px + var(--safe-bottom, 0px));
 }
 
-/* Appearance sheet (cards of quick settings bound through setting proxies) ---- */
+/* Appearance sheet: Appearance, Translation and Learning groups of quick settings bound through
+   setting proxies. A right-hand side sheet from tablet width; the phone rules turn every menu into a bottom sheet. */
 
-/* The sheet spans the reader frame (positioned against the top bar), so it
-   never runs past the frame's rounded clip. */
 .reader-menu-anchor:has(> .reader-sheet) {
     position: static;
 }
 
 .reader-sheet {
-    left: 10px;
-    right: 10px;
-    width: auto;
+    top: calc(var(--reader-frame-bar) + 20px + var(--safe-top, 0px));
+    right: calc(18px + var(--safe-right, 0px));
+    width: min(380px, calc(100vw - 28px));
     max-width: none;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
-    padding: 10px;
-    background: color-mix(in srgb, var(--surface) 96%, var(--bg));
-}
-
-/* Wide screens: one row of cards, like a control strip under the page. */
-@media (min-width: 1400px) {
-    .reader-sheet {
-        grid-template-columns:
-            minmax(196px, .9fr) minmax(214px, 1.1fr) minmax(226px, 1.15fr) minmax(206px, 1fr) minmax(186px, .9fr);
-    }
-
-    .reader-sheet:has(> .reader-sheet-card:nth-child(4):last-child) {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.1fr) minmax(0, 1fr);
-    }
-}
-
-.reader-sheet-card {
-    display: grid;
-    align-content: start;
-    gap: 10px;
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    max-height: calc(100dvh - var(--reader-frame-bar) - 110px - var(--safe-top, 0px) - var(--safe-bottom, 0px));
+    gap: 18px;
+    padding: 16px;
     background: var(--surface);
 }
 
-.reader-sheet-card h2 {
+.reader-frame:fullscreen .reader-sheet {
+    top: calc(var(--reader-frame-bar) + 8px);
+    right: 12px;
+}
+
+.reader-sheet-group {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+}
+
+.reader-sheet-group[hidden] {
+    display: none;
+}
+
+.reader-sheet-group + .reader-sheet-group {
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.reader-sheet-group h2 {
     margin: 0;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
+}
+
+.reader-sheet-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.reader-sheet-field {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+
+.reader-sheet-field > span {
+    color: var(--text-secondary, var(--muted));
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.reader-sheet-wrap {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
 }
 
 .reader-sheet-choices {
@@ -1714,6 +1880,11 @@ body:has([data-reader-frame]) .app-main {
     font-weight: 650;
 }
 
+.reader-segmented button:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
 .reader-sheet-thumb {
     width: 52px;
     height: 68px;
@@ -1724,62 +1895,20 @@ body:has([data-reader-frame]) .app-main {
     background-size: cover;
 }
 
-/* Page thumbnails drawn with gradients: text lines, an illustration, a long scroll. */
-.reader-thumb-standard,
-.reader-thumb-light-novel,
-.reader-thumb-scroll {
-    background-color: var(--surface);
-    background-repeat: no-repeat;
-    background-image: repeating-linear-gradient(
-        to bottom,
-        color-mix(in srgb, var(--text) 35%, transparent) 0 2px,
-        transparent 2px 7px);
-    background-size: 36px 52px;
-    background-position: center 8px;
-}
-
-.reader-thumb-light-novel {
-    background-image:
-        linear-gradient(color-mix(in srgb, var(--accent) 38%, var(--surface-2)), color-mix(in srgb, var(--accent) 38%, var(--surface-2))),
-        repeating-linear-gradient(
-            to bottom,
-            color-mix(in srgb, var(--text) 35%, transparent) 0 2px,
-            transparent 2px 7px);
-    background-size: 36px 22px, 36px 26px;
-    background-position: center 6px, center 34px;
-}
-
-.reader-thumb-scroll {
-    background-size: 36px 100%;
-    background-position: center 4px;
-}
-
 .reader-thumb-background {
     width: 54px;
     height: 72px;
 }
 
-/* Fixed-count rows: three reading modes, five paper colours. */
-.reader-sheet-modes {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
+/* Paper colours: as many columns as fit. */
 .reader-sheet-papers {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
     gap: 2px;
 }
 
-.reader-sheet-papers > button,
-.reader-sheet-modes > button {
+.reader-sheet-papers > button {
     padding-inline: 2px;
     font-size: 11px;
-}
-
-/* Two-word mode names ("Light Novel") wrap instead of being cut. */
-.reader-sheet-modes > button > span:last-child {
-    white-space: normal;
-    line-height: 1.2;
-    text-align: center;
 }
 
 /* Background artwork scrolls sideways instead of growing the card. */
@@ -1994,6 +2123,65 @@ body:has([data-reader-frame]) .app-main {
         text-align: center;
     }
 
+    /* Prose readers: back, context, search, bookmark and more on top; a slim slider with the position
+       centred between large Previous / Next targets below. Everything else lives in sheets. */
+    .reader-frame-prose .reader-frame-title {
+        text-align: start;
+    }
+
+    .reader-frame-prose .reader-frame-cover,
+    .reader-frame-prose .reader-frame-actions .reader-frame-label {
+        display: none;
+    }
+
+    .reader-frame-prose .reader-frame-icon.reader-frame-labelled {
+        min-width: 40px;
+        height: 40px;
+        padding: 0;
+    }
+
+    .reader-frame-prose > .reader-frame-bottom {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas:
+            "track track track"
+            "previous position next";
+        align-items: center;
+        gap: 0 8px;
+        padding: 6px 10px calc(6px + var(--safe-bottom, 0px));
+    }
+
+    .reader-frame-prose .reader-progress {
+        display: contents;
+    }
+
+    .reader-frame-prose .reader-progress-track {
+        grid-area: track;
+    }
+
+    .reader-frame-prose .reader-progress-text {
+        grid-area: position;
+        margin-top: 0;
+    }
+
+    .reader-frame-prose .reader-frame-nav .reader-frame-label {
+        display: inline;
+    }
+
+    .reader-frame-prose > .reader-frame-bottom > .reader-frame-nav {
+        min-height: 44px;
+        grid-area: previous;
+    }
+
+    .reader-frame-prose > .reader-frame-bottom > .reader-progress ~ .reader-frame-nav {
+        grid-area: next;
+        justify-self: end;
+    }
+
+    .reader-notice {
+        bottom: calc(112px + var(--safe-bottom, 0px));
+    }
+
     .reader-frame-tools {
         display: grid !important;
         grid-auto-flow: column;
@@ -2043,6 +2231,51 @@ body:has([data-reader-frame]) .app-main {
         place-items: center;
     }
 
+    /* Scroll mode on phones: the bars slide away while reading. */
+    [data-reader-frame].reader-chrome-hidden:not(.reader-frame-fixed) > .reader-frame-top {
+        transform: translateY(-100%);
+    }
+
+    [data-reader-frame].reader-chrome-hidden:not(.reader-frame-fixed) > .reader-frame-bottom {
+        transform: translateY(100%);
+    }
+
+    body:has(.reader-frame-prose) .language-inspector {
+        inset-block: auto 0;
+        inset-inline: 0;
+        width: auto;
+        max-height: 46dvh;
+        padding-bottom: calc(16px + var(--safe-bottom, 0px));
+        border-radius: 18px 18px 0 0;
+    }
+
+    body:has(.reader-frame-prose) .language-inspector.is-expanded {
+        max-height: 88dvh;
+    }
+
+    .reader-detail-handle {
+        display: block;
+        width: 100%;
+        height: 20px;
+        margin-top: -8px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+    }
+
+    .reader-detail-handle::before {
+        content: "";
+        display: block;
+        width: 38px;
+        height: 4px;
+        margin: 0 auto;
+        border-radius: 999px;
+        background: currentColor;
+        opacity: .3;
+    }
+
     /* Menus become bottom sheets above a scrim. */
     .reader-menu,
     .reader-menu-up,
@@ -2069,20 +2302,21 @@ body:has([data-reader-frame]) .app-main {
     [data-reader-frame] .reader-tts-bar:not([hidden]) {
         bottom: calc(142px + var(--safe-bottom, 0px));
     }
-
-    /* Scroll mode on phones: the bars slide away while reading. */
-    [data-reader-frame].reader-chrome-hidden:not(.reader-frame-fixed) > .reader-frame-top {
-        transform: translateY(-100%);
-    }
-
-    [data-reader-frame].reader-chrome-hidden:not(.reader-frame-fixed) > .reader-frame-bottom {
-        transform: translateY(100%);
-    }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .reader-frame-play,
-    .reader-menu {
+    .reader-menu,
+    .reader-frame-prose > .reader-frame-top,
+    .reader-frame-prose > .reader-frame-bottom,
+    .reader-frame-prose > .reader-frame-body {
         transition: none !important;
+    }
+
+    .reader-frame-prose[data-reader-restoring="true"] > .reader-frame-top::after {
+        animation: none;
+        background-size: 100% 100%;
+        background-position: 0 0;
+        opacity: .5;
     }
 }

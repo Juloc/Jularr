@@ -203,7 +203,7 @@ public sealed class ReaderPersonalizationTests
         StringAssert.Contains(page, "data-reader-autoscroll-toggle");
         StringAssert.Contains(page, "data-reader-frame");
         StringAssert.Contains(page, "data-reader-progress-slider");
-        StringAssert.Contains(page, "data-reader-page-step");
+        Assert.IsFalse(page.Contains("data-reader-page-step", StringComparison.Ordinal), "Phones turn pages by tap and swipe; Previous/Next are chapters.");
         StringAssert.Contains(page, "data-reader-settings-open=\"reading\"");
         StringAssert.Contains(page, "_ReaderSettingsPanel");
         StringAssert.Contains(page, "novels.read.chapterLabel");

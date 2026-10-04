@@ -96,58 +96,6 @@
     font-size: 12px;
 }
 
-.novel-frame-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-}
-
-.novel-frame-series {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text);
-    font-size: 15px;
-    font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.novel-frame-separator {
-    flex: 0 0 auto;
-    display: inline-grid;
-    color: var(--muted);
-}
-
-.novel-frame-separator .reader-icon {
-    width: 16px;
-    height: 16px;
-}
-
-.novel-frame-chapter {
-    min-width: 0;
-    display: grid;
-    gap: 1px;
-}
-
-.novel-frame-chapter strong,
-.novel-frame-chapter span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.novel-frame-chapter strong {
-    font-size: 13px;
-    font-weight: 650;
-}
-
-.novel-frame-chapter span {
-    color: var(--muted);
-    font-size: 12px;
-}
-
 .reader-frame-icon.has-bookmarks {
     color: var(--accent-text, var(--accent));
 }
@@ -706,41 +654,8 @@
 }
 
 @media (max-width: 720px) {
-    .novel-frame-series,
-    .novel-frame-separator {
-        display: none;
-    }
-
-    .novel-frame-chapter {
-        justify-items: center;
-    }
-
     .novel-stage {
         padding: 10px 16px 18px;
-    }
-
-    /* Phone bottom bar: "‹ ——●—— 2 / 24 ›" in one row above the tool row. */
-    .novel-reader-shell.reader-frame .reader-progress {
-        grid-template-columns: 44px minmax(0, 1fr) auto 44px;
-        grid-template-areas: "prev track text next";
-        align-items: center;
-    }
-
-    .novel-reader-shell.reader-frame .reader-progress-track {
-        grid-area: track;
-    }
-
-    .novel-reader-shell.reader-frame .reader-progress [data-reader-page-step="-1"] {
-        grid-area: prev;
-    }
-
-    .novel-reader-shell.reader-frame .reader-progress [data-reader-page-step="1"] {
-        grid-area: next;
-    }
-
-    .novel-reader-shell.reader-frame .reader-progress-text {
-        grid-area: text;
-        margin: 0 0 0 8px;
     }
 
     .novel-reader-shell.reader-frame[data-reading-mode="paged"] .novel-stage {
