@@ -371,7 +371,7 @@ public sealed class VideoAcquisitionEngine(
                 monitored = payload.MonitorFuture;
                 var selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
                 var selectedSeasonIds = (payload.SelectedSeasonIds ?? []).ToHashSet();
-                var selectedSeasonNumbers = selectedSeasonIds.Count == 0
+                HashSet<int> selectedSeasonNumbers = selectedSeasonIds.Count == 0
                     ? []
                     : (await db.WorkSeasons.AsNoTracking()
                         .Where(x => x.WorkId == payload.WorkId && selectedSeasonIds.Contains(x.Id))
