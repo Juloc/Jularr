@@ -192,6 +192,7 @@ public sealed record ClientOfflinePackageOptions(
     IReadOnlyList<ClientOfflineUnitOption> Units,
     IReadOnlyList<ClientOfflineEditionOption> Editions,
     IReadOnlyList<ClientOfflineQualityOption> Qualities,
+    IReadOnlyList<ClientOfflineQualityOption> ImageQualities,
     IReadOnlyList<ClientOfflineTrackOption> AudioTracks,
     IReadOnlyList<ClientOfflineTrackOption> SubtitleTracks,
     bool LearningAvailable,
