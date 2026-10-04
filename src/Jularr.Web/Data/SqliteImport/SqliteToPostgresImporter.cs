@@ -204,11 +204,7 @@ public static class SqliteToPostgresImporter
         return rows;
     }
 
-    private static async Task<int> CopyLegacyNotificationSubscriptionsAsync(
-        SqliteConnection sqlite,
-        NpgsqlConnection pg,
-        NpgsqlTransaction transaction,
-        CancellationToken cancellationToken)
+    private static async Task<int> CopyLegacyNotificationSubscriptionsAsync(SqliteConnection sqlite, NpgsqlConnection pg, NpgsqlTransaction transaction, CancellationToken cancellationToken)
     {
         await using var read = sqlite.CreateCommand();
         read.CommandText =
