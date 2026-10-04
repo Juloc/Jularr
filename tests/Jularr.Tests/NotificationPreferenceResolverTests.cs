@@ -100,7 +100,7 @@ public sealed class NotificationPreferenceResolverTests
             NotificationDeliveryTiming.Immediate);
         var profileChannels = new Dictionary<NotificationChannel, NotificationProfileChannelPreference>
         {
-            Channels(NotificationChannel.Push) = new("someone-else", NotificationChannel.Push, true, DateTime.UtcNow, true)
+            [NotificationChannel.Push] = new("someone-else", NotificationChannel.Push, true, DateTime.UtcNow, true)
         };
 
         Assert.ThrowsExactly<InvalidOperationException>(() =>
