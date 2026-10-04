@@ -8,8 +8,14 @@ public sealed class ReaderLocatorTests
     [TestMethod]
     public void ReflowLocatorKeepsLogicalAnchorIndependentOfRenderedPages()
     {
-        var identity = new ReaderDocumentIdentity(Guid.NewGuid(), chapterId: Guid.NewGuid(), editionId: Guid.NewGuid(), variantKey: "de-generated");
-        var source = new ReaderSourcePageReference(11, new ReaderSourceRegion(.1, .2, .7, .3), "pdf:block:42");
+        var workId = Guid.NewGuid();
+        var sourceIdentity = new ReaderDocumentIdentity(workId, assetId: Guid.NewGuid(), fileId: Guid.NewGuid(), variantKey: "original");
+        var identity = new ReaderDocumentIdentity(workId, chapterId: Guid.NewGuid(), editionId: Guid.NewGuid(), variantKey: "de-generated");
+        var source = new ReaderSourcePageReference(
+            11,
+            new ReaderSourceRegion(.1, .2, .7, .3),
+            "pdf:block:42",
+            sourceIdentity);
         var locator = new ReflowTextReaderLocator(identity, "paragraph:17", characterOffset: 83, source: source, fallbackPercent: 41.5);
 
         Assert.AreEqual("paragraph:17", locator.BlockId);
@@ -17,18 +23,22 @@ public sealed class ReaderLocatorTests
         var pageSource = (ReaderSourcePageReference)locator.Source!;
         Assert.AreEqual(11, pageSource.SourcePageIndex);
         Assert.AreEqual("pdf:block:42", pageSource.SourceItemId);
+        Assert.AreEqual(sourceIdentity.FileId, pageSource.SourceDocument!.FileId);
         Assert.AreEqual(41.5, locator.FallbackPercent);
     }
 
     [TestMethod]
     public void ReflowLocatorCanMapToSourceItemWithoutPageIdentity()
     {
-        var identity = new ReaderDocumentIdentity(Guid.NewGuid(), editionId: Guid.NewGuid(), variantKey: "translated");
-        var source = new ReaderSourceItemReference("source-paragraph:17");
+        var workId = Guid.NewGuid();
+        var sourceIdentity = new ReaderDocumentIdentity(workId, editionId: Guid.NewGuid(), versionId: Guid.NewGuid(), variantKey: "original");
+        var identity = new ReaderDocumentIdentity(workId, editionId: Guid.NewGuid(), variantKey: "translated");
+        var source = new ReaderSourceItemReference("source-paragraph:17", sourceIdentity);
         var locator = new ReflowTextReaderLocator(identity, "translated-paragraph:17", source: source);
 
         var itemSource = (ReaderSourceItemReference)locator.Source!;
         Assert.AreEqual("source-paragraph:17", itemSource.SourceItemId);
+        Assert.AreEqual(sourceIdentity.VersionId, itemSource.SourceDocument!.VersionId);
     }
 
     [TestMethod]
