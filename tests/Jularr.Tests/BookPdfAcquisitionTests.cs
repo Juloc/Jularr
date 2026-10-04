@@ -594,6 +594,7 @@ public sealed class BookPdfAcquisitionTests
                 {
                     ["Books:FilesPath"] = Path.Combine(root, "books-files"),
                     ["Books:CoversPath"] = Path.Combine(root, "books-covers"),
+                    ["Books:DerivedPath"] = Path.Combine(root, "books-derived"),
                     ["Books:Translation:MemoryPath"] = Path.Combine(root, "translation-memory")
                 })
                 .Build();
