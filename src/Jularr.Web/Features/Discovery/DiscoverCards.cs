@@ -165,7 +165,7 @@ public static partial class DiscoverCardFactory
             IsExternal(href),
             string.IsNullOrWhiteSpace(item.CoverImageUrl) ? null : item.CoverImageUrl,
             WatchlistLabels.Initial(item.Title),
-            Meta(kind, item.Year, ui),
+            Meta(item.Category, kind, item.Year, ui),
             item.Year,
             release,
             item.IsLocal,
@@ -198,7 +198,7 @@ public static partial class DiscoverCardFactory
 
     public static MediaBannerKind KindOf(string category) => category switch
     {
-        "anime" => MediaBannerKind.Anime,
+        "anime" or "movie" or "tv" => MediaBannerKind.Anime,
         "manga" => MediaBannerKind.Manga,
         "light-novel" => MediaBannerKind.LightNovel,
         _ => MediaBannerKind.Book
@@ -211,12 +211,19 @@ public static partial class DiscoverCardFactory
         "manga" => MediaAcquisitionKind.Manga,
         "light-novel" => MediaAcquisitionKind.LightNovel,
         "book" => MediaAcquisitionKind.Book,
+        "movie" => MediaAcquisitionKind.Movie,
+        "tv" => MediaAcquisitionKind.Tv,
         _ => null
     };
 
-    private static string Meta(MediaBannerKind kind, int? year, UiTextBundle ui)
+    private static string Meta(string category, MediaBannerKind kind, int? year, UiTextBundle ui)
     {
-        var label = ui[MediaBannerCardModel.KindKey(kind)];
+        var label = category switch
+        {
+            "movie" => ui["search.type.movie"],
+            "tv" => ui["search.type.series"],
+            _ => ui[MediaBannerCardModel.KindKey(kind)]
+        };
         return year is > 0
             ? $"{label} · {year.Value.ToString(CultureInfo.InvariantCulture)}"
             : label;

@@ -5,6 +5,11 @@ same shell, settings surface, preference store, theme runtime and interaction
 rules. Source-specific pages are adapters that provide content, navigation,
 translations and annotations.
 
+Implementation completion is dependency-ordered in
+`docs/implementation/unified-reader-engine-completion.md`. That pack coordinates
+the remaining #289 engine consolidation with canonical progress from #662 and
+PDF Smart Book from #819.
+
 ## Document model
 
 `ReaderDocumentDescriptor` describes the content without relying on its URL.
@@ -15,9 +20,20 @@ It supplies:
 - genres
 - capability flags
 
-Current reflowable types are Book, Light Novel and Web Novel. PDF books are
-Books in fixed pages (see "PDF books"). Manga and fixed documents have
-capability presets ready for future image/fixed renderers.
+The descriptor is not the renderer document itself. Renderer-facing content must
+preserve stable source identities, structure/source mapping and semantic content
+needed for exact locators, illustrations, annotations, translation and
+cross-view restoration.
+
+Current reflowable types are Book, Light Novel and Web Novel. PDF books can
+expose Original fixed pages and, through #819, a derived Smart Book view. Manga
+and comics are image sequences. Fixed-layout EPUB, magazines and artbooks use
+fixed/image layouts when their parsed document structure requires it.
+
+Renderer selection follows parsed document layout and capabilities, never only
+the route or file extension. A normal EPUB can be reflowable while a
+fixed-layout EPUB is fixed pages; one PDF can expose both Original and Smart
+views without becoming two Reader products.
 
 ## Capabilities
 
@@ -28,6 +44,37 @@ typography and expose zoom/page-layout controls instead.
 
 Unsupported controls must not be rendered just because another document type
 uses them.
+
+Capabilities are document-instance facts. A digital PDF with a reliable text
+layer may expose selection/search/TTS while a scan does not until OCR exists.
+Likewise, image documents may gain OCR/search/Learning without changing their
+Reader shell.
+
+Keep page-flow direction, text direction and writing mode separate. Manga/comic
+LTR/RTL page ordering, Webtoon-style vertical flow and Japanese vertical text
+(`vertical-rl`) are different concerns.
+
+## Format and layout routing
+
+The shared Reader supports source formats through document/import adapters:
+
+- normal EPUB/Web/LN text -> reflow renderer;
+- fixed-layout/pre-paginated EPUB -> fixed-page renderer;
+- original PDF -> fixed-page renderer;
+- PDF Smart Book -> semantic/reflow view mapped back to original source regions;
+- CBZ/ZIP and, when safely supported by import adapters, CBR/CB7 -> image-sequence renderer;
+- magazines/artbooks -> fixed pages or image sequence unless a reliable semantic
+  derived view exists;
+- scans -> original fixed/image view with optional OCR/Smart derivation.
+
+MOBI/AZW/AZW3/DJVU are not reasons for another Reader. They remain explicitly
+unsupported until a safe parser/import adapter can emit the same canonical
+document contract. DRM is never bypassed.
+
+Source illustrations, generated chapter artwork and Reader theme artwork are
+different assets. Source images participate in document layout; accepted
+generated chapter artwork is optional presentation and must never become a
+durable progress anchor.
 
 ## Preference cascade
 
@@ -155,10 +202,11 @@ Source adapter contract:
   `jularr:reader-layout` when the reader area changes size.
 - chrome only auto-hides on phones in Scroll mode; elsewhere the bars are part
   of the layout so the page area never jumps.
-- language/view availability is supplied by the source adapter. A cached
-  readable translation remains selectable even when translation generation or
-  Learning capabilities are disabled; generation capability only controls the
-  action that creates a missing translation.
+- language/view availability is supplied by the source adapter from the shared
+  work translation inventory. Book/PDF translated editions are shared content,
+  not profile or Learning state. Learning capabilities only control learning
+  assistance; missing translation generation follows the canonical AI/runtime
+  policy and never requires Learning to be enabled.
 
 ### Books adapter
 

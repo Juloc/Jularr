@@ -37,8 +37,32 @@ public sealed class MovieLibraryService(
 
         var cleanTitle = string.IsNullOrWhiteSpace(title) ? "Untitled" : title.Trim();
         var key = MovieKey(cleanTitle, year);
+        var cleanTmdbId = Clean(tmdbId);
+        var cleanImdbId = Clean(imdbId);
 
-        var movie = await db.Set<Movie>().FirstOrDefaultAsync(x => x.Key == key, cancellationToken);
+        Movie? movie = null;
+        if (cleanTmdbId is not null)
+        {
+            movie = await db.Set<Movie>()
+                .FirstOrDefaultAsync(x => x.TmdbId == cleanTmdbId, cancellationToken);
+        }
+
+        if (movie is null && cleanImdbId is not null)
+        {
+            movie = await db.Set<Movie>()
+                .FirstOrDefaultAsync(x => x.ImdbId == cleanImdbId, cancellationToken);
+        }
+
+        if (movie is null)
+        {
+            movie = await db.Set<Movie>()
+                .FirstOrDefaultAsync(
+                    x => x.Key == key
+                         && (cleanTmdbId == null || x.TmdbId == null)
+                         && (cleanImdbId == null || x.ImdbId == null),
+                    cancellationToken);
+        }
+
         if (movie is null)
         {
             movie = new Movie
@@ -46,8 +70,8 @@ public sealed class MovieLibraryService(
                 Key = key,
                 Title = cleanTitle,
                 Year = year,
-                TmdbId = Clean(tmdbId),
-                ImdbId = Clean(imdbId),
+                TmdbId = cleanTmdbId,
+                ImdbId = cleanImdbId,
                 LibraryPath = Clean(libraryPath)
             };
             db.Add(movie);
@@ -56,8 +80,8 @@ public sealed class MovieLibraryService(
         {
             movie.Title = cleanTitle;
             movie.Year ??= year;
-            movie.TmdbId ??= Clean(tmdbId);
-            movie.ImdbId ??= Clean(imdbId);
+            movie.TmdbId ??= cleanTmdbId;
+            movie.ImdbId ??= cleanImdbId;
             if (Clean(libraryPath) is { } path)
             {
                 movie.LibraryPath = path;

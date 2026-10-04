@@ -181,7 +181,12 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 
         var season = release?.SeasonNumber ?? 1;
         var episode = release?.EpisodeStart ?? 1;
-        var year = TryParseYear(request?.Request?.Title) ?? release?.AirDate?.Year;
+        var canonicalRequest = request?.Request is { } storedRequest
+            ? VideoAcquisitionEngine.ReadPayload(storedRequest)
+            : null;
+        var year = canonicalRequest?.Year
+            ?? TryParseYear(request?.Request?.Title)
+            ?? release?.AirDate?.Year;
 
         string? tmdb = null;
         string? tvdb = null;

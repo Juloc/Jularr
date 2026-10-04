@@ -425,6 +425,12 @@ builder.Services.AddScoped<Jularr.Web.Features.Speech.TtsPreferencesService>();
 builder.Services.AddSingleton(_ => new Jularr.Web.Features.Speech.SpeechModelManifestStore("/data"));
 builder.Services.AddSingleton<ReaderThemeCatalog>();
 
+builder.Services.AddHttpClient<TmdbDiscoveryProvider>(client =>
+{
+    client.BaseAddress = new Uri("https://api.themoviedb.org/3/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+});
 builder.Services.AddHttpClient<AniListMetadataProvider>(client =>
 {
     client.BaseAddress = new Uri("https://graphql.anilist.co/");
@@ -528,6 +534,12 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRe
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
+builder.Services.AddSingleton(_ => new Jularr.Web.Features.Acquisition.Access.VideoAcquisitionMonitoringStores("/data"));
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.MovieAcquisitionRequestExecutor>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.TvAcquisitionRequestExecutor>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Acquisition.Access.MovieWantedRequestHandler>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Acquisition.Access.TvWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.MangaWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.LightNovelWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Books.BookWantedRequestHandler>();
@@ -676,6 +688,7 @@ builder.Services.AddHostedService<ChapterArtworkAutoGenerator>();
 builder.Services.AddScoped<AiSentenceExplanationService>();
 
 builder.Services.AddSingleton<BackgroundJobQueue>();
+builder.Services.AddScoped<BookTranslationJobs>();
 builder.Services.AddHostedService<BackgroundJobWorker>();
 builder.Services.AddSingleton<PlaybackJobQueue>();
 builder.Services.AddHostedService<PlaybackJobWorker>();

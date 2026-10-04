@@ -79,13 +79,26 @@
             return value;
         };
         const compactQuery = window.matchMedia("(max-width: 720px)");
-        const inlineContentsQuery = window.matchMedia("(min-width: 1100px)");
+        // Tablet landscape keeps Contents beside the page; below that it is a modal sheet.
+        const inlineContentsQuery = window.matchMedia("(min-width: 1000px)");
+        const detailPanel = document.querySelector("[data-language-inspector]");
 
         root.classList.remove("reader-chrome-hidden");
         root.dataset.readerChrome = "visible";
+        // Books and Novels (prose frames) hide their bars on every device and keep the page hidden until the exact
+        // resume position is applied, so there is no visible jump. Other frames keep their phone-only behaviour.
+        const proseFrame = frame && root.classList.contains("reader-frame-prose");
+        if (proseFrame) root.dataset.readerRestoring = "true";
+
+        const setRestoring = active => {
+            restoring = active;
+            if (proseFrame) root.dataset.readerRestoring = active ? "true" : "false";
+        };
+
+        const detailOpen = () => Boolean(detailPanel) && !detailPanel.hidden;
 
         const overlayOpen = () => {
-            if (settingsContainer?.open) return true;
+            if (settingsContainer?.open || detailOpen()) return true;
             if (root.querySelector("dialog[open]")) return true;
             return Boolean(root.querySelector(
                 "[data-reader-notes]:not([hidden])," +
@@ -100,11 +113,17 @@
             root.dataset.readerChrome = "visible";
         };
 
-        // In the frame the bars are part of the layout; they only slide away on
-        // phones in Scroll mode, where the page scrolls underneath them.
+        const readingMode = () =>
+            root.dataset.readingMode || settings.readingMode || "continuous";
+
+        // Hiding the bars never changes the page area, so the logical reading
+        // position is the same with and without chrome (docs/mockups/reader/SPEC.md).
+        // Image readers explicitly opt into immersive chrome through the shared
+        // runtime instead of owning a second hidden-state class.
         const frameChromeCanHide = () =>
-            compactQuery.matches &&
-            (root.dataset.readingMode || settings.readingMode) !== "paged";
+            root.dataset.readerImmersive === "true" ||
+            proseFrame ||
+            (compactQuery.matches && readingMode() !== "paged");
 
         const hideChrome = () => {
             if (frame && !frameChromeCanHide()) return;
@@ -125,8 +144,25 @@
             }));
         };
 
+        const dispatchSeek = value => {
+            root.dispatchEvent(new CustomEvent("jularr:reader-seek", {
+                detail: { value },
+                bubbles: false
+            }));
+        };
+
+        const pageDirection = () => {
+            const direction = (root.dataset.pageDirection || root.dataset.direction || "ltr")
+                .trim()
+                .toLowerCase();
+            return direction === "rtl" ? "rtl" : "ltr";
+        };
+
+        const dispatchPhysicalPage = direction =>
+            dispatchPage(pageDirection() === "rtl" ? -direction : direction);
+
         const updateModeVisibility = () => {
-            const mode = root.dataset.readingMode || settings.readingMode || "continuous";
+            const mode = readingMode();
             root.querySelectorAll("[data-reader-mode-choice]").forEach(button => {
                 const active = button.dataset.readerModeChoice === mode;
                 button.classList.toggle("is-active", active);
@@ -728,6 +764,8 @@
         let openMenu = null;
         let menuTrigger = null;
         let menuScrim = null;
+        let notice = null;
+        let noticeRetry = null;
 
         const menuToggles = name =>
             root.querySelectorAll(`[data-reader-menu-toggle="${CSS.escape(name)}"]`);
@@ -760,6 +798,9 @@
             closeMenus(false);
             if (settingsContainer?.open) settingsContainer.open = false;
             menu.hidden = false;
+            if (menu.getAttribute("role") === "dialog") {
+                menu.setAttribute("aria-modal", compactQuery.matches ? "true" : "false");
+            }
             openMenu = menu;
             menuTrigger = origin || root.querySelector(
                 `[data-reader-menu-toggle="${CSS.escape(name)}"]:not([role])`);
@@ -1107,6 +1148,11 @@
                 const target = event.target instanceof Element ? event.target : null;
                 if (!target) return;
 
+                if (target.closest("[data-reader-menu-close]")) {
+                    closeMenus(true);
+                    return;
+                }
+
                 const menuToggle = target.closest("[data-reader-menu-toggle]");
                 if (menuToggle) {
                     event.preventDefault();
@@ -1177,6 +1223,62 @@
                 }
             });
 
+            // The shell is the only generic keyboard navigation owner. Renderers
+            // consume jularr:reader-page-edge / jularr:reader-seek and never bind
+            // a second Arrow/PageUp/PageDown/Space page-turn handler.
+            const shortcuts = {
+                b: "[data-bookmark-button],[data-reader-bookmark]",
+                n: "[data-reader-contents-toggle]",
+                "/": '[data-reader-menu-toggle="search"]'
+            };
+            document.addEventListener("keydown", event => {
+                if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+                const target = event.target instanceof Element ? event.target : null;
+                if (target?.closest(
+                    "input,textarea,select,[contenteditable='true'],[data-reader-menu],[data-reader-contents],[data-reader-settings-container],[role='dialog']")) {
+                    return;
+                }
+
+                const shortcutKey = event.key.toLowerCase();
+                const selector = shortcuts[shortcutKey];
+                if (selector) {
+                    const button = Array.from(root.querySelectorAll(selector)).find(isShown);
+                    if (button) {
+                        event.preventDefault();
+                        button.click();
+                        return;
+                    }
+                    if (shortcutKey === "b") {
+                        event.preventDefault();
+                        root.dispatchEvent(new CustomEvent("jularr:reader-bookmark"));
+                        return;
+                    }
+                }
+
+                if (readingMode() !== "paged" || overlayOpen()) return;
+                const onControl = target?.closest("a,button,summary,[role='button']");
+                if (event.key === " " && onControl) return;
+
+                let handled = true;
+                if (event.key === "ArrowRight") {
+                    dispatchPhysicalPage(1);
+                } else if (event.key === "ArrowLeft") {
+                    dispatchPhysicalPage(-1);
+                } else if (event.key === "PageDown" || (event.key === " " && !event.shiftKey)) {
+                    dispatchPage(1);
+                } else if (event.key === "PageUp" || (event.key === " " && event.shiftKey)) {
+                    dispatchPage(-1);
+                } else if (event.key === "Home") {
+                    dispatchSeek(Number(progressSlider?.min || 0));
+                } else if (event.key === "End") {
+                    dispatchSeek(Number(progressSlider?.max || 0));
+                } else {
+                    handled = false;
+                }
+
+                if (handled) event.preventDefault();
+            });
+
             document.addEventListener("pointerdown", event => {
                 const target = event.target instanceof Element ? event.target : null;
                 if (openMenu && target && !openMenu.contains(target) &&
@@ -1216,10 +1318,14 @@
                     return;
                 }
 
-                // Keep focus inside the contents overlay while it is modal.
-                if (event.key === "Tab" && contents?.classList.contains("is-overlay") &&
-                    !contents.hidden) {
-                    const items = focusablesIn(contents);
+                // Keyboard users always get the controls back.
+                if (event.key === "Tab" && root.classList.contains("reader-chrome-hidden")) showChrome();
+
+                // Keep focus inside a phone sheet while it is modal.
+                const contentsModal = contents?.classList.contains("is-overlay") && !contents.hidden;
+                const modal = openMenu && compactQuery.matches ? openMenu : contentsModal ? contents : null;
+                if (event.key === "Tab" && modal) {
+                    const items = focusablesIn(modal);
                     if (!items.length) return;
                     const first = items[0];
                     const last = items.at(-1);
@@ -1282,10 +1388,168 @@
             }
         };
 
+        // ---- Word details and Learning mode ---------------------------------------
+        // _LanguageInspector renders its panel only when instance, profile, permission
+        // and content all allow Learning, so the panel being present is the capability check.
+
+        const learningKey = "jularr:reader-learning";
+
+        const setupLearning = () => {
+            if (!frame || !detailPanel) return;
+
+            const group = root.querySelector("[data-reader-learning-group]");
+            const toggle = root.querySelector("[data-reader-learning-toggle]");
+            let enabled = true;
+            try {
+                enabled = window.sessionStorage.getItem(learningKey) !== "off";
+            } catch {
+            }
+
+            // Off is ordinary reading: the look-up affordances are hidden by CSS and open details close.
+            const applyLearning = next => {
+                enabled = next;
+                document.documentElement.dataset.readerLearning = enabled ? "on" : "off";
+                if (toggle) toggle.checked = enabled;
+                if (!enabled) window.JularrLanguageInspector?.close();
+                root.dispatchEvent(new CustomEvent("jularr:reader-learning", { detail: { enabled } }));
+            };
+
+            if (group) group.hidden = false;
+            toggle?.addEventListener("change", () => {
+                applyLearning(toggle.checked);
+                try {
+                    window.sessionStorage.setItem(learningKey, enabled ? "on" : "off");
+                } catch {
+                }
+            });
+            applyLearning(enabled);
+
+            // Phones show the details as a bottom sheet that starts compact and can expand.
+            const handle = document.createElement("button");
+            handle.type = "button";
+            handle.className = "reader-detail-handle";
+            const syncHandle = expanded => {
+                handle.setAttribute("aria-expanded", expanded ? "true" : "false");
+                handle.setAttribute(
+                    "aria-label",
+                    expanded ? ft("detailsCollapse", "Show fewer details") : ft("detailsExpand", "Show more details"));
+            };
+            syncHandle(false);
+            handle.addEventListener("click", () => syncHandle(detailPanel.classList.toggle("is-expanded")));
+            detailPanel.prepend(handle);
+
+            new MutationObserver(() => {
+                if (!detailPanel.hidden) return;
+                detailPanel.classList.remove("is-expanded");
+                syncHandle(false);
+            }).observe(detailPanel, { attributes: true, attributeFilter: ["hidden"] });
+        };
+
+        // ---- Reader states: failures and chapters that are not available offline ---------
+
+        const failureKind = failure => {
+            const status = typeof failure === "number" ? failure : Number(failure?.status) || 0;
+            if (status === 401 || status === 403) return "permission";
+            if (status === 404 || status === 410) return "missing";
+            return !navigator.onLine || failure instanceof TypeError ? "network" : "failed";
+        };
+
+        const noticeText = kind => {
+            switch (kind) {
+                case "offline": return ft("stateOffline", "This chapter is not available offline. Connect to the internet or download it first.");
+                case "network": return ft("stateNetwork", "The reader could not reach the server. Check the connection and try again.");
+                case "permission": return ft("statePermission", "You no longer have access to this content.");
+                case "missing": return ft("stateMissing", "This content is not available right now.");
+                default: return ft("stateFailed", "Something went wrong. Please try again.");
+            }
+        };
+
+        const showNotice = (kind, retry = null) => {
+            if (!notice) {
+                notice = document.createElement("div");
+                notice.className = "reader-notice";
+                notice.hidden = true;
+                const message = document.createElement("p");
+                message.dataset.readerNoticeText = "";
+                const retryButton = document.createElement("button");
+                retryButton.type = "button";
+                retryButton.className = "reader-notice-action";
+                retryButton.dataset.readerNoticeRetry = "";
+                retryButton.textContent = ft("stateRetry", "Retry");
+                retryButton.addEventListener("click", () => {
+                    const action = noticeRetry;
+                    notice.hidden = true;
+                    action?.();
+                });
+                const close = document.createElement("button");
+                close.type = "button";
+                close.className = "reader-notice-close";
+                close.setAttribute("aria-label", ft("close", "Close"));
+                close.textContent = "×";
+                close.addEventListener("click", () => {
+                    notice.hidden = true;
+                });
+                notice.append(message, retryButton, close);
+                root.append(notice);
+            }
+
+            noticeRetry = retry;
+            notice.setAttribute("role", kind === "offline" ? "status" : "alert");
+            notice.querySelector("[data-reader-notice-text]").textContent = noticeText(kind);
+            notice.querySelector("[data-reader-notice-retry]").hidden = !retry;
+            notice.hidden = false;
+            showChrome();
+        };
+
+        const setupOfflineNavigation = () => {
+            const workId = root.dataset.workId;
+            const repository = frame && workId && window.JularrOfflineLibraryRepository
+                ? window.JularrOfflineLibraryRepository.forWork(workId)
+                : null;
+            if (!repository) return;
+
+            const chapterLinks = () => root.querySelectorAll("a[data-book-chapter-link],a[data-novel-chapter-link]");
+            const chapterIdOf = link => new URL(link.href, window.location.origin).pathname.split("/").filter(Boolean).pop();
+
+            // While offline, Previous and Next show whether their chapter was downloaded; the link itself stays a link
+            // so the offline navigation of the repository can still render a downloaded chapter locally.
+            const syncAdjacentChapters = async () => {
+                const offline = !navigator.onLine;
+                for (const link of chapterLinks()) {
+                    let available = true;
+                    if (offline) {
+                        try {
+                            available = (await repository.findLocalChapter(chapterIdOf(link))).available;
+                        } catch (error) {
+                            console.warn(error);
+                            available = false;
+                        }
+                    }
+                    link.dataset.readerTitle ??= link.title;
+                    link.title = available ? link.dataset.readerTitle : ft("unavailableOffline", "Not available offline");
+                    link.toggleAttribute("data-offline-unavailable", !available);
+                    if (available) link.removeAttribute("aria-disabled");
+                    else link.setAttribute("aria-disabled", "true");
+                }
+            };
+
+            window.addEventListener("online", () => void syncAdjacentChapters());
+            window.addEventListener("offline", () => void syncAdjacentChapters());
+            root.addEventListener("jularr:offline-chapter-missing", event => {
+                const chapterId = event.detail?.chapterId;
+                showNotice("offline", () => {
+                    Array.from(chapterLinks()).find(link => chapterIdOf(link) === chapterId)?.click();
+                });
+            });
+            void syncAdjacentChapters();
+        };
+
         enhanceSettings();
         buildMobileActions();
         buildOverflow();
         setupFrame();
+        setupLearning();
+        setupOfflineNavigation();
         updateModeVisibility();
         syncProxies();
 
@@ -1309,7 +1573,11 @@
             contentsOpen: () => Boolean(contents && !contents.hidden),
             contentsTab: () => activeContentsTab,
             closeMenus,
-            toast
+            showChrome,
+            hideChrome,
+            toggleChrome,
+            toast,
+            reportFailure: (failure, retry) => showNotice(failureKind(failure), retry)
         });
         root.readerShell = api;
         window.JularrReaderTts?.mount(api);
@@ -1317,14 +1585,41 @@
         settingsContainer?.addEventListener("toggle", () => {
             if (settingsContainer.open) {
                 showChrome();
-                restoring = false;
+                setRestoring(false);
             }
         });
 
         root.addEventListener("jularr:reader-restoring", event => {
-            restoring = event.detail?.active !== false;
+            setRestoring(event.detail?.active !== false);
             if (restoring) showChrome();
         });
+
+        root.addEventListener("jularr:reader-mode", event => {
+            const mode = event.detail?.readingMode;
+            if (mode === "paged" || mode === "continuous") {
+                root.dataset.readingMode = mode;
+            }
+
+            const direction = event.detail?.pageDirection;
+            if (direction === "ltr" || direction === "rtl" || direction === "auto") {
+                root.dataset.pageDirection = direction;
+            }
+
+            if (typeof event.detail?.immersive === "boolean") {
+                root.dataset.readerImmersive = event.detail.immersive ? "true" : "false";
+            }
+
+            updateModeVisibility();
+        });
+
+        root.addEventListener("jularr:reader-chrome", event => {
+            if (event.detail?.visible === true) showChrome();
+            else if (event.detail?.visible === false) hideChrome();
+            else toggleChrome();
+        });
+
+        // An adapter that never reports the end of its restore must not leave the page hidden.
+        window.setTimeout(() => setRestoring(false), 2500);
 
         root.addEventListener("jularr:reader-settings", event => {
             if (event.detail?.settings) {
@@ -1363,20 +1658,21 @@
                 const selection = window.getSelection();
                 if (selection && !selection.isCollapsed && selection.toString().trim()) return;
 
-                if ((root.dataset.readingMode || settings.readingMode) === "paged") {
-                    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.25) {
-                        dispatchPage(dx < 0 ? 1 : -1);
+                if (readingMode() === "paged") {
+                    if (root.dataset.readerPanGesture !== "true" &&
+                        Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+                        dispatchPhysicalPage(dx < 0 ? 1 : -1);
                         return;
                     }
 
                     const rect = surface.getBoundingClientRect();
                     const x = event.clientX - rect.left;
                     if (distance < 14 && x < rect.width * .24) {
-                        dispatchPage(-1);
+                        dispatchPhysicalPage(-1);
                         return;
                     }
                     if (distance < 14 && x > rect.width * .76) {
-                        dispatchPage(1);
+                        dispatchPhysicalPage(1);
                         return;
                     }
                 }
@@ -1420,10 +1716,17 @@
             if (event.clientY <= 24) showChrome();
         }, { passive: true });
 
+        // Escape closes the deepest layer first: the word details (closed by the inspector itself),
+        // then a menu or sheet, a notice, the contents overlay, the settings panel and finally restores hidden chrome.
         document.addEventListener("keydown", event => {
-            if (event.key !== "Escape") return;
+            if (event.key !== "Escape" || event.defaultPrevented || detailOpen()) return;
             if (frame && openMenu) {
                 closeMenus(true);
+                event.preventDefault();
+                return;
+            }
+            if (frame && notice && !notice.hidden) {
+                notice.hidden = true;
                 event.preventDefault();
                 return;
             }
@@ -1436,12 +1739,14 @@
                 settingsContainer.open = false;
                 showChrome();
                 event.preventDefault();
+                return;
             }
-        });
+            if (root.classList.contains("reader-chrome-hidden")) showChrome();
+        }, true);
 
         window.addEventListener("load", () => {
             window.setTimeout(() => {
-                restoring = false;
+                setRestoring(false);
                 root.dataset.readerReady = "true";
                 showChrome();
             }, 250);
@@ -1451,7 +1756,7 @@
         // if the load event already fired.
         if (document.readyState === "complete") {
             window.setTimeout(() => {
-                restoring = false;
+                setRestoring(false);
                 root.dataset.readerReady = "true";
                 showChrome();
             }, 50);

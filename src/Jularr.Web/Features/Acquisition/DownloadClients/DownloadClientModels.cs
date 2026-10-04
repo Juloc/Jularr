@@ -70,6 +70,8 @@ public sealed record DownloadClientSettings
             new Dictionary<MediaAcquisitionKind, string?>
             {
                 [MediaAcquisitionKind.Anime] = "anime",
+                [MediaAcquisitionKind.Tv] = "tv",
+                [MediaAcquisitionKind.Movie] = "movies",
                 [MediaAcquisitionKind.Manga] = "manga",
                 [MediaAcquisitionKind.LightNovel] = "lightnovels",
                 [MediaAcquisitionKind.Book] = "books"

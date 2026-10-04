@@ -323,10 +323,10 @@ public sealed class BookPdfAcquisitionTests
     [TestMethod]
     public async Task PdfTitleDropsLibraryLabelsAndTakesTheRequestedCatalogTitle()
     {
-        Assert.AreEqual("Pride and Prejudice", BookCatalogService.UsablePdfTitle("The Project Gutenberg eBook #1342: Pride and Prejudice"));
-        Assert.AreEqual("Emma", BookCatalogService.UsablePdfTitle("The Project Gutenberg EBook of Emma, by Jane Austen"));
-        Assert.AreEqual("Deep Work", BookCatalogService.UsablePdfTitle("Deep Work"));
-        Assert.IsNull(BookCatalogService.UsablePdfTitle("Microsoft Word - draft.docx"));
+        Assert.AreEqual("Pride and Prejudice", PdfBookIdentity.UsableTitle("The Project Gutenberg eBook #1342: Pride and Prejudice"));
+        Assert.AreEqual("Emma", PdfBookIdentity.UsableTitle("The Project Gutenberg EBook of Emma, by Jane Austen"));
+        Assert.AreEqual("Deep Work", PdfBookIdentity.UsableTitle("Deep Work"));
+        Assert.IsNull(PdfBookIdentity.UsableTitle("Microsoft Word - draft.docx"));
 
         await using var environment = await BookAcquisitionEnvironment.CreateAsync();
         var source = Path.Combine(environment.Root, "pg33283.pdf");
@@ -355,6 +355,70 @@ public sealed class BookPdfAcquisitionTests
             CancellationToken.None);
         Assert.IsNull((await environment.Db.NovelWorks.AsNoTracking().SingleAsync(x => x.Id == otherId)).CoverImageUrl);
         Assert.IsNull(await environment.Books.GetLocalCoverPathAsync(otherId, null, CancellationToken.None));
+    }
+
+    [TestMethod]
+    [DataRow("file:///I:/eBooks/Stephen%20King/Stephen%20King%20-%20Pet%20Sematary.html")]
+    [DataRow("I:/eBooks/Stephen King/book.html")]
+    [DataRow("https://example.org/print?id=4")]
+    [DataRow("Stephen%20King%20-%20Pet%20Sematary")]
+    [DataRow("Microsoft Word - draft.docx")]
+    public void PdfTitlesThatAreLocationsOrTheFileNameAreNotUsable(string title)
+    {
+        Assert.IsNull(PdfBookIdentity.UsableTitle(title));
+    }
+
+    [TestMethod]
+    public void AGarbageInfoBlockFallsBackToTheAuthorTitleFileName()
+    {
+        var identity = PdfBookIdentity.Resolve("file:///I:/eBooks/Stephen%20King/Stephen%20King%20-%20Pet%20Sema.html", "Atterdag", "Stephen King - Pet Sematary.pdf");
+        Assert.AreEqual("Pet Sematary", identity.Title);
+        Assert.AreEqual("Stephen King", identity.Author, "A bad title makes the whole Info block untrustworthy, including its author.");
+
+        var plain = PdfBookIdentity.Resolve("https://x.test/a", "Atterdag", "pet_sematary.pdf");
+        Assert.AreEqual(("Pet Sematary", (string?)null), (plain.Title, plain.Author));
+
+        var nameCopy = PdfBookIdentity.Resolve("Stephen King - Pet Sematary", "Atterdag", "Stephen King - Pet Sematary.pdf");
+        Assert.AreEqual(("Pet Sematary", (string?)"Stephen King"), (nameCopy.Title, nameCopy.Author), "An Info title that merely repeats the file name pattern is split.");
+
+        var genuine =PdfBookIdentity.Resolve("Deep Work", "Cal Newport", "download (3).pdf");
+        Assert.AreEqual(("Deep Work", (string?)"Cal Newport"), (genuine.Title, genuine.Author));
+
+        var badAuthor = PdfBookIdentity.Resolve("Deep Work", "https://example.org", "Cal Newport - Deep Work.pdf");
+        Assert.AreEqual("Cal Newport", badAuthor.Author);
+        Assert.IsNull(PdfBookIdentity.UsableAuthor("12345"));
+        Assert.IsNull(PdfBookIdentity.UsableAuthor("unknown"));
+        Assert.AreEqual("01 - Chapter One", PdfBookIdentity.FromFileName("01 - Chapter One.pdf").Title);
+    }
+
+    [TestMethod]
+    public async Task ImportAndReanalysisRepairOnlyGarbageDerivedTitlesAndAuthors()
+    {
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync();
+        var source = Path.Combine(environment.Root, "Stephen King - Pet Sematary.pdf");
+        await File.WriteAllBytesAsync(source, TestPdf(pages: 2, title: "file:///I:/eBooks/Stephen%20King/Pet%20Sema.html", author: "Atterdag"));
+        var workId = await environment.Books.ImportPdfFileAsync(source, Path.GetFileName(source), "upload", hint: null, CancellationToken.None);
+        var imported = await environment.Db.NovelWorks.AsNoTracking().SingleAsync();
+        Assert.AreEqual(("Pet Sematary", (string?)"Stephen King"), (imported.Title, imported.Author));
+
+        // A work imported before the validation existed carries the garbage and is repaired by re-analysis.
+        var work = await environment.Db.NovelWorks.SingleAsync();
+        work.Title = work.MetadataTitle = "file://I:\\eBooks\\Stephen%20King\\Pet%20Sema";
+        work.Author = "Atterdag";
+        await environment.Db.SaveChangesAsync();
+        await environment.Books.ReanalyzePdfAsync(workId, CancellationToken.None);
+        environment.Db.ChangeTracker.Clear();
+        var repaired = await environment.Db.NovelWorks.AsNoTracking().SingleAsync();
+        Assert.AreEqual(("Pet Sematary", (string?)"Stephen King"), (repaired.Title, repaired.Author));
+
+        var edited = await environment.Db.NovelWorks.SingleAsync();
+        edited.Title = edited.MetadataTitle = "My Own Title";
+        edited.Author = "Somebody";
+        await environment.Db.SaveChangesAsync();
+        await environment.Books.ReanalyzePdfAsync(workId, CancellationToken.None);
+        environment.Db.ChangeTracker.Clear();
+        var kept = await environment.Db.NovelWorks.AsNoTracking().SingleAsync();
+        Assert.AreEqual(("My Own Title", (string?)"Somebody"), (kept.Title, kept.Author), "Values the owner edited are never overwritten.");
     }
 
     [TestMethod]
@@ -594,6 +658,7 @@ public sealed class BookPdfAcquisitionTests
                 {
                     ["Books:FilesPath"] = Path.Combine(root, "books-files"),
                     ["Books:CoversPath"] = Path.Combine(root, "books-covers"),
+                    ["Books:DerivedPath"] = Path.Combine(root, "books-derived"),
                     ["Books:Translation:MemoryPath"] = Path.Combine(root, "translation-memory")
                 })
                 .Build();

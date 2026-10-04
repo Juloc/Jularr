@@ -42,7 +42,9 @@ public sealed record PlaybackPlanOutcome(
     PlaybackStreamSession? Session,
     Guid MediaFileId,
     MediaAvailabilitySnapshot? Availability,
-    bool CapabilitiesInferred);
+    bool CapabilitiesInferred,
+    PlaybackVideoTarget Target,
+    long ResumePositionMs);
 
 public static class PlaybackNetworkClassifier
 {
@@ -106,9 +108,10 @@ public sealed class PlaybackServerCapabilityProvider(PlaybackTranscodeSlots slot
 }
 
 /// <summary>
-/// Resolves a playback plan for one episode and opens the bounded session that serves it.
-/// The server resolves the media path and every selection against the canonical inventory;
-/// the client only contributes capabilities, choices and measurements.
+/// Resolves one shared playback plan from a canonical video target and opens the bounded
+/// session that serves it. Movie, Anime and TV all flow through the same inventory and
+/// <see cref="PlaybackDecisionEngine"/> policy. The legacy Anime Episode overload is only
+/// a compatibility adapter.
 /// </summary>
 public sealed class PlaybackPlanService(
     AppDbContext db,
@@ -117,8 +120,14 @@ public sealed class PlaybackPlanService(
     PlaybackServerCapabilityProvider serverCapabilities,
     MediaAvailabilityService? mediaAvailability = null,
     KnownDeviceRegistry? deviceRegistry = null,
-    ActiveSessionService? activeSessions = null)
+    ActiveSessionService? activeSessions = null,
+    CanonicalMediaStorageService? canonicalStorage = null,
+    VideoProgressService? videoProgress = null)
 {
+    /// <summary>
+    /// Legacy Anime compatibility adapter. New callers use
+    /// <see cref="PlanAsync(PlaybackVideoTarget,string,PlaybackPlanInput,CancellationToken)"/>.
+    /// </summary>
     public async Task<PlaybackPlanOutcome?> PlanAsync(
         Guid episodeId,
         string profileId,
@@ -126,16 +135,81 @@ public sealed class PlaybackPlanService(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input);
-        var row = await db.MediaFiles
-            .AsNoTracking()
-            .Where(x => x.EpisodeId == episodeId)
-            .OrderBy(x => x.Path)
-            .Select(x => new { x.Id, x.Path, x.SizeBytes })
+
+        var legacy = await (
+                from file in db.MediaFiles.AsNoTracking()
+                join assetValue in db.MediaAssets.AsNoTracking()
+                    on file.MediaAssetId equals (Guid?)assetValue.Id into assetRows
+                from asset in assetRows.DefaultIfEmpty()
+                where file.EpisodeId == episodeId
+                orderby file.Path
+                select new LegacyPlayableRow(
+                    file.Id,
+                    file.Path,
+                    file.SizeBytes,
+                    asset == null ? null : asset.WorkId,
+                    asset == null ? null : asset.WorkEpisodeId))
             .FirstOrDefaultAsync(cancellationToken);
-        if (row is null)
+        if (legacy is null)
         {
             return null;
         }
+
+        var target = legacy.WorkId is { } workId
+            ? new PlaybackVideoTarget(workId, legacy.WorkEpisodeId)
+            : new PlaybackVideoTarget(episodeId, episodeId);
+
+        return await PlanResolvedAsync(
+            target,
+            new ResolvedPlayableFile(legacy.Id, legacy.Path, legacy.SizeBytes),
+            profileId,
+            input,
+            legacyEpisodeId: episodeId,
+            cancellationToken);
+    }
+
+    public async Task<PlaybackPlanOutcome?> PlanAsync(
+        PlaybackVideoTarget target,
+        string profileId,
+        PlaybackPlanInput input,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(input);
+
+        var playable = canonicalStorage is not null
+            ? await canonicalStorage.ResolveVideoAsync(
+                target.WorkId,
+                target.WorkEpisodeId,
+                cancellationToken)
+            : await ResolveCanonicalVideoAsync(target, cancellationToken);
+
+        if (playable is null)
+        {
+            return null;
+        }
+
+        return await PlanResolvedAsync(
+            target,
+            new ResolvedPlayableFile(
+                playable.StoredFileId,
+                playable.Path,
+                playable.SizeBytes),
+            profileId,
+            input,
+            legacyEpisodeId: null,
+            cancellationToken);
+    }
+
+    private async Task<PlaybackPlanOutcome> PlanResolvedAsync(
+        PlaybackVideoTarget target,
+        ResolvedPlayableFile row,
+        string profileId,
+        PlaybackPlanInput input,
+        Guid? legacyEpisodeId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
 
         var capabilities = input.Capabilities?.Normalize() ??
                            ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
@@ -147,6 +221,12 @@ public sealed class PlaybackPlanService(
             Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
         var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
         var previous = input.ReplacesSessionId is { } replaced ? sessions.Get(replaced, profileId) : null;
+        var resumePositionMs = videoProgress is null
+            ? 0
+            : (await videoProgress.GetAsync(
+                profileId,
+                target.ToProgressTarget(),
+                cancellationToken))?.ResumePositionMs ?? 0;
 
         // Playing is what wakes sleeping Wake-on-LAN storage (#411): a plan requested to play
         // starts the NAS through the coalesced start attempt; a plan requested only to
@@ -166,7 +246,9 @@ public sealed class PlaybackPlanService(
                 null,
                 row.Id,
                 availability,
-                capabilities.Inferred);
+                capabilities.Inferred,
+                target,
+                resumePositionMs);
         }
 
         var inventory = await mediaInventory.EnsureAnalyzedAsync(row.Id, cancellationToken);
@@ -177,7 +259,9 @@ public sealed class PlaybackPlanService(
                 null,
                 row.Id,
                 availability,
-                capabilities.Inferred);
+                capabilities.Inferred,
+                target,
+                resumePositionMs);
         }
 
         var media = PlaybackMediaProfile.From(row.Path, row.SizeBytes, technical);
@@ -199,7 +283,7 @@ public sealed class PlaybackPlanService(
         {
             session = sessions.Create(
                 profileId,
-                episodeId,
+                target,
                 row.Id,
                 row.Path,
                 media.DurationSeconds,
@@ -211,7 +295,8 @@ public sealed class PlaybackPlanService(
                     quality,
                     input.ModePreference,
                     capabilities.Client.Kind),
-                previous?.Id);
+                previous?.Id,
+                legacyEpisodeId);
 
             if (activeSessions is not null)
             {
@@ -239,8 +324,49 @@ public sealed class PlaybackPlanService(
             }
         }
 
-        return new PlaybackPlanOutcome(plan, session, row.Id, availability, capabilities.Inferred);
+        return new PlaybackPlanOutcome(
+            plan,
+            session,
+            row.Id,
+            availability,
+            capabilities.Inferred,
+            target,
+            resumePositionMs);
     }
+
+    private async Task<CanonicalPlayableFile?> ResolveCanonicalVideoAsync(
+        PlaybackVideoTarget target,
+        CancellationToken cancellationToken) =>
+        await (
+            from asset in db.MediaAssets.AsNoTracking()
+            join file in db.StoredFiles.AsNoTracking()
+                on (Guid?)asset.Id equals file.MediaAssetId
+            where asset.Kind == MediaAssetKind.Video &&
+                  asset.WorkId == target.WorkId &&
+                  asset.WorkEpisodeId == target.WorkEpisodeId
+            orderby file.Path
+            select new CanonicalPlayableFile(
+                asset.Id,
+                file.Id,
+                asset.WorkId,
+                asset.WorkEpisodeId,
+                asset.WorkVersionId,
+                file.Path,
+                file.SizeBytes,
+                file.LastWriteTimeUtc))
+        .FirstOrDefaultAsync(cancellationToken);
+
+    private sealed record ResolvedPlayableFile(
+        Guid Id,
+        string Path,
+        long SizeBytes);
+
+    private sealed record LegacyPlayableRow(
+        Guid Id,
+        string Path,
+        long SizeBytes,
+        Guid? WorkId,
+        Guid? WorkEpisodeId);
 
     private static PlaybackPlan UnavailablePlan(
         string code,

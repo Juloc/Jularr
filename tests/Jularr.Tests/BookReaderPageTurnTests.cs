@@ -31,30 +31,13 @@ public sealed class BookReaderPageTurnTests
         StringAssert.Contains(spreadHeader, "data-book-stack=\"right\"");
         StringAssert.Contains(spreadHeader, "data-book-turn-shade");
 
-        // Quick animated/instant toggle: two mutually exclusive choices reusing the
-        // existing Page transition catalog strings (no duplicate UI text), gated to
-        // paged mode and skipped for PDFs, which have their own page adapter.
-        StringAssert.Contains(page, "data-book-page-turn-choice=\"curl\"");
-        StringAssert.Contains(page, "data-book-page-turn-choice=\"none\"");
-        var toggleBlock = page[page.IndexOf("data-book-page-turn-choice=\"curl\"", StringComparison.Ordinal)..
-            page.IndexOf("data-book-page-turn-choice=\"none\"", StringComparison.Ordinal)];
-        StringAssert.Contains(toggleBlock, "data-reader-mode-only=\"paged\"");
-        StringAssert.Contains(page, "@ui[\"reader.settings.pageTransition.curl\"]");
-        StringAssert.Contains(page, "@ui[\"reader.settings.pageTransition.none\"]");
-
-        // Scoped to the "view" menu itself: the toggle sits between the spread-choice
-        // buttons and the PDF-only zoom row, and only the EPUB (!isPdf) branch renders it.
-        var viewMenuStart = page.IndexOf("id=\"book-menu-view\"", StringComparison.Ordinal);
-        var viewMenuEnd = page.IndexOf("data-reader-fullscreen-toggle", StringComparison.Ordinal);
-        Assert.IsTrue(viewMenuStart > 0 && viewMenuEnd > viewMenuStart);
-        var viewMenu = page[viewMenuStart..viewMenuEnd];
-        var notPdfBranchStart = viewMenu.IndexOf("if (!isPdf)", StringComparison.Ordinal);
-        var toggleStart = viewMenu.IndexOf("data-book-page-turn-choice=\"curl\"", StringComparison.Ordinal);
-        var pdfZoomCall = viewMenu.IndexOf("PdfZoomRow", StringComparison.Ordinal);
-        Assert.IsTrue(notPdfBranchStart >= 0 && notPdfBranchStart < toggleStart,
-            "The page-turn toggle must be declared inside the !isPdf branch.");
-        Assert.IsTrue(pdfZoomCall < 0 || toggleStart < pdfZoomCall,
-            "The page-turn toggle must come before the PDF-only zoom row.");
+        // Spread and page-animation choices have one owner each: the settings panel and the
+        // appearance sheet. The More menu repeats neither, so the top bar stays a short list.
+        Assert.IsFalse(page.Contains("data-book-page-turn-choice", StringComparison.Ordinal));
+        Assert.IsFalse(page.Contains("data-book-spread-choice", StringComparison.Ordinal));
+        var panel = Read("src", "Jularr.Web", "Pages", "Shared", "_ReaderSettingsPanel.cshtml");
+        StringAssert.Contains(panel, "data-book-setting=\"pageTransition\"");
+        StringAssert.Contains(panel, "data-book-setting=\"twoPageSpread\"");
     }
 
     [TestMethod]
@@ -90,9 +73,9 @@ public sealed class BookReaderPageTurnTests
         StringAssert.Contains(script, "DRAG_FLICK_PX_MS");
         Assert.IsFalse(script.Contains("> 0.5)", StringComparison.Ordinal));
 
-        // Existing tap-zone/swipe/keyboard navigation (reader-shell.js dispatching
-        // jularr:reader-page-edge, and the keydown handler below) is untouched: the
-        // drag only swallows the pointerup it actually turned into a page-turn.
+        // Shared tap/swipe/keyboard navigation dispatches jularr:reader-page-edge
+        // from reader-shell.js. The renderer-specific visual drag only swallows
+        // the pointerup it actually committed, so one gesture still turns once.
         StringAssert.Contains(script, "event.stopPropagation()");
         StringAssert.Contains(script, "jularr:reader-page-edge");
     }

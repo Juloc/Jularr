@@ -4,9 +4,14 @@ on:
   workflow_call:
     inputs:
       release:
-        description: "Build and attach signed APKs to the current Jularr release"
+        description: "Build signed APKs for the current Jularr release"
         required: false
         default: false
+        type: boolean
+      attach:
+        description: "Attach signed APKs to an already-created GitHub release"
+        required: false
+        default: true
         type: boolean
   workflow_dispatch:
 
@@ -17,7 +22,7 @@ on:
       - ".github/workflows/android.yml"
   push:
     branches:
-      - "main"
+      - "dev"
     paths:
       - "clients/android/**"
       - "design/player/**"
@@ -33,12 +38,14 @@ jobs:
   build:
     if: github.event_name != 'workflow_dispatch' && inputs.release != true
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -52,7 +59,7 @@ jobs:
         with:
           gradle-version: "9.8.0"
 
-      - name: Test, lint and build debug APKs
+      - name: Test and lint Android
         working-directory: clients/android
         run: >-
           gradle --stacktrace --parallel --build-cache
@@ -71,69 +78,36 @@ jobs:
           :core-design:lintDebug
           :core-tts:lintDebug
           :core-update:lintDebug
-          :app-mobile:assembleDebug
-          :app-tv:assembleDebug
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: jularr-android-debug-apks
-          if-no-files-found: error
-          path: |
-            clients/android/app-mobile/build/outputs/apk/debug/*.apk
-            clients/android/app-tv/build/outputs/apk/debug/*.apk
 
   release:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       inputs.release == true
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Detect release commit
-        id: release_commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" || "${RELEASE_INPUT}" == "true" ]]; then
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          SUBJECT="$(git log -1 --pretty=%s)"
-          if [[ "$SUBJECT" == release:* ]]; then
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_release=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          RELEASE_INPUT: ${{ inputs.release }}
-
-      - uses: actions/setup-java@v5
-        if: steps.release_commit.outputs.is_release == 'true'
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
       - uses: android-actions/setup-android@v4
-        if: steps.release_commit.outputs.is_release == 'true'
 
       - name: Install Android SDK
-        if: steps.release_commit.outputs.is_release == 'true'
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - uses: gradle/actions/setup-gradle@v6
-        if: steps.release_commit.outputs.is_release == 'true'
         with:
           gradle-version: "9.8.0"
 
       - name: Resolve release version
-        if: steps.release_commit.outputs.is_release == 'true'
         id: version
         shell: bash
         run: |
@@ -150,16 +124,16 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
 
-          if [[ "${RELEASE_INPUT}" == "true" ]]; then
+          if [[ "${RELEASE_INPUT}" == "true" && "${ATTACH_INPUT}" == "true" ]]; then
             gh release view "v${VERSION}" >/dev/null
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           RELEASE_INPUT: ${{ inputs.release }}
+          ATTACH_INPUT: ${{ inputs.attach }}
 
       - name: Stamp Android package version
-        if: steps.release_commit.outputs.is_release == 'true'
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -173,7 +147,6 @@ jobs:
           done
 
       - name: Build release APKs
-        if: steps.release_commit.outputs.is_release == 'true'
         working-directory: clients/android
         run: >-
           gradle --stacktrace --parallel --build-cache
@@ -181,7 +154,6 @@ jobs:
           :app-tv:assembleRelease
 
       - name: Sign APKs and generate checksums
-        if: steps.release_commit.outputs.is_release == 'true'
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -224,8 +196,19 @@ jobs:
           sign_apk "${MOBILE_UNSIGNED}" "Jularr-Mobile-${VERSION}"
           sign_apk "${TV_UNSIGNED}" "Jularr-TV-${VERSION}"
 
+      - name: Upload signed release assets
+        if: inputs.release == true
+        uses: actions/upload-artifact@v7
+        with:
+          name: jularr-android-release-assets
+          if-no-files-found: error
+          path: |
+            dist/*.apk
+            dist/*.sha256
+          retention-days: 1
+
       - name: Upload signed APKs for manual test
-        if: steps.release_commit.outputs.is_release == 'true' && github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
           name: jularr-android-signed-test
@@ -235,7 +218,7 @@ jobs:
             dist/*.sha256
 
       - name: Attach Android assets to GitHub release
-        if: steps.release_commit.outputs.is_release == 'true' && github.event_name != 'workflow_dispatch'
+        if: inputs.release == true && inputs.attach == true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

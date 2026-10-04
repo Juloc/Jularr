@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using Jularr.Web.Features.Novels;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +19,7 @@ public sealed record BookImportHint(
 
 /// <summary>
 /// The file Jularr keeps for a Books work (today: the PDF of a PDF book). <see cref="PageCount"/>
-/// is the number of pages, which are also the work's chapters in reading order.
+/// is the number of chapters, which are the logical pages of a PDF in reading order.
 /// </summary>
 public sealed record BookStoredFile(
     Guid WorkId,
@@ -29,7 +28,8 @@ public sealed record BookStoredFile(
     string Format,
     string MediaType,
     long SizeBytes,
-    int PageCount);
+    int PageCount,
+    string ContentHash);
 
 public sealed partial class BookCatalogService
 {
@@ -159,9 +159,10 @@ public sealed partial class BookCatalogService
 
     /// <summary>
     /// Imports one PDF as a Books work like any EPUB: the file is copied into
-    /// <see cref="FilesPath"/>, every page becomes a chapter (number = page number) carrying the
-    /// page's extracted text, and page 1 gives the cover when nothing better is known. Nothing
-    /// is parsed as EPUB and nothing is converted.
+    /// <see cref="FilesPath"/>, every logical page becomes a chapter carrying its extracted text without
+    /// page furniture (see <see cref="PdfDocumentAnalyzer"/>; physical pages that repeat an earlier page
+    /// share its chapter), and page 1 gives the cover when nothing better is known. Nothing is parsed
+    /// as EPUB and nothing is converted.
     /// </summary>
     public async Task<Guid> ImportPdfFileAsync(
         string path,
@@ -285,6 +286,8 @@ public sealed partial class BookCatalogService
             ? PdfDocumentReader.Read(await File.ReadAllBytesAsync(storedPath, cancellationToken))
             : PdfDocumentContent.Empty;
 
+        var identity = PdfBookIdentity.Resolve(content.Title, content.Author, fileName);
+
         NovelWork? work;
         if (hint?.ExistingWorkId is Guid targetWorkId)
         {
@@ -307,15 +310,14 @@ public sealed partial class BookCatalogService
                 return work.Id;
             }
 
-            var title = FirstNonEmpty(hint?.Title, UsablePdfTitle(content.Title))
-                ?? TitleFromFileName(fileName);
+            var title = FirstNonEmpty(hint?.Title, identity.Title)!;
             work = new NovelWork
             {
                 SourceProvider = ImportedBookProvider,
                 SourceKey = sourceKey,
                 SourceUrl = Truncate(sourceKind + "://" + Uri.EscapeDataString(fileName), 2048),
                 Title = Truncate(title, 500),
-                Author = TruncateNullable(hint?.Author, 300),
+                Author = TruncateNullable(FirstNonEmpty(hint?.Author, identity.Author), 300),
                 MetadataTitle = Truncate(title, 500),
                 CoverImageUrl = null,
                 MetadataStatus = "IMPORTED",
@@ -325,7 +327,7 @@ public sealed partial class BookCatalogService
         }
         if (string.IsNullOrWhiteSpace(work.Author))
         {
-            work.Author = TruncateNullable(FirstNonEmpty(hint?.Author, content.Author), 300);
+            work.Author = TruncateNullable(FirstNonEmpty(hint?.Author, identity.Author), 300);
         }
 
         work.SourceUrl = Truncate(sourceKind + "://" + Uri.EscapeDataString(fileName), 2048);
@@ -348,21 +350,13 @@ public sealed partial class BookCatalogService
             work.CoverImageUrl = $"/Books/Cover/{work.Id}";
         }
 
-        // Pages are the chapters, in page order, through the canonical Novel volume write path;
+        // Logical pages are the chapters, in reading order, through the canonical Novel volume write path;
         // progress, bookmarks and "continue reading" work exactly as for EPUB chapters.
         var pages = content.Pages.Count > 0 ? content.Pages : [new PdfPageText(1, "")];
+        var analysis = PdfDocumentAnalyzer.Analyze(pages, contentHash);
         var volume = await NovelVolumeContent.EnsureImplicitVolumeAsync(db, work, NovelVolumeKinds.Book, cancellationToken);
-        await NovelVolumeContent.SyncChaptersAsync(
-            db,
-            work,
-            volume,
-            pages
-                .Select(page => new NovelVolumeChapterInput(
-                    $"book://{work.Id:N}/{page.Number.ToString(CultureInfo.InvariantCulture)}",
-                    PageTitle(page),
-                    page.Text))
-                .ToArray(),
-            cancellationToken);
+        await CreateDerivedDocumentStore().SaveAsync(analysis.Document, cancellationToken);
+        await SyncPdfChaptersAsync(work, volume, analysis, cancellationToken);
 
         await UpsertEditionAndFileAsync(
             work,
@@ -404,7 +398,7 @@ public sealed partial class BookCatalogService
         }
 
         var pages = await db.NovelChapters.CountAsync(x => x.WorkId == workId, cancellationToken);
-        return new BookStoredFile(workId, path, file.FileName, file.Format, file.MediaType, file.SizeBytes, pages);
+        return new BookStoredFile(workId, path, file.FileName, file.Format, file.MediaType, file.SizeBytes, pages, file.ContentHash);
     }
 
     /// <summary>
@@ -489,54 +483,16 @@ public sealed partial class BookCatalogService
         }
     }
 
-    /// <summary>A page's chapter title: its first line of text, or its number for pages without text.</summary>
-    private static string PageTitle(PdfPageText page)
+    /// <summary>A logical page's chapter title: its first line of text, or its number for pages without text.</summary>
+    private static string PageTitle(int pageNumber, string text)
     {
-        var firstLine = page.Text.Split('\n', 2)[0].Trim();
+        var firstLine = text.Split('\n', 2)[0].Trim();
         if (firstLine.Length == 0)
         {
-            return page.Number.ToString(CultureInfo.InvariantCulture);
+            return pageNumber.ToString(CultureInfo.InvariantCulture);
         }
 
         return firstLine.Length <= 80 ? firstLine : firstLine[..79].TrimEnd() + "…";
-    }
-
-    /// <summary>
-    /// The book title in a PDF's Info title, or null. Producer junk ("Microsoft Word - draft.docx")
-    /// is ignored and a library label around the title ("The Project Gutenberg eBook #33283: …",
-    /// "The Project Gutenberg EBook of …, by …") is removed.
-    /// </summary>
-    public static string? UsablePdfTitle(string? title)
-    {
-        var clean = title?.Trim();
-        if (clean is not null
-            && GutenbergPdfTitle().Match(clean) is { Success: true } gutenberg)
-        {
-            clean = gutenberg.Groups["title"].Value.Trim();
-        }
-
-        if (string.IsNullOrWhiteSpace(clean)
-            || clean.Length < 2
-            || clean.StartsWith("Microsoft Word", StringComparison.OrdinalIgnoreCase)
-            || clean.Equals("untitled", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(clean, @"\.(docx?|pdf|indd|tex|rtf|odt)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-        {
-            return null;
-        }
-
-        return clean;
-    }
-
-    [GeneratedRegex(
-        @"^(?:the\s+)?project\s+gutenberg'?s?\s+e-?book(?:\s*#\s*\d+)?\s*(?::|,|\s+of\b)\s*(?<title>.+?)(?:,\s+by\s+.+)?$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex GutenbergPdfTitle();
-
-    private static string TitleFromFileName(string fileName)
-    {
-        var stem = Path.GetFileNameWithoutExtension(fileName);
-        var title = Regex.Replace(stem.Replace('_', ' ').Replace('.', ' '), @"\s+", " ").Trim();
-        return title.Length == 0 ? "PDF" : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(title);
     }
 
     private static async Task CopyBoundedAsync(Stream input, Stream output, long maxBytes, CancellationToken cancellationToken)

@@ -269,6 +269,7 @@ public sealed class BookCoverArtworkTests
                 {
                     ["Books:CoversPath"] = coversPath,
                     ["Books:FilesPath"] = Path.Combine(tempRoot, "data-files"),
+                    ["Books:DerivedPath"] = Path.Combine(tempRoot, "data-derived"),
                     ["Books:Translation:MemoryPath"] = Path.Combine(tempRoot, "translation-memory")
                 })
                 .Build();

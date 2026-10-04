@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Books;
+using Jularr.Web.Features.Operations;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -960,6 +961,76 @@ public sealed class BookCatalogServiceTests
     }
 
     [TestMethod]
+    public async Task AFailedWholeBookRunKeepsFinishedChaptersAndTheNextRunTranslatesOnlyTheMissingOnes()
+    {
+        var path = TempDatabasePath();
+
+        try
+        {
+            await using var db = await CreateDatabaseAsync(path);
+            using var client = new HttpClient(new DelegateHttpMessageHandler(request => OfflineMetadata(request, "Translation should not use HTTP.")));
+            var translator = new FakeBookTranslator { FailOnCall = 2 };
+            var service = NewService(db, client, translator);
+            await using var epub = BuildTestEpub();
+            var workId = await service.ImportUploadedEpubAsync(epub, "resume.epub", CancellationToken.None);
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.TranslateBookAsync(workId, "id", CancellationToken.None));
+            Assert.AreEqual(1, await db.NovelTranslations.CountAsync(), "The chapter finished before the usage limit stays translated.");
+
+            translator.FailOnCall = null;
+            var callsBeforeResume = translator.CallCount;
+            await service.TranslateBookAsync(workId, "id", CancellationToken.None);
+            Assert.AreEqual(1, translator.CallCount - callsBeforeResume, "Only the missing chapter is translated again.");
+            Assert.AreEqual(2, await db.NovelTranslations.CountAsync());
+
+            var firstChapterId = await db.NovelChapters.Where(x => x.WorkId == workId).OrderBy(x => x.Number).Select(x => x.Id).FirstAsync();
+            await service.TranslateChapterAsync(firstChapterId, "de", CancellationToken.None);
+            Assert.AreEqual(2, await service.ClearBookTranslationsAsync(workId, "id", CancellationToken.None));
+            Assert.AreEqual(1, await db.NovelTranslations.CountAsync(x => x.TargetLanguage == "de"), "Redo discards only the translation of its own language.");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public async Task TheLatestWholeBookRunDecidesTheStateAndAnActiveRunBlocksANewOne()
+    {
+        var path = TempDatabasePath();
+
+        try
+        {
+            await using var db = await CreateDatabaseAsync(path);
+            using var client = new HttpClient(new DelegateHttpMessageHandler(request => OfflineMetadata(request, "Translation should not use HTTP.")));
+            var jobs = new BookTranslationJobs(db, null!, NewService(db, client));
+            var store = new OperationStore(db);
+            var workId = Guid.NewGuid();
+            var run = new OperationDescriptor(BookTranslationJobs.OperationKind, "Translation", "Translate book", "Book", Details: $"{workId:N}:de");
+
+            var failed = await store.CreateAsync(run);
+            await store.MarkFailedAsync(failed, "AI usage limit reached.");
+            var afterFailure = await jobs.GetAsync(workId, "de", CancellationToken.None);
+            Assert.AreEqual(BookTranslationJobState.Failed, afterFailure.State);
+            Assert.AreEqual("AI usage limit reached.", afterFailure.Error);
+            Assert.AreEqual(BookTranslationJobState.Idle, (await jobs.GetAsync(workId, "fr", CancellationToken.None)).State, "Another language is unaffected.");
+            Assert.AreEqual(BookTranslationJobState.Idle, (await jobs.GetAsync(Guid.NewGuid(), "de", CancellationToken.None)).State, "Another book is unaffected.");
+
+            var running = await store.CreateAsync(run);
+            await store.MarkRunningAsync(running);
+            Assert.AreEqual(BookTranslationJobState.Running, (await jobs.GetAsync(workId, "de", CancellationToken.None)).State);
+            Assert.IsFalse(await jobs.QueueAsync(workId, "Book", "de", "profile-1", discardExisting: true, CancellationToken.None), "A run in progress is never duplicated or discarded.");
+
+            await store.MarkSucceededAsync(running);
+            Assert.AreEqual(BookTranslationJobState.Idle, (await jobs.GetAsync(workId, "de", CancellationToken.None)).State, "A later successful run supersedes the failure.");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public async Task BookManagementClearsTranslationsAndDeleteCascadesCanonicalState()
     {
         var path = TempDatabasePath();
@@ -1448,6 +1519,7 @@ public sealed class BookCatalogServiceTests
     {
         public string Id => "fake-books";
         public int CallCount { get; private set; }
+        public int? FailOnCall { get; set; }
         public List<string> Contexts { get; } = [];
 
         public Task<string> TranslateLiteraryAsync(
@@ -1459,6 +1531,11 @@ public sealed class BookCatalogServiceTests
         {
             CallCount++;
             Contexts.Add(context);
+            if (CallCount == FailOnCall)
+            {
+                throw new InvalidOperationException("AI usage limit reached.");
+            }
+
             return Task.FromResult(
                 $"[{targetLanguage}] {sourceText}");
         }

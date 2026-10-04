@@ -844,6 +844,32 @@ public sealed class LibraryReconciliationPlanServiceTests
         Assert.AreEqual(correctionPlan.Plan.Id, links[0].PlanId);
     }
 
+    /// <summary>Restored confirmed links must also resolve their parent folders, otherwise the tree reports unresolved files that are already mapped.</summary>
+    [TestMethod]
+    public async Task ConfirmedLinksResolveTheFolderRollupOfALaterScan()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Media");
+        Directory.CreateDirectory(Path.Combine(root.Path, "series"));
+        await File.WriteAllTextAsync(Path.Combine(root.Path, "series", "episode.mkv"), "media");
+        var work = new Work { CanonicalTitle = "Linked series", MediaType = WorkMediaType.Series };
+        scope.Db.Works.Add(work);
+        await scope.Db.SaveChangesAsync();
+        var firstPlan = await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id), CancellationToken.None);
+        await scope.Service.ScanAsync(firstPlan.Plan!.Id, CancellationToken.None);
+        var file = await scope.Db.LibraryReconciliationPlanItems.SingleAsync(x => x.PlanId == firstPlan.Plan.Id && x.RelativePath == "series/episode.mkv");
+        await scope.Service.AssignWorkAsync(new LibraryReconciliationWorkAssignmentRequest(firstPlan.Plan.Id, [file.Id], work.Id), CancellationToken.None);
+        var firstPreview = await scope.Service.BuildPreviewAsync(firstPlan.Plan.Id, CancellationToken.None);
+        await scope.Service.ExecuteAsync(new LibraryReconciliationExecutionRequest(firstPlan.Plan.Id, firstPreview!.Fingerprint), CancellationToken.None);
+
+        var laterPlan = await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id, SkipConfidentAssignments: true), CancellationToken.None);
+        await scope.Service.ScanAsync(laterPlan.Plan!.Id, CancellationToken.None);
+        var folder = await scope.Db.LibraryReconciliationPlanItems.SingleAsync(x => x.PlanId == laterPlan.Plan.Id && x.RelativePath == "series");
+
+        Assert.AreEqual(LibraryReconciliationItemState.Recognized, folder.State);
+        Assert.AreEqual(0, folder.UnresolvedCount);
+    }
+
     /// <summary>Finds only existing canonical works for a scanned plan and never turns a search term into identity.</summary>
     [TestMethod]
     public async Task WorkSearchIsCaseInsensitiveAndNeverCreatesACanonicalWork()
@@ -862,6 +888,39 @@ public sealed class LibraryReconciliationPlanServiceTests
         Assert.AreEqual(1, results.Count);
         Assert.AreEqual(matchingWork.Id, results[0].Id);
         Assert.AreEqual(2, await scope.Db.Works.CountAsync());
+    }
+
+    /// <summary>A blank query fills the work picker alphabetically so the mapping step never offers an empty list.</summary>
+    [TestMethod]
+    public async Task BlankWorkSearchListsExistingWorksAlphabetically()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Media");
+        scope.Db.Works.AddRange(new Work { CanonicalTitle = "Zeta", MediaType = WorkMediaType.Series }, new Work { CanonicalTitle = "Alpha", MediaType = WorkMediaType.Series });
+        await scope.Db.SaveChangesAsync();
+
+        var created = await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id), CancellationToken.None);
+        var results = await scope.Service.SearchWorksAsync(created.Plan!.Id, " ", CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { "Alpha", "Zeta" }, results.Select(x => x.Title).ToArray());
+    }
+
+    /// <summary>The wizard resumes the newest scanned plan and ignores drafts that were never scanned.</summary>
+    [TestMethod]
+    public async Task LatestReadyPlanIsTheNewestScannedPlan()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Media");
+        await File.WriteAllTextAsync(Path.Combine(root.Path, "episode-01.mkv"), "media");
+        await scope.Db.SaveChangesAsync();
+        var scanned = await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id), CancellationToken.None);
+        Assert.IsNotNull(scanned.Plan, scanned.Message);
+        await scope.Service.ScanAsync(scanned.Plan.Id, CancellationToken.None);
+        await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id), CancellationToken.None);
+
+        var latest = await scope.Service.GetLatestReadyPlanIdAsync(CancellationToken.None);
+
+        Assert.AreEqual(scanned.Plan.Id, latest);
     }
 
     private sealed class Scope : IDisposable

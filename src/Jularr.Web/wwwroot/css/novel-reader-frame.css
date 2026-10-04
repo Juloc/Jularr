@@ -4,25 +4,12 @@
    the layout preferences (hyphenation, indent, page numbers, illustrations). */
 
 .novel-reader-shell.reader-frame {
-    min-height: calc(100dvh - 24px - var(--safe-top, 0px) - var(--safe-bottom, 0px));
     padding: 0;
-    box-shadow: var(--shadow-card);
-    clip-path: inset(0 round var(--reader-frame-radius));
 }
 
 .novel-reader-shell.reader-frame[data-reading-mode="paged"] {
     min-height: 0;
     overflow: clip;
-}
-
-/* Phones and tablets: the frame is the whole screen (square corners), and no
-   clip-path, which would also clip the fixed bottom sheets and menus. */
-@media (max-width: 820px) {
-    .novel-reader-shell.reader-frame,
-    .novel-reader-shell.reader-frame[data-reading-mode="paged"] {
-        min-height: 100dvh;
-        clip-path: none;
-    }
 }
 
 /* Bars and panels use the app surface; the page keeps the paper colour. */
@@ -96,58 +83,6 @@
     font-size: 12px;
 }
 
-.novel-frame-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-}
-
-.novel-frame-series {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text);
-    font-size: 15px;
-    font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.novel-frame-separator {
-    flex: 0 0 auto;
-    display: inline-grid;
-    color: var(--muted);
-}
-
-.novel-frame-separator .reader-icon {
-    width: 16px;
-    height: 16px;
-}
-
-.novel-frame-chapter {
-    min-width: 0;
-    display: grid;
-    gap: 1px;
-}
-
-.novel-frame-chapter strong,
-.novel-frame-chapter span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.novel-frame-chapter strong {
-    font-size: 13px;
-    font-weight: 650;
-}
-
-.novel-frame-chapter span {
-    color: var(--muted);
-    font-size: 12px;
-}
-
 .reader-frame-icon.has-bookmarks {
     color: var(--accent-text, var(--accent));
 }
@@ -188,7 +123,8 @@
     height: auto;
     min-height: 0;
     margin: 0 auto;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .12);
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .novel-reader-shell.reader-frame[data-reading-mode="paged"][data-two-page="true"] .novel-reader-content {
@@ -198,20 +134,20 @@
 /* Page art per paper: dark ink on light paper, pale ink and a deeper fold on dark paper. */
 .novel-reader-shell.reader-frame {
     --novel-page-mountains: url("/brand/ink-mountains.svg");
-    --novel-page-fold: rgba(60, 40, 20, .09);
+    --novel-page-fold: rgba(60, 40, 20, .07);
 }
 
 .novel-reader-shell.reader-frame[data-paper-style="midnight"],
 .novel-reader-shell.reader-frame[data-paper-style="oled"],
 :root[data-app-theme="dark"] .novel-reader-shell.reader-frame[data-paper-style="auto"] {
     --novel-page-mountains: url("/brand/ink-mountains-light.svg");
-    --novel-page-fold: rgba(0, 0, 0, .38);
+    --novel-page-fold: rgba(0, 0, 0, .22);
 }
 
 @media (prefers-color-scheme: dark) {
     :root[data-app-theme="system"] .novel-reader-shell.reader-frame[data-paper-style="auto"] {
         --novel-page-mountains: url("/brand/ink-mountains-light.svg");
-        --novel-page-fold: rgba(0, 0, 0, .38);
+        --novel-page-fold: rgba(0, 0, 0, .22);
     }
 }
 
@@ -221,6 +157,9 @@
 .novel-reader-shell.reader-frame[data-reading-mode="paged"] .novel-reader-content {
     --novel-page-art-h: calc(var(--novel-page-pad-y) + 1.6rem);
     padding-bottom: var(--novel-page-art-h);
+}
+
+.novel-reader-shell.reader-frame[data-reading-mode="paged"]:is([data-paper-style="sepia"], [data-paper-style="old-paper"]) .novel-reader-content {
     background-image:
         linear-gradient(color-mix(in srgb, var(--reader-paper) 55%, transparent) 0 0),
         var(--novel-page-mountains),
@@ -240,7 +179,7 @@
     padding: 1.4rem clamp(1rem, 3vw, 2.4rem) 2.2rem;
 }
 
-.novel-reader-shell.reader-frame:not([data-reading-mode="paged"]):not([data-chapter-style="minimal"]) .novel-reader-content {
+.novel-reader-shell.reader-frame:not([data-reading-mode="paged"]):not([data-chapter-style="minimal"]):is([data-paper-style="sepia"], [data-paper-style="old-paper"]) .novel-reader-content {
     background-image:
         linear-gradient(color-mix(in srgb, var(--reader-paper) 55%, transparent) 0 0),
         url("/brand/washi.webp");
@@ -254,6 +193,10 @@
 /* Two pages side by side get a fold between them instead of one wide sheet. */
 @media (min-width: 761px) {
     .novel-reader-shell.reader-frame[data-reading-mode="paged"][data-two-page="true"]:not([data-chapter-style="minimal"]) .novel-reader-content {
+        background-image: linear-gradient(to right, transparent calc(50% - 14px), var(--novel-page-fold) 50%, transparent calc(50% + 14px));
+    }
+
+    .novel-reader-shell.reader-frame[data-reading-mode="paged"][data-two-page="true"]:not([data-chapter-style="minimal"]):is([data-paper-style="sepia"], [data-paper-style="old-paper"]) .novel-reader-content {
         background-image:
             linear-gradient(to right,
                 transparent calc(50% - 26px),
@@ -706,41 +649,8 @@
 }
 
 @media (max-width: 720px) {
-    .novel-frame-series,
-    .novel-frame-separator {
-        display: none;
-    }
-
-    .novel-frame-chapter {
-        justify-items: center;
-    }
-
     .novel-stage {
         padding: 10px 16px 18px;
-    }
-
-    /* Phone bottom bar: "‹ ——●—— 2 / 24 ›" in one row above the tool row. */
-    .novel-reader-shell.reader-frame .reader-progress {
-        grid-template-columns: 44px minmax(0, 1fr) auto 44px;
-        grid-template-areas: "prev track text next";
-        align-items: center;
-    }
-
-    .novel-reader-shell.reader-frame .reader-progress-track {
-        grid-area: track;
-    }
-
-    .novel-reader-shell.reader-frame .reader-progress [data-reader-page-step="-1"] {
-        grid-area: prev;
-    }
-
-    .novel-reader-shell.reader-frame .reader-progress [data-reader-page-step="1"] {
-        grid-area: next;
-    }
-
-    .novel-reader-shell.reader-frame .reader-progress-text {
-        grid-area: text;
-        margin: 0 0 0 8px;
     }
 
     .novel-reader-shell.reader-frame[data-reading-mode="paged"] .novel-stage {

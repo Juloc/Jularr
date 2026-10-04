@@ -414,6 +414,24 @@ public sealed partial class BookCatalogService(
             coverage);
     }
 
+    public async Task<IReadOnlyList<string>> GetCachedTranslationLanguagesAsync(Guid workId, CancellationToken cancellationToken)
+    {
+        var cacheIdentity = TranslationCacheIdentity(await translator.GetTranslationModeAsync(cancellationToken));
+        return await (
+                from translation in db.NovelTranslations.AsNoTracking()
+                join chapter in db.NovelChapters.AsNoTracking()
+                    on translation.ChapterId equals chapter.Id
+                where chapter.WorkId == workId
+                    && translation.ProviderId == cacheIdentity
+                    && translation.PromptVersion == TranslationPromptVersion
+                    && translation.SourceHash == chapter.SourceHash
+                select translation.TargetLanguage)
+            .Distinct()
+            .OrderBy(language => language)
+            .Take(12)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<BookReaderChapter?> GetReaderChapterAsync(
         Guid chapterId,
         string profileId,

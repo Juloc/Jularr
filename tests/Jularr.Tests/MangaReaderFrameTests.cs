@@ -20,6 +20,7 @@ public sealed class MangaReaderFrameTests
 
         StringAssert.Contains(page, "data-reader-frame");
         StringAssert.Contains(page, "data-unified-reader");
+        StringAssert.Contains(page, "data-manga-stage data-reader-surface");
         StringAssert.Contains(page, "data-reader-chrome-primary");
         StringAssert.Contains(page, "_ReaderIcon");
         StringAssert.Contains(page, "~/css/reader-shell.css");
@@ -93,6 +94,7 @@ public sealed class MangaReaderFrameTests
     {
         var page = Read("src", "Jularr.Web", "Pages", "Manga", "Read.cshtml");
         var script = Read("src", "Jularr.Web", "wwwroot", "js", "manga-reader.js");
+        var shell = Read("src", "Jularr.Web", "wwwroot", "js", "reader-shell.js");
 
         StringAssert.Contains(page, "asp-page-handler=\"Progress\"");
         StringAssert.Contains(page, "asp-page-handler=\"Bookmark\"");
@@ -106,10 +108,16 @@ public sealed class MangaReaderFrameTests
         StringAssert.Contains(script, "jularr:reader-location");
         StringAssert.Contains(script, "jularr:reader-seek");
         StringAssert.Contains(script, "jularr:reader-page-edge");
-        StringAssert.Contains(script, "\"ArrowLeft\"");
-        StringAssert.Contains(script, "touchstart");
+        StringAssert.Contains(script, "jularr:reader-mode");
+        StringAssert.Contains(script, "readerPanGesture");
         StringAssert.Contains(script, "prefers-reduced-motion");
         StringAssert.Contains(script, "direction === \"rtl\"");
+        StringAssert.Contains(shell, "event.key === \"ArrowLeft\"");
+        StringAssert.Contains(shell, "surface.addEventListener(\"pointerdown\"");
+        StringAssert.Contains(shell, "pageDirection() === \"rtl\" ? -direction : direction");
+        Assert.IsFalse(script.Contains("case \"ArrowLeft\"", StringComparison.Ordinal));
+        Assert.IsFalse(script.Contains("stage?.addEventListener(\"touchend\"", StringComparison.Ordinal));
+        Assert.IsFalse(script.Contains("manga-chrome-hidden", StringComparison.Ordinal));
     }
 
     [TestMethod]

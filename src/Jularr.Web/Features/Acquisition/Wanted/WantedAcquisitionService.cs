@@ -23,6 +23,12 @@ public interface IWantedRequestHandler
         AcquisitionRequest request,
         string problem,
         CancellationToken cancellationToken);
+
+    Task<bool> ContinueAfterCompletedImportAsync(
+        AcquisitionRequest request,
+        CompletedDownloadImportResult result,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(false);
 }
 
 /// <summary>
@@ -265,6 +271,15 @@ public sealed class WantedAcquisitionService(
             switch (result.Disposition)
             {
                 case CompletedDownloadImportDisposition.Completed:
+                    if (await handler.ContinueAfterCompletedImportAsync(
+                            request,
+                            result,
+                            cancellationToken))
+                    {
+                        advanced++;
+                        break;
+                    }
+
                     await store.UpdateStatusAsync(
                         request.Id,
                         AcquisitionRequestStatus.Completed,

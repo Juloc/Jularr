@@ -10,16 +10,16 @@
     --book-reader-text-width: 760px;
     --book-reader-font: Georgia, "Times New Roman", serif;
     --book-reader-align: start;
-    --paper: #f5ecda;
+    --paper: #faf6ec;
     --paper-ink: #2c2621;
     --paper-ink-soft: #7a6e62;
-    --paper-texture-opacity: .6;
+    --paper-texture-opacity: 0;
     --paper-texture-blend: multiply;
     --paper-texture-filter: none;
-    --paper-art-opacity: .82;
+    --paper-art-opacity: 0;
     --paper-art-filter: none;
-    --paper-gutter: rgba(70, 48, 26, .16);
-    --paper-shadow: 0 18px 40px -18px rgba(60, 40, 20, .45), 0 2px 6px rgba(60, 40, 20, .12);
+    --paper-gutter: rgba(70, 48, 26, .09);
+    --paper-shadow: none;
     --pad-x: 56px;
     --pad-top: 56px;
     --pad-bottom: 72px;
@@ -35,10 +35,9 @@
     --paper-texture-opacity: .06;
     --paper-texture-blend: screen;
     --paper-texture-filter: invert(1);
-    --paper-art-opacity: .42;
-    --paper-art-filter: invert(.85) hue-rotate(180deg);
+    --paper-art-opacity: 0;
     --paper-gutter: rgba(0, 0, 0, .42);
-    --paper-shadow: 0 18px 40px -18px rgba(0, 0, 0, .8);
+    --paper-shadow: none;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -49,25 +48,26 @@
         --paper-texture-opacity: .06;
         --paper-texture-blend: screen;
         --paper-texture-filter: invert(1);
-        --paper-art-opacity: .42;
-        --paper-art-filter: invert(.85) hue-rotate(180deg);
+        --paper-art-opacity: 0;
         --paper-gutter: rgba(0, 0, 0, .42);
-        --paper-shadow: 0 18px 40px -18px rgba(0, 0, 0, .8);
+        --paper-shadow: none;
     }
 }
 
 .book-reader-page[data-paper-style="white"] {
-    --paper: #fffdf9;
+    --paper: #fffefb;
     --paper-ink: #1f1d1b;
     --paper-ink-soft: #77716a;
-    --paper-texture-opacity: .28;
-    --paper-gutter: rgba(40, 32, 24, .1);
+    --paper-gutter: rgba(40, 32, 24, .08);
 }
 
 .book-reader-page[data-paper-style="sepia"] {
     --paper: #ecdcbc;
     --paper-ink: #3a2e21;
     --paper-ink-soft: #7b6650;
+    --paper-texture-opacity: .6;
+    --paper-art-opacity: .82;
+    --paper-shadow: 0 18px 40px -18px rgba(60, 40, 20, .45), 0 2px 6px rgba(60, 40, 20, .12);
 }
 
 .book-reader-page[data-paper-style="old-paper"] {
@@ -75,6 +75,8 @@
     --paper-ink: #34281b;
     --paper-ink-soft: #6f5c43;
     --paper-texture-opacity: .75;
+    --paper-art-opacity: .82;
+    --paper-shadow: 0 18px 40px -18px rgba(60, 40, 20, .45), 0 2px 6px rgba(60, 40, 20, .12);
     --paper-gutter: rgba(70, 48, 20, .22);
 }
 
@@ -85,10 +87,9 @@
     --paper-texture-opacity: .06;
     --paper-texture-blend: screen;
     --paper-texture-filter: invert(1);
-    --paper-art-opacity: .42;
-    --paper-art-filter: invert(.85) hue-rotate(180deg);
+    --paper-art-opacity: 0;
     --paper-gutter: rgba(0, 0, 0, .42);
-    --paper-shadow: 0 18px 40px -18px rgba(0, 0, 0, .8);
+    --paper-shadow: none;
 }
 
 .book-reader-page[data-paper-style="oled"] {
@@ -96,8 +97,7 @@
     --paper-ink: #cfcfcf;
     --paper-ink-soft: #7c7c7c;
     --paper-texture-opacity: 0;
-    --paper-art-opacity: .3;
-    --paper-art-filter: invert(.85) hue-rotate(180deg);
+    --paper-art-opacity: 0;
     --paper-gutter: rgba(255, 255, 255, .06);
     --paper-shadow: none;
 }
@@ -111,6 +111,7 @@
     display: grid;
     place-items: center;
     padding: 22px 28px;
+    background: var(--paper);
     outline: none;
 }
 
@@ -154,14 +155,14 @@
     left: 0;
     width: var(--sheet-w);
     border-radius: 4px 2px 2px 4px;
-    background-image: linear-gradient(to left, var(--paper-gutter), transparent 9%);
+    background-image: linear-gradient(to left, var(--paper-gutter), transparent 4%);
 }
 
 .book-sheet-right {
     left: var(--sheet-w);
     width: var(--sheet-w);
     border-radius: 2px 4px 4px 2px;
-    background-image: linear-gradient(to right, var(--paper-gutter), transparent 9%);
+    background-image: linear-gradient(to right, var(--paper-gutter), transparent 4%);
 }
 
 .book-reader-page[data-pages="1"] .book-sheet-left {
@@ -199,7 +200,7 @@
 }
 
 .book-reader-page[data-book-layout="paged"] .book-stack {
-    opacity: .9;
+    opacity: var(--paper-art-opacity);
 }
 
 .book-reader-page[data-book-layout="paged"] .book-stack-left {
@@ -419,7 +420,7 @@
 }
 
 .book-opening {
-    padding: 2.6em 0 1.6em;
+    padding: 2.2em 0 1.8em;
     color: var(--paper-ink);
     font-family: var(--book-reader-font);
     text-align: center;
@@ -428,54 +429,40 @@
 
 .book-opening-number {
     display: block;
-    font-size: 3.2em;
-    font-weight: 500;
-    line-height: 1;
+    font-size: 1em;
+    font-weight: 400;
+    line-height: 1.3;
 }
 
 .book-opening-art {
     display: block;
-    width: 9.5em;
+    width: 3.2em;
     height: auto;
-    margin: .7em auto .5em;
+    margin: .55em auto .7em;
     overflow: visible;
+    color: var(--paper-ink-soft);
 }
 
-.book-opening-sun {
-    fill: currentColor;
-    opacity: .72;
-}
-
-.book-opening-hill {
-    fill: currentColor;
-    opacity: .5;
-}
-
-.book-opening-mist {
+.book-opening-art path {
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.1;
+    stroke-width: 1;
     stroke-linecap: round;
-    opacity: .32;
+    opacity: .55;
+}
+
+.book-opening-art circle {
+    fill: var(--accent);
 }
 
 .book-opening h1 {
-    margin: .5em 0 0;
-    color: var(--paper-ink-soft);
-    font: 500 .95em/1.4 var(--book-reader-font);
-    letter-spacing: .06em;
+    margin: 0;
+    color: var(--paper-ink);
+    font: 500 1.7em/1.2 var(--book-reader-font);
 }
 
-.book-opening .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-    border: 0;
+.book-text .book-title-echo {
+    display: none;
 }
 
 .book-reader-page[data-chapter-style="minimal"] .book-opening-number,
@@ -549,6 +536,11 @@
 
 .book-reader-page[data-book-format="pdf"] .book-stage {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: color-mix(in srgb, var(--paper) 86%, var(--paper-ink));
     overflow: hidden;
     padding: 18px 24px;
 }
@@ -570,7 +562,7 @@
 
 .book-pdf-spread {
     display: flex;
-    margin: auto;
+    margin: 0 auto;
     color: var(--paper-ink);
 }
 
@@ -610,7 +602,7 @@
     isolation: isolate;
     border-radius: 4px;
     background: var(--paper);
-    box-shadow: var(--paper-shadow);
+    box-shadow: 0 1px 3px rgba(20, 16, 12, .18), 0 10px 26px -14px rgba(20, 16, 12, .35);
 }
 
 .book-pdf-page::before {
@@ -643,11 +635,11 @@
 }
 
 .book-pdf-page.is-left::after {
-    background: linear-gradient(to left, var(--paper-gutter), transparent 7%);
+    background: linear-gradient(to left, var(--paper-gutter), transparent 3.5%);
 }
 
 .book-pdf-page.is-right::after {
-    background: linear-gradient(to right, var(--paper-gutter), transparent 7%);
+    background: linear-gradient(to right, var(--paper-gutter), transparent 3.5%);
 }
 
 .book-pdf-canvas,
@@ -776,9 +768,13 @@
 
 .book-details {
     display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
     padding: 6px 4px;
+}
+
+.book-details:has(> img) {
+    grid-template-columns: 96px minmax(0, 1fr);
 }
 
 .book-details img {
@@ -794,6 +790,7 @@
     display: block;
     margin-bottom: 8px;
     font-size: 15px;
+    overflow-wrap: anywhere;
 }
 
 .book-details dl {
@@ -960,31 +957,43 @@
     }
 }
 
-/* Ready translated text covers the drawn page; every other state is a compact bar that leaves the original page readable. */
+/* Translation is part of the PDF reader layout, never an overlay. A ready translation replaces
+   the drawn original page surface. While the current page is still untranslated, the original
+   PDF remains visible and the translation state/action sits below it in normal flow. */
+.book-reader-page[data-book-format="pdf"] .book-stage:has(> .book-pdf-translation[data-state="ready"]:not([hidden])) > .book-pdf-spread {
+    display: none;
+}
+
 .book-pdf-translation {
-    position: absolute;
-    z-index: 3;
+    position: relative;
+    z-index: 1;
+    box-sizing: border-box;
+    width: min(100%, calc(var(--book-reader-text-width) + var(--pad-x) * 2));
+    max-width: 100%;
     background: var(--paper, var(--surface, #fff));
-    color: var(--ink, var(--text, inherit));
+    color: var(--paper-ink, var(--text, inherit));
 }
 
 .book-pdf-translation[data-state="ready"] {
-    inset: 0;
+    max-height: 100%;
+    margin: auto;
     overflow-y: auto;
     padding: 28px max(24px, 8vw);
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(20, 16, 12, .18), 0 10px 26px -14px rgba(20, 16, 12, .35);
 }
 
 .book-pdf-translation[data-state="pending"] {
-    inset: auto 16px 12px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 8px 12px;
+    margin: 0 auto;
     padding: 8px 14px;
     border: 1px solid var(--line, rgba(0, 0, 0, 0.15));
-    border-radius: 999px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
 }
 
 .book-pdf-translation[data-state="pending"] .book-pdf-translation-status {

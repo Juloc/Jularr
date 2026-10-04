@@ -60,7 +60,8 @@ public sealed class PlaybackTranscodeSlots(int capacity = PlaybackTranscodeSlots
 public sealed class PlaybackStreamSession(
     Guid id,
     string profileId,
-    Guid episodeId,
+    PlaybackVideoTarget target,
+    Guid? legacyEpisodeId,
     Guid mediaFileId,
     string sourcePath,
     double? durationSeconds,
@@ -72,7 +73,18 @@ public sealed class PlaybackStreamSession(
 
     public Guid Id { get; } = id;
     public string ProfileId { get; } = profileId;
-    public Guid EpisodeId { get; } = episodeId;
+    public PlaybackVideoTarget Target { get; } = target;
+    public Guid WorkId => Target.WorkId;
+    public Guid? WorkEpisodeId => Target.WorkEpisodeId;
+    public Guid TargetId => Target.IdentityId;
+    public Guid? LegacyEpisodeId { get; } = legacyEpisodeId;
+
+    /// <summary>
+    /// Compatibility identity for old Anime callers. New code uses <see cref="Target"/>.
+    /// For canonical callers without a legacy Anime id this resolves to the canonical target id.
+    /// </summary>
+    public Guid EpisodeId => LegacyEpisodeId ?? TargetId;
+
     public Guid MediaFileId { get; } = mediaFileId;
     public string SourcePath { get; } = sourcePath;
     public double? DurationSeconds { get; } = durationSeconds;
@@ -190,6 +202,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
 
     public int Count => sessions.Count;
 
+    /// <summary>Legacy Anime/test compatibility overload. New playback orchestration supplies a canonical target.</summary>
     public PlaybackStreamSession Create(
         string profileId,
         Guid episodeId,
@@ -198,9 +211,31 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         double? durationSeconds,
         PlaybackPlan plan,
         PlaybackStreamSelections selections,
-        Guid? replaces = null)
+        Guid? replaces = null) =>
+        Create(
+            profileId,
+            new PlaybackVideoTarget(episodeId, episodeId),
+            mediaFileId,
+            sourcePath,
+            durationSeconds,
+            plan,
+            selections,
+            replaces,
+            episodeId);
+
+    public PlaybackStreamSession Create(
+        string profileId,
+        PlaybackVideoTarget target,
+        Guid mediaFileId,
+        string sourcePath,
+        double? durationSeconds,
+        PlaybackPlan plan,
+        PlaybackStreamSelections selections,
+        Guid? replaces = null,
+        Guid? legacyEpisodeId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
+        ArgumentNullException.ThrowIfNull(target);
         var now = time.GetUtcNow();
         var removed = new List<PlaybackStreamSession>();
         PlaybackStreamSession session;
@@ -229,7 +264,8 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
             session = new PlaybackStreamSession(
                 Guid.NewGuid(),
                 profileId,
-                episodeId,
+                target,
+                legacyEpisodeId,
                 mediaFileId,
                 sourcePath,
                 durationSeconds,
