@@ -4,14 +4,14 @@ Status: approved UX direction for the Jularr Home page.
 
 ## Mockup files
 
-Expected references in this folder:
+Expected baseline references in this folder:
 
-- `desktop.png`
-- `mobile.png`
-- `tablet.png`
-- `tv.png`
+- existing Home platform reference(s), including `home-clean-platforms.png`;
+- approved additional Offline cold-start reference: **`offline-cold-start.png`** (Desktop + Mobile composition).
 
-Each platform mockup must cover both **Light and Dark** variants. A comparison sheet may show both themes side-by-side inside the same platform image.
+Each platform mockup must cover both **Light and Dark** behavior over the complete product set. A comparison sheet may show multiple platforms/themes side-by-side. The Offline cold-start reference may use the dark/media-led Home composition because it validates state hierarchy rather than replacing the normal Home platform/theme references.
+
+If an image and this specification conflict, this specification wins.
 
 ## Purpose
 
@@ -172,6 +172,322 @@ Home must support:
 - degraded provider state
 - storage unavailable while cached metadata remains browsable
 - offline/PWA state where applicable
+
+## Offline cold-start / disconnected Home
+
+Home is also the **normal entry surface for a fully disconnected cold start** when the client can safely restore the current local owner/account context and has verified device-local content.
+
+The target is not a separate `/offline` application and not a generic browser offline error page.
+
+Related contracts:
+- `docs/mockups/downloads-offline/SPEC.md`;
+- `docs/mockups/download-quick-view/SPEC.md`;
+- `docs/mockups/player/SPEC.md`;
+- `docs/mockups/reader/SPEC.md`;
+- `docs/mockups/offline-settings/SPEC.md`;
+- `docs/OFFLINE_LIBRARY.md`;
+- issue #839 — true offline cold-start and unified local Reader repository.
+
+### Cold-start eligibility and privacy
+
+The disconnected Home may expose local media only when the client can safely resolve the same authorized local owner boundary used by the Offline package stores.
+
+Required:
+- use the persisted current account/profile/server-origin ownership contract;
+- never enumerate another profile/account's downloaded titles, covers, progress or bytes;
+- retained-but-locked downloads stay hidden/inaccessible until the owning account is validly active again;
+- a server-origin switch must not reuse unrelated local inventory;
+- local owner uncertainty fails closed.
+
+If the client cannot establish a permitted local owner while disconnected:
+- do not show media metadata from managed Offline packages;
+- show a minimal safe disconnected/auth state with Retry/sign-in guidance appropriate to the platform;
+- do not bypass the canonical account boundary simply because files exist locally.
+
+This privacy fallback does not need its own Home mockup in this planning phase.
+
+### Shell bootstrap
+
+A supported Offline-capable client must be able to render the normal Jularr shell from locally available safe application/bootstrap state when the server cannot be reached.
+
+The user must not be forced into a generic browser `offline.html` page when verified Offline content is available and the current local owner can be resolved.
+
+The disconnected shell may use cached/local:
+- navigation structure;
+- current permitted profile display information;
+- theme/preferences required to render the shell;
+- Offline inventory metadata;
+- canonical local progress summaries.
+
+Do not pretend server-backed data is current when it cannot be refreshed.
+
+### Offline status banner
+
+Show one restrained global state near the top of Home:
+
+**Offline**
+
+`Jularr kann den Server momentan nicht erreichen. Heruntergeladene Inhalte auf diesem Gerät bleiben verfügbar.`
+
+Action:
+- **Erneut versuchen**.
+
+Mobile may shorten the helper copy to:
+
+`Nur heruntergeladene Inhalte verfügbar.`
+
+This is an expected degraded-connectivity state, not a destructive/error-red alarm.
+
+Do not:
+- cover the page with a full-screen error;
+- repeat an Offline warning on every card;
+- show raw network/server diagnostics.
+
+### Disconnected Home hierarchy
+
+When fully disconnected, replace server-dependent personalization rows with a local-first hierarchy:
+
+1. **Offline fortsetzen / Continue offline**
+2. **Auf diesem Gerät verfügbar / Available on this device**
+3. optional **Kürzlich heruntergeladen / Recently downloaded** when useful
+4. locally meaningful Games content only when the Games module has its own valid local launch state.
+
+Do not render server-only rows as permanent skeletons or broken empty shelves.
+
+While disconnected, normally omit rows whose content requires live server/provider resolution, for example:
+- online recommendations;
+- Trending/Popular that is not safely cached for this state;
+- provider discovery;
+- Requests/Wanted;
+- remote-only social/friend activity;
+- online-only upcoming/release information.
+
+If a row has trustworthy local data and remains useful offline, it may stay.
+
+### Offline fortsetzen
+
+This row is derived from canonical local progress plus verified local package availability.
+
+It may include:
+- Continue Watching;
+- Continue Reading;
+- Continue Listening.
+
+Examples:
+
+**Frieren: Beyond Journey's End**  
+`S1 E07 · 18:42 / 24:11`  
+badge: **Offline verfügbar**  
+action: **Weitersehen**
+
+**Ascendance of a Bookworm**  
+`Band 2 · Kapitel 8 · 63 %`  
+badge: **Offline verfügbar**  
+action: **Weiterlesen**
+
+**Dune: Part Two**  
+local resume position  
+badge: **Offline verfügbar**  
+action: **Abspielen / Weitersehen** according to progress.
+
+Rules:
+- show only content whose required local package is currently verified/readable/playable;
+- do not surface an online resume item merely because progress metadata exists locally;
+- opening the action uses the normal Player/Reader, not an Offline-specific player/reader;
+- ordering may use the same recent-progress semantics as normal Home, limited to locally usable items.
+
+### Available on this device
+
+Show a concise mixed local inventory shelf:
+
+**Auf diesem Gerät verfügbar**
+
+Eligible media:
+- Anime / TV episodes or grouped Works;
+- Movies;
+- Books / Light Novels;
+- Manga;
+- Audiobooks/audio packages.
+
+Each card may show one restrained **Offline** / verified-download marker.
+
+Section action:
+
+**Alle Offline-Inhalte**
+
+opens the canonical `Downloads & Offline -> Offline available` surface.
+
+This Home shelf is a projection only. It must not become another Offline Library/store.
+
+### Recently downloaded
+
+Optional local shelf:
+
+**Kürzlich heruntergeladen**
+
+Use only when it adds value after the two primary disconnected rows.
+
+Ordering comes from local package/download completion metadata.
+
+Do not turn this into permanent download history.
+
+### Search while disconnected
+
+The finished product may keep Search useful by switching its data source to local Offline metadata when the local repository exposes enough indexed metadata.
+
+When supported, clearly scope the field/result state:
+
+`Suche in deinen Offline-Inhalten …`
+
+Search results may include only local, currently accessible content.
+
+When local Offline search is not supported on a client:
+- do not fake server search;
+- opening Search explains that full Search requires the Jularr server;
+- provide a path back to locally available content.
+
+Search must not scan raw filesystem paths or reveal locked-owner metadata.
+
+### Navigation while disconnected
+
+Keep the normal responsive Jularr shell/navigation shape.
+
+Destinations remain enabled only where they have meaningful local behavior.
+
+Examples:
+- Home — available;
+- `Downloads & Offline` — available through its normal utility/global entry;
+- local Library subset — may be available when local metadata supports it;
+- Settings — device-local settings remain available; server-dependent settings degrade individually;
+- Player / Reader — available for verified packages.
+
+A destination that genuinely requires the server uses a contextual state:
+
+**Offline nicht verfügbar**
+
+`Dieser Bereich benötigt eine Verbindung zu deinem Jularr-Server.`
+
+Action:
+- **Erneut versuchen**;
+- Back/Home as context requires.
+
+Do not convert normal disconnected navigation into 404/500.
+
+### No new Downloads navigation slot
+
+The approved Offline cold-start visual reference is authoritative for Home content/state hierarchy, **not for inventing a new permanent navigation model**.
+
+Binding navigation rules remain:
+- Desktop/wide layouts follow the canonical Jularr navigation spec;
+- Mobile bottom navigation remains the canonical Home/Library/Calendar/Learning/Profile set from this specification;
+- Downloads remains reachable through the global Download Indicator, Profile/Account utility entry and contextual links;
+- do **not** add a permanent Mobile `Downloads` bottom-nav destination solely because it appears incidentally in a generated visual reference.
+
+Likewise, a Desktop `Downloads & Offline` sidebar entry in the visual reference must not override the canonical utility-entry rule unless global navigation is separately changed and approved.
+
+### Global Download Indicator offline
+
+The global Download Indicator/Quick View remains useful during cold-start without server connectivity because it reads canonical local queue state.
+
+It may show:
+- Paused;
+- Waiting for connection;
+- Failed/Needs attention;
+- locally recoverable queue state.
+
+Example:
+- `2` unfinished units;
+- `Solo Leveling · E05 — Wartet auf Verbindung`.
+
+Do not fabricate active transfer progress if no eligible connection exists.
+
+Opening the indicator uses the existing `download-quick-view` contract.
+
+### Progress, bookmarks and queued sync
+
+Local resume/progress shown on Home is the same canonical local-first state used by Player/Reader.
+
+The disconnected Home does not own another progress cache.
+
+When applicable:
+- progress;
+- completion;
+- bookmarks;
+- annotations;
+- supported Learning events
+
+remain queued for their canonical synchronization paths.
+
+A Home card may show current local resume state immediately even while synchronization is pending.
+
+### Reconnection
+
+When the server becomes reachable while disconnected Home is open:
+
+1. revalidate the active account/profile/server-origin;
+2. synchronize queued canonical local state through its owners;
+3. refresh server-backed Home sections;
+4. preserve the user's current navigation/scroll/focus where practical.
+
+A short success feedback may say:
+
+**Wieder verbunden**
+
+Do not require a destructive full-page reload solely to leave Offline mode when incremental recovery is safe.
+
+Do not silently replace newer local progress with stale server progress.
+
+### Games while offline
+
+Games remain outside the managed media Offline download contract.
+
+A Game may appear on disconnected Home only when the existing Games domain says there is a genuinely local, launchable/resumable target.
+
+Do not:
+- label Games as Jularr Offline downloads;
+- count installed/ROM content in `Downloads & Offline`;
+- invent a Game offline package to fill the shelf.
+
+### Desktop approved reference
+
+The approved Desktop Offline cold-start composition shows:
+- normal dark Jularr Home shell;
+- restrained Offline banner + **Erneut versuchen**;
+- local-scoped Search;
+- **Offline fortsetzen** with Video/Reading/Movie examples;
+- **Auf diesem Gerät verfügbar** mixed shelf;
+- optional **Kürzlich heruntergeladen**;
+- active Download Indicator/Quick View with waiting jobs.
+
+The page remains media-led and useful rather than becoming a troubleshooting dashboard.
+
+### Mobile approved reference
+
+The approved Mobile composition shows:
+- normal Jularr top bar;
+- compact Offline banner;
+- **Offline fortsetzen**;
+- **Auf diesem Gerät verfügbar**;
+- optional recently-downloaded shelf;
+- normal responsive Home presentation.
+
+Any incidental generated navigation labels that conflict with this text specification are non-binding.
+
+### Offline Home acceptance criteria
+
+- [ ] A supported client can render the normal Home shell from a cold disconnected launch when safe local owner/bootstrap state is available.
+- [ ] Verified Offline content is reachable without first loading an online Home/Reader/Player page.
+- [ ] Another account/profile's local media metadata is never exposed.
+- [ ] Offline status is clear but non-blocking.
+- [ ] Home prioritizes Continue Offline and Available on this device.
+- [ ] Server-only shelves disappear/degrade cleanly rather than showing endless loading.
+- [ ] Continue actions open the normal Player/Reader from verified local packages.
+- [ ] Downloads & Offline remains the canonical inventory/manager.
+- [ ] Download Quick View remains functional from local state.
+- [ ] Search is local-only when supported and never pretends live server results exist.
+- [ ] Reconnection revalidates ownership and synchronizes/refreshes without discarding newer local progress.
+- [ ] No new permanent Mobile Downloads bottom-nav slot is created by the Offline reference.
+- [ ] Games remain governed by the Games domain rather than the media Offline package subsystem.
 
 ## Explicit exclusions
 
