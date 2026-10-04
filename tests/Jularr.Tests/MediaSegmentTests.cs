@@ -76,27 +76,27 @@ public sealed class MediaSegmentTests
         await using var fixture = await MediaInventoryFixture.CreateAsync();
         var media = await fixture.AddMediaAsync("episode.mkv", [1, 2, 3]);
         fixture.Db.EpisodeMediaSegments.Add(
-            Row(media.EpisodeId, MediaSegmentKind.Intro, MediaSegmentSource.Imported, 60_000, 150_000, 1));
+            Row(media.EpisodeId!.Value, MediaSegmentKind.Intro, MediaSegmentSource.Imported, 60_000, 150_000, 1));
         await fixture.Db.SaveChangesAsync();
         var (service, _, _) = CreateServices(fixture);
 
-        await service.SaveManualAsync(media.EpisodeId, MediaSegmentKind.Intro, 61_000, 149_000, CancellationToken.None);
-        var corrected = await service.GetSegmentsAsync(media.EpisodeId, CancellationToken.None);
+        await service.SaveManualAsync(media.EpisodeId!.Value, MediaSegmentKind.Intro, 61_000, 149_000, CancellationToken.None);
+        var corrected = await service.GetSegmentsAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(MediaSegmentSource.Manual, corrected.Segments.Single().Source);
         Assert.AreEqual(149_000, corrected.Segments.Single().EndMs);
 
-        await service.SaveManualAsync(media.EpisodeId, MediaSegmentKind.Intro, 62_000, 148_000, CancellationToken.None);
+        await service.SaveManualAsync(media.EpisodeId!.Value, MediaSegmentKind.Intro, 62_000, 148_000, CancellationToken.None);
         Assert.AreEqual(
             1,
             await fixture.Db.EpisodeMediaSegments.CountAsync(x => x.Source == MediaSegmentSource.Manual),
             "Saving again updates the one manual marker.");
 
-        Assert.IsTrue(await service.RemoveManualAsync(media.EpisodeId, MediaSegmentKind.Intro, CancellationToken.None));
-        var fallback = await service.GetSegmentsAsync(media.EpisodeId, CancellationToken.None);
+        Assert.IsTrue(await service.RemoveManualAsync(media.EpisodeId!.Value, MediaSegmentKind.Intro, CancellationToken.None));
+        var fallback = await service.GetSegmentsAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(MediaSegmentSource.Imported, fallback.Segments.Single().Source);
 
         await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
-            service.SaveManualAsync(media.EpisodeId, MediaSegmentKind.Recap, 5_000, 5_500, CancellationToken.None));
+            service.SaveManualAsync(media.EpisodeId!.Value, MediaSegmentKind.Recap, 5_000, 5_500, CancellationToken.None));
     }
 
     [TestMethod]
@@ -149,7 +149,7 @@ public sealed class MediaSegmentTests
           { "season": 1, "episode": 2, "segments": [ { "kind": "intro", "startMs": 5000, "endMs": 95000 } ] } ] }
         """);
         var (service, _, _) = CreateServices(fixture);
-        await service.SaveManualAsync(first.EpisodeId, MediaSegmentKind.Preview, 1_400_000, 1_420_000, CancellationToken.None);
+        await service.SaveManualAsync(first.EpisodeId!.Value, MediaSegmentKind.Preview, 1_400_000, 1_420_000, CancellationToken.None);
         var importer = new MediaSegmentSidecarImporter(fixture.Db, NullLogger<MediaSegmentSidecarImporter>.Instance);
 
         var initial = await importer.ReconcileRootAsync(fixture.Root.Id, CancellationToken.None);
@@ -176,8 +176,8 @@ public sealed class MediaSegmentTests
         var remaining = await fixture.Db.EpisodeMediaSegments.AsNoTracking().ToListAsync();
         Assert.AreEqual(1, remaining.Count, "Manual markers are never touched by the importer.");
         Assert.AreEqual(MediaSegmentSource.Manual, remaining[0].Source);
-        Assert.AreEqual(first.EpisodeId, remaining[0].EpisodeId);
-        Assert.AreNotEqual(first.EpisodeId, second.EpisodeId);
+        Assert.AreEqual(first.EpisodeId!.Value, remaining[0].EpisodeId);
+        Assert.AreNotEqual(first.EpisodeId!.Value, second.EpisodeId!.Value);
     }
 
     [TestMethod]
@@ -191,19 +191,19 @@ public sealed class MediaSegmentTests
 
         Assert.AreEqual(
             SegmentDetectionOutcome.NotAnalyzed,
-            (await service.RunDetectorAsync(media.EpisodeId, force: false, CancellationToken.None)).Outcome);
+            (await service.RunDetectorAsync(media.EpisodeId!.Value, force: false, CancellationToken.None)).Outcome);
 
         await fixture.Inventory.ReconcileAsync(fixture.Root.Id, CancellationToken.None);
-        var run = await service.RunDetectorAsync(media.EpisodeId, force: false, CancellationToken.None);
+        var run = await service.RunDetectorAsync(media.EpisodeId!.Value, force: false, CancellationToken.None);
         Assert.AreEqual(new SegmentDetectionRun(SegmentDetectionOutcome.Completed, 1), run);
         Assert.AreEqual(1440.0, detector.LastRequest?.DurationSeconds);
 
-        var again = await service.RunDetectorAsync(media.EpisodeId, force: false, CancellationToken.None);
+        var again = await service.RunDetectorAsync(media.EpisodeId!.Value, force: false, CancellationToken.None);
         Assert.AreEqual(SegmentDetectionOutcome.Skipped, again.Outcome);
         Assert.AreEqual(1, detector.Calls, "Unchanged identity and detector version skip re-analysis.");
 
         detector.Version = "2";
-        await service.RunDetectorAsync(media.EpisodeId, force: false, CancellationToken.None);
+        await service.RunDetectorAsync(media.EpisodeId!.Value, force: false, CancellationToken.None);
         Assert.AreEqual(2, detector.Calls, "A new detector version rebuilds its markers.");
         var stored = await fixture.Db.EpisodeMediaSegments.AsNoTracking().SingleAsync();
         Assert.AreEqual("fake", stored.Method);
@@ -212,15 +212,15 @@ public sealed class MediaSegmentTests
         Assert.IsNotNull(stored.MediaIdentity);
 
         fixture.Db.EpisodeMediaSegments.Add(
-            Row(media.EpisodeId, MediaSegmentKind.Intro, MediaSegmentSource.Imported, 10_000, 20_000, 0.9));
+            Row(media.EpisodeId!.Value, MediaSegmentKind.Intro, MediaSegmentSource.Imported, 10_000, 20_000, 0.9));
         await fixture.Db.SaveChangesAsync();
-        var resolved = await service.GetSegmentsAsync(media.EpisodeId, CancellationToken.None);
+        var resolved = await service.GetSegmentsAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(MediaSegmentSource.Imported, resolved.Segments.Single().Source);
 
         var (disabled, _, _) = CreateServices(fixture);
         Assert.AreEqual(
             SegmentDetectionOutcome.DetectorDisabled,
-            (await disabled.RunDetectorAsync(media.EpisodeId, force: true, CancellationToken.None)).Outcome);
+            (await disabled.RunDetectorAsync(media.EpisodeId!.Value, force: true, CancellationToken.None)).Outcome);
     }
 
     [TestMethod]
@@ -237,7 +237,7 @@ public sealed class MediaSegmentTests
             service);
 
         // Without an inventory analysis there is no identity and nothing is queued.
-        var beforeAnalysis = await service.GetTrickplayAsync(media.EpisodeId, CancellationToken.None);
+        var beforeAnalysis = await service.GetTrickplayAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(TrickplayState.Unavailable, beforeAnalysis.State);
 
         await fixture.Inventory.ReconcileAsync(fixture.Root.Id, CancellationToken.None);
@@ -245,12 +245,12 @@ public sealed class MediaSegmentTests
         StringAssert.EndsWith(TrickplayGenerator.CacheKey(media.Id, identity), $"-v{TrickplayGenerator.GeneratorVersion}");
         SeedCache(trickplay, media.Id, identity, TrickplayGenerator.GeneratorVersion);
 
-        var snapshot = await playback.GetSnapshotAsync(media.EpisodeId, CancellationToken.None);
+        var snapshot = await playback.GetSnapshotAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(TrickplayState.Ready, snapshot.Navigation?.Trickplay.State);
-        var readyClient = ClientApiMappings.ToClientTrickplay(media.EpisodeId, snapshot.Navigation!.Trickplay);
+        var readyClient = ClientApiMappings.ToClientTrickplay(media.EpisodeId!.Value, snapshot.Navigation!.Trickplay);
         Assert.AreEqual("ready", readyClient.State);
         Assert.AreEqual(
-            $"{ClientApiRoutes.TrickplayAsset(media.EpisodeId, "sprite-001.jpg")}?v={identity[..16]}-{TrickplayGenerator.GeneratorVersion}",
+            $"{ClientApiRoutes.TrickplayAsset(media.EpisodeId!.Value, "sprite-001.jpg")}?v={identity[..16]}-{TrickplayGenerator.GeneratorVersion}",
             readyClient.SpriteUrls.Single(),
             "Sprite URLs change with the media identity so cached images are never reused.");
         Assert.AreEqual(0, await CountTrickplayOperationsAsync(fixture), "An existing cache is never regenerated.");
@@ -260,7 +260,7 @@ public sealed class MediaSegmentTests
         await fixture.RecordObservedIdentityAsync(media);
         await fixture.Inventory.ReconcileAsync(fixture.Root.Id, CancellationToken.None);
         Assert.AreEqual(identity, await CurrentIdentityAsync(fixture, media.Id));
-        await playback.GetSnapshotAsync(media.EpisodeId, CancellationToken.None);
+        await playback.GetSnapshotAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(0, await CountTrickplayOperationsAsync(fixture));
 
         // Changed content yields a new identity and queues exactly one generation.
@@ -270,8 +270,8 @@ public sealed class MediaSegmentTests
         var changedIdentity = await CurrentIdentityAsync(fixture, media.Id);
         Assert.AreNotEqual(identity, changedIdentity);
 
-        var changed = await playback.GetSnapshotAsync(media.EpisodeId, CancellationToken.None);
-        await playback.GetSnapshotAsync(media.EpisodeId, CancellationToken.None);
+        var changed = await playback.GetSnapshotAsync(media.EpisodeId!.Value, CancellationToken.None);
+        await playback.GetSnapshotAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(TrickplayState.Queued, changed.Navigation?.Trickplay.State);
         Assert.AreEqual(1, await CountTrickplayOperationsAsync(fixture));
 
@@ -280,7 +280,7 @@ public sealed class MediaSegmentTests
         SeedCache(otherTrickplay, media.Id, changedIdentity, TrickplayGenerator.GeneratorVersion + 1);
         Assert.AreEqual(
             TrickplayState.Unavailable,
-            (await otherService.GetTrickplayAsync(media.EpisodeId, CancellationToken.None)).State);
+            (await otherService.GetTrickplayAsync(media.EpisodeId!.Value, CancellationToken.None)).State);
     }
 
     [TestMethod]
@@ -292,26 +292,26 @@ public sealed class MediaSegmentTests
         await fixture.Inventory.ReconcileAsync(fixture.Root.Id, CancellationToken.None);
         var (service, trickplay, provider) = CreateServices(fixture);
         var identity = await CurrentIdentityAsync(fixture, media.Id);
-        var request = new TrickplayRequest(media.EpisodeId, media.Id, identity, media.Path, 1440, "episode.mkv");
+        var request = new TrickplayRequest(media.EpisodeId!.Value, media.Id, identity, media.Path, 1440, "episode.mkv");
         var operationId = await new OperationStore(fixture.Db).CreateAsync(
             new OperationDescriptor(TrickplayGenerator.OperationKind, "Playback", "Generate seek preview thumbnails"));
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             trickplay.GenerateAsync(request, new OperationExecutionContext(operationId, provider), CancellationToken.None));
 
-        var failed = await service.GetTrickplayAsync(media.EpisodeId, CancellationToken.None);
+        var failed = await service.GetTrickplayAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(TrickplayState.Failed, failed.State);
         StringAssert.Contains(failed.Message ?? "", "ffmpeg");
-        var client = ClientApiMappings.ToClientTrickplay(media.EpisodeId, failed);
+        var client = ClientApiMappings.ToClientTrickplay(media.EpisodeId!.Value, failed);
         Assert.AreEqual("unavailable", client.State);
         Assert.AreEqual(0, client.SpriteUrls.Count);
-        Assert.IsNull(await service.GetTrickplayAssetAsync(media.EpisodeId, "sprite-001.jpg", CancellationToken.None));
-        Assert.IsNull(await service.GetTrickplayAssetAsync(media.EpisodeId, "../jularr.db", CancellationToken.None));
+        Assert.IsNull(await service.GetTrickplayAssetAsync(media.EpisodeId!.Value, "sprite-001.jpg", CancellationToken.None));
+        Assert.IsNull(await service.GetTrickplayAssetAsync(media.EpisodeId!.Value, "../jularr.db", CancellationToken.None));
         Assert.IsFalse(Directory.Exists(Path.Combine(trickplay.RootPath, ".tmp")) &&
                        Directory.EnumerateFileSystemEntries(Path.Combine(trickplay.RootPath, ".tmp")).Any());
 
         File.Delete(media.Path);
-        var missing = new TrickplayRequest(media.EpisodeId, media.Id, "other", media.Path, 1440, "episode.mkv");
+        var missing = new TrickplayRequest(media.EpisodeId!.Value, media.Id, "other", media.Path, 1440, "episode.mkv");
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             trickplay.GenerateAsync(missing, new OperationExecutionContext(operationId, provider), CancellationToken.None));
         Assert.AreEqual(TrickplayState.Failed, trickplay.Describe(media.Id, "other").State);
@@ -325,8 +325,8 @@ public sealed class MediaSegmentTests
         fixture.Runner.Returns(media.Path, MediaProbeFixtures.H264Stereo);
         await fixture.Inventory.ReconcileAsync(fixture.Root.Id, CancellationToken.None);
         fixture.Db.EpisodeMediaSegments.AddRange(
-            Row(media.EpisodeId, MediaSegmentKind.Intro, MediaSegmentSource.Imported, 60_000, 150_000, 1),
-            Row(media.EpisodeId, MediaSegmentKind.Outro, MediaSegmentSource.Detector, 1_300_000, 1_390_000, 0.4));
+            Row(media.EpisodeId!.Value, MediaSegmentKind.Intro, MediaSegmentSource.Imported, 60_000, 150_000, 1),
+            Row(media.EpisodeId!.Value, MediaSegmentKind.Outro, MediaSegmentSource.Detector, 1_300_000, 1_390_000, 0.4));
         await fixture.Db.SaveChangesAsync();
 
         var (segments, _, _) = CreateServices(fixture);
@@ -355,7 +355,7 @@ public sealed class MediaSegmentTests
             account,
             segments);
 
-        var bootstrap = await api.GetPlayerAsync(media.EpisodeId, CancellationToken.None)
+        var bootstrap = await api.GetPlayerAsync(media.EpisodeId!.Value, CancellationToken.None)
             ?? throw new AssertFailedException("Expected a player bootstrap.");
         var descriptor = bootstrap.Segments ?? throw new AssertFailedException("Expected segments.");
         Assert.AreEqual(0.8, descriptor.SkipConfidenceThreshold);
@@ -366,15 +366,15 @@ public sealed class MediaSegmentTests
         Assert.IsTrue(intro.CanSkip);
         Assert.IsFalse(descriptor.Segments.Single(x => x.Kind == "outro").CanSkip, "Uncertain markers carry no skip action.");
         Assert.AreEqual("generating", bootstrap.Trickplay?.State, "Playback does not wait for preview generation.");
-        Assert.AreEqual(ClientApiRoutes.Trickplay(media.EpisodeId), bootstrap.Trickplay?.DescriptorUrl);
+        Assert.AreEqual(ClientApiRoutes.Trickplay(media.EpisodeId!.Value), bootstrap.Trickplay?.DescriptorUrl);
 
-        var standalone = await api.GetSegmentsAsync(media.EpisodeId, CancellationToken.None);
+        var standalone = await api.GetSegmentsAsync(media.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(
             JsonSerializer.Serialize(descriptor),
             JsonSerializer.Serialize(standalone));
         Assert.IsNull(await api.GetSegmentsAsync(Guid.NewGuid(), CancellationToken.None));
 
-        var snapshot = await playback.GetSnapshotAsync(media.EpisodeId, CancellationToken.None);
+        var snapshot = await playback.GetSnapshotAsync(media.EpisodeId!.Value, CancellationToken.None);
         var web = ClientApiMappings.ToClientSegments(
             snapshot.Navigation?.Segments ?? throw new AssertFailedException("Expected web navigation."));
         Assert.AreEqual(JsonSerializer.Serialize(descriptor), JsonSerializer.Serialize(web));
