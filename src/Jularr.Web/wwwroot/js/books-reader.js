@@ -498,7 +498,7 @@
         }
 
         window.clearTimeout(turnTimer);
-        columns.classList.remove("is-turning", "is-fading");
+        columns.classList.remove("is-turning");
         const styles = getComputedStyle(stage);
         const width = stage.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
         const height = stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
@@ -750,7 +750,7 @@
         columns.classList.add("is-turning");
         columns.style.transform = `translate3d(${-currentView * layout.stride}px,0,0)`;
         turnTimer = window.setTimeout(() => {
-            columns.classList.remove("is-turning", "is-fading");
+            columns.classList.remove("is-turning");
         }, 360);
     };
 
