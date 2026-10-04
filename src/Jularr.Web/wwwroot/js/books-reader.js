@@ -689,7 +689,7 @@
             else openChapter("next", false);
         },
         getScrollPermille: scrollPermille,
-        scrollToPermille: jumpToPermille,
+        scrollToPermille: value => jumpToPermille(value),
         captureAnchor
     });
 
