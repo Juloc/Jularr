@@ -32,6 +32,23 @@ public sealed class ReflowReaderOwnershipTests
     }
 
     [TestMethod]
+    public void BookAndNovelUseTheSameReflowRuntime()
+    {
+        var book = Read("src", "Jularr.Web", "wwwroot", "js", "books-reader.js");
+        var novel = Read("src", "Jularr.Web", "wwwroot", "js", "reader-personalization.js");
+
+        foreach (var script in new[] { book, novel })
+        {
+            StringAssert.Contains(script, "reflow-reader.js");
+            StringAssert.Contains(script, "createReflowTextRenderer");
+            StringAssert.Contains(script, "captureContinuousAnchor");
+            StringAssert.Contains(script, "reflowRenderer?.turn(direction)");
+            StringAssert.Contains(script, "reflowRenderer?.seek");
+            Assert.IsFalse(script.Contains("const clamp =", StringComparison.Ordinal));
+        }
+    }
+
+    [TestMethod]
     public void SourceAdaptersDoNotBecomeSecondGenericInputOwners()
     {
         var book = Read("src", "Jularr.Web", "wwwroot", "js", "books-reader.js");
