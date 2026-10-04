@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.ReaderCore;
 using Jularr.Web.Features.ReaderPreferences;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,7 +46,9 @@ public sealed class MangaReaderPreferenceInput
 
 public static class MangaReaderPreferenceStore
 {
-    private const string MediaScope = "media:manga";
+    private const string LegacyMediaScope = "media:manga";
+    private static readonly string MediaScope =
+        ReaderPreferenceScopes.Type(ReaderContentType.Manga);
 
     public static async Task<MangaReaderPreset> GetAsync(
         AppDbContext db,
@@ -59,12 +62,15 @@ public static class MangaReaderPreferenceStore
             .Where(x =>
                 x.ProfileId == profileId &&
                 (x.ScopeKey == ReaderPreferenceRules.UserDefaultScope ||
+                 x.ScopeKey == LegacyMediaScope ||
                  x.ScopeKey == MediaScope ||
                  x.ScopeKey == seriesScope))
             .ToListAsync(cancellationToken);
 
         var user = preferences.FirstOrDefault(
             x => x.ScopeKey == ReaderPreferenceRules.UserDefaultScope);
+        var legacyMedia = preferences.FirstOrDefault(
+            x => x.ScopeKey == LegacyMediaScope);
         var media = preferences.FirstOrDefault(x => x.ScopeKey == MediaScope);
         var series = preferences.FirstOrDefault(x => x.ScopeKey == seriesScope);
 
@@ -72,23 +78,27 @@ public static class MangaReaderPreferenceStore
             First(
                 series?.ReadingMode,
                 media?.ReadingMode,
+                legacyMedia?.ReadingMode,
                 user?.ReadingMode,
                 "paged"));
         var transition = ReaderPreferenceRules.NormalizePageTransition(
             First(
                 series?.PageTransition,
                 media?.PageTransition,
+                legacyMedia?.PageTransition,
                 user?.PageTransition,
                 "slide"));
         var twoPageSpread =
             series?.TwoPageSpread
             ?? media?.TwoPageSpread
+            ?? legacyMedia?.TwoPageSpread
             ?? user?.TwoPageSpread
             ?? true;
         var bookmarkColor = ReaderPreferenceRules.NormalizeBookmarkColor(
             First(
                 series?.BookmarkColor,
                 media?.BookmarkColor,
+                legacyMedia?.BookmarkColor,
                 user?.BookmarkColor,
                 "#b04455"));
 
@@ -100,47 +110,57 @@ public static class MangaReaderPreferenceStore
             ReaderPreferenceRules.NormalizeImageFlowMode(First(
                 series?.ImageFlowMode,
                 media?.ImageFlowMode,
+                legacyMedia?.ImageFlowMode,
                 user?.ImageFlowMode,
                 "continuous")),
             ReaderPreferenceRules.NormalizeImagePageDirection(First(
                 series?.ImagePageDirection,
                 media?.ImagePageDirection,
+                legacyMedia?.ImagePageDirection,
                 user?.ImagePageDirection,
                 "auto")),
             ReaderPreferenceRules.NormalizeImageFit(First(
                 series?.ImageFit,
                 media?.ImageFit,
+                legacyMedia?.ImageFit,
                 user?.ImageFit,
                 "height")),
             ReaderPreferenceRules.NormalizeImageZoomPercent(
                 series?.ImageZoomPercent
                 ?? media?.ImageZoomPercent
+                ?? legacyMedia?.ImageZoomPercent
                 ?? user?.ImageZoomPercent
                 ?? 100),
             ReaderPreferenceRules.NormalizeImagePageGapPx(
                 series?.ImagePageGapPx
                 ?? media?.ImagePageGapPx
+                ?? legacyMedia?.ImagePageGapPx
                 ?? user?.ImagePageGapPx
                 ?? 8),
             series?.ImageFirstPageAlone
                 ?? media?.ImageFirstPageAlone
+                ?? legacyMedia?.ImageFirstPageAlone
                 ?? user?.ImageFirstPageAlone
                 ?? false,
             series?.AutoContinueChapters
                 ?? media?.AutoContinueChapters
+                ?? legacyMedia?.AutoContinueChapters
                 ?? user?.AutoContinueChapters
                 ?? true,
             series?.ImageSharpen
                 ?? media?.ImageSharpen
+                ?? legacyMedia?.ImageSharpen
                 ?? user?.ImageSharpen
                 ?? false,
             series?.ImageCropBorders
                 ?? media?.ImageCropBorders
+                ?? legacyMedia?.ImageCropBorders
                 ?? user?.ImageCropBorders
                 ?? false,
             ReaderPreferenceRules.NormalizeImageColorScheme(First(
                 series?.ImageColorScheme,
                 media?.ImageColorScheme,
+                legacyMedia?.ImageColorScheme,
                 user?.ImageColorScheme,
                 "auto")),
             series is not null);
