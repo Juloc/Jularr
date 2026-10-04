@@ -177,6 +177,9 @@ public sealed class CanonicalPlaybackPlanTests
         Assert.AreEqual(
             "/api/client/v1/video/playback-plan",
             ClientApiRoutes.VideoPlaybackPlan);
+        Assert.AreEqual(
+            "/api/client/v1/video/progress",
+            ClientApiRoutes.VideoProgress);
     }
 
     private static async Task<CanonicalPlayableFile> AttachAsync(
