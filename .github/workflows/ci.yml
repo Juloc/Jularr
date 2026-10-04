@@ -141,7 +141,10 @@ jobs:
               artifact_count="$(gh api \
                 "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run}/artifacts" \
                 --jq '[.artifacts[] | select(.name == "jularr-image" and .expired == false)] | length')"
-              if [[ "${artifact_count}" != "0" ]]; then
+              successful_required_jobs="$(gh api \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run}/jobs?per_page=100" \
+                --jq '[.jobs[] | select((.name == "image" or .name == "build-test") and .conclusion == "success")] | length')"
+              if [[ "${artifact_count}" != "0" && "${successful_required_jobs}" == "2" ]]; then
                 RUN_ID="${candidate_run}"
                 ARTIFACT_SHA="${candidate_sha}"
                 break
@@ -149,12 +152,12 @@ jobs:
             fi
           done < <(
             gh api --method GET \
-              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=dev&event=push&status=success&per_page=100" \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=dev&event=push&per_page=100" \
               --jq '.workflow_runs[] | [.id, .head_sha] | @tsv'
           )
 
           if [[ -z "${RUN_ID}" || -z "${ARTIFACT_SHA}" ]]; then
-            echo "::error::No successful dev CI image artifact covers release source ${SOURCE_SHA}."
+            echo "::error::No dev CI run with successful image + build-test jobs covers release source ${SOURCE_SHA}."
             exit 1
           fi
 
