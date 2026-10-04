@@ -102,7 +102,7 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
             }
 
             return CompletedDownloadImportResult.Completed(
-                $"Imported movie \"{entry.Movie.Title}\".", resultUrl: null, placement);
+                $"Imported movie \"{entry.Movie.Title}\".", resultUrl: "/Library", placement);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
