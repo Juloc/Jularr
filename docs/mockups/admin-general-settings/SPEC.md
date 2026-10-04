@@ -371,6 +371,30 @@ Changing modes/languages never duplicates a Work. Missing locale variants are qu
 
 Detailed data-model/queue semantics are owned by #820 and `docs/MEDIA_CORE.md`.
 
+### Locale fallback
+
+Metadata fallback is locale-family aware:
+
+```text
+exact profile/instance locale
+ -> parent/base language
+ -> configured fallback exact locale
+ -> configured fallback parent/base
+ -> English
+ -> original/source language
+ -> best locally available value
+```
+
+Duplicate steps are skipped.
+
+### Coverage status
+
+When multi-language Library coverage is enabled, this page may show only a compact status summary such as required locales and overall pending/failed state.
+
+Detailed per-locale coverage, queue depth, Pause/Resume/Retry, provider capability diagnostics and explicit refresh belong to the owning Admin metadata/provider/operations surface. Do not turn General Settings into a queue dashboard.
+
+Removing the last profile using a locale does not immediately delete its metadata. That locale stops receiving normal bulk backfill and enters the shared retention/cleanup lifecycle defined by #820.
+
 ## Setup Wizard relationship
 
 The Setup Wizard does not own duplicate settings.
