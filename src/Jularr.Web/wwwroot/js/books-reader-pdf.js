@@ -140,7 +140,6 @@
         let useClock = 0;
         let scrollFrame = 0;
         let observer = null;
-        let turnTimer = 0;
         let searchHighlight = null;
 
         const sizes = new Map();
@@ -446,23 +445,11 @@
             stage.scrollTo({ top: 0, left: 0 });
             syncOverflow();
 
-            window.clearTimeout(turnTimer);
-            container.classList.remove("is-turning-next", "is-turning-back", "is-fading");
-            const transition = reduceMotion.matches ? "none" : settings.pageTransition;
-            if (animate && direction && transition !== "none") {
-                void container.offsetWidth;
-                container.classList.add(transition === "fade"
-                    ? "is-fading"
-                    : direction > 0 ? "is-turning-next" : "is-turning-back");
-                turnTimer = window.setTimeout(() => {
-                    container.classList.remove("is-turning-next", "is-turning-back", "is-fading");
-                }, 320);
-            }
-
             trimRendered(new Set(pages));
             await Promise.all(shown.map(entry => render(entry, scale)));
             if (run !== viewRun) return;
             applySearchHighlight();
+            root.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
             prefetch(currentView);
         };
 
