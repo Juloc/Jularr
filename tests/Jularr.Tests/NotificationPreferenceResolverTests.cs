@@ -11,7 +11,7 @@ public sealed class NotificationPreferenceResolverTests
     {
         var preference = Preference(
             enabled: true,
-            [NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email],
+            Channels(NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email),
             NotificationDeliveryTiming.Immediate);
         var profileChannels = ProfileChannels(
             (NotificationChannel.InApp, true),
@@ -36,7 +36,7 @@ public sealed class NotificationPreferenceResolverTests
     {
         var preference = Preference(
             enabled: false,
-            [NotificationChannel.InApp, NotificationChannel.Push],
+            Channels(NotificationChannel.InApp, NotificationChannel.Push),
             NotificationDeliveryTiming.Immediate);
 
         var route = NotificationPreferenceResolver.Resolve(
@@ -96,7 +96,7 @@ public sealed class NotificationPreferenceResolverTests
     {
         var preference = Preference(
             enabled: true,
-            [NotificationChannel.Push],
+            Channels(NotificationChannel.Push),
             NotificationDeliveryTiming.Immediate);
         var profileChannels = new Dictionary<NotificationChannel, NotificationProfileChannelPreference>
         {
@@ -106,6 +106,8 @@ public sealed class NotificationPreferenceResolverTests
         Assert.ThrowsExactly<InvalidOperationException>(() =>
             NotificationPreferenceResolver.Resolve(preference, profileChannels, [NotificationChannel.Push]));
     }
+
+    private static IReadOnlySet<NotificationChannel> Channels(params NotificationChannel[] channels) => channels.ToHashSet();
 
     private static NotificationEventPreference Preference(
         bool enabled,
