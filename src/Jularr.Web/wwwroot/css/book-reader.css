@@ -959,3 +959,27 @@
         display: none;
     }
 }
+
+/* The translated text of the current PDF page sits over the drawn page. */
+.book-pdf-translation {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    overflow-y: auto;
+    padding: 28px max(24px, 8vw);
+    background: var(--paper, var(--surface, #fff));
+    color: var(--ink, var(--text, inherit));
+}
+
+.book-pdf-translation[hidden] {
+    display: none;
+}
+
+.book-pdf-translation-status {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.book-pdf-translation-status[hidden] {
+    display: none;
+}

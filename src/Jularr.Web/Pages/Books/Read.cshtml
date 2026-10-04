@@ -20,15 +20,14 @@
     // (the "Translate into" menu entry) stays gated on Model.TranslationEnabled.
     var translatedParagraphs = sourceIsTarget ? Array.Empty<string>() : Model.Reader.TranslatedParagraphs;
     var hasAlternate = translatedParagraphs.Count > 0;
-    var canTranslate = Model.TranslationEnabled && !sourceIsTarget && !hasAlternate;
-    // The language menu is always reachable for text books; its entries reflect what is currently possible.
-    var hasLanguageChoice = !isPdf;
+    // A PDF translates page by page from its own translated-text panel, so its menu has no chapter-level translate entry.
+    var canTranslate = Model.TranslationEnabled && !sourceIsTarget && !hasAlternate && !isPdf;
     var defaultView = Model.RequestedView switch
     {
         "original" => "original",
-        "translated" when hasAlternate => "translated",
-        "both" when hasAlternate => "both",
-        _ => hasAlternate ? "translated" : "original"
+        "translated" when hasAlternate || isPdf => "translated",
+        "both" when hasAlternate && !isPdf => "both",
+        _ => hasAlternate && !isPdf ? "translated" : "original"
     };
     var initialProgress = Model.InitialPositionPermille;
     var jsonOptions = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
@@ -151,8 +150,6 @@
         </div>
 
         <div class="reader-frame-actions">
-            @if (hasLanguageChoice)
-            {
             <div class="reader-menu-anchor">
                 <button class="reader-frame-icon reader-frame-desktop" type="button"
                         data-reader-menu-toggle="language"
@@ -165,16 +162,19 @@
                         <span>@ui.Format("books.read.viewOriginal", ("language", sourceName))</span>
                         <partial name="_ReaderIcon" model="@("check")" />
                     </button>
-                    @if (!sourceIsTarget && (hasAlternate || canTranslate || Model.HasWorkTranslationLanguage))
+                    @if (!sourceIsTarget && (isPdf || hasAlternate || canTranslate || Model.HasWorkTranslationLanguage))
                     {
-                        <button type="button" role="menuitemradio" data-book-view="translated" aria-checked="false" disabled="@(!hasAlternate)">
+                        <button type="button" role="menuitemradio" data-book-view="translated" aria-checked="false" disabled="@(!isPdf && !hasAlternate)">
                             <span>@targetName</span>
                             <partial name="_ReaderIcon" model="@("check")" />
                         </button>
-                        <button type="button" role="menuitemradio" data-book-view="both" aria-checked="false" hidden="@(!hasAlternate)">
-                            <span>@ui.Format("books.read.viewBoth", ("language", targetName))</span>
-                            <partial name="_ReaderIcon" model="@("check")" />
-                        </button>
+                        @if (!isPdf)
+                        {
+                            <button type="button" role="menuitemradio" data-book-view="both" aria-checked="false" hidden="@(!hasAlternate)">
+                                <span>@ui.Format("books.read.viewBoth", ("language", targetName))</span>
+                                <partial name="_ReaderIcon" model="@("check")" />
+                            </button>
+                        }
                     }
                     @if (canTranslate)
                     {
@@ -193,7 +193,6 @@
                     }
                 </div>
             </div>
-            }
 
             @if (!isPdf)
             {
@@ -402,6 +401,14 @@
                      data-pdf-fonts="@Url.Content("~/lib/pdfjs/standard_fonts/")"
                      data-pdf-wasm="@Url.Content("~/lib/pdfjs/wasm/")"></div>
                 <p class="book-pdf-status" data-book-pdf-status role="status" hidden></p>
+                <section class="book-pdf-translation" data-book-pdf-translation lang="@target" aria-live="polite" hidden>
+                    <div class="book-text" data-book-pdf-translation-text></div>
+                    <p class="book-pdf-translation-status" data-book-pdf-translation-status role="status"></p>
+                    <form method="post" asp-page-handler="Translate" data-book-pdf-translate-form hidden>
+                        <input type="hidden" name="lang" value="@target" />
+                        <button type="submit" class="button" data-language-name="@targetName">@ui.Format("books.read.translateInto", ("language", targetName))</button>
+                    </form>
+                </section>
             </main>
         }
         else
@@ -623,13 +630,10 @@
                     <span>@ui["reader.frame.appearance"]</span>
                 </button>
             }
-            @if (hasLanguageChoice)
-            {
-                <button type="button" data-reader-menu-toggle="language" aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-language">
-                    <partial name="_ReaderIcon" model="@("translate")" />
-                    <span>@ui["reader.frame.language"]</span>
-                </button>
-            }
+            <button type="button" data-reader-menu-toggle="language" aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-language">
+                <partial name="_ReaderIcon" model="@("translate")" />
+                <span>@ui["reader.frame.language"]</span>
+            </button>
             <button type="button" data-reader-menu-toggle="more" aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-more">
                 <partial name="_ReaderIcon" model="@("more")" />
                 <span>@ui["reader.frame.more"]</span>

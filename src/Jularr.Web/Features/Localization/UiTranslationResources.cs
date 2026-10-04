@@ -2759,6 +2759,7 @@ public static class UiTranslationResources
         M("books.read.translateInto", "Translate into {language}", "Books", "Menu", "Language menu entry that starts the AI translation of this chapter when no translation is cached yet.", "concise action", 32, new Dictionary<string, string> { ["language"] = "Name of the translation language." }),
         M("books.read.translationQueued", "Translation queued…", "Books", "Status", "Status shown while a chapter translation is being generated.", "compact status", 26),
         M("books.read.translationReady", "Translation ready.", "Books", "Status", "Toast when the requested chapter translation became available.", "compact confirmation", 24),
+        M("books.read.pdfTranslationUnavailable", "Translation is not available for this book.", "Books", "Status", "Shown in the PDF reader translated view when the account may not translate this book.", "calm status", 48),
         M("books.read.author", "Author", "Books", "Label", "Label of the author row in the book reader details tab.", "short field label", 14),
         M("books.read.languageLabel", "Language", "Books", "Label", "Label of the original-language row in the book reader details tab.", "short field label", 14),
         M("books.read.chapterCount", "Chapters", "Books", "Label", "Label of the number-of-chapters row in the book reader details tab.", "short field label", 14),

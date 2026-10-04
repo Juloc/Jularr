@@ -159,6 +159,10 @@
     };
 
     const setView = next => {
+        if (pdfContainer) {
+            setPdfView(next);
+            return;
+        }
         if ((next === "translated" || next === "both") && root.dataset.hasTranslation !== "true") return;
         if (next === view && !restoring) return;
         stopAutoScroll();
@@ -1129,6 +1133,95 @@
         button.addEventListener("click", () => setView(button.dataset.bookView));
     });
 
+    // ---- PDF translation ------------------------------------------------------------
+    // A PDF page is one chapter. The translated view shows the current page's translated
+    // text over the page and offers to translate it when that page is still pending.
+
+    const pdfTranslation = root.querySelector("[data-book-pdf-translation]");
+    const pdfTranslateForm = root.querySelector("[data-book-pdf-translate-form]");
+
+    const pdfTranslationUrl = (chapterId, handler) => {
+        const url = new URL("/Books/Read/" + chapterId, window.location.origin);
+        url.searchParams.set("handler", handler);
+        url.searchParams.set("lang", targetLanguage);
+        return url;
+    };
+
+    const showPdfTranslation = ({ paragraphs = [], message = "", canTranslate = false }) => {
+        pdfTranslation.querySelector("[data-book-pdf-translation-text]").replaceChildren(...paragraphs.map(value => {
+            const paragraph = document.createElement("p");
+            paragraph.textContent = value;
+            return paragraph;
+        }));
+        const status = pdfTranslation.querySelector("[data-book-pdf-translation-status]");
+        status.textContent = message;
+        status.hidden = !message;
+        pdfTranslateForm.hidden = !canTranslate;
+        pdfTranslateForm.querySelector("button").disabled = false;
+    };
+
+    async function loadPdfTranslation(waiting = false) {
+        window.clearTimeout(pollTimer);
+        const chapterId = pdf?.currentPosition().chapterId;
+        if (view !== "translated" || !chapterId) return;
+        try {
+            const response = await fetch(pdfTranslationUrl(chapterId, "TranslationStatus"), {
+                credentials: "same-origin",
+                headers: { "X-Requested-With": "fetch" }
+            });
+            if (chapterId !== pdf.currentPosition().chapterId || view !== "translated") return;
+            if (response.status === 403) {
+                showPdfTranslation({ message: t("books.read.pdfTranslationUnavailable", "Translation is not available for this book.") });
+                return;
+            }
+            if (!response.ok) throw new Error(await response.text());
+            const result = await response.json();
+            if (result.status === "ready") {
+                showPdfTranslation({ paragraphs: result.paragraphs });
+                if (waiting) toast(t("books.read.translationReady", "Translation ready."));
+                return;
+            }
+            if (waiting) {
+                showPdfTranslation({ message: t("books.read.translationQueued", "Translation queued…") });
+                pollTimer = window.setTimeout(() => void loadPdfTranslation(true), 2500);
+                return;
+            }
+            showPdfTranslation({ canTranslate: true });
+        } catch (error) {
+            failed(error);
+        }
+    }
+
+    function setPdfView(next) {
+        view = next === "translated" ? "translated" : "original";
+        root.dataset.view = view;
+        if (pdfTranslation) pdfTranslation.hidden = view !== "translated";
+        syncViewControls();
+        void loadPdfTranslation();
+    }
+
+    pdfTranslateForm?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const chapterId = pdf?.currentPosition().chapterId;
+        if (!chapterId) return;
+        const button = pdfTranslateForm.querySelector("button");
+        button.disabled = true;
+        try {
+            const response = await fetch(pdfTranslationUrl(chapterId, "Translate"), {
+                method: "POST",
+                body: new FormData(pdfTranslateForm),
+                credentials: "same-origin",
+                headers: { "X-Requested-With": "fetch" }
+            });
+            if (!response.ok) throw new Error(await response.text());
+            showPdfTranslation({ message: t("books.read.translationQueued", "Translation queued…") });
+            pollTimer = window.setTimeout(() => void loadPdfTranslation(true), 2500);
+        } catch (error) {
+            button.disabled = false;
+            failed(error);
+        }
+    });
+
     // ---- Server helpers -------------------------------------------------------------
 
     const antiforgeryToken = () =>
@@ -1998,6 +2091,7 @@
                     label.textContent = section?.title || "";
                 });
                 if (!restoring) queueProgressSave();
+                if (view === "translated") void loadPdfTranslation();
             },
             // Without an outline the transport buttons step through pages.
             onOutline: items => {
@@ -2018,6 +2112,8 @@
             onReady: ready => {
                 finishRestore();
                 if (ready) ensureAnnotations().catch(error => console.warn(error));
+                if (pdfTranslation) pdfTranslation.hidden = view !== "translated";
+                void loadPdfTranslation();
             }
         });
 

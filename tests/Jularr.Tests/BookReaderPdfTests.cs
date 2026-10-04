@@ -28,6 +28,21 @@ public sealed class BookReaderPdfTests
     private const string PdfJsVersion = "6.3.289";
     private const string Profile = "pdf-reader";
 
+    /// <summary>A PDF book must always offer the language menu and read or continue translating its pages as text.</summary>
+    [TestMethod]
+    public void PdfBooksAlwaysOfferTheLanguageMenuAndPageTranslation()
+    {
+        var page = Read("src", "Jularr.Web", "Pages", "Books", "Read.cshtml");
+        var script = Read("src", "Jularr.Web", "wwwroot", "js", "books-reader.js");
+
+        Assert.IsFalse(page.Contains("hasLanguageChoice", StringComparison.Ordinal));
+        StringAssert.Contains(page, "data-book-pdf-translation");
+        StringAssert.Contains(page, "data-book-pdf-translate-form");
+        StringAssert.Contains(script, "loadPdfTranslation");
+        StringAssert.Contains(script, "\"TranslationStatus\"");
+        StringAssert.Contains(script, "\"Translate\"");
+    }
+
     [TestMethod]
     public void PdfBooksRenderInsideThePaperReaderFrame()
     {
