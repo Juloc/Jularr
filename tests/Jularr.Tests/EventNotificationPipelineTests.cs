@@ -57,6 +57,21 @@ public sealed class EventNotificationPipelineTests
     }
 
     [TestMethod]
+    public async Task ProfileInAppGateSuppressesInboxWithoutErasingEventSelection()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.Subscriptions.SetProfileChannelEnabledAsync("reader", NotificationChannel.InApp, false);
+
+        await fixture.Publisher.PublishAsync(JularrEvent.Create(JularrEventCategory.ReleaseAvailable, profileId: "reader"));
+
+        Assert.AreEqual(0, (await fixture.Notifications.ListAsync("reader", unreadOnly: false)).Count);
+        Assert.AreEqual(1, (await fixture.EventLog.ListRecentAsync(10)).Count);
+
+        var preference = await fixture.Subscriptions.GetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable);
+        CollectionAssert.AreEquivalent(new[] { NotificationChannel.InApp }, preference.Channels.ToArray());
+    }
+
+    [TestMethod]
     public async Task RepeatedEventWithTheSameDedupKeyBumpsOccurrenceInsteadOfSpamming()
     {
         await using var fixture = await Fixture.CreateAsync();
