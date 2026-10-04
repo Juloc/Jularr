@@ -645,6 +645,25 @@ When playback actually stalls waiting for media:
 
 Buffer display is distinct from acquisition/download progress. Normal playback buffering must never expose indexer or download-client internals.
 
+### Buffer policy contract
+
+The visible Player consumes one canonical runtime buffer policy from the PlaybackPlan/session owner. The Player must not invent independent browser-only thresholds.
+
+The policy distinguishes:
+- **startup buffer** — minimum useful media-ahead before normal playback begins/resumes;
+- **target buffer ahead** — preferred steady-state reserve;
+- **resume/low-water mark** — reserve below which delivery/transcoding should become aggressive again;
+- **maximum buffer ahead** — upper bound after which server-side live processing may be paced/throttled instead of wasting CPU/GPU/disk.
+
+Rules:
+- **Automatic** is the normal default and may adapt these values from delivery mode, network stability, device capability and server resources;
+- Advanced/admin policy may expose explicit values such as 15 / 30 / 60 / 120 seconds where the delivery stack can honor them;
+- Direct Play/browser-controlled fetching may make server-side ahead targets advisory rather than exact; diagnostics must distinguish requested target from actually observed client buffer;
+- a larger buffer must not silently turn temporary playback cache into a durable optimized version;
+- buffering policy is session/runtime state, not acquisition/download progress and not a second progress store;
+- after a seek or delivery restart, the pipeline may temporarily use a **seek/startup burst** to rebuild a safe reserve quickly, then return to normal pacing;
+- the normal Player exposes only simple Auto/quality behavior; low/high watermarks and resource tuning belong to advanced/admin policy.
+
 ### Chapters
 
 Chapters are visible in two places:
@@ -730,6 +749,26 @@ Do not present resolution-only labels if the actual decision is bitrate/network 
 
 Changing quality requests a new plan/session delivery while preserving position and track selections.
 
+### Automatic quality runtime behavior
+
+Automatic quality is runtime-aware rather than a one-time startup guess.
+
+Where the delivery/client can report reliable measurements, the canonical session feeds back:
+- measured sustainable throughput using a smoothed estimator rather than one instantaneous sample;
+- current buffer-ahead seconds;
+- recent rebuffer/stall count and cumulative stall duration;
+- segment/download timing for segmented delivery;
+- dropped-frame/decode stress where useful;
+- current transcode speed and server resource pressure from the server-side session owner.
+
+Adaptation rules:
+- downshift quickly when evidence shows playback is not sustainable;
+- upshift conservatively after a stable window;
+- use hysteresis/cooldown so quality does not oscillate between adjacent levels;
+- never upscale above the source merely to match a preset;
+- if true multi-rendition ABR is unavailable, a quality change may request a new PlaybackPlan/delivery at the same absolute position while preserving ActiveSession, selected tracks and progress;
+- the Player reports measurements; it does not locally become a second quality-decision engine.
+
 ## 11. Playback mode status and diagnostics
 
 Normal UI may show a compact status in overflow/details:
@@ -746,11 +785,16 @@ Diagnostics may show:
 - source/delivered container and codecs;
 - resolution/bitrate;
 - selected audio/subtitle;
-- throughput and buffer health;
-- transcode encoder/speed when applicable;
-- dropped frames/segment status where available.
+- measured/smoothed throughput and required bitrate;
+- actual buffer ahead plus target/low-water values when meaningful;
+- rebuffer/stall count and cumulative stall duration;
+- segment/download timing and cache status where available;
+- transcode encoder/backend, speed and FPS when applicable;
+- active / throttled / queued transcode state where applicable;
+- attributable CPU/GPU pressure only when the server can measure it reliably;
+- dropped frames where available.
 
-Diagnostics must never expose raw filesystem paths, secrets or arbitrary FFmpeg command strings.
+Diagnostics must clearly distinguish observed client values from policy targets/estimates. It must never expose raw filesystem paths, secrets or arbitrary FFmpeg command strings.
 
 ## 12. Progress and completion semantics
 
@@ -816,6 +860,10 @@ Do not expose indexer/download-client internals.
 
 ### Remux/transcode startup
 Show a normal loading state. Only show technical reason inside diagnostics.
+
+An admitted remux/transcode should produce playable media incrementally; the Player must never imply that the complete item is being prepared first. After start/seek, the delivery layer may run a short fill burst to rebuild the startup/resume buffer. Once the configured high-water/maximum-ahead threshold is reached, server-side live processing may be paced/throttled and resume aggressively below the low-water threshold.
+
+If the server cannot sustain the requested live transcode, the canonical PlaybackPlan/resource controller chooses a lower-cost compatible plan, lower quality, queue/unavailable state or another configured fallback. The Player only renders that decision and its reason.
 
 ### Buffering
 Keep the current frame when possible, show a center spinner after a short delay, keep controls available, and continue to show the buffered range in the timeline. For prolonged stalls add a concise `Buffering…` label. Do not show unreliable percentages.
@@ -1061,6 +1109,11 @@ A Player mockup is acceptable only when:
 - audio/subtitle/quality are accessible without persistent clutter;
 - Light/Dark contrast behavior is defined;
 - played/buffered/remaining timeline states are visually distinct;
+- buffer diagnostics distinguish actual observed buffer from target/low-water policy;
+- Automatic quality can consume measured throughput, buffer, stalls and server transcode health without creating client-side decision logic;
+- seek/restart buffering preserves ActiveSession, track selections and absolute position;
+- remux/transcode startup is incremental and may use bounded seek/startup fill bursts plus high/low-water throttling;
+- prolonged buffering is counted/diagnosable without showing a fake percentage;
 - chapters and segment markers are visible without making the timeline noisy;
 - manual Skip actions are direct contextual buttons;
 - Auto-Skip has explicit settings, defaults Off and provides temporary Undo feedback;
