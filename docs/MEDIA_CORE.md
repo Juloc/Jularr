@@ -101,6 +101,8 @@ Work
 
 For localized fields such as title/synopsis/description, provenance semantics apply to the resolved `(Work, locale, field)` value. Manual localized corrections remain protected from provider refresh exactly like non-localized manual corrections.
 
+Provider-localized metadata and machine-translated/generated metadata are distinct provenance classes. A value translated by Jularr from a provider's English source must record the original source/locale plus the translation/generation provider/model/version where applicable; it must not masquerade as a provider-supplied localization. Diagnostics/edit surfaces must be able to explain this distinction even when normal consumer UI stays visually quiet.
+
 Instance policy has two modes:
 - Fixed instance language: one admin-selected UI/metadata language is required;
 - Free/per-user languages: profiles may select their language, and Admin may require durable Library metadata coverage for every active profile language.
@@ -130,6 +132,8 @@ Discovery stays outside bulk persistence:
 - durable localized Work metadata begins only after canonical resolution plus a durable Jularr relationship.
 
 Artwork follows the same identity rule. The durable target is a generic Work artwork model with slots such as Poster/Cover, Backdrop/Banner and Logo, optional locale on language-specific variants, neutral fallback, and local Jularr-owned derivatives for normal Library reads. Anime-specific artwork storage is a migration source, not the long-term cross-media owner.
+
+Existing Anime metadata/artwork must therefore move through a bounded one-time migration into canonical Work ownership when #820 is implemented. Preserve provider identities, localized values, provenance, manual/user artwork precedence and offline-capable local derivatives. Ambiguous mappings require reconciliation instead of silent duplicate Work creation. After the supported upgrade cutoff, normal runtime reads/writes must use only the canonical Work metadata/artwork path; do not retain permanent dual-read or dual-write fallback to legacy Anime stores.
 
 ## Follow-ups
 
