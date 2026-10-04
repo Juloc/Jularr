@@ -1,4 +1,6 @@
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
