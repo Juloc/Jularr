@@ -22,6 +22,7 @@ namespace Jularr.Web.Pages.Discover;
 public sealed class IndexModel(
     IDiscoveryFeed coordinator,
     DiscoveryShelfService shelves,
+    TmdbDiscoveryProvider tmdb,
     AppDbContext db,
     NovelImportService novels,
     NovelMetadataService novelMetadata,
@@ -426,15 +427,58 @@ public sealed class IndexModel(
             return BadRequest();
         }
 
-        var canonicalProvider = kind == MediaAcquisitionKind.Book
-            ? Jularr.Web.Features.Books.BookCatalogService.CatalogRequestProvider
-            : AniListMetadataProvider.ProviderKey;
+        if (!await IsVisibleAsync(AcquisitionAccessNames.WorkType(kind), cancellationToken))
+        {
+            return NotFound();
+        }
 
-        // AniList-backed media use numeric IDs. Books use the catalog's stable composite identity.
-        if (kind != MediaAcquisitionKind.Book
-            && (!string.Equals(provider, AniListMetadataProvider.ProviderKey, StringComparison.Ordinal)
-                || !int.TryParse(externalId, out var aniListId)
-                || aniListId <= 0))
+        var capabilities = await requests.GetCapabilitiesAsync(kind, cancellationToken);
+        if (!capabilities.CanAdd)
+        {
+            return Forbid();
+        }
+
+        var canonicalProvider = kind switch
+        {
+            MediaAcquisitionKind.Book => Jularr.Web.Features.Books.BookCatalogService.CatalogRequestProvider,
+            MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv => TmdbDiscoveryProvider.ProviderKey,
+            _ => AniListMetadataProvider.ProviderKey
+        };
+
+        if (kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv)
+        {
+            if (!string.Equals(provider, TmdbDiscoveryProvider.ProviderKey, StringComparison.Ordinal)
+                || !int.TryParse(externalId, out var tmdbId)
+                || tmdbId <= 0)
+            {
+                return BadRequest();
+            }
+
+            try
+            {
+                await tmdb.EnsureCanonicalWorkAsync(
+                    kind == MediaAcquisitionKind.Movie
+                        ? TmdbDiscoveryMediaType.Movie
+                        : TmdbDiscoveryMediaType.Series,
+                    externalId.Trim(),
+                    cancellationToken);
+            }
+            catch (Exception exception) when (exception is HttpRequestException
+                                               or InvalidOperationException
+                                               or InvalidDataException)
+            {
+                logger.LogWarning(
+                    exception,
+                    "TMDB identity {Kind}/{ExternalId} could not be materialized before request.",
+                    kind,
+                    externalId);
+                return StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+        }
+        else if (kind != MediaAcquisitionKind.Book
+                 && (!string.Equals(provider, AniListMetadataProvider.ProviderKey, StringComparison.Ordinal)
+                     || !int.TryParse(externalId, out var aniListId)
+                     || aniListId <= 0))
         {
             return BadRequest();
         }
@@ -520,7 +564,9 @@ public sealed class IndexModel(
             ["anime"] = MediaAcquisitionKind.Anime,
             ["manga"] = MediaAcquisitionKind.Manga,
             ["light-novel"] = MediaAcquisitionKind.LightNovel,
-            ["book"] = MediaAcquisitionKind.Book
+            ["book"] = MediaAcquisitionKind.Book,
+            ["movie"] = MediaAcquisitionKind.Movie,
+            ["tv"] = MediaAcquisitionKind.Tv
         };
 
     public async Task<IActionResult> OnPostImportSourceAsync(
