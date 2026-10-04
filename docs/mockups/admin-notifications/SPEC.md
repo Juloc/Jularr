@@ -625,3 +625,27 @@ Incremental implementation:
 - No HTML/Razor/script template editor in V1.
 - No server-wide quiet-hours behavior without explicit critical-event semantics.
 - No duplicate Activity/History screen.
+
+
+## Storage Lifecycle notification boundary (#414)
+
+Storage Lifecycle uses the existing canonical event/notification pipeline. It must not create a Storage-specific delivery system.
+
+The current implementation has `StorageProblem`; additional lifecycle categories are **target categories only until actually added to the shared event catalog**.
+
+Potential #414 categories:
+- StorageCapacityWarning / StorageCapacityCritical;
+- StorageCleanupReviewAvailable;
+- StorageLifecycleActionCompleted / Failed;
+- StorageOptimizationCompleted / Failed;
+- StorageMigrationCompleted / Failed;
+- StorageIntegrityProblem;
+- StorageTrashPurgeScheduled.
+
+Rules:
+- infrastructure/lifecycle events default to Admin audience unless a specific profile-facing use case exists;
+- optional pre-delete/archive/downgrade notice to an affected profile is controlled by #414 policy, not by changing event audience ad hoc;
+- profile notices must not reveal other profiles' Requirements/history;
+- repeated capacity/forecast checks must deduplicate/group;
+- notification delivery failure never fails the lifecycle operation;
+- Activity/To-Do remains the operational detail owner; notifications deep-link there or to the relevant Storage review/policy item.
