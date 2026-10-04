@@ -115,6 +115,35 @@ public sealed class VideoWantedLifecycleTests
     }
 
     [TestMethod]
+    public async Task FailedMovieDownloadContinuesWithTheNextUntriedRelease()
+    {
+        await using var host = await Host.CreateAsync(
+            MediaAcquisitionKind.Movie,
+            Candidate("Inception.2010.1080p.BluRay.x264-GROUP", "first"),
+            Candidate("Inception.2010.1080p.WEB-DL.x264-OTHER", "second"));
+        await host.CreateMovieAsync("27205", "Inception", 2010);
+        var request = await host.CreateApprovedAsync(MediaAcquisitionKind.Movie, "27205", "Inception");
+
+        await host.ProcessAsync(DateTime.UtcNow);
+        var first = await host.GetAsync(request.Id);
+        var firstOperation = first.OperationId!.Value;
+        await host.Operations.MarkFailedAsync(firstOperation, "Out of retention");
+        await host.ProcessAsync(DateTime.UtcNow.AddMinutes(1));
+
+        var second = await host.GetAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, second.Status);
+        Assert.AreNotEqual(firstOperation, second.OperationId);
+        Assert.AreEqual(2, host.Environment.Client.Grabs.Count);
+        StringAssert.Contains(second.StatusMessage, "Out of retention");
+
+        await host.Operations.MarkFailedAsync(second.OperationId!.Value, "Broken archive");
+        await host.ProcessAsync(DateTime.UtcNow.AddMinutes(2));
+        var waiting = await host.GetAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, waiting.Status);
+        Assert.AreEqual(2, host.Environment.Client.Grabs.Count, "Tried releases are not submitted again.");
+    }
+
+    [TestMethod]
     public async Task CancelledMovieDownloadDoesNotGrabTheNextRelease()
     {
         await using var host = await Host.CreateAsync(
