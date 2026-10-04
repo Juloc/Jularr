@@ -73,16 +73,16 @@ public sealed class ProfileNotificationSettingsTests
     {
         public const string ProfileId = "notification-settings-user";
 
-        private readonly DefaultHttpContext context;
-        private readonly AppDbContext db;
-        private readonly CurrentAccountContext account;
+        private readonly DefaultHttpContext _context;
+        private readonly AppDbContext _db;
+        private readonly CurrentAccountContext _account;
 
         private Fixture(DefaultHttpContext context, AppDbContext db)
         {
-            this.context = context;
-            this.db = db;
+            _context = context;
+            _db = db;
             var accessor = new HttpContextAccessor { HttpContext = context };
-            account = new CurrentAccountContext(accessor);
+            _account = new CurrentAccountContext(accessor);
             Store = new NotificationSubscriptionStore(db);
         }
 
@@ -110,17 +110,17 @@ public sealed class ProfileNotificationSettingsTests
                 value => $"delivery.{value.Category}",
                 value => new StringValues(value.Value),
                 StringComparer.Ordinal);
-            context.Features.Set<IFormFeature>(new FormFeature(new FormCollection(form)));
+            _context.Features.Set<IFormFeature>(new FormFeature(new FormCollection(form)));
 
-            var page = new NotificationsModel(db, Store, account)
+            var page = new NotificationsModel(_db, Store, _account)
             {
-                PageContext = new PageContext { HttpContext = context },
-                TempData = new TempDataDictionary(context, new NoTempDataProvider())
+                PageContext = new PageContext { HttpContext = _context },
+                TempData = new TempDataDictionary(_context, new NoTempDataProvider())
             };
             return page;
         }
 
-        public ValueTask DisposeAsync() => db.DisposeAsync();
+        public ValueTask DisposeAsync() => _db.DisposeAsync();
     }
 
     private sealed class NoTempDataProvider : ITempDataProvider
