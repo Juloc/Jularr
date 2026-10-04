@@ -12,7 +12,6 @@ public sealed class ReaderPreference
     public Guid Id { get; set; } = Guid.NewGuid();
     public string ProfileId { get; set; } = "";
     public string ScopeKey { get; set; } = "";
-    public Guid? WorkId { get; set; }
 
     public string? ReadingMode { get; set; }
     public string? PageTransition { get; set; }
@@ -532,7 +531,7 @@ public static class ReaderPreferenceStore
     public static async Task<ReaderSettingsSnapshot> GetAsync(
         AppDbContext db,
         string profileId,
-        Guid workId,
+        Guid? workId,
         string? genresJson,
         ReaderContentType contentType,
         CancellationToken cancellationToken)
@@ -547,14 +546,16 @@ public static class ReaderPreferenceStore
             .Select(ReaderPreferenceScopes.NormalizeGenreKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var typeScope = ReaderPreferenceScopes.Type(contentType);
-        var workScope = ReaderPreferenceScopes.Work(workId);
+        var workScope = workId is Guid id ? ReaderPreferenceScopes.Work(id) : null;
 
         var global = preferences.FirstOrDefault(
             x => x.ScopeKey == ReaderPreferenceRules.UserDefaultScope);
         var type = preferences.FirstOrDefault(
             x => x.ScopeKey.Equals(typeScope, StringComparison.OrdinalIgnoreCase));
-        var work = preferences.FirstOrDefault(
-            x => x.ScopeKey.Equals(workScope, StringComparison.OrdinalIgnoreCase));
+        var work = workScope is null
+            ? null
+            : preferences.FirstOrDefault(
+                x => x.ScopeKey.Equals(workScope, StringComparison.OrdinalIgnoreCase));
 
         var genreLayers = preferences
             .Select(preference =>
@@ -811,7 +812,6 @@ public static class ReaderPreferenceStore
             db,
             profileId,
             ReaderPreferenceRules.UserDefaultScope,
-            null,
             input,
             cancellationToken);
 
@@ -825,7 +825,6 @@ public static class ReaderPreferenceStore
             db,
             profileId,
             ReaderPreferenceScopes.Type(contentType),
-            null,
             input,
             cancellationToken);
 
@@ -840,7 +839,6 @@ public static class ReaderPreferenceStore
             db,
             profileId,
             ReaderPreferenceScopes.Genre(genre, priority),
-            null,
             input,
             cancellationToken);
 
@@ -848,42 +846,31 @@ public static class ReaderPreferenceStore
         AppDbContext db,
         string profileId,
         string scopeKey,
-        Guid? workId,
         ReaderSettingsInput input,
         CancellationToken cancellationToken)
     {
         ValidateScope(scopeKey);
-        var preference = await FindOrCreateAsync(
-            db,
-            profileId,
-            scopeKey,
-            workId,
-            cancellationToken);
+        var preference = await FindOrCreateAsync(db, profileId, scopeKey, cancellationToken);
 
         ApplyAll(preference, input);
         preference.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public static async Task SaveBookOverrideAsync(
+    public static Task SaveWorkOverrideAsync(
         AppDbContext db,
         string profileId,
         Guid workId,
         string changedKey,
         ReaderSettingsInput input,
-        CancellationToken cancellationToken)
-    {
-        var preference = await FindOrCreateAsync(
+        CancellationToken cancellationToken) =>
+        SaveScopeFieldAsync(
             db,
             profileId,
             ReaderPreferenceScopes.Work(workId),
-            workId,
+            changedKey,
+            input,
             cancellationToken);
-
-        ApplyField(preference, changedKey, input);
-        preference.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(cancellationToken);
-    }
 
     public static async Task SaveScopeFieldAsync(
         AppDbContext db,
@@ -894,16 +881,33 @@ public static class ReaderPreferenceStore
         CancellationToken cancellationToken)
     {
         ValidateScope(scopeKey);
-        var preference = await FindOrCreateAsync(
-            db,
-            profileId,
-            scopeKey,
-            scopeKey.StartsWith("work:", StringComparison.OrdinalIgnoreCase)
-                ? TryParseWorkId(scopeKey)
-                : null,
-            cancellationToken);
+        var preference = await FindOrCreateAsync(db, profileId, scopeKey, cancellationToken);
 
         ApplyField(preference, changedKey, input);
+        preference.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public static async Task SaveScopeFieldsAsync(
+        AppDbContext db,
+        string profileId,
+        string scopeKey,
+        IReadOnlyCollection<string> changedKeys,
+        ReaderSettingsInput input,
+        CancellationToken cancellationToken)
+    {
+        ValidateScope(scopeKey);
+        if (changedKeys.Count == 0)
+        {
+            throw new ArgumentException("At least one reader setting is required.", nameof(changedKeys));
+        }
+
+        var preference = await FindOrCreateAsync(db, profileId, scopeKey, cancellationToken);
+        foreach (var changedKey in changedKeys.Distinct(StringComparer.Ordinal))
+        {
+            ApplyField(preference, changedKey, input);
+        }
+
         preference.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -937,7 +941,7 @@ public static class ReaderPreferenceStore
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public static Task ResetBookAsync(
+    public static Task ResetWorkAsync(
         AppDbContext db,
         string profileId,
         Guid workId,
@@ -1422,7 +1426,6 @@ public static class ReaderPreferenceStore
         AppDbContext db,
         string profileId,
         string scopeKey,
-        Guid? workId,
         CancellationToken cancellationToken)
     {
         var preference = await db.ReaderPreferences
@@ -1438,8 +1441,7 @@ public static class ReaderPreferenceStore
         preference = new ReaderPreference
         {
             ProfileId = profileId,
-            ScopeKey = scopeKey,
-            WorkId = workId
+            ScopeKey = scopeKey
         };
         db.ReaderPreferences.Add(preference);
         return preference;
@@ -1458,12 +1460,5 @@ public static class ReaderPreferenceStore
         throw new InvalidOperationException("Unknown reader preference scope.");
     }
 
-    private static Guid? TryParseWorkId(string scopeKey)
-    {
-        var raw = scopeKey["work:".Length..];
-        return Guid.TryParseExact(raw, "N", out var workId)
-            ? workId
-            : null;
-    }
 }
 
