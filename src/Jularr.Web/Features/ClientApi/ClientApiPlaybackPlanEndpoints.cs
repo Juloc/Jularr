@@ -47,6 +47,21 @@ public sealed record ClientPlaybackPlanResponse(
     ClientVideoTarget Target,
     long ResumePositionMs);
 
+public sealed record ClientVideoProgressUpdate(
+    ClientVideoTarget Target,
+    long PositionMs,
+    long? DurationMs,
+    bool Completed);
+
+public sealed record ClientVideoProgressResponse(
+    ClientVideoTarget Target,
+    long PositionMs,
+    long? DurationMs,
+    int Percent,
+    bool IsCompleted,
+    DateTime? UpdatedAtUtc,
+    long ResumePositionMs);
+
 public static class ClientApiPlaybackPlanEndpoints
 {
     public const string RateLimitPolicy = PlaybackDecisionRegistration.RateLimitPolicy;
@@ -90,9 +105,7 @@ public static class ClientApiPlaybackPlanEndpoints
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            if (request.Target is not { } target ||
-                target.WorkId == Guid.Empty ||
-                target.WorkEpisodeId == Guid.Empty)
+            if (request.Target is not { } target || !ValidTarget(target))
             {
                 return Results.BadRequest(new ClientErrorResponse(
                     "invalid_playback_target",
@@ -120,6 +133,43 @@ public static class ClientApiPlaybackPlanEndpoints
             return Results.Ok(ToResponse(outcome, currentAccount));
         })
         .RequireRateLimiting(RateLimitPolicy);
+
+        group.MapPut("/video/progress", async (
+            ClientVideoProgressUpdate update,
+            VideoProgressService progress,
+            CurrentAccountContext currentAccount,
+            CancellationToken cancellationToken) =>
+        {
+            if (!ValidTarget(update.Target) ||
+                update.PositionMs < 0 ||
+                update.DurationMs is < 0)
+            {
+                return Results.BadRequest(new ClientErrorResponse(
+                    "invalid_progress",
+                    "A valid canonical video target and non-negative progress values are required."));
+            }
+
+            var snapshot = await progress.UpdateAsync(
+                currentAccount.ProfileId,
+                new MediaProgressTarget(update.Target.WorkId, update.Target.WorkEpisodeId),
+                new MediaProgressUpdate(update.PositionMs, update.DurationMs, update.Completed),
+                cancellationToken);
+            if (snapshot is null)
+            {
+                return Results.NotFound(new ClientErrorResponse(
+                    "video_target_not_found",
+                    "The canonical video target does not exist."));
+            }
+
+            return Results.Ok(new ClientVideoProgressResponse(
+                new ClientVideoTarget(snapshot.WorkId, snapshot.WorkEpisodeId),
+                snapshot.PositionMs,
+                snapshot.DurationMs,
+                snapshot.Percent,
+                snapshot.IsCompleted,
+                snapshot.UpdatedAt,
+                snapshot.ResumePositionMs));
+        });
 
         group.MapGet("/stream-sessions/{sessionId:guid}/stream", (
             Guid sessionId,
@@ -318,6 +368,10 @@ public static class ClientApiPlaybackPlanEndpoints
 
         return endpoints;
     }
+
+    private static bool ValidTarget(ClientVideoTarget target) =>
+        target.WorkId != Guid.Empty &&
+        target.WorkEpisodeId != Guid.Empty;
 
     private static ClientPlaybackPlanResponse ToResponse(
         PlaybackPlanOutcome outcome,
