@@ -51,6 +51,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
       source_sha: ${{ steps.release.outputs.source_sha }}
+      artifact_sha: ${{ steps.release.outputs.artifact_sha }}
       source_run_id: ${{ steps.release.outputs.source_run_id }}
 
     steps:
@@ -71,13 +72,19 @@ jobs:
           set -euo pipefail
           VERSION_FILE="src/Jularr.Web/Jularr.Web.csproj"
           IS_RELEASE=false
+          RETRY=false
 
           if [[ "${EVENT_NAME}" == "workflow_dispatch" && "${REF_NAME}" == "refs/heads/main" && "${RELEASE_INPUT}" == "true" ]]; then
             IS_RELEASE=true
           elif [[ "${EVENT_NAME}" == "push" && "${REF_NAME}" == "refs/heads/main" ]] \
-            && git rev-parse --verify HEAD^ >/dev/null 2>&1 \
-            && ! git diff --quiet HEAD^ HEAD -- "${VERSION_FILE}"; then
-            IS_RELEASE=true
+            && git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            SUBJECT="$(git log -1 --pretty=%s)"
+            if ! git diff --quiet HEAD^ HEAD -- "${VERSION_FILE}"; then
+              IS_RELEASE=true
+            elif [[ "${SUBJECT}" == release:\ retry* ]]; then
+              IS_RELEASE=true
+              RETRY=true
+            fi
           fi
 
           echo "is_release=${IS_RELEASE}" >> "${GITHUB_OUTPUT}"
@@ -85,6 +92,7 @@ jobs:
             echo "version=" >> "${GITHUB_OUTPUT}"
             echo "tag=" >> "${GITHUB_OUTPUT}"
             echo "source_sha=" >> "${GITHUB_OUTPUT}"
+            echo "artifact_sha=" >> "${GITHUB_OUTPUT}"
             echo "source_run_id=" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -99,18 +107,27 @@ jobs:
           PY
           )"
 
-          read -ra PARENTS <<< "$(git rev-list --parents -n 1 HEAD)"
-          if (( ${#PARENTS[@]} < 3 )); then
-            echo "::error::Release main commit must be a merge commit from dev."
-            exit 1
-          fi
-          SOURCE_SHA="${PARENTS[2]}"
-          if ! git diff --quiet "${SOURCE_SHA}" HEAD -- .; then
-            echo "::error::Release merge tree differs from its dev parent; refusing to publish an untested tree."
-            exit 1
+          if [[ "${RETRY}" == "true" ]]; then
+            SOURCE_SHA="$(git rev-parse HEAD^)"
+            if ! git diff --quiet "${SOURCE_SHA}" HEAD -- . ':(exclude).github/workflows/ci.yml'; then
+              echo "::error::Release retry may only change the CI workflow."
+              exit 1
+            fi
+          else
+            read -ra PARENTS <<< "$(git rev-list --parents -n 1 HEAD)"
+            if (( ${#PARENTS[@]} < 3 )); then
+              echo "::error::Release main commit must be a merge commit from dev."
+              exit 1
+            fi
+            SOURCE_SHA="${PARENTS[2]}"
+            if ! git diff --quiet "${SOURCE_SHA}" HEAD -- .; then
+              echo "::error::Release merge tree differs from its dev parent; refusing to publish an untested tree."
+              exit 1
+            fi
           fi
 
           RUN_ID=""
+          ARTIFACT_SHA=""
           while IFS=$'\t' read -r candidate_run candidate_sha; do
             [[ -n "${candidate_run}" && -n "${candidate_sha}" ]] || continue
             git cat-file -e "${candidate_sha}^{commit}" 2>/dev/null || continue
@@ -119,12 +136,14 @@ jobs:
               ':(exclude)clients/android/**' \
               ':(exclude)docs/**' \
               ':(exclude)**/*.md' \
-              ':(exclude).github/workflows/android.yml'; then
+              ':(exclude).github/workflows/android.yml' \
+              ':(exclude).github/workflows/ci.yml'; then
               artifact_count="$(gh api \
                 "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run}/artifacts" \
                 --jq '[.artifacts[] | select(.name == "jularr-image" and .expired == false)] | length')"
               if [[ "${artifact_count}" != "0" ]]; then
                 RUN_ID="${candidate_run}"
+                ARTIFACT_SHA="${candidate_sha}"
                 break
               fi
             fi
@@ -134,7 +153,7 @@ jobs:
               --jq '.workflow_runs[] | [.id, .head_sha] | @tsv'
           )
 
-          if [[ -z "${RUN_ID}" ]]; then
+          if [[ -z "${RUN_ID}" || -z "${ARTIFACT_SHA}" ]]; then
             echo "::error::No successful dev CI image artifact covers release source ${SOURCE_SHA}."
             exit 1
           fi
@@ -142,6 +161,7 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "source_sha=${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_sha=${ARTIFACT_SHA}" >> "${GITHUB_OUTPUT}"
           echo "source_run_id=${RUN_ID}" >> "${GITHUB_OUTPUT}"
 
   build-test:
@@ -609,14 +629,14 @@ jobs:
           DIR="${RUNNER_TEMP}/jularr-image"
           zstd -dc -q "${DIR}/jularr-image.tar.zst" | docker load
           EXPECTED="$(cat "${DIR}/jularr-image.fingerprint")"
-          SOURCE_SHA="${{ needs.release-info.outputs.source_sha }}"
-          ACTUAL="$(docker image inspect --format '{{json .RootFS.Layers}}{{json .Config}}' "${IMAGE}:${SOURCE_SHA}" \
+          ARTIFACT_SHA="${{ needs.release-info.outputs.artifact_sha }}"
+          ACTUAL="$(docker image inspect --format '{{json .RootFS.Layers}}{{json .Config}}' "${IMAGE}:${ARTIFACT_SHA}" \
             | sha256sum | cut -d' ' -f1)"
           if [[ "${EXPECTED}" != "${ACTUAL}" ]]; then
             echo "::error::Loaded image fingerprint ${ACTUAL} does not match the smoke-tested dev image ${EXPECTED}."
             exit 1
           fi
-          docker tag "${IMAGE}:${SOURCE_SHA}" "${IMAGE}:${GITHUB_SHA}"
+          docker tag "${IMAGE}:${ARTIFACT_SHA}" "${IMAGE}:${GITHUB_SHA}"
           rm -rf "${DIR}"
 
       - name: Log in to GHCR
