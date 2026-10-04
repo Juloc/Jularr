@@ -36,12 +36,6 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 - `progress-achievements/SPEC.md` — Learning progress, statistics and achievements
 - `script-trainer/SPEC.md` — generic Script Trainer with Japanese Kana as current toolkit
 - `user-settings/SPEC.md`
-- `downloads-offline/SPEC.md` — device-local consumer downloads/offline inventory and queue management
-- `offline-settings/SPEC.md` — end-state network, quality, storage, Smart Offline, cleanup and offline privacy preferences
-- `offline-storage-location/SPEC.md` — managed client storage selection, validation and safe migration of existing offline content
-- `download-selection/SPEC.md` — shared per-download scope, quality, tracks, Learning, storage and Smart Offline promotion dialog/sheet
-- `download-quick-view/SPEC.md` — global download indicator, current-device queue quick view and direct pause/resume/retry actions
-- `download-notifications/SPEC.md` — consumer download toast/snackbar, Bell event and OS-notification routing semantics
 - `profile-activity/SPEC.md`
 - `add-request-flow/SPEC.md`
 - `request-status-details/SPEC.md` — consumer Request status/detail sheet
@@ -49,6 +43,12 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 - `person-creator/SPEC.md` — secondary Person/Creator view
 - `login-profile-selection/SPEC.md` — account login, external identities and Profile selection
 - `continuation-surfaces/SPEC.md` — persistent Now Playing and Continue Reading surfaces
+- `downloads-offline/SPEC.md` — device-local consumer downloads/offline inventory and queue management
+- `offline-settings/SPEC.md` — end-state network, quality, storage, Smart Offline, cleanup and offline privacy preferences
+- `offline-storage-location/SPEC.md` — managed client storage selection, validation and safe migration of existing offline content
+- `download-selection/SPEC.md` — shared per-download scope, quality, tracks, Learning, storage and Smart Offline promotion dialog/sheet
+- `download-quick-view/SPEC.md` — global download indicator, current-device queue quick view and direct pause/resume/retry actions
+- `download-notifications/SPEC.md` — Offline-domain download events; shared Bell/Toast/OS delivery is owned by the canonical Notifications system
 - `error-permission-states/SPEC.md` — shared 404/403/module/resource/session/500 states
 - `media-preview/SPEC.md` — cinematic Quick View for discovery/recommendations
 - `games/SPEC.md` — shared Games UX contract
