@@ -17,7 +17,9 @@
     const VIEW_KEY = "jularr:book-pdf-view";
     const SEARCH_HIT_LIMIT = 60;
 
-    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const fixedPage = window.JularrFixedPage;
+    if (!fixedPage) throw new Error("Fixed page runtime is required before the PDF adapter.");
+    const clamp = fixedPage.clamp;
     const frame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
     // The worker asks the page for cMaps, standard fonts and image decoders.
@@ -38,45 +40,21 @@
         }
     }
 
-    // Every PDF page is one chapter of the work (BookCatalogPdf), so a page is
-    // stored as its chapter at position 0. If the import could not read every
-    // page, pages map linearly onto the chapters (page centre -> permille).
+    // Compatibility names stay local to the PDF adapter; the generic physical
+    // page/locator and cover-spread semantics live in fixed-page-reader.js.
     const pageMap = (pageCount, pageChapters) => {
-        const total = Math.max(1, pageCount);
-        const chapters = Math.max(1, pageChapters.length);
-        const exact = chapters === total;
+        const map = fixedPage.createPageMap(pageCount, pageChapters);
         return Object.freeze({
             positionForPage(page) {
-                const number = clamp(Math.round(page), 1, total);
-                if (exact) return { chapterId: pageChapters[number - 1], positionPermille: 0 };
-                const at = (number - 0.5) * chapters / total;
-                const index = clamp(Math.floor(at), 0, chapters - 1);
-                return {
-                    chapterId: pageChapters[index],
-                    positionPermille: clamp(Math.round((at - index) * 1000), 0, 1000)
-                };
+                const position = map.positionForPage(page);
+                return { chapterId: position.itemId, positionPermille: position.positionPermille };
             },
-            pageForPosition(chapterId, positionPermille) {
-                const wanted = String(chapterId || "").toLowerCase();
-                const index = pageChapters.findIndex(id => String(id).toLowerCase() === wanted);
-                if (index < 0) return null;
-                if (exact) return index + 1;
-                const at = (index + clamp(Number(positionPermille) || 0, 0, 1000) / 1000) * total / chapters;
-                return clamp(Math.floor(at) + 1, 1, total);
-            }
+            pageForPosition: map.pageForPosition
         });
     };
 
-    // Book spreads: the first page (the cover) stands alone, then 2–3, 4–5, …
-    const spreads = (pageCount, perView) => Object.freeze({
-        count: perView === 1 ? pageCount : Math.floor(pageCount / 2) + 1,
-        viewOfPage: page => perView === 1 ? page - 1 : Math.floor(page / 2),
-        pagesOfView: index => {
-            if (perView === 1) return [index + 1];
-            if (index === 0) return [1];
-            return [index * 2, index * 2 + 1].filter(page => page <= pageCount);
-        }
-    });
+    const spreads = (pageCount, perView) =>
+        fixedPage.createSpreadProjection(pageCount, perView, true);
 
     // Case-insensitive matches in one page's text layer text. Offsets are into
     // `text`, so a hit can be marked in the rendered layer; the snippet collapses
@@ -148,6 +126,13 @@
         let perView = 1;
         let currentView = 0;
         let currentPage = 1;
+        const fixedState = fixedPage.createState({ pageCount: 1, page: 1, mode, perView, firstPageAlone: true });
+        const syncFixedState = () => {
+            mode = fixedState.mode;
+            perView = fixedState.perView;
+            currentView = fixedState.view;
+            currentPage = fixedState.page;
+        };
         let view = readView();
         let outline = null;
         let outlineLoading = null;
@@ -155,7 +140,6 @@
         let useClock = 0;
         let scrollFrame = 0;
         let observer = null;
-        let turnTimer = 0;
         let searchHighlight = null;
 
         const sizes = new Map();
@@ -177,11 +161,10 @@
 
         // ---- Layout ----------------------------------------------------------------------
 
-        const paged = () => mode === "paged";
-
-        const viewOfPage = page => spreads(pageCount, perView).viewOfPage(page);
-        const viewCount = () => spreads(pageCount, perView).count;
-        const pagesOfView = index => spreads(pageCount, perView).pagesOfView(index);
+        const paged = () => fixedState.isPaged;
+        const viewOfPage = page => fixedState.viewOfPage(page);
+        const viewCount = () => fixedState.viewCount();
+        const pagesOfView = index => fixedState.pagesOfView(index);
 
         const sizeOf = page => sizes.get(page) || defaultSize;
 
@@ -445,9 +428,9 @@
         let viewRun = 0;
         const showView = async (index, { animate = false, direction = 0 } = {}) => {
             const run = ++viewRun;
-            currentView = clamp(index, 0, Math.max(0, viewCount() - 1));
-            const pages = pagesOfView(currentView);
-            currentPage = pages[0];
+            fixedState.setView(index);
+            syncFixedState();
+            const pages = fixedState.visiblePages();
             emitLocation();
             await Promise.all(pages.map(knowSize));
             if (run !== viewRun) return;
@@ -462,23 +445,11 @@
             stage.scrollTo({ top: 0, left: 0 });
             syncOverflow();
 
-            window.clearTimeout(turnTimer);
-            container.classList.remove("is-turning-next", "is-turning-back", "is-fading");
-            const transition = reduceMotion.matches ? "none" : settings.pageTransition;
-            if (animate && direction && transition !== "none") {
-                void container.offsetWidth;
-                container.classList.add(transition === "fade"
-                    ? "is-fading"
-                    : direction > 0 ? "is-turning-next" : "is-turning-back");
-                turnTimer = window.setTimeout(() => {
-                    container.classList.remove("is-turning-next", "is-turning-back", "is-fading");
-                }, 320);
-            }
-
             trimRendered(new Set(pages));
             await Promise.all(shown.map(entry => render(entry, scale)));
             if (run !== viewRun) return;
             applySearchHighlight();
+            root.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
             prefetch(currentView);
         };
 
@@ -539,7 +510,8 @@
             observer = new IntersectionObserver(onIntersect, { rootMargin: "120% 0px 160% 0px" });
             elements.forEach(element => observer.observe(element));
             scrollToPage(anchor.page, anchor.fraction);
-            currentPage = anchor.page;
+            fixedState.setPage(anchor.page);
+            syncFixedState();
             emitLocation();
         };
 
@@ -589,7 +561,8 @@
                 scrollFrame = 0;
                 const page = pageAtLine();
                 if (page === currentPage) return;
-                currentPage = page;
+                fixedState.setPage(page);
+                syncFixedState();
                 emitLocation();
                 for (const near of nearPages()) {
                     if (!entries.get(near)?.ready) void showColumnPage(near);
@@ -602,11 +575,8 @@
 
         const visiblePages = () => {
             if (!pageCount) return [currentPage, currentPage];
-            if (paged()) {
-                const pages = pagesOfView(currentView);
-                return [pages[0], pages.at(-1)];
-            }
-            return [currentPage, currentPage];
+            const pages = fixedState.visiblePages();
+            return [pages[0], pages.at(-1)];
         };
 
         function emitLocation() {
@@ -619,14 +589,14 @@
 
         const goToPage = (page, { animate = false } = {}) => {
             if (!pageCount) return Promise.resolve();
-            const target = clamp(Math.round(page), 1, pageCount);
+            const previousView = currentView;
+            fixedState.setPage(page);
+            syncFixedState();
             if (paged()) {
-                const index = viewOfPage(target);
-                const direction = Math.sign(index - currentView);
-                return showView(index, { animate, direction });
+                const direction = Math.sign(currentView - previousView);
+                return showView(currentView, { animate, direction });
             }
-            scrollToPage(target);
-            currentPage = target;
+            scrollToPage(currentPage);
             emitLocation();
             return Promise.resolve();
         };
@@ -656,9 +626,9 @@
                     return;
                 }
             }
-            const next = currentView + direction;
-            if (next < 0 || next >= viewCount()) return;
-            void showView(next, { animate: true, direction });
+            const move = fixedState.targetForTurn(direction);
+            if (move.kind !== "view") return;
+            void showView(move.view, { animate: true, direction: move.direction });
         };
 
         // The slider runs from 0 to the page count; its value is the last page on
@@ -721,8 +691,9 @@
             const anchorPage = paged() ? pagesOfView(currentView)[0] : null;
             const columnAnchor = !paged() && container.childElementCount ? scrollAnchor() : null;
             const modeChanged = nextMode !== mode || !container.childElementCount;
-            mode = nextMode;
-            perView = nextPerView;
+            fixedState.setPage(currentPage);
+            fixedState.setLayout(nextMode, nextPerView);
+            syncFixedState();
             laidOutSpread = settings.twoPageSpread !== false;
             root.dataset.bookLayout = paged() ? "paged" : "scroll";
             root.dataset.pages = String(perView);
@@ -990,8 +961,10 @@
                 });
                 doc = await task.promise;
                 pageCount = doc.numPages;
+                fixedState.setPageCount(pageCount);
                 chapterMap = pageMap(pageCount, pageChapters);
-                currentPage = clamp(pageForPosition(options.startChapterId, options.startPermille) || 1, 1, pageCount);
+                fixedState.setPage(pageForPosition(options.startChapterId, options.startPermille) || 1);
+                syncFixedState();
                 const first = await doc.getPage(currentPage);
                 const viewport = first.getViewport({ scale: 1 });
                 defaultSize = { width: viewport.width, height: viewport.height };

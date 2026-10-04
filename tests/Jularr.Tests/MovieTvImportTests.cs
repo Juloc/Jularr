@@ -119,6 +119,60 @@ public sealed class MovieTvImportTests
     }
 
     [TestMethod]
+    public async Task MovieLibraryReusesProviderIdentityWhenRequestYearIsMissing()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var existing = new Movie
+        {
+            Key = MovieLibraryService.MovieKey("Dune", 2021),
+            Title = "Dune",
+            Year = 2021,
+            TmdbId = "438631"
+        };
+        db.Movies.Add(existing);
+        await db.SaveChangesAsync();
+
+        var resolved = await new MovieLibraryService(db, Bridge(db)).EnsureAsync(
+            "Dune",
+            year: null,
+            tmdbId: "438631",
+            imdbId: null,
+            libraryPath: null,
+            CancellationToken.None);
+
+        Assert.AreEqual(existing.Id, resolved.Movie.Id);
+        Assert.AreEqual(1, await db.Movies.CountAsync());
+        Assert.AreEqual(2021, resolved.Movie.Year);
+    }
+
+    [TestMethod]
+    public async Task TvLibraryReusesProviderIdentityWhenRequestYearIsMissing()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var existing = new TvSeries
+        {
+            Key = TvLibraryService.SeriesKey("Severance", 2022),
+            Title = "Severance",
+            Year = 2022,
+            TmdbId = "95396"
+        };
+        db.TvSeries.Add(existing);
+        await db.SaveChangesAsync();
+
+        var resolved = await new TvLibraryService(db, Bridge(db), new WorkStructureService(db)).EnsureSeriesAsync(
+            "Severance",
+            year: null,
+            tmdbId: "95396",
+            tvdbId: null,
+            libraryPath: null,
+            CancellationToken.None);
+
+        Assert.AreEqual(existing.Id, resolved.Series.Id);
+        Assert.AreEqual(1, await db.TvSeries.CountAsync());
+        Assert.AreEqual(2022, resolved.Series.Year);
+    }
+
+    [TestMethod]
     public async Task MovieInboxImportsEachVideo()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();

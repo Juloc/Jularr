@@ -110,7 +110,7 @@
                                 var coverSrc = book.CoverImageUrl.StartsWith("/Books/Cover/", StringComparison.Ordinal)
                                     ? book.CoverImageUrl + "?w=320"
                                     : book.CoverImageUrl;
-                                <img src="@coverSrc" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                                <img src="@coverSrc" alt="" loading="lazy" referrerpolicy="no-referrer" data-book-cover data-title="@book.Title" />
                             }
                             else
                             {
@@ -308,4 +308,5 @@
 
 @section Scripts {
     <script src="~/js/books-library.js" asp-append-version="true" defer></script>
+    <script src="~/js/book-cover-fallback.js" asp-append-version="true" defer></script>
 }

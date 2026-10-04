@@ -43,9 +43,9 @@ public sealed class BookReaderPdfTests
         StringAssert.Contains(script, "\"Translate\"");
     }
 
-    /// <summary>The drawn PDF page stays readable until the translation is ready; failures offer a retry and generated text is labelled.</summary>
+    /// <summary>Partial PDF translation never overlays the source page: pending keeps the original readable and ready content replaces it.</summary>
     [TestMethod]
-    public void PdfPageTranslationKeepsTheOriginalReadableOffersRetryAndLabelsGeneratedText()
+    public void PdfPageTranslationUsesReplacementWithOriginalFallbackInsteadOfOverlay()
     {
         var page = Read("src", "Jularr.Web", "Pages", "Books", "Read.cshtml");
         var script = Read("src", "Jularr.Web", "wwwroot", "js", "books-reader.js");
@@ -55,8 +55,10 @@ public sealed class BookReaderPdfTests
         StringAssert.Contains(page, "books.read.generatedTranslation");
         StringAssert.Contains(script, "books.read.translationRetry");
         StringAssert.Contains(script, "books.read.translationNotReady");
-        StringAssert.Contains(styles, ".book-pdf-translation[data-state=\"ready\"]");
+        StringAssert.Contains(styles, ".book-reader-page[data-book-format=\"pdf\"] .book-stage:has(> .book-pdf-translation[data-state=\"ready\"]:not([hidden])) > .book-pdf-spread");
+        StringAssert.Contains(styles, ".book-pdf-translation {\n    position: relative;");
         StringAssert.Contains(styles, ".book-pdf-translation[data-state=\"pending\"]");
+        Assert.IsFalse(styles.Contains(".book-pdf-translation {\n    position: absolute;", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -67,7 +69,12 @@ public sealed class BookReaderPdfTests
 
         StringAssert.Contains(page, "data-reader-frame");
         StringAssert.Contains(page, "data-book-pdf");
+        StringAssert.Contains(page, "~/js/fixed-page-reader.js");
         StringAssert.Contains(page, "~/js/books-reader-pdf.js");
+        Assert.IsTrue(
+            page.IndexOf("~/js/fixed-page-reader.js", StringComparison.Ordinal) <
+            page.IndexOf("~/js/books-reader-pdf.js", StringComparison.Ordinal),
+            "The canonical fixed-page runtime must load before the PDF adapter.");
         StringAssert.Contains(page, "/lib/pdfjs/pdf.min.mjs");
         StringAssert.Contains(page, "/lib/pdfjs/pdf.worker.min.mjs");
         foreach (var source in new[] { page, adapter })
@@ -209,7 +216,7 @@ public sealed class BookReaderPdfTests
         // "1 / 2 (50%)" with the handle at the start came from a view-index slider
         // and a page-based percentage. Both now use the last page on screen.
         StringAssert.Contains(script, "value: last,\n                max: layout.pageCount,\n                percent: Math.round(last / layout.pageCount * 100)");
-        StringAssert.Contains(script, "goToView(viewForSliderPage(value), { animate: false })");
+        StringAssert.Contains(script, "reflowRenderer?.seekPage(viewForSliderPage(value))");
         StringAssert.Contains(script, "value: last,\n                    max: total,\n                    percent: Math.round(last / total * 100)");
         StringAssert.Contains(script, "addEventListener(\"change\"");
         Assert.IsFalse(script.Contains("max = layout.viewCount - 1", StringComparison.Ordinal));
@@ -248,13 +255,28 @@ public sealed class BookReaderPdfTests
         Assert.AreEqual(3, reader.ChapterCount);
         Assert.AreEqual(ReaderLayoutKind.FixedPages, reader.ReaderDocument.LayoutKind);
         Assert.IsTrue(reader.ReaderDocument.Capabilities.SupportsTts);
-        Assert.IsFalse(reader.TranslationEnabled);
 
         File.Delete(fixture.PdfPath);
         var missing = fixture.CreateReadModel();
         await missing.OnGetAsync(fixture.PageIds[0], "en", null, null, null, CancellationToken.None);
         Assert.IsNotNull(missing.Pdf);
         Assert.IsNull(missing.Pdf.FileUrl, "A missing file is reported, not replaced by the page text.");
+    }
+
+    [TestMethod]
+    public async Task PdfReaderExposesSharedCachedTranslationLanguagesAcrossProfiles()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.SeedTranslationAsync(fixture.PageIds[1], "de", "Übersetzte Seite.");
+
+        var first = fixture.CreateReadModel("pdf-reader-a");
+        await first.OnGetAsync(fixture.PageIds[1], "id", null, null, null, CancellationToken.None);
+        var second = fixture.CreateReadModel("pdf-reader-b");
+        await second.OnGetAsync(fixture.PageIds[1], "id", null, null, null, CancellationToken.None);
+
+        CollectionAssert.Contains(first.CachedTranslationLanguages.ToArray(), "de");
+        CollectionAssert.Contains(second.CachedTranslationLanguages.ToArray(), "de");
+        Assert.IsTrue(second.ReaderDocument.Languages.Any(language => language.Tag.Equals("de", StringComparison.OrdinalIgnoreCase)));
     }
 
     [TestMethod]
@@ -280,6 +302,7 @@ public sealed class BookReaderPdfTests
     {
         var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(10)));
         engine.Execute("var window = globalThis;");
+        engine.Execute(Read("src", "Jularr.Web", "wwwroot", "js", "fixed-page-reader.js"));
         engine.Execute(Read("src", "Jularr.Web", "wwwroot", "js", "books-reader-pdf.js"));
         return engine;
     }
@@ -389,11 +412,11 @@ public sealed class BookReaderPdfTests
                 pdfPath);
         }
 
-        public ReadModel CreateReadModel()
+        public ReadModel CreateReadModel(string profileId = Profile)
         {
             var page = new ReadModel(
                 Books,
-                TestAccounts.Context(Profile),
+                TestAccounts.Context(profileId),
                 new BackgroundJobQueue(services.GetRequiredService<IServiceScopeFactory>()),
                 Db);
             page.PageContext = new PageContext
@@ -407,6 +430,22 @@ public sealed class BookReaderPdfTests
                 ViewData = new ViewDataDictionary<ReadModel>(new EmptyModelMetadataProvider(), new ModelStateDictionary())
             };
             return page;
+        }
+
+        public async Task SeedTranslationAsync(Guid pageId, string targetLanguage, string text)
+        {
+            var chapter = await Db.NovelChapters.SingleAsync(x => x.Id == pageId);
+            Db.NovelTranslations.Add(new NovelTranslation
+            {
+                ChapterId = pageId,
+                TargetLanguage = BookLanguageCatalog.Normalize(targetLanguage),
+                ProviderId = $"book-v{BookCatalogService.TranslationPromptVersion}-efficient",
+                PromptVersion = BookCatalogService.TranslationPromptVersion,
+                SourceHash = chapter.SourceHash,
+                Text = text
+            });
+            await Db.SaveChangesAsync();
+            Db.ChangeTracker.Clear();
         }
 
         private BookCatalogService NewBookCatalogService()

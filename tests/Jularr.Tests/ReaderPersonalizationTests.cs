@@ -26,7 +26,7 @@ public sealed class ReaderPersonalizationTests
                 Defaults(font: "book-serif", paper: "cream"),
                 CancellationToken.None);
 
-            await ReaderPreferenceStore.SaveBookOverrideAsync(
+            await ReaderPreferenceStore.SaveWorkOverrideAsync(
                 db,
                 "reader-a",
                 work.Id,
@@ -45,7 +45,7 @@ public sealed class ReaderPersonalizationTests
             Assert.AreEqual("sepia", first.PaperStyle);
             CollectionAssert.Contains(first.SourceGenres.ToArray(), "Fantasy");
             Assert.AreEqual("auto", first.ResolvedGenreTheme);
-            Assert.IsTrue(first.HasBookOverride);
+            Assert.IsTrue(first.HasWorkOverride);
 
             await ReaderPreferenceStore.SaveUserDefaultsAsync(
                 db,
@@ -63,7 +63,7 @@ public sealed class ReaderPersonalizationTests
             Assert.AreEqual("system-sans", afterDefaultChange.FontFamily);
             Assert.AreEqual("sepia", afterDefaultChange.PaperStyle);
 
-            await ReaderPreferenceStore.ResetBookAsync(
+            await ReaderPreferenceStore.ResetWorkAsync(
                 db,
                 "reader-a",
                 work.Id,
@@ -77,7 +77,7 @@ public sealed class ReaderPersonalizationTests
                 CancellationToken.None);
 
             Assert.AreEqual("white", reset.PaperStyle);
-            Assert.IsFalse(reset.HasBookOverride);
+            Assert.IsFalse(reset.HasWorkOverride);
         }
         finally
         {
@@ -203,7 +203,7 @@ public sealed class ReaderPersonalizationTests
         StringAssert.Contains(page, "data-reader-autoscroll-toggle");
         StringAssert.Contains(page, "data-reader-frame");
         StringAssert.Contains(page, "data-reader-progress-slider");
-        StringAssert.Contains(page, "data-reader-page-step");
+        Assert.IsFalse(page.Contains("data-reader-page-step", StringComparison.Ordinal), "Phones turn pages by tap and swipe; Previous/Next are chapters.");
         StringAssert.Contains(page, "data-reader-settings-open=\"reading\"");
         StringAssert.Contains(page, "_ReaderSettingsPanel");
         StringAssert.Contains(page, "novels.read.chapterLabel");

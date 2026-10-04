@@ -39,6 +39,12 @@ public sealed class EditModel(
     public string? AnimeCategory { get; set; }
 
     [BindProperty]
+    public string? TvCategory { get; set; }
+
+    [BindProperty]
+    public string? MovieCategory { get; set; }
+
+    [BindProperty]
     public string? MangaCategory { get; set; }
 
     [BindProperty]
@@ -55,6 +61,8 @@ public sealed class EditModel(
     public InstanceModuleSettings InstanceModules { get; private set; } = InstanceModuleSettings.Default;
     public bool ShowBooks => InstanceModules.IsEnabled(InstanceModule.Book);
     public bool ShowAnime => InstanceModules.IsEnabled(InstanceModule.Anime);
+    public bool ShowTv => InstanceModules.IsEnabled(InstanceModule.Tv);
+    public bool ShowMovie => InstanceModules.IsEnabled(InstanceModule.Movie);
     public bool ShowManga => InstanceModules.IsEnabled(InstanceModule.Manga);
     public bool ShowLightNovels => InstanceModules.IsEnabled(InstanceModule.Novel);
 
@@ -78,6 +86,8 @@ public sealed class EditModel(
         BaseUrl = entry.Settings.BaseUrl;
         BooksCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Book);
         AnimeCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Anime);
+        TvCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Tv);
+        MovieCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Movie);
         MangaCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Manga);
         LightNovelCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.LightNovel);
         Priority = entry.Priority;
@@ -112,6 +122,12 @@ public sealed class EditModel(
                             [MediaAcquisitionKind.Anime] = ShowAnime
                                 ? AnimeCategory
                                 : existing?.Settings.CategoryFor(MediaAcquisitionKind.Anime),
+                            [MediaAcquisitionKind.Tv] = ShowTv
+                                ? TvCategory
+                                : existing?.Settings.CategoryFor(MediaAcquisitionKind.Tv),
+                            [MediaAcquisitionKind.Movie] = ShowMovie
+                                ? MovieCategory
+                                : existing?.Settings.CategoryFor(MediaAcquisitionKind.Movie),
                             [MediaAcquisitionKind.Manga] = ShowManga
                                 ? MangaCategory
                                 : existing?.Settings.CategoryFor(MediaAcquisitionKind.Manga),

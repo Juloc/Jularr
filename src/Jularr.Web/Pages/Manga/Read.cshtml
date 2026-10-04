@@ -37,6 +37,9 @@
             label = item.Label ?? ""
         }),
         jsonOptions);
+    var settingsJson = System.Text.Json.JsonSerializer.Serialize(
+        Model.ReaderSettings,
+        jsonOptions);
     var readerText = ui.WithPrefix("manga.reader.")
         .Append(new KeyValuePair<string, string>("common.remove", ui["common.remove"]))
         .ToDictionary(x => x.Key, x => x.Value);
@@ -94,7 +97,7 @@
      data-unified-reader
      data-reader-frame
      data-reader-content-type="manga"
-     data-reading-mode="paged"
+     data-reading-mode="@Model.ReaderSettings.ReadingMode"
      data-profile="@Model.ProfileId"
      data-chapter-id="@chapter.Id"
      data-series-id="@chapter.SeriesId"
@@ -110,6 +113,7 @@
 
     <script type="application/json" data-reader-frame-text>@Json.Serialize(ui.WithPrefix("reader.frame."))</script>
     <script type="application/json" data-manga-reader-text>@Json.Serialize(readerText)</script>
+    <script type="application/json" data-manga-settings>@Html.Raw(settingsJson)</script>
     <script type="application/json" data-manga-chapters>@Html.Raw(chaptersJson)</script>
     <script type="application/json" data-manga-bookmarks>@Html.Raw(bookmarksJson)</script>
 
@@ -316,7 +320,7 @@
         </aside>
         <div class="reader-contents-backdrop" data-reader-contents-backdrop hidden></div>
 
-        <main class="manga-stage" data-manga-stage tabindex="-1" aria-label="@chapterHeading">
+        <main class="manga-stage" data-manga-stage data-reader-surface tabindex="-1" aria-label="@chapterHeading">
             <div class="manga-spread" data-manga-spread>
                 <img data-manga-slot alt="" draggable="false" hidden />
                 <img data-manga-slot alt="" draggable="false" hidden />

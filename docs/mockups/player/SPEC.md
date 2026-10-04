@@ -425,18 +425,199 @@ Repeated presses may accumulate visually while the seek is being applied, but th
 
 Use capability detection and progressive enhancement. Do not fork server/domain playback rules.
 
-Where WebKit permits:
-- keep Jularr inline controls;
-- use normal PlaybackPlan/ActiveSession;
-- support fullscreen, PiP, Media Session and wake-lock-like behavior only when the platform actually exposes it.
+### Binding control policy
 
-Where WebKit requires system surfaces:
-- degrade deliberately to supported system playback/fullscreen controls;
-- preserve canonical progress, track preferences and session identity;
-- never claim a custom control exists when WebKit does not allow it;
-- return from system fullscreen/native surfaces to the same logical ActiveSession.
+The default iPhone/iPad Safari and Home Screen/PWA experience is the **Jularr custom Player**, not Safari's built-in `<video controls>` UI.
 
-The mockup represents the intended Jularr inline state, but implementation may use a system-control fallback for unsupported WebKit capabilities.
+For normal inline playback:
+- render the media element with `playsinline`;
+- do **not** add the HTML `controls` attribute;
+- keep `video.controls === false`;
+- Jularr owns play/pause, -10/+30 seek, timeline, audio/subtitle/quality menus, chapters, Learning controls, Minimize, Popout/PiP and the normal fullscreen action;
+- attach `playsinline` before playback starts so iPhone does not enter native fullscreen merely because playback began;
+- keep PlaybackPlan, ActiveSession, MediaProgress and track selection exactly the same as every other web client.
+
+Safari/Apple controls are an explicit compatibility surface, not a second normal Player design. Jularr must never accidentally show both its own chrome and the browser's normal inline controls at the same time.
+
+### Presentation modes
+
+WebKit presentation is a client-only presentation concern over the same ActiveSession. Model it explicitly as one of:
+
+`Inline | Theater | ElementFullscreen | NativeVideoFullscreen | PictureInPicture`
+
+This state does not create another playback session, progress record, quality decision or track-selection owner.
+
+#### Inline
+
+Inline is the default. The video stays inside the Jularr composition with custom controls and overlays.
+
+#### Jularr Theater Mode
+
+Theater Mode is the mandatory fallback when Jularr cannot put the whole Player container into standards-based fullscreen while retaining custom HTML chrome.
+
+Theater Mode:
+- keeps the same video element and ActiveSession;
+- expands the Jularr Player root to the complete usable viewport with fixed positioning;
+- keeps Jularr controls, subtitles and Learning overlays fully functional;
+- hides normal application chrome behind the Player;
+- locks page scrolling/overscroll while active and restores it exactly on exit;
+- respects `env(safe-area-inset-top/right/bottom/left)`;
+- uses modern dynamic viewport sizing such as `100dvh` with a safe fallback rather than assuming `100vh` equals the visible iOS viewport;
+- responds to portrait/landscape viewport changes without recreating playback;
+- does not claim that browser chrome has been removed when Safari itself still owns visible browser UI.
+
+For an installed iPhone/iPad Home Screen app, Theater Mode is the preferred full-screen-like Jularr experience when standards-based element fullscreen is unavailable because the standalone app viewport already removes normal Safari tab/address chrome.
+
+#### Element fullscreen with custom controls
+
+When the Player root exposes a working standards-based element Fullscreen API, the normal Fullscreen action should request fullscreen on the **Player root/container**, not directly on the `<video>`.
+
+This preserves:
+- custom transport;
+- Jularr subtitle rendering;
+- Learning overlays;
+- settings sheets;
+- safe custom exit/fullscreen actions.
+
+Use actual runtime capability detection, for example whether the Player root has a callable `requestFullscreen` and whether the document exposes matching fullscreen state/events. Do not hard-code `iPad = supported`; WebKit/browser version and presentation context are the deciding capability.
+
+If the element-fullscreen request rejects or is unavailable, fall back immediately to Jularr Theater Mode. Do not fall through automatically to the native Apple video player.
+
+#### Native Apple video fullscreen
+
+Native video fullscreen is a **last-resort or explicitly requested system-player path** because WebKit owns that surface and Jularr HTML overlays/custom controls cannot be assumed to remain visible.
+
+Only use native video fullscreen when:
+- the user deliberately chooses a system-player/system-fullscreen action; or
+- a WebKit limitation makes native fullscreen the only usable playback surface for that media/context.
+
+Where supported, this may use the WebKit video fullscreen API such as `webkitEnterFullscreen()`.
+
+Before entering native fullscreen:
+- flush meaningful current progress/session state;
+- preserve selected audio/subtitle/quality preference in the canonical session;
+- record that the presentation changed, not that a new playback session started.
+
+While native fullscreen is active:
+- do not display fake Jularr buttons that cannot control the native surface;
+- do not claim interactive Learning overlays remain available;
+- native subtitle/track behavior may be used only when it maps safely to the selected canonical tracks.
+
+On return:
+- keep the same ActiveSession;
+- restore the same logical position and selected tracks;
+- restore Jularr inline/Theater chrome without creating a second Player instance;
+- process `webkitbeginfullscreen` / `webkitendfullscreen` or equivalent supported events so state does not drift.
+
+The normal iPhone Fullscreen button must therefore prefer **Jularr Theater Mode**, not `webkitEnterFullscreen()`, when custom Player behavior is required.
+
+### Fullscreen action resolution
+
+The recommended implementation for the normal Jularr Fullscreen action is:
+
+```text
+user presses Fullscreen
+  -> Player-root element fullscreen supported and usable?
+       yes -> ElementFullscreen
+       no  -> Theater
+
+explicit "Open in system player/fullscreen"
+  -> native video fullscreen supported?
+       yes -> NativeVideoFullscreen
+       no  -> keep current Jularr mode and hide/disable the unsupported action
+```
+
+Exiting Fullscreen reverses only the presentation mode. It must not stop playback unless the user separately chose Close/Stop.
+
+### Picture in Picture / Popout
+
+PiP must be capability-based and must not be inferred only from `iPhone`, `iPad`, Safari version or PWA status.
+
+Recommended order:
+1. use the standards-based Picture-in-Picture API when it is actually exposed and succeeds;
+2. where necessary, use WebKit presentation-mode capability checks such as `webkitSupportsPresentationMode("picture-in-picture")` plus `webkitSetPresentationMode(...)`;
+3. if neither is usable, hide/disable Popout rather than presenting a dead button.
+
+A capability probe that reports support is not enough after a real invocation returns `NotSupportedError` or otherwise fails. Downgrade the current-session capability and stop offering a broken action until the environment changes/reloads.
+
+Listen to the corresponding enter/leave/presentation-mode events so Jularr chrome and ActiveSession state remain synchronized.
+
+### Safari vs installed PWA
+
+Safari and an installed Home Screen/PWA must share the same Player implementation and contracts. Do not create a separate iOS Player page.
+
+Presentation differences may be detected only to improve layout:
+- standalone display mode may use the full app viewport for Theater Mode;
+- Safari browser mode must account for dynamic browser chrome;
+- neither mode implies that PiP, fullscreen, orientation lock, Wake Lock or Media Session definitely works.
+
+Use `matchMedia("(display-mode: standalone)")` and, where useful for Apple Home Screen detection, the platform-exposed standalone signal only as presentation context. Never use those checks as codec/playback compatibility rules.
+
+### Orientation and safe areas
+
+Do not require orientation lock for correct playback. iPhone/iPad Player layout must remain usable when orientation APIs are missing or denied.
+
+On viewport/orientation change:
+- recompute Player geometry and subtitle safe zones;
+- preserve playback position and controls state;
+- do not reload the media;
+- keep top/bottom actions out of notch/Dynamic Island/home-indicator unsafe areas.
+
+### Subtitles and Learning
+
+Custom subtitle and Learning layers are first-class reasons to prefer Inline/Theater/ElementFullscreen over native video fullscreen.
+
+- Jularr-rendered subtitles remain above the media and independent from transient player chrome.
+- Learning hit targets remain interactive only while Jularr owns the composition.
+- Entering native system fullscreen must not silently pretend those HTML overlays are still available.
+- If native fullscreen is explicitly selected while Learning is On, the action must communicate that interactive Learning controls are unavailable in the system surface; returning restores them without changing Learning state.
+
+### Media Session, background transitions and progress
+
+Use Media Session and related APIs only when actually supported.
+
+Flush meaningful state on:
+- pause;
+- completed seek;
+- visibility/background transition;
+- entering/leaving native fullscreen or PiP;
+- route leave;
+- Player close.
+
+Do not recreate PlaybackPlan or ActiveSession solely because Safari changed presentation mode.
+
+### Implementation ownership
+
+Keep WebKit-specific behavior in the shared web Player presentation/capability layer. Do not spread `navigator.userAgent` checks through controls, playback planning or media-domain code.
+
+The implementation should have:
+- one media element;
+- one Jularr control tree;
+- one presentation-mode resolver;
+- one runtime capability snapshot that can be downgraded after failed API calls;
+- event synchronization for fullscreen/PiP/native-video presentation;
+- CSS presentation states for Inline/Theater/ElementFullscreen rather than separate Player pages.
+
+Playback compatibility remains owned by the canonical capability document + PlaybackPlan. Presentation capability must never become a rule such as `iOS = transcode`.
+
+### Required iPhone/iPad verification matrix
+
+Manual real-device verification is required in addition to browser/DOM regression tests because headless automation cannot prove all WebKit media surfaces.
+
+At minimum verify:
+- iPhone Safari portrait + landscape: playback begins inline with Jularr controls and no duplicate Safari controls;
+- iPhone installed Home Screen/PWA portrait + landscape: same Player, Theater fills the standalone viewport and respects safe areas;
+- iPad Safari portrait + landscape: custom controls remain intact through the best supported custom fullscreen path;
+- iPad installed Home Screen/PWA portrait + landscape;
+- normal Fullscreen never unexpectedly launches native Apple video fullscreen when Theater/custom fullscreen is available;
+- explicit native/system fullscreen preserves position/session and restores Jularr correctly on exit;
+- PiP button appears only when the actual current environment can use it and failure does not leave a dead control;
+- selected audio/subtitle state survives Inline <-> Theater <-> fullscreen/PiP transitions;
+- Learning subtitles/overlays remain usable in Jularr-owned presentation modes and are not falsely promised in native fullscreen;
+- Minimize, Popout, Fullscreen and Close remain four distinct actions;
+- rotation, safe-area changes, Safari browser chrome changes and PWA standalone sizing do not reload or restart playback.
+
+The mockup represents the intended Jularr-owned Player state. Apple system playback UI is an explicit compatibility fallback, not the primary iOS/iPadOS design.
 
 ## 9. Timeline, buffer, chapters and skip segments
 
@@ -856,6 +1037,10 @@ The Player must not query legacy Anime/Episode-only tables as its permanent sour
 - No Auto-Skip enabled by default.
 - No Auto-Skip without a canonical eligible segment marker.
 - No single symmetric seek-step setting that forces backward and forward to use the same duration; the canonical Player contract must support 10 seconds backward and 30 seconds forward independently.
+- No `controls` attribute or `video.controls = true` for normal iPhone/iPad inline playback while Jularr custom controls are active.
+- No normal iPhone Fullscreen action that blindly calls `webkitEnterFullscreen()` and discards Jularr controls/overlays.
+- No UA-only `iPhone/iPad/Safari` switch deciding fullscreen, PiP, playback compatibility or transcoding behavior.
+- No duplicate iOS/iPadOS Player page or second ActiveSession merely to handle WebKit presentation differences.
 
 ## 24. Mockup acceptance checklist
 
@@ -882,4 +1067,10 @@ A Player mockup is acceptable only when:
 - preparing/loading/buffering/error states have clear treatment;
 - completion vs resume semantics are not visually conflated;
 - no legacy media model is implied;
-- no control depends on a capability the platform may not have without a fallback state.
+- no control depends on a capability the platform may not have without a fallback state;
+- iPhone/iPad inline playback uses `playsinline` with Jularr custom controls and does not expose duplicate Safari inline controls;
+- normal Fullscreen preserves Jularr chrome by resolving to Player-root element fullscreen when usable, otherwise Jularr Theater Mode;
+- native Apple video fullscreen is explicit/last-resort and round-trips through the same ActiveSession;
+- PiP/Popout is shown from actual runtime capability and can downgrade cleanly after a failed invocation;
+- Safari and Home Screen/PWA share one Player implementation while handling standalone viewport/safe-area differences deliberately;
+- real-device iPhone/iPad Safari + Home Screen verification covers portrait, landscape, fullscreen/Theater, PiP, track persistence and Learning-overlay behavior.

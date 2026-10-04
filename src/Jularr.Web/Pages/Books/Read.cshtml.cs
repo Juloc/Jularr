@@ -1,7 +1,5 @@
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Books;
-using Jularr.Web.Features.Instance;
-using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Operations;
@@ -26,8 +24,7 @@ public sealed class ReadModel(
     BookCatalogService books,
     CurrentAccountContext account,
     BackgroundJobQueue jobs,
-    AppDbContext db,
-    IInstanceModuleService? instanceModules = null) : PageModel
+    AppDbContext db) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public BookReaderChapter Reader { get; private set; } = null!;
@@ -55,8 +52,8 @@ public sealed class ReadModel(
     public BookPdfReaderDocument? Pdf { get; private set; }
 
     /// <summary>
-    /// Other languages with a cached, current translation of this chapter.
-    /// Reading them is always allowed (#369); the language menu links to them.
+    /// Other current translated editions cached for this work. Translations are shared content,
+    /// not profile/Learning state; the language menu links to them.
     /// </summary>
     public IReadOnlyList<string> CachedTranslationLanguages { get; private set; } = [];
 
@@ -76,17 +73,6 @@ public sealed class ReadModel(
         || Reader.SourceLanguage.Equals(
             Reader.TargetLanguage,
             StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Whether generating (or regenerating) this chapter's AI translation is
-    /// allowed, resolved through the canonical Learning hierarchy (Book media
-    /// type → work → chapter). This only gates the translate/generation-status
-    /// handlers and the "translate this chapter" prompt; it must never
-    /// withhold an already cached translation, since reading an existing
-    /// translated variant is core reader behaviour and must work with
-    /// Learning off (#369).
-    /// </summary>
-    public bool TranslationEnabled { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(
         Guid id,
@@ -115,17 +101,23 @@ public sealed class ReadModel(
             : Math.Clamp(pos.Value, 0, 1000);
         RequestedParagraph = p is >= 0 ? p : null;
         RequestedView = NormalizeRequestedView(view);
-        var source = new ReaderDocumentLanguage(reader.SourceLanguage, BookLanguageCatalog.GetName(reader.SourceLanguage));
+        var availableTranslationLanguages = await books.GetCachedTranslationLanguagesAsync(reader.Work.Id, cancellationToken);
+        HasWorkTranslationLanguage = availableTranslationLanguages.Any(language => language.Equals(reader.TargetLanguage, StringComparison.OrdinalIgnoreCase));
+        CachedTranslationLanguages = availableTranslationLanguages
+            .Where(language => !language.Equals(reader.SourceLanguage, StringComparison.OrdinalIgnoreCase)
+                && !language.Equals(reader.TargetLanguage, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var documentLanguages = new[] { reader.SourceLanguage, reader.TargetLanguage }
+            .Concat(availableTranslationLanguages)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(language => new ReaderDocumentLanguage(language, BookLanguageCatalog.GetName(language)))
+            .ToList();
+
         if (BookFileFormats.IsPdf(reader.Work))
         {
-            // A PDF book is one document whose pages are the work's chapters; the
-            // reader shows the pages themselves, so it needs every page's chapter.
-            var pages = await db.NovelChapters
-                .AsNoTracking()
-                .Where(x => x.WorkId == reader.Work.Id)
-                .OrderBy(x => x.Number)
-                .Select(x => x.Id)
-                .ToListAsync(cancellationToken);
+            // A PDF book is one document whose logical pages are the work's chapters; the
+            // reader shows the physical pages, so it needs every physical page's chapter.
+            var pages = await books.GetPdfPageChapterIdsAsync(reader.Work.Id, cancellationToken);
             var file = await books.GetStoredFileAsync(reader.Work.Id, cancellationToken);
             Pdf = new BookPdfReaderDocument(
                 file is null ? null : $"/Books/File/{reader.Work.Id}",
@@ -137,25 +129,19 @@ public sealed class ReadModel(
                 reader.Work.MetadataTitle ?? reader.Work.Title,
                 ReaderPreferenceRules.ParseGenres(reader.Work.MetadataGenresJson),
                 ReaderLayoutKind.FixedPages,
-                [source]);
+                documentLanguages);
         }
         else
         {
             ChapterCount = await db.NovelChapters
                 .AsNoTracking()
                 .CountAsync(x => x.WorkId == reader.Work.Id, cancellationToken);
-            CachedTranslationLanguages = await GetCachedTranslationLanguagesAsync(reader, cancellationToken);
-            HasWorkTranslationLanguage = await HasWorkTranslationLanguageAsync(reader, cancellationToken);
             ReaderDocument = ReaderDocumentDescriptor.Create(
                 reader.Work.Id,
                 ReaderContentType.Book,
                 reader.Work.MetadataTitle ?? reader.Work.Title,
                 ReaderPreferenceRules.ParseGenres(reader.Work.MetadataGenresJson),
-                languages:
-                [
-                    source,
-                    new(reader.TargetLanguage, BookLanguageCatalog.GetName(reader.TargetLanguage))
-                ]);
+                languages: documentLanguages);
         }
 
         ReaderSettings = await ReaderPreferenceStore.GetAsync(
@@ -167,18 +153,13 @@ public sealed class ReadModel(
             cancellationToken);
         if (Pdf is not null)
         {
-            // Fixed pages have no paragraph text to anchor highlights to and are
-            // not translated in the reader.
+            // PDF translation is page-level; fixed pages do not use paragraph highlights.
             return Page();
         }
 
         CurrentHighlights = await BookReaderAnnotationStore.GetChapterHighlightsAsync(
             db,
             account.ProfileId,
-            reader.Chapter.Id,
-            cancellationToken);
-        TranslationEnabled = await ResolveTranslationEnabledAsync(
-            reader.Work.Id,
             reader.Chapter.Id,
             cancellationToken);
         return Page();
@@ -257,9 +238,6 @@ public sealed class ReadModel(
                     db,
                     account.ProfileId,
                     scopeKey,
-                    scopeKey.StartsWith("work:", StringComparison.OrdinalIgnoreCase)
-                        ? reader.Work.Id
-                        : null,
                     input,
                     cancellationToken);
             }
@@ -297,7 +275,7 @@ public sealed class ReadModel(
             return NotFound();
         }
 
-        await ReaderPreferenceStore.ResetBookAsync(
+        await ReaderPreferenceStore.ResetWorkAsync(
             db,
             account.ProfileId,
             reader.Work.Id,
@@ -330,11 +308,6 @@ public sealed class ReadModel(
         if (reader is null)
         {
             return NotFound();
-        }
-
-        if (!await ResolveTranslationEnabledAsync(reader.Work.Id, reader.Chapter.Id, cancellationToken))
-        {
-            return Forbid();
         }
 
         if (reader.SourceLanguage.Equals(
@@ -405,10 +378,6 @@ public sealed class ReadModel(
             });
         }
 
-        // Reading an already cached translation is core reader behaviour and
-        // must not depend on the Learning capability (#369); only a *pending*
-        // generation (no cached text yet) requires the resolved capability,
-        // since it implies a translation would still need to be produced.
         if (reader.Translation is not null)
         {
             return new JsonResult(new
@@ -416,11 +385,6 @@ public sealed class ReadModel(
                 status = "ready",
                 paragraphs = reader.TranslatedParagraphs
             });
-        }
-
-        if (!await ResolveTranslationEnabledAsync(reader.Work.Id, reader.Chapter.Id, cancellationToken))
-        {
-            return Forbid();
         }
 
         return new JsonResult(new { status = "pending" });
@@ -655,59 +619,6 @@ public sealed class ReadModel(
         return new JsonResult(new { hits });
     }
 
-    private async Task<bool> HasWorkTranslationLanguageAsync(
-        BookReaderChapter reader,
-        CancellationToken cancellationToken)
-    {
-        if (reader.SourceLanguage.Equals(
-                reader.TargetLanguage,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return await (
-            from translation in db.NovelTranslations.AsNoTracking()
-            join chapter in db.NovelChapters.AsNoTracking()
-                on translation.ChapterId equals chapter.Id
-            where chapter.WorkId == reader.Work.Id
-                && translation.TargetLanguage == reader.TargetLanguage
-                && translation.SourceHash == chapter.SourceHash
-            select translation.Id)
-            .AnyAsync(cancellationToken);
-    }
-
-    private async Task<IReadOnlyList<string>> GetCachedTranslationLanguagesAsync(
-        BookReaderChapter reader,
-        CancellationToken cancellationToken)
-    {
-        var candidates = await db.NovelTranslations
-            .AsNoTracking()
-            .Where(x => x.ChapterId == reader.Chapter.Id
-                && x.SourceHash == reader.Chapter.SourceHash)
-            .Select(x => x.TargetLanguage)
-            .Distinct()
-            .Take(12)
-            .ToListAsync(cancellationToken);
-
-        var languages = new List<string>();
-        foreach (var candidate in candidates
-                     .Select(x => x.Trim().ToLowerInvariant())
-                     .Where(x => x.Length > 0
-                         && !x.Equals(reader.TargetLanguage, StringComparison.OrdinalIgnoreCase)
-                         && !x.Equals(reader.SourceLanguage, StringComparison.OrdinalIgnoreCase))
-                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                     .Order(StringComparer.Ordinal))
-        {
-            if (await books.GetCachedTranslationAsync(reader.Chapter.Id, candidate, cancellationToken) is not null)
-            {
-                languages.Add(candidate);
-            }
-        }
-
-        return languages;
-    }
-
     private static string? NormalizeRequestedView(string? value)
     {
         var normalized = value?.Trim().ToLowerInvariant();
@@ -716,22 +627,4 @@ public sealed class ReadModel(
             : null;
     }
 
-    /// <summary>
-    /// Resolves the Translation capability for this chapter's scope (profile →
-    /// Book media type → work → chapter) so cached translated text and the
-    /// translate/status handlers follow the canonical Learning hierarchy
-    /// instead of only checking whether a translation happens to be cached.
-    /// Shared with the Library chapter-list page through
-    /// <see cref="LearningModuleResolver.ResolveTranslationEnabledAsync"/>.
-    /// </summary>
-    private Task<bool> ResolveTranslationEnabledAsync(
-        Guid workId,
-        Guid chapterId,
-        CancellationToken cancellationToken) =>
-        new LearningModuleResolver(db, instanceModules).ResolveTranslationEnabledAsync(
-            account.ProfileId,
-            LearningMediaType.Book,
-            workId.ToString(),
-            chapterId.ToString(),
-            cancellationToken);
 }

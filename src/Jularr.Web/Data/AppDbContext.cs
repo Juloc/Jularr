@@ -618,11 +618,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.BackgroundMotionMode).HasMaxLength(24);
             entity.Property(x => x.BookmarkStyle).HasMaxLength(24);
             entity.Property(x => x.BookmarkColor).HasMaxLength(16);
+            entity.Property(x => x.ImageFlowMode).HasMaxLength(24);
+            entity.Property(x => x.ImagePageDirection).HasMaxLength(16);
+            entity.Property(x => x.ImageFit).HasMaxLength(16);
+            entity.Property(x => x.ImageColorScheme).HasMaxLength(16);
             entity.Property(x => x.TtsProviderId).HasMaxLength(24);
             entity.Property(x => x.TtsVoiceIds).HasMaxLength(8000);
-            entity.HasOne<NovelWork>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.ProfileId, x.ScopeKey }).IsUnique();
-            entity.HasIndex(x => x.WorkId);
         });
 
         modelBuilder.Entity<NovelAnimeMapping>(entity =>

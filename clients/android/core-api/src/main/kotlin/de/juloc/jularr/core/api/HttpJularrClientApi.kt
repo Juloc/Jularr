@@ -363,7 +363,8 @@ class HttpJularrClientApi(
                     name == "continueWatching" ||
                     name == "playbackHistory" ||
                     name == "watchlist" ||
-                    name == "devicePairing"
+                    name == "devicePairing" ||
+                    name == "offlinePackages"
                 ) {
                     features.optBoolean(name, false)
                 } else {
@@ -759,5 +760,6 @@ internal object ClientFeatureFlagParser {
         playbackHistory = readBoolean("playbackHistory"),
         watchlist = readBoolean("watchlist"),
         devicePairing = readBoolean("devicePairing"),
+        offlinePackages = readBoolean("offlinePackages"),
     )
 }

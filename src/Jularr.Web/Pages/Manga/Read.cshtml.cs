@@ -3,6 +3,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Manga;
+using Jularr.Web.Features.MediaCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -24,7 +25,9 @@ public sealed record MangaReaderVolume(
 
 public sealed class ReadModel(
     AppDbContext db,
-    CurrentAccountContext account) : PageModel
+    CurrentAccountContext account,
+    WorkQueryService workQueries,
+    LegacyWorkBridge workBridge) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public MangaChapterRead Chapter { get; private set; } = null!;
@@ -142,12 +145,17 @@ public sealed class ReadModel(
             chapter.SeriesId,
             cancellationToken);
 
+        var workId = await workQueries.ResolveWorkForSourceAsync(
+            WorkSourceKind.MangaSeries,
+            chapter.SeriesId,
+            cancellationToken);
+
         // Local-only: the reader never waits on AniList. Remote progress and
         // the Operations-backed sync are on the series page's lazy card.
-        ReaderSettings = await MangaReaderPreferenceStore.GetAsync(
+        ReaderSettings = await MangaReaderPreferences.GetAsync(
             db,
             account.ProfileId,
-            chapter.SeriesId,
+            workId,
             cancellationToken);
 
         var requested = page
@@ -164,7 +172,8 @@ public sealed class ReadModel(
     public async Task<IActionResult> OnPostPreferenceAsync(
         Guid id,
         string? scope,
-        string? mode,
+        string? changedKey,
+        MangaReaderPreferenceInput input,
         CancellationToken cancellationToken)
     {
         var repository = new MangaRepository(db);
@@ -174,21 +183,39 @@ public sealed class ReadModel(
             return NotFound();
         }
 
-        var seriesId = string.Equals(
+        var isTypeDefault = string.Equals(
             scope,
             "media",
-            StringComparison.OrdinalIgnoreCase)
-            ? (Guid?)null
-            : chapter.SeriesId;
-
-        await MangaReaderPreferenceStore.SaveModeAsync(
-            db,
-            account.ProfileId,
-            seriesId,
-            mode,
+            StringComparison.OrdinalIgnoreCase);
+        Guid? workId = await workQueries.ResolveWorkForSourceAsync(
+            WorkSourceKind.MangaSeries,
+            chapter.SeriesId,
             cancellationToken);
 
-        return new OkResult();
+        if (!isTypeDefault && workId is null)
+        {
+            workId = await workBridge.EnsureWorkForMangaSeriesAsync(
+                chapter.SeriesId,
+                chapter.SeriesTitle,
+                nativeTitle: null,
+                aniListId: null,
+                cancellationToken);
+        }
+
+        await MangaReaderPreferences.SaveAsync(
+            db,
+            account.ProfileId,
+            isTypeDefault ? null : workId,
+            input,
+            changedKey,
+            cancellationToken);
+
+        var resolved = await MangaReaderPreferences.GetAsync(
+            db,
+            account.ProfileId,
+            workId,
+            cancellationToken);
+        return new JsonResult(resolved);
     }
 
     public async Task<IActionResult> OnPostResetPreferenceAsync(
@@ -202,19 +229,26 @@ public sealed class ReadModel(
             return NotFound();
         }
 
-        await MangaReaderPreferenceStore.ResetSeriesAsync(
-            db,
-            account.ProfileId,
+        var workId = await workQueries.ResolveWorkForSourceAsync(
+            WorkSourceKind.MangaSeries,
             chapter.SeriesId,
             cancellationToken);
+        if (workId is Guid resolvedWorkId)
+        {
+            await MangaReaderPreferences.ResetWorkAsync(
+                db,
+                account.ProfileId,
+                resolvedWorkId,
+                cancellationToken);
+        }
 
-        var settings = await MangaReaderPreferenceStore.GetAsync(
+        var settings = await MangaReaderPreferences.GetAsync(
             db,
             account.ProfileId,
-            chapter.SeriesId,
+            workId,
             cancellationToken);
 
-        return new JsonResult(new { mode = settings.UiMode });
+        return new JsonResult(settings);
     }
 
     public async Task<IActionResult> OnGetPageAsync(

@@ -8,6 +8,7 @@ using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.MediaMapping;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Operations;
@@ -54,7 +55,7 @@ public sealed class LocalFirstPageGetTests
             aniListId: "321",
             chapters: 3);
         await fixture.SaveMangaProgressAsync(seriesId, chapterIds[1], pageIndex: 4);
-        var page = fixture.Attach(new MangaReadModel(fixture.Db, fixture.OwnerAccount));
+        var page = fixture.Attach(new MangaReadModel(fixture.Db, fixture.OwnerAccount, new WorkQueryService(fixture.Db), fixture.WorkBridge()));
 
         var result = await page.OnGetAsync(chapterIds[1], null, CancellationToken.None);
 
@@ -379,6 +380,9 @@ public sealed class LocalFirstPageGetTests
                 OwnerAccount,
                 NullLogger<AniListAccountService>.Instance);
 
+        public LegacyWorkBridge WorkBridge() =>
+            new(Db, new WorkService(Db), new WorkStructureService(Db));
+
         public MangaSeriesModel MangaSeriesPage() =>
             new(
                 Db,
@@ -479,10 +483,26 @@ public sealed class LocalFirstPageGetTests
                 Db,
                 new ThrowingBookTranslator(),
                 configuration);
+            var works = new Jularr.Web.Features.MediaCore.WorkService(Db);
+            var structure = new Jularr.Web.Features.MediaCore.WorkStructureService(Db);
+            var tmdb = new Jularr.Web.Features.Discovery.TmdbDiscoveryProvider(
+                Guard.CreateClient(),
+                configuration,
+                new Jularr.Web.Features.Providers.ProviderExecutor(
+                    new Jularr.Web.Features.Providers.ProviderRateLimiter(),
+                    new Jularr.Web.Features.Providers.ProviderHealthTracker(TimeProvider.System),
+                    TimeProvider.System,
+                    NullLogger<Jularr.Web.Features.Providers.ProviderExecutor>.Instance),
+                new Jularr.Web.Features.Providers.ProviderResponseCache(TimeProvider.System),
+                works,
+                structure,
+                Db,
+                new Jularr.Web.Features.MediaCore.LegacyWorkBridge(Db, works, structure));
             var coordinator = new Jularr.Web.Features.Discovery.DiscoveryCoordinator(
                 animeProvider,
                 readingProvider,
                 books,
+                tmdb,
                 AniListAccount(),
                 Db,
                 NullLogger<Jularr.Web.Features.Discovery.DiscoveryCoordinator>.Instance);
@@ -502,6 +522,7 @@ public sealed class LocalFirstPageGetTests
             return new DiscoverIndexModel(
                 coordinator,
                 shelves,
+                tmdb,
                 Db,
                 new NovelImportService(Db, [], novelMetadata),
                 novelMetadata,

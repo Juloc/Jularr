@@ -33,8 +33,32 @@ public sealed class TvLibraryService(
 
         var cleanTitle = string.IsNullOrWhiteSpace(title) ? "Untitled" : title.Trim();
         var key = SeriesKey(cleanTitle, year);
+        var cleanTmdbId = Clean(tmdbId);
+        var cleanTvdbId = Clean(tvdbId);
 
-        var series = await db.Set<TvSeries>().FirstOrDefaultAsync(x => x.Key == key, cancellationToken);
+        TvSeries? series = null;
+        if (cleanTmdbId is not null)
+        {
+            series = await db.Set<TvSeries>()
+                .FirstOrDefaultAsync(x => x.TmdbId == cleanTmdbId, cancellationToken);
+        }
+
+        if (series is null && cleanTvdbId is not null)
+        {
+            series = await db.Set<TvSeries>()
+                .FirstOrDefaultAsync(x => x.TvdbId == cleanTvdbId, cancellationToken);
+        }
+
+        if (series is null)
+        {
+            series = await db.Set<TvSeries>()
+                .FirstOrDefaultAsync(
+                    x => x.Key == key
+                         && (cleanTmdbId == null || x.TmdbId == null)
+                         && (cleanTvdbId == null || x.TvdbId == null),
+                    cancellationToken);
+        }
+
         if (series is null)
         {
             series = new TvSeries
@@ -42,8 +66,8 @@ public sealed class TvLibraryService(
                 Key = key,
                 Title = cleanTitle,
                 Year = year,
-                TmdbId = Clean(tmdbId),
-                TvdbId = Clean(tvdbId),
+                TmdbId = cleanTmdbId,
+                TvdbId = cleanTvdbId,
                 LibraryPath = Clean(libraryPath)
             };
             db.Add(series);
@@ -52,8 +76,8 @@ public sealed class TvLibraryService(
         {
             series.Title = cleanTitle;
             series.Year ??= year;
-            series.TmdbId ??= Clean(tmdbId);
-            series.TvdbId ??= Clean(tvdbId);
+            series.TmdbId ??= cleanTmdbId;
+            series.TvdbId ??= cleanTvdbId;
             if (Clean(libraryPath) is { } path)
             {
                 series.LibraryPath = path;

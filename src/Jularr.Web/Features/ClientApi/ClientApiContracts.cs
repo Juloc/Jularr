@@ -63,7 +63,8 @@ public static class ClientApiContract
                 TtsPreferences: true,
                 PlaybackPlan: true,
                 Watchlist: true,
-                DevicePairing: true));
+                DevicePairing: true,
+                OfflinePackages: true));
     }
 }
 
@@ -132,6 +133,12 @@ public static class ClientApiRoutes
     public static string DirectContent(Guid mediaFileId) =>
         $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/content";
 
+    public static string MediaTrickplay(Guid mediaFileId) =>
+        $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/trickplay";
+
+    public static string MediaTrickplayAsset(Guid mediaFileId, string fileName) =>
+        $"{MediaTrickplay(mediaFileId)}/{Uri.EscapeDataString(fileName)}";
+
     public static string MediaAvailability(Guid mediaFileId) =>
         $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/availability";
 
@@ -160,6 +167,15 @@ public static class ClientApiRoutes
 
     public static string PlaybackPlan(Guid episodeId) =>
         $"{Episode(episodeId)}/playback-plan";
+
+    public static string VideoPlayer =>
+        $"{ClientApiContract.BasePath}/video/player";
+
+    public static string VideoPlaybackPlan =>
+        $"{ClientApiContract.BasePath}/video/playback-plan";
+
+    public static string VideoProgress =>
+        $"{ClientApiContract.BasePath}/video/progress";
 
     public static string StreamSession(Guid sessionId) =>
         $"{ClientApiContract.BasePath}/stream-sessions/{sessionId:D}";
@@ -237,7 +253,8 @@ public sealed record ClientFeatureFlags(
     bool PlaybackPlan = false,
     bool Watchlist = false,
     // TV device-code pairing, "/api/client/v1/pairing/*" (#489).
-    bool DevicePairing = false);
+    bool DevicePairing = false,
+    bool OfflinePackages = false);
 
 public sealed record ClientErrorResponse(
     string Code,

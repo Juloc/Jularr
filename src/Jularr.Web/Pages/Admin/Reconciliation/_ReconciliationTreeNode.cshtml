@@ -2,21 +2,27 @@
 @using Jularr.Web.Features.Storage.Reconciliation
 @{
     var node = Model.Node;
-    var isSelected = Model.SelectedPath == node.Item.RelativePath;
-    var selectedClass = isSelected ? " selected" : "";
-    var state = Model.Present(node.Item.State);
-    var expandsForSelection = Model.SelectedPath?.StartsWith(node.Item.RelativePath + "/", StringComparison.Ordinal) == true;
-    var shouldExpand = node.Item.State != LibraryReconciliationItemState.Recognized || expandsForSelection || isSelected;
-    var name = node.Item.RelativePath.Split('/').Last();
-    var resolvedCount = node.Item.FileCount - node.Item.UnresolvedCount;
+    var item = node.Item;
+    var isSelected = Model.SelectedPath == item.RelativePath;
+    var state = Model.Present(item.State);
+    var expandsForSelection = Model.SelectedPath?.StartsWith(item.RelativePath + "/", StringComparison.Ordinal) == true;
+    var shouldExpand = item.State != LibraryReconciliationItemState.Recognized || expandsForSelection || isSelected;
+    var name = item.RelativePath.Split('/').Last();
+    var resolvedCount = item.FileCount - item.UnresolvedCount;
+    var badgeCount = item.State is LibraryReconciliationItemState.Recognized or LibraryReconciliationItemState.Partial ? $"{resolvedCount}/{item.FileCount}" : item.UnresolvedCount.ToString();
+    var iconName = item.IsDirectory ? "folder" : "file";
 }
 <li>
     @if (node.Children.Count > 0)
     {
         <details open="@shouldExpand">
             <summary>
-                <a class="admrec-tree-entry@(selectedClass)" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@Model.PlanId" asp-route-selected="@node.Item.RelativePath" asp-route-step="2">@name</a>
-                <span class="admrec-state @state.CssClass">@state.Text <span class="admrec-tree-count">@resolvedCount/@node.Item.FileCount</span></span>
+                <span class="admrec-twisty"><partial name="_ReconciliationIcon" model='"chevron"' /></span>
+                <a class="admrec-node admrec-tone-@state.CssClass @(isSelected ? "selected" : "")" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@Model.PlanId" asp-route-selected="@item.RelativePath" asp-route-step="2" aria-current="@(isSelected ? "true" : null)">
+                    <partial name="_ReconciliationIcon" model="iconName" />
+                    <span class="admrec-node-name">@name</span>
+                    <span class="admrec-badge"><partial name="_ReconciliationIcon" model="state.CssClass" />@state.Text <span class="admrec-badge-count">(@badgeCount)</span></span>
+                </a>
             </summary>
             <ul>
                 @foreach (var child in node.Children)
@@ -28,7 +34,19 @@
     }
     else
     {
-        <a class="admrec-tree-entry@(selectedClass)" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@Model.PlanId" asp-route-selected="@node.Item.RelativePath" asp-route-step="2">@name</a>
-        <span class="admrec-state @state.CssClass">@state.Text</span>
+        <div class="admrec-leaf">
+            <a class="admrec-node admrec-tone-@state.CssClass @(isSelected ? "selected" : "")" asp-page="/Admin/Reconciliation/Index" asp-route-planId="@Model.PlanId" asp-route-selected="@item.RelativePath" asp-route-step="2" aria-current="@(isSelected ? "true" : null)">
+                <partial name="_ReconciliationIcon" model="iconName" />
+                <span class="admrec-node-name">@name</span>
+                @if (item.IsDirectory)
+                {
+                    <span class="admrec-badge"><partial name="_ReconciliationIcon" model="state.CssClass" />@state.Text <span class="admrec-badge-count">(@badgeCount)</span></span>
+                }
+                else
+                {
+                    <span class="admrec-visually-hidden">@state.Text</span>
+                }
+            </a>
+        </div>
     }
 </li>

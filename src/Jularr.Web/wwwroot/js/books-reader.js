@@ -1,4 +1,4 @@
-(() => {
+(async () => {
     "use strict";
 
     // Books reader (reader frame, see docs/UNIFIED_READER.md "Reader frame").
@@ -11,6 +11,25 @@
 
     const root = document.querySelector("[data-book-reader]");
     if (!root) return;
+
+    const scriptUrl = document.currentScript?.src;
+    if (!scriptUrl) return;
+    const sourceScriptUrl = new URL(scriptUrl);
+    const reflowModuleUrl = new URL("reflow-reader.js", sourceScriptUrl);
+    const buildVersion = sourceScriptUrl.searchParams.get("v");
+    if (buildVersion) reflowModuleUrl.searchParams.set("v", buildVersion);
+    const {
+        clamp,
+        permilleForIndex,
+        indexForPermille,
+        scrollPermille: reflowScrollPermille,
+        scrollTopForPermille,
+        captureContinuousAnchor,
+        capturePagedRectAnchor,
+        createReflowTextRenderer,
+        measurePagedSequence,
+        viewIndexForDisplayPage
+    } = await import(reflowModuleUrl.href);
 
     const readJson = (selector, fallback) => {
         try {
@@ -94,7 +113,7 @@
         themeTintStrength: 1,
         bookmarkStyle: "fabric",
         bookmarkColor: "#b04455",
-        hasBookOverride: false
+        hasWorkOverride: false
     }, readJson("[data-book-settings-json]", {}));
 
     const fontStacks = {
@@ -117,6 +136,7 @@
 
     let view = root.dataset.view || "original";
     let restoring = true;
+    let reflowRenderer = null;
 
     const toast = message => {
         if (!toastElement || !message) return;
@@ -128,9 +148,13 @@
         }, 2400);
     };
 
+    // The status lets the shell tell a revoked permission or missing content from a network failure.
+    const httpError = async response => Object.assign(new Error(await response.text()), { status: response.status });
+
     const failed = error => {
         console.warn(error);
-        toast(t("books.read.actionFailed", "That did not work. Please try again."));
+        if (root.readerShell) root.readerShell.reportFailure(error);
+        else toast(t("books.read.actionFailed", "That did not work. Please try again."));
     };
 
     // ---- Language views ---------------------------------------------------------
@@ -146,8 +170,8 @@
     const currentAnchorLanguage = () => view === "original" ? "original" : targetLanguage;
 
     const syncViewControls = () => {
-        root.querySelectorAll("[data-book-view]").forEach(button => {
-            button.setAttribute("aria-checked", button.dataset.bookView === view ? "true" : "false");
+        root.querySelectorAll("[data-reader-view]").forEach(button => {
+            button.setAttribute("aria-checked", button.dataset.readerView === view ? "true" : "false");
         });
         // Chapter links keep the chosen language view.
         root.querySelectorAll("a[data-book-chapter-link]").forEach(link => {
@@ -183,22 +207,10 @@
                 "aria-pressed",
                 button.dataset.bookMode === settings.readingMode ? "true" : "false");
         });
-        root.querySelectorAll("[data-book-spread-choice]").forEach(button => {
-            const spreadChoice = button.dataset.bookSpreadChoice === "true";
-            button.setAttribute(
-                "aria-checked",
-                spreadChoice === Boolean(settings.twoPageSpread) ? "true" : "false");
-        });
         root.querySelectorAll("[data-book-paper]").forEach(button => {
             button.setAttribute(
                 "aria-checked",
                 button.dataset.bookPaper === settings.paperStyle ? "true" : "false");
-        });
-        // Animated (curl/slide/fade) vs instant paging; see the drag-turn section below.
-        root.querySelectorAll("[data-book-page-turn-choice]").forEach(button => {
-            const animated = button.dataset.bookPageTurnChoice !== "none";
-            const isOn = settings.pageTransition !== "none";
-            button.setAttribute("aria-checked", animated === isOn ? "true" : "false");
         });
     };
 
@@ -230,7 +242,6 @@
 
     const applySettings = () => {
         const anchor = pdfContainer ? null : relayoutAnchor();
-        root.dataset.readingMode = settings.readingMode;
         root.dataset.paperStyle = settings.paperStyle;
         root.dataset.chapterStyle = settings.chapterStyle;
         root.dataset.pageTransition = settings.pageTransition;
@@ -291,7 +302,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const result = await response.json();
         if (result?.settings) applyServerSettings(result.settings);
     };
@@ -307,7 +318,7 @@
 
     const scheduleSettingSave = changedKey => {
         const scope = settingsForm?.querySelector('[name="scope"]')?.value || "work";
-        if (scope === "work") settings.hasBookOverride = true;
+        if (scope === "work") settings.hasWorkOverride = true;
         const value = settings[changedKey];
         unsavedEdits.set(changedKey, value);
         settingsSave = settingsSave
@@ -346,15 +357,8 @@
     root.querySelectorAll("[data-book-mode]").forEach(button => {
         button.addEventListener("click", () => setSettingControl("readingMode", button.dataset.bookMode));
     });
-    root.querySelectorAll("[data-book-spread-choice]").forEach(button => {
-        button.addEventListener("click", () =>
-            setSettingControl("twoPageSpread", button.dataset.bookSpreadChoice === "true"));
-    });
     root.querySelectorAll("[data-book-paper]").forEach(button => {
         button.addEventListener("click", () => setSettingControl("paperStyle", button.dataset.bookPaper));
-    });
-    root.querySelectorAll("[data-book-page-turn-choice]").forEach(button => {
-        button.addEventListener("click", () => setSettingControl("pageTransition", button.dataset.bookPageTurnChoice));
     });
 
     root.addEventListener("jularr:reader-settings-response", event => {
@@ -382,55 +386,46 @@
     const topBarBottom = () =>
         root.querySelector("[data-reader-chrome-primary]")?.getBoundingClientRect().bottom || 0;
 
-    const scrollPermille = () => {
-        const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        return Math.max(0, Math.min(1000, Math.round(window.scrollY / max * 1000)));
-    };
+    const scrollPermille = () =>
+        reflowScrollPermille(
+            window.scrollY,
+            document.documentElement.scrollHeight,
+            window.innerHeight);
 
-    const currentPermille = () => {
-        if (!layout.paged) return scrollPermille();
-        return layout.viewCount <= 1
-            ? 0
-            : Math.round(currentView / (layout.viewCount - 1) * 1000);
-    };
+    const currentPermille = () =>
+        layout.paged
+            ? permilleForIndex(currentView, layout.viewCount)
+            : scrollPermille();
 
     const viewForPermille = permille =>
-        layout.viewCount <= 1
-            ? 0
-            : Math.max(0, Math.min(
-                layout.viewCount - 1,
-                Math.round(Number(permille) / 1000 * (layout.viewCount - 1))));
+        indexForPermille(permille, layout.viewCount);
 
-    // First paragraph of the active language on screen; used to keep the
-    // reading position when the layout changes (mode, font, window size).
+    // One canonical anchor algorithm is shared with Novel/LN. Books supplies
+    // its paper-spread geometry, while the reflow runtime owns anchor semantics.
     function captureAnchor() {
         const list = paragraphsOf(activeColumn());
         if (!list.length) return null;
+
         if (layout.paged) {
-            // Positions relative to the column box and the current page window,
-            // independent of any running transform.
             const origin = columns.getBoundingClientRect().left;
-            const start = currentView * layout.stride;
-            const end = start + flow.clientWidth;
-            const inside = rect =>
-                rect.right - origin > start + 1 && rect.left - origin < end - 1;
-            for (let index = 0; index < list.length; index++) {
-                const rects = Array.from(list[index].getClientRects());
-                const part = rects.findIndex(inside);
-                if (part < 0) continue;
-                // A paragraph continued from the previous page is a weak anchor;
-                // prefer the next one when it starts on this page.
-                const next = list[index + 1]?.getClientRects()[0];
-                if (part > 0 && next && inside(next)) {
-                    return { index: Number(list[index + 1].dataset.bookParagraph), part: 0 };
-                }
-                return { index: Number(list[index].dataset.bookParagraph), part };
-            }
-            return null;
+            const viewOfRect = rect => {
+                const page = Math.floor(
+                    (rect.left - origin + 2) / Math.max(1, layout.columnStride));
+                return Math.floor(page / Math.max(1, layout.pages));
+            };
+            const anchor = capturePagedRectAnchor(
+                list,
+                currentView,
+                viewOfRect);
+            return anchor
+                ? { index: anchor.index, part: anchor.part || 0 }
+                : null;
         }
-        const line = topBarBottom() + 8;
-        const found = list.find(paragraph => paragraph.getBoundingClientRect().bottom > line);
-        return found ? { index: Number(found.dataset.bookParagraph) } : null;
+
+        const anchor = captureContinuousAnchor(
+            list,
+            topBarBottom() + 8);
+        return anchor ? { index: anchor.index } : null;
     }
 
     const paragraphAt = index =>
@@ -454,8 +449,6 @@
         paragraph.classList.add("book-paragraph-flash");
     };
 
-    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-
     function scheduleLayout(anchor) {
         if (anchor && !pendingAnchor) pendingAnchor = anchor;
         cancelAnimationFrame(layoutFrame);
@@ -471,6 +464,8 @@
         root.classList.toggle("reader-frame-fixed", paged);
 
         if (!paged) {
+            reflowRenderer?.setMode("continuous");
+            reflowRenderer?.setPageState(0, 1);
             columns.style.transform = "";
             spread.style.cssText = "";
             layout.pages = 1;
@@ -488,8 +483,13 @@
                 }
             } else if (anchor === null && restoring) {
                 const initial = Number(root.dataset.progress || "0");
-                const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-                window.scrollTo({ top: max * initial / 1000, behavior: "auto" });
+                window.scrollTo({
+                    top: scrollTopForPermille(
+                        initial,
+                        document.documentElement.scrollHeight,
+                        window.innerHeight),
+                    behavior: "auto"
+                });
             }
             renderPageNumbers();
             emitLocation();
@@ -498,7 +498,7 @@
         }
 
         window.clearTimeout(turnTimer);
-        columns.classList.remove("is-turning", "is-fading");
+        columns.classList.remove("is-turning");
         const styles = getComputedStyle(stage);
         const width = stage.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
         const height = stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
@@ -532,8 +532,17 @@
 
         columns.style.transform = "translate3d(0,0,0)";
         const contentWidth = columns.scrollWidth;
-        layout.pageCount = Math.max(1, Math.round((contentWidth + gap) / layout.columnStride));
-        layout.viewCount = Math.max(1, Math.ceil(layout.pageCount / pages));
+        const measured = measurePagedSequence({
+            scrollWidth: contentWidth,
+            columnStride: layout.columnStride,
+            pagesPerView: pages,
+            extraExtent: gap,
+            rounding: "round"
+        });
+        layout.pageCount = measured.pageCount;
+        layout.viewCount = measured.viewCount;
+        reflowRenderer?.setMode("paged");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
 
         let target;
         currentView = 0;
@@ -576,7 +585,7 @@
             return;
         }
         const max = compactQuery.matches ? 6 : STACK_MAX_PX;
-        const ratio = layout.viewCount > 1 ? currentView / (layout.viewCount - 1) : 0;
+        const ratio = permilleForIndex(currentView, layout.viewCount) / 1000;
         spread.style.setProperty("--book-stack-left", Math.round(STACK_MIN_PX + ratio * (max - STACK_MIN_PX)) + "px");
         spread.style.setProperty("--book-stack-right", Math.round(STACK_MIN_PX + (1 - ratio) * (max - STACK_MIN_PX)) + "px");
     };
@@ -627,32 +636,32 @@
 
     // A slider value is a page number (Pages mode) or a permille (Scroll mode).
     const viewForSliderPage = value =>
-        Math.floor((Math.max(1, Math.round(Number(value) || 0)) - 1) / Math.max(1, layout.pages));
+        viewIndexForDisplayPage(value, layout.pages);
 
     function goToView(target, { animate = true, save = true } = {}) {
         const next = clamp(target, 0, layout.viewCount - 1);
         const direction = Math.sign(next - currentView);
         currentView = next;
-        const transition = reduceMotion.matches ? "none" : settings.pageTransition;
-        const animated = animate && direction !== 0 && transition !== "none";
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
+        const animated = animate && direction !== 0 &&
+            root.dataset.readerTransitionActive !== "true" && !reduceMotion.matches;
 
         window.clearTimeout(turnTimer);
-        columns.classList.remove("is-turning", "is-fading");
-        if (animated && transition === "fade") {
-            columns.classList.add("is-fading");
-        } else if (animated) {
-            columns.classList.add("is-turning");
-        }
+        columns.classList.remove("is-turning");
+        if (animated) columns.classList.add("is-turning");
         columns.style.transform = `translate3d(${-next * layout.stride}px,0,0)`;
         if (animated) {
             turnTimer = window.setTimeout(() => {
-                columns.classList.remove("is-turning", "is-fading");
+                columns.classList.remove("is-turning");
             }, 360);
         }
 
         renderPageNumbers();
         updateStackDepth();
         emitLocation();
+        requestAnimationFrame(() => {
+            root.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
+        });
         if (save) {
             readerMoved = true;
             queueProgressSave();
@@ -675,25 +684,26 @@
         return true;
     };
 
-    const turn = (direction, { fromUser = true } = {}) => {
-        if (!layout.paged) {
+    reflowRenderer = createReflowTextRenderer({
+        initialMode: isPaged() ? "paged" : "continuous",
+        goToPage: page => goToView(page),
+        turnContinuous: direction => {
             window.scrollBy({
                 top: direction * window.innerHeight * 0.85,
                 behavior: reduceMotion.matches ? "auto" : "smooth"
             });
-            return;
-        }
-        const next = currentView + direction;
-        if (next < 0) {
-            if (fromUser) openChapter("previous", true);
-            return;
-        }
-        if (next >= layout.viewCount) {
-            if (fromUser) openChapter("next", false);
-            return;
-        }
-        goToView(next);
-    };
+        },
+        onPageEdge: direction => {
+            const speaking =
+                root.dataset.readerTts && root.dataset.readerTts !== "idle";
+            if (speaking) return;
+            if (direction < 0) openChapter("previous", true);
+            else openChapter("next", false);
+        },
+        getScrollPermille: scrollPermille,
+        scrollToPermille: value => jumpToPermille(value),
+        captureAnchor
+    });
 
     // ---- Interactive page-turn drag (#446) -----------------------------------------
     // Holding and dragging a page follows the pointer instead of jumping straight to
@@ -740,7 +750,7 @@
         columns.classList.add("is-turning");
         columns.style.transform = `translate3d(${-currentView * layout.stride}px,0,0)`;
         turnTimer = window.setTimeout(() => {
-            columns.classList.remove("is-turning", "is-fading");
+            columns.classList.remove("is-turning");
         }, 360);
     };
 
@@ -777,7 +787,7 @@
                 dragState.atEnd = currentView >= layout.viewCount - 1;
                 window.getSelection()?.removeAllRanges();
                 window.clearTimeout(turnTimer);
-                columns.classList.remove("is-turning", "is-fading");
+                columns.classList.remove("is-turning");
                 columns.classList.add("is-dragging");
                 root.classList.add("book-is-dragging");
                 spread.setPointerCapture(event.pointerId);
@@ -837,8 +847,13 @@
             goToView(viewForPermille(permille), { animate: false });
             return;
         }
-        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-        window.scrollTo({ top: max * Number(permille) / 1000, behavior: "auto" });
+        window.scrollTo({
+            top: scrollTopForPermille(
+                permille,
+                document.documentElement.scrollHeight,
+                window.innerHeight),
+            behavior: "auto"
+        });
     };
 
     function finishRestore() {
@@ -859,15 +874,23 @@
             pdf?.turn(direction);
             return;
         }
-        // Read-aloud follows the voice within the chapter; it never changes chapters.
-        turn(direction, { fromUser: !(root.dataset.readerTts && root.dataset.readerTts !== "idle") });
+
+        reflowRenderer?.setMode(layout.paged ? "paged" : "continuous");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
+        reflowRenderer?.turn(direction);
     });
 
     root.addEventListener("jularr:reader-seek", event => {
         const value = Number(event.detail?.value || 0);
-        if (pdfContainer) pdf?.seek(value);
-        else if (layout.paged) goToView(viewForSliderPage(value), { animate: false });
-        else jumpToPermille(value);
+        if (pdfContainer) {
+            pdf?.seek(value);
+            return;
+        }
+
+        reflowRenderer?.setMode(layout.paged ? "paged" : "continuous");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
+        if (layout.paged) reflowRenderer?.seekPage(viewForSliderPage(value));
+        else reflowRenderer?.seekPermille(value);
     });
 
     // After a drag the slider snaps to the page actually shown.
@@ -912,81 +935,29 @@
         });
     }, { passive: true });
 
+    // PDF zoom is renderer-specific. Generic page navigation keys are owned by
+    // reader-shell.js and arrive here through jularr:reader-page-edge / seek.
     document.addEventListener("keydown", event => {
-        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (!pdfContainer || !pdf || event.defaultPrevented ||
+            event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+
         const target = event.target;
         if (target instanceof HTMLElement &&
             (target.matches("input, textarea, select") || target.isContentEditable ||
              target.closest("[data-reader-menu],[data-reader-contents],[data-reader-settings-container],[role='dialog']"))) {
             return;
         }
-        const key = event.key;
-        if (key === "b" || key === "B") {
-            event.preventDefault();
-            toggleBookmark();
-            return;
-        }
-        if (key === "n" || key === "N") {
-            event.preventDefault();
-            root.querySelector("[data-reader-contents-toggle]")?.click();
-            return;
-        }
-        if (key === "/") {
-            event.preventDefault();
-            root.querySelector('[data-reader-menu-toggle="search"]')?.click();
-            return;
-        }
-        if (pdfContainer) {
-            if (pdf) handlePdfKey(event, target);
-            return;
-        }
-        if (!layout.paged) return;
-        const onControl = target instanceof HTMLElement && target.closest("button, a, summary");
-        if (key === " " && onControl) return;
-        if (key === "ArrowRight" || key === "PageDown" || (key === " " && !event.shiftKey)) {
-            event.preventDefault();
-            turn(1);
-        } else if (key === "ArrowLeft" || key === "PageUp" || (key === " " && event.shiftKey)) {
-            event.preventDefault();
-            turn(-1);
-        } else if (key === "Home") {
-            event.preventDefault();
-            goToView(0);
-        } else if (key === "End") {
-            event.preventDefault();
-            goToView(layout.viewCount - 1);
-        }
-    });
 
-    function handlePdfKey(event, target) {
-        const key = event.key;
-        if (key === "+" || key === "=") {
+        if (event.key === "+" || event.key === "=") {
             event.preventDefault();
             pdf.zoom(1);
-            return;
-        }
-        if (key === "-") {
+        } else if (event.key === "-") {
             event.preventDefault();
             pdf.zoom(-1);
-            return;
         }
-        if (!pdf.isPaged()) return;
-        const onControl = target instanceof HTMLElement && target.closest("button, a, summary");
-        if (key === " " && onControl) return;
-        if (key === "ArrowRight" || key === "PageDown" || (key === " " && !event.shiftKey)) {
-            event.preventDefault();
-            pdf.turn(1);
-        } else if (key === "ArrowLeft" || key === "PageUp" || (key === " " && event.shiftKey)) {
-            event.preventDefault();
-            pdf.turn(-1);
-        } else if (key === "Home") {
-            event.preventDefault();
-            pdf.first();
-        } else if (key === "End") {
-            event.preventDefault();
-            pdf.last();
-        }
-    }
+    });
 
     // ---- Progress -----------------------------------------------------------------
 
@@ -1074,9 +1045,10 @@
             return paragraph;
         }));
         root.dataset.hasTranslation = "true";
-        root.querySelectorAll('[data-book-view="translated"], [data-book-view="both"]')
+        root.querySelectorAll('[data-reader-view="translated"], [data-reader-view="both"]')
             .forEach(button => {
                 button.hidden = false;
+                button.disabled = false;
             });
         translateForm?.remove();
         setView("translated");
@@ -1121,7 +1093,7 @@
                 credentials: "same-origin",
                 headers: { "X-Requested-With": "fetch" }
             });
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             void pollTranslation();
         } catch (error) {
             if (button) button.disabled = false;
@@ -1129,8 +1101,8 @@
         }
     });
 
-    root.querySelectorAll("[data-book-view]").forEach(button => {
-        button.addEventListener("click", () => setView(button.dataset.bookView));
+    root.querySelectorAll("[data-reader-view]").forEach(button => {
+        button.addEventListener("click", () => setView(button.dataset.readerView));
     });
 
     // ---- PDF translation ------------------------------------------------------------
@@ -1197,7 +1169,7 @@
                 showPdfTranslation({ message: t("books.read.pdfTranslationUnavailable", "Translation is not available for this book.") });
                 return;
             }
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             const result = await response.json();
             if (result.status === "ready") {
                 showPdfTranslation({ paragraphs: result.paragraphs });
@@ -1236,7 +1208,7 @@
                 credentials: "same-origin",
                 headers: { "X-Requested-With": "fetch" }
             });
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) throw await httpError(response);
             pdfTranslationPolls = 0;
             waitForPdfTranslation();
         } catch (error) {
@@ -1267,7 +1239,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         return response.json();
     };
 
@@ -1285,7 +1257,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const type = response.headers.get("content-type") || "";
         return type.includes("application/json") ? response.json() : null;
     };
@@ -1352,11 +1324,6 @@
             bookmarkButton.setAttribute("aria-label", label);
             bookmarkButton.title = label;
         }
-        root.querySelectorAll("[data-book-bookmark-proxy]").forEach(button => {
-            button.setAttribute("aria-pressed", active ? "true" : "false");
-            const span = button.querySelector("span");
-            if (span) span.textContent = label;
-        });
     }
 
     async function toggleBookmark() {
@@ -1389,7 +1356,7 @@
                         chapterId,
                         chapterNumber: pdf
                             ? pdf.visiblePages()[0]
-                            : Number(root.querySelector("[data-book-chapter-number]")?.textContent || 0),
+                            : Number(root.dataset.chapterNumber || 0),
                         chapterTitle: pdf ? "" : root.querySelector("[data-book-chapter-title]")?.textContent || "",
                         positionPermille: position,
                         language: currentAnchorLanguage()
@@ -1405,9 +1372,6 @@
     }
 
     bookmarkButton?.addEventListener("click", toggleBookmark);
-    root.querySelectorAll("[data-book-bookmark-proxy]").forEach(button => {
-        button.addEventListener("click", toggleBookmark);
-    });
 
     // ---- Contents panel ---------------------------------------------------------------
 
@@ -1441,7 +1405,7 @@
             return;
         }
         const [first] = pdf.visiblePages();
-        const section = pdf.sectionFor(first);
+        const section = pdf.sectionFor(first) ?? items.filter(entry => entry.page <= first).at(-1);
         let current = null;
         for (const entry of items) {
             const item = document.createElement("li");
@@ -1948,7 +1912,7 @@
             credentials: "same-origin",
             headers: { "X-Requested-With": "fetch" }
         });
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) throw await httpError(response);
         const item = await response.json();
         currentHighlights.push(item);
         if (allAnnotations) {
@@ -2028,7 +1992,7 @@
             const payload = event.detail?.payload || {};
             if (translated) translated.replaceChildren();
             root.dataset.hasTranslation = "false";
-            root.querySelectorAll('[data-book-view="translated"], [data-book-view="both"]')
+            root.querySelectorAll('[data-reader-view="translated"], [data-reader-view="both"]')
                 .forEach(button => {
                     button.hidden = true;
                 });
@@ -2037,10 +2001,11 @@
                 node.textContent = title;
             });
             if (payload.number !== undefined) {
-                const number = root.querySelector("[data-book-chapter-number]");
-                if (number) number.textContent = String(payload.number);
-                const label = root.querySelector("[data-book-chapter-label]");
-                if (label) label.textContent = t("books.chapter.number", "Chapter {number}", { number: payload.number });
+                root.dataset.chapterNumber = String(payload.number);
+                const chapterLabel = t("books.chapter.number", "Chapter {number}", { number: payload.number });
+                root.querySelectorAll("[data-book-chapter-number],[data-book-chapter-context]").forEach(node => {
+                    node.textContent = chapterLabel;
+                });
             }
             currentHighlights = [];
             chapterBookmarks = [];
@@ -2054,23 +2019,13 @@
             ensureParagraphMetadata(original);
             scheduleLayout(null);
         });
-
-        root.addEventListener("jularr:offline-chapter-missing", () => {
-            let offlineText = {};
-            try {
-                offlineText = JSON.parse(document.getElementById("offline-library-text")?.textContent || "{}");
-            } catch {
-            }
-            toast(offlineText["offlineLibrary.chapter.offlineMissing"] ||
-                t("books.read.actionFailed", "That did not work. Please try again."));
-        });
     }
 
     // ---- PDF pages -------------------------------------------------------------------
 
     function startPdf() {
         const status = root.querySelector("[data-book-pdf-status]");
-        const sectionLabels = root.querySelectorAll("[data-book-chapter-label]");
+        const positionLabel = root.querySelector("[data-book-pdf-position]");
         const sectionSteps = root.querySelectorAll("[data-book-pdf-section]");
         const pages = (readJson("[data-book-pdf-pages-json]", []) || []).map(String);
         const source = pdfContainer.dataset;
@@ -2110,9 +2065,13 @@
                     max: total,
                     percent: Math.round(last / total * 100)
                 });
-                sectionLabels.forEach(label => {
-                    label.textContent = section?.title || "";
-                });
+                if (positionLabel) {
+                    const position = t("books.read.pagePosition", "Page {page} of {total}", {
+                        page: first === last ? first : first + "–" + last,
+                        total
+                    });
+                    positionLabel.textContent = section?.title ? position + " · " + section.title : position;
+                }
                 if (!restoring) queueProgressSave();
                 if (view === "translated") void loadPdfTranslation();
             },
@@ -2134,6 +2093,10 @@
             },
             onReady: ready => {
                 finishRestore();
+                // Contents restored open before the pages were ready would otherwise stay empty.
+                if (ready && !chaptersLoaded && !root.querySelector("[data-reader-contents]")?.hidden) {
+                    void loadChapters(chapterSearch?.value);
+                }
                 if (ready) ensureAnnotations().catch(error => console.warn(error));
                 if (pdfTranslation) pdfTranslation.hidden = view !== "translated";
                 void loadPdfTranslation();

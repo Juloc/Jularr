@@ -46,20 +46,23 @@ public sealed class UnifiedReaderShellTests
             root, "src", "Jularr.Web", "Pages", "Novels", "Read.cshtml"));
         var shell = File.ReadAllText(Path.Combine(
             root, "src", "Jularr.Web", "wwwroot", "js", "reader-shell.js"));
+        var sheet = File.ReadAllText(Path.Combine(
+            root, "src", "Jularr.Web", "Pages", "Shared", "_ReaderAppearanceSheet.cshtml"));
 
         StringAssert.Contains(novel, "data-reader-frame");
         StringAssert.Contains(novel, "data-reader-progress-slider");
-        StringAssert.Contains(novel, "data-reader-page-step");
-        StringAssert.Contains(novel, "data-reader-menu=\"appearance\"");
-        StringAssert.Contains(novel, "data-reader-proxy=\"fontSizeRem\"");
-        StringAssert.Contains(novel, "data-reader-proxy=\"paperStyle\"");
-        StringAssert.Contains(novel, "data-reader-proxy=\"showIllustrations\"");
-        StringAssert.Contains(novel, "data-reader-proxy=\"autoContinueChapters\"");
+        StringAssert.Contains(novel, "_ReaderAppearanceSheet");
+        StringAssert.Contains(novel, "data-reader-menu-toggle=\"appearance\"");
+        StringAssert.Contains(sheet, "data-reader-menu=\"appearance\"");
+        StringAssert.Contains(sheet, "data-reader-proxy=\"fontSizeRem\"");
+        StringAssert.Contains(sheet, "data-reader-proxy=\"paperStyle\"");
+        StringAssert.Contains(sheet, "data-reader-proxy=\"showIllustrations\"");
+        StringAssert.Contains(sheet, "data-reader-proxy=\"autoContinueChapters\"");
 
         StringAssert.Contains(shell, "[data-reader-proxy]");
         StringAssert.Contains(shell, "postSettingsCommand");
         Assert.IsFalse(
-            novel.Contains("name=\"FontSizeRem\"", StringComparison.Ordinal),
+            sheet.Contains("name=\"FontSizeRem\"", StringComparison.Ordinal),
             "Quick appearance controls must proxy the canonical settings form instead of owning a second persistence path.");
     }
 

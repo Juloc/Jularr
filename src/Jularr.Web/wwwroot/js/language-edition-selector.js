@@ -4,10 +4,15 @@
 (() => {
     const dialogs = new Map();
 
-    const showLanguage = dialog => {
-        const language = dialog.querySelector("[data-language-edition-language]").value;
+    // The language chips are shortcuts of the full dropdown; both always show the same language.
+    const showLanguage = (dialog, language) => {
+        dialog.querySelector("[data-language-edition-language]").value = language;
         for (const row of dialog.querySelectorAll("[data-language-edition-row]")) {
             row.hidden = row.dataset.language !== language;
+        }
+
+        for (const chip of dialog.querySelectorAll("[data-language-edition-chip]")) {
+            chip.setAttribute("aria-pressed", String(chip.dataset.languageEditionChip === language));
         }
     };
 
@@ -21,23 +26,34 @@
 
     for (const dialog of document.querySelectorAll("[data-language-edition-dialog]")) {
         dialogs.set(dialog.id, dialog);
-        const trigger = document.querySelector(`[data-language-edition-open="${dialog.id}"]`);
+        let opener = null;
 
-        trigger?.addEventListener("click", () => {
-            if (!dialog.open) {
-                dialog.showModal();
-            }
-        });
-        dialog.addEventListener("close", () => trigger?.focus());
+        for (const trigger of document.querySelectorAll(`[data-language-edition-open="${dialog.id}"]`)) {
+            trigger.addEventListener("click", () => {
+                opener = trigger;
+                if (!dialog.open) {
+                    dialog.showModal();
+                }
+            });
+        }
+
+        dialog.addEventListener("close", () => opener?.focus());
         dialog.addEventListener("click", event => {
             if (event.target === dialog) {
                 dialog.close();
             }
         });
-        dialog.querySelector("[data-language-edition-language]").addEventListener("change", () => {
+        const select = dialog.querySelector("[data-language-edition-language]");
+        select.addEventListener("change", () => {
             dialog.querySelector("[data-language-edition-error]").hidden = true;
-            showLanguage(dialog);
+            showLanguage(dialog, select.value);
         });
+        for (const chip of dialog.querySelectorAll("[data-language-edition-chip]")) {
+            chip.addEventListener("click", () => {
+                dialog.querySelector("[data-language-edition-error]").hidden = true;
+                showLanguage(dialog, chip.dataset.languageEditionChip);
+            });
+        }
 
         for (const link of dialog.querySelectorAll("a[data-edition-key]")) {
             link.addEventListener("click", event => {
