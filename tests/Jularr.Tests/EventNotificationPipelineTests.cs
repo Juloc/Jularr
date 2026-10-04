@@ -12,10 +12,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Jularr.Tests;
 
 /// <summary>
-/// The unified event & notification system (#429): one event boundary
-/// (<see cref="IJularrEventPublisher"/>) fans out to per-profile in-app notifications according to
-/// each profile's <see cref="NotificationSubscriptionStore"/> preference, deduplicates repeated
-/// events instead of spamming the inbox, and isolates a broken sink from the event's caller.
+/// The unified event and notification system (#429): one event boundary fans out to profile channels
+/// according to the canonical notification preference model, deduplicates In-App rows and isolates a
+/// broken channel from the event's caller.
 /// </summary>
 [TestClass]
 public sealed class EventNotificationPipelineTests
@@ -43,10 +42,13 @@ public sealed class EventNotificationPipelineTests
     }
 
     [TestMethod]
-    public async Task OffSubscriptionSuppressesDeliveryButNotTheAuditLog()
+    public async Task DisabledPreferenceSuppressesDeliveryButNotTheAuditLog()
     {
         await using var fixture = await Fixture.CreateAsync();
-        await fixture.Subscriptions.SetAsync("reader", JularrEventCategory.DownloadFailed, NotificationMode.Off);
+        await fixture.Subscriptions.SetEventPreferenceAsync(
+            "reader",
+            JularrEventCategory.DownloadFailed,
+            new NotificationEventPreferenceUpdate(false, Channels(NotificationChannel.InApp), NotificationDeliveryTiming.Immediate));
 
         await fixture.Publisher.PublishAsync(JularrEvent.Create(JularrEventCategory.DownloadFailed, profileId: "reader"));
 
@@ -107,11 +109,10 @@ public sealed class EventNotificationPipelineTests
     }
 
     [TestMethod]
-    public async Task ProfileAudienceEventWithNoProfileFallsBackToAdmins()
+    public async Task ProfileAudienceEventWithNoProfileFallsBackToAdminsUntilPhaseFour()
     {
         await using var fixture = await Fixture.CreateAsync();
 
-        // A system-triggered import has no requesting profile; it must not be silently dropped.
         await fixture.Publisher.PublishAsync(JularrEvent.Create(JularrEventCategory.ImportCompleted, profileId: null));
 
         Assert.AreEqual(1, (await fixture.Notifications.ListAsync("owner", unreadOnly: false)).Count);
@@ -119,14 +120,64 @@ public sealed class EventNotificationPipelineTests
     }
 
     [TestMethod]
-    public async Task ABrokenSinkNeverFailsThePublishCallOrBlocksOtherSinks()
+    public async Task ImmediateExternalChannelRoutesOnlyWhenSelectedEnabledAndRegistered()
+    {
+        var push = new RecordingSink(NotificationChannel.Push);
+        await using var fixture = await Fixture.CreateAsync(extraSinks: [push]);
+        await fixture.Subscriptions.SetEventPreferenceAsync(
+            "reader",
+            JularrEventCategory.ReleaseAvailable,
+            new NotificationEventPreferenceUpdate(
+                true,
+                Channels(NotificationChannel.InApp, NotificationChannel.Push),
+                NotificationDeliveryTiming.Immediate));
+        await fixture.Subscriptions.SetProfileChannelEnabledAsync("reader", NotificationChannel.Push, true);
+
+        var domainEvent = JularrEvent.Create(JularrEventCategory.ReleaseAvailable, profileId: "reader");
+        await fixture.Publisher.PublishAsync(domainEvent);
+
+        Assert.AreEqual(1, (await fixture.Notifications.ListAsync("reader", unreadOnly: false)).Count);
+        Assert.AreEqual(1, push.Deliveries.Count);
+        Assert.AreEqual(domainEvent.Id, push.Deliveries[0].EventId);
+        Assert.AreEqual("reader", push.Deliveries[0].ProfileId);
+    }
+
+    [TestMethod]
+    public async Task DigestTimingKeepsInAppImmediateButDoesNotInvokeExternalSink()
+    {
+        var push = new RecordingSink(NotificationChannel.Push);
+        await using var fixture = await Fixture.CreateAsync(extraSinks: [push]);
+        await fixture.Subscriptions.SetEventPreferenceAsync(
+            "reader",
+            JularrEventCategory.ReleaseAvailable,
+            new NotificationEventPreferenceUpdate(
+                true,
+                Channels(NotificationChannel.InApp, NotificationChannel.Push),
+                NotificationDeliveryTiming.Digest));
+        await fixture.Subscriptions.SetProfileChannelEnabledAsync("reader", NotificationChannel.Push, true);
+
+        await fixture.Publisher.PublishAsync(JularrEvent.Create(JularrEventCategory.ReleaseAvailable, profileId: "reader"));
+
+        Assert.AreEqual(1, (await fixture.Notifications.ListAsync("reader", unreadOnly: false)).Count);
+        Assert.AreEqual(0, push.Deliveries.Count, "Digest external delivery belongs to the future scheduler, not the synchronous dispatcher.");
+    }
+
+    [TestMethod]
+    public async Task ABrokenExternalSinkNeverFailsThePublishCallOrBlocksInApp()
     {
         await using var fixture = await Fixture.CreateAsync(extraSinks: [new ThrowingSink()]);
+        await fixture.Subscriptions.SetEventPreferenceAsync(
+            "reader",
+            JularrEventCategory.DownloadGrabbed,
+            new NotificationEventPreferenceUpdate(
+                true,
+                Channels(NotificationChannel.InApp, NotificationChannel.Push),
+                NotificationDeliveryTiming.Immediate));
+        await fixture.Subscriptions.SetProfileChannelEnabledAsync("reader", NotificationChannel.Push, true);
 
-        // Must not throw even though ThrowingSink always fails.
         await fixture.Publisher.PublishAsync(JularrEvent.Create(JularrEventCategory.DownloadGrabbed, profileId: "reader"));
 
-        Assert.AreEqual(1, (await fixture.Notifications.ListAsync("reader", unreadOnly: false)).Count, "The in-app sink must still run.");
+        Assert.AreEqual(1, (await fixture.Notifications.ListAsync("reader", unreadOnly: false)).Count, "The In-App sink must still run.");
     }
 
     [TestMethod]
@@ -146,16 +197,20 @@ public sealed class EventNotificationPipelineTests
     }
 
     [TestMethod]
-    public async Task UnsetPreferenceDefaultsToInAppOptOutNotOptIn()
+    public async Task UnsetPreferenceResolvesToCanonicalInAppImmediateDefault()
     {
         await using var fixture = await Fixture.CreateAsync();
 
-        var mode = await fixture.Subscriptions.GetModeAsync("reader", JularrEventCategory.ReleaseAvailable);
-        Assert.AreEqual(NotificationMode.InApp, mode);
+        var preference = await fixture.Subscriptions.GetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable);
+        Assert.IsTrue(preference.Enabled);
+        Assert.IsFalse(preference.IsExplicit);
+        Assert.AreEqual(NotificationDeliveryTiming.Immediate, preference.Timing);
+        CollectionAssert.AreEquivalent(new[] { NotificationChannel.InApp }, preference.Channels.ToArray());
 
-        var all = await fixture.Subscriptions.GetAllAsync("reader");
+        var all = await fixture.Subscriptions.GetAllEventPreferencesAsync("reader");
         Assert.AreEqual(Enum.GetValues<JularrEventCategory>().Length, all.Count);
-        Assert.IsTrue(all.Values.All(m => m == NotificationMode.InApp));
+        Assert.IsTrue(all.Values.All(item => item.Enabled && !item.IsExplicit && item.Timing == NotificationDeliveryTiming.Immediate));
+        Assert.IsTrue(all.Values.All(item => item.Channels.SetEquals(Channels(NotificationChannel.InApp))));
     }
 
     [TestMethod]
@@ -185,6 +240,8 @@ public sealed class EventNotificationPipelineTests
         Assert.AreEqual("reader", denied.ProfileId);
     }
 
+    private static IReadOnlySet<NotificationChannel> Channels(params NotificationChannel[] channels) => channels.ToHashSet();
+
     private static ClaimsPrincipal OwnerPrincipal() =>
         new(new ClaimsIdentity(
             [new Claim(ClaimTypes.NameIdentifier, "owner"), new Claim(ClaimTypes.Role, AccountRoles.Owner)],
@@ -197,11 +254,27 @@ public sealed class EventNotificationPipelineTests
 
     private sealed class ThrowingSink : INotificationSink
     {
-        public string Key => "throwing";
-        public NotificationMode Mode => NotificationMode.InApp;
+        public string Key => "throwing-push";
+
+        public NotificationChannel Channel => NotificationChannel.Push;
 
         public Task DeliverAsync(JularrEvent domainEvent, string profileId, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Simulated channel failure.");
+    }
+
+    private sealed class RecordingSink(NotificationChannel channel) : INotificationSink
+    {
+        public List<(Guid EventId, string ProfileId)> Deliveries { get; } = [];
+
+        public string Key => $"recording-{channel}";
+
+        public NotificationChannel Channel => channel;
+
+        public Task DeliverAsync(JularrEvent domainEvent, string profileId, CancellationToken cancellationToken)
+        {
+            Deliveries.Add((domainEvent.Id, profileId));
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class Fixture : IAsyncDisposable
