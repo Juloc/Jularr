@@ -120,11 +120,20 @@ public sealed record ReaderSourceRegion
 /// Mapping from derived/variant Reader content back to its immutable source.
 /// Reflow sources use stable item ids; fixed sources use zero-based source pages.
 /// </summary>
-public abstract record ReaderSourceReference;
+public abstract record ReaderSourceReference
+{
+    protected ReaderSourceReference(ReaderDocumentIdentity? sourceDocument)
+    {
+        SourceDocument = sourceDocument;
+    }
+
+    public ReaderDocumentIdentity? SourceDocument { get; }
+}
 
 public sealed record ReaderSourceItemReference : ReaderSourceReference
 {
-    public ReaderSourceItemReference(string sourceItemId)
+    public ReaderSourceItemReference(string sourceItemId, ReaderDocumentIdentity? sourceDocument = null)
+        : base(sourceDocument)
     {
         if (string.IsNullOrWhiteSpace(sourceItemId))
         {
@@ -139,7 +148,12 @@ public sealed record ReaderSourceItemReference : ReaderSourceReference
 
 public sealed record ReaderSourcePageReference : ReaderSourceReference
 {
-    public ReaderSourcePageReference(int sourcePageIndex, ReaderSourceRegion? region = null, string? sourceItemId = null)
+    public ReaderSourcePageReference(
+        int sourcePageIndex,
+        ReaderSourceRegion? region = null,
+        string? sourceItemId = null,
+        ReaderDocumentIdentity? sourceDocument = null)
+        : base(sourceDocument)
     {
         if (sourcePageIndex < 0)
         {
