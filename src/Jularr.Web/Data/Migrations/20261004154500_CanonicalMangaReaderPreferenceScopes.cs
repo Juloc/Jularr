@@ -107,6 +107,48 @@ public partial class CanonicalMangaReaderPreferenceScopes : Migration
 
         migrationBuilder.Sql(
             """
+            UPDATE "ReaderPreferences" AS Target
+            SET
+                "ReadingMode" = COALESCE(Target."ReadingMode", Legacy."ReadingMode"),
+                "PageTransition" = COALESCE(Target."PageTransition", Legacy."PageTransition"),
+                "TwoPageSpread" = COALESCE(Target."TwoPageSpread", Legacy."TwoPageSpread"),
+                "BookmarkColor" = COALESCE(Target."BookmarkColor", Legacy."BookmarkColor"),
+                "ImageFlowMode" = COALESCE(Target."ImageFlowMode", Legacy."ImageFlowMode"),
+                "ImagePageDirection" = COALESCE(Target."ImagePageDirection", Legacy."ImagePageDirection"),
+                "ImageFit" = COALESCE(Target."ImageFit", Legacy."ImageFit"),
+                "ImageZoomPercent" = COALESCE(Target."ImageZoomPercent", Legacy."ImageZoomPercent"),
+                "ImagePageGapPx" = COALESCE(Target."ImagePageGapPx", Legacy."ImagePageGapPx"),
+                "ImageFirstPageAlone" = COALESCE(Target."ImageFirstPageAlone", Legacy."ImageFirstPageAlone"),
+                "AutoContinueChapters" = COALESCE(Target."AutoContinueChapters", Legacy."AutoContinueChapters"),
+                "ImageSharpen" = COALESCE(Target."ImageSharpen", Legacy."ImageSharpen"),
+                "ImageCropBorders" = COALESCE(Target."ImageCropBorders", Legacy."ImageCropBorders"),
+                "ImageColorScheme" = COALESCE(Target."ImageColorScheme", Legacy."ImageColorScheme")
+            FROM "ReaderPreferences" AS Legacy
+            JOIN "MangaSeries" AS Series
+              ON Legacy."ScopeKey" =
+                 'media:manga:series:' || replace(Series."Id"::text, '-', '')
+            JOIN "WorkSourceLinks" AS SourceLink
+              ON SourceLink."SourceKind" = 3
+             AND SourceLink."SourceId" = Series."Id"
+            WHERE Target."ProfileId" = Legacy."ProfileId"
+              AND Target."ScopeKey" =
+                  'work:' || replace(SourceLink."WorkId"::text, '-', '');
+
+            DELETE FROM "ReaderPreferences" AS Legacy
+            USING "MangaSeries" AS Series,
+                  "WorkSourceLinks" AS SourceLink,
+                  "ReaderPreferences" AS Target
+            WHERE Legacy."ScopeKey" =
+                  'media:manga:series:' || replace(Series."Id"::text, '-', '')
+              AND SourceLink."SourceKind" = 3
+              AND SourceLink."SourceId" = Series."Id"
+              AND Target."ProfileId" = Legacy."ProfileId"
+              AND Target."ScopeKey" =
+                  'work:' || replace(SourceLink."WorkId"::text, '-', '');
+            """);
+
+        migrationBuilder.Sql(
+            """
             UPDATE "ReaderPreferences" AS Preference
             SET "ScopeKey" = 'work:' || replace(SourceLink."WorkId"::text, '-', '')
             FROM "MangaSeries" AS Series
