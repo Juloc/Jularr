@@ -10,6 +10,7 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
@@ -100,7 +101,9 @@ public sealed class VideoAcquisitionEngine(
     DownloadClientSubmissionService downloads,
     ReleaseRequestTracker tracker,
     VideoMonitoringStores monitoringStores,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<VideoAcquisitionEngine> logger,
+    TmdbDiscoveryProvider? tmdb = null)
 {
     public const string OperationKind = "video-usenet-download";
     public static readonly TimeSpan FuturePollInterval = TimeSpan.FromHours(6);
@@ -123,6 +126,35 @@ public sealed class VideoAcquisitionEngine(
         var workType = request.Kind == MediaAcquisitionKind.Movie
             ? WorkMediaType.Movie
             : WorkMediaType.Series;
+
+        if (request.Kind == MediaAcquisitionKind.Tv
+            && tmdb is not null
+            && request.Provider.Equals(TmdbDiscoveryProvider.ProviderKey, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                await tmdb.EnsureCanonicalWorkAsync(
+                    TmdbDiscoveryMediaType.Series,
+                    request.ExternalId,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception) when (
+                exception is HttpRequestException
+                or InvalidOperationException
+                or InvalidDataException
+                or TaskCanceledException)
+            {
+                logger.LogWarning(
+                    exception,
+                    "TMDB structure refresh failed for TV request {RequestId}; continuing with local canonical structure.",
+                    request.Id);
+            }
+        }
+
         var work = await ResolveWorkAsync(request, workType, cancellationToken);
         if (work is null)
         {
