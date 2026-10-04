@@ -217,20 +217,32 @@ export const createReflowTextRenderer = adapter => {
         return true;
     };
 
-    const seekPermille = value => {
-        if (mode === ReflowReadingMode.paged) {
-            pageIndex = indexForPermille(value, pageCount);
-            adapter.goToPage?.(pageIndex);
-        } else {
-            adapter.scrollToPermille?.(clamp(value, 0, 1000));
-        }
-
+    const seekPage = value => {
+        if (mode !== ReflowReadingMode.paged) return false;
+        pageIndex = clamp(value, 0, pageCount - 1);
+        adapter.goToPage?.(pageIndex, false);
         adapter.onLocation?.({
             mode,
             pageIndex,
             pageCount,
             progressPermille: progressPermille()
         });
+        return true;
+    };
+
+    const seekPermille = value => {
+        if (mode === ReflowReadingMode.paged) {
+            return seekPage(indexForPermille(value, pageCount));
+        }
+
+        adapter.scrollToPermille?.(clamp(value, 0, 1000));
+        adapter.onLocation?.({
+            mode,
+            pageIndex,
+            pageCount,
+            progressPermille: progressPermille()
+        });
+        return true;
     };
 
     const captureAnchor = () =>
@@ -255,6 +267,7 @@ export const createReflowTextRenderer = adapter => {
         setPageState,
         progressPermille,
         turn,
+        seekPage,
         seekPermille,
         captureAnchor,
         restoreAnchor
