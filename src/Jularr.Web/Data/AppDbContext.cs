@@ -6,6 +6,7 @@ using Jularr.Web.Features.Audiobooks;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Collections;
+using Jularr.Web.Features.Games;
 using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.Learning.Courses;
 using Jularr.Web.Features.Learning.Curriculum;
@@ -39,15 +40,27 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         v => DateTime.Parse(v, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime());
 
     public DbSet<LibraryRoot> LibraryRoots => Set<LibraryRoot>();
+    public DbSet<Game> Games => Set<Game>();
+    public DbSet<GameTitle> GameTitles => Set<GameTitle>();
+    public DbSet<GameExternalIdentity> GameExternalIdentities => Set<GameExternalIdentity>();
+    public DbSet<GameArtwork> GameArtworks => Set<GameArtwork>();
+    public DbSet<GamePlatform> GamePlatforms => Set<GamePlatform>();
+    public DbSet<GameRelease> GameReleases => Set<GameRelease>();
+    public DbSet<GameReleaseHash> GameReleaseHashes => Set<GameReleaseHash>();
+    public DbSet<GameReleaseFile> GameReleaseFiles => Set<GameReleaseFile>();
     public DbSet<Anime> Anime => Set<Anime>();
     public DbSet<Episode> Episodes => Set<Episode>();
-    public DbSet<MediaFile> MediaFiles => Set<MediaFile>();
+    public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+    public DbSet<StoredFile> MediaFiles => StoredFiles;
+    public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
     public DbSet<LibraryReconciliationPlan> LibraryReconciliationPlans => Set<LibraryReconciliationPlan>();
     public DbSet<LibraryReconciliationPlanItem> LibraryReconciliationPlanItems => Set<LibraryReconciliationPlanItem>();
     public DbSet<LibraryReconciliationLogicalGroup> LibraryReconciliationLogicalGroups => Set<LibraryReconciliationLogicalGroup>();
     public DbSet<LibraryReconciliationFileLink> LibraryReconciliationFileLinks => Set<LibraryReconciliationFileLink>();
-    public DbSet<MediaAnalysis> MediaAnalyses => Set<MediaAnalysis>();
-    public DbSet<MediaAnalysisStream> MediaAnalysisStreams => Set<MediaAnalysisStream>();
+    public DbSet<MediaTechnicalAnalysis> MediaTechnicalAnalyses => Set<MediaTechnicalAnalysis>();
+    public DbSet<MediaTechnicalAnalysis> MediaAnalyses => MediaTechnicalAnalyses;
+    public DbSet<MediaTrack> MediaTracks => Set<MediaTrack>();
+    public DbSet<MediaTrack> MediaAnalysisStreams => MediaTracks;
     public DbSet<AnimeMetadata> AnimeMetadata => Set<AnimeMetadata>();
     public DbSet<AnimeLocalMetadata> AnimeLocalMetadata => Set<AnimeLocalMetadata>();
     public DbSet<SubtitleTrack> SubtitleTracks => Set<SubtitleTrack>();
@@ -159,6 +172,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasIndex(x => x.Path).IsUnique();
         });
 
+        GamesModelConfiguration.Configure(modelBuilder);
+
         modelBuilder.Entity<LibraryReconciliationPlan>(entity =>
         {
             entity.HasKey(x => x.Id);
@@ -269,20 +284,39 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasIndex(x => new { x.AnimeId, x.SeasonNumber, x.Number }).IsUnique();
         });
 
-        modelBuilder.Entity<MediaFile>(entity =>
+        modelBuilder.Entity<MediaAsset>(entity =>
         {
+            entity.ToTable("MediaAssets", table =>
+                table.HasCheckConstraint("CK_MediaAssets_Kind", "\"Kind\" >= 0 AND \"Kind\" <= 5"));
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Kind).HasConversion<int>();
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WorkEpisode>().WithMany().HasForeignKey(x => x.WorkEpisodeId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WorkVersion>().WithMany().HasForeignKey(x => x.WorkVersionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.WorkVersionId, x.Kind }).IsUnique();
+            entity.HasIndex(x => new { x.WorkId, x.WorkEpisodeId, x.Kind });
+        });
+
+        modelBuilder.Entity<StoredFile>(entity =>
+        {
+            entity.ToTable("StoredFiles", table =>
+                table.HasCheckConstraint("CK_StoredFiles_SizeBytes", "\"SizeBytes\" >= 0"));
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Path).HasMaxLength(2048);
             entity.Property(x => x.LastWriteTimeUtc).HasConversion(FileTimestampConverter);
+            entity.HasOne<MediaAsset>().WithMany().HasForeignKey(x => x.MediaAssetId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<LibraryRoot>().WithMany().HasForeignKey(x => x.LibraryRootId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne<Episode>().WithMany().HasForeignKey(x => x.EpisodeId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Episode>().WithMany().HasForeignKey(x => x.EpisodeId).OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(x => x.Path).IsUnique();
+            entity.HasIndex(x => x.MediaAssetId);
             entity.HasIndex(x => new { x.LibraryRootId, x.EpisodeId });
         });
 
-        modelBuilder.Entity<MediaAnalysis>(entity =>
+        modelBuilder.Entity<MediaTechnicalAnalysis>(entity =>
         {
+            entity.ToTable("MediaTechnicalAnalyses");
             entity.HasKey(x => x.MediaFileId);
+            entity.Property(x => x.MediaFileId).HasColumnName("StoredFileId");
             entity.Property(x => x.Status).HasConversion<int>();
             entity.Property(x => x.SourceFingerprint).HasMaxLength(64);
             entity.Property(x => x.Diagnostic).HasMaxLength(MediaInventoryService.DiagnosticMaxLength);
@@ -292,19 +326,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.PixelFormat).HasMaxLength(40);
             entity.Property(x => x.DynamicRange).HasMaxLength(24);
             entity.Property(x => x.SourceLastWriteTimeUtc).HasConversion(FileTimestampConverter);
-            entity.HasOne<MediaFile>().WithOne().HasForeignKey<MediaAnalysis>(x => x.MediaFileId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<StoredFile>().WithOne().HasForeignKey<MediaTechnicalAnalysis>(x => x.MediaFileId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.Status, x.ProbeVersion });
         });
 
-        modelBuilder.Entity<MediaAnalysisStream>(entity =>
+        modelBuilder.Entity<MediaTrack>(entity =>
         {
+            entity.ToTable("MediaTracks");
             entity.HasKey(x => new { x.MediaFileId, x.StreamIndex });
+            entity.Property(x => x.MediaFileId).HasColumnName("StoredFileId");
             entity.Property(x => x.Kind).HasConversion<int>();
             entity.Property(x => x.Codec).HasMaxLength(64);
             entity.Property(x => x.Language).HasMaxLength(32);
             entity.Property(x => x.Title).HasMaxLength(300);
             entity.Property(x => x.ChannelLayout).HasMaxLength(64);
-            entity.HasOne<MediaAnalysis>().WithMany().HasForeignKey(x => x.MediaFileId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.MediaFileId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<SubtitleTrack>(entity =>

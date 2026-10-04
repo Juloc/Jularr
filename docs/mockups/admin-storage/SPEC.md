@@ -80,7 +80,7 @@ Examples:
 - software/installers
 - archives
 - datasets
-- backups
+- downloaded backup/archive files that are merely generic content, **not** Jularr Backup/Restore archives
 - other uncategorized/admin-generic content
 
 Example path:
@@ -90,11 +90,20 @@ This is different from the temporary Native Download Workspace.
 
 #### Other managed roles
 Future/optional roles may include:
-- backup target
-- cache/temp
-- transcode workspace
+- backup target;
+- cache/temp;
+- transcode workspace;
+- restricted Games BIOS/Firmware storage when the Games runtime subsystem requires it.
 
 These must remain explicit roles rather than being confused with LibraryRoots.
+
+### Games BIOS/Firmware role boundary
+
+When Games needs BIOS/Firmware artifacts:
+- Storage owns the restricted managed path, capacity/availability and safe file access;
+- Games Admin owns BIOS/Firmware requirements, validation, artifact binding and runtime compatibility;
+- BIOS/Firmware is never a Games LibraryRoot and never a Generic Downloads destination;
+- Games screens reference the Storage-managed role and do not expose arbitrary host paths.
 
 ## Native downloader storage flow
 
@@ -243,7 +252,7 @@ Choose exactly one primary path role:
 - **Generic Downloads**
   - final destination for generic/unclassified downloads
 - **Other**
-  - explicit managed role such as backup/cache/transcode where supported
+  - explicit managed role such as backup/cache/transcode or restricted Games BIOS/Firmware storage where supported
 
 The role determines which settings appear in Step 3.
 
@@ -456,6 +465,278 @@ Workspace:
 - test
 - cleanup disposable completed/temp data with preview
 - move workspace only through an explicit migration operation
+
+## Storage Lifecycle Management (#414)
+
+Admin Storage is also the single owner of **storage lifecycle policy**. Do not create separate permanent Admin pages for cleanup, optimization, tiering, migration or storage forecasting.
+
+These are secondary surfaces/workflows inside Storage and contextual entry points from an individual Admin Media Detail.
+
+Recommended internal surfaces:
+- **Overview** — mounts, roles, capacity, forecast, recent growth and reclaimable-space summary;
+- **Policies** — lifecycle rules, scope, protection, quality floors, maintenance/resource limits and policy revisions;
+- **Review** — candidate queue and policy conflicts;
+- **Optimize** — selected Work/library/root optimization and Dry Run;
+- **Migration** — physical LibraryRoot move/tiering/evacuation workflow;
+- **History** — audited lifecycle actions and measured savings.
+
+Activity / To-Do remains the owner of running/failed background operations. Storage links to those operations rather than duplicating the global job queue.
+
+### Lifecycle policy modes
+
+Every destructive canonical-media policy is explicitly one of:
+- **Off** — analysis only;
+- **Review** — generate candidates, require admin action;
+- **Automatic** — execute only after the admin explicitly enabled that policy.
+
+Low free space, a forecast, an import burst or a reserve violation may rank/prepare candidates but must never silently turn Review/Off into Automatic.
+
+### Eligibility and protection
+
+Candidate evaluation may combine:
+- inactivity since last watch/read/listen/play;
+- never-started age;
+- completed + inactive age;
+- active Watchlist/Reading List presence;
+- request/acquisition age;
+- aggregate use across profiles;
+- physical/logical size;
+- storage pressure/reserve;
+- reacquisition confidence;
+- version redundancy;
+- cold-tier suitability.
+
+Protection can include:
+- active hard user Requirements;
+- in-progress media;
+- active Watchlist/Reading List;
+- recent requests/acquisitions;
+- active playback/read/download/import/transcode;
+- Work/item `Keep`, temporary Keep or `Never delete`;
+- protected tags/libraries/media types/profiles;
+- quality floors;
+- rare/unknown reacquisition guard.
+
+Effective rule precedence is safety-first:
+1. storage/integrity safety;
+2. active hard Requirements;
+3. explicit item protection;
+4. admin exclusions and quality floors;
+5. lifecycle eligibility;
+6. ranking, reserve and cleanup-target optimization.
+
+The Review UI must explain every matched rule, the winning rule and why an action is proposed or blocked.
+
+### Review actions and delete semantics
+
+Review actions can include:
+- Keep;
+- Keep for 30/90/365 days or custom expiry;
+- Never delete;
+- Ignore/defer;
+- Optimize;
+- Move to colder storage;
+- Delete local media.
+
+Default canonical-media deletion removes physical bytes but retains:
+- Work/Edition/Version identity where still logically valid;
+- metadata/provider identities;
+- user progress/history;
+- list state;
+- request/history evidence.
+
+The item becomes not locally available and can later use the normal acquisition pipeline again.
+
+Intentional cleanup must suppress accidental immediate reacquisition by Jularr/Sonarr/Radarr/external manager monitoring until the effective policy/demand actually requires the media again.
+
+### Requirement-aware version/component pruning
+
+Before deleting, downgrading, optimizing, pruning tracks or removing a MediaVersion, Storage Lifecycle must calculate hard-Requirement coverage before/after.
+
+Never automatically remove the only version/track satisfying an active hard Requirement.
+
+The preview shows affected users/requirements without exposing unrelated private profile activity.
+
+Version pruning may remove redundant releases only after equivalence/coverage is safe.
+
+### Optimization
+
+Optimization is a separate action from deletion.
+
+Supported targets may include:
+- artwork/posters/covers/banners/backdrops/thumbnails;
+- video/audio bitrate/resolution/codec/container;
+- redundant optional audio/subtitle/commentary/embedded-artwork tracks;
+- regenerable previews/derived cache.
+
+Use:
+`source -> temporary optimized output -> verify/probe/decode -> atomically adopt -> remove/retain old source according to policy`.
+
+Never destructively overwrite before verification.
+
+Books/comics/PDF optimization must remain format-safe and preserve readable content.
+
+Quality floors are explicit and may vary by library/media type/profile.
+
+#### Artwork boundary
+
+Normal behavior remains:
+- canonical durable artwork beside media;
+- compact rebuildable derivatives under local Jularr cache.
+
+Derivative/cache artwork may be compressed/evicted aggressively.
+
+Replacing canonical artwork with a smaller canonical copy is allowed only as an explicitly enabled #414 lifecycle action with Dry Run, quality/dimension floor, validation, custom-art protection and configured grace/undo semantics.
+
+### True physical savings and dedupe
+
+Show logical bytes separately from measured/estimated physically reclaimable bytes.
+
+Where supported and trustworthy, account for:
+- hardlinks;
+- reflinks/COW sharing;
+- filesystem dedupe;
+- snapshot-retained blocks.
+
+Do not promise physical savings that shared blocks/snapshots prevent.
+
+Byte-identical/provably equivalent duplicates may be consolidated with filesystem-native hardlink/reflink/dedupe capabilities. Filename/title similarity is never sufficient.
+
+Canonical identity ambiguity belongs to the duplicate/merge review contract, not to storage dedupe.
+
+### Integrity, orphan and missing states
+
+Keep these separate:
+- **orphan file** — physical file exists but no canonical stored-file ownership;
+- **missing reference** — canonical file expected but absent while its Storage is confirmed Online;
+- **corrupt file** — present but fails configured integrity validation;
+- **offline storage** — availability state, never mass-missing media.
+
+Unknown/orphan files are never silently deleted.
+
+Integrity scrub may use existence/size/mtime, stored checksum and format/media probing where useful. Heavy scrub runs only while storage is Online unless explicitly requested and is throttled.
+
+Corrupt media is protected from ordinary automatic cleanup until replacement/recovery/discard is explicitly resolved.
+
+### Cold storage, migration and evacuation
+
+Lifecycle may move existing media between compatible configured LibraryRoots without changing canonical Work identity.
+
+Normal future import routing remains owned by the LibraryRoot default contract (#815). A lifecycle move never silently changes that default.
+
+Physical migration flow:
+`scope -> destination -> capacity/capability/conflict check -> Dry Run -> copy/move/reflink -> verify -> switch canonical location -> optional source cleanup`.
+
+Evacuation mode plans all remaining dependencies before a root is removed/replaced and proves which items could not be migrated.
+
+Source deletion occurs only after destination verification.
+
+### Forecast, simulator and targets
+
+Storage may show:
+- growth over 7/30/90 days;
+- estimated time-to-full;
+- largest growth contributors;
+- Top Waste categories;
+- reclaimable bytes by action type;
+- historical savings.
+
+Forecasts are estimates.
+
+What-if simulation changes policy inputs without changing media.
+
+Cleanup may stop after a configured target such as:
+- reclaim 500 GB;
+- restore >=20% free;
+- optimize at most N Works.
+
+Reserve targets may be absolute bytes or percent and may reserve working space for downloader/import/repair/transcode operations.
+
+Known queued import sizes may trigger burst-pressure planning, but never silently enable deletion.
+
+### Reacquisition risk
+
+Keep reacquisition confidence separate from cleanup score:
+- Easy;
+- Likely;
+- Uncertain;
+- Rare/protected;
+- Unknown.
+
+Policies may permit automatic deletion only for selected confidence levels. Future availability is never guaranteed.
+
+### Resource/energy-aware execution
+
+Heavy lifecycle work supports:
+- maintenance windows;
+- CPU/GPU/IO/concurrency limits;
+- pause/yield during playback;
+- pause/yield during high import/download activity;
+- restart-safe resume.
+
+Prefer running while the required NAS/GPU is already active. Do not wake a sleeping NAS only for passive analytics or low-priority optimization.
+
+Optimization preview may expose approximate ROI (expected saving vs. work/cost) and rank/skip low-value jobs.
+
+### Notifications and pre-action notice
+
+Storage lifecycle events may use the canonical notification system:
+- warning/critical free-space threshold;
+- cleanup available for review;
+- automatic policy result;
+- optimization/migration failure;
+- forecast threshold;
+- upcoming trash final purge.
+
+Notifications are deduplicated/configurable.
+
+An optional policy may notify affected users before archive/delete/downgrade. It is not a mandatory approval step and must not reveal another user's history/requirements.
+
+### Trash / grace / undo
+
+Destructive cleanup may use an optional grace period.
+
+During grace:
+- media is excluded from normal local availability;
+- metadata/history remains;
+- automatic reacquisition stays suppressed;
+- pending reclaim is distinguished from already reclaimed space;
+- restore is available where technically reversible.
+
+History labels actions as reversible, pending purge, irreversible, or reacquirable-only.
+
+### Policy revision, import/export and audit
+
+Every lifecycle action records:
+- initiator;
+- policy revision;
+- target;
+- reason/rules;
+- before/after size;
+- measured/estimated savings;
+- outcome;
+- reversibility/reacquisition state.
+
+Policy changes are versioned. Historical actions keep their original explanation.
+
+Policy sets may be exported/imported without secrets, filesystem-specific IDs or private user state. Instance-specific LibraryRoot mappings require explicit remap + preview before activation.
+
+### Storage impact by requirements
+
+Admin may inspect aggregate storage cost caused by additional quality/language/version Requirements for capacity planning.
+
+This is explanatory only. It does not create automatic per-user quotas or justify bypassing active hard Requirements.
+
+### Safety invariants
+
+- removing/disabling a Storage role never deletes canonical media;
+- sleeping/offline storage never becomes mass-missing;
+- no destructive bulk action without Dry Run unless an already approved Automatic policy is executing;
+- all canonical-media lifecycle actions are auditable;
+- active operations are protected from races;
+- migration/tiering/optimization are restart-safe/idempotent where practical;
+- Jularr-owned disposable cache/temp may use more permissive cleanup than canonical media;
+- per-Work actions and bulk actions use the same policy engine and safety checks.
 
 ## Light / Dark
 

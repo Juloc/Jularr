@@ -83,6 +83,58 @@ Registered by `MediaCoreRegistration.AddMediaCore` (called from `Program.cs`).
   override is never overwritten by a provider refresh. Wiring every existing
   per-type metadata write through it is a follow-up owned by the per-type adapters.
 
+## Localized metadata and artwork policy (#820)
+
+The canonical Work identity is language-independent. A locale never creates another Work.
+
+The current core already supports language-tagged `WorkTitle` rows and field-level provenance, but the durable multi-locale metadata model is a follow-up owned by #820. Language-dependent fields must become locale-aware without duplicating language-neutral facts.
+
+Conceptually:
+
+```text
+Work
+  -> locale-aware textual metadata (de-DE, en, ja-JP, ...)
+  -> locale-neutral facts (year, runtime, identities, structure, ...)
+  -> field provenance per resolved localized value
+  -> artwork variants (locale-specific or neutral)
+```
+
+For localized fields such as title/synopsis/description, provenance semantics apply to the resolved `(Work, locale, field)` value. Manual localized corrections remain protected from provider refresh exactly like non-localized manual corrections.
+
+Provider-localized metadata and machine-translated/generated metadata are distinct provenance classes. A value translated by Jularr from a provider's English source must record the original source/locale plus the translation/generation provider/model/version where applicable; it must not masquerade as a provider-supplied localization. Diagnostics/edit surfaces must be able to explain this distinction even when normal consumer UI stays visually quiet.
+
+Instance policy has two modes:
+- Fixed instance language: one admin-selected UI/metadata language is required;
+- Free/per-user languages: profiles may select their language, and Admin may require durable Library metadata coverage for every active profile language.
+
+In Free mode with multi-language coverage enabled, a new profile locale creates deduplicated background `(Work, locale)` metadata work for durable Library/monitoring Works. Provider pacing/health/backoff remain shared infrastructure concerns.
+
+Opening a Work never waits for a bulk backfill. Missing preferred-locale metadata renders from the best local fallback immediately and promotes/enqueues that specific `(Work, locale)` job at interactive priority.
+
+Locale resolution is deterministic and family-aware: exact locale -> parent/base language -> configured fallback (exact then parent) -> English -> original/source language -> best locally available value. Duplicate steps are skipped.
+
+The spool is operationally bounded:
+- deduplicate equivalent `(Work, locale)` jobs;
+- enforce global and per-provider concurrency/rate budgets;
+- integrate provider health/backoff;
+- remember provider language/field/artwork capabilities so known-unsupported work is not repeatedly queued;
+- cache valid negative results separately from transient failures, with bounded expiry/revalidation;
+- refresh only missing/stale data rather than refetching fresh data on normal reads;
+- preserve last-known-good data when refresh fails.
+
+When both text and artwork are missing, prioritize visible/identity-relevant localized text first, then essential poster/cover, then larger/nonessential artwork such as backdrops/banners/logos.
+
+Locales no longer required by active profile policy stop receiving bulk work but are not immediately deleted. Persisted variants enter a retention/cleanup lifecycle and are reused if the locale becomes required again before cleanup.
+
+Discovery stays outside bulk persistence:
+- remote provider candidates are locale-aware bounded cache/evidence;
+- they are not materialized into every configured locale;
+- durable localized Work metadata begins only after canonical resolution plus a durable Jularr relationship.
+
+Artwork follows the same identity rule. The durable target is a generic Work artwork model with slots such as Poster/Cover, Backdrop/Banner and Logo, optional locale on language-specific variants, neutral fallback, and local Jularr-owned derivatives for normal Library reads. Anime-specific artwork storage is a migration source, not the long-term cross-media owner.
+
+Existing Anime metadata/artwork must therefore move through a bounded one-time migration into canonical Work ownership when #820 is implemented. Preserve provider identities, localized values, provenance, manual/user artwork precedence and offline-capable local derivatives. Ambiguous mappings require reconciliation instead of silent duplicate Work creation. After the supported upgrade cutoff, normal runtime reads/writes must use only the canonical Work metadata/artwork path; do not retain permanent dual-read or dual-write fallback to legacy Anime stores.
+
 ## Follow-ups
 
 - Per-type adapters: populate the core from providers during Anime/Novel/Book/Manga
@@ -90,6 +142,7 @@ Registered by `MediaCoreRegistration.AddMediaCore` (called from `Program.cs`).
   through the core in library/discovery surfaces.
 - #432 merge/split resolution workflow and identity-change audit.
 - Route existing per-type metadata writes through `WorkFieldProvenance` (#435).
+- #820: add durable locale-aware Work metadata/artwork variants plus the fixed/free language policy and prioritized metadata spool.
 - Owner UI for reviewing/correcting mappings (`mediaCore.*` translation keys) once a
   surface exists.
 - Per-user requirement/track/MediaVersion modelling on top of `WorkVersion` (#556 §22).

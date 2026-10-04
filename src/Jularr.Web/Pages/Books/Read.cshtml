@@ -20,15 +20,14 @@
     // (the "Translate into" menu entry) stays gated on Model.TranslationEnabled.
     var translatedParagraphs = sourceIsTarget ? Array.Empty<string>() : Model.Reader.TranslatedParagraphs;
     var hasAlternate = translatedParagraphs.Count > 0;
-    var canTranslate = Model.TranslationEnabled && !sourceIsTarget && !hasAlternate;
-    // The language menu only exists when there is something to switch to.
-    var hasLanguageChoice = !isPdf && (hasAlternate || canTranslate || Model.HasWorkTranslationLanguage || Model.CachedTranslationLanguages.Count > 0);
+    // A PDF translates page by page from its own translated-text panel, so its menu has no chapter-level translate entry.
+    var canTranslate = Model.TranslationEnabled && !sourceIsTarget && !hasAlternate && !isPdf;
     var defaultView = Model.RequestedView switch
     {
         "original" => "original",
-        "translated" when hasAlternate => "translated",
-        "both" when hasAlternate => "both",
-        _ => hasAlternate ? "translated" : "original"
+        "translated" when hasAlternate || isPdf => "translated",
+        "both" when hasAlternate && !isPdf => "both",
+        _ => hasAlternate && !isPdf ? "translated" : "original"
     };
     var initialProgress = Model.InitialPositionPermille;
     var jsonOptions = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
@@ -151,93 +150,20 @@
         </div>
 
         <div class="reader-frame-actions">
-            @if (hasLanguageChoice)
-            {
-            <div class="reader-menu-anchor">
-                <button class="reader-frame-icon reader-frame-desktop" type="button"
-                        data-reader-menu-toggle="language"
-                        aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-language"
-                        aria-label="@ui["reader.frame.language"]" title="@ui["reader.frame.language"]">
-                    <partial name="_ReaderIcon" model="@("translate")" />
-                </button>
-                <div class="reader-menu" id="book-menu-language" data-reader-menu="language" role="menu" aria-label="@ui["reader.frame.language"]" hidden>
-                    <button type="button" role="menuitemradio" data-book-view="original" aria-checked="false">
-                        <span>@ui.Format("books.read.viewOriginal", ("language", sourceName))</span>
-                        <partial name="_ReaderIcon" model="@("check")" />
-                    </button>
-                    @if (!sourceIsTarget && (hasAlternate || canTranslate || Model.HasWorkTranslationLanguage))
-                    {
-                        <button type="button" role="menuitemradio" data-book-view="translated" aria-checked="false" disabled="@(!hasAlternate)">
-                            <span>@targetName</span>
-                            <partial name="_ReaderIcon" model="@("check")" />
-                        </button>
-                        <button type="button" role="menuitemradio" data-book-view="both" aria-checked="false" hidden="@(!hasAlternate)">
-                            <span>@ui.Format("books.read.viewBoth", ("language", targetName))</span>
-                            <partial name="_ReaderIcon" model="@("check")" />
-                        </button>
-                    }
-                    @if (canTranslate)
-                    {
-                        <form method="post" asp-page-handler="Translate" asp-route-id="@chapter.Id" data-book-translate-form>
-                            <input type="hidden" name="lang" value="@target" />
-                            <button type="submit" role="menuitem" data-translation-state>
-                                @ui.Format("books.read.translateInto", ("language", targetName))
-                            </button>
-                        </form>
-                    }
-                    @foreach (var language in Model.CachedTranslationLanguages)
-                    {
-                        <a role="menuitem" href="/Books/Read/@chapter.Id?lang=@language&view=translated">
-                            @BookLanguageCatalog.GetName(language)
-                        </a>
-                    }
-                </div>
-            </div>
-            }
-
-            @if (!isPdf)
-            {
-                <button class="reader-frame-icon reader-frame-glyph reader-frame-desktop" type="button"
-                        data-reader-settings-open="text"
-                        aria-label="@ui["reader.frame.fontLayout"]" title="@ui["reader.frame.fontLayout"]">
-                    <span class="reader-frame-glyph-inline" aria-hidden="true"></span>
-                </button>
-            }
-
-            <div class="reader-menu-anchor">
-                <button class="reader-frame-icon reader-frame-desktop" type="button"
-                        data-reader-menu-toggle="palette"
-                        aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-palette"
-                        aria-label="@ui["reader.frame.colorScheme"]" title="@ui["reader.frame.colorScheme"]">
-                    <partial name="_ReaderIcon" model="@("palette")" />
-                </button>
-                <div class="reader-menu reader-menu-palette" id="book-menu-palette" data-reader-menu="palette" role="menu" aria-label="@ui["reader.frame.colorScheme"]" hidden>
-                    <div class="reader-swatches">
-                        @foreach (var (paper, paperKey) in paperStyles)
-                        {
-                            <button type="button" role="menuitemradio" aria-checked="false"
-                                    data-book-paper="@paper"
-                                    aria-label="@ui[paperKey]"
-                                    title="@ui[paperKey]"></button>
-                        }
-                    </div>
-                    <button type="button" role="menuitem" data-reader-settings-open="appearance">@ui["reader.frame.moreAppearance"]</button>
-                </div>
-            </div>
-
-            <button class="reader-frame-icon reader-frame-desktop" type="button"
-                    data-bookmark-button
-                    aria-pressed="false"
-                    aria-label="@ui["books.read.bookmarkPage"]" title="@ui["books.read.bookmarkPage"]">
-                <partial name="_ReaderIcon" model="@("bookmark")" />
+            <button class="reader-frame-icon reader-frame-labelled reader-frame-desktop" type="button"
+                    data-reader-contents-toggle aria-controls="book-reader-contents" aria-expanded="false"
+                    aria-label="@ui["reader.frame.contents"]" title="@ui["reader.frame.contents"]">
+                <partial name="_ReaderIcon" model="@("contents")" />
+                <span class="reader-frame-label">@ui["reader.frame.contents"]</span>
             </button>
 
             <div class="reader-menu-anchor">
-                <button class="reader-frame-icon reader-frame-desktop" type="button"
+                <button class="reader-frame-icon reader-frame-labelled reader-frame-desktop" type="button"
                         data-reader-menu-toggle="search"
                         aria-haspopup="dialog" aria-expanded="false" aria-controls="book-menu-search"
                         aria-label="@ui["reader.frame.search"]" title="@ui["reader.frame.search"]">
                     <partial name="_ReaderIcon" model="@("search")" />
+                    <span class="reader-frame-label">@ui["reader.frame.search"]</span>
                 </button>
                 <div class="reader-menu reader-menu-search" id="book-menu-search" data-reader-menu="search" role="dialog" aria-label="@ui["reader.frame.search"]" hidden>
                     <form class="reader-search-form" data-book-search-form role="search">
@@ -252,11 +178,97 @@
             </div>
 
             <div class="reader-menu-anchor">
-                <button class="reader-frame-icon" type="button"
+                <button class="reader-frame-icon reader-frame-desktop @(sourceIsTarget ? "reader-frame-labelled" : "reader-frame-chip")" type="button"
+                        data-reader-menu-toggle="language"
+                        aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-language"
+                        aria-label="@ui["reader.frame.language"]" title="@ui["reader.frame.language"]">
+                    @if (sourceIsTarget)
+                    {
+                        <partial name="_ReaderIcon" model="@("translate")" />
+                        <span class="reader-frame-label">@ui["reader.frame.language"]</span>
+                    }
+                    else
+                    {
+                        <span>@($"{Model.Reader.SourceLanguage.ToUpperInvariant()} ⇄ {target.ToUpperInvariant()}")</span>
+                    }
+                </button>
+                <div class="reader-menu" id="book-menu-language" data-reader-menu="language" role="menu" aria-label="@ui["reader.frame.language"]" hidden>
+                    <button type="button" role="menuitemradio" data-book-view="original" aria-checked="false">
+                        <span>@ui.Format("books.read.viewOriginal", ("language", sourceName))</span>
+                        <partial name="_ReaderIcon" model="@("check")" />
+                    </button>
+                    @if (!sourceIsTarget && (isPdf || hasAlternate || canTranslate || Model.HasWorkTranslationLanguage))
+                    {
+                        <button type="button" role="menuitemradio" data-book-view="translated" aria-checked="false" disabled="@(!isPdf && !hasAlternate)">
+                            <span>@targetName <small class="reader-menu-tag">@ui["reader.frame.generatedTag"]</small></span>
+                            <partial name="_ReaderIcon" model="@("check")" />
+                        </button>
+                        @if (!isPdf)
+                        {
+                            <button type="button" role="menuitemradio" data-book-view="both" aria-checked="false" hidden="@(!hasAlternate)">
+                                <span>@ui.Format("books.read.viewBoth", ("language", targetName))</span>
+                                <partial name="_ReaderIcon" model="@("check")" />
+                            </button>
+                        }
+                    }
+                    @if (canTranslate)
+                    {
+                        <form method="post" asp-page-handler="Translate" asp-route-id="@chapter.Id" data-book-translate-form>
+                            <input type="hidden" name="lang" value="@target" />
+                            <button type="submit" role="menuitem" data-translation-state>
+                                @ui.Format("books.read.translateInto", ("language", targetName))
+                            </button>
+                        </form>
+                    }
+                    @foreach (var language in Model.CachedTranslationLanguages)
+                    {
+                        <a role="menuitem" href="/Books/Read/@chapter.Id?lang=@language&view=translated">
+                            @BookLanguageCatalog.GetName(language) <small class="reader-menu-tag">@ui["reader.frame.generatedTag"]</small>
+                        </a>
+                    }
+                </div>
+            </div>
+
+            <div class="reader-menu-anchor">
+                <button class="reader-frame-icon reader-frame-labelled reader-frame-desktop" type="button"
+                        data-reader-menu-toggle="palette"
+                        aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-palette"
+                        aria-label="@ui["reader.frame.appearance"]" title="@ui["reader.frame.appearance"]">
+                    <span class="reader-frame-glyph-inline" aria-hidden="true"></span>
+                    <span class="reader-frame-label">@ui["reader.frame.appearance"]</span>
+                </button>
+                <div class="reader-menu reader-menu-palette" id="book-menu-palette" data-reader-menu="palette" role="menu" aria-label="@ui["reader.frame.colorScheme"]" hidden>
+                    <div class="reader-swatches">
+                        @foreach (var (paper, paperKey) in paperStyles)
+                        {
+                            <button type="button" role="menuitemradio" aria-checked="false"
+                                    data-book-paper="@paper"
+                                    aria-label="@ui[paperKey]"
+                                    title="@ui[paperKey]"></button>
+                        }
+                    </div>
+                    @if (!isPdf)
+                    {
+                        <button type="button" role="menuitem" data-reader-settings-open="text">@ui["reader.frame.fontLayout"]</button>
+                    }
+                    <button type="button" role="menuitem" data-reader-settings-open="appearance">@ui["reader.frame.moreAppearance"]</button>
+                </div>
+            </div>
+
+            <button class="reader-frame-icon reader-frame-desktop" type="button"
+                    data-bookmark-button
+                    aria-pressed="false"
+                    aria-label="@ui["books.read.bookmarkPage"]" title="@ui["books.read.bookmarkPage"]">
+                <partial name="_ReaderIcon" model="@("bookmark")" />
+            </button>
+
+            <div class="reader-menu-anchor">
+                <button class="reader-frame-icon reader-frame-labelled" type="button"
                         data-reader-menu-toggle="more"
                         aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-more"
                         aria-label="@ui["reader.frame.more"]" title="@ui["reader.frame.more"]">
                     <partial name="_ReaderIcon" model="@("more")" />
+                    <span class="reader-frame-label">@ui["reader.frame.more"]</span>
                 </button>
                 <div class="reader-menu reader-menu-more" id="book-menu-more" data-reader-menu="more" role="menu" aria-label="@ui["reader.frame.more"]" hidden>
                     <button type="button" role="menuitem" class="reader-frame-mobile" data-book-bookmark-proxy>
@@ -402,6 +414,15 @@
                      data-pdf-fonts="@Url.Content("~/lib/pdfjs/standard_fonts/")"
                      data-pdf-wasm="@Url.Content("~/lib/pdfjs/wasm/")"></div>
                 <p class="book-pdf-status" data-book-pdf-status role="status" hidden></p>
+                <section class="book-pdf-translation" data-book-pdf-translation data-state="pending" lang="@target" aria-live="polite" hidden>
+                    <p class="book-pdf-translation-label" data-book-pdf-translation-label hidden>@ui.Format("books.read.generatedTranslation", ("language", targetName))</p>
+                    <div class="book-text" data-book-pdf-translation-text></div>
+                    <p class="book-pdf-translation-status" data-book-pdf-translation-status role="status"></p>
+                    <form method="post" asp-page-handler="Translate" data-book-pdf-translate-form hidden>
+                        <input type="hidden" name="lang" value="@target" />
+                        <button type="submit" class="button" data-language-name="@targetName">@ui.Format("books.read.translateInto", ("language", targetName))</button>
+                    </form>
+                </section>
             </main>
         }
         else
@@ -458,11 +479,31 @@
     </div>
 
     <footer class="reader-frame-bottom" data-reader-chrome>
-        <button class="reader-frame-icon reader-frame-desktop" type="button"
-                data-reader-contents-toggle aria-controls="book-reader-contents" aria-expanded="false"
-                aria-label="@ui["reader.frame.contents"]" title="@ui["reader.frame.contents"]">
-            <partial name="_ReaderIcon" model="@("contents")" />
-        </button>
+        @if (isPdf)
+        {
+            @* Outline sections, or pages when the PDF has no outline (books-reader.js). *@
+            <button class="reader-frame-nav reader-frame-desktop" type="button" data-book-pdf-section="-1"
+                    aria-label="@ui["reader.frame.previousPage"]" title="@ui["reader.frame.previousPage"]">
+                <partial name="_ReaderIcon" model="@("back")" />
+                <span class="reader-frame-label">@ui["reader.frame.previousPage"]</span>
+            </button>
+        }
+        else if (Model.Reader.PreviousChapterId is Guid previous)
+        {
+            <a class="reader-frame-nav reader-frame-desktop" href="/Books/Read/@previous?lang=@target@viewQuery"
+               data-book-chapter-link="previous"
+               aria-label="@ui["reader.frame.previousChapter"]" title="@ui["reader.frame.previousChapter"]">
+                <partial name="_ReaderIcon" model="@("back")" />
+                <span class="reader-frame-label">@ui["reader.frame.previousChapter"]</span>
+            </a>
+        }
+        else
+        {
+            <button class="reader-frame-nav reader-frame-desktop" type="button" disabled aria-label="@ui["reader.frame.previousChapter"]">
+                <partial name="_ReaderIcon" model="@("back")" />
+                <span class="reader-frame-label">@ui["reader.frame.previousChapter"]</span>
+            </button>
+        }
 
         <div class="reader-progress">
             <button class="reader-frame-icon reader-frame-mobile" type="button" data-reader-page-step="-1"
@@ -482,32 +523,35 @@
             <output class="reader-progress-text" data-reader-progress-text aria-live="off"></output>
         </div>
 
-        <div class="reader-frame-transport reader-frame-desktop">
-            @if (isPdf)
-            {
-                @* Outline sections, or pages when the PDF has no outline (books-reader.js). *@
-                <button class="reader-frame-icon" type="button" data-book-pdf-section="-1"
-                        aria-label="@ui["reader.frame.previousPage"]" title="@ui["reader.frame.previousPage"]">
-                    <partial name="_ReaderIcon" model="@("previous")" />
-                </button>
-            }
-            else if (Model.Reader.PreviousChapterId is Guid previous)
-            {
-                <a class="reader-frame-icon" href="/Books/Read/@previous?lang=@target@viewQuery"
-                   data-book-chapter-link="previous"
-                   aria-label="@ui["reader.frame.previousChapter"]" title="@ui["reader.frame.previousChapter"]">
-                    <partial name="_ReaderIcon" model="@("previous")" />
-                </a>
-            }
-            else
-            {
-                <button class="reader-frame-icon" type="button" disabled aria-label="@ui["reader.frame.previousChapter"]">
-                    <partial name="_ReaderIcon" model="@("previous")" />
-                </button>
-            }
+        @if (isPdf)
+        {
+            <button class="reader-frame-nav reader-frame-desktop" type="button" data-book-pdf-section="1"
+                    aria-label="@ui["reader.frame.nextPage"]" title="@ui["reader.frame.nextPage"]">
+                <span class="reader-frame-label">@ui["reader.frame.nextPage"]</span>
+                <partial name="_ReaderIcon" model="@("forward")" />
+            </button>
+        }
+        else if (Model.Reader.NextChapterId is Guid next)
+        {
+            <a class="reader-frame-nav reader-frame-desktop" href="/Books/Read/@next?lang=@target@viewQuery"
+               data-book-chapter-link="next"
+               data-reader-next-chapter="@next"
+               aria-label="@ui["reader.frame.nextChapter"]" title="@ui["reader.frame.nextChapter"]">
+                <span class="reader-frame-label">@ui["reader.frame.nextChapter"]</span>
+                <partial name="_ReaderIcon" model="@("forward")" />
+            </a>
+        }
+        else
+        {
+            <button class="reader-frame-nav reader-frame-desktop" type="button" disabled aria-label="@ui["reader.frame.nextChapter"]">
+                <span class="reader-frame-label">@ui["reader.frame.nextChapter"]</span>
+                <partial name="_ReaderIcon" model="@("forward")" />
+            </button>
+        }
 
-            @if (supportsTts)
-            {
+        @if (supportsTts)
+        {
+            <div class="reader-frame-transport reader-frame-desktop">
                 <button class="reader-frame-play" type="button"
                         data-reader-tts-toggle
                         aria-pressed="false"
@@ -516,31 +560,8 @@
                     <span class="reader-play-icon"><partial name="_ReaderIcon" model="@("play")" /></span>
                     <span class="reader-pause-icon"><partial name="_ReaderIcon" model="@("pause")" /></span>
                 </button>
-            }
-
-            @if (isPdf)
-            {
-                <button class="reader-frame-icon" type="button" data-book-pdf-section="1"
-                        aria-label="@ui["reader.frame.nextPage"]" title="@ui["reader.frame.nextPage"]">
-                    <partial name="_ReaderIcon" model="@("next")" />
-                </button>
-            }
-            else if (Model.Reader.NextChapterId is Guid next)
-            {
-                <a class="reader-frame-icon" href="/Books/Read/@next?lang=@target@viewQuery"
-                   data-book-chapter-link="next"
-                   data-reader-next-chapter="@next"
-                   aria-label="@ui["reader.frame.nextChapter"]" title="@ui["reader.frame.nextChapter"]">
-                    <partial name="_ReaderIcon" model="@("next")" />
-                </a>
-            }
-            else
-            {
-                <button class="reader-frame-icon" type="button" disabled aria-label="@ui["reader.frame.nextChapter"]">
-                    <partial name="_ReaderIcon" model="@("next")" />
-                </button>
-            }
-        </div>
+            </div>
+        }
 
         <div class="reader-frame-tail reader-frame-desktop">
             @if (supportsTts)
@@ -623,13 +644,10 @@
                     <span>@ui["reader.frame.appearance"]</span>
                 </button>
             }
-            @if (hasLanguageChoice)
-            {
-                <button type="button" data-reader-menu-toggle="language" aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-language">
-                    <partial name="_ReaderIcon" model="@("translate")" />
-                    <span>@ui["reader.frame.language"]</span>
-                </button>
-            }
+            <button type="button" data-reader-menu-toggle="language" aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-language">
+                <partial name="_ReaderIcon" model="@("translate")" />
+                <span>@ui["reader.frame.language"]</span>
+            </button>
             <button type="button" data-reader-menu-toggle="more" aria-haspopup="menu" aria-expanded="false" aria-controls="book-menu-more">
                 <partial name="_ReaderIcon" model="@("more")" />
                 <span>@ui["reader.frame.more"]</span>

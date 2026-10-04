@@ -439,6 +439,39 @@ Anime/Series:
 
 Provider-specific deep links may select/highlight a relevant season/presentation target while remaining on the same Work identity.
 
+## 21a. Localized Work metadata and artwork (#820)
+
+Library/Detail are local-first consumers of durable Jularr state.
+
+Normal Library/Detail reads:
+- use persisted canonical Work metadata and local artwork derivatives;
+- do not require a live AniList/TMDB/Open Library/other provider request;
+- keep last-known metadata usable during provider outages;
+- may enqueue or reprioritize background metadata refresh, but must not block rendering on it.
+
+The effective metadata locale comes from the canonical instance language policy:
+- Fixed mode -> the single admin-selected instance language;
+- Free mode -> the profile metadata language, with deterministic local fallback.
+
+When the preferred locale is unavailable:
+1. render the best locally persisted fallback immediately;
+2. if the locale is already in the metadata spool, promote that `(Work, locale)` job when the Work is opened;
+3. otherwise enqueue it at interactive priority when policy permits;
+4. replace the fallback naturally on later reads after the localized data is persisted.
+
+One Work remains one Work across all locales. Localized titles/descriptions and other localized fields are variants/evidence on the same canonical identity, not separate Library entries.
+
+When Admin enabled “Keep Library metadata for all active profile languages”, durable Library/monitoring Works are gradually populated for every effective profile metadata language. A newly introduced profile language therefore causes background coverage work without making the first page request wait for a whole-Library backfill.
+
+Artwork:
+- canonical slots are media-independent: Poster/Cover, Backdrop/Banner, Logo and other approved slots;
+- prefer artwork matching the effective locale where the provider exposes language-specific art;
+- then prefer neutral artwork;
+- then another locally available variant;
+- compact derivatives remain Jularr-owned local cache data (for example under `/data`) so Library cards remain available while NAS/provider sources are offline.
+
+Transient Discover candidate metadata/artwork is not Library truth and does not enter Library solely because it was viewed.
+
 ## 22. Approved visual baseline
 
 `library-clean-approved.png` remains the approved Clean baseline.
@@ -465,6 +498,8 @@ Do not treat other unapproved images in this folder as implementation authority.
 - no hover card expansion/reflow;
 - no separate Library request/progress model;
 - no provider-native identity as Library identity;
+- no live provider dependency for normal Library/Detail rendering;
+- no duplicate Work per metadata language;
 - no technical release/download metadata on normal cards;
 - no wide landscape-card substitution on Mobile;
 - no Desktop grid simply scaled up for TV.

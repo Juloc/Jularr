@@ -93,7 +93,7 @@ Examples:
 - PostgreSQL
 - NAS / configured storage roots
 - SABnzbd
-- qBittorrent or other download clients
+- native downloader and configured external download-client adapters
 - Indexers / release-search providers
 - metadata providers
 - subtitle providers
@@ -318,7 +318,7 @@ Categories may include:
 - AI
 - Maintenance
 
-This is not a replacement for full logs. `View all` opens Activity/Jobs or diagnostics with the proper filter.
+This is not a replacement for full logs or a second job store. `View all` opens Activity / To-Do / History or System & Diagnostics with the proper filter.
 
 ## Interaction and state requirements
 

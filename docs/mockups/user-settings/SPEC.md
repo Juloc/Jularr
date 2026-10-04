@@ -199,6 +199,15 @@ Do not duplicate `Reduced motion`; that belongs to Accessibility.
 
 ## 5. Language & Region
 
+Language controls consume the canonical instance language policy from Admin General Settings / #820.
+
+### Instance-policy behavior
+
+- **Fixed instance language:** the profile cannot override UI or metadata language. Show the effective instance language read-only where useful; do not persist ignored personal values.
+- **Free / per-user languages:** the profile may choose its effective UI/metadata language. Changing to a language not previously used on the instance may enroll that locale in the background Library-metadata spool when Admin enabled “Keep Library metadata for all active profile languages”.
+
+A profile language change must not synchronously wait for whole-Library metadata backfill.
+
 ### Interface
 - UI language
 - locale/region
@@ -210,6 +219,8 @@ Do not duplicate `Reduced motion`; that belongs to Accessibility.
   - Preferred
   - Original
   - Romanized
+
+When a preferred locale is missing for a Work, normal consumer pages immediately show the best locally persisted fallback. The missing locale fetch may be promoted/enqueued in the background; the page must not block on a provider.
 
 Do not create provider-specific language settings here.
 

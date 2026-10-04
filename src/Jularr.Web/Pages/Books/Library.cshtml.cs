@@ -6,6 +6,7 @@ using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Infrastructure;
+using Jularr.Web.Ui;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,7 @@ public sealed class LibraryModel(
     public BookLibraryDetail Book { get; private set; } = null!;
     public string TargetLanguage { get; private set; } = "id";
     public bool SourceIsTarget { get; private set; }
+    public LanguageEditionSelectorModel LanguageEdition { get; private set; } = null!;
     public bool IsOwner => account.IsOwner;
 
     /// <summary>A PDF book: its chapters are its pages, which the page lists in ranges.</summary>
@@ -69,6 +71,18 @@ public sealed class LibraryModel(
                 TargetLanguage,
                 StringComparison.OrdinalIgnoreCase);
         TranslationEnabled = await ResolveTranslationEnabledAsync(id, cancellationToken);
+        LanguageEdition = BookLanguageEditionSelectorFactory.Create(
+            "book-language-edition",
+            Book.Work.MetadataTitle ?? Book.Work.Title,
+            GetSourceLanguage(Book.Work),
+            TargetLanguage,
+            Book.Chapters.Count,
+            IsPdf,
+            Book.TranslationCoverage,
+            TranslationEnabled,
+            language => $"/Books/Library/{id}?lang={Uri.EscapeDataString(language)}",
+            $"/Books/Library/{id}?handler=TranslateBook",
+            Ui);
         return Page();
     }
 

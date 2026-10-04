@@ -21,7 +21,7 @@ Admin Games contains only Games-specific operational configuration that cannot l
 Do not duplicate:
 - Games LibraryRoot -> Admin Storage
 - game metadata provider configuration/health -> Admin Providers
-- indexers/search -> Provider/Acquisition settings
+- indexers/release-search provider configuration -> Admin Providers; release scoring/policy -> Admin Acquisition Profiles
 - native download queue -> Admin Downloader
 - global jobs/failures -> Activity / To-Do / History
 
@@ -52,7 +52,7 @@ Approved Games-specific Admin surfaces:
 Shared Admin pages remain authoritative for:
 - Games LibraryRoot -> Storage;
 - Games metadata-provider configuration/health -> Providers;
-- indexers/acquisition/downloader -> shared acquisition/downloader settings;
+- indexers/providers -> Providers; scoring/policy -> Acquisition Profiles; transport/queue -> Downloader;
 - cross-system failures -> Activity / To-Do / History.
 
 No additional Games-specific Admin page is currently required for the non-player scope.

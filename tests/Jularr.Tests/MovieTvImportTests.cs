@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Movies;
 using Jularr.Web.Features.Tv;
 using Microsoft.EntityFrameworkCore;
@@ -51,7 +52,8 @@ public sealed class MovieTvImportTests
             Registry(),
             settings,
             new FileSystemHardLinkCreator(),
-            NullLogger<MovieCompletedDownloadImportAdapter>.Instance);
+            NullLogger<MovieCompletedDownloadImportAdapter>.Instance,
+            new CanonicalMediaStorageService(db));
 
         var result = await adapter.ImportAsync(
             new CompletedDownloadImportRequest(null, null, download, MediaAcquisitionKind.Movie), CancellationToken.None);
@@ -67,6 +69,12 @@ public sealed class MovieTvImportTests
         var work = await db.Works.SingleAsync();
         Assert.AreEqual(WorkMediaType.Movie, work.MediaType);
         Assert.AreEqual(1, await db.WorkSourceLinks.CountAsync(x => x.SourceKind == WorkSourceKind.Movie && x.SourceId == movie.Id));
+
+        var movieAsset = await db.MediaAssets.SingleAsync();
+        Assert.AreEqual(work.Id, movieAsset.WorkId);
+        Assert.IsNull(movieAsset.WorkEpisodeId);
+        var movieFile = await db.StoredFiles.SingleAsync();
+        Assert.AreEqual(movieAsset.Id, movieFile.MediaAssetId);
     }
 
     [TestMethod]
@@ -84,7 +92,8 @@ public sealed class MovieTvImportTests
             Registry(),
             settings,
             new FileSystemHardLinkCreator(),
-            NullLogger<TvCompletedDownloadImportAdapter>.Instance);
+            NullLogger<TvCompletedDownloadImportAdapter>.Instance,
+            new CanonicalMediaStorageService(db));
 
         var result = await adapter.ImportAsync(
             new CompletedDownloadImportRequest(null, null, download, MediaAcquisitionKind.Tv), CancellationToken.None);
@@ -101,6 +110,12 @@ public sealed class MovieTvImportTests
         var episode = await db.WorkEpisodes.SingleAsync(x => x.WorkId == work.Id);
         Assert.AreEqual(1, episode.SeasonNumber);
         Assert.AreEqual(2, episode.EpisodeNumber);
+
+        var tvAsset = await db.MediaAssets.SingleAsync();
+        Assert.AreEqual(work.Id, tvAsset.WorkId);
+        Assert.AreEqual(episode.Id, tvAsset.WorkEpisodeId);
+        var tvFile = await db.StoredFiles.SingleAsync();
+        Assert.AreEqual(tvAsset.Id, tvFile.MediaAssetId);
     }
 
     [TestMethod]

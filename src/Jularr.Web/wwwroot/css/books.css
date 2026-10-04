@@ -305,9 +305,7 @@
 }
 
 .books-inline-form input,
-.books-stack-form input,
-.book-language-row select,
-.book-language-row input[type="text"] {
+.books-stack-form input {
     min-width: 0;
     width: 100%;
 }
@@ -331,13 +329,6 @@
     flex-wrap: wrap;
     gap: 12px;
     margin-top: 18px;
-}
-
-.book-language-row label {
-    display: grid;
-    gap: 5px;
-    color: var(--muted);
-    font-size: 13px;
 }
 
 .book-translation-summary {
@@ -532,23 +523,6 @@
 }
 
 
-.book-language-form {
-    display: grid;
-    grid-template-columns: minmax(180px, 280px) auto;
-    gap: 8px 10px;
-    align-items: end;
-}
-
-.book-language-form small {
-    grid-column: 1 / -1;
-    color: var(--muted);
-    line-height: 1.4;
-}
-
-.book-language-form code {
-    font-size: .92em;
-}
-
 /* Reader detail: the primary reading state is visible without exposing the
    owner-only controls that live below the header. */
 .book-reading-hero {
@@ -676,18 +650,6 @@
 
     .reading-detail-kicker span + span {
         padding-left: 8px;
-    }
-}
-
-@media (max-width: 640px) {
-    .book-language-form {
-        grid-template-columns: 1fr;
-        width: 100%;
-    }
-
-    .book-language-form .button,
-    .book-language-form label {
-        width: 100%;
     }
 }
 

@@ -18,7 +18,8 @@ public sealed class LibraryScanner(
     ILogger<LibraryScanner> logger,
     AnimeMetadataService? metadataService = null,
     MediaSegmentSidecarImporter? segmentSidecars = null,
-    AnimeArtworkLibrary? artworkLibrary = null)
+    AnimeArtworkLibrary? artworkLibrary = null,
+    CanonicalVideoStorageBackfillService? canonicalVideoBackfill = null)
 {
     private readonly AnimeArtworkLibrary artwork =
         artworkLibrary ?? new AnimeArtworkLibrary(db, Microsoft.Extensions.Logging.Abstractions.NullLogger<AnimeArtworkLibrary>.Instance);
@@ -356,8 +357,15 @@ public sealed class LibraryScanner(
                 moved.Path = normalizedPath;
                 if (moved.EpisodeId != episode.Id)
                 {
-                    relinkedFromEpisodeIds.Add(moved.EpisodeId);
+                    if (moved.EpisodeId is { } previousEpisodeId)
+                    {
+                        relinkedFromEpisodeIds.Add(previousEpisodeId);
+                    }
+
                     moved.EpisodeId = episode.Id;
+                    // The same physical file moved to a different logical episode: preserve the
+                    // StoredFile id/analysis but force the canonical Asset target to be reconciled.
+                    moved.MediaAssetId = null;
                 }
 
                 existingFiles.Add(normalizedPath, moved);
@@ -405,6 +413,11 @@ public sealed class LibraryScanner(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        if (canonicalVideoBackfill is not null)
+        {
+            await canonicalVideoBackfill.BackfillLegacyAnimeAsync(rootId, cancellationToken);
+        }
 
         if (metadataService is not null)
         {
@@ -500,7 +513,8 @@ public sealed class LibraryScanner(
         if (removed > 0 || relinkedFromEpisodeIds.Count > 0)
         {
             var staleEpisodeIds = staleMediaFiles
-                .Select(x => x.EpisodeId)
+                .Where(x => x.EpisodeId.HasValue)
+                .Select(x => x.EpisodeId!.Value)
                 .Concat(relinkedFromEpisodeIds)
                 .Distinct()
                 .ToArray();

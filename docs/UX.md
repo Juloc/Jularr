@@ -524,42 +524,103 @@ Status/details behavior is owned by `docs/mockups/request-status-details/SPEC.md
 
 Entering Admin expands/replaces navigation with explicit admin destinations while preserving a clear way back to normal Jularr.
 
-Admin navigation groups:
+The target Admin shell uses **one permanent navigation destination per owning area**. Tabs, editors, repair dialogs and compatibility routes do not become duplicate sidebar entries.
 
 ### Overview
 - Dashboard
 - Activity / To-Do
-- History
+  - History is the third tab of this operational area; a deep-linkable History route may remain for compatibility, but it is not a second permanent sidebar destination.
 
 ### Media
 - Library
 - Wanted
 - Requests
-- Manual Search
 
-### Acquisition
-- Indexers / release search providers
-- Native Usenet
-- External download clients
-- Profiles / scoring
+Library here is a navigation bridge to the canonical Library/media-management context; it does not create a second Admin-only library identity/store. Authorized management actions may open Admin Media Detail from that canonical library context.
 
-### Metadata & Providers
-- Metadata providers
-- Subtitle providers
-- Translation providers
-- AI providers
+Admin Media Detail and Manual Search are contextual workflows opened from Library/Wanted/Requests/related objects. Manual Search is the Search tab of the reusable Acquisition dialog and is not a permanent sidebar page.
 
-### System
+### Acquisition & integrations
+- Downloader
+  - Übersicht, Queue, Server, Verarbeitung, Geschwindigkeit & Zeitplan, Einstellungen, Externe Clients are secondary navigation inside Downloader.
+- Providers
+  - Indexer/Search, Metadata, Subtitles, Translation, Reading Sources and other supported provider families live here.
+- Acquisition Profiles
+  - quality/upgrade, Release Rules, language, wait/source policy and score testing.
+
+AI provider/model configuration stays in the dedicated **AI** Admin area rather than being folded into generic Providers.
+
+### Administration
 - Storage
-- Users & permissions
-- Devices
-- Tasks/jobs
+- AI
+- Users & Permissions
+- Devices & Sessions
+- Notifications
+- Backup & Restore
 - Migration
-- Backup/restore
-- Logs/diagnostics
-- General settings
+- System & Diagnostics
+- Instance
+- General Settings
+- Appearance
 
-Only show destinations actually implemented and permitted.
+
+### Storage ownership and lifecycle
+
+Binding specification:
+- `docs/mockups/admin-storage/SPEC.md`
+
+**Storage** is the only permanent Admin owner for:
+- physical Mounts and LibraryRoots;
+- capacity/free-space/reserve;
+- safe path/routing and placement capabilities;
+- storage lifecycle policies (#414);
+- Review candidates and policy conflicts;
+- optimize/tier/delete Dry Runs;
+- physical root-to-root migration/evacuation;
+- storage forecast/growth/top-waste and lifecycle history.
+
+Do not create permanent sidebar entries named Cleanup, Optimize, Tiering or Storage Migration. They are secondary Storage surfaces/contextual workflows.
+
+Admin Media Detail may expose contextual `Storage` / `Optimize` / `Keep` actions for one Work, but they open the same canonical Storage Lifecycle engine.
+
+System & Diagnostics may show read-only capacity/health summaries only. Activity / To-Do owns running/failed lifecycle operations. Migration Center owns external-system migration, not physical media movement between Jularr roots.
+
+Destructive UX requirements:
+- always show why the item is eligible and what protects/blocks it;
+- show before/after requirement coverage when a version/track may change;
+- show logical vs estimated physical savings where they differ;
+- show reversibility/grace/reacquisition state;
+- no bulk destructive confirmation without a Dry Run unless the already-enabled Automatic policy itself is executing;
+- Compact mode must never hide destructive-action context.
+
+
+### Games
+When Games is actually available, Games-specific Admin configuration is one contextual/dedicated area with secondary surfaces for Runtimes and BIOS/Firmware. Game LibraryRoots remain in Storage, provider configuration in Providers, acquisition/downloader work in the shared acquisition areas and failures in Activity / To-Do.
+
+### Contextual / non-sidebar flows
+The following are reachable by deep link or from their owning page, but are not permanent sidebar destinations:
+- Admin Media Detail;
+- Manual Search / Acquisition dialog;
+- Download Assignment;
+- Library Reconciliation / Folder Import Mapping;
+- Games Runtime Editor;
+- BIOS/Firmware Add or Replace;
+- Game Import Resolution;
+- Setup Wizard after first-run completion.
+
+### Legacy-route consolidation
+Existing routes may remain temporarily as redirects/deep links while implementation is migrated, but must not remain parallel configuration owners:
+- `/Admin/Resources`, `/Admin/Health`, `/Admin/Logs` -> System & Diagnostics;
+- `/Admin/Sessions`, `/Admin/Devices` -> Devices & Sessions;
+- `/Admin/History` -> Activity / To-Do → History;
+- `/Admin/Usenet` -> Downloader;
+- `/Admin/Sonarr`, `/Settings/SonarrMigration` -> Migration / the Sonarr manager adapter;
+- `/Settings/Indexers`, provider-specific configuration pages and `/Admin/ReadingSources` -> Providers where the concern is provider configuration;
+- `/Settings/DownloadClients` -> Downloader → Externe Clients;
+- legacy sections of `/Settings/Acquisition` -> Acquisition Profiles, Storage, Downloader or Backup/Restore according to the owning contract;
+- `/Admin/Scans` -> scan/reconcile actions originate from Storage/LibraryRoot and their running/result state is surfaced through Activity / To-Do / History.
+
+Only show destinations actually implemented, permitted and backed by their owning runtime capability.
 
 ### Admin UI density
 
@@ -574,7 +635,7 @@ This is a shared Admin-shell preference, not a per-page setting and not an insta
 
 Compact mode is table/list-oriented and reduces repeated descriptions, card padding, row height and form spacing where safe. Detailed mode exposes more inline explanation and context. Both modes use the same data, permissions, validation and actions; business behavior may never depend on the selected density.
 
-The preference applies across Admin Dashboard, Instance, Storage, Downloader, Providers, AI, Users/Permissions, Activity/History, Wanted/Requests, Backup/Restore, Migration, Diagnostics and future Admin screens using the shared Admin shell.
+The preference applies across Admin Dashboard, Instance, Storage, Downloader, Providers, AI, Users/Permissions, Activity/To-Do/History, Wanted/Requests, Backup/Restore, Migration, System & Diagnostics and future Admin screens using the shared Admin shell.
 
 Compact mode must not hide errors, warnings, destructive-action context or required information. On touch/mobile layouts, minimum touch-target sizes remain intact even when Compact is selected.
 
@@ -675,7 +736,7 @@ Storage roles include:
 
 The Native Download Workspace is temporary operational storage for incomplete download, verification/repair, extraction and staging. It is distinct from final Generic Downloads.
 
-Path selection uses a server-side safe browser restricted to permitted Mounts. Native downloader transport/server settings live in Acquisition/Usenet settings, not Storage.
+Path selection uses a server-side safe browser restricted to permitted Mounts. Native downloader transport/server settings live in the dedicated Downloader Admin area, not Storage or Acquisition.
 
 ## 23a. Native Downloader Admin
 
@@ -912,7 +973,7 @@ Source-specific path translation belongs to that migration/coexistence adapter a
 
 Dry Run is mandatory before persistent migration. Unsupported or ambiguous source semantics remain visible in preview/report rather than being silently guessed.
 
-The existing Sonarr coexistence safety behavior remains preserved until the general cross-source ownership/coexistence product contract is explicitly approved.
+The generalized manager-coexistence contract is approved. Manager-style integrations expose, only when their adapter supports the required safety capabilities, the Work-level modes **Extern verwaltet**, **Gemeinsam** and **Jularr verwaltet**. Defaults are configured per integration × media/content type with optional per-Work overrides. At most one external manager may co-manage a Work with Jularr. **Gemeinsam** is a permanent advanced mode and fails closed when the external manager cannot be observed. After handover to **Jularr verwaltet**, the integration may remain connected for read-only conflict observation; disabling external monitoring is an explicit, previewed handover option.
 
 ## 28. Responsive profiles
 

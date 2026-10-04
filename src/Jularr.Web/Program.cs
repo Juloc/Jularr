@@ -331,6 +331,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.AddSingleton<MediaProcessRunner>();
 builder.Services.AddScoped<LibraryScanner>();
+builder.Services.AddScoped<CanonicalMediaStorageService>();
+builder.Services.AddScoped<CanonicalVideoStorageBackfillService>();
 builder.Services.AddSingleton<IMediaProbeRunner, FfprobeMediaProbeRunner>();
 builder.Services.AddSingleton<MediaInventoryService>();
 builder.Services.AddSingleton<IMediaContainerRemuxer, FfmpegMediaContainerRemuxer>();
@@ -404,6 +406,10 @@ builder.Services.AddSingleton<TrickplayGenerator>();
 builder.Services.AddSingleton<SeasonSegmentDetectionQueue>();
 builder.Services.AddScoped<MediaSegmentService>();
 builder.Services.AddScoped<MediaSegmentSidecarImporter>();
+builder.Services.AddScoped<VideoProgressService>();
+builder.Services.AddScoped<CanonicalVideoTargetResolver>();
+builder.Services.AddScoped<CanonicalVideoProgressBackfillService>();
+builder.Services.AddScoped<ActiveSessionService>();
 builder.Services.AddScoped<EpisodeProgressService>();
 builder.Services.AddScoped<ClientApiService>();
 builder.Services.AddScoped<ClientApiOfflineService>();
@@ -798,6 +804,22 @@ static async Task InitializeDatabaseAsync(
 
     var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
     await Jularr.Web.Data.SqliteImport.SqliteToPostgresImporter.RunIfNeededAsync(db, configuration, log);
+
+    var canonicalVideoBackfill = scope.ServiceProvider.GetRequiredService<CanonicalVideoStorageBackfillService>();
+    var backfilledVideoFiles = await canonicalVideoBackfill.BackfillLegacyAnimeAsync(
+        libraryRootId: null,
+        CancellationToken.None);
+    if (backfilledVideoFiles > 0)
+    {
+        log($"Backfilled {backfilledVideoFiles} legacy Anime file(s) into canonical video Assets.");
+    }
+
+    var canonicalProgressBackfill = scope.ServiceProvider.GetRequiredService<CanonicalVideoProgressBackfillService>();
+    var backfilledProgress = await canonicalProgressBackfill.BackfillLegacyAnimeAsync(CancellationToken.None);
+    if (backfilledProgress > 0)
+    {
+        log($"Backfilled {backfilledProgress} legacy Anime progress row(s) into canonical MediaProgress.");
+    }
 
     if (await db.LibraryRoots.AnyAsync())
     {

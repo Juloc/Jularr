@@ -227,10 +227,35 @@ equivalent. **Exists** (reading media here, anime on Mapping Review).
 
 ## 4. Admin navigation
 
-Target groups per #510 ("Dashboard, Library, Acquisition, Wanted/Missing, Queue, Downloads,
-Metadata & Mapping, Subtitles, Media Processing, Playback & Sessions, Storage, Calendar/Releases,
-Jobs/Activity, Integrations, Users & Permissions, Settings, Diagnostics") against the current
-catalog in `src/Jularr.Web/Features/Localization/UiShellNavigation.cs`:
+The binding target Admin information architecture is `docs/UX.md` §17 plus the individual Admin screen specs.
+
+Permanent owning destinations are consolidated around:
+- Dashboard;
+- Activity / To-Do, with History as the third tab;
+- Library, Wanted and Requests;
+- Downloader;
+- Providers, including the Reading Sources family and its enablement/priority/fallback configuration;
+- Acquisition Profiles;
+- Storage;
+- AI;
+- Users & Permissions;
+- Devices & Sessions;
+- Notifications;
+- Backup & Restore;
+- Migration;
+- System & Diagnostics;
+- Instance;
+- General Settings;
+- Appearance;
+- conditional Games administration when Games is available.
+
+Manual Search, Media Detail, assignment/reconciliation editors, Setup and Games editors/import-resolution are contextual flows rather than extra permanent sidebar destinations.
+
+Reading Sources do not get another permanent Admin destination. The current `/Admin/ReadingSources` surface is an implementation-migration input to `Admin → Providers → Reading Sources`; future reading-source adapters must extend that shared Provider family instead of adding pages.
+
+Legacy `/Admin/Resources`, `/Admin/Health`, `/Admin/Logs`, `/Admin/Sessions`, `/Admin/Devices`, `/Admin/History`, `/Admin/Usenet`, `/Admin/Sonarr`, `/Admin/Scans` and older `/Settings/*` configuration routes are implementation migration inputs. They may redirect/deep-link into their target owner after feature parity; they do not define target ownership.
+
+The table below is therefore a **current implementation inventory against the older #510 grouping**, not the target navigation contract:
 
 | Target group | Current route | State |
 | --- | --- | --- |
@@ -242,8 +267,8 @@ catalog in `src/Jularr.Web/Features/Localization/UiShellNavigation.cs`:
 | Metadata & Mapping | `/Settings/MappingReview`, `/Settings/MappingSegments` (admin-mapping) | Exists — configurable provider roles and the anime range-mapping apply/preview/audit workflow, see §3 |
 | Subtitles | `/Admin/Subtitles`, `/Settings/Subtitles` (admin-subtitles) | Exists |
 | Media Processing | no dedicated nav entry (optimizer/trickplay/segments run as background Operations, surfaced only in `/Admin/Operations`) | Partial |
-| Playback & Sessions | **missing** — no admin sessions page exists (`Features/PlaybackSessions` has the hub/coordinator/store but no admin view) | Missing. #518 |
-| Storage | `/Admin/System` (admin-system, roots/wake/health); the container-aware folder browser behind the path fields of `/Settings/Acquisition` (`Features/Storage/FolderBrowse`, #604); `/Admin/Storage` storage insights (#414: usage per root and media type from the library inventory, largest files, Jularr cache use and a previewed safe cleanup of unusable cache leftovers), linked from the `/Admin` overview and not from the shell nav catalog | Exists |
+| Playback & Sessions | `/Admin/Sessions`, `/Admin/Devices` | Exists as separate current surfaces; target consolidation into **Devices & Sessions** is pending. #518 |
+| Storage | Target owner is Admin **Storage** per `docs/mockups/admin-storage/SPEC.md`: physical Mounts/LibraryRoots, safe path/routing, capacity/reserve plus #414 lifecycle policies, Review, optimization, tiering/physical migration, integrity analysis, forecast and history. Current `/Admin/System` still exposes roots/wake/health; current `/Admin/Storage` implements inventory insights + safe Jularr-cache cleanup only. | Partial — #414 lifecycle target is substantially larger than the current insights/cache-cleanup implementation. |
 | Calendar / Releases | consumer `/Calendar` only; no admin releases nav entry | Partial |
 | Jobs / Activity | `/Admin/Operations`, `/Admin/Scans`, `/Admin/Logs` (admin-operations, admin-scans, admin-logs) | Exists |
 | Integrations | `/Admin/Usenet`, `/Admin/Sonarr` (admin-usenet, admin-sonarr) | Partial — Usenet/Sonarr only, no general integrations hub (Prowlarr health lives under Usenet) |
@@ -349,7 +374,7 @@ each row's Where.
 | Acquisition (search/download/import) | Exists | `Features/ReadingAcquisition`, `AcquisitionRequestService` | — |
 | Monitoring/wanted | Exists | `WantedAcquisitionService` | — |
 | Metadata/provider mapping | Exists (AniList) | Manga/Novel AniList match services | — |
-| Configurable Light Novel search sources | Exists — the owner enables and prioritises sources (Narou, AniList, BOOK☆WALKER, WebNovel, Internet Archive) at `/Admin/ReadingSources`; each has a capability (public full text, published edition, preview, external reference), a licensing note and in-memory health. Discovery-only sources list results and link out, and cannot be added; Internet Archive lists only open or lendable items. See [READING_ACQUISITION.md](READING_ACQUISITION.md#reading-sources). **Follow-up:** the settings page is only linked from the Light Novel Add dialog, not from the Admin navigation | `Features/ReadingSources`, `Features/ReadingDiscovery`, `Pages/Admin/ReadingSources.cshtml` | #477 |
+| Configurable Light Novel search sources | Exists for current enable/disable + priority — Narou, AniList, BOOK☆WALKER, WebNovel and Internet Archive are configured at `/Admin/ReadingSources`, with capability/licensing/health and rights-aware Internet Archive filtering. **Target:** consolidate this into `Admin → Providers → Reading Sources`, add explicit Normal vs Fallback-only participation (including Internet Archive as a configurable fallback), media/language applicability and schema-driven future adapters without new pages. Acquisition Profiles may narrow/prefer the configured providers but cannot override adapter rights/capability limits. See [READING_ACQUISITION.md](READING_ACQUISITION.md#reading-sources) and [admin-providers/SPEC.md](mockups/admin-providers/SPEC.md). | `Features/ReadingSources`, `Features/ReadingDiscovery`, `Pages/Admin/ReadingSources.cshtml` | #477, #438 |
 | Naming/organization | Exists — one naming-template profile per reading media type (Books, Manga, Light Novels), applied when a release is placed into its NAS library root; live preview and token reference on `/Settings/ReadingNaming` (sibling of anime's `/Settings/Naming`) | `Features/Naming`, `Pages/Settings/ReadingNaming.cshtml(.cs)` | — |
 | Reading progress | Exists | `NovelProgress`, `MangaProgressItem`, bookmarks/highlights | — |
 | Multiple editions/formats | Exists (Books) | `BookEdition`/`BookFile` (EPUB, PDF) | — |
@@ -504,3 +529,17 @@ The layer boundary also applies to search/discovery presentation:
 - Exact season/part searches may surface/deep-link that target directly.
 - Admin mapping/review owns corrections. Consumer surfaces consume the resolved mapping and do not expose provider-coordinate complexity.
 
+## Storage lifecycle target (#414)
+
+Binding Storage UX/spec ownership is in `docs/mockups/admin-storage/SPEC.md`.
+
+Important boundary:
+- #411 = canonical storage availability/integrity-safety state;
+- #815 = LibraryRoot routing/default placement for future imports;
+- #414 = retention, cleanup, optimization, candidate/review policy, tiering, physical LibraryRoot migration/evacuation, forecast/accounting and lifecycle history;
+- #433 Migration Center = external-system/configuration migration into Jularr, not physical root-to-root storage migration;
+- #415 = disposable client/offline-prefetch copies, never canonical-media eviction.
+
+The target allows explicitly enabled Automatic canonical-media policies, but low free space alone never enables them. All destructive actions remain Requirement-aware, preview/audit driven and preserve logical Work/user state unless an explicit domain operation changes that state.
+
+Current implementation is narrower: `/Admin/Storage` only has storage insights and safe cleanup of Jularr-owned disposable cache leftovers. Documentation describing current behavior must not imply the full #414 target is already implemented.

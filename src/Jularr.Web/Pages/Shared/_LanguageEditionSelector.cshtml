@@ -1,0 +1,110 @@
+@model Jularr.Web.Ui.LanguageEditionSelectorModel
+@using Jularr.Web.Ui
+@*
+    Shared Language & Edition selector (docs/mockups/language-edition-selector/SPEC.md). Render with one line:
+        <partial name="_LanguageEditionSelector" model="selectorModel" />
+    Hosts render it only when selectorModel.IsMeaningful. Reader contract: build the model for the reader's work, render the
+    partial, and listen on the dialog (id = Model.Id) for the cancelable "jularr:edition-selected" CustomEvent
+    (detail: { selectorId, key, language, url }). Calling preventDefault() stops the default navigation to detail.url so the
+    reader can switch in place and restore its locator itself. window.JularrLanguageEditionSelector.showError(id, text)
+    shows a local switch failure inside the open dialog. The dialog is a native <dialog>: Escape closes it, focus returns to
+    the trigger, and below 720px it is styled as a bottom sheet. The partial never navigates to Request or mutates state itself;
+    row actions are plain antiforgery-protected POST forms supplied by the host.
+*@
+@{
+    var ui = Model.Ui;
+    var titleId = $"{Model.Id}-title";
+    var statusLabels = new Dictionary<EditionState, string>
+    {
+        [EditionState.Current] = ui["languageEdition.state.current"],
+        [EditionState.Available] = ui["languageEdition.state.available"],
+        [EditionState.Partial] = ui["languageEdition.state.partial"],
+        [EditionState.Unavailable] = ui["languageEdition.state.unavailable"]
+    };
+}
+<link rel="stylesheet" href="~/css/language-edition-selector.css" asp-append-version="true" />
+<script src="~/js/language-edition-selector.js" asp-append-version="true" defer></script>
+
+<button type="button"
+        class="button language-edition-trigger"
+        data-language-edition-open="@Model.Id"
+        aria-haspopup="dialog"
+        aria-controls="@Model.Id">
+    <span>@ui["languageEdition.title"]</span>
+    <strong>@Model.CurrentLanguage.Name</strong>
+</button>
+
+<dialog class="language-edition-dialog"
+        id="@Model.Id"
+        aria-labelledby="@titleId"
+        data-language-edition-dialog>
+    <div class="language-edition-header">
+        <div>
+            <h2 id="@titleId">@ui["languageEdition.title"]</h2>
+            <p>@Model.WorkTitle</p>
+        </div>
+        <form method="dialog"><button class="button" type="submit">@ui["languageEdition.close"]</button></form>
+    </div>
+
+    <label class="language-edition-language">
+        <span>@ui["languageEdition.language"]</span>
+        <select data-language-edition-language>
+            @foreach (var language in Model.Languages)
+            {
+                <option value="@language.Code" selected="@(language.Code.Equals(Model.CurrentLanguageCode, StringComparison.OrdinalIgnoreCase))">@language.Name</option>
+            }
+        </select>
+    </label>
+
+    <p class="language-edition-error" role="alert" data-language-edition-error hidden></p>
+
+    <ul class="language-edition-list">
+        @foreach (var edition in Model.Editions)
+        {
+            var isCurrentLanguage = edition.LanguageCode.Equals(Model.CurrentLanguageCode, StringComparison.OrdinalIgnoreCase);
+            var provenanceLabel = edition.Provenance == EditionProvenance.Official ? ui["languageEdition.official"] : ui["languageEdition.generated"];
+            var stateLabel = statusLabels[edition.State];
+            var rowLabel = ui.Format("languageEdition.rowLabel", ("title", edition.Title), ("provenance", provenanceLabel), ("state", stateLabel));
+            <li class="language-edition-row"
+                data-language-edition-row
+                data-language="@edition.LanguageCode"
+                data-state="@edition.State.ToString().ToLowerInvariant()"
+                data-provenance="@edition.Provenance.ToString().ToLowerInvariant()"
+                hidden="@(!isCurrentLanguage)">
+                @if (edition.SelectUrl is not null)
+                {
+                    <a class="language-edition-select"
+                       href="@edition.SelectUrl"
+                       data-edition-key="@edition.Key"
+                       aria-label="@rowLabel"
+                       aria-current="@(edition.State == EditionState.Current ? "true" : null)">
+                        <span class="language-edition-name">@edition.Title</span>
+                        <span class="language-edition-tag" data-provenance="@edition.Provenance.ToString().ToLowerInvariant()">@provenanceLabel</span>
+                        <span class="language-edition-description">@edition.Description</span>
+                        <span class="language-edition-state">@(edition.Progress ?? stateLabel)</span>
+                    </a>
+                }
+                else
+                {
+                    <div class="language-edition-select" aria-label="@rowLabel" role="group">
+                        <span class="language-edition-name">@edition.Title</span>
+                        <span class="language-edition-tag" data-provenance="@edition.Provenance.ToString().ToLowerInvariant()">@provenanceLabel</span>
+                        <span class="language-edition-description">@edition.Description</span>
+                        <span class="language-edition-state">@stateLabel</span>
+                    </div>
+                }
+
+                @if (edition.Action is not null)
+                {
+                    <form method="post" action="@edition.Action.PostUrl" asp-antiforgery="true" class="language-edition-action">
+                        @foreach (var field in edition.Action.Fields)
+                        {
+                            <input type="hidden" name="@field.Key" value="@field.Value" />
+                        }
+                        <button class="button" type="submit">@edition.Action.Label</button>
+                    </form>
+                }
+            </li>
+        }
+    </ul>
+</dialog>

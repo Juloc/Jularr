@@ -569,7 +569,9 @@ Where supported:
 - grab immediately at score >= X;
 - optional maximum wait;
 - provider/source allowlist;
-- provider/source preference or penalty.
+- provider/source preference or penalty;
+- capability/content-type-specific provider preference;
+- whether configured fallback-only providers may be used for this profile/media kind.
 
 ### Source/provider restrictions
 
@@ -578,12 +580,24 @@ The profile may say:
 - all eligible release-search providers;
 - only selected providers;
 - prefer selected providers;
-- avoid selected providers.
+- avoid selected providers;
+- allow or disallow the configured fallback tier for this profile/media kind.
 
 This references Provider IDs/capabilities.
 
+For Reading Sources, the shared Admin Provider configuration is the canonical owner of whether a source is enabled, its declared capabilities and whether it normally participates or is **Fallback only**. An Acquisition Profile may narrow the eligible set or preference for a media kind, but it must not duplicate provider configuration.
+
+Example for Light Novels/Books:
+
+`normal Reading Sources → normal acquisition/search → fallback-only Reading Sources such as Internet Archive when no acceptable result exists`
+
+The exact order is capability-aware: a reference/preview source remains reference/preview even when it is the only fallback result. A profile cannot promote it into an importer.
+
 It does **not** own:
 - provider URL/API key;
+- provider enable/disable state;
+- provider capability declarations;
+- mandatory licensing/rights/access checks;
 - rate limits;
 - provider health.
 
@@ -787,11 +801,22 @@ Opening score details reuses the same explanation contract as Score-Test.
 
 Provider/indexer configuration remains in Admin Providers.
 
+This includes the Reading Sources family. Admin Providers owns:
+- adapter registration/configuration;
+- enable/disable;
+- capabilities;
+- priority;
+- Normal vs Fallback-only participation;
+- health/backoff;
+- credentials/endpoints where applicable;
+- licensing/access notes and mandatory safety constraints.
+
 Acquisition Profile may reference:
 - allowed provider IDs;
-- preferred/avoided provider IDs.
+- preferred/avoided provider IDs;
+- whether the configured fallback tier is eligible for the profile/media kind.
 
-It never stores provider credentials.
+It never stores provider credentials and never overrides provider safety/capability limits.
 
 ## Relationship to Downloader
 

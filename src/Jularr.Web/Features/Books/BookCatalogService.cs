@@ -393,11 +393,25 @@ public sealed partial class BookCatalogService(
                     && x.WorkId == workId,
                 cancellationToken);
 
+        var coverage = await (
+                from translation in db.NovelTranslations.AsNoTracking()
+                join chapter in db.NovelChapters.AsNoTracking()
+                    on translation.ChapterId equals chapter.Id
+                where chapter.WorkId == workId
+                    && translation.ProviderId == cacheIdentity
+                    && translation.PromptVersion == TranslationPromptVersion
+                    && translation.SourceHash == chapter.SourceHash
+                group translation.ChapterId by translation.TargetLanguage into languageGroup
+                orderby languageGroup.Key
+                select new BookTranslationCoverage(languageGroup.Key, languageGroup.Distinct().Count()))
+            .ToListAsync(cancellationToken);
+
         return new BookLibraryDetail(
             work,
             ParseGenres(work.MetadataGenresJson),
             chapters,
-            progress);
+            progress,
+            coverage);
     }
 
     public async Task<BookReaderChapter?> GetReaderChapterAsync(
@@ -929,7 +943,6 @@ public sealed partial class BookCatalogService(
                     translationMode,
                     index,
                     chunk,
-                    localContext,
                     cancellationToken);
 
                 if (!string.IsNullOrWhiteSpace(cachedChunk))
@@ -1016,7 +1029,6 @@ public sealed partial class BookCatalogService(
                     translationMode,
                     index,
                     chunk,
-                    localContext,
                     candidate,
                     cancellationToken);
 

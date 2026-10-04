@@ -34,6 +34,8 @@ Settings:
 
 Workspace selectors reference Storage roles only.
 
+The native downloader enabled state is a Downloader service setting (for choosing whether Jularr's built-in transport may accept work), **not** an `InstanceModule` switch. It must not create a fake module gate or hide unrelated Acquisition/Downloader compatibility configuration.
+
 ## Retry / failure behavior
 
 Configure:

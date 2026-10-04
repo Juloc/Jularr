@@ -29,6 +29,37 @@ Migration never keeps a legacy source model as a second long-term authority.
 
 Migration is also the owning Admin surface for **external-manager coexistence and handover state** when a supported adapter remains connected after the initial import. This must not create a second canonical media/acquisition model.
 
+
+## Physical Storage migration boundary
+
+Migration Center owns migration **from external/legacy systems into Jularr** and external-manager coexistence/handover.
+
+It does not own moving already-canonical Jularr media between LibraryRoots.
+
+Physical LibraryRoot migration, cold tiering and evacuation are owned by Admin Storage / #414 and reuse the Storage safe-transfer contract.
+
+Importing/mapping an external Sonarr/Radarr/etc. root:
+- may map/create the appropriate Jularr LibraryRoot;
+- must not implicitly move existing media;
+- must not silently trigger a #414 lifecycle policy.
+
+After the external-state migration is complete, an admin may separately launch Storage's preview-first physical migration workflow.
+
+Both flows preserve canonical Work identity and have independent Dry Run/history/audit.
+
+
+## Backup / Restore boundary
+
+Migration and Backup/Restore are separate Admin owners.
+
+Route source material as follows:
+- a recognized current/versioned Jularr backup archive -> **Backup & Restore**;
+- a legacy `AcquisitionBackupBundle` -> **Backup & Restore** legacy Acquisition-only restore/import flow;
+- an old Jularr database/configuration/layout that is not a supported backup archive -> **Migration Center**;
+- Sonarr/Radarr/Readarr/Plex/Jellyfin/Emby/folder/JSON/CSV source migration -> **Migration Center**.
+
+Migration adapters may be reused internally by restore/version-upgrade code, but the UI must not offer the same artifact as two competing import/restore workflows.
+
 ## Current Sonarr implementation on dev
 
 The existing Sonarr integration already has production-relevant safety behavior that must be preserved while Migration Center is generalized:

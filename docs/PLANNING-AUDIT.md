@@ -118,11 +118,16 @@ Mobile primary navigation is now locked to `Home · Library · Calendar · Learn
 
 The next work should therefore not invent additional pages merely to continue planning.
 
+The Admin cross-spec consistency pass is now complete at planning-contract level.
+
+Implementation handoff: `docs/implementation/admin-navigation-route-consolidation.md`.
+
 Remaining work is primarily:
 
-- resolve any contradictions between global UX, domain/architecture and individual screen specs;
-- complete page-specific visual approval where a spec explicitly still requires it;
-- keep Games page-by-page planning separate from core media completion;
+- implement the consolidated Admin shell/legacy-route redirects without creating duplicate owners;
+- complete page-specific visual approval only where a spec explicitly still requires it;
+- keep Games page-by-page implementation separate from core media completion;
+- prioritize dependency-ordered implementation of the canonical request -> acquisition -> import -> playback path;
 - keep implementation dependent on the canonical persistence/application contracts in the roadmap.
 
 A new screen should be added only when a concrete workflow cannot be represented cleanly by an existing page, dialog, sheet or state.

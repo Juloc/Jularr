@@ -167,13 +167,30 @@ Each library root (`/Admin/System`) can enable Wake-on-LAN with a MAC address an
 - **Diagnostics.** Every send attempt logs the library root id, MAC address and the resolved destination endpoint. A library root in `Error` state distinguishes a send failure (`StorageDiagnosticCodes.WakeSendFailed`, for example `SocketException: Network is unreachable`, which can itself indicate the configured address is unroutable from the container) from a timeout waiting for the storage after a packet was sent (`StorageDiagnosticCodes.WakeTimeout`).
 - **Host networking remains a documented fallback**, not a requirement: `network_mode: host` (or a macvlan network) gives the container a real LAN-facing interface, after which the default `255.255.255.255` broadcast works like it would on any other LAN host. This trades away Docker's network isolation for the `jularr` service and needs the owner's own `compose.yaml` change; Jularr does not switch this automatically.
 
-## Storage insights and safe cleanup
+## Storage insights and current safe cleanup
 
-`/Admin/Storage` (linked from the `/Admin` overview) shows where disk space goes (#414).
+`/Admin/Storage` currently implements the first narrow slice of #414.
 
-- **Usage** comes from the library inventory (`MediaFile.SizeBytes` from the last reconciliation, audiobook and book file sizes), never from a filesystem scan of the library roots. A root's state is read from the cached availability; a root that could be a sleeping Wake-on-LAN NAS and was never observed is shown as "Not checked" and is not probed. A root that is not online keeps its last-scan figures, marked "As of the last scan", without free space.
-- **Jularr cache** lists the rebuildable data Jularr keeps on the `/data` volume: prepared playback files, streaming sessions, seek previews, artwork, audio fingerprints and manga pages.
-- **Safe cleanup** previews before it removes anything and only covers entries Jularr can prove unusable: prepared playback files and seek previews whose media file is gone or changed in the database, work files left by interrupted jobs, and streaming sessions idle for over an hour. Artwork, fingerprints and manga pages are measured only. The cleanup recomputes the list when it runs, refuses anything outside its cache area or at, above or inside a library root or known media path, and never opens a library root. Library media is never deleted by Jularr automatically.
+- **Usage** comes from the library inventory (`MediaFile.SizeBytes` from the last reconciliation, audiobook and book file sizes), never from an unbounded filesystem scan of library roots. A root's state is read from cached availability; a root that could be a sleeping Wake-on-LAN NAS and was never observed is shown as "Not checked" and is not probed. A root that is not online keeps its last-scan figures, marked "As of the last scan", without free space.
+- **Jularr cache** lists rebuildable data on `/data`: prepared playback files, streaming sessions, seek previews, artwork derivatives, audio fingerprints and manga pages.
+- **Current safe cleanup** only removes Jularr-owned cache leftovers it can prove unusable: prepared playback files and seek previews whose media file is gone/changed in the database, work files left by interrupted jobs, and streaming sessions idle for over an hour. Artwork derivatives, fingerprints and manga pages are measured only where their existing owner manages lifetime.
+- Cleanup recomputes the candidate list at execution time and refuses anything outside its permitted cache area or at/above/inside a LibraryRoot or known media path.
+- **Current implementation does not delete canonical library media automatically.**
+
+### #414 target lifecycle (not yet equivalent to the current implementation)
+
+The approved target in `docs/mockups/admin-storage/SPEC.md` adds explicit Off/Review/Automatic lifecycle policies for canonical media, plus Requirement-aware version pruning, optimization, cold tiering, physical root migration/evacuation, integrity/orphan analysis, true-physical-savings accounting, forecasts, What-if simulation, grace/undo and policy/audit history.
+
+The future Automatic mode is only valid when an admin explicitly enables that policy. Storage pressure by itself never enables canonical-media deletion.
+
+All future canonical-media actions must reuse #411 availability safety, #815 LibraryRoot routing/capabilities and the canonical Work/Asset/File/Track + Requirement model; they must not extend the existing cache cleanup by simply allowing arbitrary LibraryRoot paths.
+
+Artwork distinction:
+- rebuildable local derivatives remain safe cache;
+- canonical artwork remains beside media by default;
+- optional canonical-artwork downsizing is a separate explicit #414 lifecycle optimization with preview, validation, quality floor and custom-art protection.
+
+Operational lifecycle jobs should use the shared Operations/Activity infrastructure rather than create a second job-history system.
 
 ## Lossless playback optimization
 

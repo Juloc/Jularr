@@ -297,9 +297,9 @@ public sealed class MediaInventoryTests
             new PlaybackCueProjector(new EmptyMorphology()),
             fixture.Inventory);
 
-        var snapshot = await playback.GetMediaAsync(media.EpisodeId, CancellationToken.None);
+        var snapshot = await playback.GetMediaAsync(media.EpisodeId!.Value, CancellationToken.None);
         var stream = await playback.GetStreamAsync(
-            media.EpisodeId,
+            media.EpisodeId!.Value,
             new PlaybackStreamRequest(PlaybackRequestedMode.Device),
             CancellationToken.None);
 

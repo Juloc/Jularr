@@ -773,3 +773,31 @@ V1 is complete only when:
 - No restore that silently invents missing Storage paths.
 - No permanent separate Acquisition backup system.
 - No dependence on legacy per-media tables as the long-term backup format.
+
+
+## Storage Lifecycle backup boundary (#414)
+
+Backup/Restore must preserve durable Storage Lifecycle **intent/state**, not media payloads.
+
+Include where implemented:
+- lifecycle policies and policy revisions;
+- Off/Review/Automatic mode;
+- explicit Keep / Never-delete / temporary-Keep protections;
+- quality floors, exclusions and maintenance/resource rules;
+- root/library policy assignments;
+- reacquisition suppressions/guards required to prevent intentionally cleaned media from being immediately reacquired;
+- lifecycle audit/history according to the normal retention contract.
+
+Do not include:
+- canonical media payloads;
+- trash/grace-period media bytes;
+- optimized/transcode working outputs;
+- temporary migration copies;
+- rebuildable storage analytics/cache.
+
+Restore safety:
+- restored policies remain bound to canonical IDs where valid;
+- missing/remapped LibraryRoots are unresolved until Storage mapping/validation completes;
+- destructive Automatic policies stay paused for unresolved/offline-invalid root assignments;
+- restore preview must call out lifecycle policies/protections that cannot be mapped;
+- Backup/Restore never executes a lifecycle cleanup merely because restored state references a missing file/root.

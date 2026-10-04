@@ -97,7 +97,7 @@ public sealed class AnimeRepairService(
             .ToListAsync(cancellationToken);
         var episodeIds = episodes.Select(x => x.Id).ToArray();
         var mediaFiles = await db.MediaFiles
-            .Where(x => episodeIds.Contains(x.EpisodeId))
+            .Where(x => x.EpisodeId.HasValue && episodeIds.Contains(x.EpisodeId.Value))
             .ToListAsync(cancellationToken);
 
         var nfoWarnings = RereadNfo(anime, episodes, mediaFiles, animeDirectory);

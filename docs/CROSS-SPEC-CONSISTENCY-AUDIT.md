@@ -2,7 +2,7 @@
 
 Date: 2026-10-03  
 Branch baseline: `dev`  
-Status: **core consistency pass complete; no unresolved direct cross-spec contradiction remains**.
+Status: **core + Admin consistency pass complete; no unresolved direct cross-spec contradiction remains after the fixes recorded below**.
 
 This audit compares the current canonical domain/architecture/global UX contracts with the binding screen specs. It is a documentation consistency audit, not an implementation audit.
 
@@ -251,3 +251,108 @@ Core Media, Request, Library, Collections, Discover, Detail, Player, Reader, Pro
 No new generic core consumer screen is required by this audit.
 
 The previous Mobile Games-vs-Learning contradiction is resolved.
+
+
+## 21. Admin navigation / route ownership — aligned
+
+The global Admin navigation is normalized to one permanent destination per owning area.
+
+Key results:
+- History is the third tab of Activity / To-Do, not a second permanent sidebar destination;
+- Manual Search is contextual inside the Acquisition dialog;
+- Downloader is one destination with internal secondary navigation;
+- Indexer/Search and other provider configuration belongs to Providers;
+- external download-client configuration belongs to Downloader -> Externe Clients;
+- AI provider/model configuration belongs to Admin AI;
+- Resources/Health/Logs consolidate into System & Diagnostics;
+- Sessions/Devices consolidate into Devices & Sessions;
+- Scan/reconciliation starts from Storage/LibraryRoot and runs through Activity;
+- Setup and repair/editor flows remain contextual.
+
+Legacy routes may remain only as compatibility redirects/deep links while implementation catches up.
+
+## 22. Storage / Downloader / Acquisition / Migration ownership — aligned
+
+The owning split is consistent:
+
+- **Storage** -> Mounts, LibraryRoots, managed storage roles, safe local paths, final destination defaults and import placement strategy;
+- **Downloader** -> native Usenet transport, queue, verify/repair/extract, bandwidth/schedule and external download-client adapters;
+- **Providers** -> Indexer/Search, Metadata, Subtitles, Translation, Reading Sources and other provider adapter configuration;
+- **Acquisition Profiles** -> quality, upgrade, language, Release Rules, scoring, wait/delay and source/provider preference;
+- **Migration adapter** -> source-manager path translation/coexistence state;
+- **content importer/library layer** -> content-specific naming/organization inside the Storage-selected target;
+- **Games Admin** -> BIOS/Firmware requirement/validation/binding, while Storage owns the restricted BIOS/Firmware path.
+
+There is no permanent global Import & Routing page and Acquisition does not own filesystem naming/path policy. BIOS/Firmware is neither a Games LibraryRoot nor Generic Downloads.
+
+## 23. Activity / History / domain diagnostics — aligned
+
+One canonical operational model remains authoritative.
+
+- Dashboard is a live projection, not a job store;
+- Activity / To-Do owns live/actionable cross-system operations;
+- History is the completed/resolved tab of that same operational area;
+- Downloader Completed/Failed is downloader-specific technical detail over shared operational data;
+- AI Jobs & Usage is an AI-focused projection plus AI usage telemetry, not another global job store;
+- Notification delivery history is sink-attempt diagnostics and is explicitly distinct from Activity/History;
+- System Runtime is worker/runtime health rather than a competing business-operation queue.
+
+## 24. Setup / Instance module gating — aligned
+
+Setup Wizard uses the same canonical stores as normal Admin pages.
+
+It may not invent independent Instance switches for AI, Native Downloader, Games, Requests or Generic Downloads before complete runtime gates exist.
+
+The Setup module list now mirrors the canonical `InstanceModule` contract instead of maintaining an incomplete Setup-only list. The Downloader and AI setup steps are conditioned on real capability/configuration availability rather than fake module toggles. The native-downloader on/off setting is explicitly a Downloader service setting, not an InstanceModule. Final setup health tests run only for configured owners.
+
+## 25. Sonarr migration / coexistence — aligned
+
+The old Anime-specific Sonarr document is explicitly an implementation bridge to the generalized Migration Center contract.
+
+Binding target:
+- ownership at Work level only;
+- modes **Extern verwaltet**, **Gemeinsam**, **Jularr verwaltet**;
+- default per integration instance × media/content type;
+- optional per-Work override;
+- at most one external manager + Jularr per Work;
+- **Gemeinsam** is permanent/advanced and fails closed without reliable observation;
+- **Jularr verwaltet** may keep Sonarr connected for read-only conflict observation;
+- monitoring handover is explicit/previewed;
+- source path translation belongs to the Sonarr migration/coexistence adapter.
+
+Legacy `/Settings/SonarrMigration`, `/Admin/Sonarr` and Anime remote-path mappings are migration inputs, not target owners.
+
+## 26. Backup / Migration boundary — aligned
+
+Artifact routing is explicit:
+- recognized current/versioned Jularr backup -> Backup & Restore;
+- legacy Acquisition backup bundle -> Backup & Restore legacy Acquisition-only flow;
+- old Jularr database/layout that is not a supported backup -> Migration Center;
+- external manager/media-server/folder/JSON/CSV migration -> Migration Center.
+
+The same artifact must not appear as two competing restore/import workflows.
+
+## 27. Admin density / permissions — aligned
+
+`Detailliert | Kompakt` remains one profile-scoped Admin-shell preference. Appearance may expose it only as a shortcut to the same state; no page owns a second density setting and no business logic changes with density.
+
+Authorization remains server-side/capability-based. Hidden navigation is not authorization, and no Admin screen may create its own disconnected permission model.
+
+For AI specifically, Users & Permissions owns base Account/Profile/group/role eligibility for shared instance AI. Admin AI owns only AI-service-specific narrowing and limits; effective access is the intersection of the two contracts.
+
+## 28. Remaining Admin implementation gaps — not spec contradictions
+
+Current `dev` still contains legacy implementation routes/navigation such as standalone Resources, History, Sessions, Scans, Logs, Usenet and System/Sonarr settings.
+
+These are implementation migration tasks. They no longer represent competing target contracts.
+
+Provider-specific operational pages such as subtitle completeness/manual subtitle work may remain feature surfaces, but provider **configuration** must converge on Admin Providers rather than being duplicated.
+
+## 29. Updated result
+
+The Admin planning contracts are consistent enough to stop inventing new generic Admin pages.
+
+Next work should be:
+1. implement/consolidate the target Admin shell and redirects without losing current functionality;
+2. migrate legacy settings/state to their canonical owners;
+3. execute dependency-ordered implementation, with Anime/Movie/TV request -> acquisition -> import -> playback as the primary product path.

@@ -1,6 +1,7 @@
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Progress;
 
 namespace Jularr.Web.Features.ClientApi;
 
@@ -260,13 +261,21 @@ public static class ClientApiPlaybackPlanEndpoints
             return Results.File(asset.Path, asset.ContentType, enableRangeProcessing: asset.EnableRangeProcessing);
         });
 
-        group.MapDelete("/stream-sessions/{sessionId:guid}", (
+        group.MapDelete("/stream-sessions/{sessionId:guid}", async (
             Guid sessionId,
             PlaybackStreamSessionStore sessions,
-            CurrentAccountContext currentAccount) =>
-            sessions.Remove(sessionId, currentAccount.ProfileId)
-                ? Results.NoContent()
-                : SessionNotFound());
+            ActiveSessionService activeSessions,
+            CurrentAccountContext currentAccount,
+            CancellationToken cancellationToken) =>
+        {
+            if (!sessions.Remove(sessionId, currentAccount.ProfileId))
+            {
+                return SessionNotFound();
+            }
+
+            await activeSessions.EndAsync(sessionId, currentAccount.ProfileId, cancellationToken);
+            return Results.NoContent();
+        });
 
         return endpoints;
     }

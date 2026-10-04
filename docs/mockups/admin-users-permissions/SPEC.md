@@ -23,6 +23,18 @@ Create/invite where supported, enable/disable, assign groups/roles, edit capabil
 
 Instance-wide Login-provider enablement/configuration belongs to provider/auth settings; this page manages which identities belong to a specific Account and the resulting user/profile policy.
 
+## AI authorization boundary
+
+Users & Permissions owns the canonical Account/Profile/group/role capability that determines whether a subject is eligible to use shared instance AI.
+
+Admin AI owns AI-service-specific narrowing and resource policy such as:
+- allowed AI feature categories;
+- request/token/image limits;
+- concurrency/queue policy;
+- budgets/cost ceilings where supported.
+
+Effective access is the intersection of both contracts. Neither page may persist a separate AI identity/group/role model.
+
 ## Light / Dark
 Both first-class Admin surfaces.
 

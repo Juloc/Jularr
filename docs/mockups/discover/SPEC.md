@@ -198,6 +198,29 @@ For watch/read/listen media, the canonical identity is Work. The Work/Season/Epi
 
 
 
+## Metadata localization and persistence boundary (#820)
+
+Discover/Search is a provider-driven, transient surface. It must not become a second permanent multilingual media catalog.
+
+For normal media:
+- request provider candidates in the effective profile metadata locale where the provider supports it;
+- cache candidate metadata and artwork with bounded TTL;
+- keep locale in the candidate/cache identity when provider output is locale-dependent;
+- do not backfill every transient provider candidate into every language used by the instance;
+- do not create a durable Work merely because a result was displayed;
+- resolve/dedupe to canonical Jularr identity before Request, monitoring, import or another durable action.
+
+When a result already resolves to a durable Work, consumer presentation should prefer locally persisted Work metadata for the effective locale where available and may use the provider candidate only as transient supplemental evidence.
+
+Discover artwork follows the same boundary:
+- temporary provider cover/poster/backdrop/logo may be cached for Discover/Preview;
+- language-specific artwork may be requested for the effective locale;
+- durable local Work artwork is created/retained only once the Work has durable Jularr context.
+
+Provider failure may degrade affected remote rows but must not make already-persisted Work metadata/artwork unreadable.
+
+The fixed-vs-free instance language policy and background Library metadata spool are owned by #820. Discover never bulk-enrolls its transient results into that spool.
+
 ## Games in Discover
 
 Games is an additional media type inside the existing Discover/Search surface.

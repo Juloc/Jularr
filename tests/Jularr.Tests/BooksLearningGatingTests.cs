@@ -86,6 +86,9 @@ public sealed class BooksLearningGatingTests
     [TestMethod]
     public async Task ReaderKeepsLanguageAffordanceWhenOnlyAnotherChapterIsTranslated()
     {
+        // A whole-book translation can be partially complete (for example
+        // 20/50 chapters/pages). Opening one of the unfinished chapters must
+        // not make the Reader's language control disappear.
         await using var fixture = await Fixture.CreateAsync();
         await fixture.SeedCachedTranslationForOtherChapterAsync("de", "Bereits übersetzt.");
 
@@ -101,7 +104,7 @@ public sealed class BooksLearningGatingTests
         var view = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Read.cshtml"));
         StringAssert.Contains(view, "Model.HasWorkTranslationLanguage");
-        StringAssert.Contains(view, "disabled=\"@(!hasAlternate)\"");
+        StringAssert.Contains(view, "disabled=\"@(!isPdf && !hasAlternate)\"");
     }
 
     [TestMethod]
@@ -207,9 +210,11 @@ public sealed class BooksLearningGatingTests
         var view = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Library.cshtml"));
 
-        // Generating (or regenerating) a whole-book translation must still
-        // gate on the resolved capability.
-        AssertGuardPrecedesHandler(view, "asp-page-handler=\"TranslateBook\"");
+        // Regenerating a whole-book translation must still gate on the resolved
+        // capability; generating one is offered by the shared language/edition
+        // selector, which only receives the action when TranslationEnabled.
+        StringAssert.Contains(File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Library.cshtml.cs")), "TranslationEnabled,");
         AssertGuardPrecedesHandler(view, "asp-page-handler=\"Regenerate\"");
     }
 
@@ -231,14 +236,14 @@ public sealed class BooksLearningGatingTests
             view.Contains("Model.SourceIsTarget || Model.TranslationEnabled", StringComparison.Ordinal),
             "The translated-count summary must not depend on the resolved Learning capability.");
 
-        // Every remaining "TranslationEnabled" reference must belong to one of
-        // the two generation actions (TranslateBook, Regenerate) - nowhere else.
+        // The only remaining "TranslationEnabled" reference in the view is the
+        // Regenerate form; TranslateBook moved into the language/edition selector.
         var occurrences = System.Text.RegularExpressions.Regex.Matches(
             view, "Model\\.TranslationEnabled").Count;
         Assert.AreEqual(
-            2,
+            1,
             occurrences,
-            "Only the TranslateBook and Regenerate forms may still gate on TranslationEnabled.");
+            "Only the Regenerate form may still gate on TranslationEnabled in the view.");
     }
 
     /// <summary>Asserts the nearest preceding "@if" guards the given form/handler with TranslationEnabled.</summary>

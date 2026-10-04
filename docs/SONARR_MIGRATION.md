@@ -1,83 +1,182 @@
-# Sonarr → Jularr migration
+# Sonarr → Jularr migration and coexistence
 
-Jularr migrates anime individually. Do not switch the whole library at once.
+Status: **implementation bridge to the generalized Migration Center contract**.
 
-## Modes
+Binding product/UX contract:
+- `docs/mockups/admin-migration/SPEC.md`
 
-- **Read-only coexistence** — Sonarr owns acquisition, imports and renames. Jularr only observes the library. This is the default for every anime without an owner decision.
-- **Parallel acquisition** — Jularr may acquire content, but it may mutate only paths explicitly owned by an Jularr job. Active Sonarr releases, downloads, episodes and paths block duplicate/conflicting work.
-- **Jularr managed** — Jularr owns acquisition/import/naming for that anime. Sonarr should no longer monitor or manage it.
+This document preserves the existing Sonarr safety behavior and implementation seams while the legacy Anime-specific integration is generalized. Where this document describes legacy routes/types, the Migration Center specification owns the target UX and generalized model.
 
-The mode is per anime. One title can remain Sonarr-managed while another is migrated.
+## Target ownership model
 
-## Owner controls
+Manager ownership is resolved at **Work level**.
 
-Owners manage migration under **Settings → Sonarr migration** (`/Settings/SonarrMigration`). Each anime row shows the current mode, the linked Sonarr series (suggested by the same matcher the Sonarr artwork import uses), whether Sonarr monitors it, active Sonarr downloads and any conflicts. Actions:
+User-facing modes:
 
-| Action | Mode afterwards | Sonarr side effect |
-| --- | --- | --- |
-| Keep Sonarr | Read-only coexistence | none |
-| Parallel | Parallel acquisition | none (with the monitoring option: restores monitoring Jularr turned off) |
-| Hand over to Jularr | Jularr managed | only with the monitoring option: unmonitors the series via `PUT /api/v3/series/editor` |
-| Revert | Read-only coexistence | only with the monitoring option: re-enables exactly the monitoring Jularr turned off |
+- **Extern verwaltet** — Sonarr owns acquisition/import/naming for the Work; Jularr observes and must not perform conflicting library mutations.
+- **Gemeinsam** — Sonarr and Jularr may both perform supported operations, but Jularr checks ownership before every mutation. This is a permanent advanced mode, not only a temporary migration state.
+- **Jularr verwaltet** — Jularr owns acquisition/import/naming. Sonarr may remain connected for read-only observation/conflict detection.
 
-Actions are idempotent (repeating one changes nothing and logs nothing) and reversible (hand over followed by revert restores the Sonarr-managed state and Sonarr monitoring). Hand over is refused while Sonarr has active downloads for the series or Sonarr cannot be observed. Revert is refused while Jularr jobs for the anime are still pending or importing. Every applied action is recorded in the ownership migration log.
+Existing implementation enum/state maps as:
 
-Jularr never deletes Sonarr series or files and never calls any other mutating Sonarr endpoint.
+| Existing Sonarr state | Target mode |
+| --- | --- |
+| `ReadOnlyCoexistence` | **Extern verwaltet** |
+| `ParallelAcquisition` | **Gemeinsam** |
+| `JularrManaged` | **Jularr verwaltet** |
+
+The existing per-Anime state is transitional. It must migrate to the generic per-Work ownership contract rather than becoming a second permanent ownership model.
+
+## Defaults and overrides
+
+Defaults are configured per **Sonarr integration instance × media/content type**.
+
+Example:
+- Sonarr + Series/TV -> **Extern verwaltet**
+- Sonarr + Anime -> **Jularr verwaltet**
+
+A Work may explicitly override that default.
+
+Resolution order:
+1. explicit per-Work override;
+2. integration + media/content-type default;
+3. Jularr-managed fallback only when no external-manager default applies.
+
+Changing a default does not overwrite explicit Work overrides unless the admin deliberately resets them.
+
+For one Work, Jularr supports at most **one external manager plus Jularr**. `Gemeinsam` never means multiple external managers sharing the same Work.
+
+## Handover
+
+Changing ownership is explicit, previewed and audited.
+
+When switching to **Jularr verwaltet**:
+- Jularr imports the source monitoring state into canonical Jularr monitoring where a safe semantic equivalent exists;
+- Work/Season/Episode monitoring granularity is preserved where supported;
+- unsupported semantics are shown instead of guessed;
+- **Externes Monitoring deaktivieren** is offered as an explicit handover option and is checked by default when the adapter can safely perform the change;
+- if Jularr changed Sonarr monitoring, that fact is recorded so a later revert restores only state Jularr itself changed;
+- Jularr never deletes the Sonarr series or source media.
+
+Ownership remains Work-level even though monitoring may be finer-grained.
 
 ## Sonarr observation
 
-Jularr reuses the single Sonarr connection configured under **Admin → Sonarr** (the same connection used for artwork import). It reads the Sonarr v3 API with `GET` requests only:
+Jularr observes the Sonarr v3 API for safety evidence, including where available:
 
-- `/api/v3/series` — series ids, root folders and monitoring state,
-- `/api/v3/episodefile?seriesId=…` — exact Sonarr file paths for linked anime that are not in read-only coexistence,
-- `/api/v3/queue` — active releases, download ids (e.g. SABnzbd `nzo_id`), output paths and episodes,
+- `/api/v3/series` — linked series, root folders and monitoring state;
+- `/api/v3/episodefile?seriesId=…` — episode-file paths;
+- `/api/v3/queue` — active releases/download ids/output paths/episodes;
 - `/api/v3/history` — recent grabs, imports, renames and failures.
 
-From that observation Jularr recognizes Sonarr-owned series (linked Sonarr series id), paths (queue output, episode file, series folder) and downloads (queue or history download id). Observation is cached for one minute and never transfers ownership. If Sonarr is configured but unreachable, Jularr fails closed: grabs, imports and renames for Sonarr-linked or parallel-mode anime pause until Sonarr can be observed again.
+Observation does not transfer ownership.
 
-Ownership decisions and Sonarr links persist in the canonical ownership store (`/data/acquisition/ownership.json`).
+### Fail-closed behavior
 
-### Different mount paths
+For **Gemeinsam**, if Sonarr cannot be observed reliably, Jularr fails closed for new mutations on the affected Work/scope. Read-only display/diagnostics may continue, but new grab/import/rename/replace/delete work that depends on coexistence safety must not start.
 
-When Sonarr and Jularr see the shared library under different paths (different container
-mounts), configure the **Anime** remote path mappings on `/Settings/Acquisition`: every Sonarr-observed path
-(series folder, episode file, queue output path, history source/target path) is rewritten through
-those mappings before Jularr compares it to its own paths, so ownership recognition and rename-loop
-detection keep working. The same Anime mappings also rewrite completed anime download paths reported by the
-download client (see [ANIME_ACQUISITION.md](ANIME_ACQUISITION.md#import-mode-and-remote-path-mapping)) — they are one canonical list for both purposes.
+For **Jularr verwaltet**, Sonarr may remain connected in read-only observation mode. If Jularr needs current Sonarr state to prove a mutation safe, an unavailable/ambiguous observation also blocks that mutation rather than guessing.
+
+The UI reports the reason explicitly, for example:
+- `Gemeinsam · Sonarr nicht erreichbar · Änderungen pausiert`;
+- `Jularr verwaltet · Sonarr beobachtet`;
+- `Jularr verwaltet · Sonarr nicht erreichbar`.
+
+## Path translation
+
+Sonarr/Jularr path translation belongs to the **Sonarr migration/coexistence adapter**.
+
+Use it only when Sonarr and Jularr see the same underlying files under different path prefixes.
+
+Required resolver behavior:
+- longest matching prefix wins;
+- path-boundary aware;
+- slash/backslash normalization where applicable;
+- deterministic overlap behavior;
+- local target resolves inside permitted Storage;
+- live test uses the same resolver as coexistence/import safety.
+
+Do **not** keep the old Anime remote-path mapping list in `/Settings/Acquisition` as the target owner.
+
+Legacy Anime mappings must be migrated to the appropriate owner:
+- Sonarr source/coexistence mapping -> Sonarr Migration adapter;
+- external download-client mapping -> that Downloader external-client adapter.
+
+No global Remote Path Mapping / Import & Routing page is created.
 
 ## Safe rollout
 
-1. Start every existing title in **Read-only coexistence**.
-2. Verify Jularr metadata and episode/AniList mappings.
-3. Move one test anime to **Parallel acquisition**.
-4. Give Jularr-owned downloads a distinct download-client category and ownership record.
-5. Confirm imports and naming are correct and no duplicate Sonarr job exists.
-6. Wait until Sonarr's queue for that series is empty.
-7. **Hand over to Jularr** with the Sonarr monitoring option (or disable monitoring for the series in Sonarr yourself).
-8. Repeat title by title.
+A safe rollout can still be Work-by-Work:
 
-To revert, finish or cancel active Jularr jobs first, then **Revert** with the Sonarr monitoring option to return the anime to Sonarr and re-enable Sonarr monitoring.
+1. connect/test Sonarr observation;
+2. map Sonarr identities and Storage paths;
+3. choose the integration × media-type default;
+4. keep individual Works on **Extern verwaltet** while validating mappings;
+5. use **Gemeinsam** for selected Works when parallel operation is intentionally desired;
+6. hand a Work to **Jularr verwaltet** only after current Sonarr/Jularr activity is conflict-free;
+7. optionally disable Sonarr monitoring through the explicit handover option;
+8. keep Sonarr connected for read-only observation until the admin deliberately removes the integration.
+
+The system never automatically disconnects Sonarr after successful migration/handover.
 
 ## Conflict rules
 
-Jularr must not grab a release already active in Sonarr, an episode Sonarr is downloading, or an episode Sonarr grabbed within the last 24 hours (unless that download failed). An Jularr-managed anime whose Sonarr series is still monitored cannot be grabbed or renamed by Jularr. Jularr does not import downloads Sonarr tracks and does not replace files it may not mutate; such imports are ignored or sent to manual review. In parallel mode it must not rename, replace or delete an unowned path. Files inside a Sonarr series folder are only changed for the linked anime after Sonarr stopped monitoring the series. Existing files are never deleted before a replacement import commits successfully. Filesystem watchers may observe Sonarr changes, but observation does not transfer ownership.
+The current Sonarr safety rules remain the minimum implementation baseline.
 
-Jularr never renames a file Sonarr imported or renamed within the last 24 hours, so the two managers cannot rename the same file back and forth.
+Jularr must not:
+- grab a release already actively owned by Sonarr;
+- start conflicting acquisition for a unit Sonarr is downloading;
+- import/rename/replace/delete a path Jularr cannot prove it may mutate;
+- mutate through an unresolved path mapping;
+- guess ownership when Sonarr evidence is unavailable;
+- create a rename loop with recent Sonarr activity.
 
-When both managers act on the same release, download or path, Jularr surfaces a conflict and stops the Jularr mutation instead of guessing. Conflicts appear on the Sonarr migration page and as warnings in the application log:
+When both managers appear to act on the same release/download/path, Jularr surfaces a conflict and stops/pauses the Jularr mutation.
 
-- `release` / `path` — both managers report the same active release or path,
-- `download` — Sonarr tracks an Jularr download (shared download-client category),
-- `monitoring` — an Jularr-managed series is still monitored in Sonarr, or a reverted series is still unmonitored,
-- `sonarr-activity` — Sonarr grabbed, imported or renamed after the anime was handed over,
-- `rename-loop` — Sonarr renamed an Jularr-owned file,
-- `unverified` — Sonarr cannot be observed for a Sonarr-linked anime.
+Conflict families include:
+- `release` / `path`;
+- `download`;
+- `monitoring`;
+- `sonarr-activity`;
+- `rename-loop`;
+- `unverified`.
 
-## Integration seams
+Conflicts are surfaced through Migration and actionable Activity / To-Do diagnostics, not only raw logs.
 
-- Grab: `AnimeMonitoringEngine.EvaluateCandidate(..., ownership)` consults `SonarrParallelSafety.CanGrab`; `AnimeAcquisitionPipeline` refreshes the snapshot before automatic and owner grabs and registers an Jularr job for every grab (see [ANIME_ACQUISITION.md](ANIME_ACQUISITION.md)).
-- Import: `AnimeImportPlanner.Plan(..., ownership)` consults `SonarrParallelSafety.CanImport` and `CanMutateLibraryPath` for replaced files; `AnimeImportExecutor` also checks `CanMutateLibraryPath` for every destination before moving a file.
-- Rename: `AnimeRenameService` calls `SonarrParallelSafety.CanRename` for every file, sidecar and series-folder move before anything is moved (see [ANIME_NAMING.md](ANIME_NAMING.md)).
-- Executors obtain the snapshot from `SonarrObservationService.GetSnapshotAsync`.
+## Target Admin surface
+
+Target owner:
+- **Admin → Migration → Sonarr adapter**
+
+The existing routes are transitional implementation surfaces:
+- `/Settings/SonarrMigration`;
+- `/Admin/Sonarr`;
+- Sonarr-related sections under legacy Acquisition settings.
+
+They may remain temporarily as redirects/deep links while feature parity is moved into Migration Center, but must not remain parallel configuration owners.
+
+## Current implementation seams
+
+The current code remains valuable and should be generalized rather than discarded:
+
+- `SonarrMigration` ownership state;
+- `SonarrParallelSafety`;
+- Sonarr observation/snapshot service;
+- conflict guards in grab/import/rename;
+- migration/ownership audit log;
+- explicit handover/revert behavior;
+- path translation and tests.
+
+Current Anime-specific call sites are migration targets, not target architecture. Their safety semantics must be preserved while they move behind generic Work/manager integration contracts.
+
+## Must not regress
+
+- No duplicate grabs caused by coexistence.
+- No mutation of unowned paths.
+- No silent ownership transfer.
+- No automatic deletion of Sonarr media/series.
+- No automatic external-manager disconnect after handover.
+- No multi-external-manager ownership for one Work.
+- No ownership below Work level.
+- No source path mapping stored in generic Acquisition Profiles.
+- No fail-open behavior in **Gemeinsam**.

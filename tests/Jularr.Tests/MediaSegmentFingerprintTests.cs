@@ -133,13 +133,13 @@ public sealed class MediaSegmentFingerprintTests
             ffmpegExecutable: "jularr-missing-ffmpeg");
         var service = new MediaSegmentService(fixture.Db, Options.Create(new MediaSegmentOptions()), detector, trickplay);
 
-        var run = await service.RunDetectorAsync(episode1.EpisodeId, force: false, CancellationToken.None);
+        var run = await service.RunDetectorAsync(episode1.EpisodeId!.Value, force: false, CancellationToken.None);
         Assert.AreEqual(SegmentDetectionOutcome.Completed, run.Outcome);
         Assert.AreEqual(2, run.SegmentCount, "Both a shared intro and a shared outro should be found across the season.");
 
         var stored = await fixture.Db.EpisodeMediaSegments
             .AsNoTracking()
-            .Where(x => x.EpisodeId == episode1.EpisodeId && x.Source == MediaSegmentSource.Detector)
+            .Where(x => x.EpisodeId == episode1.EpisodeId!.Value && x.Source == MediaSegmentSource.Detector)
             .ToListAsync();
         Assert.AreEqual(2, stored.Count);
         var intro = stored.Single(x => x.Kind == MediaSegmentKind.Intro);
@@ -149,20 +149,20 @@ public sealed class MediaSegmentFingerprintTests
         var decodeCallsAfterFirstRun = decoder.CallCount;
         Assert.IsTrue(decodeCallsAfterFirstRun > 0);
 
-        var again = await service.RunDetectorAsync(episode1.EpisodeId, force: false, CancellationToken.None);
+        var again = await service.RunDetectorAsync(episode1.EpisodeId!.Value, force: false, CancellationToken.None);
         Assert.AreEqual(SegmentDetectionOutcome.Skipped, again.Outcome, "Unchanged media identity and detector version must skip re-analysis.");
         Assert.AreEqual(decodeCallsAfterFirstRun, decoder.CallCount, "A skipped run must not decode audio again.");
 
         // A manual correction always wins, even though a detector row exists for the same kind.
-        await service.SaveManualAsync(episode1.EpisodeId, MediaSegmentKind.Intro, 6_000, 32_000, CancellationToken.None);
-        var resolved = await service.GetSegmentsAsync(episode1.EpisodeId, CancellationToken.None);
+        await service.SaveManualAsync(episode1.EpisodeId!.Value, MediaSegmentKind.Intro, 6_000, 32_000, CancellationToken.None);
+        var resolved = await service.GetSegmentsAsync(episode1.EpisodeId!.Value, CancellationToken.None);
         var resolvedIntro = resolved.Segments.Single(x => x.Kind == MediaSegmentKind.Intro);
         Assert.AreEqual(MediaSegmentSource.Manual, resolvedIntro.Source);
         Assert.AreEqual(32_000, resolvedIntro.EndMs);
 
-        var forcedAfterManual = await service.RunDetectorAsync(episode1.EpisodeId, force: true, CancellationToken.None);
+        var forcedAfterManual = await service.RunDetectorAsync(episode1.EpisodeId!.Value, force: true, CancellationToken.None);
         Assert.AreEqual(SegmentDetectionOutcome.Completed, forcedAfterManual.Outcome);
-        var stillResolved = await service.GetSegmentsAsync(episode1.EpisodeId, CancellationToken.None);
+        var stillResolved = await service.GetSegmentsAsync(episode1.EpisodeId!.Value, CancellationToken.None);
         Assert.AreEqual(
             MediaSegmentSource.Manual,
             stillResolved.Segments.Single(x => x.Kind == MediaSegmentKind.Intro).Source,
@@ -191,7 +191,7 @@ public sealed class MediaSegmentFingerprintTests
             ffmpegExecutable: "jularr-missing-ffmpeg");
         var lonelyService = new MediaSegmentService(fixture.Db, Options.Create(new MediaSegmentOptions()), lonelyDetector, trickplay);
 
-        var lonelyRun = await lonelyService.RunDetectorAsync(episode.EpisodeId, force: false, CancellationToken.None);
+        var lonelyRun = await lonelyService.RunDetectorAsync(episode.EpisodeId!.Value, force: false, CancellationToken.None);
         Assert.AreEqual(SegmentDetectionOutcome.Completed, lonelyRun.Outcome);
         Assert.AreEqual(0, lonelyRun.SegmentCount, "With no siblings there is nothing to corroborate a marker with.");
 

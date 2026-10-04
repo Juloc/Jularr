@@ -43,7 +43,7 @@ public sealed class MediaInventoryService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var analysis = await db.MediaAnalyses
+        var analysis = await db.MediaTechnicalAnalyses
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.MediaFileId == mediaFileId, cancellationToken);
 
@@ -60,16 +60,16 @@ public sealed class MediaInventoryService(
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var analyses = await (
-                from analysis in db.MediaAnalyses.AsNoTracking()
-                join media in db.MediaFiles.AsNoTracking() on analysis.MediaFileId equals media.Id
+                from analysis in db.MediaTechnicalAnalyses.AsNoTracking()
+                join media in db.StoredFiles.AsNoTracking() on analysis.MediaFileId equals media.Id
                 where media.LibraryRootId == libraryRootId
                 orderby media.Path
                 select analysis)
             .ToListAsync(cancellationToken);
 
         var streams = (await (
-                    from stream in db.MediaAnalysisStreams.AsNoTracking()
-                    join media in db.MediaFiles.AsNoTracking() on stream.MediaFileId equals media.Id
+                    from stream in db.MediaTracks.AsNoTracking()
+                    join media in db.StoredFiles.AsNoTracking() on stream.MediaFileId equals media.Id
                     where media.LibraryRootId == libraryRootId
                     select stream)
                 .ToListAsync(cancellationToken))
@@ -113,7 +113,7 @@ public sealed class MediaInventoryService(
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.MediaAnalyses
+        return await db.MediaTechnicalAnalyses
             .Where(x => mediaFileIds.Contains(x.MediaFileId))
             .ExecuteUpdateAsync(
                 update => update.SetProperty(x => x.ProbeVersion, InvalidatedProbeVersion),
@@ -128,12 +128,12 @@ public sealed class MediaInventoryService(
         CancellationToken cancellationToken)
     {
         List<MediaFileIdentity> files;
-        Dictionary<Guid, MediaAnalysis> analyses;
+        Dictionary<Guid, MediaTechnicalAnalysis> analyses;
 
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            files = await db.MediaFiles
+            files = await db.StoredFiles
                 .AsNoTracking()
                 .Where(x => x.LibraryRootId == libraryRootId)
                 .OrderBy(x => x.Path)
@@ -141,8 +141,8 @@ public sealed class MediaInventoryService(
                 .ToListAsync(cancellationToken);
 
             analyses = await (
-                    from analysis in db.MediaAnalyses.AsNoTracking()
-                    join media in db.MediaFiles.AsNoTracking() on analysis.MediaFileId equals media.Id
+                    from analysis in db.MediaTechnicalAnalyses.AsNoTracking()
+                    join media in db.StoredFiles.AsNoTracking() on analysis.MediaFileId equals media.Id
                     where media.LibraryRootId == libraryRootId
                     select analysis)
                 .ToDictionaryAsync(x => x.MediaFileId, cancellationToken);
@@ -234,7 +234,7 @@ public sealed class MediaInventoryService(
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var query = db.MediaFiles.AsNoTracking();
+            var query = db.StoredFiles.AsNoTracking();
             query = mediaFileId is { } id
                 ? query.Where(x => x.Id == id)
                 : query.Where(x => x.Path == fullPath);
@@ -254,7 +254,7 @@ public sealed class MediaInventoryService(
             }
 
             observed = new SourceIdentity(file.Length, file.LastWriteTimeUtc);
-            var analysis = await db.MediaAnalyses
+            var analysis = await db.MediaTechnicalAnalyses
                 .AsNoTracking()
                 .SingleOrDefaultAsync(x => x.MediaFileId == media.Id, cancellationToken);
 
@@ -283,7 +283,7 @@ public sealed class MediaInventoryService(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var analysis = await db.MediaAnalyses
+            var analysis = await db.MediaTechnicalAnalyses
                 .SingleOrDefaultAsync(x => x.MediaFileId == mediaFileId, cancellationToken);
 
             // Another caller may have analysed this file while we waited for the gate.
@@ -310,20 +310,31 @@ public sealed class MediaInventoryService(
 
             if (analysis is null)
             {
-                analysis = new MediaAnalysis { MediaFileId = mediaFileId };
-                db.MediaAnalyses.Add(analysis);
+                analysis = new MediaTechnicalAnalysis { MediaFileId = mediaFileId };
+                db.MediaTechnicalAnalyses.Add(analysis);
             }
 
             Apply(analysis, observed, fingerprint, status, diagnostic, technical);
 
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-            await db.MediaAnalysisStreams
+            await db.MediaTracks
                 .Where(x => x.MediaFileId == mediaFileId)
                 .ExecuteDeleteAsync(cancellationToken);
             if (technical is not null)
             {
-                db.MediaAnalysisStreams.AddRange(
-                    technical.Streams.Select(stream => ToRow(mediaFileId, stream)));
+                var tracks = technical.Streams.Select(stream => ToRow(mediaFileId, stream)).ToList();
+                if (technical.Video is { StreamIndex: { } videoIndex } video)
+                {
+                    tracks.Add(new MediaTrack
+                    {
+                        MediaFileId = mediaFileId,
+                        StreamIndex = videoIndex,
+                        Kind = MediaTrackKind.Video,
+                        Codec = Bound(video.Codec, 64)
+                    });
+                }
+
+                db.MediaTracks.AddRange(tracks);
             }
 
             await db.SaveChangesAsync(cancellationToken);
@@ -386,7 +397,7 @@ public sealed class MediaInventoryService(
     }
 
     private static void Apply(
-        MediaAnalysis analysis,
+        MediaTechnicalAnalysis analysis,
         SourceIdentity observed,
         string? fingerprint,
         MediaAnalysisStatus status,
@@ -413,7 +424,7 @@ public sealed class MediaInventoryService(
         analysis.DynamicRange = Bound(video?.DynamicRange, 24);
     }
 
-    private static MediaAnalysisStream ToRow(Guid mediaFileId, MediaStreamInfo stream) =>
+    private static MediaTrack ToRow(Guid mediaFileId, MediaStreamInfo stream) =>
         new()
         {
             MediaFileId = mediaFileId,
@@ -430,7 +441,7 @@ public sealed class MediaInventoryService(
 
     private static async Task<MediaInventoryEntry> ToEntryAsync(
         AppDbContext db,
-        MediaAnalysis analysis,
+        MediaTechnicalAnalysis analysis,
         CancellationToken cancellationToken)
     {
         if (analysis.Status != MediaAnalysisStatus.Succeeded)
@@ -438,7 +449,7 @@ public sealed class MediaInventoryService(
             return ToEntry(analysis, technical: null);
         }
 
-        var streams = await db.MediaAnalysisStreams
+        var streams = await db.MediaTracks
             .AsNoTracking()
             .Where(x => x.MediaFileId == analysis.MediaFileId)
             .ToListAsync(cancellationToken);
@@ -446,8 +457,8 @@ public sealed class MediaInventoryService(
     }
 
     private static MediaInventoryEntry ToEntryFromRows(
-        MediaAnalysis analysis,
-        IEnumerable<MediaAnalysisStream> streams) =>
+        MediaTechnicalAnalysis analysis,
+        IEnumerable<MediaTrack> streams) =>
         ToEntry(
             analysis,
             analysis.Status == MediaAnalysisStatus.Succeeded
@@ -466,6 +477,7 @@ public sealed class MediaInventoryService(
                             analysis.DynamicRange),
                     [
                         .. streams
+                            .Where(x => x.Kind != MediaTrackKind.Video)
                             .OrderBy(x => x.StreamIndex)
                             .Select(x => new MediaStreamInfo(
                                 x.StreamIndex,
@@ -481,7 +493,7 @@ public sealed class MediaInventoryService(
                 : null);
 
     private static MediaInventoryEntry ToEntry(
-        MediaAnalysis analysis,
+        MediaTechnicalAnalysis analysis,
         MediaTechnicalInfo? technical) =>
         new(
             analysis.MediaFileId,
@@ -491,7 +503,7 @@ public sealed class MediaInventoryService(
             analysis.Diagnostic,
             technical);
 
-    private static Freshness Evaluate(MediaAnalysis? analysis, SourceIdentity observed)
+    private static Freshness Evaluate(MediaTechnicalAnalysis? analysis, SourceIdentity observed)
     {
         if (analysis is null ||
             analysis.ProbeVersion != CurrentProbeVersion ||

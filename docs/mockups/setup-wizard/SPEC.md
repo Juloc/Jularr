@@ -96,6 +96,17 @@ Options:
 - Bestehende Installation migrieren
 - optional: Einstellungen/Backup wiederherstellen when supported
 
+### Backup vs migration routing
+
+The Setup-Art choices are entry points into existing owners, not duplicate restore logic.
+
+- a recognized current/versioned Jularr backup archive opens/reuses **Backup & Restore**;
+- a legacy `AcquisitionBackupBundle` uses the Backup & Restore legacy Acquisition-only flow;
+- old Jularr data/layout that is not a supported backup archive uses **Migration Center**;
+- Sonarr/Radarr/Readarr/Plex/Jellyfin/Emby/folder/JSON/CSV sources use **Migration Center**.
+
+The same artifact must not be offered simultaneously as both "restore" and "migration".
+
 ### Neue Instanz
 
 Continue with clean configuration.
@@ -133,15 +144,19 @@ Fields:
 
 ### Module activation
 
-Instance-level feature switches.
+Render the same canonical instance modules exposed by Admin -> Instance. Do not maintain a second Setup-only module list.
 
-Examples:
-- Series/Anime media support
-- Movies
-- Manga
-- Books
-- Audiobooks
-- Learning
+Current `dev` module contract includes:
+- Anime;
+- Movie;
+- TV;
+- Manga;
+- Novel;
+- Book;
+- Audiobook;
+- Learning;
+- Acquisition;
+- Tracking.
 
 Additional concepts such as Games, Requests, Native Downloader, AI or Generic Downloads appear as independent module switches **only after** their complete canonical instance runtime gate exists. Setup Wizard must not invent switches that Admin -> Instance cannot actually enforce.
 
@@ -192,14 +207,16 @@ When a canonical Games instance module exists and is enabled, or when the setup 
 - allow creation/selection of a Games-capable LibraryRoot;
 - the Games importer owns final Game/platform/release folder organization inside that root;
 - do not route identified Games to Generic Downloads;
-- BIOS/Firmware storage is restricted Games runtime data and is configured later through Games Admin, not as a normal LibraryRoot.
+- BIOS/Firmware is restricted Games runtime data, not a normal LibraryRoot. The restricted storage role/path is owned by Admin Storage; Games Admin later owns BIOS/Firmware requirements, validation and artifact/runtime binding.
 
 ### Optional storage roles
 
-Depending on enabled modules:
-- Native Download Workspace
-- Generic Downloads Root
-- optional future backup/cache/transcode roles
+Depending on the capabilities/configuration selected for this setup:
+- Native Download Workspace when the downloader is being configured;
+- Generic Downloads Root when that managed role is actually supported/needed;
+- optional future backup/cache/transcode roles only when their owning feature exists.
+
+Do not infer independent module switches for these roles. Storage roles follow their owning feature contracts and the canonical Instance module system.
 
 Path selection uses the safe Storage path browser.
 
@@ -212,7 +229,9 @@ Validate:
 
 ## 5. Downloader / Usenet
 
-Only shown when Native Downloader or an external download client is enabled.
+Show this step when downloader configuration is part of the selected setup and the installation exposes the relevant capability.
+
+Do **not** invent a separate Native Downloader instance-module switch. Until such a complete runtime gate exists, Setup follows the real canonical module/capability state and simply configures the Downloader owner when applicable.
 
 ### Native Usenet
 
@@ -288,7 +307,9 @@ Secrets are masked/write-only.
 
 ## 7. AI
 
-Only shown if AI is enabled.
+Show this step when server/shared AI capability is available and the admin chooses to configure it during setup.
+
+Do **not** depend on a fake AI InstanceModule. Until a complete canonical AI runtime gate exists, this is optional setup of the dedicated Admin AI contract and may be skipped for later configuration.
 
 Allow:
 - provider selection
@@ -367,9 +388,9 @@ Run:
 - database readiness
 - Storage read/write
 - LibraryRoot validation
-- downloader health if enabled
+- downloader health if configured
 - required provider health
-- AI provider/model health if enabled
+- AI provider/model health if configured
 - unresolved blocking migration/setup conflicts
 
 Result states:

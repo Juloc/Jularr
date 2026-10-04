@@ -195,6 +195,20 @@ Provider result -> persist provider evidence/snapshot -> identity resolution -> 
 
 External provider data fetched for durable Jularr features should remain locally usable after fetch rather than making normal UI rendering depend on repeated provider calls.
 
+### Localized metadata policy
+
+Work identity is language-independent. Localized metadata is stored as language-tagged variants/evidence on the same Work; language-neutral facts are not duplicated per locale.
+
+The canonical instance policy is defined by #820:
+- Fixed mode: one admin-selected language for UI and required media metadata; personal language overrides are disabled.
+- Free mode: profile languages are allowed; Admin may require the Library to retain metadata for every effective profile language.
+
+When a new required locale appears, missing durable `(Work, locale)` metadata is filled through a deduplicated, provider-rate-aware background spool. Opening a Work promotes its missing locale fetch, while the page immediately renders the best locally persisted fallback.
+
+Discover candidates remain bounded locale-aware provider cache/evidence and are not bulk-materialized in every instance language.
+
+Durable artwork is likewise canonical/local-first: generic Work artwork slots may carry a locale for language-specific posters/logos, use neutral fallback, and maintain local Jularr-owned derivatives for normal Library rendering.
+
 Conceptual `ProviderEntitySnapshot`:
 - Provider;
 - EntityKind;
@@ -422,6 +436,27 @@ Recommendations should return canonical/resolvable target references owned by th
 `LibraryRoot` remains a storage concept, not a media type.
 
 Files reference storage roots. NAS wake/retry/availability belongs to storage infrastructure. Logical Works and metadata remain available even while a storage root is offline.
+
+Storage lifecycle changes physical availability/location; it does **not** redefine canonical Work identity.
+
+Canonical rules:
+- moving/tiering a File between compatible LibraryRoots keeps the same logical Work/Version/Asset identity where the stored-file contract permits it;
+- deleting local bytes does not delete Work metadata, provider identity, progress/history or list state by default;
+- a Work may remain in the Library as not locally available and later be reacquired through the normal acquisition pipeline;
+- low free space is input to policy evaluation, never implicit permission to delete;
+- active hard Requirements constrain version/track pruning, downgrade and optimization;
+- policy/scoring/reacquisition-risk state is operational lifecycle state, not media identity;
+- orphan file, missing reference, corrupt file and offline storage are separate states;
+- physical duplicate consolidation must not silently merge canonical Works/editions;
+- logical file size and physically reclaimable bytes may differ because of hardlinks/reflinks/dedupe/snapshots.
+
+Ownership:
+- #411 owns canonical storage availability and integrity-safety gates;
+- #815 owns LibraryRoot routing/default future import placement;
+- #414 owns lifecycle/retention/optimization/tiering/physical migration policy and audit;
+- external-stack migration remains separate (#433).
+
+Destructive lifecycle operations are explicit/audited and preserve user state unless a separate canonical domain operation intentionally changes it.
 
 ## 18. Identity and deletion rules
 

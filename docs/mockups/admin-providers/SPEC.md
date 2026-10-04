@@ -45,6 +45,42 @@ Family responsibilities:
 - Translation -> translation execution/capabilities
 - Reading Source -> searchable/readable written-content sources
 
+### Reading Sources
+
+Reading Sources are a first-class Provider family. They do **not** get a separate permanent Admin product.
+
+Target ownership:
+
+`Admin → Providers → Lesequellen`
+
+The existing `/Admin/ReadingSources` route is a legacy/current implementation surface and should migrate or deep-link into this family once the shared Provider UI has feature parity.
+
+Every registered Reading Source must be configurable by an authorized admin without code-specific UI. At minimum expose, where supported by the adapter:
+
+- enabled/disabled;
+- provider priority;
+- participation mode: **Normal** or **Fallback only**;
+- applicable media/content types, for example Light Novel and Book;
+- declared capabilities such as metadata/catalog, published edition/acquisition target, public full text, preview and external reference;
+- locale/language/region restrictions;
+- timeout/result-limit/search options when the provider supports them;
+- health, cooldown/backoff and last failure;
+- licensing/access note.
+
+Adapter-declared safety/capability limits are authoritative. Admin configuration may narrow usage but may not turn a preview/reference-only provider into a full-text importer, bypass DRM/paywalls/login challenges, or disable mandatory rights/access checks.
+
+Initial Reading Source adapters include:
+
+- AniList;
+- Shōsetsuka ni Narō / Syosetu;
+- BOOK☆WALKER;
+- WebNovel;
+- Internet Archive.
+
+Internet Archive must support being configured as **Fallback only**. In that mode it is queried only after normal enabled sources produce no acceptable result, or when an authorized user explicitly expands the manual search to fallback sources. Rights/access classification remains mandatory regardless of priority or fallback mode.
+
+Adding a future Reading Source should require registering its adapter/schema/capabilities with the shared Provider catalog, not adding another Admin page or hard-coded provider switch.
+
 ## Overview page
 
 Desktop uses:
@@ -239,6 +275,15 @@ Indexer/Search examples:
 - Software
 - Generic
 
+Reading Source examples:
+- catalog/metadata
+- published edition / acquisition target
+- public full text
+- preview
+- external reference
+- Light Novel
+- Book
+
 A provider may have different priority for different capabilities/content types.
 
 Priority semantics must be explicit.
@@ -359,6 +404,17 @@ Example:
 - another provider priority 2 as fallback
 
 Fallback is deterministic and visible.
+
+A provider may be marked **Fallback only** for a capability/content type. Fallback-only means:
+
+1. normal enabled providers are queried/evaluated first;
+2. fallback-only providers are not part of the normal automatic fan-out;
+3. they are queried when the normal tier yields no acceptable result, or when an authorized manual-search action explicitly requests fallback results;
+4. their normal capability, licensing, access and authorization rules remain unchanged.
+
+This is especially important for Reading Sources such as Internet Archive, where an admin may want it available as a last-resort source without mixing it into every normal Light Novel/Book search.
+
+Per-profile policy may narrow or prefer configured providers, but the Provider configuration remains the canonical owner of adapter enablement, capability declarations, health and fallback participation.
 
 Provider priority never creates canonical identity by itself.
 

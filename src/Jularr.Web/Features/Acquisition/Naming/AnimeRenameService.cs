@@ -66,7 +66,7 @@ public sealed class AnimeRenameService(
         var episodes = await db.Episodes.AsNoTracking().Where(x => x.AnimeId == animeId).ToListAsync(cancellationToken);
         var episodeIds = episodes.Select(x => x.Id).ToArray();
         var mediaFiles = await db.MediaFiles.AsNoTracking()
-            .Where(x => episodeIds.Contains(x.EpisodeId))
+            .Where(x => x.EpisodeId.HasValue && episodeIds.Contains(x.EpisodeId.Value))
             .ToListAsync(cancellationToken);
         mediaFiles.Sort((left, right) => string.CompareOrdinal(left.Path, right.Path));
         var rootIds = mediaFiles.Select(x => x.LibraryRootId).Distinct().ToArray();
@@ -94,7 +94,7 @@ public sealed class AnimeRenameService(
 
         foreach (var mediaFile in mediaFiles)
         {
-            var episode = episodeById[mediaFile.EpisodeId];
+            var episode = episodeById[mediaFile.EpisodeId!.Value];
             var source = Path.GetFullPath(mediaFile.Path);
             if (!roots.TryGetValue(mediaFile.LibraryRootId, out var root))
             {

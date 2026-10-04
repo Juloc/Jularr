@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Library;
 
 namespace Jularr.Web.Features.Movies;
 
@@ -18,7 +19,8 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
     MediaAcquisitionRegistry registry,
     AnimeImportSettingsStore importSettings,
     IHardLinkCreator hardLinks,
-    ILogger<MovieCompletedDownloadImportAdapter> logger)
+    ILogger<MovieCompletedDownloadImportAdapter> logger,
+    CanonicalMediaStorageService? canonicalStorage = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     /// <summary>Why a finished download did not become a movie; the next release is tried.</summary>
@@ -56,6 +58,8 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
             var settings = await importSettings.LoadAsync(cancellationToken);
             var library = settings.LibraryFor(MediaAcquisitionKind.Movie);
             string? libraryPath;
+            var storedVideoPath = Path.GetFullPath(video.Path);
+            var storageRootPath = Path.GetDirectoryName(storedVideoPath);
             CompletedDownloadPlacement? placement = null;
 
             if (library is not null)
@@ -76,6 +80,8 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
                 }
 
                 libraryPath = folder;
+                storedVideoPath = Path.GetFullPath(destination);
+                storageRootPath = Path.GetFullPath(library.LibraryRoot!);
                 placement = new CompletedDownloadPlacement(folder, mode);
             }
             else
@@ -85,6 +91,16 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
 
             var entry = await movies.EnsureAsync(
                 metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, libraryPath, cancellationToken);
+            if (canonicalStorage is not null)
+            {
+                await canonicalStorage.AttachVideoAsync(
+                    entry.WorkId,
+                    workEpisodeId: null,
+                    storedVideoPath,
+                    storageRootPath,
+                    cancellationToken);
+            }
+
             return CompletedDownloadImportResult.Completed(
                 $"Imported movie \"{entry.Movie.Title}\".", resultUrl: null, placement);
         }
@@ -120,9 +136,19 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
             }
 
             var metadata = ResolveMetadata(request: null, file.Path);
-            await movies.EnsureAsync(
+            var entry = await movies.EnsureAsync(
                 metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId,
                 Path.GetDirectoryName(file.Path), cancellationToken);
+            if (canonicalStorage is not null)
+            {
+                await canonicalStorage.AttachVideoAsync(
+                    entry.WorkId,
+                    workEpisodeId: null,
+                    file.Path,
+                    inboxRoot,
+                    cancellationToken);
+            }
+
             imported++;
         }
 

@@ -236,11 +236,11 @@ public sealed class MediaOptimizationTests
         var targetPath = Path.ChangeExtension(media.Path, ".mp4");
         var embedded = new SubtitleTrack
         {
-            EpisodeId = media.EpisodeId,
+            EpisodeId = media.EpisodeId!.Value,
             Path = EmbeddedSubtitleExtractor.BuildSourceKey(media.Path, 2),
             Format = "embedded"
         };
-        var sidecar = new SubtitleTrack { EpisodeId = media.EpisodeId, Path = Path.ChangeExtension(media.Path, ".ja.srt"), Format = "srt" };
+        var sidecar = new SubtitleTrack { EpisodeId = media.EpisodeId!.Value, Path = Path.ChangeExtension(media.Path, ".ja.srt"), Format = "srt" };
         fixture.Inventory.Db.SubtitleTracks.AddRange(embedded, sidecar);
         await fixture.Inventory.Db.SaveChangesAsync();
 

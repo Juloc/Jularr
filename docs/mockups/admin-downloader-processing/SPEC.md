@@ -74,7 +74,7 @@ Downloader-local post-processing may include:
 - prepare manifest
 - signal Identify/Import pipeline
 
-Content-specific naming and Library organization belong to Library/Acquisition, not Downloader.
+Content-specific naming/organization belongs to the canonical importer/library implementation for that content type. Storage owns the target LibraryRoot and placement policy. Acquisition selects what should be acquired; it does not own filesystem naming or library organization.
 
 ## Pre-check / direct write / assembler tuning
 

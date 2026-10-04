@@ -200,7 +200,11 @@ public sealed record BookLibraryDetail(
     NovelWork Work,
     IReadOnlyList<string> Subjects,
     IReadOnlyList<BookChapterItem> Chapters,
-    NovelProgress? Progress);
+    NovelProgress? Progress,
+    IReadOnlyList<BookTranslationCoverage> TranslationCoverage);
+
+/// <summary>How many chapters of a work have a current cached translation in one target language.</summary>
+public sealed record BookTranslationCoverage(string Language, int TranslatedChapters);
 
 public sealed record BookReaderChapter(
     NovelWork Work,

@@ -582,7 +582,8 @@ public sealed class SubtitleImportService
     {
         var episodeIds = await db.MediaFiles
             .AsNoTracking()
-            .Select(x => x.EpisodeId)
+            .Where(x => x.EpisodeId.HasValue)
+            .Select(x => x.EpisodeId!.Value)
             .Distinct()
             .ToListAsync(cancellationToken);
 
@@ -1624,7 +1625,8 @@ public sealed class SubtitleImportService
         var targetLanguage = await contentLanguageResolver.ResolveTargetLanguageAsync(cancellationToken);
         return await db.MediaFiles
             .AsNoTracking()
-            .Select(x => x.EpisodeId)
+            .Where(x => x.EpisodeId.HasValue)
+            .Select(x => x.EpisodeId!.Value)
             .Distinct()
             .Where(episodeId =>
                 !db.SubtitleTracks.Any(track =>

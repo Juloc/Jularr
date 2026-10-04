@@ -810,7 +810,7 @@ public sealed class PlaybackDecisionEngineTests
             new PlaybackServerCapabilityProvider(new PlaybackTranscodeSlots()));
         var input = new PlaybackPlanInput(null, "web", ChromeAgent, IPAddress.Parse("192.168.1.2"));
 
-        var outcome = await service.PlanAsync(media.EpisodeId, "reader", input, CancellationToken.None);
+        var outcome = await service.PlanAsync(media.EpisodeId!.Value, "reader", input, CancellationToken.None);
 
         Assert.IsNotNull(outcome);
         Assert.IsTrue(outcome.CapabilitiesInferred, "Without a document the user agent picks an inferred baseline.");
@@ -821,7 +821,7 @@ public sealed class PlaybackDecisionEngineTests
         Assert.IsNull(store.Get(outcome.Session.Id, "other"));
 
         var retry = await service.PlanAsync(
-            media.EpisodeId,
+            media.EpisodeId!.Value,
             "reader",
             input with
             {
@@ -833,7 +833,7 @@ public sealed class PlaybackDecisionEngineTests
         Assert.IsNull(retry.Session, "No session is opened for a plan that cannot play.");
 
         var remote = await service.PlanAsync(
-            media.EpisodeId,
+            media.EpisodeId!.Value,
             "reader",
             input with { RemoteAddress = IPAddress.Parse("203.0.113.9") },
             CancellationToken.None);

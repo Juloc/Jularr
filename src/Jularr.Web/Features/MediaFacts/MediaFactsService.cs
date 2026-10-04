@@ -72,12 +72,18 @@ public sealed class MediaFactsService(AppDbContext db)
         int episodeCount,
         CancellationToken cancellationToken)
     {
-        var embedded = await (
+        var nullableEpisodeIds = episodeIds.Select(id => (Guid?)id).ToArray();
+        var embeddedRows = await (
             from stream in db.MediaAnalysisStreams.AsNoTracking()
             join media in db.MediaFiles.AsNoTracking() on stream.MediaFileId equals media.Id
-            where episodeIds.Contains(media.EpisodeId) && stream.Language != null
+            where nullableEpisodeIds.Contains(media.EpisodeId) &&
+                  stream.Language != null
             select new { media.EpisodeId, stream.Kind, stream.Language })
             .ToListAsync(cancellationToken);
+        var embedded = embeddedRows
+            .Where(x => x.EpisodeId.HasValue)
+            .Select(x => new { EpisodeId = x.EpisodeId.Value, x.Kind, x.Language })
+            .ToArray();
 
         var sidecar = await db.SubtitleTracks
             .AsNoTracking()
