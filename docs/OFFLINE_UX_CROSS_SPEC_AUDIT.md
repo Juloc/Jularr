@@ -242,38 +242,32 @@ The Offline event spec has now been cleaned up so:
 
 The visual mismatch can be resolved naturally when the Notification planning branch is integrated. It does **not** require another Offline-specific mockup because the canonical Notification family already owns the component visuals.
 
-## 7. Branch integration blocker: current planning branch is behind `dev`
+## 7. Branch reconciliation status
 
-Audit snapshot:
+Initial audit snapshot found the Offline branch substantially behind `dev`.
 
-- `planning/offline-ux-20261004` and `dev` are diverged;
-- Offline branch was **28 commits ahead** and **144 commits behind** `dev` at audit time.
+That has now been reconciled explicitly.
 
-Do not merge the Offline branch to `dev`/main without reconciling current `dev`.
+Current status after merge commit `398e073a42ec9c6f315b54e527bef8d813ef21a4`:
+- `planning/offline-ux-20261004` is **41 commits ahead** of `dev`;
+- it is **0 commits behind**;
+- current `dev` is an ancestor of the Offline planning branch.
 
-### Reader is the critical conflict
+The reconciliation used current `dev` as the base tree and overlaid only the approved Offline planning files, preserving current implementation/docs outside the Offline planning diff.
 
-Current `dev` added/expanded Unified Reader architecture after this Offline branch was created, including:
-- format/layout resolution;
-- fixed-layout EPUB;
-- PDF Smart Book routing;
-- scans;
-- comics;
-- magazines/artbooks;
-- CBR/CB7/import-adapter direction;
-- richer canonical Reader document routing.
+### Reader reconciliation
 
-`docs/UNIFIED_READER.md` on `dev` is also materially newer than the copy at this branch point.
+The Reader spec has been rebuilt from current `dev` and then extended with the approved Offline-reading section.
 
-The Offline Reader additions are valid, but integration must preserve **both**:
+Therefore the branch now preserves both:
 1. latest Unified Reader format/layout architecture from `dev`;
-2. the new Offline Reader behavior from this branch.
+2. the new Offline Reader behavior from this planning work.
 
-Do not resolve that conflict by choosing one whole file over the other.
+This includes current format/layout routing plus Offline local package, partial-chapter, progress, annotation, Learning/TTS and storage-recovery semantics.
 
-### Player
+### Player reconciliation
 
-Player also changed on the Offline branch. Before integration, compare against current `dev` and retain all newer canonical Playback/Progress/ActiveSession work.
+The Player spec has likewise been rebuilt from current `dev` and extended with the approved Offline playback contract, preserving current Playback/Progress/ActiveSession semantics.
 
 ## 8. Existing issue alignment
 
@@ -444,10 +438,9 @@ Do not merge or implement the Offline planning work as a pile of independent scr
 
 Recommended order:
 
-1. **Reconcile branch with current `dev`**
-   - preserve latest Reader/Playback architecture;
-   - reapply Offline additions conflict-by-conflict.
-   - Reader/Player/index reconciliation has been performed in this planning branch; branch ancestry still needs the final dev sync/merge before integration.
+1. **Branch reconciliation — complete**
+   - latest `dev` ancestry is integrated;
+   - Reader/Player/Home/index preserve current `dev` contracts plus Offline additions.
 
 2. **Sync media-detail contracts**
    - implement #840 wording/action ownership;
