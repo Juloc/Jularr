@@ -56,19 +56,14 @@ public sealed class NotificationDispatcher(
         }
     }
 
-    private async Task<IReadOnlyList<string>> ResolveRecipientsAsync(JularrEvent domainEvent, CancellationToken cancellationToken)
-    {
-        if (domainEvent.Audience == JularrEventAudience.Profile)
+    private async Task<IReadOnlyList<string>> ResolveRecipientsAsync(JularrEvent domainEvent, CancellationToken cancellationToken) =>
+        domainEvent.Audience switch
         {
-            // Phase 4 makes Profile audience fail closed at creation/publish time. Keep the existing
-            // fallback until affected emitters are corrected in that same phase.
-            return string.IsNullOrWhiteSpace(domainEvent.ProfileId)
-                ? await AdminProfileIdsAsync(cancellationToken)
-                : [domainEvent.ProfileId];
-        }
-
-        return await AdminProfileIdsAsync(cancellationToken);
-    }
+            JularrEventAudience.Profile when !string.IsNullOrWhiteSpace(domainEvent.ProfileId) => [domainEvent.ProfileId],
+            JularrEventAudience.Profile => [],
+            JularrEventAudience.Admin => await AdminProfileIdsAsync(cancellationToken),
+            _ => []
+        };
 
     private async Task<IReadOnlyList<string>> AdminProfileIdsAsync(CancellationToken cancellationToken) =>
         await db.OwnerAccounts
