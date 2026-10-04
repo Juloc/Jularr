@@ -316,6 +316,7 @@ public sealed class MangaTests
         var root = TempDirectory();
         var database = Path.Combine(root, "jularr.db");
         var seriesId = Guid.NewGuid();
+        var workId = Guid.NewGuid();
 
         try
         {
@@ -334,6 +335,7 @@ public sealed class MangaTests
             var global = await MangaReaderPreferenceStore.GetAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
             Assert.AreEqual("continuous", global.ReadingMode);
@@ -351,6 +353,7 @@ public sealed class MangaTests
             var media = await MangaReaderPreferenceStore.GetAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
             Assert.AreEqual("paged", media.ReadingMode);
@@ -360,13 +363,14 @@ public sealed class MangaTests
             await MangaReaderPreferenceStore.SaveModeAsync(
                 db,
                 "reader-a",
-                seriesId,
+                workId,
                 "continuous",
                 CancellationToken.None);
 
             var series = await MangaReaderPreferenceStore.GetAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
             Assert.AreEqual("continuous", series.ReadingMode);
@@ -377,12 +381,14 @@ public sealed class MangaTests
             await MangaReaderPreferenceStore.ResetSeriesAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
 
             var reset = await MangaReaderPreferenceStore.GetAsync(
                 db,
                 "reader-a",
+                workId,
                 seriesId,
                 CancellationToken.None);
             Assert.AreEqual("paged", reset.ReadingMode);
