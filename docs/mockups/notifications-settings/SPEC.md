@@ -5,6 +5,7 @@ Status: approved planning direction for the finished Jularr notification experie
 Global UX rules: `docs/UX.md`.
 Shared Profile / Settings shell: `docs/mockups/user-settings/SPEC.md`.
 Admin delivery infrastructure: `docs/mockups/admin-notifications/SPEC.md`.
+Canonical notification architecture: `docs/NOTIFICATIONS.md`.
 
 If an image and this specification conflict, this specification wins.
 
@@ -94,6 +95,8 @@ Mobile must not reproduce a desktop two-column layout.
 
 The top group shows personal channels that the current instance makes available to this profile.
 
+The channel toggle is a profile-wide optional-delivery gate. Turning a channel off preserves per-event channel selections for later restoration. Effective delivery is resolved centrally from event selection, profile channel enablement, instance availability and event policy; the page must not maintain a second derived preference model.
+
 ### In-App
 
 Purpose:
@@ -169,8 +172,14 @@ Target groups include:
 Examples:
 
 - new releases;
-- request status;
-- download/import completion where user-visible.
+- download/import completion or failure where user-visible.
+
+### Anfragen
+
+Examples:
+
+- request approved/denied;
+- request availability/status changes backed by canonical request events.
 
 ### Lernen
 
@@ -327,7 +336,9 @@ The editor must define at least:
 
 An event configured for Immediate is not silently moved into Digest.
 
-An event configured for Digest must not additionally send an immediate duplicate unless its policy explicitly requires escalation.
+An event configured for Digest must not additionally send an immediate external duplicate unless its policy explicitly requires escalation.
+
+In-App is the durable inbox route. When In-App is selected, its inbox row may still appear immediately even if the event timing is Digest; Digest controls scheduled external summary delivery and suppresses immediate transient Toast attention. The canonical semantics are defined in `docs/NOTIFICATIONS.md`.
 
 ## Preview
 
@@ -509,6 +520,9 @@ Dark and Original Jularr themes use the same hierarchy and interaction model thr
 
 This screen is one part of the complete notification experience. Separate screen/surface specs are reserved for:
 
+- `docs/mockups/notifications-topic-editor/`;
+- `docs/mockups/notifications-quiet-hours/`;
+- `docs/mockups/notifications-digest/`;
 - `docs/mockups/notifications-center/`;
 - `docs/mockups/notifications-bell/`;
 - `docs/mockups/notifications-toast-popup/`;
