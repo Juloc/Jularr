@@ -56,9 +56,6 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
     /// <summary>Media files below <see cref="ScopeItem"/>, including skipped ones so that a skip stays reversible.</summary>
     public IReadOnlyList<LibraryReconciliationPlanItem> ScopeFiles { get; private set; } = [];
 
-    /// <summary>Folders that still need a decision, largest unresolved backlog first, shown as examples on the scan overview.</summary>
-    public IReadOnlyList<LibraryReconciliationPlanItem> ProblemFolders { get; private set; } = [];
-
     /// <summary>Direct media files of the folder selected in the structure step.</summary>
     public IReadOnlyList<LibraryReconciliationPlanItem> SelectedFolderFiles { get; private set; } = [];
 
@@ -101,11 +98,24 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
     {
         // Navigation: view selection never mutates the durable plan and remains bounded to its five approved stages.
         CurrentStep = Math.Clamp(step ?? (preview ? 5 : string.IsNullOrWhiteSpace(selected) ? 1 : 3), 1, 5);
+
+        // Resume: a valid ready scan is offered again instead of forcing the administrator to rescan.
+        planId ??= await reconciliation.GetLatestReadyPlanIdAsync(cancellationToken);
         await LoadAsync(planId, selected, WorkQuery, preview || CurrentStep == 5, cancellationToken);
+        if (Plan is not null)
+        {
+            LibraryRootId = Plan.LibraryRootId;
+            StartFolder = Plan.StartFolder;
+            IncludeSubfolders = Plan.IncludeSubfolders;
+            SkipConfidentAssignments = Plan.SkipConfidentAssignments;
+            OnlyUnclearItems = Plan.OnlyUnclearItems;
+            AnalyzeFilenameEvidence = Plan.AnalyzeFilenameEvidence;
+        }
+
         return Page();
     }
 
-    /// <summary>Validates and persists a draft; the request does not scan, assign, rename, move or delete any file.</summary>
+    /// <summary>Validates and persists a draft, then runs its read-only inventory; the request never assigns, renames, moves or deletes any file.</summary>
     public async Task<IActionResult> OnPostCreateAsync(CancellationToken cancellationToken)
     {
         await LoadRootsAsync(cancellationToken);
@@ -121,6 +131,8 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
             return Page();
         }
 
+        var scan = await reconciliation.ScanAsync(result.Plan.Id, cancellationToken);
+        TempData["Status"] = scan.Message ?? (scan.Succeeded ? $"{scan.FilesFound} {Ui["admin.reconciliation.files"].ToLowerInvariant()}." : Ui["admin.reconciliation.error"]);
         return RedirectToPage(new { planId = result.Plan.Id });
     }
 
@@ -308,8 +320,13 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
         // Derive the page-only hierarchy and selected detail from the immutable review result.
         Plan = new ReconciliationPlanView(
             review.Plan.Id,
+            review.Plan.LibraryRootId,
             review.LibraryRootName,
-            review.Plan.StartFolder ?? "/",
+            review.Plan.StartFolder,
+            review.Plan.IncludeSubfolders,
+            review.Plan.SkipConfidentAssignments,
+            review.Plan.AnalyzeFilenameEvidence,
+            review.Plan.ScannedAtUtc,
             review.Plan.Status,
             review.Plan.Failure,
             review.Plan.OnlyUnclearItems,
@@ -318,14 +335,13 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
             review.Plan.ExecutionOperationId);
         Items = review.Items;
         Tree = BuildTree(Plan.OnlyUnclearItems ? FilterToUnclear(Items) : Items);
-        ProblemFolders = Items
-            .Where(x => x.IsDirectory && x.UnresolvedCount > 0 && x.State != LibraryReconciliationItemState.Ignored)
-            .OrderByDescending(x => x.UnresolvedCount)
-            .ThenBy(x => x.RelativePath, StringComparer.OrdinalIgnoreCase)
-            .Take(10)
-            .ToArray();
         LogicalGroups = await reconciliation.GetLogicalGroupsAsync(id, cancellationToken);
-        SelectedItem = string.IsNullOrWhiteSpace(selected) ? null : Items.SingleOrDefault(x => string.Equals(x.RelativePath, selected, StringComparison.Ordinal));
+        if (string.IsNullOrWhiteSpace(selected) && CurrentStep is 2 or 3)
+        {
+            selected = FindFirstFolderNeedingReview(Items);
+        }
+
+        SelectedItem = string.IsNullOrWhiteSpace(selected) ? null :Items.SingleOrDefault(x => string.Equals(x.RelativePath, selected, StringComparison.Ordinal));
         if (SelectedItem is not null)
         {
             SelectedWork = await reconciliation.GetResolvedWorkAsync(id, SelectedItem.Id, cancellationToken);
@@ -363,9 +379,9 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
             }
         }
 
-        if (Plan.Status == LibraryReconciliationPlanStatus.Ready && SelectedItem is not null && !string.IsNullOrWhiteSpace(workQuery))
+        if (Plan.Status == LibraryReconciliationPlanStatus.Ready && SelectedItem is not null && CurrentStep is 2 or 3)
         {
-            // Search existing canonical works only after a selected review entry requests it.
+            // The picker lists existing canonical works only; a typed query narrows the list and never infers a mapping.
             WorkCandidates = await reconciliation.SearchWorksAsync(Plan.Id, workQuery, cancellationToken);
         }
 
@@ -398,8 +414,13 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
     /// <summary>Minimal plan data rendered by the page without duplicating persistence ownership.</summary>
     public sealed record ReconciliationPlanView(
         Guid Id,
+        Guid LibraryRootId,
         string RootName,
-        string ScopeLabel,
+        string? StartFolder,
+        bool IncludeSubfolders,
+        bool SkipConfidentAssignments,
+        bool AnalyzeFilenameEvidence,
+        DateTime? ScannedAtUtc,
         LibraryReconciliationPlanStatus Status,
         string? Failure,
         bool OnlyUnclearItems,
@@ -473,6 +494,14 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
         var prefix = selectedItem.RelativePath + "/";
         var childFiles = items.Where(x => !x.IsDirectory && x.State != LibraryReconciliationItemState.Ignored && x.RelativePath.StartsWith(prefix, StringComparison.Ordinal)).ToArray();
         return [selectedItem, .. childFiles];
+    }
+
+    /// <summary>Preselects the first folder, in path order, that directly holds unresolved files; falls back to the first folder so the detail pane is never empty.</summary>
+    private static string? FindFirstFolderNeedingReview(IReadOnlyList<LibraryReconciliationPlanItem> items)
+    {
+        var folders = items.Where(x => x.IsDirectory).OrderBy(x => x.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray();
+        var directFilePaths = items.Where(x => !x.IsDirectory && x.State != LibraryReconciliationItemState.Recognized && x.State != LibraryReconciliationItemState.Ignored).Select(x => GetParentPath(x.RelativePath)).ToHashSet(StringComparer.Ordinal);
+        return (folders.FirstOrDefault(x => directFilePaths.Contains(x.RelativePath)) ?? folders.FirstOrDefault())?.RelativePath;
     }
 
     private static string GetParentPath(string relativePath)

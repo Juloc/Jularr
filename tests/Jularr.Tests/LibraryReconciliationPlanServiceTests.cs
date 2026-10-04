@@ -864,6 +864,39 @@ public sealed class LibraryReconciliationPlanServiceTests
         Assert.AreEqual(2, await scope.Db.Works.CountAsync());
     }
 
+    /// <summary>A blank query fills the work picker alphabetically so the mapping step never offers an empty list.</summary>
+    [TestMethod]
+    public async Task BlankWorkSearchListsExistingWorksAlphabetically()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Media");
+        scope.Db.Works.AddRange(new Work { CanonicalTitle = "Zeta", MediaType = WorkMediaType.Series }, new Work { CanonicalTitle = "Alpha", MediaType = WorkMediaType.Series });
+        await scope.Db.SaveChangesAsync();
+
+        var created = await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id), CancellationToken.None);
+        var results = await scope.Service.SearchWorksAsync(created.Plan!.Id, " ", CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { "Alpha", "Zeta" }, results.Select(x => x.Title).ToArray());
+    }
+
+    /// <summary>The wizard resumes the newest scanned plan and ignores drafts that were never scanned.</summary>
+    [TestMethod]
+    public async Task LatestReadyPlanIsTheNewestScannedPlan()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Media");
+        await File.WriteAllTextAsync(Path.Combine(root.Path, "episode-01.mkv"), "media");
+        await scope.Db.SaveChangesAsync();
+        var scanned = await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id), CancellationToken.None);
+        Assert.IsNotNull(scanned.Plan, scanned.Message);
+        await scope.Service.ScanAsync(scanned.Plan.Id, CancellationToken.None);
+        await scope.Service.CreateAsync(new LibraryReconciliationPlanRequest(root.Id), CancellationToken.None);
+
+        var latest = await scope.Service.GetLatestReadyPlanIdAsync(CancellationToken.None);
+
+        Assert.AreEqual(scanned.Plan.Id, latest);
+    }
+
     private sealed class Scope : IDisposable
     {
         /// <summary>Retains the isolated files, database and service used by one reconciliation test.</summary>
