@@ -260,6 +260,7 @@ public sealed record ReaderSystemPreset(
     double ThemeTintStrength,
     string BookmarkStyle,
     string BookmarkColor,
+    bool AutoContinueChapters,
     string TtsProviderId,
     double TtsRate,
     double TtsPitch,
@@ -294,6 +295,7 @@ public static class ReaderPresetCatalog
             {
                 ReadingMode = "paged",
                 TwoPageSpread = true,
+                AutoContinueChapters = true,
                 GenreArtworkEnabled = false,
                 BackgroundIntensity = 0,
                 BackgroundMotionMode = "static"
@@ -348,6 +350,7 @@ public static class ReaderPresetCatalog
         ThemeTintStrength: 1,
         BookmarkStyle: "fabric",
         BookmarkColor: "#b04455",
+        AutoContinueChapters: false,
         TtsProviderId: "auto",
         TtsRate: 1,
         TtsPitch: 1,
