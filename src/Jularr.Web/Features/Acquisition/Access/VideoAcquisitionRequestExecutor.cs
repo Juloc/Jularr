@@ -144,7 +144,7 @@ public sealed class VideoAcquisitionEngine(
                     AcquisitionRequestStatus.Approved,
                     continuation.HasMissingDue
                         ? "Searching for the next requested TV episode."
-                        : "Current requested episodes are available. Monitoring future episodes.",
+                        : "Waiting for the next requested TV episode to become available.",
                     ResultUrl: ResultUrl(payload.Title));
             }
 
@@ -294,7 +294,7 @@ public sealed class VideoAcquisitionEngine(
             AcquisitionRequestStatus.Approved,
             continuation.HasMissingDue
                 ? "Imported episode(s). Searching for the next requested episode."
-                : "Current requested episodes are imported. Monitoring future episodes.",
+                : "Imported requested episodes. Waiting for the next requested TV episode.",
             request.OperationId,
             ResultUrl(reset.Title),
             decidedByProfileId: null,
