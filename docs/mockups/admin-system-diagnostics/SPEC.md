@@ -594,12 +594,16 @@ Admin Storage owns:
 - Wake-on-LAN
 - capacity configuration/reserve
 - reconciliation policy
+- lifecycle policies / Review / optimization / tiering / physical migration (#414)
+- storage forecast, reclaimable-space analysis and lifecycle history
 
 System → Resources may display mount capacity/health read-only.
 
 System → Overview may display a simple Storage health summary.
 
 All storage mutations link to Admin Storage.
+
+System must not become a second cleanup/optimization/policy editor. It may surface a storage warning/summary and link to the exact Storage view or Activity operation.
 
 ## Downloader boundary
 
