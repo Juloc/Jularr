@@ -22,7 +22,9 @@
         scrollTopForPermille,
         captureContinuousAnchor,
         capturePagedRectAnchor,
-        createReflowTextRenderer
+        createReflowTextRenderer,
+        measurePagedSequence,
+        viewIndexForDisplayPage
     } = await import(new URL("reflow-reader.js", scriptUrl).href);
 
     const readJson = (selector, fallback) => {
@@ -526,8 +528,15 @@
 
         columns.style.transform = "translate3d(0,0,0)";
         const contentWidth = columns.scrollWidth;
-        layout.pageCount = Math.max(1, Math.round((contentWidth + gap) / layout.columnStride));
-        layout.viewCount = Math.max(1, Math.ceil(layout.pageCount / pages));
+        const measured = measurePagedSequence({
+            scrollWidth: contentWidth,
+            columnStride: layout.columnStride,
+            pagesPerView: pages,
+            extraExtent: gap,
+            rounding: "round"
+        });
+        layout.pageCount = measured.pageCount;
+        layout.viewCount = measured.viewCount;
         reflowRenderer?.setMode("paged");
         reflowRenderer?.setPageState(currentView, layout.viewCount);
 
@@ -623,7 +632,7 @@
 
     // A slider value is a page number (Pages mode) or a permille (Scroll mode).
     const viewForSliderPage = value =>
-        Math.floor((Math.max(1, Math.round(Number(value) || 0)) - 1) / Math.max(1, layout.pages));
+        viewIndexForDisplayPage(value, layout.pages);
 
     function goToView(target, { animate = true, save = true } = {}) {
         const next = clamp(target, 0, layout.viewCount - 1);
