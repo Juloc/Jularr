@@ -984,15 +984,6 @@ body.novel-paged-body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .reader-turn-curl-next,
-    .reader-turn-curl-prev,
-    .reader-turn-slide-next,
-    .reader-turn-slide-prev,
-    .reader-turn-fade-next,
-    .reader-turn-fade-prev {
-        animation: none !important;
-    }
-
     .novel-reader-shell[data-reader-personalization] * {
         scroll-behavior: auto !important;
     }
