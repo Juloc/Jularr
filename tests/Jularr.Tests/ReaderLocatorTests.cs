@@ -67,6 +67,9 @@ public sealed class ReaderLocatorTests
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => new FixedPageReaderLocator(identity, 0, -1));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ImageSequenceReaderLocator(identity, 0, fallbackPercent: 101));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReaderViewportPosition(0, 0, 0));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReaderViewportPosition(double.NaN, 0, 1));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReaderSourceRegion(.8, 0, .3, 1));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ReaderSourceRegion(0, 0, double.PositiveInfinity, 1));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ImageSequenceReaderLocator(identity, 0, fallbackPercent: double.NaN));
     }
 }
