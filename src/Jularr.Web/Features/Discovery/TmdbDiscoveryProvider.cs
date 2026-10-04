@@ -322,7 +322,8 @@ public sealed class TmdbDiscoveryProvider(
         }
 
         if (mediaType == TmdbDiscoveryMediaType.Series
-            && details.ExternalIds?.TvdbId is > 0 tvdbId)
+            && details.ExternalIds?.TvdbId is int tvdbId
+            && tvdbId > 0)
         {
             await works.LinkExternalIdentityAsync(
                 work.Id,
