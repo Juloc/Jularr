@@ -2,8 +2,10 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Providers;
+using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Discovery;
 
@@ -41,7 +43,9 @@ public sealed class TmdbDiscoveryProvider(
     ProviderExecutor executor,
     ProviderResponseCache cache,
     WorkService works,
-    WorkStructureService structure)
+    WorkStructureService structure,
+    AppDbContext db,
+    LegacyWorkBridge legacyBridge)
 {
     public const string ProviderKey = ProviderKeys.Tmdb;
     private const int MaxMaterializedSeasons = 100;
@@ -166,13 +170,67 @@ public sealed class TmdbDiscoveryProvider(
         var title = details.DisplayTitle(mediaType);
         var year = Year(details.ReleaseDate(mediaType));
 
-        var work = await works.EnsureWorkByExternalIdentityAsync(
-            workType,
-            ProviderKey,
-            tmdbId.ToString(CultureInfo.InvariantCulture),
-            title,
-            year,
-            cancellationToken);
+        var canonicalExternalId = tmdbId.ToString(CultureInfo.InvariantCulture);
+        var legacyMovie = mediaType == TmdbDiscoveryMediaType.Movie
+            ? await db.Movies
+                .Where(x => x.TmdbId == canonicalExternalId)
+                .Take(2)
+                .ToListAsync(cancellationToken)
+            : [];
+        var legacySeries = mediaType == TmdbDiscoveryMediaType.Series
+            ? await db.TvSeries
+                .Where(x => x.TmdbId == canonicalExternalId)
+                .Take(2)
+                .ToListAsync(cancellationToken)
+            : [];
+
+        if (legacyMovie.Count > 1 || legacySeries.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"TMDB {mediaType} id {canonicalExternalId} resolves to multiple legacy records and requires review.");
+        }
+
+        var existingWorkId = await db.WorkExternalIdentities
+            .Where(x =>
+                x.Provider == ProviderKey
+                && x.MediaType == workType
+                && x.ExternalId == canonicalExternalId)
+            .Select(x => x.WorkId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        Work work;
+        if (existingWorkId != Guid.Empty)
+        {
+            work = await db.Works.SingleAsync(x => x.Id == existingWorkId, cancellationToken);
+            if (legacyMovie.SingleOrDefault() is { } movie)
+            {
+                await works.LinkSourceAsync(work.Id, WorkSourceKind.Movie, movie.Id, cancellationToken);
+            }
+            else if (legacySeries.SingleOrDefault() is { } series)
+            {
+                await works.LinkSourceAsync(work.Id, WorkSourceKind.Series, series.Id, cancellationToken);
+            }
+        }
+        else if (legacyMovie.SingleOrDefault() is { } movie)
+        {
+            var workId = await legacyBridge.EnsureWorkForMovieAsync(movie, cancellationToken);
+            work = await db.Works.SingleAsync(x => x.Id == workId, cancellationToken);
+        }
+        else if (legacySeries.SingleOrDefault() is { } series)
+        {
+            var workId = await legacyBridge.EnsureWorkForSeriesAsync(series, cancellationToken);
+            work = await db.Works.SingleAsync(x => x.Id == workId, cancellationToken);
+        }
+        else
+        {
+            work = await works.EnsureWorkByExternalIdentityAsync(
+                workType,
+                ProviderKey,
+                canonicalExternalId,
+                title,
+                year,
+                cancellationToken);
+        }
 
         await works.AddOrUpdateTitleAsync(
             work.Id,
