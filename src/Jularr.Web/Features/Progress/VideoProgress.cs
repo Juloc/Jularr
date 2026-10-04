@@ -620,37 +620,66 @@ public sealed class VideoProgressService(AppDbContext db)
         DateTime updatedAt,
         CancellationToken cancellationToken)
     {
-        var durationSql = durationMs.HasValue ? ""DurationMs" = {0}," : ""DurationMs" = NULL,";
-        var where = target.WorkEpisodeId.HasValue
-            ? ""ProfileId" = {5} AND "WorkEpisodeId" = {6}"
-            : ""ProfileId" = {5} AND "WorkId" = {6} AND "WorkEpisodeId" IS NULL";
+        if (target.WorkEpisodeId is { } episodeId)
+        {
+            if (durationMs.HasValue)
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    """
+                    UPDATE "MediaProgress"
+                    SET "DurationMs" = {0},
+                        "PositionMs" = {1},
+                        "IsCompleted" = CASE WHEN "IsCompleted" = TRUE OR {2} = TRUE THEN TRUE ELSE FALSE END,
+                        "UpdatedAt" = {3}
+                    WHERE "ProfileId" = {4} AND "WorkEpisodeId" = {5}
+                    """,
+                    [durationMs.Value, positionMs, completed, updatedAt, profileId, episodeId],
+                    cancellationToken);
+            }
+            else
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    """
+                    UPDATE "MediaProgress"
+                    SET "PositionMs" = {0},
+                        "IsCompleted" = CASE WHEN "IsCompleted" = TRUE OR {1} = TRUE THEN TRUE ELSE FALSE END,
+                        "UpdatedAt" = {2}
+                    WHERE "ProfileId" = {3} AND "WorkEpisodeId" = {4}
+                    """,
+                    [positionMs, completed, updatedAt, profileId, episodeId],
+                    cancellationToken);
+            }
+
+            return;
+        }
 
         if (durationMs.HasValue)
         {
             await db.Database.ExecuteSqlRawAsync(
-                $"""
+                """
                 UPDATE "MediaProgress"
-                SET "DurationMs" = {{0}},
-                    "PositionMs" = {{1}},
-                    "IsCompleted" = CASE WHEN "IsCompleted" = TRUE OR {{2}} = TRUE THEN TRUE ELSE FALSE END,
-                    "UpdatedAt" = {{3}}
-                WHERE {(target.WorkEpisodeId.HasValue ? ""ProfileId" = {4} AND "WorkEpisodeId" = {5}" : ""ProfileId" = {4} AND "WorkId" = {5} AND "WorkEpisodeId" IS NULL")}
+                SET "DurationMs" = {0},
+                    "PositionMs" = {1},
+                    "IsCompleted" = CASE WHEN "IsCompleted" = TRUE OR {2} = TRUE THEN TRUE ELSE FALSE END,
+                    "UpdatedAt" = {3}
+                WHERE "ProfileId" = {4} AND "WorkId" = {5} AND "WorkEpisodeId" IS NULL
                 """,
-                [durationMs.Value, positionMs, completed, updatedAt, profileId, target.WorkEpisodeId ?? target.WorkId],
+                [durationMs.Value, positionMs, completed, updatedAt, profileId, target.WorkId],
                 cancellationToken);
-            return;
         }
-
-        await db.Database.ExecuteSqlRawAsync(
-            $"""
-            UPDATE "MediaProgress"
-            SET "PositionMs" = {{0}},
-                "IsCompleted" = CASE WHEN "IsCompleted" = TRUE OR {{1}} = TRUE THEN TRUE ELSE FALSE END,
-                "UpdatedAt" = {{2}}
-            WHERE {(target.WorkEpisodeId.HasValue ? ""ProfileId" = {3} AND "WorkEpisodeId" = {4}" : ""ProfileId" = {3} AND "WorkId" = {4} AND "WorkEpisodeId" IS NULL")}
-            """,
-            [positionMs, completed, updatedAt, profileId, target.WorkEpisodeId ?? target.WorkId],
-            cancellationToken);
+        else
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                UPDATE "MediaProgress"
+                SET "PositionMs" = {0},
+                    "IsCompleted" = CASE WHEN "IsCompleted" = TRUE OR {1} = TRUE THEN TRUE ELSE FALSE END,
+                    "UpdatedAt" = {2}
+                WHERE "ProfileId" = {3} AND "WorkId" = {4} AND "WorkEpisodeId" IS NULL
+                """,
+                [positionMs, completed, updatedAt, profileId, target.WorkId],
+                cancellationToken);
+        }
     }
 
     private async Task SetCompletedRowAsync(
@@ -660,15 +689,30 @@ public sealed class VideoProgressService(AppDbContext db)
         DateTime updatedAt,
         CancellationToken cancellationToken)
     {
+        if (target.WorkEpisodeId is { } episodeId)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                UPDATE "MediaProgress"
+                SET "PositionMs" = 0,
+                    "IsCompleted" = {0},
+                    "UpdatedAt" = {1}
+                WHERE "ProfileId" = {2} AND "WorkEpisodeId" = {3}
+                """,
+                [completed, updatedAt, profileId, episodeId],
+                cancellationToken);
+            return;
+        }
+
         await db.Database.ExecuteSqlRawAsync(
-            $"""
+            """
             UPDATE "MediaProgress"
             SET "PositionMs" = 0,
-                "IsCompleted" = {{0}},
-                "UpdatedAt" = {{1}}
-            WHERE {(target.WorkEpisodeId.HasValue ? ""ProfileId" = {2} AND "WorkEpisodeId" = {3}" : ""ProfileId" = {2} AND "WorkId" = {3} AND "WorkEpisodeId" IS NULL")}
+                "IsCompleted" = {0},
+                "UpdatedAt" = {1}
+            WHERE "ProfileId" = {2} AND "WorkId" = {3} AND "WorkEpisodeId" IS NULL
             """,
-            [completed, updatedAt, profileId, target.WorkEpisodeId ?? target.WorkId],
+            [completed, updatedAt, profileId, target.WorkId],
             cancellationToken);
     }
 
