@@ -8,17 +8,17 @@ public sealed record ReaderViewportPosition
 {
     public ReaderViewportPosition(double x, double y, double zoom)
     {
-        if (x is < 0 or > 1)
+        if (!double.IsFinite(x) || x is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(x));
         }
 
-        if (y is < 0 or > 1)
+        if (!double.IsFinite(y) || y is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(y));
         }
 
-        if (zoom <= 0)
+        if (!double.IsFinite(zoom) || zoom <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(zoom));
         }
@@ -44,7 +44,7 @@ public abstract record ReaderLocator
     protected ReaderLocator(ReaderDocumentIdentity document, double? fallbackPercent)
     {
         ArgumentNullException.ThrowIfNull(document);
-        if (fallbackPercent is < 0 or > 100)
+        if (fallbackPercent.HasValue && (!double.IsFinite(fallbackPercent.Value) || fallbackPercent.Value is < 0 or > 100))
         {
             throw new ArgumentOutOfRangeException(nameof(fallbackPercent));
         }
