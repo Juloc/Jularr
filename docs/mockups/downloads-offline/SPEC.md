@@ -1,6 +1,6 @@
 # Downloads & Offline — Consumer Download Manager
 
-Status: **binding planning specification; visual reference pending upload/approval**.
+Status: **binding target-product planning specification; visual reference pending upload/approval**.
 
 This screen is the canonical consumer surface for device-local offline media and active offline-download work. It unifies the existing Offline Library and Offline Media capabilities without creating another download engine, progress store, media identity model or server-side acquisition queue.
 
@@ -12,7 +12,7 @@ Relevant existing contracts:
 - `docs/mockups/player/SPEC.md`
 - issue #221 — Offline Library & Reader Sync
 - issue #225 — bounded offline playback
-- issue #415 — later Smart Offline prefetch
+- issue #415 — Smart Offline / bounded prefetch
 
 ## 1. Purpose and boundary
 
@@ -56,21 +56,22 @@ The page may group local items visually by Work, season, volume or media type. T
 
 ## 3. Information architecture
 
-Primary path:
-
-`Profile -> Settings -> Downloads & Offline`
-
-The Settings landing page lists **Downloads & Offline** in the Media group.
-
-Secondary entry points may deep-link here:
+Primary entry points:
 - the compact global download indicator;
+- Profile/Account utility entry **Downloads & Offline**;
 - an offline/download action on a media detail surface;
 - a download-completed or download-failed notification;
 - storage-limit/error recovery actions.
 
+This management surface is not the Settings form itself.
+
+`Profile -> Settings -> Downloads & Offline` opens the dedicated preference surface defined by `docs/mockups/offline-settings/SPEC.md`.
+
+The management screen exposes a clear **Offline settings** action and the Settings screen exposes **Manage downloads**. Both point to the same underlying local download owners; neither duplicates queue/storage state.
+
 Do not add Downloads as a permanent primary bottom-navigation item.
 
-The page is one level below Settings and uses the normal contextual Back behavior from the shared account/settings shell.
+Contextual Back follows the actual entry point.
 
 ## 4. Platform contract
 
@@ -250,11 +251,38 @@ Reuse the structured offline package model:
 - no Manga-only download subsystem.
 
 ### Audiobook
-Use the same surface when offline-audio capability exists.
-Do not force an audiobook implementation merely because the screen can represent it.
+Audiobooks use the same surface and canonical progress model.
+
+Represent:
+- complete audiobook offline packages;
+- chapter/track-level packages when the canonical audiobook structure exposes them;
+- audio quality/size according to the Offline Settings policy.
+
+Do not create a separate audiobook download manager.
 
 ### Games
-Games are not part of this first offline-download contract unless a concrete local/offline game package capability is separately defined. Do not expose an empty Games filter.
+Games remain outside this media-offline contract unless the Games domain defines a concrete managed offline package. Do not expose an empty Games filter or reinterpret installed/local ROM ownership as a normal media download.
+
+
+## 8.1 Smart Offline items
+
+Smart Offline uses this same manager. It does not get a second queue or library.
+
+Prefetched items:
+- appear in the normal Downloads / Offline available surfaces;
+- carry a restrained **Smart Offline** origin label where useful;
+- use the same Ready/Failed/Waiting semantics;
+- count toward local storage usage;
+- are eligible for automatic eviction under the Smart Offline budget;
+- never displace protected explicit content beyond the configured policy.
+
+Actions:
+- **Keep offline** / **Pin** promotes the item to explicit content and protects it from Smart Offline eviction;
+- **Remove** deletes the local copy;
+- pausing/canceling a prefetched transfer affects that local job only;
+- repeated planner runs must not create duplicate jobs.
+
+Completed Smart Offline content may be replaced by the next candidate only after local progress/state is safely queued and the item is not active/pinned.
 
 ## 9. User actions
 
@@ -330,15 +358,22 @@ The storage panel is operational context, not a storage-admin dashboard.
 
 ## 12. Offline Settings relationship
 
-This screen manages items. Offline Settings owns reusable preferences such as:
-- Wi-Fi-only downloads;
-- effective per-device/profile offline limit where supported;
-- later Smart Offline controls;
-- bulk clear/manage actions when appropriate.
+This screen manages items. The complete preference contract lives in `docs/mockups/offline-settings/SPEC.md`.
 
-Do not duplicate all settings inside the management page.
+Offline Settings owns:
+- network/roaming/background/power policy;
+- video/audio/reading quality defaults;
+- audio/subtitle/Learning package defaults;
+- local storage limit, safety reserve and supported storage location;
+- Smart Offline participation, ahead amount, budget and quality;
+- explicit automatic cleanup policy;
+- update policy;
+- sign-out retention policy;
+- bulk storage actions and notification deep links.
 
-A small Settings link/button is enough.
+Do not duplicate those controls on the manager.
+
+The manager shows only current effective state needed to explain behavior, for example **Waiting for Wi-Fi**, storage-limit blocked or **Smart Offline** origin.
 
 ## 13. Network behavior
 
@@ -401,7 +436,7 @@ Actions:
 
 Never resolve a full device by deleting explicit user downloads automatically.
 
-Later Smart Offline eviction may remove only disposable speculative copies according to #415. Explicit downloads have priority.
+Smart Offline eviction may remove only disposable speculative copies according to #415 and the Offline Settings policy. Explicit downloads always have priority.
 
 ## 18. Offline page behavior
 
@@ -553,13 +588,12 @@ State terms should map consistently across Web/PWA and Android even when the pla
 ## 28. Explicitly out of scope for this screen/spec
 
 Do not add here:
-- Smart Offline / automatic next-episode prefetch;
-- automatic watched-item eviction;
-- download scheduler/time windows;
-- bandwidth throttling;
+- configuration controls that belong to Offline Settings;
+- download scheduler/time windows unless separately specified later;
+- bandwidth throttling unless separately specified later;
 - server-side acquisition/download queue;
 - release/indexer selection;
-- transcode profiles/codecs;
+- transcode/codec implementation controls;
 - cross-device file transfer;
 - offline-file sharing/export;
 - DRM/license-server behavior;
@@ -568,12 +602,12 @@ Do not add here:
 - a new progress database;
 - a new media identity hierarchy.
 
-Smart Offline remains later work under #415 and must reuse these local-download owners when implemented.
+Smart Offline is in scope as another origin of items in this same local manager. Its policy belongs to `offline-settings/SPEC.md`.
 
 ## 29. Acceptance criteria
 
 - [ ] One consumer screen manages current-device offline work across supported media types.
-- [ ] The screen is reachable from Profile -> Settings and the global download indicator.
+- [ ] The screen is reachable from the global download indicator and the Profile/Account utility surface; Offline Settings cross-links to it.
 - [ ] Active and ready items are clearly separated.
 - [ ] Queued, downloading, paused, waiting, failed and ready behavior is understandable.
 - [ ] Progress percentages are shown only when meaningful.
@@ -581,6 +615,7 @@ Smart Offline remains later work under #415 and must reuse these local-download 
 - [ ] Remove affects only the current device's offline copy.
 - [ ] Ready items open through the normal Reader/Player flow.
 - [ ] Series/books can be visually grouped without creating parallel domain identities.
+- [ ] Smart Offline items appear in the same manager, can be pinned to explicit, and remain distinguishable only where useful.
 - [ ] Storage usage is truthful and does not confuse browser quota, Jularr limit and physical device capacity.
 - [ ] The page remains useful offline from local state.
 - [ ] Local content is isolated per profile/account.
