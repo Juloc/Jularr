@@ -11,11 +11,7 @@ namespace Jularr.Web.Features.Notifications;
 /// <see cref="NotificationPreferenceResolver"/>. Sink failures are isolated so notification delivery
 /// can never fail the domain operation that raised the event.
 /// </summary>
-public sealed class NotificationDispatcher(
-    AppDbContext db,
-    NotificationSubscriptionStore subscriptions,
-    IEnumerable<INotificationSink> sinks,
-    ILogger<NotificationDispatcher> logger)
+public sealed class NotificationDispatcher(AppDbContext db, NotificationSubscriptionStore subscriptions, IEnumerable<INotificationSink> sinks, ILogger<NotificationDispatcher> logger)
 {
     private readonly IReadOnlyDictionary<NotificationChannel, INotificationSink> _sinks = sinks.ToDictionary(sink => sink.Channel);
 
