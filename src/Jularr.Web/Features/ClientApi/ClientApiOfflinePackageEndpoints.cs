@@ -6,7 +6,7 @@ public static class ClientApiOfflinePackageEndpoints
     {
         var group = endpoints.MapGroup(ClientApiContract.BasePath).RequireAuthorization();
 
-        group.MapPost("/offline/packages/options", async (
+        group.MapPost(ClientApiOfflinePackageRoutes.OptionsPath, async (
             ClientOfflinePackageOptionsRequest request,
             ClientApiOfflinePackageOptionsService service,
             HttpContext httpContext,
@@ -17,7 +17,7 @@ public static class ClientApiOfflinePackageEndpoints
             return ToHttpResult(result);
         });
 
-        group.MapPost("/offline/packages/preview", async (
+        group.MapPost(ClientApiOfflinePackageRoutes.PreviewPath, async (
             ClientOfflinePackagePreviewRequest request,
             ClientApiOfflinePackageOptionsService service,
             HttpContext httpContext,
