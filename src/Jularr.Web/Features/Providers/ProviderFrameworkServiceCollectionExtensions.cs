@@ -23,6 +23,10 @@ public static class ProviderFrameworkServiceCollectionExtensions
                 "AniList",
                 ProviderCapabilities.Metadata | ProviderCapabilities.ReleaseSchedule | ProviderCapabilities.Sync));
             catalog.Register(new ExternalProviderDescriptor(
+                ProviderKeys.Tmdb,
+                "TMDB",
+                ProviderCapabilities.Metadata | ProviderCapabilities.Search | ProviderCapabilities.ReleaseSchedule));
+            catalog.Register(new ExternalProviderDescriptor(
                 ProviderKeys.Newznab,
                 "Newznab indexer",
                 ProviderCapabilities.Search));
