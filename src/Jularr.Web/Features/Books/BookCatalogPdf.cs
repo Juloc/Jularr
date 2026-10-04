@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using Jularr.Web.Features.Novels;
 using Microsoft.EntityFrameworkCore;
 
@@ -287,6 +286,8 @@ public sealed partial class BookCatalogService
             ? PdfDocumentReader.Read(await File.ReadAllBytesAsync(storedPath, cancellationToken))
             : PdfDocumentContent.Empty;
 
+        var identity = PdfBookIdentity.Resolve(content.Title, content.Author, fileName);
+
         NovelWork? work;
         if (hint?.ExistingWorkId is Guid targetWorkId)
         {
@@ -309,15 +310,14 @@ public sealed partial class BookCatalogService
                 return work.Id;
             }
 
-            var title = FirstNonEmpty(hint?.Title, UsablePdfTitle(content.Title))
-                ?? TitleFromFileName(fileName);
+            var title = FirstNonEmpty(hint?.Title, identity.Title)!;
             work = new NovelWork
             {
                 SourceProvider = ImportedBookProvider,
                 SourceKey = sourceKey,
                 SourceUrl = Truncate(sourceKind + "://" + Uri.EscapeDataString(fileName), 2048),
                 Title = Truncate(title, 500),
-                Author = TruncateNullable(hint?.Author, 300),
+                Author = TruncateNullable(FirstNonEmpty(hint?.Author, identity.Author), 300),
                 MetadataTitle = Truncate(title, 500),
                 CoverImageUrl = null,
                 MetadataStatus = "IMPORTED",
@@ -327,7 +327,7 @@ public sealed partial class BookCatalogService
         }
         if (string.IsNullOrWhiteSpace(work.Author))
         {
-            work.Author = TruncateNullable(FirstNonEmpty(hint?.Author, content.Author), 300);
+            work.Author = TruncateNullable(FirstNonEmpty(hint?.Author, identity.Author), 300);
         }
 
         work.SourceUrl = Truncate(sourceKind + "://" + Uri.EscapeDataString(fileName), 2048);
@@ -493,44 +493,6 @@ public sealed partial class BookCatalogService
         }
 
         return firstLine.Length <= 80 ? firstLine : firstLine[..79].TrimEnd() + "…";
-    }
-
-    /// <summary>
-    /// The book title in a PDF's Info title, or null. Producer junk ("Microsoft Word - draft.docx")
-    /// is ignored and a library label around the title ("The Project Gutenberg eBook #33283: …",
-    /// "The Project Gutenberg EBook of …, by …") is removed.
-    /// </summary>
-    public static string? UsablePdfTitle(string? title)
-    {
-        var clean = title?.Trim();
-        if (clean is not null
-            && GutenbergPdfTitle().Match(clean) is { Success: true } gutenberg)
-        {
-            clean = gutenberg.Groups["title"].Value.Trim();
-        }
-
-        if (string.IsNullOrWhiteSpace(clean)
-            || clean.Length < 2
-            || clean.StartsWith("Microsoft Word", StringComparison.OrdinalIgnoreCase)
-            || clean.Equals("untitled", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(clean, @"\.(docx?|pdf|indd|tex|rtf|odt)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-        {
-            return null;
-        }
-
-        return clean;
-    }
-
-    [GeneratedRegex(
-        @"^(?:the\s+)?project\s+gutenberg'?s?\s+e-?book(?:\s*#\s*\d+)?\s*(?::|,|\s+of\b)\s*(?<title>.+?)(?:,\s+by\s+.+)?$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex GutenbergPdfTitle();
-
-    private static string TitleFromFileName(string fileName)
-    {
-        var stem = Path.GetFileNameWithoutExtension(fileName);
-        var title = Regex.Replace(stem.Replace('_', ' ').Replace('.', ' '), @"\s+", " ").Trim();
-        return title.Length == 0 ? "PDF" : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(title);
     }
 
     private static async Task CopyBoundedAsync(Stream input, Stream output, long maxBytes, CancellationToken cancellationToken)

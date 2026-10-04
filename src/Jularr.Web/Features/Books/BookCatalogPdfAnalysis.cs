@@ -55,9 +55,40 @@ public sealed partial class BookCatalogService
         var volume = await NovelVolumeContent.EnsureImplicitVolumeAsync(db, work, NovelVolumeKinds.Book, cancellationToken);
         await CreateDerivedDocumentStore().SaveAsync(analysis.Document, cancellationToken);
         await SyncPdfChaptersAsync(work, volume, analysis, cancellationToken);
+        await RepairGarbagePdfIdentityAsync(work, content, file.FileName, cancellationToken);
         work.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
         return analysis.Document;
+    }
+
+    /// <summary>
+    /// Replaces a title that only garbage Info metadata can have produced (a file:// location, a path) by the validated
+    /// identity, together with the author that came from the same Info block. A title that reads like a title is never
+    /// touched, so values the owner edited survive.
+    /// </summary>
+    private async Task RepairGarbagePdfIdentityAsync(NovelWork work, PdfDocumentContent content, string fileName, CancellationToken cancellationToken)
+    {
+        if (!PdfBookIdentity.IsGarbageTitle(work.MetadataTitle ?? work.Title))
+        {
+            return;
+        }
+
+        var identity = PdfBookIdentity.Resolve(content.Title, content.Author, fileName);
+        var authorCameFromInfo = string.IsNullOrWhiteSpace(work.Author)
+            || string.Equals(work.Author, content.Author?.Trim(), StringComparison.Ordinal);
+        work.Title = Truncate(identity.Title, 500);
+        work.MetadataTitle = work.Title;
+        if (authorCameFromInfo)
+        {
+            work.Author = TruncateNullable(identity.Author, 300);
+        }
+
+        var edition = await db.BookEditions.SingleOrDefaultAsync(x => x.WorkId == work.Id && x.IsPrimary, cancellationToken);
+        if (edition is not null)
+        {
+            edition.Title = work.Title;
+            edition.Author = work.Author;
+        }
     }
 
     /// <summary>
