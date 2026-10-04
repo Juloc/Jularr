@@ -284,6 +284,9 @@ public sealed class BooksLearningGatingTests
                     new EmptyModelMetadataProvider(),
                     new ModelStateDictionary())
             };
+            page.TempData = new TempDataDictionary(
+                page.HttpContext,
+                new StubTempDataProvider());
             return page;
         }
 
@@ -324,6 +327,16 @@ public sealed class BooksLearningGatingTests
             if (Directory.Exists(directory))
             {
                 Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        private sealed class StubTempDataProvider : ITempDataProvider
+        {
+            public IDictionary<string, object> LoadTempData(HttpContext context) =>
+                new Dictionary<string, object>();
+
+            public void SaveTempData(HttpContext context, IDictionary<string, object> values)
+            {
             }
         }
 
