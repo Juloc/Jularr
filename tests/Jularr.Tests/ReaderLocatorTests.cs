@@ -14,8 +14,10 @@ public sealed class ReaderLocatorTests
 
         Assert.AreEqual("paragraph:17", locator.BlockId);
         Assert.AreEqual(83, locator.CharacterOffset);
-        Assert.AreEqual(11, locator.Source!.SourcePageIndex);
-        Assert.AreEqual("pdf:block:42", locator.Source.SourceItemId);
+        var pageSource = locator.Source as ReaderSourcePageReference;
+        Assert.IsNotNull(pageSource);
+        Assert.AreEqual(11, pageSource.SourcePageIndex);
+        Assert.AreEqual("pdf:block:42", pageSource.SourceItemId);
         Assert.AreEqual(41.5, locator.FallbackPercent);
     }
 
