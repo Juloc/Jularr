@@ -865,6 +865,39 @@ public sealed class BookCatalogServiceTests
     }
 
     [TestMethod]
+    public async Task LibraryDetailReportsTranslatedChapterCoverageForEveryCachedLanguage()
+    {
+        var path = TempDatabasePath();
+
+        try
+        {
+            await using var db = await CreateDatabaseAsync(path);
+            using var client = new HttpClient(new DelegateHttpMessageHandler(
+                request => OfflineMetadata(request, "Coverage should not use HTTP.")))
+            {
+                BaseAddress = new Uri("https://gutendex.com/")
+            };
+            var service = NewService(db, client, new FakeBookTranslator());
+
+            await using var epub = BuildTestEpub();
+            var workId = await service.ImportUploadedEpubAsync(epub, "test.epub", CancellationToken.None);
+            var chapterId = await db.NovelChapters.Where(x => x.WorkId == workId).OrderBy(x => x.Number).Select(x => x.Id).FirstAsync();
+            await service.TranslateChapterAsync(chapterId, "id", CancellationToken.None);
+            await service.TranslateChapterAsync(chapterId, "de", CancellationToken.None);
+
+            var detail = await service.GetLibraryBookAsync(workId, "profile", "en", CancellationToken.None);
+
+            Assert.IsNotNull(detail);
+            CollectionAssert.AreEqual(new[] { "de", "id" }, detail.TranslationCoverage.Select(x => x.Language).ToArray());
+            Assert.IsTrue(detail.TranslationCoverage.All(x => x.TranslatedChapters == 1));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public async Task LaterBookChapterUsesPreviousTargetTranslationAsContinuityContext()
     {
         var path = TempDatabasePath();

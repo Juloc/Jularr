@@ -109,40 +109,9 @@
         </div>
 
         <div class="book-language-row book-reading-language-row">
-            <form method="get" class="book-language-form">
-                <label>
-                    @ui["books.library.readingLanguage"]
-                    <input type="text"
-                           name="lang"
-                           value="@Model.TargetLanguage"
-                           list="book-language-options"
-                           maxlength="35"
-                           spellcheck="false"
-                           autocapitalize="none"
-                           aria-describedby="book-language-help" />
-                </label>
-                <datalist id="book-language-options">
-                    @foreach (var language in Jularr.Web.Features.Books.BookLanguageCatalog.Supported)
-                    {
-                        <option value="@language.Key">@language.Value</option>
-                    }
-                </datalist>
-                <button class="button" type="submit">@ui["books.library.useLanguage"]</button>
-                <small id="book-language-help">
-                    @ui["books.library.languageHelpPrefix"] <code>ro</code>, <code>sv</code> @ui["books.library.languageHelpConjunction"] <code>id-modern</code>.
-                </small>
-            </form>
-
-            @if (!Model.SourceIsTarget && Model.TranslationEnabled)
+            @if (Model.LanguageEdition.IsMeaningful)
             {
-                <form method="post"
-                      asp-page-handler="TranslateBook"
-                      asp-route-id="@Model.Book.Work.Id">
-                    <input type="hidden" name="lang" value="@Model.TargetLanguage" />
-                    <button class="button button-primary" type="submit">
-                        @ui.Format("books.library.translateWholeBook", ("language", Jularr.Web.Features.Books.BookLanguageCatalog.GetName(Model.TargetLanguage)))
-                    </button>
-                </form>
+                <partial name="_LanguageEditionSelector" model="Model.LanguageEdition" />
             }
         </div>
 
