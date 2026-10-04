@@ -186,7 +186,8 @@ public sealed class EventNotificationPipelineTests
     {
         var push = new RecordingSink(NotificationChannel.Push);
         await using var fixture = await Fixture.CreateAsync(extraSinks: [push]);
-        await fixture.Subscriptions.SetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable, new NotificationEventPreferenceUpdate(true, Channels(NotificationChannel.InApp, NotificationChannel.Push), NotificationDeliveryTiming.Immediate));
+        var update = new NotificationEventPreferenceUpdate(true, Channels(NotificationChannel.InApp, NotificationChannel.Push), NotificationDeliveryTiming.Immediate);
+        await fixture.Subscriptions.SetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable, update);
         await fixture.Subscriptions.SetProfileChannelEnabledAsync("reader", NotificationChannel.Push, true);
 
         var domainEvent = JularrEvent.Create(JularrEventCategory.ReleaseAvailable, profileId: "reader");
@@ -203,7 +204,8 @@ public sealed class EventNotificationPipelineTests
     {
         var push = new RecordingSink(NotificationChannel.Push);
         await using var fixture = await Fixture.CreateAsync(extraSinks: [push]);
-        await fixture.Subscriptions.SetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable, new NotificationEventPreferenceUpdate(true, Channels(NotificationChannel.InApp, NotificationChannel.Push), NotificationDeliveryTiming.Digest));
+        var update = new NotificationEventPreferenceUpdate(true, Channels(NotificationChannel.InApp, NotificationChannel.Push), NotificationDeliveryTiming.Digest);
+        await fixture.Subscriptions.SetEventPreferenceAsync("reader", JularrEventCategory.ReleaseAvailable, update);
         await fixture.Subscriptions.SetProfileChannelEnabledAsync("reader", NotificationChannel.Push, true);
 
         await fixture.Publisher.PublishAsync(JularrEvent.Create(JularrEventCategory.ReleaseAvailable, profileId: "reader"));
@@ -216,7 +218,8 @@ public sealed class EventNotificationPipelineTests
     public async Task ABrokenExternalSinkNeverFailsThePublishCallOrBlocksInApp()
     {
         await using var fixture = await Fixture.CreateAsync(extraSinks: [new ThrowingSink()]);
-        await fixture.Subscriptions.SetEventPreferenceAsync("reader", JularrEventCategory.DownloadGrabbed, new NotificationEventPreferenceUpdate(true, Channels(NotificationChannel.InApp, NotificationChannel.Push), NotificationDeliveryTiming.Immediate));
+        var update = new NotificationEventPreferenceUpdate(true, Channels(NotificationChannel.InApp, NotificationChannel.Push), NotificationDeliveryTiming.Immediate);
+        await fixture.Subscriptions.SetEventPreferenceAsync("reader", JularrEventCategory.DownloadGrabbed, update);
         await fixture.Subscriptions.SetProfileChannelEnabledAsync("reader", NotificationChannel.Push, true);
 
         await fixture.Publisher.PublishAsync(JularrEvent.Create(JularrEventCategory.DownloadGrabbed, profileId: "reader"));
@@ -323,7 +326,7 @@ public sealed class EventNotificationPipelineTests
 
     private sealed class Fixture : IAsyncDisposable
     {
-        private readonly string path;
+        private readonly string _path;
 
         public required AppDbContext Db { get; init; }
         public required EventLogStore EventLog { get; init; }
@@ -333,7 +336,7 @@ public sealed class EventNotificationPipelineTests
 
         private Fixture(string path)
         {
-            this.path = path;
+            _path = path;
         }
 
         public static async Task<Fixture> CreateAsync(IEnumerable<INotificationSink>? extraSinks = null)
@@ -377,7 +380,7 @@ public sealed class EventNotificationPipelineTests
         public async ValueTask DisposeAsync()
         {
             await Db.DisposeAsync();
-            File.Delete(path);
+            File.Delete(_path);
         }
     }
 }
