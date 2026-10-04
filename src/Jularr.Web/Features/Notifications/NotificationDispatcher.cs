@@ -6,11 +6,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Notifications;
 
 /// <summary>
-/// Turns one published <see cref="JularrEvent"/> into per-profile deliveries: resolves who should
-/// see it, checks each recipient's <see cref="NotificationSubscriptionStore"/> preference, then
-/// runs every registered <see cref="INotificationSink"/> for that preference. A sink failure is
-/// logged and skipped, never rethrown, so one broken channel (for example a future webhook) can
-/// never fail the acquisition/import/request flow that raised the event.
+/// Turns one published <see cref="JularrEvent"/> into per-profile channel deliveries. Recipient
+/// resolution remains here; event/profile/channel policy is resolved by
+/// <see cref="NotificationPreferenceResolver"/>. Sink failures are isolated so notification delivery
+/// can never fail the domain operation that raised the event.
 /// </summary>
 public sealed class NotificationDispatcher(
     AppDbContext db,
@@ -18,20 +17,27 @@ public sealed class NotificationDispatcher(
     IEnumerable<INotificationSink> sinks,
     ILogger<NotificationDispatcher> logger)
 {
+    private readonly IReadOnlyDictionary<NotificationChannel, INotificationSink> _sinks =
+        sinks.ToDictionary(sink => sink.Channel);
+
     public async Task DispatchAsync(JularrEvent domainEvent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
 
         foreach (var profileId in await ResolveRecipientsAsync(domainEvent, cancellationToken))
         {
-            var mode = await subscriptions.GetModeAsync(profileId, domainEvent.Category, cancellationToken);
-            if (mode == NotificationMode.Off)
+            var preference = await subscriptions.GetEventPreferenceAsync(profileId, domainEvent.Category, cancellationToken);
+            if (!preference.Enabled)
             {
                 continue;
             }
 
-            foreach (var sink in sinks.Where(sink => sink.Mode == mode))
+            var profileChannels = await subscriptions.GetProfileChannelPreferencesAsync(profileId, cancellationToken);
+            var route = NotificationPreferenceResolver.Resolve(preference, profileChannels, _sinks.Keys);
+
+            foreach (var channel in route.ImmediateChannels)
             {
+                var sink = _sinks[channel];
                 try
                 {
                     await sink.DeliverAsync(domainEvent, profileId, cancellationToken);
@@ -54,8 +60,8 @@ public sealed class NotificationDispatcher(
     {
         if (domainEvent.Audience == JularrEventAudience.Profile)
         {
-            // No specific profile to notify (for example a system-triggered import): fall back to
-            // admins rather than silently dropping the event.
+            // Phase 4 makes Profile audience fail closed at creation/publish time. Keep the existing
+            // fallback until affected emitters are corrected in that same phase.
             return string.IsNullOrWhiteSpace(domainEvent.ProfileId)
                 ? await AdminProfileIdsAsync(cancellationToken)
                 : [domainEvent.ProfileId];
