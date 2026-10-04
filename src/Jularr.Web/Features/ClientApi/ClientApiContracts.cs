@@ -164,6 +164,9 @@ public static class ClientApiRoutes
     public static string VideoPlaybackPlan =>
         $"{ClientApiContract.BasePath}/video/playback-plan";
 
+    public static string VideoProgress =>
+        $"{ClientApiContract.BasePath}/video/progress";
+
     public static string StreamSession(Guid sessionId) =>
         $"{ClientApiContract.BasePath}/stream-sessions/{sessionId:D}";
 
