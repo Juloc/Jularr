@@ -3,32 +3,27 @@ using Jularr.Web.Features.Events;
 namespace Jularr.Web.Features.Notifications;
 
 /// <summary>
-/// One notification destination. <see cref="InAppNotificationSink"/> is the only sink wired up in
-/// v1; a webhook/Home Assistant, Web Push or e-mail sink (#429 follow-up) plugs in the same way —
-/// register it in DI and <see cref="NotificationDispatcher"/> picks it up automatically. A sink
-/// must never throw past <see cref="DeliverAsync"/>; the dispatcher already isolates failures per
-/// sink, but a well-behaved sink should not fail the caller's media operation either.
+/// One product notification channel. The dispatcher owns policy/routing and isolates failures; a
+/// sink owns only transport-specific delivery. Multiple endpoints/devices for one product channel
+/// are handled inside that channel's sink rather than by registering duplicate channel sinks.
 /// </summary>
 public interface INotificationSink
 {
-    /// <summary>Stable identifier, for logging and future per-destination settings.</summary>
+    /// <summary>Stable identifier used for diagnostics/logging.</summary>
     string Key { get; }
 
-    /// <summary>The <see cref="NotificationMode"/> this sink acts on; other modes are ignored.</summary>
-    NotificationMode Mode { get; }
+    /// <summary>The product channel this sink delivers.</summary>
+    NotificationChannel Channel { get; }
 
-    Task DeliverAsync(
-        JularrEvent domainEvent,
-        string profileId,
-        CancellationToken cancellationToken);
+    Task DeliverAsync(JularrEvent domainEvent, string profileId, CancellationToken cancellationToken);
 }
 
-/// <summary>The baseline destination (#429): a durable, profile-scoped inbox row.</summary>
+/// <summary>The baseline In-App channel: a durable, profile-scoped inbox row.</summary>
 public sealed class InAppNotificationSink(NotificationStore store) : INotificationSink
 {
     public string Key => "in-app";
 
-    public NotificationMode Mode => NotificationMode.InApp;
+    public NotificationChannel Channel => NotificationChannel.InApp;
 
     public Task DeliverAsync(JularrEvent domainEvent, string profileId, CancellationToken cancellationToken) =>
         store.CreateAsync(NotificationDraft.From(domainEvent, profileId), cancellationToken);
