@@ -226,18 +226,18 @@ public sealed class EpisodeProgressService(
     CanonicalVideoTargetResolver? canonicalTargets = null)
 {
     /// <summary>Playback at or beyond this share of the duration marks the episode watched.</summary>
-    public const double CompletionThreshold = 0.95;
+    public const double CompletionThreshold = VideoProgressService.CompletionThreshold;
 
     /// <summary>Positions below this are accidental starts: never resumed and never create state.</summary>
-    public const long MinimumResumeMs = 30_000;
+    public const long MinimumResumeMs = VideoProgressService.MinimumResumeMs;
 
     /// <summary>Maximum number of personal history entries kept per profile.</summary>
-    public const int HistoryLimit = 50;
+    public const int HistoryLimit = VideoProgressService.HistoryLimit;
 
     public const int ContinueWatchingLimit = 12;
 
     /// <summary>Checkpoints of the same episode within this gap extend one history entry.</summary>
-    public static readonly TimeSpan HistorySessionGap = TimeSpan.FromMinutes(30);
+    public static readonly TimeSpan HistorySessionGap = VideoProgressService.HistorySessionGap;
 
     private const int ContinueWatchingCandidateLimit = 500;
 
