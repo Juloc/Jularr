@@ -192,8 +192,8 @@ public sealed class AcquisitionRequestService(
     }
 
     /// <summary>
-    /// Validates the richer options of a draft and moves them into the payload. Only anime titles have
-    /// options (the other media types use the payload for their own state), and a requester without the
+    /// Validates the richer structured-video options of a draft and moves them into the payload. Anime and
+    /// TV share this contract; other media types use the payload for their own state. A requester without the
     /// media manager role may only pick a quality profile the owner opened to requests.
     /// </summary>
     private async Task<AcquisitionRequestDraft> PrepareDraftAsync(
@@ -205,9 +205,9 @@ public sealed class AcquisitionRequestService(
             return draft;
         }
 
-        if (draft.Kind != MediaAcquisitionKind.Anime || draft.PayloadJson is not null)
+        if (draft.Kind is not (MediaAcquisitionKind.Anime or MediaAcquisitionKind.Tv) || draft.PayloadJson is not null)
         {
-            throw new ArgumentException("Request options are only available for anime titles.", nameof(draft));
+            throw new ArgumentException("Request options are only available for Anime and TV titles.", nameof(draft));
         }
 
         var options = chosen.Validate();
