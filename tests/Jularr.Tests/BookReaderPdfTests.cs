@@ -216,7 +216,7 @@ public sealed class BookReaderPdfTests
         // "1 / 2 (50%)" with the handle at the start came from a view-index slider
         // and a page-based percentage. Both now use the last page on screen.
         StringAssert.Contains(script, "value: last,\n                max: layout.pageCount,\n                percent: Math.round(last / layout.pageCount * 100)");
-        StringAssert.Contains(script, "goToView(viewForSliderPage(value), { animate: false })");
+        StringAssert.Contains(script, "reflowRenderer?.seekPage(viewForSliderPage(value))");
         StringAssert.Contains(script, "value: last,\n                    max: total,\n                    percent: Math.round(last / total * 100)");
         StringAssert.Contains(script, "addEventListener(\"change\"");
         Assert.IsFalse(script.Contains("max = layout.viewCount - 1", StringComparison.Ordinal));
