@@ -52,21 +52,21 @@ public sealed partial class PlaybackPlanStartTests
             new MediaAvailabilityService(fixture.Db, roots));
         var input = new PlaybackPlanInput(null, ClientKinds.Web, ChromeAgent, IPAddress.Loopback);
 
-        var opened = await service.PlanAsync(media.EpisodeId, "reader", input with { Wake = false }, CancellationToken.None);
+        var opened = await service.PlanAsync(media.EpisodeId!.Value, "reader", input with { Wake = false }, CancellationToken.None);
         Assert.AreEqual(PlaybackDeliveryMode.Unavailable, opened!.Plan.Mode);
         Assert.AreEqual(PlaybackReasonCodes.MediaUnavailable, opened.Plan.Reasons.Single().Code);
         Assert.IsNull(opened.Session);
         Assert.IsFalse(opened.Availability!.IsAvailable);
         Assert.AreEqual(0, sender.Sent, "Opening the page only decides; it never wakes the NAS.");
 
-        var played = await service.PlanAsync(media.EpisodeId, "reader", input, CancellationToken.None);
+        var played = await service.PlanAsync(media.EpisodeId!.Value, "reader", input, CancellationToken.None);
         Assert.AreEqual(PlaybackDeliveryMode.Unavailable, played!.Plan.Mode);
         Assert.AreEqual(StorageAvailabilityState.Starting, played.Availability!.State,
             "Play starts the shared wake attempt and reports Starting so the client polls and re-plans.");
         Assert.IsTrue(played.Availability.Retryable);
         await WaitUntilAsync(() => sender.Sent == 1);
 
-        await service.PlanAsync(media.EpisodeId, "reader", input, CancellationToken.None);
+        await service.PlanAsync(media.EpisodeId!.Value, "reader", input, CancellationToken.None);
         Assert.AreEqual(1, sender.Sent, "A second play request joins the running start attempt.");
         Assert.AreEqual(0, store.Count, "No stream session exists before the media is readable.");
     }
