@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
@@ -444,12 +445,12 @@ public sealed class IndexModel(
             MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv => TmdbDiscoveryProvider.ProviderKey,
             _ => AniListMetadataProvider.ProviderKey
         };
+        var canonicalExternalId = externalId.Trim();
 
         if (kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv)
         {
             if (!string.Equals(provider, TmdbDiscoveryProvider.ProviderKey, StringComparison.Ordinal)
-                || !int.TryParse(externalId, out var tmdbId)
-                || tmdbId <= 0)
+                || !TmdbDiscoveryProvider.TryNormalizeExternalId(externalId, out canonicalExternalId))
             {
                 return BadRequest();
             }
@@ -460,7 +461,7 @@ public sealed class IndexModel(
                     kind == MediaAcquisitionKind.Movie
                         ? TmdbDiscoveryMediaType.Movie
                         : TmdbDiscoveryMediaType.Series,
-                    externalId.Trim(),
+                    canonicalExternalId,
                     cancellationToken);
             }
             catch (Exception exception) when (exception is HttpRequestException
@@ -475,12 +476,16 @@ public sealed class IndexModel(
                 return StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
         }
-        else if (kind != MediaAcquisitionKind.Book
-                 && (!string.Equals(provider, AniListMetadataProvider.ProviderKey, StringComparison.Ordinal)
-                     || !int.TryParse(externalId, out var aniListId)
-                     || aniListId <= 0))
+        else if (kind != MediaAcquisitionKind.Book)
         {
-            return BadRequest();
+            if (!string.Equals(provider, AniListMetadataProvider.ProviderKey, StringComparison.Ordinal)
+                || !int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId)
+                || aniListId <= 0)
+            {
+                return BadRequest();
+            }
+
+            canonicalExternalId = aniListId.ToString(CultureInfo.InvariantCulture);
         }
 
         try
@@ -489,7 +494,7 @@ public sealed class IndexModel(
                 new AcquisitionRequestDraft(
                     kind,
                     canonicalProvider,
-                    externalId.Trim(),
+                    canonicalExternalId,
                     title.Trim(),
                     kind == MediaAcquisitionKind.Book
                         ? string.IsNullOrWhiteSpace(author) ? null : author.Trim()
