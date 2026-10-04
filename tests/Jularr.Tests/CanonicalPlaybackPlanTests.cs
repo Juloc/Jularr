@@ -121,6 +121,60 @@ public sealed class CanonicalPlaybackPlanTests
     }
 
     [TestMethod]
+    public async Task CanonicalBootstrapUsesTracksAndWorkEpisodeNavigation()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var storage = new CanonicalMediaStorageService(fixture.Db);
+        var progress = new VideoProgressService(fixture.Db);
+        var player = new CanonicalVideoPlayerService(
+            fixture.Db,
+            storage,
+            fixture.Inventory,
+            progress);
+
+        var movie = new Work
+        {
+            MediaType = WorkMediaType.Movie,
+            CanonicalTitle = "Movie Without Fake Next"
+        };
+        var series = new Work
+        {
+            MediaType = WorkMediaType.Series,
+            CanonicalTitle = "Ordered Series"
+        };
+        var episode1 = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 1, Title = "One" };
+        var episode2 = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 2, Title = "Two" };
+        var episode3 = new WorkEpisode { WorkId = series.Id, SeasonNumber = 2, EpisodeNumber = 1, Title = "Three" };
+        fixture.Db.AddRange(movie, series, episode1, episode2, episode3);
+        await fixture.Db.SaveChangesAsync();
+
+        await AttachAsync(fixture, storage, movie.Id, null, "bootstrap-movie.mp4", MediaProbeFixtures.H264Stereo);
+        await AttachAsync(fixture, storage, series.Id, episode1.Id, "bootstrap-s01e01.mp4", MediaProbeFixtures.H264Stereo);
+        await AttachAsync(fixture, storage, series.Id, episode2.Id, "bootstrap-s01e02.mkv", MediaProbeFixtures.HevcTenBitHdrMultiAudio);
+        await AttachAsync(fixture, storage, series.Id, episode3.Id, "bootstrap-s02e01.mp4", MediaProbeFixtures.H264Stereo);
+
+        var movieBootstrap = await player.GetAsync(
+            "reader",
+            PlaybackVideoTarget.Movie(movie.Id),
+            CancellationToken.None);
+        Assert.IsNotNull(movieBootstrap);
+        Assert.IsNull(movieBootstrap.Navigation.Previous);
+        Assert.IsNull(movieBootstrap.Navigation.Next, "A movie never fabricates episode navigation.");
+
+        var tvBootstrap = await player.GetAsync(
+            "reader",
+            PlaybackVideoTarget.Episode(series.Id, episode2.Id),
+            CancellationToken.None);
+        Assert.IsNotNull(tvBootstrap);
+        Assert.AreEqual(episode1.Id, tvBootstrap.Navigation.Previous!.Target.WorkEpisodeId);
+        Assert.AreEqual(episode3.Id, tvBootstrap.Navigation.Next!.Target.WorkEpisodeId);
+        Assert.AreEqual(1, tvBootstrap.Inventory.Technical!.AudioStreams.Count);
+        Assert.AreEqual(1, tvBootstrap.Inventory.Technical.SubtitleStreams.Count);
+        Assert.AreEqual(series.Id, tvBootstrap.Target.WorkId);
+        Assert.AreEqual(episode2.Id, tvBootstrap.Target.WorkEpisodeId);
+    }
+
+    [TestMethod]
     public async Task LegacyAnimePlanRouteResolvesCanonicalTarget()
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();
@@ -174,6 +228,9 @@ public sealed class CanonicalPlaybackPlanTests
     [TestMethod]
     public void ClientContractExposesCanonicalVideoPlanRoute()
     {
+        Assert.AreEqual(
+            "/api/client/v1/video/player",
+            ClientApiRoutes.VideoPlayer);
         Assert.AreEqual(
             "/api/client/v1/video/playback-plan",
             ClientApiRoutes.VideoPlaybackPlan);
