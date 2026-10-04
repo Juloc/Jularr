@@ -1404,7 +1404,7 @@
             return;
         }
         const [first] = pdf.visiblePages();
-        const section = pdf.sectionFor(first);
+        const section = pdf.sectionFor(first) ?? items.filter(entry => entry.page <= first).at(-1);
         let current = null;
         for (const entry of items) {
             const item = document.createElement("li");
@@ -2092,6 +2092,10 @@
             },
             onReady: ready => {
                 finishRestore();
+                // Contents restored open before the pages were ready would otherwise stay empty.
+                if (ready && !chaptersLoaded && !root.querySelector("[data-reader-contents]")?.hidden) {
+                    void loadChapters(chapterSearch?.value);
+                }
                 if (ready) ensureAnnotations().catch(error => console.warn(error));
                 if (pdfTranslation) pdfTranslation.hidden = view !== "translated";
                 void loadPdfTranslation();

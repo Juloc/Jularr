@@ -1915,6 +1915,19 @@ html[data-reader-learning="off"] [data-language-lookup-selection] {
     font-size: 11px;
 }
 
+.reader-sheet-papers > button > span:last-child {
+    line-height: 1.15;
+    text-align: center;
+    white-space: normal;
+}
+
+/* A phone never shows two pages, so the spread switch has nothing to do there. */
+@media (max-width: 720px) {
+    .reader-sheet-toggle:has([data-reader-proxy="twoPageSpread"]) {
+        display: none;
+    }
+}
+
 /* Background artwork scrolls sideways instead of growing the card. */
 .reader-sheet-backgrounds {
     grid-template-columns: none;
