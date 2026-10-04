@@ -6,6 +6,8 @@ Global UX rules: `docs/UX.md`.
 User notification preferences: `docs/mockups/notifications-settings/SPEC.md`.
 Admin delivery infrastructure: `docs/mockups/admin-notifications/SPEC.md`.
 
+Canonical notification architecture: `docs/NOTIFICATIONS.md`.
+
 If an image and this specification conflict, this specification wins.
 
 ## Purpose
