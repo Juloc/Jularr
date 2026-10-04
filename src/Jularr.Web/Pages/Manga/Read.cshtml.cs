@@ -164,7 +164,8 @@ public sealed class ReadModel(
     public async Task<IActionResult> OnPostPreferenceAsync(
         Guid id,
         string? scope,
-        string? mode,
+        string? changedKey,
+        MangaReaderPreferenceInput input,
         CancellationToken cancellationToken)
     {
         var repository = new MangaRepository(db);
@@ -181,14 +182,20 @@ public sealed class ReadModel(
             ? (Guid?)null
             : chapter.SeriesId;
 
-        await MangaReaderPreferenceStore.SaveModeAsync(
+        await MangaReaderPreferenceStore.SaveAsync(
             db,
             account.ProfileId,
             seriesId,
-            mode,
+            input,
+            changedKey,
             cancellationToken);
 
-        return new OkResult();
+        var resolved = await MangaReaderPreferenceStore.GetAsync(
+            db,
+            account.ProfileId,
+            chapter.SeriesId,
+            cancellationToken);
+        return new JsonResult(resolved);
     }
 
     public async Task<IActionResult> OnPostResetPreferenceAsync(
@@ -214,7 +221,7 @@ public sealed class ReadModel(
             chapter.SeriesId,
             cancellationToken);
 
-        return new JsonResult(new { mode = settings.UiMode });
+        return new JsonResult(settings);
     }
 
     public async Task<IActionResult> OnGetPageAsync(
