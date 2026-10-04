@@ -290,6 +290,16 @@
         }
     };
 
+    const signalPagedRender = () => {
+        const visible = slots.filter(image => !image.hidden && image.getAttribute("src"));
+        const decoded = visible.map(image => typeof image.decode === "function"
+            ? image.decode().catch(() => {})
+            : Promise.resolve());
+        void Promise.all(decoded).then(() => {
+            root.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
+        });
+    };
+
     let figures = [];
     const buildStrip = () => {
         if (!strip || figures.length) return;
@@ -620,8 +630,13 @@
         const next = imageRenderer.setPage(target);
         if (next === page) return;
         page = next;
-        if (isPaged()) renderSpread();
-        else scrollToPage(page);
+        if (isPaged()) {
+            renderSpread();
+            signalPagedRender();
+        } else {
+            scrollToPage(page);
+            root.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
+        }
         updateLocation();
         queueProgress();
         prefetch();
