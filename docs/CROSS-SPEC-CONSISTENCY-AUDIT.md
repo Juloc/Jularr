@@ -356,3 +356,33 @@ Next work should be:
 1. implement/consolidate the target Admin shell and redirects without losing current functionality;
 2. migrate legacy settings/state to their canonical owners;
 3. execute dependency-ordered implementation, with Anime/Movie/TV request -> acquisition -> import -> playback as the primary product path.
+
+## 27. Notifications — aligned
+
+Canonical notification architecture is now centralized in `docs/NOTIFICATIONS.md`.
+
+The Notification Settings, Topic Editor, Quiet Hours, Digest, Center, Bell/Quick View, Toast/Popup, Persistent Banner and Admin Notifications specs now use the same ownership model:
+
+- one `JularrEvent` / EventLog boundary;
+- one event-definition catalog;
+- one profile notification preference owner;
+- profile channels are In-App / Push / E-Mail;
+- Digest is timing, not a transport;
+- Quiet Hours delays eligible attention/external delivery but does not hide the durable In-App inbox;
+- Notification Center/Bell/Quick View share one inbox state;
+- Toast is transient attention;
+- Banner is current-state driven and never owned by inbox read state;
+- external/integration channels such as Webhook/Home Assistant are not normal personal profile channels by default;
+- delivery failures never replay the originating business operation.
+
+Resolved cross-spec contradictions:
+
+- Request status belongs to the Requests topic, not Media. The approved Topic Editor image remains a layout reference where it shows an illustrative Request row under Media; text/architecture is authoritative.
+- The current single `NotificationMode` model is explicitly V1-only; the target is Enabled + selected channels + Immediate/Digest timing.
+- In-App remains immediate durable inbox state even when external delivery timing is Digest; Digest does not become an In-App transport.
+- Quiet Hours and Digest share one restart-safe delivery scheduler rather than separate page-owned queues.
+- persistent Banner state is separated from event/Toast delivery.
+- inbox recurrence time, read time and dismissal state are distinct; read/unread changes do not reorder the feed.
+- Profile audience no longer has a target semantic fallback to Admin when ProfileId is missing; target routing is explicit/fail-closed.
+
+The remaining work is implementation parity against this contract, not another UX ownership decision.
