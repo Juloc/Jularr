@@ -9,6 +9,9 @@ Primary backlog:
 - #840 — device-local Offline actions on consumer detail surfaces;
 - #415 — Smart Offline, only after the explicit Offline foundation is stable.
 
+Detailed Phase A contract/owner plan:
+- `docs/implementation/offline-phase-a-contracts.md`
+
 Existing foundations that remain authoritative:
 - #221 — Offline Library & Reader Sync;
 - #225 — bounded offline playback;
