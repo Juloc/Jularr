@@ -344,7 +344,7 @@
                     false);
 
                 if (scope === "work" || scope === "book") {
-                    state.hasBookOverride = true;
+                    state.hasWorkOverride = true;
                 }
                 // Apply the saved values, except for settings that changed again
                 // while this save was in flight (an appearance card sets several
@@ -465,7 +465,7 @@
         });
 
         if (overrideState) {
-            overrideState.textContent = state.hasBookOverride
+            overrideState.textContent = state.hasWorkOverride
                 ? t("overrideWork", "Customized for this work")
                 : state.hasGenreOverride
                     ? t("overrideGenre", "Genre default")
