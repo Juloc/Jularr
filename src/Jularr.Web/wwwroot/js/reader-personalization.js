@@ -1,6 +1,16 @@
-(() => {
+(async () => {
     const shell = document.querySelector("[data-novel-reader][data-reader-personalization]");
     if (!shell) return;
+
+    const scriptUrl = document.currentScript?.src;
+    if (!scriptUrl) return;
+    const {
+        clamp,
+        permilleForIndex,
+        scrollPermille,
+        captureContinuousAnchor,
+        capturePagedTextAnchor
+    } = await import(new URL("reflow-reader.js", scriptUrl).href);
 
     const settingsElement = shell.querySelector("[data-reader-settings-json]");
     const settingsForm = shell.querySelector("[data-reader-settings-form]");
@@ -62,9 +72,6 @@
     let saveQueue = Promise.resolve();
 
     const bookmarkState = new Map();
-
-    const clamp = (value, min, max) =>
-        Math.min(max, Math.max(min, value));
 
     const cssEscape = value =>
         window.CSS?.escape ? window.CSS.escape(value) : String(value).replace(/["\\]/g, "\\$&");
@@ -508,30 +515,6 @@
         return Math.floor((content.scrollLeft + left - content.getBoundingClientRect().left + 1) / width);
     };
 
-    const pagedAnchor = paragraphs => {
-        const page = Math.round(content.scrollLeft / Math.max(1, content.clientWidth));
-        const paragraph = paragraphs.find(item =>
-            Array.from(item.getClientRects()).some(rect => rect.width > 0 && pageAt(rect.left) >= page));
-        if (!paragraph) return { paragraph: paragraphs[0], offset: 0 };
-
-        const first = paragraph.getClientRects()[0];
-        if (!first || pageAt(first.left) >= page) return { paragraph, offset: 0 };
-
-        // The paragraph started on an earlier page: find the first character laid
-        // out on this page. Characters run in reading order across the columns,
-        // so "on this page or later" is monotonic in the offset.
-        const length = paragraph.textContent?.length || 0;
-        let low = 0;
-        let high = length;
-        while (low < high) {
-            const middle = Math.floor((low + high) / 2);
-            const left = characterLeft(paragraph, middle, length);
-            if (left !== null && pageAt(left) >= page) high = middle;
-            else low = middle + 1;
-        }
-        return { paragraph, offset: Math.min(low, Math.max(0, length - 1)) };
-    };
-
     const captureLogicalAnchor = () => {
         const language =
             shell.dataset.view === "de" && shell.dataset.hasTranslation === "true"
@@ -543,21 +526,18 @@
         if (paragraphs.length === 0) return null;
 
         if ((shell.dataset.readingMode || state.readingMode) === "paged") {
-            return pagedAnchor(paragraphs);
+            return capturePagedTextAnchor(
+                paragraphs,
+                Math.round(content.scrollLeft / Math.max(1, content.clientWidth)),
+                pageAt,
+                characterLeft,
+                { language });
         }
 
-        const target = window.innerHeight * .28;
-        let selected = paragraphs[0];
-        for (const paragraph of paragraphs) {
-            const rect = paragraph.getBoundingClientRect();
-            if (rect.top <= target) selected = paragraph;
-            if (rect.top <= target && rect.bottom >= target) break;
-            if (rect.top > target) break;
-        }
-        const rect = selected.getBoundingClientRect();
-        const length = selected.textContent?.length || 0;
-        const fraction = rect.height <= 0 ? 0 : clamp((target - rect.top) / rect.height, 0, 1);
-        return { paragraph: selected, offset: Math.round(length * fraction) };
+        return captureContinuousAnchor(
+            paragraphs,
+            window.innerHeight * .28,
+            { language });
     };
 
     // Page that shows the anchor's character (the paragraph start for offset 0).
@@ -572,8 +552,7 @@
 
     const updateReadingProgress = () => {
         if (state.readingMode !== "paged") return;
-        const progress =
-            pageCount <= 1 ? 1000 : Math.round(currentPage / (pageCount - 1) * 1000);
+        const progress = permilleForIndex(currentPage, pageCount);
         document.querySelectorAll("[data-reading-progress]").forEach(bar => {
             bar.style.width = (progress / 10) + "%";
         });
@@ -595,8 +574,7 @@
             shell.dataset.view === "de" && shell.dataset.hasTranslation === "true"
                 ? "de"
                 : "ja";
-        const progress =
-            pageCount <= 1 ? 1000 : Math.round(currentPage / (pageCount - 1) * 1000);
+        const progress = permilleForIndex(currentPage, pageCount);
         const data = new FormData(progressForm);
         setFormValue(data, "positionPermille", progress);
         setFormValue(data, "anchorLanguage", language);
@@ -626,10 +604,12 @@
             max = pageCount - 1;
         } else {
             const viewport = Math.max(1, window.innerHeight);
-            const scrollable = Math.max(1, document.documentElement.scrollHeight - viewport);
             total = Math.max(1, Math.ceil(document.documentElement.scrollHeight / viewport));
             page = Math.min(total, Math.floor(window.scrollY / viewport) + 1);
-            value = Math.round(clamp(window.scrollY / scrollable, 0, 1) * 1000);
+            value = scrollPermille(
+                window.scrollY,
+                document.documentElement.scrollHeight,
+                viewport);
             max = 1000;
         }
         const percent = state.readingMode === "paged"
