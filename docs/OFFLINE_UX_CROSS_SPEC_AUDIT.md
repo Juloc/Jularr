@@ -233,16 +233,14 @@ Do not implement a second Offline-specific toast queue or notification store.
 
 ### Current known visual/spec conflict
 
-The Offline download notification reference currently shows a **bottom mobile snackbar**.
+The Offline download notification reference shows a **bottom mobile snackbar**, while the canonical Notification Toast target specifies a **compact top in-app notification banner/toast on phone**.
 
-The canonical Notification Toast target specifies a **compact top in-app notification banner/toast on phone**.
+The Offline event spec has now been cleaned up so:
+- canonical Notifications placement explicitly wins;
+- Offline owns event facts/context only;
+- the Offline notification image is treated as an event-content example rather than shared Toast-placement authority.
 
-When the two planning branches are integrated:
-- canonical Notifications placement wins;
-- the Offline notification image remains useful only as an event-content example unless updated;
-- `download-notifications/SPEC.md` must delegate layout/attention behavior to the canonical Notification contracts.
-
-This does **not** require another Offline-specific mockup. The approved Notification family already owns the component visuals.
+The visual mismatch can be resolved naturally when the Notification planning branch is integrated. It does **not** require another Offline-specific mockup because the canonical Notification family already owns the component visuals.
 
 ## 7. Branch integration blocker: current planning branch is behind `dev`
 
@@ -413,11 +411,7 @@ No new storage-manager mockup is required.
 
 All planned Offline surfaces currently have uploaded images in their owning folders.
 
-Two early specs still contain stale status wording:
-- `downloads-offline/SPEC.md` says visual reference is pending;
-- `offline-settings/SPEC.md` says image upload is pending.
-
-Those lines should be normalized to approved/available status before branch integration.
+The early stale visual-status wording in `downloads-offline/SPEC.md` and `offline-settings/SPEC.md` was corrected during this audit; both now state that their approved references are present.
 
 Some approved image filenames are generated `file_...` names rather than `image.png`. This is not semantically wrong because the folder + `SPEC.md` is the owner, but filenames may be normalized later for maintainability if desired.
 
