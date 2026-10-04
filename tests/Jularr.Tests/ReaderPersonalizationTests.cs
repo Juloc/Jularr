@@ -45,7 +45,7 @@ public sealed class ReaderPersonalizationTests
             Assert.AreEqual("sepia", first.PaperStyle);
             CollectionAssert.Contains(first.SourceGenres.ToArray(), "Fantasy");
             Assert.AreEqual("auto", first.ResolvedGenreTheme);
-            Assert.IsTrue(first.HasBookOverride);
+            Assert.IsTrue(first.HasWorkOverride);
 
             await ReaderPreferenceStore.SaveUserDefaultsAsync(
                 db,
@@ -77,7 +77,7 @@ public sealed class ReaderPersonalizationTests
                 CancellationToken.None);
 
             Assert.AreEqual("white", reset.PaperStyle);
-            Assert.IsFalse(reset.HasBookOverride);
+            Assert.IsFalse(reset.HasWorkOverride);
         }
         finally
         {
