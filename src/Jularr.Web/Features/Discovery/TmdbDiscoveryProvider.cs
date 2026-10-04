@@ -245,13 +245,14 @@ public sealed class TmdbDiscoveryProvider(
                 cancellationToken);
         }
 
-        if (!string.IsNullOrWhiteSpace(details.ImdbId))
+        var imdbId = details.ImdbId ?? details.ExternalIds?.ImdbId;
+        if (!string.IsNullOrWhiteSpace(imdbId))
         {
             await works.LinkExternalIdentityAsync(
                 work.Id,
                 workType,
                 ProviderKeys.Imdb,
-                details.ImdbId,
+                imdbId,
                 confidence: 1.0,
                 evidence: "TMDB external_ids",
                 isPrimary: true,
