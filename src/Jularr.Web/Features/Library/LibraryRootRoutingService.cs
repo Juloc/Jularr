@@ -138,12 +138,22 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
                         "The LibraryRoot does not support this content type.");
             }
 
-            foreach (var assignment in assignments)
+            // PostgreSQL enforces one default through a filtered unique index. Clear the old
+            // default first, then activate the new one inside the same transaction so the database
+            // never observes two default rows at once.
+            foreach (var assignment in assignments.Where(row => row.IsDefault && !ReferenceEquals(row, selected)))
             {
-                assignment.IsDefault = ReferenceEquals(assignment, selected);
+                assignment.IsDefault = false;
             }
 
             await db.SaveChangesAsync(cancellationToken);
+
+            if (selected is not null && !selected.IsDefault)
+            {
+                selected.IsDefault = true;
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
             await transaction.CommitAsync(cancellationToken);
         }
         catch
