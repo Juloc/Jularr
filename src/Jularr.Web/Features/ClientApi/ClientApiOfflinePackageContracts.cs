@@ -131,6 +131,15 @@ public static class ClientApiOfflinePackageContract
     }
 }
 
+public static class ClientApiOfflinePackageRoutes
+{
+    public const string OptionsPath = "/offline/packages/options";
+    public const string PreviewPath = "/offline/packages/preview";
+
+    public static string Options => $"{ClientApiContract.BasePath}{OptionsPath}";
+    public static string Preview => $"{ClientApiContract.BasePath}{PreviewPath}";
+}
+
 public enum ClientOfflinePackageIntent
 {
     Watch,
