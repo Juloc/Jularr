@@ -16,14 +16,7 @@ public sealed class OperationNotificationAudienceTests
         var events = new RecordingEventPublisher();
         var store = new OperationStore(db, events);
 
-        var operationId = await store.CreateAsync(
-            new OperationDescriptor(
-                "book-download",
-                "Download",
-                "Download book",
-                Subject: "Example Book",
-                ProfileId: "reader",
-                IsDownload: true));
+        var operationId = await store.CreateAsync(new OperationDescriptor("book-download", "Download", "Download book", Subject: "Example Book", ProfileId: "reader", IsDownload: true));
 
         await store.MarkSucceededAsync(operationId, "Downloaded.");
 
@@ -41,14 +34,7 @@ public sealed class OperationNotificationAudienceTests
         var events = new RecordingEventPublisher();
         var store = new OperationStore(db, events);
 
-        var operationId = await store.CreateAsync(
-            new OperationDescriptor(
-                "scheduled-download",
-                "Download",
-                "Background download",
-                Subject: "Example",
-                ProfileId: null,
-                IsDownload: true));
+        var operationId = await store.CreateAsync(new OperationDescriptor("scheduled-download", "Download", "Background download", Subject: "Example", ProfileId: null, IsDownload: true));
 
         await store.MarkSucceededAsync(operationId, "Downloaded.");
 
@@ -65,13 +51,7 @@ public sealed class OperationNotificationAudienceTests
         var events = new RecordingEventPublisher();
         var store = new OperationStore(db, events);
 
-        var operationId = await store.CreateAsync(
-            new OperationDescriptor(
-                "book-import",
-                "Import",
-                "Background import",
-                Subject: "Example",
-                ProfileId: null));
+        var operationId = await store.CreateAsync(new OperationDescriptor("book-import", "Import", "Background import", Subject: "Example", ProfileId: null));
 
         await store.MarkFailedAsync(operationId, "Import failed.");
 
