@@ -137,9 +137,18 @@ Owns reusable translation tasks and persisted derivatives:
 - provider abstraction
 - local/self-hosted and optional remote adapters
 - document/chapter translation jobs
+- provider-neutral progressive translation run/block contract (#834)
+- validated partial block cache and resume/idempotency semantics
 - Translation provenance
-- derived Edition/Version creation
+- derived Edition/Version creation/finalization
 - cache/versioning
+
+Translation normalizes provider-native token/delta or final-response behavior
+behind its application contract. Reader never owns provider protocol details,
+partial JSON or a second translation cache. Only validated completed blocks are
+durable/reusable; a complete derived Edition/Version is published after final
+validation. Translation generation is shared content capability rather than a
+Learning/profile-owned capability.
 
 Reader and Learning can consume this module through application contracts.
 
@@ -465,12 +474,25 @@ Web, Android and TV use the same planning semantics. They may render completely 
 ```text
 requested Work/Edition/Chapter
  -> preferred available language edition
- -> if unavailable and policy permits: TranslationJob
+ -> if unavailable and policy permits: shared TranslationJob/run
+ -> stable semantic source blocks
+ -> provider adapter (delta-capable or bounded final-response)
+ -> validated completed translated blocks
+ -> Reader can consume partial readable coverage
+ -> final validation
  -> translated derived Edition/Version
  -> persisted/cached Asset
  -> Reader document contract
  -> progress/annotations
 ```
+
+Progressive translation is ordered/idempotent and reconnectable by stable
+run/block identity. Provider deltas are transient infrastructure events; the
+Translation module validates and normalizes them before Reader consumption.
+Completed blocks survive retry/restart, while incomplete output cannot be
+published as a complete derivative. Multiple viewers share canonical work rather
+than starting duplicate provider runs. Search/TTS/offline/durable annotation
+features consume completed validated text, not ephemeral deltas.
 
 Never destructively overwrite source text with machine translation.
 
