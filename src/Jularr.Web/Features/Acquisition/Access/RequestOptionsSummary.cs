@@ -22,6 +22,23 @@ public static class RequestOptionsSummary
         var lines = new List<string>();
         switch (options.Scope)
         {
+            case RequestScope.FutureOnly:
+                lines.Add(ui["requests.options.futureOnly"]);
+                break;
+            case RequestScope.Custom:
+                if (options.Seasons.Count > 0)
+                {
+                    lines.Add(ui.Format("requests.options.seasons", ("list", RequestSelectionText.FormatSeasons(options.Seasons))));
+                }
+                if (options.Episodes.Count > 0)
+                {
+                    lines.Add(ui.Format("requests.options.episodes", ("list", RequestSelectionText.FormatEpisodes(options.Episodes))));
+                }
+                if (options.MonitorFuture)
+                {
+                    lines.Add(ui["requests.options.futureIncluded"]);
+                }
+                break;
             case RequestScope.Seasons:
                 lines.Add(ui.Format("requests.options.seasons", ("list", RequestSelectionText.FormatSeasons(options.Seasons))));
                 break;
