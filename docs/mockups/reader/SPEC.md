@@ -142,6 +142,10 @@ May expose:
 
 ### Manga / comic image sequence
 
+Manga and western comics share the image-sequence renderer but not necessarily
+the same defaults. Reading direction comes from document metadata/profile
+preference rather than title guessing.
+
 Expose:
 - single page;
 - spread / two-page where meaningful;
@@ -158,6 +162,10 @@ Do **not** show text font/line-height controls for image pages.
 
 ### Fixed document / PDF
 
+This includes original PDF, fixed-layout/pre-paginated EPUB and other
+page-faithful documents such as magazines/artbooks when reflow would destroy
+the intended layout.
+
 Expose:
 - page navigation;
 - single/spread/continuous layout;
@@ -167,6 +175,39 @@ Expose:
 - bookmarks.
 
 Do not emulate reflowable typography for fixed pages.
+
+### Format/layout resolution
+
+Renderer choice follows the parsed document layout/capabilities, not only the
+file extension:
+
+- normal EPUB -> reflowable text;
+- fixed-layout EPUB -> fixed pages;
+- original PDF -> fixed pages;
+- PDF Smart Book -> semantic/reflow view mapped to original pages/regions;
+- CBZ/ZIP/CBR/CB7 after safe import normalization -> image sequence;
+- scans -> fixed/image source view with optional OCR/Smart derived view;
+- magazine/artbook -> fixed/image unless a reliable semantic derived view exists.
+
+One source may expose more than one view without creating a second Reader or
+progress store. Smart PDF and Original PDF are the primary example.
+
+Keep these concepts separate:
+- image/page order: LTR / RTL;
+- continuous vertical image flow / Webtoon;
+- text direction: LTR / RTL / auto;
+- text writing mode: horizontal / vertical-rl / vertical-lr.
+
+Japanese vertical writing is not the same capability as vertical Manga/Webtoon
+scrolling.
+
+Source illustrations, Manga/comic pages, generated chapter artwork and Reader
+theme artwork are different concepts. Generated chapter artwork is optional
+presentation and must not become a progress/annotation anchor.
+
+Unsupported DRM-protected content must fail explicitly; Reader planning never
+implies DRM circumvention. MOBI/AZW/AZW3/DJVU remain format-adapter work and
+must reuse this same Reader contract if supported later.
 
 ## 5. Exact progress and completion semantics
 
@@ -884,7 +925,8 @@ The new Reader UI must not permanently query legacy `NovelWork`, `NovelProgress`
 
 ## 27. Must not implement
 
-- No separate Book, Novel and Manga Reader shells.
+- No separate Book, Novel, Manga, Comic, PDF or Magazine Reader shells.
+- No renderer selection based only on route or file extension.
 - No second progress database/store per media type.
 - No manual Save Progress requirement.
 - No progress represented only as percentage when a stable locator is available.
@@ -901,6 +943,7 @@ The new Reader UI must not permanently query legacy `NovelWork`, `NovelProgress`
 - No Reader Learning control when instance/profile/policy/content eligibility does not allow it.
 - No TV text Reader purely for parity.
 - No unsanitized imported HTML.
+- No execution of embedded document scripts/actions or DRM bypass.
 - No annotation implementation that mutates canonical source text.
 - No duplicate online/offline Reader rendering paths.
 - No separate offline progress semantics.
