@@ -8,6 +8,7 @@ Notification Center: `docs/mockups/notifications-center/SPEC.md`.
 Bell / Quick View: `docs/mockups/notifications-bell/SPEC.md`.
 Toast / Popup: `docs/mockups/notifications-toast-popup/SPEC.md`.
 Persistent Banner: `docs/mockups/notifications-banner/SPEC.md`.
+Canonical notification architecture: `docs/NOTIFICATIONS.md`.
 
 If an image and this specification conflict, this specification wins.
 
@@ -79,8 +80,10 @@ Each event type is shown as one self-contained setting group.
 Example Media topic:
 
 1. Neue Releases;
-2. Anfrage-Status;
-3. Download & Import.
+2. Download & Import;
+3. other user-visible media/library events backed by the canonical event catalog.
+
+Request approval/denial/status belongs to the separate `Anfragen` topic. The approved mockup's `Anfrage-Status` row inside the Medien sheet is an illustrative layout example only and does not override the canonical topic taxonomy.
 
 Each event block contains:
 
@@ -200,9 +203,9 @@ The event is delivered through selected channels according to normal delivery po
 
 ### Digest
 
-The event is queued for the profile's configured Digest schedule.
-
 Digest is a cadence, not a transport.
+
+When Digest is selected, Digest-capable external channels are queued for the profile's configured Digest schedule. If In-App is also selected, the durable inbox row may still be created immediately, but no immediate transient Toast is shown for the Digest-timed event.
 
 An event configured for Digest must not also receive a duplicate immediate delivery unless canonical escalation policy explicitly requires it.
 
