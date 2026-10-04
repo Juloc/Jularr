@@ -3,6 +3,6 @@
     <span class="reader-frame-cover-initial">@Model.Initial</span>
     @if (Model.ImageUrl is not null)
     {
-        <img src="@Model.ImageUrl" alt="" width="40" height="56" decoding="async" referrerpolicy="no-referrer" />
+        <img src="@Model.ImageUrl" data-book-cover data-title="@Model.Title" alt="" width="40" height="56" decoding="async" referrerpolicy="no-referrer" />
     }
 </span>

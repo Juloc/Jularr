@@ -83,12 +83,6 @@
         const inlineContentsQuery = window.matchMedia("(min-width: 1000px)");
         const detailPanel = document.querySelector("[data-language-inspector]");
 
-        // A cover that cannot be loaded leaves its placeholder initial behind.
-        root.querySelectorAll("[data-reader-cover] > img").forEach(image => {
-            image.addEventListener("error", () => image.remove());
-            if (image.complete && image.naturalWidth === 0) image.remove();
-        });
-
         root.classList.remove("reader-chrome-hidden");
         root.dataset.readerChrome = "visible";
         // Books and Novels (prose frames) hide their bars on every device and keep the page hidden until the exact

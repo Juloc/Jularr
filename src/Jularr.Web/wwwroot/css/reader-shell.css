@@ -1015,6 +1015,10 @@ html[data-reader-learning="off"] [data-language-lookup-selection] {
     font: 650 18px/1 Georgia, "Times New Roman", serif;
 }
 
+.reader-frame-cover > .book-cover-placeholder {
+    display: none;
+}
+
 .reader-frame-cover > img {
     position: absolute;
     inset: 0;
