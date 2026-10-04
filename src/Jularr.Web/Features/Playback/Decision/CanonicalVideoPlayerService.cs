@@ -48,7 +48,7 @@ public sealed class CanonicalVideoPlayerService(
     CanonicalMediaStorageService storage,
     MediaInventoryService inventory,
     VideoProgressService progress,
-    CanonicalPlayerNavigationAssetService navigationAssets)
+    CanonicalPlayerNavigationAssetService? navigationAssets = null)
 {
     public async Task<CanonicalVideoPlayerSnapshot?> GetAsync(
         string profileId,
@@ -122,12 +122,16 @@ public sealed class CanonicalVideoPlayerService(
         var navigation = episode is null
             ? CanonicalVideoNavigation.None
             : await ResolveNavigationAsync(target.WorkId, episode.Id, cancellationToken);
-        var segments = await navigationAssets.GetSegmentsAsync(target, cancellationToken);
-        var trickplay = await navigationAssets.GetTrickplayAsync(
-            target,
-            file,
-            queue: true,
-            cancellationToken);
+        var segments = navigationAssets is null
+            ? new EpisodeSegmentDescriptor(new MediaSegmentOptions().SkipConfidenceThreshold, [])
+            : await navigationAssets.GetSegmentsAsync(target, cancellationToken);
+        var trickplay = navigationAssets is null
+            ? TrickplayDescriptor.Unavailable
+            : await navigationAssets.GetTrickplayAsync(
+                target,
+                file,
+                queue: true,
+                cancellationToken);
 
         return new CanonicalVideoPlayerSnapshot(
             target,
