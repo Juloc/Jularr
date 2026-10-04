@@ -8,6 +8,7 @@ using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.MediaMapping;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Operations;
@@ -54,7 +55,7 @@ public sealed class LocalFirstPageGetTests
             aniListId: "321",
             chapters: 3);
         await fixture.SaveMangaProgressAsync(seriesId, chapterIds[1], pageIndex: 4);
-        var page = fixture.Attach(new MangaReadModel(fixture.Db, fixture.OwnerAccount));
+        var page = fixture.Attach(new MangaReadModel(fixture.Db, fixture.OwnerAccount, fixture.WorkBridge()));
 
         var result = await page.OnGetAsync(chapterIds[1], null, CancellationToken.None);
 
@@ -378,6 +379,9 @@ public sealed class LocalFirstPageGetTests
                 ReviewStore,
                 OwnerAccount,
                 NullLogger<AniListAccountService>.Instance);
+
+        public LegacyWorkBridge WorkBridge() =>
+            new(Db, new WorkService(Db), new WorkStructureService(Db));
 
         public MangaSeriesModel MangaSeriesPage() =>
             new(
