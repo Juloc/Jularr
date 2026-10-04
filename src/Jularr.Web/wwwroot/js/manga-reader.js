@@ -77,55 +77,39 @@
     };
 
     // ---- Settings -------------------------------------------------------------
-    // The view mode is stored server-side (single/double/continuous, shared
-    // ReaderPreferences). Everything else is a per-device preference.
-
-    const settingsKey = `anilingo.reader.manga.${root.dataset.profile || "default"}`;
+    // Durable Manga/comic presentation is part of ReaderPreference. The client
+    // keeps only the live in-memory projection; there is no second localStorage
+    // owner that can drift from profile/type/series inheritance.
     const scrollModes = ["continuous", "horizontal", "webtoon"];
     const schemes = ["auto", "light", "sepia", "dark"];
+    const initialSettings = readJson("[data-manga-settings]", {});
 
-    const loadSettings = () => {
-        let stored = {};
-        try {
-            stored = JSON.parse(localStorage.getItem(settingsKey) || "{}") || {};
-        } catch {
-            stored = {};
-        }
-        // Older builds stored fit ("width"/"height") and zoom as a factor.
-        const zoomPercent = Number(stored.zoomPercent) ||
-            (Number(stored.zoom) > 0 ? Number(stored.zoom) * 100 : 100);
-        return {
-            fitWidth: typeof stored.fitWidth === "boolean" ? stored.fitWidth : stored.fit === "width",
-            zoomPercent: clamp(Math.round(zoomPercent / 10) * 10, 50, 300),
-            scrollMode: scrollModes.includes(stored.scrollMode) ? stored.scrollMode : "continuous",
-            firstPageAlone: stored.firstPageAlone === true,
-            autoNext: stored.autoNext !== false,
-            scheme: schemes.includes(stored.scheme) ? stored.scheme : "auto",
-            sharpen: stored.sharpen === true,
-            crop: stored.crop === true,
-            gap: clamp(Number.isFinite(Number(stored.gap)) ? Number(stored.gap) : 8, 0, 48),
-            directions: stored.directions && typeof stored.directions === "object" ? stored.directions : {}
-        };
+    const settings = {
+        fitWidth: initialSettings.imageFit === "width",
+        zoomPercent: clamp(Number(initialSettings.imageZoomPercent) || 100, 50, 300),
+        scrollMode: scrollModes.includes(initialSettings.imageFlowMode)
+            ? initialSettings.imageFlowMode
+            : "continuous",
+        firstPageAlone: initialSettings.imageFirstPageAlone === true,
+        autoNext: initialSettings.autoContinueChapters !== false,
+        scheme: schemes.includes(initialSettings.imageColorScheme)
+            ? initialSettings.imageColorScheme
+            : "auto",
+        sharpen: initialSettings.imageSharpen === true,
+        crop: initialSettings.imageCropBorders === true,
+        gap: clamp(Number(initialSettings.imagePageGapPx) || 0, 0, 48)
     };
+    if (!Number.isFinite(Number(initialSettings.imagePageGapPx))) settings.gap = 8;
 
-    const settings = loadSettings();
-    const saveSettings = () => {
-        try {
-            localStorage.setItem(settingsKey, JSON.stringify(settings));
-        } catch {
-        }
-    };
-
-    const serverMode = root.dataset.defaultMode;
-    let mode = serverMode === "continuous"
-        ? settings.scrollMode
-        : serverMode === "double" ? "double" : "single";
-    let direction = settings.directions[seriesId] === "ltr" || settings.directions[seriesId] === "rtl"
-        ? settings.directions[seriesId]
+    const serverMode = initialSettings.uiMode || root.dataset.defaultMode;
+    let mode = ["single", "double", ...scrollModes].includes(serverMode)
+        ? serverMode
+        : "single";
+    let direction = initialSettings.pageDirection === "ltr" || initialSettings.pageDirection === "rtl"
+        ? initialSettings.pageDirection
         : root.dataset.seriesDirection === "ltr" ? "ltr" : "rtl";
 
     const isPaged = () => mode === "single" || mode === "double";
-    const coarseMode = value => value === "single" || value === "double" ? value : "continuous";
 
     // ---- Pages ----------------------------------------------------------------
 
@@ -663,27 +647,59 @@
 
     // ---- Mode and settings changes ------------------------------------------
 
-    const savePreference = scope => postForm(preferenceForm, data => {
+    const savePreference = (scope, changedKey = "") => postForm(preferenceForm, data => {
         data.set("scope", scope);
-        data.set("mode", coarseMode(mode));
+        data.set("changedKey", changedKey);
+        data.set("mode", mode);
+        data.set("pageDirection", direction);
+        data.set("imageFit", settings.fitWidth ? "width" : "height");
+        data.set("imageZoomPercent", String(settings.zoomPercent));
+        data.set("imagePageGapPx", String(settings.gap));
+        data.set("imageFirstPageAlone", String(settings.firstPageAlone));
+        data.set("autoContinueChapters", String(settings.autoNext));
+        data.set("imageSharpen", String(settings.sharpen));
+        data.set("imageCropBorders", String(settings.crop));
+        data.set("imageColorScheme", settings.scheme);
     });
+
+    const preferenceTimers = new Map();
+    const queuePreferenceSave = changedKey => {
+        window.clearTimeout(preferenceTimers.get(changedKey));
+        const timer = window.setTimeout(() => {
+            preferenceTimers.delete(changedKey);
+            void savePreference("series", changedKey)
+                .then(() => {
+                    if (resetSeriesButton) resetSeriesButton.hidden = false;
+                })
+                .catch(() => toast(t("toast.saveFailed", "Could not save. Please try again.")));
+        }, 180);
+        preferenceTimers.set(changedKey, timer);
+    };
 
     const setMode = (next, { persist = true } = {}) => {
         if (!["single", "double", ...scrollModes].includes(next) || next === mode) return;
         mode = next;
-        if (scrollModes.includes(mode)) {
-            settings.scrollMode = mode;
-            saveSettings();
-        }
+        if (scrollModes.includes(mode)) settings.scrollMode = mode;
         if (isPaged()) page = spreadStart(page);
         render();
         queueProgress();
         if (!persist) return;
-        void savePreference("series")
+        void savePreference("series", "mode")
             .then(() => {
                 if (resetSeriesButton) resetSeriesButton.hidden = false;
             })
             .catch(() => toast(t("toast.saveFailed", "Could not save. Please try again.")));
+    };
+
+    const settingPreferenceKeys = {
+        zoom: "imageZoomPercent",
+        gap: "imagePageGapPx",
+        rightToLeft: "pageDirection",
+        firstPageAlone: "imageFirstPageAlone",
+        crop: "imageCropBorders",
+        autoNext: "autoContinueChapters",
+        sharpen: "imageSharpen",
+        fitWidth: "imageFit"
     };
 
     const changeSetting = (key, value) => {
@@ -696,8 +712,6 @@
                 break;
             case "rightToLeft":
                 direction = value ? "rtl" : "ltr";
-                if (direction === root.dataset.seriesDirection) delete settings.directions[seriesId];
-                else settings.directions[seriesId] = direction;
                 break;
             case "firstPageAlone":
                 settings.firstPageAlone = Boolean(value);
@@ -715,9 +729,10 @@
             default:
                 return;
         }
-        saveSettings();
+
         applyView();
         syncControls();
+        queuePreferenceSave(settingPreferenceKeys[key]);
         if (isPaged() && ["rightToLeft", "firstPageAlone", "crop"].includes(key)) {
             renderSpread();
             updateLocation();
@@ -752,9 +767,9 @@
             settings.scheme = schemes.includes(schemeButton.dataset.mangaScheme)
                 ? schemeButton.dataset.mangaScheme
                 : "auto";
-            saveSettings();
             applyView();
             syncControls();
+            queuePreferenceSave("imageColorScheme");
             return;
         }
 
@@ -798,10 +813,31 @@
             void postForm(resetPreferenceForm)
                 .then(result => {
                     if (resetSeriesButton) resetSeriesButton.hidden = true;
-                    const fallback = result?.mode === "continuous"
-                        ? settings.scrollMode
-                        : result?.mode === "double" ? "double" : "single";
-                    setMode(fallback, { persist: false });
+                    if (result) {
+                        settings.scrollMode = scrollModes.includes(result.imageFlowMode)
+                            ? result.imageFlowMode
+                            : "continuous";
+                        settings.fitWidth = result.imageFit === "width";
+                        settings.zoomPercent = clamp(Number(result.imageZoomPercent) || 100, 50, 300);
+                        settings.gap = Number.isFinite(Number(result.imagePageGapPx))
+                            ? clamp(Number(result.imagePageGapPx), 0, 48)
+                            : 8;
+                        settings.firstPageAlone = result.imageFirstPageAlone === true;
+                        settings.autoNext = result.autoContinueChapters !== false;
+                        settings.sharpen = result.imageSharpen === true;
+                        settings.crop = result.imageCropBorders === true;
+                        settings.scheme = schemes.includes(result.imageColorScheme)
+                            ? result.imageColorScheme
+                            : "auto";
+                        direction = result.pageDirection === "ltr" || result.pageDirection === "rtl"
+                            ? result.pageDirection
+                            : root.dataset.seriesDirection === "ltr" ? "ltr" : "rtl";
+                        mode = ["single", "double", ...scrollModes].includes(result.uiMode)
+                            ? result.uiMode
+                            : "single";
+                        if (isPaged()) page = spreadStart(page);
+                        render();
+                    }
                     toast(t("toast.usingDefault", "Using the manga default."));
                 })
                 .catch(() => toast(t("toast.saveFailed", "Could not save. Please try again.")));
