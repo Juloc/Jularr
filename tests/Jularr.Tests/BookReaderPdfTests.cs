@@ -297,6 +297,7 @@ public sealed class BookReaderPdfTests
     {
         var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(10)));
         engine.Execute("var window = globalThis;");
+        engine.Execute(Read("src", "Jularr.Web", "wwwroot", "js", "fixed-page-reader.js"));
         engine.Execute(Read("src", "Jularr.Web", "wwwroot", "js", "books-reader-pdf.js"));
         return engine;
     }
