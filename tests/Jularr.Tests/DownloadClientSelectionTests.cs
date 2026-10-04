@@ -133,6 +133,8 @@ public sealed class DownloadClientSelectionTests
         var settings = DownloadClientSettings.CreateDefault("http://client.example:8080");
 
         Assert.AreEqual("anime", settings.CategoryFor(MediaAcquisitionKind.Anime));
+        Assert.AreEqual("tv", settings.CategoryFor(MediaAcquisitionKind.Tv));
+        Assert.AreEqual("movies", settings.CategoryFor(MediaAcquisitionKind.Movie));
         Assert.AreEqual("manga", settings.CategoryFor(MediaAcquisitionKind.Manga));
         Assert.AreEqual("lightnovels", settings.CategoryFor(MediaAcquisitionKind.LightNovel));
         Assert.AreEqual("books", settings.CategoryFor(MediaAcquisitionKind.Book));
