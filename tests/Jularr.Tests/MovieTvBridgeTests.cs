@@ -40,6 +40,33 @@ public sealed class MovieTvBridgeTests
     }
 
     [TestMethod]
+    public async Task LegacyVideoRowsReuseAnExistingCanonicalTmdbWork()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var works = new WorkService(db);
+        var movieWork = await works.EnsureWorkByExternalIdentityAsync(
+            WorkMediaType.Movie, "tmdb", "27205", "Inception", 2010, CancellationToken.None);
+        var seriesWork = await works.EnsureWorkByExternalIdentityAsync(
+            WorkMediaType.Series, "tmdb", "1396", "Breaking Bad", 2008, CancellationToken.None);
+
+        var movie = new Movie { Key = "inception:2010", Title = "Inception", Year = 2010, TmdbId = "27205" };
+        var series = new TvSeries { Key = "breakingbad:2008", Title = "Breaking Bad", Year = 2008, TmdbId = "1396" };
+        db.Movies.Add(movie);
+        db.TvSeries.Add(series);
+        await db.SaveChangesAsync();
+
+        var bridge = Bridge(db);
+        Assert.AreEqual(movieWork.Id, await bridge.EnsureWorkForMovieAsync(movie, CancellationToken.None));
+        Assert.AreEqual(seriesWork.Id, await bridge.EnsureWorkForSeriesAsync(series, CancellationToken.None));
+
+        Assert.AreEqual(2, await db.Works.CountAsync(), "Import must not create a second Work next to the provider-resolved Work.");
+        Assert.AreEqual(movieWork.Id, await new WorkQueryService(db).ResolveWorkForSourceAsync(
+            WorkSourceKind.Movie, movie.Id, CancellationToken.None));
+        Assert.AreEqual(seriesWork.Id, await new WorkQueryService(db).ResolveWorkForSourceAsync(
+            WorkSourceKind.Series, series.Id, CancellationToken.None));
+    }
+
+    [TestMethod]
     public async Task SeriesBridgeMirrorsIdentitiesAndReusesSeasonEpisodeStructure()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
