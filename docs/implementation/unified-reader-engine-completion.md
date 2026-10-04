@@ -575,10 +575,14 @@ Exit: Book/LN/Manga/PDF continuation comes from one canonical Progress owner.
 
 Exit: PDF has two views, not two Reader products.
 
-### Phase 8 — variants and canonical translation
+### Phase 8 — variants and canonical/progressive translation
 - route official/generated Editions/Versions through one Reader variant contract;
 - migrate legacy translation tracks as canonical Translation/Edition work lands;
-- preserve Original/Official/Generated/Both UX and stable location mapping.
+- preserve Original/Official/Generated/Both UX and stable location mapping;
+- implement the progressive translation contract from #834 through the canonical Translation owner: stable semantic block identities, provider-neutral ordered events, validated restart-safe partial blocks and atomic final Edition/Version finalization;
+- use real provider deltas only behind the Translation adapter; non-streaming providers still publish completed bounded blocks progressively;
+- keep published blocks stable within one translation version and keep Reader locator/focus stable as new blocks arrive;
+- connect #819 Smart PDF blocks and #846 Manga/comic OCR text regions to the same contract instead of creating renderer-specific translation pipelines.
 
 ### Phase 9 — annotations/bookmarks canonicalization
 - move legacy Novel/Manga bookmark/highlight targets to canonical content locators as the domain migration permits;
