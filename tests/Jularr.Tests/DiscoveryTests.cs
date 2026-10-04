@@ -376,6 +376,25 @@ public sealed class DiscoveryTests
             DiscoverBrowseQuery.Parse(key => key == "mode" ? "upcoming" : key == "category" ? "movie" : null).Mode);
     }
 
+    [TestMethod]
+    public void MovieAndTvRequestPathMaterializesCanonicalTmdbWorkBeforeSubmitting()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "src",
+            "Jularr.Web",
+            "Pages",
+            "Discover",
+            "Index.cshtml.cs"));
+
+        StringAssert.Contains(source, "MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv");
+        StringAssert.Contains(source, "TmdbDiscoveryProvider.TryNormalizeExternalId");
+        var materialize = source.IndexOf("EnsureCanonicalWorkAsync", StringComparison.Ordinal);
+        var submit = source.IndexOf("requests.SubmitAsync", StringComparison.Ordinal);
+        Assert.IsTrue(materialize >= 0 && submit > materialize,
+            "A TMDB result must become a canonical Work before the durable acquisition request is submitted.");
+    }
+
     private static AniListRemoteListEntry Remote(
         int progress,
         string status) =>
