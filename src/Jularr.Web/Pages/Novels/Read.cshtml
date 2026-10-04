@@ -78,7 +78,6 @@
         && Jularr.Web.Features.Novels.NovelTextLayout.IsTitleEcho(Model.JapaneseParagraphs[firstIndex], chapter.Title)
             ? firstIndex
             : -1;
-    var languagePair = "JA ⇄ DE";
     var supportsTts = Model.ReaderDocument.Capabilities.SupportsTts;
     var canTranslate = !hasTranslation && Model.TranslationEnabled && Model.IsOwner;
     // A chapter that opens with an illustration shows it as the chapter header.
@@ -162,7 +161,7 @@
             <partial name="_ReaderIcon" model="@("back")" />
         </a>
 
-        <img class="reader-frame-cover" src="/Novels/Cover/@chapter.WorkId" alt="" width="40" height="56" decoding="async" />
+        <partial name="_ReaderCover" model="@(new Jularr.Web.Features.ReaderCore.ReaderCoverModel(chapter.WorkTitle, $"/Novels/Cover/{chapter.WorkId}"))" />
 
         <div class="reader-frame-title">
             <strong>@chapter.WorkTitle</strong>
@@ -198,11 +197,12 @@
             </div>
 
             <div class="reader-menu-anchor">
-                <button class="reader-frame-icon reader-frame-chip reader-frame-desktop" type="button"
+                <button class="reader-frame-icon reader-frame-labelled reader-frame-desktop" type="button"
                         data-reader-menu-toggle="language"
                         aria-haspopup="menu" aria-expanded="false" aria-controls="novel-menu-language"
                         aria-label="@ui["reader.frame.language"]" title="@ui["reader.frame.language"]">
-                    <span>@languagePair</span>
+                    <partial name="_ReaderIcon" model="@("translate")" />
+                    <span class="reader-frame-label">@ui["reader.frame.language"]</span>
                 </button>
                 <div class="reader-menu" id="novel-menu-language" data-reader-menu="language" role="menu" aria-label="@ui["novels.read.readingLanguageAria"]" hidden>
                     <button type="button" role="menuitemradio" aria-checked="false" data-reader-view="ja">
@@ -244,11 +244,12 @@
                 <partial name="_ReaderAppearanceSheet" model="@appearanceSheet" />
             </div>
 
-            <button class="reader-frame-icon @(currentBookmarks.Count > 0 ? "has-bookmarks" : "")" type="button"
+            <button class="reader-frame-icon reader-frame-labelled @(currentBookmarks.Count > 0 ? "has-bookmarks" : "")" type="button"
                     data-reader-bookmark
                     aria-label="@ui["novels.read.setBookmark"]"
                     title="@ui["novels.read.setBookmark"]">
                 <partial name="_ReaderIcon" model="@("bookmark")" />
+                <span class="reader-frame-label">@ui["reader.frame.bookmark"]</span>
             </button>
 
             <div class="reader-menu-anchor">
@@ -274,11 +275,19 @@
                     </button>
                     @if (supportsTts)
                     {
-                        <button type="button" role="menuitem" class="reader-frame-mobile" data-reader-tts-toggle aria-pressed="false" hidden>
+                        <button type="button" role="menuitem" data-reader-tts-toggle aria-pressed="false" hidden>
                             <partial name="_ReaderIcon" model="@("headphones")" />
                             <span>@ui["reader.frame.readAloud"]</span>
                         </button>
+                        <button type="button" role="menuitem" data-reader-settings-open="tts">
+                            <partial name="_ReaderIcon" model="@("sliders")" />
+                            <span>@ui["reader.frame.audioSettings"]</span>
+                        </button>
                     }
+                    <button type="button" role="menuitem" data-reader-immersive-toggle aria-pressed="false">
+                        <partial name="_ReaderIcon" model="@("fullscreen")" />
+                        <span>@ui["reader.frame.fullscreen"]</span>
+                    </button>
                     <button type="button" role="menuitem" data-reader-contents-open="notes">
                         <partial name="_ReaderIcon" model="@("notes")" />
                         <span>@ui["novels.read.bookmarksAndHighlights"]</span>
@@ -529,30 +538,6 @@
                 <partial name="_ReaderIcon" model="@("forward")" />
             </button>
         }
-
-        <div class="reader-frame-tail reader-frame-desktop">
-            <button class="reader-frame-icon" type="button" data-reader-contents-open="notes"
-                    aria-label="@ui["novels.read.bookmarksAndHighlights"]" title="@ui["novels.read.bookmarksAndHighlights"]">
-                <partial name="_ReaderIcon" model="@("notes")" />
-            </button>
-            @if (supportsTts)
-            {
-                <button class="reader-frame-icon reader-frame-tts" type="button"
-                        data-reader-tts-toggle
-                        aria-pressed="false"
-                        aria-label="@ui["reader.frame.readAloud"]" title="@ui["reader.frame.readAloud"]"
-                        hidden>
-                    <span class="reader-play-icon"><partial name="_ReaderIcon" model="@("headphones")" /></span>
-                    <span class="reader-pause-icon"><partial name="_ReaderIcon" model="@("pause")" /></span>
-                </button>
-            }
-            <button class="reader-frame-icon" type="button"
-                    data-reader-immersive-toggle
-                    aria-pressed="false"
-                    aria-label="@ui["reader.frame.fullscreen"]" title="@ui["reader.frame.fullscreen"]">
-                <partial name="_ReaderIcon" model="@("fullscreen")" />
-            </button>
-        </div>
 
     </footer>
 

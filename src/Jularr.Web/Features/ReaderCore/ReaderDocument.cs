@@ -318,7 +318,7 @@ public static class ReaderPresetCatalog
         TextWidthPx: 760,
         TextAlignment: "start",
         ChapterStyle: "light-novel",
-        PaperStyle: "midnight",
+        PaperStyle: "auto",
         GenreArtworkEnabled: true,
         GenreTheme: "auto",
         BackgroundAssetId: "auto",

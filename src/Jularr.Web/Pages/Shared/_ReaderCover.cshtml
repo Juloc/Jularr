@@ -1,0 +1,8 @@
+@model Jularr.Web.Features.ReaderCore.ReaderCoverModel
+<span class="reader-frame-cover" data-reader-cover aria-hidden="true">
+    <span class="reader-frame-cover-initial">@Model.Initial</span>
+    @if (Model.ImageUrl is not null)
+    {
+        <img src="@Model.ImageUrl" alt="" width="40" height="56" decoding="async" referrerpolicy="no-referrer" />
+    }
+</span>

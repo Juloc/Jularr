@@ -187,22 +187,10 @@
                 "aria-pressed",
                 button.dataset.bookMode === settings.readingMode ? "true" : "false");
         });
-        root.querySelectorAll("[data-book-spread-choice]").forEach(button => {
-            const spreadChoice = button.dataset.bookSpreadChoice === "true";
-            button.setAttribute(
-                "aria-checked",
-                spreadChoice === Boolean(settings.twoPageSpread) ? "true" : "false");
-        });
         root.querySelectorAll("[data-book-paper]").forEach(button => {
             button.setAttribute(
                 "aria-checked",
                 button.dataset.bookPaper === settings.paperStyle ? "true" : "false");
-        });
-        // Animated (curl/slide/fade) vs instant paging; see the drag-turn section below.
-        root.querySelectorAll("[data-book-page-turn-choice]").forEach(button => {
-            const animated = button.dataset.bookPageTurnChoice !== "none";
-            const isOn = settings.pageTransition !== "none";
-            button.setAttribute("aria-checked", animated === isOn ? "true" : "false");
         });
     };
 
@@ -350,15 +338,8 @@
     root.querySelectorAll("[data-book-mode]").forEach(button => {
         button.addEventListener("click", () => setSettingControl("readingMode", button.dataset.bookMode));
     });
-    root.querySelectorAll("[data-book-spread-choice]").forEach(button => {
-        button.addEventListener("click", () =>
-            setSettingControl("twoPageSpread", button.dataset.bookSpreadChoice === "true"));
-    });
     root.querySelectorAll("[data-book-paper]").forEach(button => {
         button.addEventListener("click", () => setSettingControl("paperStyle", button.dataset.bookPaper));
-    });
-    root.querySelectorAll("[data-book-page-turn-choice]").forEach(button => {
-        button.addEventListener("click", () => setSettingControl("pageTransition", button.dataset.bookPageTurnChoice));
     });
 
     root.addEventListener("jularr:reader-settings-response", event => {
@@ -1374,7 +1355,7 @@
                         chapterId,
                         chapterNumber: pdf
                             ? pdf.visiblePages()[0]
-                            : Number(root.querySelector("[data-book-chapter-number]")?.textContent || 0),
+                            : Number(root.dataset.chapterNumber || 0),
                         chapterTitle: pdf ? "" : root.querySelector("[data-book-chapter-title]")?.textContent || "",
                         positionPermille: position,
                         language: currentAnchorLanguage()
@@ -2019,12 +2000,11 @@
                 node.textContent = title;
             });
             if (payload.number !== undefined) {
-                const number = root.querySelector("[data-book-chapter-number]");
-                if (number) number.textContent = String(payload.number);
-                const context = root.querySelector("[data-book-chapter-context]");
-                if (context) context.textContent = t("books.chapter.number", "Chapter {number}", { number: payload.number });
-                const label = root.querySelector("[data-book-chapter-label]");
-                if (label) label.textContent = t("books.chapter.number", "Chapter {number}", { number: payload.number });
+                root.dataset.chapterNumber = String(payload.number);
+                const chapterLabel = t("books.chapter.number", "Chapter {number}", { number: payload.number });
+                root.querySelectorAll("[data-book-chapter-number],[data-book-chapter-context]").forEach(node => {
+                    node.textContent = chapterLabel;
+                });
             }
             currentHighlights = [];
             chapterBookmarks = [];
@@ -2044,7 +2024,7 @@
 
     function startPdf() {
         const status = root.querySelector("[data-book-pdf-status]");
-        const sectionLabels = root.querySelectorAll("[data-book-chapter-label]");
+        const positionLabel = root.querySelector("[data-book-pdf-position]");
         const sectionSteps = root.querySelectorAll("[data-book-pdf-section]");
         const pages = (readJson("[data-book-pdf-pages-json]", []) || []).map(String);
         const source = pdfContainer.dataset;
@@ -2084,9 +2064,13 @@
                     max: total,
                     percent: Math.round(last / total * 100)
                 });
-                sectionLabels.forEach(label => {
-                    label.textContent = section?.title || "";
-                });
+                if (positionLabel) {
+                    const position = t("books.read.pagePosition", "Page {page} of {total}", {
+                        page: first === last ? first : first + "–" + last,
+                        total
+                    });
+                    positionLabel.textContent = section?.title ? position + " · " + section.title : position;
+                }
                 if (!restoring) queueProgressSave();
                 if (view === "translated") void loadPdfTranslation();
             },
