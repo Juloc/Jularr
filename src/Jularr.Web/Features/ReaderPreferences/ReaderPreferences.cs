@@ -183,7 +183,7 @@ public sealed record ReaderSettingsSnapshot(
     double ThemeTintStrength,
     string BookmarkStyle,
     string BookmarkColor,
-    bool HasBookOverride)
+    bool HasWorkOverride)
 {
     /// <summary>
     /// Off by default. The reader only offers the control when the content
@@ -762,7 +762,7 @@ public static class ReaderPreferenceStore
                     "bookmarkColor",
                     x => x.BookmarkColor,
                     preset.BookmarkColor)),
-            HasBookOverride: work is not null)
+            HasWorkOverride: work is not null)
         {
             ContentTypeKey = ReaderContentTypes.ToKey(contentType),
             HasTypeOverride = type is not null,
@@ -774,7 +774,10 @@ public static class ReaderPreferenceStore
             ShowPageNumbers = ResolveValue("showPageNumbers", x => x.ShowPageNumbers, true),
             ShowIllustrations = ResolveValue("showIllustrations", x => x.ShowIllustrations, true),
             ParagraphIndent = ResolveValue("paragraphIndent", x => x.ParagraphIndent, true),
-            AutoContinueChapters = ResolveValue("autoContinueChapters", x => x.AutoContinueChapters, false),
+            AutoContinueChapters = ResolveValue(
+                "autoContinueChapters",
+                x => x.AutoContinueChapters,
+                preset.AutoContinueChapters),
             ImageFlowMode = ReaderPreferenceRules.NormalizeImageFlowMode(ResolveString("imageFlowMode", x => x.ImageFlowMode, "continuous")),
             ImagePageDirection = ReaderPreferenceRules.NormalizeImagePageDirection(ResolveString("imagePageDirection", x => x.ImagePageDirection, "auto")),
             ImageFit = ReaderPreferenceRules.NormalizeImageFit(ResolveString("imageFit", x => x.ImageFit, "height")),
