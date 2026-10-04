@@ -695,7 +695,6 @@
 
     const setupPaged = anchor => {
         stopAutoScroll();
-        shell.dataset.readingMode = "paged";
         shell.classList.toggle("reader-frame-fixed", frame);
         if (pageControls) pageControls.hidden = false;
         document.body.classList.add("novel-paged-body");
@@ -719,7 +718,6 @@
     const teardownPaged = anchor => {
         settledPagedAnchor = null;
         content.scrollLeft = 0;
-        shell.dataset.readingMode = "continuous";
         shell.classList.remove("reader-frame-fixed");
         if (pageControls) pageControls.hidden = true;
         document.body.classList.remove("novel-paged-body");
@@ -738,7 +736,6 @@
         const anchor = preserveAnchor ? captureLogicalAnchor() : initialAnchor();
         const previousMode = shell.dataset.readingMode || state.readingMode;
 
-        shell.dataset.readingMode = state.readingMode;
         shell.dataset.pageTransition = state.pageTransition;
         shell.dataset.twoPage = String(Boolean(state.twoPageSpread));
         shell.dataset.chapterStyle = state.chapterStyle;
@@ -1271,11 +1268,6 @@
         emitLocation.timer = window.setTimeout(emitLocation, 60);
     }, { passive: true });
 
-    shell.querySelector("[data-reader-page-prev]")?.addEventListener("click", () =>
-        goToPage(currentPage - 1));
-    shell.querySelector("[data-reader-page-next]")?.addEventListener("click", () =>
-        goToPage(currentPage + 1));
-
     content.addEventListener("scroll", () => {
         if (state.readingMode !== "paged") return;
         window.clearTimeout(content.__readerPageTimer);
@@ -1284,18 +1276,6 @@
             sendPagedProgress();
         }, 180);
     }, { passive: true });
-
-    document.addEventListener("keydown", event => {
-        if (state.readingMode !== "paged") return;
-        if (event.target.matches("input, select, textarea, button")) return;
-        if (event.key === "ArrowRight" || event.key === "PageDown") {
-            event.preventDefault();
-            goToPage(currentPage + 1);
-        } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
-            event.preventDefault();
-            goToPage(currentPage - 1);
-        }
-    });
 
     document.addEventListener("click", event => {
         if (state.readingMode !== "paged") return;
