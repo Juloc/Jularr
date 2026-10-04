@@ -479,10 +479,26 @@ public sealed class LocalFirstPageGetTests
                 Db,
                 new ThrowingBookTranslator(),
                 configuration);
+            var works = new Jularr.Web.Features.MediaCore.WorkService(Db);
+            var structure = new Jularr.Web.Features.MediaCore.WorkStructureService(Db);
+            var tmdb = new Jularr.Web.Features.Discovery.TmdbDiscoveryProvider(
+                Guard.CreateClient(),
+                configuration,
+                new Jularr.Web.Features.Providers.ProviderExecutor(
+                    new Jularr.Web.Features.Providers.ProviderRateLimiter(),
+                    new Jularr.Web.Features.Providers.ProviderHealthTracker(TimeProvider.System),
+                    TimeProvider.System,
+                    NullLogger<Jularr.Web.Features.Providers.ProviderExecutor>.Instance),
+                new Jularr.Web.Features.Providers.ProviderResponseCache(TimeProvider.System),
+                works,
+                structure,
+                Db,
+                new Jularr.Web.Features.MediaCore.LegacyWorkBridge(Db, works, structure));
             var coordinator = new Jularr.Web.Features.Discovery.DiscoveryCoordinator(
                 animeProvider,
                 readingProvider,
                 books,
+                tmdb,
                 AniListAccount(),
                 Db,
                 NullLogger<Jularr.Web.Features.Discovery.DiscoveryCoordinator>.Instance);
@@ -502,6 +518,7 @@ public sealed class LocalFirstPageGetTests
             return new DiscoverIndexModel(
                 coordinator,
                 shelves,
+                tmdb,
                 Db,
                 new NovelImportService(Db, [], novelMetadata),
                 novelMetadata,
