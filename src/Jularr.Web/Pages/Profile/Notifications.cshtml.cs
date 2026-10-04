@@ -14,27 +14,20 @@ namespace Jularr.Web.Pages.Profile;
 /// until it lands, this page exposes only the currently real Off/In-App choice while reading and
 /// writing the canonical event-preference aggregate.
 /// </summary>
-public sealed class NotificationsModel(
-    AppDbContext db,
-    NotificationSubscriptionStore subscriptions,
-    CurrentAccountContext account) : PageModel
+public sealed class NotificationsModel(AppDbContext db, NotificationSubscriptionStore subscriptions, CurrentAccountContext account) : PageModel
 {
     public const string OffFormValue = "off";
     public const string InAppFormValue = "in-app";
 
-    private static readonly FrozenSet<NotificationChannel> InAppOnly =
-        new[] { NotificationChannel.InApp }.ToFrozenSet();
+    private static readonly FrozenSet<NotificationChannel> s_inAppOnly = new[] { NotificationChannel.InApp }.ToFrozenSet();
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
-    public IReadOnlyDictionary<JularrEventCategory, NotificationEventPreference> Preferences { get; private set; } =
-        new Dictionary<JularrEventCategory, NotificationEventPreference>();
+    public IReadOnlyDictionary<JularrEventCategory, NotificationEventPreference> Preferences { get; private set; } = new Dictionary<JularrEventCategory, NotificationEventPreference>();
 
     public bool IsAdmin { get; private set; }
 
-    public IEnumerable<JularrEventCategory> VisibleCategories =>
-        Enum.GetValues<JularrEventCategory>()
-            .Where(category => IsAdmin || JularrEventCategories.Of(category).Audience == JularrEventAudience.Profile);
+    public IEnumerable<JularrEventCategory> VisibleCategories => Enum.GetValues<JularrEventCategory>().Where(category => IsAdmin || JularrEventCategories.Of(category).Audience == JularrEventAudience.Profile);
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -51,8 +44,8 @@ public sealed class NotificationsModel(
         {
             var update = Request.Form[$"delivery.{category}"].ToString() switch
             {
-                OffFormValue => new NotificationEventPreferenceUpdate(false, InAppOnly, NotificationDeliveryTiming.Immediate),
-                InAppFormValue => new NotificationEventPreferenceUpdate(true, InAppOnly, NotificationDeliveryTiming.Immediate),
+                OffFormValue => new NotificationEventPreferenceUpdate(false, s_inAppOnly, NotificationDeliveryTiming.Immediate),
+                InAppFormValue => new NotificationEventPreferenceUpdate(true, s_inAppOnly, NotificationDeliveryTiming.Immediate),
                 _ => null
             };
 
