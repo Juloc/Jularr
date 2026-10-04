@@ -81,22 +81,22 @@ public sealed record ReaderSourceRegion
 {
     public ReaderSourceRegion(double x, double y, double width, double height)
     {
-        if (x is < 0 or > 1)
+        if (!double.IsFinite(x) || x is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(x));
         }
 
-        if (y is < 0 or > 1)
+        if (!double.IsFinite(y) || y is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(y));
         }
 
-        if (width <= 0 || width > 1 || x + width > 1)
+        if (!double.IsFinite(width) || width <= 0 || width > 1 || x + width > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(width));
         }
 
-        if (height <= 0 || height > 1 || y + height > 1)
+        if (!double.IsFinite(height) || height <= 0 || height > 1 || y + height > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(height));
         }
