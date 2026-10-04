@@ -161,6 +161,9 @@ public static class ClientApiRoutes
     public static string PlaybackPlan(Guid episodeId) =>
         $"{Episode(episodeId)}/playback-plan";
 
+    public static string VideoPlayer =>
+        $"{ClientApiContract.BasePath}/video/player";
+
     public static string VideoPlaybackPlan =>
         $"{ClientApiContract.BasePath}/video/playback-plan";
 
