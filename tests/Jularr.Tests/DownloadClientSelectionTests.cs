@@ -136,6 +136,8 @@ public sealed class DownloadClientSelectionTests
         Assert.AreEqual("manga", settings.CategoryFor(MediaAcquisitionKind.Manga));
         Assert.AreEqual("lightnovels", settings.CategoryFor(MediaAcquisitionKind.LightNovel));
         Assert.AreEqual("books", settings.CategoryFor(MediaAcquisitionKind.Book));
+        Assert.AreEqual("movies", settings.CategoryFor(MediaAcquisitionKind.Movie));
+        Assert.AreEqual("tv", settings.CategoryFor(MediaAcquisitionKind.Tv));
     }
 
     private sealed class FakeDownloadClient(
