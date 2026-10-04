@@ -62,6 +62,48 @@ public sealed record ClientVideoProgressResponse(
     DateTime? UpdatedAtUtc,
     long ResumePositionMs);
 
+public sealed record ClientVideoPlayerRequest(
+    ClientVideoTarget? Target);
+
+public sealed record ClientVideoNavigationItem(
+    ClientVideoTarget Target,
+    int SeasonNumber,
+    int EpisodeNumber,
+    string? Title);
+
+public sealed record ClientVideoNavigation(
+    ClientVideoNavigationItem? Previous,
+    ClientVideoNavigationItem? Next);
+
+public sealed record ClientCanonicalVideoMedia(
+    Guid MediaFileId,
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    long? DurationMs,
+    string? VideoCodec,
+    string? PixelFormat,
+    string? AudioCodec,
+    string DirectContentUrl);
+
+public sealed record ClientCanonicalVideoPlayerBootstrap(
+    int ApiVersion,
+    ClientVideoTarget Target,
+    string MediaType,
+    string WorkTitle,
+    ClientVideoNavigation Navigation,
+    ClientCanonicalVideoMedia Media,
+    IReadOnlyList<ClientMediaTrack> AudioTracks,
+    IReadOnlyList<ClientMediaTrack> SubtitleTracks,
+    string? DefaultAudioTrackId,
+    string? DefaultSubtitleTrackId,
+    ClientVideoProgressResponse Progress,
+    ClientPlayerControls Controls,
+    string PlaybackPlanUrl,
+    string ProgressUrl,
+    ClientSegmentDescriptor? Segments = null,
+    ClientTrickplayDescriptor? Trickplay = null);
+
 public static class ClientApiPlaybackPlanEndpoints
 {
     public const string RateLimitPolicy = PlaybackDecisionRegistration.RateLimitPolicy;
@@ -97,6 +139,34 @@ public static class ClientApiPlaybackPlanEndpoints
             return Results.Ok(ToResponse(outcome, currentAccount));
         })
         .RequireRateLimiting(RateLimitPolicy);
+
+        group.MapPost("/video/player", async (
+            ClientVideoPlayerRequest request,
+            CanonicalVideoPlayerService player,
+            CurrentAccountContext currentAccount,
+            CancellationToken cancellationToken) =>
+        {
+            if (!ValidTarget(request.Target))
+            {
+                return Results.BadRequest(new ClientErrorResponse(
+                    "invalid_playback_target",
+                    "target.workId is required and target.workEpisodeId must be a valid id when present."));
+            }
+
+            var target = request.Target!;
+            var snapshot = await player.GetAsync(
+                currentAccount.ProfileId,
+                new PlaybackVideoTarget(target.WorkId, target.WorkEpisodeId),
+                cancellationToken);
+            if (snapshot is null)
+            {
+                return Results.NotFound(new ClientErrorResponse(
+                    "video_target_not_found",
+                    "The canonical video target is not locally playable."));
+            }
+
+            return Results.Ok(ToPlayerBootstrap(snapshot));
+        });
 
         group.MapPost("/video/playback-plan", async (
             ClientPlaybackPlanRequest request,
@@ -369,6 +439,81 @@ public static class ClientApiPlaybackPlanEndpoints
 
         return endpoints;
     }
+
+    private static ClientCanonicalVideoPlayerBootstrap ToPlayerBootstrap(
+        CanonicalVideoPlayerSnapshot snapshot)
+    {
+        var technical = snapshot.Inventory.Technical!;
+        var audio = technical.AudioStreams
+            .OrderBy(x => x.Index)
+            .Select(ToClientTrack)
+            .ToArray();
+        var subtitles = technical.SubtitleStreams
+            .OrderBy(x => x.Index)
+            .Select(ToClientTrack)
+            .ToArray();
+        var defaultAudio = technical.AudioStreams.FirstOrDefault(x => x.IsDefault)
+            ?? technical.AudioStreams.FirstOrDefault();
+        var defaultSubtitle = technical.SubtitleStreams.FirstOrDefault(x => x.IsDefault && !x.IsForced);
+        var durationMs = technical.DurationSeconds is > 0 and < (long.MaxValue / 1000d)
+            ? (long?)Math.Round(technical.DurationSeconds.Value * 1000d)
+            : null;
+
+        ClientVideoNavigationItem? NavigationItem(CanonicalVideoNavigationItem? item) =>
+            item is null
+                ? null
+                : new ClientVideoNavigationItem(
+                    new ClientVideoTarget(item.Target.WorkId, item.Target.WorkEpisodeId),
+                    item.SeasonNumber,
+                    item.EpisodeNumber,
+                    item.Title);
+
+        return new ClientCanonicalVideoPlayerBootstrap(
+            ClientApiContract.ApiVersion,
+            new ClientVideoTarget(snapshot.Target.WorkId, snapshot.Target.WorkEpisodeId),
+            WorkMediaTypes.ToStorage(snapshot.MediaType),
+            snapshot.WorkTitle,
+            new ClientVideoNavigation(
+                NavigationItem(snapshot.Navigation.Previous),
+                NavigationItem(snapshot.Navigation.Next)),
+            new ClientCanonicalVideoMedia(
+                snapshot.File.StoredFileId,
+                Path.GetFileName(snapshot.File.Path),
+                PlaybackMediaTypes.GetContentType(snapshot.File.Path),
+                snapshot.File.SizeBytes,
+                durationMs,
+                technical.Video?.Codec,
+                technical.Video?.PixelFormat,
+                defaultAudio?.Codec,
+                ClientApiRoutes.DirectContent(snapshot.File.StoredFileId)),
+            audio,
+            subtitles,
+            defaultAudio is null ? null : PlaybackTrackIds.Format(defaultAudio.Index),
+            defaultSubtitle is null ? null : PlaybackTrackIds.Format(defaultSubtitle.Index),
+            new ClientVideoProgressResponse(
+                new ClientVideoTarget(snapshot.Progress.WorkId, snapshot.Progress.WorkEpisodeId),
+                snapshot.Progress.PositionMs,
+                snapshot.Progress.DurationMs,
+                snapshot.Progress.Percent,
+                snapshot.Progress.IsCompleted,
+                snapshot.Progress.UpdatedAt,
+                snapshot.Progress.ResumePositionMs),
+            new ClientPlayerControls(PlaybackPreferenceRules.Speeds, PlaybackQuality.Names),
+            ClientApiRoutes.VideoPlaybackPlan,
+            ClientApiRoutes.VideoProgress);
+    }
+
+    private static ClientMediaTrack ToClientTrack(MediaStreamInfo track) =>
+        new(
+            PlaybackTrackIds.Format(track.Index),
+            track.Index,
+            track.Kind.ToString().ToLowerInvariant(),
+            track.Codec,
+            PlaybackLanguages.Normalize(track.Language),
+            track.Title,
+            track.IsDefault,
+            track.IsForced,
+            track.IsText);
 
     private static bool ValidTarget(ClientVideoTarget? target) =>
         target is not null &&
