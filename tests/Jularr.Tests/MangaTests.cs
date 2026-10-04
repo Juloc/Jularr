@@ -378,7 +378,7 @@ public sealed class MangaTests
             Assert.AreEqual("continuous", series.UiMode);
             Assert.IsTrue(series.HasSeriesOverride);
 
-            await MangaReaderPreferenceStore.ResetSeriesAsync(
+            await MangaReaderPreferenceStore.ResetWorkAsync(
                 db,
                 "reader-a",
                 workId,
