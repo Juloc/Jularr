@@ -2,9 +2,21 @@
 // reader-shell.js owns the bars, menus, contents panel, slider and fullscreen;
 // this script renders the pages, keeps MangaProgress (zero-based page index)
 // and bookmarks in sync and applies the manga view settings.
-(() => {
+(async () => {
     const root = document.querySelector("[data-manga-reader]");
     if (!root) return;
+
+    const scriptUrl = document.currentScript?.src;
+    if (!scriptUrl) return;
+    const sourceScriptUrl = new URL(scriptUrl);
+    const imageModuleUrl = new URL("image-sequence-reader.js", sourceScriptUrl);
+    const buildVersion = sourceScriptUrl.searchParams.get("v");
+    if (buildVersion) imageModuleUrl.searchParams.set("v", buildVersion);
+    const {
+        createImageSequenceRenderer,
+        spreadStartFor,
+        spreadPagesFor
+    } = await import(imageModuleUrl.href);
 
     const readJson = (selector, fallback) => {
         try {
@@ -109,26 +121,29 @@
         ? initialSettings.pageDirection
         : root.dataset.seriesDirection === "ltr" ? "ltr" : "rtl";
 
-    const isPaged = () => mode === "single" || mode === "double";
+    const imageRenderer = createImageSequenceRenderer({
+        pageCount,
+        initialPage: Number(root.dataset.page) || 0,
+        initialMode: mode,
+        initialDirection: direction,
+        firstPageAlone: settings.firstPageAlone
+    });
+    mode = imageRenderer.mode;
+    direction = imageRenderer.direction;
+
+    const isPaged = () => imageRenderer.isPaged;
 
     // ---- Pages ----------------------------------------------------------------
 
-    const spreadStart = index => {
-        if (mode !== "double") return index;
-        if (settings.firstPageAlone) return index === 0 ? 0 : index - ((index - 1) % 2);
-        return index - (index % 2);
-    };
+    const spreadStart = index =>
+        spreadStartFor(index, mode, settings.firstPageAlone);
 
-    const spreadPages = start => {
-        if (mode !== "double") return [start];
-        if (settings.firstPageAlone && start === 0) return [0];
-        return start + 1 < pageCount ? [start, start + 1] : [start];
-    };
+    const spreadPages = start =>
+        spreadPagesFor(start, pageCount, mode, settings.firstPageAlone);
 
-    const visiblePages = () => isPaged() ? spreadPages(page) : [page];
+    const visiblePages = () => imageRenderer.visiblePages();
 
-    let page = clamp(Number(root.dataset.page) || 0, 0, pageCount - 1);
-    page = spreadStart(page);
+    let page = imageRenderer.page;
 
     // Border cropping (single and double page): trims plain white or black
     // margins on a small sample, then cuts the full image once. Pages come from
@@ -602,8 +617,7 @@
     };
 
     const goTo = target => {
-        let next = clamp(Math.round(Number(target) || 0), 0, pageCount - 1);
-        if (isPaged()) next = spreadStart(next);
+        const next = imageRenderer.setPage(target);
         if (next === page) return;
         page = next;
         if (isPaged()) renderSpread();
@@ -625,15 +639,21 @@
     };
 
     const forward = () => {
-        const next = isPaged() ? page + spreadPages(page).length : page + 1;
-        if (next < pageCount) goTo(next);
-        else chapterEnd();
+        const move = imageRenderer.targetForMove(1);
+        if (move.kind === "page") {
+            goTo(move.page);
+            return;
+        }
+        if (move.kind === "edge") chapterEnd();
     };
 
     const back = () => {
-        if (page > 0) {
-            goTo(isPaged() ? spreadStart(page - 1) : page - 1);
-        } else if (previousHref) {
+        const move = imageRenderer.targetForMove(-1);
+        if (move.kind === "page") {
+            goTo(move.page);
+            return;
+        }
+        if (move.kind === "edge" && previousHref) {
             saveProgress(true);
             window.location.assign(previousHref);
         }
@@ -678,9 +698,10 @@
 
     const setMode = (next, { persist = true } = {}) => {
         if (!["single", "double", ...scrollModes].includes(next) || next === mode) return;
-        mode = next;
+        imageRenderer.setMode(next);
+        mode = imageRenderer.mode;
         if (scrollModes.includes(mode)) settings.scrollMode = mode;
-        if (isPaged()) page = spreadStart(page);
+        page = imageRenderer.page;
         render();
         queueProgress();
         if (!persist) return;
@@ -711,11 +732,12 @@
                 settings.gap = clamp(Number(value) || 0, 0, 48);
                 break;
             case "rightToLeft":
-                direction = value ? "rtl" : "ltr";
+                direction = imageRenderer.setDirection(value ? "rtl" : "ltr");
                 break;
             case "firstPageAlone":
                 settings.firstPageAlone = Boolean(value);
-                page = spreadStart(page);
+                imageRenderer.setFirstPageAlone(settings.firstPageAlone);
+                page = imageRenderer.page;
                 break;
             case "crop":
                 settings.crop = Boolean(value);
@@ -835,7 +857,10 @@
                         mode = ["single", "double", ...scrollModes].includes(result.uiMode)
                             ? result.uiMode
                             : "single";
-                        if (isPaged()) page = spreadStart(page);
+                        imageRenderer.setDirection(direction);
+                        imageRenderer.setFirstPageAlone(settings.firstPageAlone);
+                        imageRenderer.setMode(mode);
+                        page = imageRenderer.page;
                         render();
                     }
                     toast(t("toast.usingDefault", "Using the manga default."));
@@ -963,7 +988,7 @@
             : stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 2;
         if (atEnd) current = pageCount - 1;
         if (current !== page) {
-            page = current;
+            page = imageRenderer.setPage(current);
             updateLocation();
             queueProgress();
         }
