@@ -46,8 +46,18 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// </summary>
     public async Task<Guid> EnsureWorkForMovieAsync(Movie movie, CancellationToken cancellationToken)
     {
-        var workId = await EnsureWorkAsync(
-            WorkSourceKind.Movie, movie.Id, WorkMediaType.Movie, movie.Title, movie.Year, cancellationToken);
+        var workId = !string.IsNullOrWhiteSpace(movie.TmdbId)
+            ? await EnsureWorkWithExternalIdentityAsync(
+                WorkSourceKind.Movie,
+                movie.Id,
+                WorkMediaType.Movie,
+                movie.Title,
+                movie.Year,
+                MappingProviders.Tmdb,
+                movie.TmdbId!,
+                cancellationToken)
+            : await EnsureWorkAsync(
+                WorkSourceKind.Movie, movie.Id, WorkMediaType.Movie, movie.Title, movie.Year, cancellationToken);
 
         await works.AddOrUpdateTitleAsync(
             workId, WorkTitleType.Primary, "und", movie.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
@@ -82,8 +92,18 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// </summary>
     public async Task<Guid> EnsureWorkForSeriesAsync(TvSeries series, CancellationToken cancellationToken)
     {
-        var workId = await EnsureWorkAsync(
-            WorkSourceKind.Series, series.Id, WorkMediaType.Series, series.Title, series.Year, cancellationToken);
+        var workId = !string.IsNullOrWhiteSpace(series.TmdbId)
+            ? await EnsureWorkWithExternalIdentityAsync(
+                WorkSourceKind.Series,
+                series.Id,
+                WorkMediaType.Series,
+                series.Title,
+                series.Year,
+                MappingProviders.Tmdb,
+                series.TmdbId!,
+                cancellationToken)
+            : await EnsureWorkAsync(
+                WorkSourceKind.Series, series.Id, WorkMediaType.Series, series.Title, series.Year, cancellationToken);
 
         await works.AddOrUpdateTitleAsync(
             workId, WorkTitleType.Primary, "und", series.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
@@ -289,6 +309,54 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
         }
 
         return workId;
+    }
+
+    /// <summary>
+    /// Resolves a legacy row and a strong provider identity to one Work. If both already point at
+    /// different Works the mapping is ambiguous and must be reviewed instead of silently duplicating.
+    /// </summary>
+    private async Task<Guid> EnsureWorkWithExternalIdentityAsync(
+        WorkSourceKind sourceKind,
+        Guid sourceId,
+        WorkMediaType mediaType,
+        string title,
+        int? year,
+        string provider,
+        string externalId,
+        CancellationToken cancellationToken)
+    {
+        var sourceWorkId = await db.Set<WorkSourceLink>().AsNoTracking()
+            .Where(x => x.SourceKind == sourceKind && x.SourceId == sourceId)
+            .Select(x => (Guid?)x.WorkId)
+            .FirstOrDefaultAsync(cancellationToken);
+        var identityWorkId = await db.Set<WorkExternalIdentity>().AsNoTracking()
+            .Where(x =>
+                x.MediaType == mediaType
+                && x.Provider == provider
+                && x.ExternalId == externalId.Trim())
+            .Select(x => (Guid?)x.WorkId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (sourceWorkId is { } source && identityWorkId is { } identity && source != identity)
+        {
+            throw new InvalidOperationException(
+                $"Legacy {sourceKind} {sourceId} and {provider}:{externalId} resolve to different Works and require review.");
+        }
+
+        if (identityWorkId is { } existingIdentity)
+        {
+            await works.LinkSourceAsync(existingIdentity, sourceKind, sourceId, cancellationToken);
+            return existingIdentity;
+        }
+
+        if (sourceWorkId is { } existingSource)
+        {
+            return existingSource;
+        }
+
+        var work = await works.CreateWorkAsync(mediaType, title, year, cancellationToken);
+        await works.LinkSourceAsync(work.Id, sourceKind, sourceId, cancellationToken);
+        return work.Id;
     }
 
     /// <summary>Resolves the existing work bridged to a legacy record, creating and linking one if absent.</summary>
