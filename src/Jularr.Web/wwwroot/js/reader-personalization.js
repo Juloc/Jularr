@@ -8,8 +8,10 @@
         clamp,
         permilleForIndex,
         scrollPermille,
+        scrollTopForPermille,
         captureContinuousAnchor,
-        capturePagedTextAnchor
+        capturePagedTextAnchor,
+        createReflowTextRenderer
     } = await import(new URL("reflow-reader.js", scriptUrl).href);
 
     const settingsElement = shell.querySelector("[data-reader-settings-json]");
@@ -70,6 +72,7 @@
     let keepAwake = true;
     let toastTimer = null;
     let saveQueue = Promise.resolve();
+    let reflowRenderer = null;
 
     const bookmarkState = new Map();
 
@@ -636,6 +639,8 @@
         // otherwise add an empty page after the last one.
         pageCount = Math.max(1, Math.ceil((content.scrollWidth - 2) / width));
         currentPage = clamp(Math.round(content.scrollLeft / width), 0, pageCount - 1);
+        reflowRenderer?.setMode("paged");
+        reflowRenderer?.setPageState(currentPage, pageCount);
         if (pageNumber) pageNumber.textContent = `${currentPage + 1} / ${pageCount}`;
         emitLocation();
         shell.querySelector("[data-reader-page-prev]")?.toggleAttribute("disabled", currentPage <= 0);
@@ -715,6 +720,7 @@
     const applySettings = (preserveAnchor = true) => {
         const anchor = preserveAnchor ? captureLogicalAnchor() : initialAnchor();
         const previousMode = shell.dataset.readingMode || state.readingMode;
+        reflowRenderer?.setMode(state.readingMode);
 
         shell.dataset.pageTransition = state.pageTransition;
         shell.dataset.twoPage = String(Boolean(state.twoPageSpread));
@@ -1172,34 +1178,49 @@
         return true;
     };
 
-    shell.addEventListener("jularr:reader-page-edge", event => {
-        const direction = Number(event.detail?.direction || 0);
-        if (!direction) return;
-        if (state.readingMode !== "paged") {
-            // Frame page buttons in Scroll mode move by one screen.
+    reflowRenderer = createReflowTextRenderer({
+        initialMode: state.readingMode,
+        goToPage: (page, animate = true) => goToPage(page, animate),
+        turnContinuous: direction => {
             window.scrollBy({
                 top: direction * window.innerHeight * .85,
                 behavior: reduceMotion.matches ? "auto" : "smooth"
             });
-            return;
-        }
-        const speaking = shell.dataset.readerTts && shell.dataset.readerTts !== "idle";
-        const next = currentPage + direction;
-        // Turning past either end opens the adjacent chapter; read-aloud page
-        // following never changes chapters.
-        if (!speaking && next >= pageCount && openAdjacentChapter("next")) return;
-        if (!speaking && next < 0 && openAdjacentChapter("previous")) return;
-        goToPage(next);
+        },
+        onPageEdge: direction => {
+            const speaking =
+                shell.dataset.readerTts && shell.dataset.readerTts !== "idle";
+            if (speaking) return;
+            openAdjacentChapter(direction < 0 ? "previous" : "next");
+        },
+        getScrollPermille: () => scrollPermille(
+            window.scrollY,
+            document.documentElement.scrollHeight,
+            window.innerHeight),
+        scrollToPermille: value => window.scrollTo({
+            top: scrollTopForPermille(
+                value,
+                document.documentElement.scrollHeight,
+                window.innerHeight),
+            behavior: "auto"
+        }),
+        captureAnchor: captureLogicalAnchor
+    });
+
+    shell.addEventListener("jularr:reader-page-edge", event => {
+        const direction = Number(event.detail?.direction || 0);
+        if (!direction) return;
+        reflowRenderer?.setMode(state.readingMode);
+        reflowRenderer?.setPageState(currentPage, pageCount);
+        reflowRenderer?.turn(direction);
     });
 
     shell.addEventListener("jularr:reader-seek", event => {
         const value = Number(event.detail?.value || 0);
-        if (state.readingMode === "paged") {
-            goToPage(value, false);
-            return;
-        }
-        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-        window.scrollTo({ top: max * value / 1000, behavior: "auto" });
+        reflowRenderer?.setMode(state.readingMode);
+        reflowRenderer?.setPageState(currentPage, pageCount);
+        if (state.readingMode === "paged") reflowRenderer?.seekPage(value);
+        else reflowRenderer?.seekPermille(value);
     });
 
     // Search hits and note jumps inside the current chapter (novel-search.js).
