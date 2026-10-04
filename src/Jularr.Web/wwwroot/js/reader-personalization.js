@@ -659,29 +659,18 @@
         renderPageBookmarks();
     };
 
-    const animatePage = direction => {
-        if (reduceMotion.matches || state.pageTransition === "none") return;
-        const animation = `reader-turn-${state.pageTransition}-${direction}`;
-        content.classList.remove(
-            "reader-turn-curl-next", "reader-turn-curl-prev",
-            "reader-turn-slide-next", "reader-turn-slide-prev",
-            "reader-turn-fade-next", "reader-turn-fade-prev");
-        void content.offsetWidth;
-        content.classList.add(animation);
-        setTimeout(() => content.classList.remove(animation), 430);
-    };
-
-    const goToPage = (page, animate = true) => {
+    const goToPage = page => {
         if (state.readingMode !== "paged") return;
         const next = clamp(page, 0, pageCount - 1);
-        const direction = next >= currentPage ? "next" : "prev";
-        if (animate && next !== currentPage) animatePage(direction);
         content.scrollTo({
             left: next * content.clientWidth,
-            behavior: reduceMotion.matches ? "auto" : "smooth"
+            behavior: "auto"
         });
         currentPage = next;
         syncPageState();
+        requestAnimationFrame(() => {
+            shell.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
+        });
         window.setTimeout(() => {
             syncPageState();
             sendPagedProgress();
@@ -1189,7 +1178,7 @@
 
     reflowRenderer = createReflowTextRenderer({
         initialMode: state.readingMode,
-        goToPage: (page, animate = true) => goToPage(page, animate),
+        goToPage,
         turnContinuous: direction => {
             window.scrollBy({
                 top: direction * window.innerHeight * .85,
