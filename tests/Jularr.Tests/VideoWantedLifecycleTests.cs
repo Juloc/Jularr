@@ -16,6 +16,7 @@ using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Movies;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.Tv;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
