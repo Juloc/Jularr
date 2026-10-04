@@ -71,7 +71,6 @@ public sealed class VideoAcquisitionEngine(
     QualityProfileStore profiles,
     ReleaseRequestTracker tracker,
     AcquisitionAccessStore requestStore,
-    AcquisitionRequestService requests,
     VideoAcquisitionMonitoringStores monitoring,
     TimeProvider clock)
 {
@@ -233,7 +232,7 @@ public sealed class VideoAcquisitionEngine(
         }
     }
 
-    public async Task ContinueAfterProblemAsync(
+    public async Task PrepareAfterProblemAsync(
         AcquisitionRequest request,
         string problem,
         CancellationToken cancellationToken)
@@ -241,14 +240,12 @@ public sealed class VideoAcquisitionEngine(
         var payload = ReadPayload(request);
         if (payload is null)
         {
-            await requests.ContinueAsync(request.Id, cancellationToken);
             return;
         }
 
         await RecordFailedAsync(request.Kind, payload, cancellationToken);
         var next = ReleaseRequestTracker.AfterProblem(payload, problem);
         await requestStore.UpdatePayloadAsync(request.Id, next.Serialize(), cancellationToken);
-        await requests.ContinueAsync(request.Id, cancellationToken);
     }
 
     /// <summary>
@@ -457,9 +454,10 @@ public sealed class VideoAcquisitionEngine(
         }
 
         var nextKnown = missingIncluded
-            .Where(x => x.AiredAt > now)
+            .Where(x => x.AiredAt is DateTime airedAt && airedAt > now)
             .Select(x => x.AiredAt)
-            .Min();
+            .OrderBy(x => x)
+            .FirstOrDefault();
         return new TvContinuation(
             KeepOpen: true,
             HasMissingDue: false,
@@ -725,7 +723,8 @@ public sealed class VideoAcquisitionEngine(
 }
 
 public abstract class VideoWantedRequestHandler(
-    VideoAcquisitionEngine engine) : IWantedRequestHandler
+    VideoAcquisitionEngine engine,
+    AcquisitionRequestService requests) : IWantedRequestHandler
 {
     public abstract MediaAcquisitionKind Kind { get; }
 
@@ -735,11 +734,14 @@ public abstract class VideoWantedRequestHandler(
         return payload is null || ReleaseRequestTracker.IsSearchDue(payload, nowUtc);
     }
 
-    public Task ContinueAfterProblemAsync(
+    public async Task ContinueAfterProblemAsync(
         AcquisitionRequest request,
         string problem,
-        CancellationToken cancellationToken) =>
-        engine.ContinueAfterProblemAsync(request, problem, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        await engine.PrepareAfterProblemAsync(request, problem, cancellationToken);
+        await requests.ContinueAsync(request.Id, cancellationToken);
+    }
 
     public Task<bool> ContinueAfterCompletedImportAsync(
         AcquisitionRequest request,
@@ -771,13 +773,15 @@ public sealed class TvAcquisitionRequestExecutor(
 }
 
 public sealed class MovieWantedRequestHandler(
-    VideoAcquisitionEngine engine) : VideoWantedRequestHandler(engine)
+    VideoAcquisitionEngine engine,
+    AcquisitionRequestService requests) : VideoWantedRequestHandler(engine, requests)
 {
     public override MediaAcquisitionKind Kind => MediaAcquisitionKind.Movie;
 }
 
 public sealed class TvWantedRequestHandler(
-    VideoAcquisitionEngine engine) : VideoWantedRequestHandler(engine)
+    VideoAcquisitionEngine engine,
+    AcquisitionRequestService requests) : VideoWantedRequestHandler(engine, requests)
 {
     public override MediaAcquisitionKind Kind => MediaAcquisitionKind.Tv;
 }
