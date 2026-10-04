@@ -2,6 +2,7 @@
 @model Jularr.Web.Pages.Profile.NotificationsModel
 @using Jularr.Web.Features.Events
 @using Jularr.Web.Features.Notifications
+@using Jularr.Web.Pages.Profile
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["notifications.settings.title"];
@@ -20,7 +21,8 @@
         @foreach (var category in Model.VisibleCategories)
         {
             var meta = JularrEventCategories.Of(category);
-            var current = Model.Preferences.TryGetValue(category, out var mode) ? mode : NotificationSubscription.DefaultMode;
+            var current = Model.Preferences[category];
+            var inAppSelected = current.Enabled && current.Channels.Contains(NotificationChannel.InApp);
             <div class="notification-settings-row">
                 <div class="notification-settings-copy">
                     <strong>@ui[meta.LabelKey]</strong>
@@ -29,9 +31,9 @@
                         <small>@ui["notifications.settings.adminNote"]</small>
                     }
                 </div>
-                <select name="mode.@category">
-                    <option value="@NotificationMode.Off" selected="@(current == NotificationMode.Off)">@ui["notifications.settings.modeOff"]</option>
-                    <option value="@NotificationMode.InApp" selected="@(current == NotificationMode.InApp)">@ui["notifications.settings.modeInApp"]</option>
+                <select name="delivery.@category">
+                    <option value="@NotificationsModel.OffFormValue" selected="@(!inAppSelected)">@ui["notifications.settings.modeOff"]</option>
+                    <option value="@NotificationsModel.InAppFormValue" selected="@inAppSelected">@ui["notifications.settings.modeInApp"]</option>
                 </select>
             </div>
         }
