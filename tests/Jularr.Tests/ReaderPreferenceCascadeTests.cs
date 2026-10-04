@@ -69,7 +69,7 @@ public sealed class ReaderPreferenceCascadeTests
             StringAssert.StartsWith(settings.EffectiveSources["paperStyle"], "genre:700:horror");
             Assert.IsTrue(settings.HasTypeOverride);
             Assert.IsTrue(settings.HasGenreOverride);
-            Assert.IsTrue(settings.HasBookOverride);
+            Assert.IsTrue(settings.HasWorkOverride);
 
             await ReaderPreferenceStore.ResetScopeFieldAsync(
                 db,
@@ -88,7 +88,7 @@ public sealed class ReaderPreferenceCascadeTests
 
             Assert.AreEqual(1.15, inherited.FontSizeRem);
             Assert.AreEqual("default", inherited.EffectiveSources["fontSizeRem"]);
-            Assert.IsFalse(inherited.HasBookOverride);
+            Assert.IsFalse(inherited.HasWorkOverride);
         }
         finally
         {
