@@ -18,7 +18,6 @@ public static class BookLanguageEditionSelectorFactory
         int totalChapters,
         bool isPdf,
         IReadOnlyList<BookTranslationCoverage> coverage,
-        bool translationEnabled,
         Func<string, string> selectUrl,
         string translateUrl,
         UiTextBundle ui)
@@ -58,7 +57,7 @@ public static class BookLanguageEditionSelectorFactory
                 state = EditionState.Current;
             }
 
-            var action = !isComplete && translationEnabled
+            var action = !isComplete
                 ? new EditionAction(translated > 0 ? ui["books.library.continueTranslation"] : ui["languageEdition.translate"], translateUrl, new Dictionary<string, string> { ["lang"] = language.Code })
                 : null;
             var progress = translated > 0 && !isComplete

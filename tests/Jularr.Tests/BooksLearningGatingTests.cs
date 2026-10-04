@@ -3,7 +3,6 @@ using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Books;
-using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Infrastructure;
 using Jularr.Web.Pages.Books;
@@ -20,233 +19,94 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Jularr.Tests;
 
 /// <summary>
-/// #230/#369: the Books reader's whole-chapter AI translation *generation*
-/// (the DE/EN "Translate this chapter" flow, plus the library's whole-book
-/// Translate/Regenerate actions) must resolve the Translation capability
-/// through the canonical hierarchy. Reading an already cached translated
-/// chapter, however, is core reader behaviour and must always work
-/// regardless of that capability (#369 fixed a regression where #230
-/// withheld cached text while Learning was off). Follows the pattern in
-/// NovelLearningTests/HomePageLearningGatingTests.
+/// #833: Book/PDF translations are shared work content. Learning configuration may personalize
+/// study assistance, but it must neither hide cached translated editions nor authorize translation generation.
 /// </summary>
 [TestClass]
 public sealed class BooksLearningGatingTests
 {
-    private const string Profile = "books-learner";
+    private const string Profile = "books-reader-a";
+    private const string OtherProfile = "books-reader-b";
 
     [TestMethod]
-    public async Task OffResolvesTranslationDisabledAndRefusesTheHandlers()
+    public async Task TranslationHandlersWorkWithoutLearningConfiguration()
     {
         await using var fixture = await Fixture.CreateAsync();
 
-        var reader = fixture.CreateReadModel(Profile);
-        await reader.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
-        Assert.IsFalse(reader.TranslationEnabled, "Off must not offer *generating* a chapter translation.");
+        var postResult = await fixture.CreateReadModel(Profile).OnPostTranslateAsync(fixture.ChapterId, "de", CancellationToken.None);
+        var postJson = JsonDocument.Parse(JsonSerializer.Serialize(((JsonResult)postResult).Value));
+        Assert.AreEqual("queued", postJson.RootElement.GetProperty("status").GetString());
 
-        var postResult = await fixture.CreateReadModel(Profile).OnPostTranslateAsync(
-            fixture.ChapterId,
-            "de",
-            CancellationToken.None);
-        Assert.IsInstanceOfType(postResult, typeof(ForbidResult));
+        var statusResult = await fixture.CreateReadModel(Profile).OnGetTranslationStatusAsync(fixture.ChapterId, "de", CancellationToken.None);
+        var statusJson = JsonDocument.Parse(JsonSerializer.Serialize(((JsonResult)statusResult).Value));
+        Assert.AreEqual("pending", statusJson.RootElement.GetProperty("status").GetString());
 
-        // No cached translation exists yet, so the status handler implies
-        // generation and stays gated (see OffStillExposesACachedTranslation
-        // below for the cached-content case, #369).
-        var statusResult = await fixture.CreateReadModel(Profile).OnGetTranslationStatusAsync(
-            fixture.ChapterId,
-            "de",
-            CancellationToken.None);
-        Assert.IsInstanceOfType(statusResult, typeof(ForbidResult));
+        var libraryResult = await fixture.CreateLibraryModel(Profile).OnPostTranslateBookAsync(fixture.WorkId, "de", CancellationToken.None);
+        Assert.IsInstanceOfType(libraryResult, typeof(RedirectToPageResult));
+
+        var regenerateResult = await fixture.CreateLibraryModel(Fixture.Owner, owner: true).OnPostRegenerateAsync(fixture.WorkId, "fr", CancellationToken.None);
+        Assert.IsInstanceOfType(regenerateResult, typeof(RedirectToPageResult));
     }
 
     [TestMethod]
-    public async Task OffStillExposesACachedTranslationAndTheStatusHandlerReturnsReady()
+    public async Task CachedTranslationIsSharedAcrossProfiles()
     {
-        // #369: reading an already cached translated chapter is core reader
-        // behaviour and must not depend on the Learning Translation
-        // capability. Only *generating* a new translation stays gated.
         await using var fixture = await Fixture.CreateAsync();
         await fixture.SeedCachedTranslationAsync("de", "Hallo Welt.");
 
-        var reader = fixture.CreateReadModel(Profile);
-        await reader.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
+        var first = fixture.CreateReadModel(Profile);
+        await first.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
 
-        Assert.IsFalse(reader.TranslationEnabled);
-        Assert.IsNotNull(reader.Reader.Translation, "The cached translation must still be loaded.");
-        Assert.AreEqual(1, reader.Reader.TranslatedParagraphs.Count);
+        var second = fixture.CreateReadModel(OtherProfile);
+        await second.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
 
-        var statusResult = await fixture.CreateReadModel(Profile).OnGetTranslationStatusAsync(
-            fixture.ChapterId,
-            "de",
-            CancellationToken.None);
-        var json = JsonDocument.Parse(JsonSerializer.Serialize(((JsonResult)statusResult).Value));
-        Assert.AreEqual("ready", json.RootElement.GetProperty("status").GetString());
+        Assert.IsNotNull(first.Reader.Translation);
+        Assert.IsNotNull(second.Reader.Translation);
+        CollectionAssert.AreEqual(first.Reader.TranslatedParagraphs.ToArray(), second.Reader.TranslatedParagraphs.ToArray());
+        Assert.AreEqual("Hallo Welt.", second.Reader.TranslatedParagraphs.Single());
     }
 
     [TestMethod]
-    public async Task ReaderKeepsLanguageAffordanceWhenOnlyAnotherChapterIsTranslated()
+    public async Task ReaderKeepsWorkLanguageAffordanceWhenCurrentChapterIsNotTranslated()
     {
-        // A whole-book translation can be partially complete (for example
-        // 20/50 chapters/pages). Opening one of the unfinished chapters must
-        // not make the Reader's language control disappear.
         await using var fixture = await Fixture.CreateAsync();
         await fixture.SeedCachedTranslationForOtherChapterAsync("de", "Bereits übersetzt.");
 
-        var reader = fixture.CreateReadModel(Profile);
+        var reader = fixture.CreateReadModel(OtherProfile);
         await reader.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
 
-        Assert.IsFalse(reader.TranslationEnabled);
         Assert.IsNull(reader.Reader.Translation, "The currently open chapter is intentionally untranslated.");
-        Assert.IsTrue(
-            reader.HasWorkTranslationLanguage,
-            "A cached target-language translation elsewhere in the book must keep the language affordance visible.");
-
-        var view = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Read.cshtml"));
-        StringAssert.Contains(view, "Model.HasWorkTranslationLanguage");
-        StringAssert.Contains(view, "disabled=\"@(!isPdf && !hasAlternate)\"");
+        Assert.IsTrue(reader.HasWorkTranslationLanguage, "A work-level translated edition must stay visible while translation is partial.");
     }
 
     [TestMethod]
-    public async Task LanguageToolsAndStudyEnableTranslationByDefault()
+    public void BooksTranslationPathsDoNotUseLearningAsAnAuthorizationGate()
     {
-        await using var fixture = await Fixture.CreateAsync();
+        var root = RepositoryRoot();
+        var readModel = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Books", "Read.cshtml.cs"));
+        var libraryModel = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Books", "Library.cshtml.cs"));
+        var readView = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Books", "Read.cshtml"));
+        var libraryView = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Books", "Library.cshtml"));
 
-        await fixture.SetModeAsync(Profile, LearningMode.LanguageTools);
-        var languageTools = fixture.CreateReadModel(Profile);
-        await languageTools.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
-        Assert.IsTrue(languageTools.TranslationEnabled, "Language Tools offers translation by default.");
+        foreach (var source in new[] { readModel, libraryModel })
+        {
+            Assert.IsFalse(source.Contains("LearningModuleResolver", StringComparison.Ordinal));
+            Assert.IsFalse(source.Contains("LearningMediaType.Book", StringComparison.Ordinal));
+            Assert.IsFalse(source.Contains("TranslationEnabled", StringComparison.Ordinal));
+        }
 
-        await fixture.SetModeAsync(Profile, LearningMode.Study);
-        var study = fixture.CreateReadModel(Profile);
-        await study.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
-        Assert.IsTrue(study.TranslationEnabled, "Study offers translation by default.");
+        Assert.IsFalse(readView.Contains("Model.TranslationEnabled", StringComparison.Ordinal));
+        Assert.IsFalse(libraryView.Contains("Model.TranslationEnabled", StringComparison.Ordinal));
     }
 
     [TestMethod]
-    public async Task CustomRespectsTheTranslationCapability()
+    public void LibraryViewShowsTranslationStateFromTheSharedCache()
     {
-        await using var fixture = await Fixture.CreateAsync();
-        await fixture.SetModeAsync(Profile, LearningMode.Custom);
-
-        var withoutOverride = fixture.CreateReadModel(Profile);
-        await withoutOverride.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
-        Assert.IsFalse(
-            withoutOverride.TranslationEnabled,
-            "Custom starts with every capability off until the profile opts in.");
-
-        await fixture.SetCapabilityAsync(Profile, LearningCapability.Translation, true);
-        var withOverride = fixture.CreateReadModel(Profile);
-        await withOverride.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
-        Assert.IsTrue(withOverride.TranslationEnabled);
-    }
-
-    [TestMethod]
-    public async Task WorkLevelOverrideEnablesTranslationOnlyForThatBook()
-    {
-        await using var fixture = await Fixture.CreateAsync();
-        await using var otherFixture = await Fixture.CreateAsync();
-
-        // Global Off, but this one book is switched to Study.
-        await new LearningConfigurationStore(fixture.Db).SetModeAsync(
-            Profile,
-            LearningScopeRef.ForWork(LearningMediaType.Book, fixture.WorkId.ToString()),
-            LearningMode.Study,
-            CancellationToken.None);
-
-        var overridden = fixture.CreateReadModel(Profile);
-        await overridden.OnGetAsync(fixture.ChapterId, "de", null, null, null, CancellationToken.None);
-        Assert.IsTrue(overridden.TranslationEnabled, "The overridden work must resolve Study.");
-
-        var unrelated = otherFixture.CreateReadModel(Profile);
-        await unrelated.OnGetAsync(otherFixture.ChapterId, "de", null, null, null, CancellationToken.None);
-        Assert.IsFalse(
-            unrelated.TranslationEnabled,
-            "A different book on the same (globally Off) profile must not inherit the override.");
-    }
-
-    // ---- Books/Library. #369: the whole-book Translate/Regenerate actions
-    // (generation) still resolve the Translation capability, the same way the
-    // reader's own translate handler does. The per-chapter "Translated" badge
-    // and the translated-count summary, however, only reflect the cache: they
-    // are core reader status, not a Learning affordance.
-
-    [TestMethod]
-    public async Task LibraryPageResolvesTranslationDisabledOffAndRefusesTheWholeBookHandlers()
-    {
-        await using var fixture = await Fixture.CreateAsync();
-
-        var library = fixture.CreateLibraryModel(Profile);
-        await library.OnGetAsync(fixture.WorkId, "de", CancellationToken.None);
-        Assert.IsFalse(library.TranslationEnabled, "Off must not offer whole-book translation.");
-
-        var translateResult = await fixture.CreateLibraryModel(Profile).OnPostTranslateBookAsync(
-            fixture.WorkId,
-            "de",
-            CancellationToken.None);
-        Assert.IsInstanceOfType(translateResult, typeof(ForbidResult));
-
-        var regenerateResult = await fixture.CreateLibraryModel(Fixture.Owner, owner: true).OnPostRegenerateAsync(
-            fixture.WorkId,
-            "de",
-            CancellationToken.None);
-        Assert.IsInstanceOfType(regenerateResult, typeof(ForbidResult));
-    }
-
-    [TestMethod]
-    public async Task LibraryPageEnablesTranslationByDefaultInStudy()
-    {
-        await using var fixture = await Fixture.CreateAsync();
-        await fixture.SetModeAsync(Profile, LearningMode.Study);
-
-        var library = fixture.CreateLibraryModel(Profile);
-        await library.OnGetAsync(fixture.WorkId, "de", CancellationToken.None);
-        Assert.IsTrue(library.TranslationEnabled);
-    }
-
-    [TestMethod]
-    public void LibraryViewGatesOnlyTheGenerationActionsOnTranslationEnabled()
-    {
-        var view = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Library.cshtml"));
-
-        // Regenerating a whole-book translation must still gate on the resolved
-        // capability; generating one is offered by the shared language/edition
-        // selector, which only receives the action when TranslationEnabled.
-        StringAssert.Contains(File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Library.cshtml.cs")), "TranslationEnabled,");
-        AssertGuardPrecedesHandler(view, "asp-page-handler=\"Regenerate\"");
-    }
-
-    [TestMethod]
-    public void LibraryViewShowsTheBadgeAndSummaryFromTheCacheAlone()
-    {
-        // #369: the per-chapter "Translated" badge and the translated-count
-        // summary must reflect chapter.HasTranslation (the cache) regardless
-        // of the resolved Learning capability, unlike the generation actions
-        // asserted in LibraryViewGatesOnlyTheGenerationActionsOnTranslationEnabled.
-        var view = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Library.cshtml"));
+        var view = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Books", "Library.cshtml"));
 
         StringAssert.Contains(view, "else if (chapter.HasTranslation)");
-        Assert.IsFalse(
-            view.Contains("Model.TranslationEnabled && chapter.HasTranslation", StringComparison.Ordinal),
-            "The per-chapter badge must not depend on the resolved Learning capability.");
-        Assert.IsFalse(
-            view.Contains("Model.SourceIsTarget || Model.TranslationEnabled", StringComparison.Ordinal),
-            "The translated-count summary must not depend on the resolved Learning capability.");
-    }
-
-    /// <summary>Asserts the translation forms only render after the "!Model.TranslationEnabled" branch, so they never show while the capability is off.</summary>
-    private static void AssertGuardPrecedesHandler(string view, string handlerMarker)
-    {
-        var handlerIndex = view.IndexOf(handlerMarker, StringComparison.Ordinal);
-        Assert.IsTrue(handlerIndex > 0, $"'{handlerMarker}' was not found.");
-
-        var guardIndex = view.LastIndexOf("@if (!Model.TranslationEnabled)", handlerIndex, StringComparison.Ordinal);
-        Assert.IsTrue(guardIndex >= 0, $"No TranslationEnabled guard precedes '{handlerMarker}'.");
-        var elseIndex = view.IndexOf("else if (!job.IsActive)", guardIndex, StringComparison.Ordinal);
-        Assert.IsTrue(elseIndex > guardIndex && elseIndex < handlerIndex, "The forms belong to the capability-enabled branch.");
+        Assert.IsFalse(view.Contains("Model.TranslationEnabled && chapter.HasTranslation", StringComparison.Ordinal));
+        Assert.IsFalse(view.Contains("Model.SourceIsTarget || Model.TranslationEnabled", StringComparison.Ordinal));
     }
 
     private static string RepositoryRoot()
@@ -287,7 +147,7 @@ public sealed class BooksLearningGatingTests
 
         public static async Task<Fixture> CreateAsync()
         {
-            var directory = Path.Combine(Path.GetTempPath(), $"jularr-books-gating-{Guid.NewGuid():N}");
+            var directory = Path.Combine(Path.GetTempPath(), $"jularr-books-translation-{Guid.NewGuid():N}");
             Directory.CreateDirectory(directory);
             var connectionString = $"Data Source={Path.Combine(directory, "jularr.db")};Foreign Keys=True";
 
@@ -384,21 +244,6 @@ public sealed class BooksLearningGatingTests
             Db.ChangeTracker.Clear();
         }
 
-        public Task SetModeAsync(string profileId, LearningMode mode) =>
-            new LearningConfigurationStore(Db).SetModeAsync(
-                profileId,
-                LearningScopeRef.Profile,
-                mode,
-                CancellationToken.None);
-
-        public Task SetCapabilityAsync(string profileId, LearningCapability capability, bool enabled) =>
-            new LearningConfigurationStore(Db).SetCapabilityOverrideAsync(
-                profileId,
-                LearningScopeRef.Profile,
-                capability,
-                enabled,
-                CancellationToken.None);
-
         public ReadModel CreateReadModel(string profileId) =>
             AttachPageContext(new ReadModel(
                 NewBookCatalogService(),
@@ -492,7 +337,7 @@ public sealed class BooksLearningGatingTests
                 string targetLanguage,
                 string context,
                 CancellationToken cancellationToken) =>
-                throw new InvalidOperationException("AI translation is not expected in these gating tests.");
+                throw new InvalidOperationException("AI translation is not expected in these ownership tests.");
         }
     }
 }

@@ -7,7 +7,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class LanguageEditionSelectorTests
 {
-    private static LanguageEditionSelectorModel Create(string current, IReadOnlyList<BookTranslationCoverage> coverage, bool translationEnabled, string source = "ja") =>
+    private static LanguageEditionSelectorModel Create(string current, IReadOnlyList<BookTranslationCoverage> coverage, string source = "ja") =>
         BookLanguageEditionSelectorFactory.Create(
             "selector",
             "Work",
@@ -16,7 +16,6 @@ public sealed class LanguageEditionSelectorTests
             10,
             false,
             coverage,
-            translationEnabled,
             language => $"/Books/Library/1?lang={language}",
             "/Books/Library/1?handler=TranslateBook",
             UiTextBundle.English);
@@ -24,7 +23,7 @@ public sealed class LanguageEditionSelectorTests
     [TestMethod]
     public void SourceLanguageIsTheOnlyOfficialEditionAndTranslationsAreGenerated()
     {
-        var model = Create("ja", [new BookTranslationCoverage("de", 10)], translationEnabled: false);
+        var model = Create("ja", [new BookTranslationCoverage("de", 10)]);
 
         var original = model.Editions.Single(x => x.LanguageCode == "ja");
         var german = model.Editions.Single(x => x.LanguageCode == "de");
@@ -38,13 +37,12 @@ public sealed class LanguageEditionSelectorTests
     }
 
     [TestMethod]
-    public void PartialAndMissingTranslationsExposeTranslateOnlyWhenAllowed()
+    public void PartialAndMissingTranslationsExposeTranslateActions()
     {
-        var allowed = Create("de", [new BookTranslationCoverage("de", 4)], translationEnabled: true);
-        var denied = Create("de", [new BookTranslationCoverage("de", 4)], translationEnabled: false);
+        var model = Create("de", [new BookTranslationCoverage("de", 4)]);
 
-        var partial = allowed.Editions.Single(x => x.LanguageCode == "de");
-        var missing = allowed.Editions.Single(x => x.LanguageCode == "fr");
+        var partial = model.Editions.Single(x => x.LanguageCode == "de");
+        var missing = model.Editions.Single(x => x.LanguageCode == "fr");
 
         Assert.AreEqual(EditionState.Current, partial.State);
         Assert.AreEqual("4 / 10 chapters translated", partial.Progress);
@@ -52,25 +50,21 @@ public sealed class LanguageEditionSelectorTests
         Assert.AreEqual(EditionState.Unavailable, missing.State);
         Assert.IsNull(missing.SelectUrl);
         Assert.AreEqual("fr", missing.Action!.Fields["lang"]);
-        Assert.IsTrue(denied.Editions.All(x => x.Action is null));
     }
 
     [TestMethod]
-    public void SelectorIsHiddenWhenNothingCanBeChosenOrRequested()
+    public void SelectorIsMeaningfulWhenTranslationsCanBeRequested()
     {
-        var onlyOriginal = Create("ja", [], translationEnabled: false);
-        var withTranslation = Create("ja", [new BookTranslationCoverage("de", 10)], translationEnabled: false);
-        var translatable = Create("ja", [], translationEnabled: true);
+        var model = Create("ja", []);
 
-        Assert.IsFalse(onlyOriginal.IsMeaningful);
-        Assert.IsTrue(withTranslation.IsMeaningful);
-        Assert.IsTrue(translatable.IsMeaningful);
+        Assert.IsTrue(model.IsMeaningful);
+        Assert.IsTrue(model.Editions.Any(x => x.Provenance == EditionProvenance.Generated && x.Action is not null));
     }
 
     [TestMethod]
     public void LanguagesAreListedOnceEvenWhenCoverageDiffersInCase()
     {
-        var model = Create("sv", [new BookTranslationCoverage("sv", 3), new BookTranslationCoverage("DE", 2)], translationEnabled: true);
+        var model = Create("sv", [new BookTranslationCoverage("sv", 3), new BookTranslationCoverage("DE", 2)]);
 
         Assert.AreEqual(1, model.Languages.Count(x => x.Code == "sv"));
         Assert.AreEqual(1, model.Languages.Count(x => x.Code.Equals("de", StringComparison.OrdinalIgnoreCase)));

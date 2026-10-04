@@ -248,13 +248,28 @@ public sealed class BookReaderPdfTests
         Assert.AreEqual(3, reader.ChapterCount);
         Assert.AreEqual(ReaderLayoutKind.FixedPages, reader.ReaderDocument.LayoutKind);
         Assert.IsTrue(reader.ReaderDocument.Capabilities.SupportsTts);
-        Assert.IsFalse(reader.TranslationEnabled);
 
         File.Delete(fixture.PdfPath);
         var missing = fixture.CreateReadModel();
         await missing.OnGetAsync(fixture.PageIds[0], "en", null, null, null, CancellationToken.None);
         Assert.IsNotNull(missing.Pdf);
         Assert.IsNull(missing.Pdf.FileUrl, "A missing file is reported, not replaced by the page text.");
+    }
+
+    [TestMethod]
+    public async Task PdfReaderExposesSharedCachedTranslationLanguagesAcrossProfiles()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.SeedTranslationAsync(fixture.PageIds[1], "de", "Übersetzte Seite.");
+
+        var first = fixture.CreateReadModel("pdf-reader-a");
+        await first.OnGetAsync(fixture.PageIds[1], "id", null, null, null, CancellationToken.None);
+        var second = fixture.CreateReadModel("pdf-reader-b");
+        await second.OnGetAsync(fixture.PageIds[1], "id", null, null, null, CancellationToken.None);
+
+        CollectionAssert.Contains(first.CachedTranslationLanguages.ToArray(), "de");
+        CollectionAssert.Contains(second.CachedTranslationLanguages.ToArray(), "de");
+        Assert.IsTrue(second.ReaderDocument.Languages.Any(language => language.Tag.Equals("de", StringComparison.OrdinalIgnoreCase)));
     }
 
     [TestMethod]
@@ -389,11 +404,11 @@ public sealed class BookReaderPdfTests
                 pdfPath);
         }
 
-        public ReadModel CreateReadModel()
+        public ReadModel CreateReadModel(string profileId = Profile)
         {
             var page = new ReadModel(
                 Books,
-                TestAccounts.Context(Profile),
+                TestAccounts.Context(profileId),
                 new BackgroundJobQueue(services.GetRequiredService<IServiceScopeFactory>()),
                 Db);
             page.PageContext = new PageContext
@@ -407,6 +422,22 @@ public sealed class BookReaderPdfTests
                 ViewData = new ViewDataDictionary<ReadModel>(new EmptyModelMetadataProvider(), new ModelStateDictionary())
             };
             return page;
+        }
+
+        public async Task SeedTranslationAsync(Guid pageId, string targetLanguage, string text)
+        {
+            var chapter = await Db.NovelChapters.SingleAsync(x => x.Id == pageId);
+            Db.NovelTranslations.Add(new NovelTranslation
+            {
+                ChapterId = pageId,
+                TargetLanguage = BookLanguageCatalog.Normalize(targetLanguage),
+                ProviderId = $"book-v{BookCatalogService.TranslationPromptVersion}-efficient",
+                PromptVersion = BookCatalogService.TranslationPromptVersion,
+                SourceHash = chapter.SourceHash,
+                Text = text
+            });
+            await Db.SaveChangesAsync();
+            Db.ChangeTracker.Clear();
         }
 
         private BookCatalogService NewBookCatalogService()

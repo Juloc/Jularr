@@ -202,10 +202,11 @@ Source adapter contract:
   `jularr:reader-layout` when the reader area changes size.
 - chrome only auto-hides on phones in Scroll mode; elsewhere the bars are part
   of the layout so the page area never jumps.
-- language/view availability is supplied by the source adapter. A cached
-  readable translation remains selectable even when translation generation or
-  Learning capabilities are disabled; generation capability only controls the
-  action that creates a missing translation.
+- language/view availability is supplied by the source adapter from the shared
+  work translation inventory. Book/PDF translated editions are shared content,
+  not profile or Learning state. Learning capabilities only control learning
+  assistance; missing translation generation follows the canonical AI/runtime
+  policy and never requires Learning to be enabled.
 
 ### Books adapter
 
