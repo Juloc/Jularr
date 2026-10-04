@@ -63,8 +63,7 @@ public static class JularrEventCategories
         public bool Supports(NotificationChannel channel) => SupportedChannels.Contains(channel);
     }
 
-    private static readonly FrozenSet<NotificationChannel> AllProfileChannels =
-        ChannelSet(NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email);
+    private static readonly FrozenSet<NotificationChannel> s_allProfileChannels = ChannelSet(NotificationChannel.InApp, NotificationChannel.Push, NotificationChannel.Email);
 
     public static readonly IReadOnlyDictionary<JularrEventCategory, Meta> All =
         new Dictionary<JularrEventCategory, Meta>
@@ -136,7 +135,7 @@ public static class JularrEventCategories
                 DefaultTiming: NotificationDeliveryTiming.Immediate,
                 CanDisable: true,
                 RequiresAtLeastOneRoute: false,
-                SupportedChannels: AllProfileChannels,
+                SupportedChannels: s_allProfileChannels,
                 AllowsDigest: false,
                 QuietHoursPolicy: NotificationQuietHoursPolicy.Bypass,
                 AllowsTransientAttention: true)
@@ -159,24 +158,18 @@ public static class JularrEventCategories
     /// <see cref="JularrEvent.Create"/> and the publisher so manually constructed events cannot widen
     /// audience or change severity before they reach the durable EventLog.
     /// </summary>
-    public static void ValidateOccurrence(
-        JularrEventCategory category,
-        JularrEventAudience audience,
-        JularrEventSeverity severity,
-        string? profileId)
+    public static void ValidateOccurrence(JularrEventCategory category, JularrEventAudience audience, JularrEventSeverity severity, string? profileId)
     {
         var meta = Of(category);
 
         if (audience != meta.Audience)
         {
-            throw new InvalidOperationException(
-                $"{category} requires audience {meta.Audience}, not {audience}.");
+            throw new InvalidOperationException($"{category} requires audience {meta.Audience}, not {audience}.");
         }
 
         if (severity != meta.Severity)
         {
-            throw new InvalidOperationException(
-                $"{category} requires severity {meta.Severity}, not {severity}.");
+            throw new InvalidOperationException($"{category} requires severity {meta.Severity}, not {severity}.");
         }
 
         switch (meta.Audience)
@@ -242,13 +235,7 @@ public static class JularrEventCategories
         }
     }
 
-    private static Meta ProfilePolicy(
-        JularrEventSeverity severity,
-        string messageKey,
-        string labelKey,
-        NotificationTopicGroup topicGroup,
-        bool allowsDigest,
-        bool allowsTransientAttention) =>
+    private static Meta ProfilePolicy(JularrEventSeverity severity, string messageKey, string labelKey, NotificationTopicGroup topicGroup, bool allowsDigest, bool allowsTransientAttention) =>
         new(
             Audience: JularrEventAudience.Profile,
             Severity: severity,
@@ -260,13 +247,12 @@ public static class JularrEventCategories
             DefaultTiming: NotificationDeliveryTiming.Immediate,
             CanDisable: true,
             RequiresAtLeastOneRoute: false,
-            SupportedChannels: AllProfileChannels,
+            SupportedChannels: s_allProfileChannels,
             AllowsDigest: allowsDigest,
             QuietHoursPolicy: NotificationQuietHoursPolicy.Delayable,
             AllowsTransientAttention: allowsTransientAttention);
 
-    private static FrozenSet<NotificationChannel> ChannelSet(params NotificationChannel[] channels) =>
-        channels.ToFrozenSet();
+    private static FrozenSet<NotificationChannel> ChannelSet(params NotificationChannel[] channels) => channels.ToFrozenSet();
 }
 
 /// <summary>
