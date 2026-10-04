@@ -8,6 +8,8 @@ Bell / Quick View: `docs/mockups/notifications-bell/SPEC.md`.
 Toast / Popup: `docs/mockups/notifications-toast-popup/SPEC.md`.
 User notification preferences: `docs/mockups/notifications-settings/SPEC.md`.
 
+Canonical notification architecture: `docs/NOTIFICATIONS.md`.
+
 If an image and this specification conflict, this specification wins.
 
 ## Purpose
