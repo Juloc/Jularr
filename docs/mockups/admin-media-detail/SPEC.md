@@ -1,8 +1,10 @@
 # Admin Media Detail — V1
 
-Status: planning baseline for the first Admin Media Detail implementation.
+Status: **binding V1 planning specification; current Desktop/Mobile visual references are the implementation baseline.**
 
 Global UX rules: `docs/UX.md`
+
+Text specification wins over images on conflict.
 
 The V1 goal is deliberately simple: one clear hierarchy, direct monitoring/search actions at the level the admin is looking at, and expandable local-file details. Do not turn this screen into a collection of unrelated Sonarr-style tabs.
 
