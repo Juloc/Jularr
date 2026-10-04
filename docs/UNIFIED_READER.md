@@ -267,6 +267,66 @@ pdf.js, vendored in `wwwroot/lib/pdfjs` (version and licence in `VERSION` and
   offline sync queue; the reader resumes on that page and keeps it in the URL.
   Highlights and notes need text anchors and are not offered for PDF pages.
 
+
+## Progressive translation
+
+Issue #834 defines live/progressive translation for every Reader renderer that can
+expose stable semantic text blocks. The Reader consumes one provider-neutral
+translation stream; it never consumes Codex/OpenAI/local-provider wire events or
+partial structured JSON directly.
+
+The canonical unit is a stable source block. Reflowable documents use paragraph,
+heading/list and related semantic block identities; PDF Smart Book uses the
+derived semantic/source mapping from #819; Manga/comics/fixed image content can
+participate only after a reliable OCR/text-region model such as #846 exposes
+stable region identities. OCR/extraction remains a prerequisite owned by the
+document pipeline, not by translation.
+
+A progressive run may expose ephemeral text deltas for the currently translating
+block, but only a validated `BlockCompleted` becomes reusable durable content.
+Completed blocks are persisted/reused immediately and survive reconnect/restart.
+An unfinished run must never masquerade as a complete Translation derivative;
+the final Edition/Version is finalized only after every required block and final
+validation succeed.
+
+One run pins the complete execution identity that can affect translation:
+source/hash, target language, provider/model, prompt version, terminology and
+do-not-translate rules, translation memory/story context and other canonical
+context inputs. A settings/model/context change creates or selects another
+translation version rather than mixing outputs inside one run. A completed block
+already published for one version is stable; finalization may validate/assemble
+it but must not silently rewrite it. A later consistency/editing pass that
+changes text is a new revision/version.
+
+Runs are ordered, idempotent and reconnectable by stable run/block/event identity.
+Duplicate, late or out-of-order events cannot append text twice or corrupt block
+order. Multiple authorized readers observe the same shared translation
+run/cache. Leaving or closing the Reader does not cancel that shared job.
+Pause stops new provider work at a safe boundary, Resume continues from the first
+missing valid block, Cancel interrupts/stops future work while retaining valid
+completed blocks, and Retry reuses all valid work before requesting missing or
+failed blocks.
+
+Streaming capability is optional. Providers with usable text deltas can drive the
+current block live; providers that only return final responses still provide the
+same Reader UX by translating bounded semantic blocks sequentially. Raw
+provider markup/script is never trusted rendering input, and partial
+JSON/schema fragments never reach the Reader.
+
+Reader state distinguishes waiting for first text, partially readable,
+translating current block, finalizing, completed, paused/cancelled/failed and
+stale-source states. Completed text must appear without changing the reader's
+logical locator. Search, canonical TTS text, durable annotation anchors and
+offline packaging consume validated completed blocks only; ephemeral deltas are
+visual/transient state. Translation progress is not 100% until final
+validation/finalization succeeds.
+
+Read-ahead prioritizes the current and next blocks while keeping concurrency,
+queue depth, retries and rate-limit handling bounded. Completed work is retained
+through transient provider failures and source changes invalidate partial and
+final caches through the same canonical source-identity rules. Translation
+generation remains independent from Learning/profile mode as specified by #833.
+
 ## State ownership
 
 Durable typography, paper, theme, mode and layout settings belong to
