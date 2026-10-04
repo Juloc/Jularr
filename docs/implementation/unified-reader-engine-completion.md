@@ -91,6 +91,11 @@ Examples:
 
 A source may expose more than one readable view. Example: one PDF can expose both Original Pages and Smart Book while retaining one canonical reading position.
 
+Reader layout/profile terms such as Comic, Magazine, Scan or Artbook do not by
+themselves create a second canonical media identity. Whether a future product
+decision adds a distinct WorkMediaType is a MediaCore/domain question; the
+Reader must already support those documents without inventing parallel Works.
+
 ## 4. ReaderDocument contract
 
 `ReaderDocumentDescriptor` remains the lightweight identity/capability description. Add a renderer-facing document contract instead of making renderers inspect page routes or source-specific DOM.
