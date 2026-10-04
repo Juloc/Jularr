@@ -114,7 +114,7 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 15
-          --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=2147483648
+          --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=3221225472
 
     steps:
       - uses: actions/checkout@v5
@@ -143,6 +143,21 @@ jobs:
 
       - run: dotnet restore Jularr.sln
       - run: dotnet build Jularr.sln --no-restore --configuration Release
+      - name: Tune ephemeral PostgreSQL for parallel tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}' | head -n 1)"
+          test -n "${PG_CONTAINER}"
+          docker exec -i "${PG_CONTAINER}" psql -U jularr -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER SYSTEM SET fsync = off;
+          ALTER SYSTEM SET synchronous_commit = off;
+          ALTER SYSTEM SET full_page_writes = off;
+          ALTER SYSTEM SET max_wal_size = '256MB';
+          ALTER SYSTEM SET min_wal_size = '80MB';
+          SELECT pg_reload_conf();
+          SQL
+
       - name: Run tests in three PostgreSQL-isolated shards
         shell: bash
         run: |
@@ -167,7 +182,7 @@ jobs:
           except StopIteration:
               raise SystemExit("dotnet test --list-tests did not return a test list")
 
-          discovered = [line.strip() for line in lines[start:] if line.startswith(("    ", "\t")) and line.strip()]
+          discovered = [line.strip() for line in lines[start:] if line.strip()]
           if not discovered:
               raise SystemExit("No tests discovered")
           (shard_dir / "expected-total.txt").write_text(str(len(discovered)))
