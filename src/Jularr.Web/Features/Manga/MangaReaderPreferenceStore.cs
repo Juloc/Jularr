@@ -127,25 +127,44 @@ public static class MangaReaderPreferenceStore
         var scopes = new[] { LegacyMediaScope, MediaScope, legacySeriesScope, workScope };
         var preferences = await db.ReaderPreferences.Where(x => x.ProfileId == profileId && scopes.Contains(x.ScopeKey)).ToListAsync(cancellationToken);
 
+        var changed = false;
         var legacyMedia = preferences.FirstOrDefault(x => x.ScopeKey == LegacyMediaScope);
         var media = preferences.FirstOrDefault(x => x.ScopeKey == MediaScope);
         if (legacyMedia is not null)
         {
-            media ??= CreatePreference(db, profileId, MediaScope, workId: null);
-            CopyMissingImageReaderFields(media, legacyMedia);
-            db.ReaderPreferences.Remove(legacyMedia);
+            if (media is null)
+            {
+                legacyMedia.ScopeKey = MediaScope;
+                legacyMedia.WorkId = null;
+            }
+            else
+            {
+                CopyMissingImageReaderFields(media, legacyMedia);
+                db.ReaderPreferences.Remove(legacyMedia);
+            }
+
+            changed = true;
         }
 
         var legacySeries = preferences.FirstOrDefault(x => x.ScopeKey == legacySeriesScope);
         var work = preferences.FirstOrDefault(x => x.ScopeKey == workScope);
         if (legacySeries is not null)
         {
-            work ??= CreatePreference(db, profileId, workScope, workId);
-            CopyMissingImageReaderFields(work, legacySeries);
-            db.ReaderPreferences.Remove(legacySeries);
+            if (work is null)
+            {
+                legacySeries.ScopeKey = workScope;
+                legacySeries.WorkId = workId;
+            }
+            else
+            {
+                CopyMissingImageReaderFields(work, legacySeries);
+                db.ReaderPreferences.Remove(legacySeries);
+            }
+
+            changed = true;
         }
 
-        if (legacyMedia is not null || legacySeries is not null)
+        if (changed)
         {
             await db.SaveChangesAsync(cancellationToken);
         }
