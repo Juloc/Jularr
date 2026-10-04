@@ -27,6 +27,31 @@ namespace Jularr.Web.Data.Migrations
             modelBuilder.Model.RemoveEntityType("Jularr.Web.Features.Library.MediaFile");
             modelBuilder.Model.RemoveEntityType("Jularr.Web.Features.ReaderPreferences.ReaderPreference");
 
+            modelBuilder.Entity("Jularr.Web.Features.Library.LibraryRoot", b =>
+                {
+                    b.Property<int>("PlacementPolicy").HasColumnType("integer");
+                    b.ToTable("LibraryRoots", t =>
+                        t.HasCheckConstraint("CK_LibraryRoots_PlacementPolicy", "\"PlacementPolicy\" >= 0 AND \"PlacementPolicy\" <= 3"));
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.Library.LibraryRootContentAssignment", b =>
+                {
+                    b.Property<Guid>("LibraryRootId").HasColumnType("uuid");
+                    b.Property<int>("ContentType").HasColumnType("integer");
+                    b.Property<DateTime>("CreatedAt").HasColumnType("timestamp with time zone");
+                    b.Property<bool>("IsDefault").HasColumnType("boolean");
+                    b.HasKey("LibraryRootId", "ContentType");
+                    b.HasIndex("ContentType").IsUnique().HasFilter("\"IsDefault\" = TRUE");
+                    b.HasIndex("ContentType", "IsDefault");
+                    b.ToTable("LibraryRootContentAssignments", t =>
+                        t.HasCheckConstraint("CK_LibraryRootContentAssignments_ContentType", "\"ContentType\" >= 1 AND \"ContentType\" <= 8"));
+                    b.HasOne("Jularr.Web.Features.Library.LibraryRoot", null)
+                        .WithMany()
+                        .HasForeignKey("LibraryRootId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Jularr.Web.Features.ReaderPreferences.ReaderPreference", b =>
                 {
                     b.Property<Guid>("Id")

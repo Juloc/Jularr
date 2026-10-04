@@ -351,6 +351,7 @@ builder.Services.AddSingleton<IWakeOnLanPacketSender, UdpWakeOnLanPacketSender>(
 builder.Services.AddSingleton(new StorageWakeOptions());
 builder.Services.AddSingleton<StorageWakeCoordinator>();
 builder.Services.AddScoped<StorageIntegrityService>();
+builder.Services.AddScoped<LibraryRootRoutingService>();
 builder.Services.AddSingleton(StorageCacheLayout.Default);
 builder.Services.AddScoped<StorageUsageService>();
 builder.Services.AddScoped<StorageCacheScanner>();
