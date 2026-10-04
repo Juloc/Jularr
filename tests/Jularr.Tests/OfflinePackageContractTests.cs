@@ -47,6 +47,12 @@ public sealed class OfflinePackageContractTests
     }
 
     [TestMethod]
+    public void ServerAdvertisesCanonicalOfflinePackageCapability()
+    {
+        Assert.IsTrue(ClientApiContract.Capabilities().Features.OfflinePackages);
+    }
+
+    [TestMethod]
     public void IntentNamesAreStableWireValues()
     {
         Assert.IsTrue(ClientApiOfflinePackageContract.TryParseIntent("WATCH", out var watch));
