@@ -39,7 +39,7 @@ public enum ReaderTextBlockKind
 /// </summary>
 public sealed record ReaderDocumentIdentity
 {
-    public ReaderDocumentIdentity(Guid workId, Guid? volumeId = null, Guid? chapterId = null, Guid? editionId = null, Guid? versionId = null, Guid? assetId = null, string? variantKey = null)
+    public ReaderDocumentIdentity(Guid workId, Guid? volumeId = null, Guid? chapterId = null, Guid? editionId = null, Guid? versionId = null, Guid? assetId = null, Guid? fileId = null, string? variantKey = null)
     {
         if (workId == Guid.Empty)
         {
@@ -52,6 +52,7 @@ public sealed record ReaderDocumentIdentity
         EditionId = editionId;
         VersionId = versionId;
         AssetId = assetId;
+        FileId = fileId;
         VariantKey = string.IsNullOrWhiteSpace(variantKey) ? null : variantKey.Trim();
     }
 
@@ -66,6 +67,8 @@ public sealed record ReaderDocumentIdentity
     public Guid? VersionId { get; }
 
     public Guid? AssetId { get; }
+
+    public Guid? FileId { get; }
 
     public string? VariantKey { get; }
 }
@@ -250,7 +253,7 @@ public sealed record ReaderDocument
             throw new ArgumentException("Reader descriptor and document identity must target the same Work.", nameof(identity));
         }
 
-        var nodes = content ?? [];
+        var nodes = content ?? Array.Empty<ReaderContentNode>();
         var stableIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in nodes)
         {
