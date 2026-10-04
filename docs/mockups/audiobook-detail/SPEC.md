@@ -109,6 +109,21 @@ Sections without meaningful data disappear.
 - optional Collection action
 - overflow for secondary consumer actions
 
+### Request / acquisition behavior
+
+When no playable Audiobook Edition is available and the active profile may request it:
+
+- the primary consumer action is `Request`;
+- it opens/uses the shared Request contract rather than an Audiobook-specific downloader UI;
+- after approval or instant policy approval, Jularr searches enabled audiobook providers automatically;
+- direct/free acquisition and shared Usenet/download-client acquisition converge on the same import path;
+- while acquisition runs, the primary action remains in place and reflects the persisted live Request/Operation state;
+- consumer-visible progress is limited to Pending/Search/Download/Import/Completed plus a compact percentage when meaningful;
+- on completion the primary action becomes `Listen` / `Continue Listening`;
+- provider/indexer/release/file details stay in Admin/Wanted/Manual Search surfaces.
+
+If another profile already caused a compatible acquisition for the same canonical audiobook edition, show the shared request/acquisition state rather than offering a duplicate Request.
+
 ### Compact information strip
 
 High-value audio facts:
