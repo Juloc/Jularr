@@ -242,7 +242,7 @@ public static class SqliteToPostgresImporter
                 preference.Parameters.AddWithValue("@category", category);
                 preference.Parameters.AddWithValue("@enabled", enabled);
                 preference.Parameters.AddWithValue("@timing", timing);
-                preference.Parameters.AddWithValue("@updatedAtUtc", updatedAtUtc.ToString("O", CultureInfo.InvariantCulture));
+                preference.Parameters.AddWithValue("@updatedAtUtc", updatedAtUtc);
                 await preference.ExecuteNonQueryAsync(cancellationToken);
             }
 
