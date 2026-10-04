@@ -169,6 +169,66 @@ public sealed class RequestOptionsTests
     }
 
     [TestMethod]
+    public async Task TvUsesTheSharedFutureAndCustomRequestOptions()
+    {
+        var future = new AcquisitionRequestOptions
+        {
+            Scope = RequestScope.FutureOnly,
+            Seasons = [1],
+            Episodes = [new RequestEpisode(1, 1)]
+        }.Validate();
+        Assert.AreEqual(RequestScope.FutureOnly, future.Scope);
+        Assert.AreEqual(0, future.Seasons.Count);
+        Assert.AreEqual(0, future.Episodes.Count);
+        Assert.IsTrue(future.MonitorFuture);
+
+        var custom = new AcquisitionRequestOptions
+        {
+            Scope = RequestScope.Custom,
+            Seasons = [2],
+            Episodes = [new RequestEpisode(1, 3)],
+            MonitorFuture = true,
+            SubtitleLanguage = "de"
+        }.Validate();
+        CollectionAssert.AreEqual(new[] { 2 }, custom.Seasons.ToArray());
+        CollectionAssert.AreEqual(new[] { new RequestEpisode(1, 3) }, custom.Episodes.ToArray());
+        Assert.IsTrue(custom.MonitorFuture);
+
+        await using var fixture = await AcquisitionAccessFixture.CreateAsync();
+        var tvExecutor = new RecordingExecutor(MediaAcquisitionKind.Tv);
+        var service = fixture.Service("owner", AccountRole.Owner, tvExecutor);
+        var request = await service.SubmitAsync(
+            new AcquisitionRequestDraft(
+                MediaAcquisitionKind.Tv,
+                "tmdb",
+                "1396",
+                "Breaking Bad",
+                null,
+                null,
+                Options: custom),
+            CancellationToken.None);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
+        Assert.AreEqual(RequestScope.Custom, request.Options.Scope);
+        CollectionAssert.AreEqual(new[] { 2 }, request.Options.Seasons.ToArray());
+        CollectionAssert.AreEqual(new[] { new RequestEpisode(1, 3) }, request.Options.Episodes.ToArray());
+        Assert.IsTrue(request.Options.MonitorFuture);
+        Assert.AreEqual("de", request.Options.SubtitleLanguage);
+        Assert.AreEqual(1, tvExecutor.Runs);
+    }
+
+    [TestMethod]
+    public void EmptyCustomScopeIsRejected()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new AcquisitionRequestOptions { Scope = RequestScope.Custom }.Validate());
+        Assert.IsTrue(
+            new AcquisitionRequestOptions { Scope = RequestScope.Custom, MonitorFuture = true }
+                .Validate()
+                .MonitorFuture);
+    }
+
+    [TestMethod]
     public async Task RequestersMayOnlyPickQualityProfilesTheOwnerOpenedToRequests()
     {
         await using var fixture = await AcquisitionAccessFixture.CreateAsync();
