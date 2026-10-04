@@ -8,6 +8,8 @@ Notification Topic Editor: `docs/mockups/notifications-topic-editor/SPEC.md`.
 Notification Center: `docs/mockups/notifications-center/SPEC.md`.
 Toast / Popup: `docs/mockups/notifications-toast-popup/SPEC.md`.
 
+Canonical notification architecture: `docs/NOTIFICATIONS.md`.
+
 If an image and this specification conflict, this specification wins.
 
 ## Purpose
