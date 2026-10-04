@@ -146,7 +146,7 @@ public static class MangaReaderPreferences
             settings.ImageSharpen,
             settings.ImageCropBorders,
             settings.ImageColorScheme,
-            settings.HasBookOverride);
+            settings.HasWorkOverride);
 
     private static ReaderSettingsInput ToSettingsInput(MangaReaderPreferenceInput input)
     {
