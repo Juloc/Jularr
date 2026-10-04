@@ -176,17 +176,66 @@ public abstract record ReaderContentNode
     public ReaderSourceReference? Source { get; }
 }
 
-public sealed record ReaderTextContentNode : ReaderContentNode
+public sealed record ReaderInlineRun
 {
-    public ReaderTextContentNode(string stableId, ReaderTextBlockKind kind, string text, ReaderSourceReference? source = null) : base(stableId, source)
+    public ReaderInlineRun(string text, string? ruby = null, bool emphasis = false, bool strong = false)
     {
         Text = text ?? throw new ArgumentNullException(nameof(text));
+        Ruby = string.IsNullOrWhiteSpace(ruby) ? null : ruby.Trim();
+        Emphasis = emphasis;
+        Strong = strong;
+    }
+
+    public string Text { get; }
+
+    public string? Ruby { get; }
+
+    public bool Emphasis { get; }
+
+    public bool Strong { get; }
+}
+
+public sealed record ReaderTextContentNode : ReaderContentNode
+{
+    public ReaderTextContentNode(string stableId, ReaderTextBlockKind kind, string text, ReaderSourceReference? source = null, int headingLevel = 0)
+        : this(stableId, kind, [new ReaderInlineRun(text)], source, headingLevel)
+    {
+    }
+
+    public ReaderTextContentNode(string stableId, ReaderTextBlockKind kind, IReadOnlyList<ReaderInlineRun> runs, ReaderSourceReference? source = null, int headingLevel = 0)
+        : base(stableId, source)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        if (runs.Count == 0)
+        {
+            throw new ArgumentException("Reader text content requires at least one inline run.", nameof(runs));
+        }
+
+        if (kind == ReaderTextBlockKind.Heading)
+        {
+            if (headingLevel is < 1 or > 6)
+            {
+                throw new ArgumentOutOfRangeException(nameof(headingLevel));
+            }
+        }
+        else if (headingLevel != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(headingLevel));
+        }
+
         Kind = kind;
+        Runs = runs.ToArray();
+        Text = string.Concat(Runs.Select(run => run.Text));
+        HeadingLevel = headingLevel;
     }
 
     public ReaderTextBlockKind Kind { get; }
 
+    public IReadOnlyList<ReaderInlineRun> Runs { get; }
+
     public string Text { get; }
+
+    public int HeadingLevel { get; }
 }
 
 public sealed record ReaderImageContentNode : ReaderContentNode
