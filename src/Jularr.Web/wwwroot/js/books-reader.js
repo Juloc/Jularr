@@ -585,7 +585,7 @@
             return;
         }
         const max = compactQuery.matches ? 6 : STACK_MAX_PX;
-        const ratio = layout.viewCount > 1 ? currentView / (layout.viewCount - 1) : 0;
+        const ratio = permilleForIndex(currentView, layout.viewCount) / 1000;
         spread.style.setProperty("--book-stack-left", Math.round(STACK_MIN_PX + ratio * (max - STACK_MIN_PX)) + "px");
         spread.style.setProperty("--book-stack-right", Math.round(STACK_MIN_PX + (1 - ratio) * (max - STACK_MIN_PX)) + "px");
     };
