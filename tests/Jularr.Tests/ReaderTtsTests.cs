@@ -51,7 +51,7 @@ public sealed class ReaderTtsTests
             Assert.AreEqual("de-genre", settings.TtsVoiceIds["de"]);
             StringAssert.StartsWith(settings.EffectiveSources["ttsVoiceId:de"], "genre:600:fantasy");
             Assert.IsTrue(settings.TtsAutoContinueChapters);
-            Assert.IsTrue(settings.HasBookOverride);
+            Assert.IsTrue(settings.HasWorkOverride);
 
             await ReaderPreferenceStore.ResetScopeFieldAsync(
                 db, "profile", workScope, "ttsVoiceId:ja", CancellationToken.None);
@@ -64,7 +64,7 @@ public sealed class ReaderTtsTests
             Assert.AreEqual("type:light-novel", inherited.EffectiveSources["ttsVoiceId:ja"]);
             Assert.AreEqual("de-genre", inherited.TtsVoiceIds["de"]);
             Assert.IsFalse(inherited.TtsAutoContinueChapters);
-            Assert.IsFalse(inherited.HasBookOverride, "The emptied work row must be removed.");
+            Assert.IsFalse(inherited.HasWorkOverride, "The emptied work row must be removed.");
         }
         finally
         {
