@@ -20,6 +20,7 @@ public sealed class JularrEventPublisher(
     public async Task PublishAsync(JularrEvent domainEvent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
+        JularrEventCategories.ValidateOccurrence(domainEvent);
 
         // The durable audit log write can throw (for example a full disk); that is surfaced to the
         // caller like any other persistence failure. Delivery to profiles, once the event itself is
