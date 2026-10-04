@@ -352,10 +352,10 @@ public sealed class DiscoveryTests
     }
 
     [TestMethod]
-    public void DiscoveryClientOnlyOffersTheNewTabForBooks()
+    public void DiscoveryClientOffersNewAndUpcomingOnlyWhereProvidersSupportThem()
     {
-        // #371: Anime/Manga/Novels have no real "recently published" source of their own (their
-        // AniList browse only distinguishes Trending from Top), so the New tab must stay hidden
+        // Books have a true recent-publication feed. TMDB exposes new/upcoming Movie/TV feeds.
+        // AniList-backed categories still stay on Trending/Top here.
         // outside the Book category instead of silently aliasing to Top under a wrong label.
         var page = File.ReadAllText(Path.Combine(
             FindRepositoryRoot(),
@@ -365,11 +365,15 @@ public sealed class DiscoveryTests
             "Discover",
             "Index.cshtml"));
 
-        StringAssert.Contains(page, "if (query.Category == DiscoveryCategory.Book)");
+        StringAssert.Contains(page, "DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series");
         StringAssert.Contains(page, "DiscoveryMode.New, \"discover.tabs.new\"");
+        StringAssert.Contains(page, "DiscoveryMode.Upcoming, \"discover.tabs.upcoming\"");
         Assert.AreEqual(
             DiscoveryMode.Trending,
             DiscoverBrowseQuery.Parse(key => key == "mode" ? "new" : key == "category" ? "anime" : null).Mode);
+        Assert.AreEqual(
+            DiscoveryMode.Upcoming,
+            DiscoverBrowseQuery.Parse(key => key == "mode" ? "upcoming" : key == "category" ? "movie" : null).Mode);
     }
 
     private static AniListRemoteListEntry Remote(
