@@ -415,9 +415,13 @@ Do not put:
 - LibraryRoots;
 - download paths;
 - backup paths;
-- safe filesystem browser.
+- safe filesystem browser;
+- lifecycle cleanup/optimization/tiering policies;
+- free-space reserve/forecast;
+- storage migration/evacuation;
+- storage maintenance/resource windows.
 
-Those belong to Storage/Backup.
+Those belong to Storage/Backup according to the owning spec; canonical storage lifecycle belongs to Admin Storage (#414).
 
 ## Provider / Acquisition boundary
 
