@@ -552,6 +552,18 @@ translation action is not offered for guessed whole-page text.
 Only validated completed blocks feed search, canonical TTS text, durable
 translation-based annotations and offline packages.
 
+Accessibility:
+- do not announce token/delta updates through an ARIA live region; assistive
+  technology receives concise state changes such as preparing, translated
+  content available, paused, failed or completed;
+- preserve keyboard focus, text selection and the current semantic locator while
+  translated blocks appear;
+- do not require a typing animation; reduced-motion users receive the same
+  content without decorative streaming motion;
+- TTS on a partially generated target-language view reads only validated target
+  blocks and waits at the first missing block while generation is active rather
+  than silently switching languages.
+
 ## 14. Reader appearance and preferences
 
 Reader settings use the existing preference cascade rather than per-page localStorage copies.
