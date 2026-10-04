@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,7 +34,9 @@ public sealed record CanonicalVideoPlayerSnapshot(
     CanonicalPlayableFile File,
     MediaInventoryEntry Inventory,
     MediaProgressSnapshot Progress,
-    CanonicalVideoNavigation Navigation);
+    CanonicalVideoNavigation Navigation,
+    EpisodeSegmentDescriptor Segments,
+    TrickplayDescriptor Trickplay);
 
 /// <summary>
 /// Canonical Player bootstrap owner for every local video type. It resolves only
@@ -44,7 +47,8 @@ public sealed class CanonicalVideoPlayerService(
     AppDbContext db,
     CanonicalMediaStorageService storage,
     MediaInventoryService inventory,
-    VideoProgressService progress)
+    VideoProgressService progress,
+    CanonicalPlayerNavigationAssetService navigationAssets)
 {
     public async Task<CanonicalVideoPlayerSnapshot?> GetAsync(
         string profileId,
@@ -118,6 +122,12 @@ public sealed class CanonicalVideoPlayerService(
         var navigation = episode is null
             ? CanonicalVideoNavigation.None
             : await ResolveNavigationAsync(target.WorkId, episode.Id, cancellationToken);
+        var segments = await navigationAssets.GetSegmentsAsync(target, cancellationToken);
+        var trickplay = await navigationAssets.GetTrickplayAsync(
+            target,
+            file,
+            queue: true,
+            cancellationToken);
 
         return new CanonicalVideoPlayerSnapshot(
             target,
@@ -127,7 +137,9 @@ public sealed class CanonicalVideoPlayerService(
             file,
             technical,
             progressSnapshot,
-            navigation);
+            navigation,
+            segments,
+            trickplay);
     }
 
     private async Task<CanonicalVideoNavigation> ResolveNavigationAsync(
