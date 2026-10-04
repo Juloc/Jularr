@@ -68,6 +68,9 @@ public interface IExternalProvider
 public static class ProviderKeys
 {
     public const string AniList = "anilist";
+    public const string Tmdb = "tmdb";
+    public const string Tvdb = "tvdb";
+    public const string Imdb = "imdb";
     public const string Newznab = "newznab";
     public const string Prowlarr = "prowlarr";
     public const string OpenSubtitles = "opensubtitles";
