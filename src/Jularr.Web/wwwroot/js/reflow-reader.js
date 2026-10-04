@@ -1,7 +1,7 @@
 // Canonical reflow runtime shared by Books and Novel/Light-Novel readers.
 // Source adapters own persistence, translation, annotations and presentation;
 // this module owns layout-independent reflow navigation semantics.
-const clamp = (value, min, max) =>
+export const clamp = (value, min, max) =>
     Math.min(max, Math.max(min, Number(value) || 0));
 
 export const ReflowReadingMode = Object.freeze({
