@@ -311,11 +311,10 @@ public sealed class MangaTests
     }
 
     [TestMethod]
-    public async Task ReaderPreferencesResolveGlobalMediaAndSeriesScopes()
+    public async Task ReaderPreferencesResolveGlobalTypeAndWorkScopes()
     {
         var root = TempDirectory();
         var database = Path.Combine(root, "jularr.db");
-        var seriesId = Guid.NewGuid();
         var workId = Guid.NewGuid();
 
         try
@@ -332,64 +331,61 @@ public sealed class MangaTests
             });
             await db.SaveChangesAsync();
 
-            var global = await MangaReaderPreferenceStore.GetAsync(
+            var global = await MangaReaderPreferences.GetAsync(
                 db,
                 "reader-a",
                 workId,
-                seriesId,
                 CancellationToken.None);
             Assert.AreEqual("continuous", global.ReadingMode);
             Assert.IsFalse(global.TwoPageSpread);
             Assert.AreEqual("#123456", global.BookmarkColor);
             Assert.IsFalse(global.HasSeriesOverride);
 
-            await MangaReaderPreferenceStore.SaveModeAsync(
+            await MangaReaderPreferences.SaveAsync(
                 db,
                 "reader-a",
-                null,
-                "double",
+                workId: null,
+                new MangaReaderPreferenceInput { Mode = "double" },
+                "mode",
                 CancellationToken.None);
 
-            var media = await MangaReaderPreferenceStore.GetAsync(
+            var type = await MangaReaderPreferences.GetAsync(
                 db,
                 "reader-a",
                 workId,
-                seriesId,
                 CancellationToken.None);
-            Assert.AreEqual("paged", media.ReadingMode);
-            Assert.IsTrue(media.TwoPageSpread);
-            Assert.AreEqual("double", media.UiMode);
+            Assert.AreEqual("paged", type.ReadingMode);
+            Assert.IsTrue(type.TwoPageSpread);
+            Assert.AreEqual("double", type.UiMode);
 
-            await MangaReaderPreferenceStore.SaveModeAsync(
+            await MangaReaderPreferences.SaveAsync(
                 db,
                 "reader-a",
                 workId,
-                "continuous",
+                new MangaReaderPreferenceInput { Mode = "continuous" },
+                "mode",
                 CancellationToken.None);
 
-            var series = await MangaReaderPreferenceStore.GetAsync(
+            var work = await MangaReaderPreferences.GetAsync(
                 db,
                 "reader-a",
                 workId,
-                seriesId,
                 CancellationToken.None);
-            Assert.AreEqual("continuous", series.ReadingMode);
-            Assert.IsFalse(series.TwoPageSpread);
-            Assert.AreEqual("continuous", series.UiMode);
-            Assert.IsTrue(series.HasSeriesOverride);
+            Assert.AreEqual("continuous", work.ReadingMode);
+            Assert.IsFalse(work.TwoPageSpread);
+            Assert.AreEqual("continuous", work.UiMode);
+            Assert.IsTrue(work.HasSeriesOverride);
 
-            await MangaReaderPreferenceStore.ResetWorkAsync(
+            await MangaReaderPreferences.ResetWorkAsync(
                 db,
                 "reader-a",
                 workId,
-                seriesId,
                 CancellationToken.None);
 
-            var reset = await MangaReaderPreferenceStore.GetAsync(
+            var reset = await MangaReaderPreferences.GetAsync(
                 db,
                 "reader-a",
                 workId,
-                seriesId,
                 CancellationToken.None);
             Assert.AreEqual("paged", reset.ReadingMode);
             Assert.IsTrue(reset.TwoPageSpread);
