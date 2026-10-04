@@ -34,6 +34,7 @@ public sealed record CanonicalVideoPlayerSnapshot(
     CanonicalPlayableFile File,
     MediaInventoryEntry Inventory,
     MediaProgressSnapshot Progress,
+    PlaybackPreferencesSnapshot Preferences,
     CanonicalVideoNavigation Navigation,
     EpisodeSegmentDescriptor Segments,
     TrickplayDescriptor Trickplay);
@@ -119,6 +120,17 @@ public sealed class CanonicalVideoPlayerService(
             return null;
         }
 
+        var preferenceRow = await db.ProfilePlaybackPreferences
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.ProfileId == profileId, cancellationToken);
+        var preferences = preferenceRow is null
+            ? PlaybackPreferencesSnapshot.Default
+            : new PlaybackPreferencesSnapshot(
+                preferenceRow.AutoplayNext,
+                preferenceRow.PreferredAudioLanguage,
+                preferenceRow.PreferredSubtitleLanguage,
+                preferenceRow.DefaultPlaybackSpeed);
+
         var navigation = episode is null
             ? CanonicalVideoNavigation.None
             : await ResolveNavigationAsync(target.WorkId, episode.Id, cancellationToken);
@@ -141,6 +153,7 @@ public sealed class CanonicalVideoPlayerService(
             file,
             technical,
             progressSnapshot,
+            preferences,
             navigation,
             segments,
             trickplay);
