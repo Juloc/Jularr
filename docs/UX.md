@@ -929,20 +929,29 @@ This is a normal settings page, **not a Setup Wizard continuation**. It must not
 
 The Setup Wizard and this page must use the same canonical settings store. Appearance, Modules, Storage, Providers, Acquisition, AI, Backup and Runtime remain in their owning Admin areas.
 
-## 27d. Admin Notifications
+## 27d. Notifications
 
-Binding specification:
+Canonical architecture:
+- `docs/NOTIFICATIONS.md`
+
+Binding user specifications:
+- `docs/mockups/notifications-settings/SPEC.md`
+- `docs/mockups/notifications-topic-editor/SPEC.md`
+- `docs/mockups/notifications-quiet-hours/SPEC.md`
+- `docs/mockups/notifications-digest/SPEC.md`
+- `docs/mockups/notifications-center/SPEC.md`
+- `docs/mockups/notifications-bell/SPEC.md`
+- `docs/mockups/notifications-toast-popup/SPEC.md`
+- `docs/mockups/notifications-banner/SPEC.md`
+
+Binding Admin specification:
 - `docs/mockups/admin-notifications/SPEC.md`
 
-Admin Notifications owns the instance's technical notification delivery layer:
-- registered/configured notification sinks;
-- channel health and tests;
-- read-only canonical event catalog/audience/severity;
-- delivery diagnostics/history once backed by a durable delivery-attempt store.
+Admin Notifications owns the instance's technical channel layer: registered/configured sinks, health/tests and durable delivery diagnostics. Profile Notification Settings own personal channel gates, event subscriptions, Immediate/Digest timing, Quiet Hours and Digest scheduling.
 
-Current implementation has a real **In-App** sink only. Push/Digest exist in the model but must not appear as working transports until a real sink/configuration contract exists. Future E-Mail, Web Push, Webhook/Home Assistant or other channels plug into the shared `INotificationSink` pipeline rather than creating parallel notification systems.
+The durable In-App Center, Bell and Quick View share one inbox state. Toasts are transient attention only. Persistent Banners are current-state driven and are not derived from inbox read state.
 
-Profile Notification Settings continue to own each user's event preferences. Activity/History remain operational-job surfaces and are not duplicated by notification delivery history.
+Current implementation has a real **In-App** sink only. Future E-Mail/Push and integration channels extend the canonical pipeline; UI must not present them as working until their backend exists. Activity/History remain operational-job surfaces and are not duplicated by notification delivery history.
 
 ## 27e. Admin Backup & Restore
 
