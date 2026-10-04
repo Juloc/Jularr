@@ -1,6 +1,7 @@
 # Jularr planning audit
 
 Cross-spec consistency: `CROSS-SPEC-CONSISTENCY-AUDIT.md`.
+Implementation readiness: `implementation/request-to-play-readiness-audit.md`.
 
 Status: **current planning coverage audit**. This document does not authorize bypassing architecture, migration, security, visual-approval or implementation gates.
 
@@ -125,10 +126,15 @@ Implementation handoff: `docs/implementation/admin-navigation-route-consolidatio
 Remaining work is primarily:
 
 - implement the consolidated Admin shell/legacy-route redirects without creating duplicate owners;
-- complete page-specific visual approval only where a spec explicitly still requires it;
+- implement the first complete Anime/Movie/TV Request-to-Play vertical according to `implementation/request-to-play-readiness-audit.md`;
 - keep Games page-by-page implementation separate from core media completion;
-- prioritize dependency-ordered implementation of the canonical request -> acquisition -> import -> playback path;
 - keep implementation dependent on the canonical persistence/application contracts in the roadmap.
+
+Explicit approval gates that genuinely remain:
+- Calendar: final owner review of status/filter semantics, event interaction, responsive behavior and Light/Dark before implementation merge;
+- PlayStation 1 Game Player: visual mockup approval is still pending.
+
+Profile/Activity, Admin Users & Permissions and Admin Media Detail no longer carry stale “waiting for first mockup” status language; their existing visual directions/specs are sufficient planning baselines.
 
 A new screen should be added only when a concrete workflow cannot be represented cleanly by an existing page, dialog, sheet or state.
 
