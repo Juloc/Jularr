@@ -132,6 +132,12 @@ public static class ClientApiRoutes
     public static string DirectContent(Guid mediaFileId) =>
         $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/content";
 
+    public static string MediaTrickplay(Guid mediaFileId) =>
+        $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/trickplay";
+
+    public static string MediaTrickplayAsset(Guid mediaFileId, string fileName) =>
+        $"{MediaTrickplay(mediaFileId)}/{Uri.EscapeDataString(fileName)}";
+
     public static string MediaAvailability(Guid mediaFileId) =>
         $"{ClientApiContract.BasePath}/media/{mediaFileId:D}/availability";
 
