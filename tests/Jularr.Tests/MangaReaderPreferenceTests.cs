@@ -69,7 +69,7 @@ public sealed class MangaReaderPreferenceTests
             Assert.IsFalse(overridden.AutoContinueChapters);
             Assert.IsTrue(overridden.HasSeriesOverride);
 
-            await MangaReaderPreferenceStore.ResetSeriesAsync(
+            await MangaReaderPreferenceStore.ResetWorkAsync(
                 db,
                 "reader-a",
                 workId,
