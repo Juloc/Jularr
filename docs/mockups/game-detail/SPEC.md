@@ -106,6 +106,55 @@ Use shared `Request` behavior.
 
 Do not create a Games-specific request/acquisition flow.
 
+## Device-local Offline / install state
+
+Game Detail distinguishes three separate concepts:
+
+1. canonical/shared server Games library availability;
+2. acquisition/request state for obtaining a GameRelease on the Jularr server/library;
+3. current-device local install/package state for Offline play.
+
+Do not collapse these into one generic `Downloading` state.
+
+When the current client exposes a managed Games Offline/install adapter (#851), the detail page may show a secondary device-local action/status:
+
+- **Offline installieren** / **Für Offline installieren**;
+- **Wird auf diesem Gerät installiert**;
+- **Offline spielbar**;
+- **Update verfügbar**;
+- **Offline-Installation fortsetzen**;
+- **Offline-Installation erneut versuchen**;
+- **Lokale Installation entfernen**.
+
+The action resolves through the Games-owned install/package owner and may project into the shared `Downloads & Offline -> Games` manager.
+
+Ready means more than raw files existing. The Games owner must be able to resolve the required:
+- canonical `GameRelease`;
+- complete verified release resources;
+- runtime capability;
+- required BIOS/firmware where applicable;
+- local package/install metadata.
+
+External launcher installs use a separate capability vocabulary such as:
+- **Installiert**;
+- **Offline spielbar**;
+- **Launcher erforderlich**;
+- **Online-Anmeldung erforderlich**;
+- **Offline-Status unbekannt**.
+
+Jularr must not claim ownership of external install bytes or offer generic remove/migrate actions for them unless the integration actually owns those operations.
+
+### Offline package update/removal
+
+For Jularr-managed local Game packages:
+- a failed update must not destroy the last verified playable generation;
+- install/update should switch to the replacement only after complete verification;
+- normal package removal/update preserves profile saves unless the user explicitly removes save data;
+- multi-file/multi-disc releases remain one logical install;
+- saves/playtime remain Games-owned state, not MediaProgress.
+
+When a genuine cross-device save conflict exists after Offline play, route it through the Games save owner/future reconciliation contract (#862); never silently overwrite one divergent binary save with another.
+
 ## Recent save / resume card
 
 When resumable state exists, show one prominent latest-save card near the Play action.
@@ -475,8 +524,10 @@ Every platform defines:
 - local but unsupported runtime;
 - missing BIOS;
 - browser/device unsupported;
-- requested;
-- downloading/preparing;
+- requested/server-acquiring;
+- current-device Offline downloading/installing/verifying when supported;
+- current-device Offline ready/update available/failed when supported;
+- external launcher Offline capability where integrated;
 - not local/requestable;
 - no Save States;
 - screenshots empty;
@@ -526,4 +577,7 @@ Mockups define visual direction; this text spec defines behavior/data/boundaries
 - no forced release chooser when one obvious playable target exists;
 - no empty tabs;
 - no permanent controller setup on Detail;
-- no achievement/mod/DLC scope in V1.
+- no achievement/mod/DLC scope in V1;
+- no MediaCore Work/MediaProgress identity for Games just to share Offline UI;
+- no second Games-specific consumer downloads manager;
+- no silent deletion of profile saves when a managed local Game package is updated or removed.
