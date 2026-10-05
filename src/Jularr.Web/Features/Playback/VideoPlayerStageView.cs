@@ -34,4 +34,6 @@ public sealed record VideoPlayerStageView(
     string SubtitleCuesUrlTemplate,
     PlayerControls? Controls,
     IReadOnlyList<PlaybackCue> Cues,
-    bool ShowPlayerTools);
+    bool ShowPlayerTools,
+    string? PreviousUrl = null,
+    string? PreviousLabel = null);

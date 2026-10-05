@@ -11,22 +11,17 @@
 .ad-related li > a:not([href]) { cursor: default; }
 .ad-related li > a:not([href]):hover { background: var(--surface-2); }
 
-/* Hero without artwork: a compact gradient (the home hero fallback) instead of a tall empty banner. A poster-derived
-   backdrop replaces the gradient once Work artwork exists. */
-.ad-hero.vd-hero-plain { min-height: 0; justify-content: flex-start; }
-.vd-hero-plain .ad-hero-copy { padding-top: 40px; }
-@media (max-width: 860px) { .vd-hero-plain .ad-hero-copy { padding-top: 26px; } }
+/* Hero without artwork: the home hero fallback gradient, shorter than the artwork hero but still a banner with the copy
+   resting above the facts. A poster-derived backdrop replaces the gradient once Work artwork exists. */
+.ad-hero.vd-hero-plain { min-height: clamp(260px, 22vw, 300px); }
 
-/* Movie body: Related and About in the main column, Versions & Languages as a compact card beside them when there is room. */
+/* Movie body: compact Versions & Languages and About side by side, then Related Works as a row of cards. */
 .vd-body { display: grid; gap: 20px; align-items: start; grid-template-columns: minmax(0, 1fr); }
-.vd-main { display: grid; gap: 20px; min-width: 0; }
-.vd-main > .ad-related { margin: 0; }
-@media (min-width: 900px) {
-    .vd-body:has(.vd-main > *):has(.vd-aside) { grid-template-columns: minmax(0, 1fr) 340px; }
-    .vd-aside { grid-column: 2; grid-row: 1; }
-    .vd-main { grid-column: 1; grid-row: 1; }
-    .vd-body:not(:has(.vd-main > *)) .vd-aside { grid-column: 1; max-width: 420px; }
-}
+.vd-top { display: grid; gap: 20px; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.vd-top:not(:has(*)) { display: none; }
+.vd-body > .ad-related { margin: 0; }
+.vd-body > .ad-related ul { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.vd-body > .ad-related small { white-space: normal; }
 
 .vd-card {
     display: grid; gap: 12px; min-width: 0; padding: 16px;
@@ -35,7 +30,7 @@
 }
 .vd-card h2 { margin: 0; font-size: 18px; }
 
-.vd-langs { display: grid; gap: 8px; margin: 0; }
+.vd-langs { display: grid; gap: 8px 24px; margin: 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
 .vd-langs > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .vd-langs dt { min-width: 76px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .vd-langs dd { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }

@@ -24,7 +24,7 @@ public sealed class WatchPageMarkupTests
         foreach (var hook in new[]
                  {
                      "data-chrome-play", "data-chrome-settings-toggle", "data-chrome-fullscreen", "data-chrome-subtitles",
-                     "data-chrome-pip", "data-chrome-mute", "data-player-next", "data-repeat-line",
+                     "data-chrome-pip", "data-chrome-mute", "data-player-previous", "data-player-next", "data-repeat-line",
                      "data-player-action=\"seekBack10\"", "data-player-action=\"seekForward10\""
                  })
         {
@@ -35,6 +35,20 @@ public sealed class WatchPageMarkupTests
         StringAssert.DoesNotMatch(Page, new Regex("data-chrome-speed"));
         StringAssert.DoesNotMatch(Page, new Regex("player-top-actions"));
         StringAssert.DoesNotMatch(Page, new Regex(">\\s*✕\\s*<"), "Close buttons use the shared close icon.");
+    }
+
+    // docs/mockups/player: Previous and Next are part of the centred transport group, never of the volume/settings bar.
+    [TestMethod]
+    public void PreviousAndNextEpisodeBelongToTheTransportGroup()
+    {
+        var transportStart = Page.IndexOf("class=\"player-center\"", StringComparison.Ordinal);
+        var barStart = Page.IndexOf("class=\"player-bottom\"", StringComparison.Ordinal);
+        Assert.IsTrue(transportStart > 0 && barStart > transportStart);
+        var transport = Page[transportStart..barStart];
+
+        StringAssert.Contains(transport, "data-player-previous");
+        StringAssert.Contains(transport, "data-player-next");
+        StringAssert.DoesNotMatch(Page[barStart..], new Regex("data-player-(previous|next)"));
     }
 
     [TestMethod]

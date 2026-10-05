@@ -91,6 +91,13 @@
 
             @* The one play/pause button. Tapping the video only shows or hides these controls. *@
             <div class="player-center">
+                @if (Model.PreviousUrl is { } previousUrl)
+                {
+                    <a class="player-round-button player-round-step player-step-previous" href="@previousUrl" data-player-previous
+                       aria-label="@Model.PreviousLabel" title="@Model.PreviousLabel">
+                        <partial name="_PlayerIcon" model="@("next")" />
+                    </a>
+                }
                 <button class="player-round-button" type="button" data-player-action="seekBack10"
                         aria-label="@ui.Format("library.episode.seekBack", ("seconds", seekBack))">
                     <partial name="_PlayerIcon" model="@("seekBack")" />
@@ -106,6 +113,13 @@
                     <partial name="_PlayerIcon" model="@("seekForward")" />
                     <span>@seekForward</span>
                 </button>
+                @if (Model.NextUrl is { } playerNextUrl)
+                {
+                    <a class="player-round-button player-round-step" href="@playerNextUrl" data-player-next
+                       aria-label="@ui["library.episode.nextEpisode"]" title="@ui["library.episode.nextEpisode"]">
+                        <partial name="_PlayerIcon" model="@("next")" />
+                    </a>
+                }
             </div>
 
             <div class="player-bottom">
@@ -122,13 +136,6 @@
                 </div>
                 <div class="player-bar">
                     <div class="player-bar-group">
-                        @if (Model.NextUrl is { } playerNextUrl)
-                        {
-                            <a class="player-icon-button" href="@playerNextUrl" data-player-next
-                               aria-label="@ui["library.episode.nextEpisode"]" title="@ui["library.episode.nextEpisode"]">
-                                <partial name="_PlayerIcon" model="@("next")" />
-                            </a>
-                        }
                         <div class="player-volume">
                             <button class="player-icon-button" type="button" data-chrome-mute
                                     aria-label="@ui["library.watch.mute"]" title="@ui["library.watch.mute"]"

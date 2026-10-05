@@ -476,7 +476,15 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 }
 .player-round-button:hover { background: rgba(0,0,0,.5); transform: scale(1.05); }
 .player-round-button .player-icon { width: 30px; height: 30px; }
-.player-round-button > span { position: absolute; bottom: 12px; font-size: 9px; font-weight: 800; }
+/* The seek step sits inside the arrow of the seek icon (its circle is centred slightly below the middle of the viewBox). */
+.player-round-button > span {
+    position: absolute; inset: 0; display: grid; place-items: center; padding-top: 3px;
+    font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; pointer-events: none;
+}
+/* Previous and Next episode: secondary to the seek and play buttons in the transport group. */
+.player-round-step { width: 44px; height: 44px; text-decoration: none; }
+.player-round-step .player-icon { width: 24px; height: 24px; }
+.player-step-previous .player-icon { transform: scaleX(-1); }
 .player-round-button-main { width: 76px; height: 76px; background: color-mix(in srgb, var(--accent) 88%, transparent); color: var(--on-accent); }
 .player-round-button-main:hover { background: var(--accent); }
 .player-round-button-main .player-icon { width: 40px; height: 40px; }
@@ -563,6 +571,22 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 .player-setting-system { display: grid; gap: 4px; justify-items: start; }
 .player-setting-system[hidden] { display: none; }
 
+/* Desktop (pointer, wide): the transport sits in the control row, geometrically centred between the volume on the left and the
+   settings on the right, as in docs/mockups/player. Touch and narrow windows keep it over the video. */
+@media (hover: hover) and (pointer: fine) and (min-width: 1100px) {
+    .player-center { top: auto; bottom: 8px; transform: translateX(-50%); gap: 8px; }
+    .player-round-button { width: 40px; height: 40px; background: transparent; backdrop-filter: none; }
+    .player-round-button:hover { background: rgba(255,255,255,.14); transform: none; }
+    .player-round-button .player-icon { width: 30px; height: 30px; }
+    .player-round-step { width: 40px; height: 40px; }
+    .player-round-step .player-icon { width: 22px; height: 22px; }
+    .player-round-button-main {
+        width: 52px; height: 52px; border: 2px solid rgba(255,255,255,.62); background: rgba(0,0,0,.28); color: #fff;
+    }
+    .player-round-button-main:hover { background: rgba(255,255,255,.18); }
+    .player-round-button-main .player-icon { width: 28px; height: 28px; }
+}
+
 /* Before playback starts only the header and settings are useful (mode, retry). */
 .video-stage.player-placeholder .player-center,
 .video-stage.player-placeholder .player-timeline-row,
@@ -578,7 +602,7 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 /* The stage is a dark surface in both themes (the video letterbox is the player background), so everything drawn on it
    uses light-on-dark values instead of the page theme tokens, which turn dark in the light theme. */
 .watch-main .player-error {
-    position: absolute; top: 70px; inset-inline: 16px; z-index: 9; margin: 0;
+    position: absolute; top: 84px; inset-inline: 16px; z-index: 9; margin: 0;
     background: rgba(120, 24, 24, .88); color: #ffe6e6; font-size: 13px;
 }
 .playback-preparation .eyebrow { color: rgba(255, 255, 255, .7); }
@@ -655,6 +679,8 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
     .player-volume-slider { display: none; }
     .player-round-button { width: 48px; height: 48px; }
     .player-round-button-main { width: 62px; height: 62px; }
+    .player-round-step { width: 40px; height: 40px; }
+    .player-center { gap: clamp(12px, 4vw, 32px); }
     .player-settings { right: 8px; left: 8px; width: auto; bottom: 64px; }
 }
 @media (max-width: 520px) {

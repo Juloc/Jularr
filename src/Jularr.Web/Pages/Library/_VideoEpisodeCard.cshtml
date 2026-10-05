@@ -25,6 +25,10 @@
         {
             <span class="ad-ep-play" aria-hidden="true"><partial name="_AnimeDetailIcon" model='"play"' /></span>
         }
+        else
+        {
+            <span class="ad-ep-placeholder" aria-hidden="true"><partial name="_AnimeDetailIcon" model="stateIcon" /></span>
+        }
         @if (episode.RuntimeMinutes is int minutes)
         {
             <span class="ad-ep-runtime">@ui.Format("library.anime.durationMinutes", ("minutes", minutes))</span>

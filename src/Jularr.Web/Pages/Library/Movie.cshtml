@@ -33,8 +33,79 @@
 <partial name="_VideoDetailHero" model="Model" />
 
 <div class="vd-body">
-    <div class="vd-main">
-        <partial name="_VideoDetailRelated" model="Model" />
+    <div class="vd-top">
+        @if (detail.Versions.Count > 0)
+        {
+            <section class="vd-card" aria-labelledby="vd-versions-title">
+                <h2 id="vd-versions-title">@ui["library.video.versionsHeading"]</h2>
+                @if (hasLanguages)
+                {
+                    <dl class="vd-langs">
+                        @foreach (var (label, chips) in new[] { (ui["mediaFacts.audio"], audioChips), (ui["mediaFacts.subtitles"], subtitleChips) })
+                        {
+                            if (chips.Any)
+                            {
+                                <div>
+                                    <dt>@label</dt>
+                                    <dd>
+                                        @foreach (var chip in chips.Shown)
+                                        {
+                                            <span class="ad-lang@(chip.IsPreferred ? " is-preferred" : "")" title="@(chip.IsPreferred ? ui["library.anime.preferredLanguage"] : null)">@chip.Code</span>
+                                        }
+                                        @if (chips.More > 0)
+                                        {
+                                            <span class="ad-lang ad-lang-more" title="@ui.Format("library.anime.moreLanguages", ("count", chips.More))">+@chips.More</span>
+                                        }
+                                    </dd>
+                                </div>
+                            }
+                        }
+                    </dl>
+                    @if (detail.Preference.IsSet)
+                    {
+                        <p class="vd-language-state@(preferredAvailable ? "" : " is-other")">@ui[preferredAvailable ? "library.video.language.preferred" : "library.video.language.otherOnly"]</p>
+                    }
+                }
+
+                @if (hasUltraHd || hasHdr || hasDolbyVision)
+                {
+                    <ul class="vd-badges" aria-label="@ui["library.video.capabilities"]">
+                        @if (hasUltraHd)
+                        {
+                            <li>4K</li>
+                        }
+                        @if (hasHdr)
+                        {
+                            <li>HDR</li>
+                        }
+                        @if (hasDolbyVision)
+                        {
+                            <li>Dolby Vision</li>
+                        }
+                    </ul>
+                }
+
+                <details class="vd-versions">
+                    <summary>@ui["library.video.viewAll"]</summary>
+                    <ol>
+                        @foreach (var (version, index) in detail.Versions.Select((version, index) => (version, index + 1)))
+                        {
+                            <li>
+                                <strong>@VersionLabel(version, index)</strong>
+                                @if (version.Audio.Count > 0)
+                                {
+                                    <span>@ui["mediaFacts.audio"]: @Codes(version.Audio)</span>
+                                }
+                                @if (version.Subtitles.Count > 0)
+                                {
+                                    <span>@ui["mediaFacts.subtitles"]: @Codes(version.Subtitles)</span>
+                                }
+                            </li>
+                        }
+                    </ol>
+                </details>
+            </section>
+        }
 
         @if (detail.AlsoKnownAs.Count > 0)
         {
@@ -50,78 +121,5 @@
         }
     </div>
 
-    @if (detail.Versions.Count > 0)
-    {
-        <aside class="vd-aside" aria-label="@ui["library.video.versionsHeading"]">
-        <section class="vd-card" aria-labelledby="vd-versions-title">
-            <h2 id="vd-versions-title">@ui["library.video.versionsHeading"]</h2>
-            @if (hasLanguages)
-            {
-                <dl class="vd-langs">
-                    @foreach (var (label, chips) in new[] { (ui["mediaFacts.audio"], audioChips), (ui["mediaFacts.subtitles"], subtitleChips) })
-                    {
-                        if (chips.Any)
-                        {
-                            <div>
-                                <dt>@label</dt>
-                                <dd>
-                                    @foreach (var chip in chips.Shown)
-                                    {
-                                        <span class="ad-lang@(chip.IsPreferred ? " is-preferred" : "")" title="@(chip.IsPreferred ? ui["library.anime.preferredLanguage"] : null)">@chip.Code</span>
-                                    }
-                                    @if (chips.More > 0)
-                                    {
-                                        <span class="ad-lang ad-lang-more" title="@ui.Format("library.anime.moreLanguages", ("count", chips.More))">+@chips.More</span>
-                                    }
-                                </dd>
-                            </div>
-                        }
-                    }
-                </dl>
-                @if (detail.Preference.IsSet)
-                {
-                    <p class="vd-language-state@(preferredAvailable ? "" : " is-other")">@ui[preferredAvailable ? "library.video.language.preferred" : "library.video.language.otherOnly"]</p>
-                }
-            }
-
-            @if (hasUltraHd || hasHdr || hasDolbyVision)
-            {
-                <ul class="vd-badges" aria-label="@ui["library.video.capabilities"]">
-                    @if (hasUltraHd)
-                    {
-                        <li>4K</li>
-                    }
-                    @if (hasHdr)
-                    {
-                        <li>HDR</li>
-                    }
-                    @if (hasDolbyVision)
-                    {
-                        <li>Dolby Vision</li>
-                    }
-                </ul>
-            }
-
-            <details class="vd-versions">
-                <summary>@ui["library.video.viewAll"]</summary>
-                <ol>
-                    @foreach (var (version, index) in detail.Versions.Select((version, index) => (version, index + 1)))
-                    {
-                        <li>
-                            <strong>@VersionLabel(version, index)</strong>
-                            @if (version.Audio.Count > 0)
-                            {
-                                <span>@ui["mediaFacts.audio"]: @Codes(version.Audio)</span>
-                            }
-                            @if (version.Subtitles.Count > 0)
-                            {
-                                <span>@ui["mediaFacts.subtitles"]: @Codes(version.Subtitles)</span>
-                            }
-                        </li>
-                    }
-                </ol>
-            </details>
-        </section>
-        </aside>
-    }
+    <partial name="_VideoDetailRelated" model="Model" />
 </div>

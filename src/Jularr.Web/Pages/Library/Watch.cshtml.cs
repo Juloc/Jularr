@@ -85,6 +85,7 @@ public sealed class WatchModel(
         var storage = await availability.CheckMediaAsync(snapshot.File.StoredFileId, force: false, cancellationToken);
         var probe = PlaybackProbeResult.From(snapshot.Inventory.Technical!);
         var next = snapshot.Navigation.Next is { } item ? VideoDetailView.WatchHref(item.Target.WorkId, item.Target.WorkEpisodeId) : null;
+        var previous = snapshot.Navigation.Previous;
         return new VideoPlayerStageView(
             Ui: Ui,
             LegacyEpisodeId: null,
@@ -109,6 +110,8 @@ public sealed class WatchModel(
             SubtitleCuesUrlTemplate: ClientApiRoutes.VideoSubtitleTrackCues(snapshot.Target, "__track__"),
             Controls: PlayerControls.Build(probe.Tracks, probe.VideoHeight, hasLearningCues: false, learningSourceStreamIndex: null, snapshot.Preferences),
             Cues: [],
-            ShowPlayerTools: false);
+            ShowPlayerTools: false,
+            PreviousUrl: previous is null ? null : VideoDetailView.WatchHref(previous.Target.WorkId, previous.Target.WorkEpisodeId),
+            PreviousLabel: previous is null ? null : Ui.Format("library.episode.previousEpisodeAria", ("season", previous.SeasonNumber.ToString("00")), ("episode", previous.EpisodeNumber.ToString("00"))));
     }
 }
