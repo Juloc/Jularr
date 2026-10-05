@@ -105,7 +105,7 @@ No further required Offline mockup remains after this state.
 | Offline Learning package | `download-selection` + `offline-settings` | Complete |
 | Wi-Fi/metered policy | `offline-settings` | Complete |
 | Background/power policy | `offline-settings` | Complete |
-| Device Offline limit/reserve | `offline-settings` | Complete |
+| Device Offline limit/reserve | `offline-settings` | Complete target semantics; device-wide retained-profile accounting hardened in #861 |
 | Smart Offline | `offline-settings` + manager | Complete target contract |
 | Smart Offline promotion to explicit | selection/manager/Quick View | Complete |
 | Download live shell indicator | `download-quick-view` | Complete |
@@ -122,8 +122,10 @@ No further required Offline mockup remains after this state.
 | Corrupt local package | manager + Player/Reader | Complete |
 | Removed/unavailable local storage | settings/migration + Player/Reader | Complete |
 | Account/Profile isolation | offline owner + all surfaces | Semantics covered; implementation alignment still required |
-| Cold-start PWA/app shell | Home + local repository | **Missing final visual/integration contract** |
-| Detail-page local Offline action | shared selection + media detail specs | **Spec integration gap; no new mockup required** |
+| Games first-class Offline/install projection | Games owner + `downloads-offline` + Home + Game Detail | Complete target UX via #851; no MediaCore/MediaProgress reuse |
+| Games offline save conflict reconciliation | Games save owner | Future hardening tracked by #862; no silent divergent-save overwrite |
+| Cold-start PWA/app shell | Home + local repository | Approved/spec'd; implementation tracked by #839 |
+| Detail-page local Offline action | shared selection + media detail specs | Media integration tracked by #840; Games detail integration now specified via #851 |
 | Server acquisition vs device download wording | media detail + Offline specs | **Must be disambiguated** |
 
 ## 4. Implementation gap: true cold-start Offline is not finished
@@ -399,6 +401,15 @@ Storage migration additionally requires:
 - atomic ownership/location switch;
 - only then delete old copy.
 
+Package **content updates** need the same safety principle even when no storage-location move occurs:
+- keep the old Ready generation usable;
+- prepare/download and verify the candidate generation;
+- atomically switch the local package reference;
+- garbage-collect superseded resources only after the switch;
+- failed update leaves the old Ready generation intact.
+
+Device admission must count all Jularr-managed bytes physically retained on the device, including locked content of other profiles, without exposing those profiles' item metadata. Shared verified resources may be reused by known content identity/hash rather than duplicated. These lifecycle hardening rules are tracked by #861.
+
 No new storage-manager mockup is required.
 
 ## 14. Visual-reference housekeeping
@@ -481,6 +492,10 @@ Everything else found by this audit is:
 - spec integration;
 - terminology ownership;
 - notification-system integration;
-- implementation backlog.
+- implementation backlog;
+- package lifecycle hardening (#861);
+- Games save reconciliation after disconnected multi-device play (#862).
+
+No additional mandatory Offline mockup family is needed for #861/#862; the existing manager/settings/Game Detail/Notification surfaces can represent the required states.
 
 Do not create new standalone Offline pages for those concerns.
