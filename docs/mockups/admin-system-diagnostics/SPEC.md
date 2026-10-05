@@ -730,6 +730,58 @@ Dashboard links into the corresponding System tab with filters/context.
 
 Do not duplicate the entire Resources page on Dashboard.
 
+## Administrative audit trail
+
+Jularr requires a durable, typed **administrative audit trail** for security-sensitive and configuration-changing actions.
+
+This is not the same thing as:
+- Activity / To-Do operational jobs;
+- completed operational History;
+- free-form technical Logs;
+- login/security-event telemetry.
+
+Audit events record **who changed what and whether it succeeded**.
+
+Minimum event envelope:
+- stable event ID;
+- UTC timestamp;
+- actor Account/Profile identity where applicable, or explicit system actor;
+- action type;
+- target type + stable target ID/reference;
+- success/failure/result;
+- request/correlation ID where available;
+- concise sanitized summary;
+- optional structured before/after change set for fields safe to retain;
+- source surface/API identity where useful.
+
+Required event families include at least:
+- user/role/capability changes;
+- provider/downloader/integration configuration changes;
+- Storage Mount/LibraryRoot/role/policy changes;
+- Instance/module/general/appearance/notification/AI policy changes;
+- API-key/credential lifecycle events without recording secret material;
+- ownership/handover/coexistence changes;
+- Backup/Restore and Migration execution/restore decisions;
+- destructive or security-sensitive Admin actions.
+
+Secret/privacy rules:
+- never persist passwords, API keys, tokens, cookies, credential values or unredacted secret-bearing URLs;
+- before/after snapshots are allowlisted field deltas, not arbitrary serialized objects;
+- file paths/user data are included only when operationally required and should support redaction where practical.
+
+Retention:
+- retention is explicit and bounded/configurable;
+- security-critical audit events should have a materially longer default retention than transient technical logs;
+- retention cleanup itself is auditable;
+- an admin may export sanitized audit evidence when authorized.
+
+Presentation:
+- do **not** create another permanent top-level Admin page just for audit;
+- expose it as an Audit view/filter inside System & Diagnostics and allow contextual links from Users, Storage, Migration, Backup and other owning pages;
+- Activity/History may link to a related audit event, but operational History must not become the audit store.
+
+The audit trail is append-oriented. Normal Admin UI must not edit past audit records.
+
 ## Storage boundary
 
 Admin Storage owns:
