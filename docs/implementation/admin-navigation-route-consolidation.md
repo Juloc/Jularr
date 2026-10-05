@@ -395,6 +395,16 @@ Do not invent a new permanent sidebar destination merely to relocate:
 
 Keep them as contextual/deep-link workflows until their canonical importer/library/media-management owner exposes equivalent entry points.
 
+### Final ownership notes for remaining legacy technical routes
+
+These ownership decisions are fixed before implementation:
+
+- `/Settings/Naming` / `/Settings/ReadingNaming` -> contextual naming/organization entry from the relevant LibraryRoot/library-management owner; no permanent Naming sidebar area.
+- `/Settings/MappingReview` / `/Settings/MappingSegments` -> contextual identity/mapping correction from Admin Media Detail / To-Do / Reconciliation; no permanent Mapping sidebar area.
+- `/Admin/Languages` -> General Settings → Language & Localization → UI translations after General Settings has parity.
+- `/Settings/ApiKeys` -> transitional technical route until an approved API & Automation contract exists. Do not invent that broader page during route cleanup.
+- Admin audit events -> System & Diagnostics Audit view/filter plus contextual links; no new permanent sidebar destination.
+
 ## Phase E — Migration, Backup, Notifications, General Settings
 
 Add these permanent navigation destinations only when their implementations exist:
