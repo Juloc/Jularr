@@ -8,7 +8,9 @@ Primary backlog:
 - #839 — true offline cold-start + unified local Reader repository;
 - #840 — device-local Offline actions on consumer detail surfaces;
 - #415 — Smart Offline, only after the explicit Offline foundation is stable.
-- #851 — Games: first-class device-local Offline/install support through a Games-owned package/install owner projected into shared Offline surfaces.
+- #851 — Games: first-class device-local Offline/install support through a Games-owned package/install owner projected into shared Offline surfaces;
+- #861 — device-local package lifecycle hardening: atomic updates, device-wide capacity accounting and known-resource reuse;
+- #862 — Games save reconciliation for divergent multi-device Offline changes.
 
 Detailed Phase A contract/owner plan:
 - `docs/implementation/offline-phase-a-contracts.md`
@@ -814,7 +816,7 @@ No duplicate queue record.
 
 # 11. Phase 6 — Downloads & Offline + Quick View projection
 
-Goal: replace fragmented settings/list status with the approved manager while reusing the existing local stores.
+Goal: replace fragmented settings/list status with the approved manager while reusing the existing local stores and Games-owned adapter projections.
 
 ## 11.1 One UI query layer
 
@@ -831,7 +833,8 @@ Implement:
 - grouping;
 - Pause/Resume/Retry/Remove/Update;
 - Smart Offline label/Keep Offline;
-- storage summary.
+- storage summary, including Games-owned managed bytes when supported;
+- aggregate hidden-owner reserved bytes where needed for truthful device capacity without exposing another profile's metadata.
 
 ## 11.3 Quick View
 
@@ -854,6 +857,22 @@ Do not overload `Settings/Offline` as both:
 Settings and manager cross-link.
 
 ---
+
+# 11.5 Package lifecycle hardening (#861)
+
+Before treating update/replace as complete:
+
+- keep the last verified Ready generation usable while a replacement is prepared;
+- verify the candidate fully;
+- atomically switch the package generation/reference;
+- only then collect superseded unreferenced resources;
+- failed update leaves the old Ready generation usable;
+- known identical verified resources may be reused across explicit/Smart/update package revisions instead of downloaded again;
+- removing one logical package never deletes a resource still referenced elsewhere;
+- restart cleanup is idempotent and cannot promote partial bytes to Ready;
+- device admission counts all Jularr-managed retained bytes, including locked other-profile bytes, while exposing only aggregate hidden-owner usage.
+
+Games implements these rules in its own install owner and projects resulting states through OfflineLocalCatalog.
 
 # 12. Phase 7 — Offline Settings target
 
@@ -1230,14 +1249,16 @@ The Offline target is complete when a user can:
 1. choose exactly what to take offline;
 2. understand size/quality/tracks before starting;
 3. see live current-device progress anywhere;
-4. manage all Offline media in one consumer surface;
+4. manage Video, Reading, Audio and supported Games local packages in one consumer Offline surface;
 5. restart the app/browser without connectivity;
-6. immediately see and open verified local media;
-7. watch/read/listen using the normal Player/Reader;
-8. continue progress/bookmarks locally;
-9. reconnect and synchronize safely;
-10. change native storage safely where supported;
-11. opt into bounded Smart Offline later without creating a second subsystem.
+6. immediately see and open verified local media/Games that are genuinely launchable;
+7. watch/read/listen using the normal Player/Reader and play Games through the Games runtime owner;
+8. continue progress/bookmarks or Games save/play state locally through the owning domain;
+9. reconnect and synchronize safely without silent backward progress or divergent Games save loss;
+10. update a local package without destroying the last verified usable generation;
+11. account for real device-wide Jularr-managed storage without leaking another profile's inventory;
+12. change native storage safely where supported;
+13. opt into bounded Smart Offline later without creating a second subsystem.
 
 Architecture completion means the same behavior is achieved without:
 - duplicate canonical media identity;
@@ -1245,4 +1266,7 @@ Architecture completion means the same behavior is achieved without:
 - duplicate download queues;
 - duplicate notification systems;
 - per-media Offline applications;
-- server acquisition concepts leaking into device-download UX.
+- server acquisition concepts leaking into device-download UX;
+- destructive in-place package updates that can erase the last Ready copy;
+- profile-private inventory leakage through capacity accounting;
+- silent last-write-wins loss for divergent Games saves.
