@@ -121,6 +121,8 @@ The next work should therefore not invent additional pages merely to continue pl
 
 The Admin cross-spec consistency pass is now complete at planning-contract level.
 
+Custom-group semantics remain the only Admin authorization product decision intentionally left for discussion; implementation must not invent them meanwhile. The remaining cross-cutting ownership points (audit trail, naming/mapping, UI translations, API keys) are now assigned without adding new generic Admin pages.
+
 Implementation handoff: `docs/implementation/admin-navigation-route-consolidation.md`.
 
 Remaining work is primarily:
