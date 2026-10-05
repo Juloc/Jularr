@@ -10,6 +10,25 @@ Normal page rendering never calls AI.
 
 English source resources are defined in code with stable semantic keys. Missing or outdated translations are generated only by an explicit Owner action, persisted in SQLite, and reused afterwards.
 
+## Error and validation localization (#853)
+
+Errors use the same central localization model as other user-visible UI copy.
+
+The backend/domain contract is a stable semantic error identity, not localized prose. A user-facing error may carry:
+
+- a stable machine-readable error code when the client needs deterministic behavior;
+- a semantic localization/message key;
+- structured placeholder parameters;
+- a safe incident/reference ID when a concrete technical incident was recorded.
+
+The transport/UI boundary resolves the primary visible message through the normal locale bundle/fallback chain. Web, Android, TV and future clients MUST NOT branch on English or translated message text.
+
+Internal diagnostics are not localized contracts. Stack traces, nested exception chains, SQL, unsafe filesystem details, raw sensitive provider payloads and secrets never become normal user-facing translated content.
+
+Expected validation/not-found/conflict/forbidden outcomes use semantic result/error identities and appropriate localized UI messages. Unexpected technical failures may expose only the safe primary localized message plus the safe incident/reference ID (and stable code where needed); complete technical cause information remains Admin/server-side.
+
+Do not throw localized strings from domain/persistence code as the canonical error contract. Do not create a second error-localization store beside `UiTranslationResources` / `UiTranslationCatalogStore`.
+
 ## Resource metadata
 
 Every translatable resource must carry enough context for a translator or AI model to understand its purpose:
