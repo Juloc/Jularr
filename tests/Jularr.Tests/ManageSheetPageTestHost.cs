@@ -72,13 +72,14 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
     /// <summary>The host's services, to seed the stores a page reads.</summary>
     public IServiceProvider Services => host.Services;
 
-    public static async Task<ManageSheetPageTestHost> CreateAsync()
+    /// <param name="sharedDatabasePath">The database path of another test host: both then serve the same PostgreSQL database, as one install does.</param>
+    public static async Task<ManageSheetPageTestHost> CreateAsync(string? sharedDatabasePath = null)
     {
         var root = Path.Combine(Path.GetTempPath(), $"jularr-manage-sheet-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         var dataDirectory = new DirectoryInfo(Path.Combine(root, "data"));
         dataDirectory.Create();
-        var databasePath = Path.Combine(root, "jularr.db");
+        var databasePath = sharedDatabasePath ?? Path.Combine(root, "jularr.db");
         var connectionString = $"Data Source={databasePath};Foreign Keys=True";
 
         var host = await new HostBuilder()

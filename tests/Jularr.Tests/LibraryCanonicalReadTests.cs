@@ -439,7 +439,7 @@ public sealed class LibraryCanonicalReadTests
     private static CanonicalVideoStorageBackfillService CreateBackfill(AppDbContext db) =>
         new(db, new LegacyWorkBridge(db, new WorkService(db), new WorkStructureService(db)), new CanonicalMediaStorageService(db), NullLogger<CanonicalVideoStorageBackfillService>.Instance);
 
-    private sealed class CommandCounter : DbCommandInterceptor
+    internal sealed class CommandCounter : DbCommandInterceptor
     {
         public int Count { get; set; }
 

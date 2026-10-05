@@ -105,7 +105,10 @@ public sealed class CanonicalVideoPlayerService(
             return null;
         }
 
-        var technical = await inventory.EnsureAnalyzedAsync(file.StoredFileId, cancellationToken);
+        // Unreachable storage must not read as "no video": the persisted analysis still describes the file, and the storage state
+        // the caller reads tells the client why it cannot play yet.
+        var technical = await inventory.EnsureAnalyzedAsync(file.StoredFileId, cancellationToken)
+            ?? await inventory.GetAsync(file.StoredFileId, cancellationToken);
         if (technical?.Technical is null)
         {
             return null;

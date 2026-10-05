@@ -36,6 +36,7 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
 {
     public const string Profile = "test-profile";
     private const string OwnerHeader = "X-Test-Owner";
+    private const string ProfileHeader = "X-Test-Profile";
 
     private readonly string root;
     private readonly IHost host;
@@ -53,6 +54,9 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
 
     public AppDbContext Db { get; }
 
+    /// <summary>The host's services, for tests that act as a background job against the same install.</summary>
+    public IServiceProvider Services => host.Services;
+
     public FakeMediaProbeRunner Probe { get; }
 
     public MediaCapabilityStore Capabilities { get; }
@@ -60,12 +64,13 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
     /// <summary>A directory for real media files of the Watch tests; it is the storage root those files are attached to.</summary>
     public string MediaDirectory => Path.Combine(root, "media");
 
-    public static async Task<VideoDetailPageTestHost> CreateAsync()
+    /// <param name="sharedDatabasePath">The database path of another test host: both then serve the same PostgreSQL database, as one install does.</param>
+    public static async Task<VideoDetailPageTestHost> CreateAsync(string? sharedDatabasePath = null)
     {
         var root = Path.Combine(Path.GetTempPath(), $"jularr-video-detail-{Guid.NewGuid():N}");
         var data = Directory.CreateDirectory(Path.Combine(root, "data"));
         Directory.CreateDirectory(Path.Combine(root, "media"));
-        var connectionString = $"Data Source={Path.Combine(root, "jularr.db")};Foreign Keys=True";
+        var connectionString = $"Data Source={sharedDatabasePath ?? Path.Combine(root, "jularr.db")};Foreign Keys=True";
         var capabilities = new MediaCapabilityStore(data.FullName);
         var probe = new FakeMediaProbeRunner();
 
@@ -116,7 +121,8 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                 {
                     app.Use(async (context, next) =>
                     {
-                        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, Profile) };
+                        var profile = context.Request.Headers.TryGetValue(ProfileHeader, out var header) ? header.ToString() : Profile;
+                        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, profile) };
                         if (context.Request.Headers.ContainsKey(OwnerHeader))
                         {
                             claims.Add(new Claim(ClaimTypes.Role, AccountRoles.Owner));
@@ -140,12 +146,17 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
         return new VideoDetailPageTestHost(root, db, host, probe, capabilities);
     }
 
-    public async Task<(HttpStatusCode Status, string Html)> GetAsync(string path, bool asOwner = false)
+    public async Task<(HttpStatusCode Status, string Html)> GetAsync(string path, bool asOwner = false, string? profile = null)
     {
         using var client = server.CreateClient();
         if (asOwner)
         {
             client.DefaultRequestHeaders.Add(OwnerHeader, "true");
+        }
+
+        if (profile is not null)
+        {
+            client.DefaultRequestHeaders.Add(ProfileHeader, profile);
         }
 
         using var response = await client.GetAsync(path);
@@ -168,12 +179,17 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
     }
 
     /// <summary>Sends a JSON request to the client API as the signed-in profile (or the owner).</summary>
-    public async Task<(HttpStatusCode Status, string Body)> SendAsync(HttpMethod method, string path, object? body = null, bool asOwner = false)
+    public async Task<(HttpStatusCode Status, string Body)> SendAsync(HttpMethod method, string path, object? body = null, bool asOwner = false, string? profile = null)
     {
         using var client = server.CreateClient();
         if (asOwner)
         {
             client.DefaultRequestHeaders.Add(OwnerHeader, "true");
+        }
+
+        if (profile is not null)
+        {
+            client.DefaultRequestHeaders.Add(ProfileHeader, profile);
         }
 
         using var request = new HttpRequestMessage(method, path);
@@ -187,9 +203,9 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
     }
 
     /// <summary>The page of an existing title; fails with the response when it is not a plain 200.</summary>
-    public async Task<string> GetOkAsync(string path, bool asOwner = false)
+    public async Task<string> GetOkAsync(string path, bool asOwner = false, string? profile = null)
     {
-        var (status, html) = await GetAsync(path, asOwner);
+        var (status, html) = await GetAsync(path, asOwner, profile);
         Assert.AreEqual(HttpStatusCode.OK, status, $"GET {path} failed:\n{html}");
         return html;
     }

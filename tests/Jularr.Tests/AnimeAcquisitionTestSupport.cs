@@ -73,6 +73,9 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
     public IHardLinkCreator HardLinkCreator { get; }
     public HttpMessageHandler AniListHandler { get; set; } = new NotConnectedAniListHandler();
     public FakeAnimeMetadataProvider AniListMetadata { get; } = new();
+
+    /// <summary>What ffprobe says about files the library scan analyses; like a non-media file unless a test describes them.</summary>
+    public FakeMediaProbeRunner Probe { get; } = new();
     public Guid AnimeId { get; private set; }
     public Guid ProwlarrIndexerEntryId { get; private set; }
 
@@ -537,7 +540,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddHttpClient();
 
         var dictionary = Path.Combine(TempRoot, "dictionary");
-        var mediaInventory = MediaInventoryTestSupport.Create(Options);
+        var mediaInventory = MediaInventoryTestSupport.Create(Options, Probe);
         collection.AddScoped(provider =>
         {
             var db = provider.GetRequiredService<AppDbContext>();
@@ -551,7 +554,12 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
                     sonarrStore,
                     new SonarrArtworkImportService(db, new NoHttpClientFactory(), NullLogger<SonarrArtworkImportService>.Instance),
                     NullLogger<SonarrArtworkSyncService>.Instance),
-                NullLogger<LibraryScanner>.Instance);
+                NullLogger<LibraryScanner>.Instance,
+                canonicalVideoBackfill: new CanonicalVideoStorageBackfillService(
+                    db,
+                    new Jularr.Web.Features.MediaCore.LegacyWorkBridge(db, new Jularr.Web.Features.MediaCore.WorkService(db), new Jularr.Web.Features.MediaCore.WorkStructureService(db)),
+                    new CanonicalMediaStorageService(db),
+                    NullLogger<CanonicalVideoStorageBackfillService>.Instance));
         });
 
         return collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
