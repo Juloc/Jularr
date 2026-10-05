@@ -60,6 +60,7 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 - `profile-activity/SPEC.md`
 - `add-request-flow/SPEC.md`
 - `request-status-details/SPEC.md` — consumer Request status/detail sheet
+- `instant-play/SPEC.md` — Start Watching / Watch now orchestration for missing media, including manager-only/no-Playback instances
 - `language-edition-selector/SPEC.md` — shared language/Edition dialog/sheet
 - `person-creator/SPEC.md` — secondary Person/Creator view
 - `login-profile-selection/SPEC.md` — account login, external identities and Profile selection
