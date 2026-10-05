@@ -104,7 +104,9 @@ public sealed class PlaybackStreamSession(
     double? durationSeconds,
     PlaybackPlan plan,
     PlaybackStreamSelections selections,
-    DateTimeOffset createdAtUtc)
+    DateTimeOffset createdAtUtc,
+    TimeProvider time,
+    PlaybackAdaptationDirective adaptation)
 {
     private readonly object gate = new();
 
@@ -134,6 +136,18 @@ public sealed class PlaybackStreamSession(
 
     /// <summary>What the player reported about this session's playback; ephemeral, never persisted.</summary>
     public PlaybackSessionTelemetry Telemetry { get; } = new();
+
+    /// <summary>The measured speed of the video transcode behind this session; ephemeral like the telemetry.</summary>
+    public PlaybackTranscodeMeter Transcode { get; } = new(time);
+
+    /// <summary>What the session was planned under: what the replaced session asked for and the capacity limits learned for this title so far.</summary>
+    public PlaybackAdaptationDirective Adaptation { get; } = adaptation;
+
+    /// <summary>
+    /// Starts measuring one encode attempt of this session; the returned callback receives its progress. Null when the plan copies the
+    /// video, which has no speed worth measuring.
+    /// </summary>
+    public Action<PlaybackTranscodeSample>? BeginTranscodeRun(PlaybackHardwareBackend backend) => Plan.TranscodesVideo ? Transcode.BeginRun(backend).Record : null;
 
     public void Touch(DateTimeOffset now)
     {
@@ -219,6 +233,9 @@ public sealed class PlaybackStreamSession(
     private readonly SemaphoreSlim hlsStartGate = new(1, 1);
 }
 
+/// <summary>The answer to a telemetry report: the quality advice and the measured transcode speed, both ephemeral session state.</summary>
+public sealed record PlaybackSessionAdvice(PlaybackAdaptationDecision Decision, PlaybackTranscodeReading Transcode);
+
 /// <summary>The session's selections, kept so a re-plan (fallback, quality change) starts from them.</summary>
 public sealed record PlaybackStreamSelections(
     int? AudioStreamIndex,
@@ -272,7 +289,8 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         PlaybackPlan plan,
         PlaybackStreamSelections selections,
         Guid? replaces = null,
-        Guid? legacyEpisodeId = null)
+        Guid? legacyEpisodeId = null,
+        PlaybackAdaptationDirective? adaptation = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
         ArgumentNullException.ThrowIfNull(target);
@@ -311,7 +329,9 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
                 durationSeconds,
                 plan,
                 selections,
-                now);
+                now,
+                time,
+                adaptation ?? PlaybackAdaptationDirective.None);
             sessions[session.Id] = session;
         }
 
@@ -358,6 +378,53 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
 
     /// <summary>The runtime evidence the session's player reported, as of now; null when it never reported.</summary>
     public PlaybackTelemetryEvidence? TelemetryEvidence(PlaybackStreamSession session) => session.Telemetry.Evidence(time.GetUtcNow());
+
+    /// <summary>
+    /// What the profile's player should do about quality right now and the measured speed of the transcode behind the session; null when the
+    /// session is not the profile's or expired. A pure read of the session's ephemeral state: asking changes nothing, so repeating it is safe.
+    /// </summary>
+    public PlaybackSessionAdvice? Advise(Guid sessionId, string profileId)
+    {
+        var session = Peek(sessionId, profileId);
+        if (session is null)
+        {
+            return null;
+        }
+
+        var reading = session.Transcode.Read();
+        return new PlaybackSessionAdvice(Decide(session, reading), reading);
+    }
+
+    /// <summary>What the plan that replaces <paramref name="session"/> is made under; see <see cref="PlaybackAdaptation.NextDirective"/>.</summary>
+    public PlaybackAdaptationDirective NextDirective(PlaybackStreamSession session)
+    {
+        var reading = session.Transcode.Read();
+        return PlaybackAdaptation.NextDirective(Decide(session, reading), session.Adaptation, session.Plan.Quality.DeliveredBitrateKbps, reading.Backend);
+    }
+
+    /// <summary>
+    /// Whether a running transcode on the same kind of encoder (hardware or software) is measured to stay under real time: the machine
+    /// cannot take another one, and admission refuses it instead of making every viewer worse.
+    /// </summary>
+    public bool IsTranscodeOverloaded(bool hardwareEncoder) =>
+        sessions.Values.Any(x => x.Transcode.Read() is { State: PlaybackTranscodeSpeedState.TooSlow, Backend: { } backend } && (backend != PlaybackHardwareBackend.Software) == hardwareEncoder);
+
+    private PlaybackAdaptationDecision Decide(PlaybackStreamSession session, PlaybackTranscodeReading reading)
+    {
+        var now = time.GetUtcNow();
+        var quality = session.Plan.Quality;
+        return PlaybackAdaptation.Decide(new PlaybackAdaptationInput(
+            now,
+            session.CreatedAtUtc,
+            quality.Requested,
+            quality.DeliveredBitrateKbps,
+            quality.SourceBitrateKbps,
+            session.Plan.Buffer?.LowWaterSeconds ?? 0,
+            session.Adaptation.CeilingKbps,
+            session.Telemetry.Recent(),
+            session.Telemetry.Evidence(now)?.RecentStalls ?? 0,
+            reading.State));
+    }
 
     /// <summary>Returns the session only to the profile that created it.</summary>
     public PlaybackStreamSession? Get(Guid sessionId, string profileId)

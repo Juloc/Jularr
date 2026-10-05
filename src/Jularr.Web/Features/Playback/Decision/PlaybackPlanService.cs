@@ -109,9 +109,10 @@ public sealed class PlaybackServerCapabilityProvider(
     PlaybackTranscodeSlots slots,
     PlaybackHardwareService hardware)
 {
-    public PlaybackServerCapabilities Current()
+    /// <param name="tooSlow">Encoders that already failed to keep up with real time for the title being planned; see <see cref="PlaybackHardwareService.Choose"/>.</param>
+    public PlaybackServerCapabilities Current(IReadOnlyCollection<PlaybackHardwareBackend>? tooSlow = null)
     {
-        var choice = hardware.Choose();
+        var choice = hardware.Choose(tooSlow);
         var costClass = choice.Target.IsHardware ? PlaybackCostClass.HardwareVideo : PlaybackCostClass.SoftwareVideo;
         return PlaybackServerCapabilities.Software(slots.Available(costClass)) with
         {
@@ -122,7 +123,9 @@ public sealed class PlaybackServerCapabilityProvider(
             H264Encoder = PlaybackHardwareBackends.H264Encoder(choice.Target.Backend),
             MaxTranscodeHeight = choice.Target.IsHardware ? PlaybackServerCapabilities.HardwareMaxHeight : PlaybackServerCapabilities.SoftwareMaxHeight,
             SuspendedHardware = choice.Suspended,
-            BufferPreset = settings.Current.BufferPreset
+            BufferPreset = settings.Current.BufferPreset,
+            // Software is the last choice: when it is the one that was too slow nothing is left to try.
+            EncoderTooSlow = tooSlow?.Contains(choice.Target.Backend) == true
         };
     }
 }
@@ -247,6 +250,10 @@ public sealed class PlaybackPlanService(
             evidence?.BufferSeconds ?? (input.Network?.BufferSeconds is >= 0 and <= 3600 ? input.Network.BufferSeconds : null),
             evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
         var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
+
+        // The replaced session's advice and what the server learned about its own capacity for this title (a tier ceiling, encoders that could
+        // not keep up) travel with the chain of re-plans of the title and nowhere else.
+        var directive = previous is not null && previous.Target == target ? sessions.NextDirective(previous) : PlaybackAdaptationDirective.None;
         var resumePositionMs = videoProgress is null
             ? 0
             : (await videoProgress.GetAsync(
@@ -294,7 +301,7 @@ public sealed class PlaybackPlanService(
         var plan = PlaybackDecisionEngine.Decide(new PlaybackDecisionRequest(
             media,
             capabilities,
-            serverCapabilities.Current(),
+            serverCapabilities.Current(directive.SlowBackends),
             input.AudioStreamIndex,
             input.SubtitleStreamIndex,
             input.BurnInSubtitle,
@@ -302,7 +309,14 @@ public sealed class PlaybackPlanService(
             network,
             input.ModePreference,
             input.FailedModes,
-            previous?.Plan.Quality.DeliveredBitrateKbps));
+            previous?.Plan.Quality.DeliveredBitrateKbps,
+            directive));
+
+        // No encoder is left that keeps up: the slow transcode behind the replaced session must stop now instead of running on unused.
+        if (previous is not null && plan.Mode == PlaybackDeliveryMode.Unavailable && plan.Reasons.Any(x => x.Code == PlaybackReasonCodes.TranscodeUnsustainable) && sessions.Remove(previous.Id, profileId) && activeSessions is not null)
+        {
+            await activeSessions.EndAsync(previous.Id, profileId, cancellationToken);
+        }
 
         PlaybackStreamSession? session = null;
         if (plan.Mode != PlaybackDeliveryMode.Unavailable)
@@ -322,7 +336,8 @@ public sealed class PlaybackPlanService(
                     input.ModePreference,
                     capabilities.Client.Kind),
                 previous?.Id,
-                legacyEpisodeId);
+                legacyEpisodeId,
+                directive);
 
             if (activeSessions is not null)
             {

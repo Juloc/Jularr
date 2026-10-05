@@ -118,9 +118,16 @@ public sealed class PlaybackSessionTelemetry
     // The 60 second window and the endpoint's rate limit already keep this far below the cap; it only bounds a flood within one instant.
     private const int MaxStallChanges = 128;
 
+    /// <summary>How far back the recent reports reach: the 60 s window of a step up plus the cooldown's margin; older ones decide nothing.</summary>
+    private static readonly TimeSpan s_historyWindow = TimeSpan.FromMinutes(3);
+
+    // Reports come every 5 s (about 36 in the window); the cap only bounds a client that reports faster than it should.
+    private const int MaxHistory = 64;
+
     private readonly Lock _gate = new();
     private readonly List<(DateTimeOffset At, int Count)> _stallChanges = [];
     private readonly Queue<DateTimeOffset> _rewinds = new();
+    private readonly List<PlaybackTelemetry> _history = [];
     private PlaybackTelemetry? _latest;
     private double _progressMark;
     private TimeSpan _bufferingExtension;
@@ -173,6 +180,14 @@ public sealed class PlaybackSessionTelemetry
             }
 
             _latest = report;
+            _history.Add(report);
+            var historyCutoff = report.ReportedAtUtc - s_historyWindow;
+            _history.RemoveAll(x => x.ReportedAtUtc < historyCutoff);
+            if (_history.Count > MaxHistory)
+            {
+                _history.RemoveRange(0, _history.Count - MaxHistory);
+            }
+
             // A paused report still moves the progress mark (a seek while paused) but never extends the session.
             var shows = ShowsProgress(previous, report);
             return shows && report.State != PlaybackClientState.Paused ? PlaybackTelemetryOutcome.ShowsProgress : PlaybackTelemetryOutcome.Recorded;
@@ -230,6 +245,15 @@ public sealed class PlaybackSessionTelemetry
         {
             _rewinds.Enqueue(report.ReportedAtUtc);
             _progressMark = report.PositionSeconds;
+        }
+    }
+
+    /// <summary>The recent reports, oldest first; what the runtime adaptation reads. A copy, so it cannot change while it is evaluated.</summary>
+    public IReadOnlyList<PlaybackTelemetry> Recent()
+    {
+        lock (_gate)
+        {
+            return [.. _history];
         }
     }
 

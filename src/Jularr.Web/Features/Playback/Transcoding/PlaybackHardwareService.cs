@@ -138,15 +138,19 @@ public sealed class PlaybackHardwareService(PlaybackHardwareProbe probe, Playbac
         }
     }
 
-    /// <summary>The backend new plans are made for: the first detected one in selection order whose breaker is closed.</summary>
-    public PlaybackEncoderChoice Choose()
+    /// <summary>
+    /// The backend new plans are made for: the first detected one in selection order whose breaker is closed. Backends in
+    /// <paramref name="tooSlow"/> already failed to keep up with real time for this title: they are skipped without a word to the breaker
+    /// (slowness is the server's capacity, not a failure of the device).
+    /// </summary>
+    public PlaybackEncoderChoice Choose(IReadOnlyCollection<PlaybackHardwareBackend>? tooSlow = null)
     {
         PlaybackBackendSuspension? suspended = null;
         if (Detected is { } capabilities)
         {
             foreach (var backend in PlaybackHardwareBackends.SelectionOrder)
             {
-                if (capabilities.Status(backend) is not { State: PlaybackBackendState.Available } status)
+                if (capabilities.Status(backend) is not { State: PlaybackBackendState.Available } status || tooSlow?.Contains(backend) == true)
                 {
                     continue;
                 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Jularr.Web.Features.Auth;
@@ -70,6 +71,13 @@ public enum StreamSessionState
     Active,
     Ended
 }
+
+/// <summary>
+/// The answer to a telemetry report. <see cref="Advice"/> is what the server asks the player to do about quality (<c>none</c>, <c>step_down</c>,
+/// <c>step_up</c>) and <see cref="Reason"/> why; the player re-plans with the same selections when it follows it. The transcode values are
+/// what the server measured while converting the video and are null when it does not convert or has no measurement yet.
+/// </summary>
+public sealed record ClientTelemetryAnswer(PlaybackAdaptationAdvice Advice, PlaybackAdaptationReason? Reason, double? TranscodeSpeed, double? TranscodeFps);
 
 public sealed record ClientVideoProgressUpdate(
     ClientVideoTarget? Target,
@@ -360,7 +368,7 @@ public static class ClientApiPlaybackPlanEndpoints
                         LivePlaybackStream? stream = null;
                         try
                         {
-                            stream = LivePlaybackStream.Start(PlaybackDeliveryCommand.Progressive(session.SourcePath, session.Plan, start, admitted.Encoder), admitted.Lease);
+                            stream = LivePlaybackStream.Start(PlaybackDeliveryCommand.Progressive(session.SourcePath, session.Plan, start, admitted.Encoder), admitted.Lease, session.BeginTranscodeRun(admitted.Encoder.Backend));
                             await stream.WaitForFirstBytesAsync(PlaybackDeliveryCommand.FirstOutputTimeout, cancellationToken);
                             return stream;
                         }
@@ -437,7 +445,8 @@ public static class ClientApiPlaybackPlanEndpoints
                             start,
                             directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory, admitted.Encoder),
                             admitted.Lease,
-                            token)).SessionId),
+                            token,
+                            session.BeginTranscodeRun(admitted.Encoder.Backend))).SessionId),
                     previous => manager.Stop(previous, session.ProfileId),
                     cancellationToken);
                 if (hlsSessionId is not { } started)
@@ -562,7 +571,17 @@ public static class ClientApiPlaybackPlanEndpoints
                     "sequence, state, bufferAheadSeconds, stallCount, stallTotalMs and positionSeconds are required and must be non-negative, finite values a player can observe."));
             }
 
-            return sessions.ReportTelemetry(sessionId, currentAccount.ProfileId, report) ? Results.NoContent() : SessionNotFound();
+            if (!sessions.ReportTelemetry(sessionId, currentAccount.ProfileId, report) || sessions.Advise(sessionId, currentAccount.ProfileId) is not { } advice)
+            {
+                return SessionNotFound();
+            }
+
+            // A repeated or older report answers like a new one: the advice is a pure reading of the session's state, never of the request.
+            return Results.Ok(new ClientTelemetryAnswer(
+                advice.Decision.Advice,
+                advice.Decision.Reason,
+                advice.Transcode.Speed is { } speed ? Math.Round(speed, 2) : null,
+                advice.Transcode.Fps is { } fps ? Math.Round(fps, 1) : null));
         })
         .RequireRateLimiting(PlaybackDecisionRegistration.TelemetryRateLimitPolicy);
 
@@ -899,10 +918,21 @@ public static class ClientApiPlaybackPlanEndpoints
             "invalid_start_position",
             "startSeconds must be a finite value greater than or equal to zero."));
 
-    internal static IResult Refused(string code) =>
-        Results.Json(
-            new ClientErrorResponse(code, PlaybackAdmissionCodes.Message(code)),
-            statusCode: StatusCodes.Status503ServiceUnavailable);
+    /// <summary>An admission refusal: 503 with the stable code, and a <c>Retry-After</c> where asking again can help. Nothing is queued server-side.</summary>
+    internal static IResult Refused(string code) => new RefusalResult(code);
+
+    private sealed class RefusalResult(string code) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            if (PlaybackAdmissionCodes.RetryAfterSeconds(code) is { } seconds)
+            {
+                httpContext.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return Results.Json(new ClientErrorResponse(code, PlaybackAdmissionCodes.Message(code)), statusCode: StatusCodes.Status503ServiceUnavailable).ExecuteAsync(httpContext);
+        }
+    }
 
     private static IResult StartFailed() =>
         Results.Json(

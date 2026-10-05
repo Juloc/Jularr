@@ -35,7 +35,8 @@ internal sealed class PlaybackServerTestKit
         Breaker = new PlaybackBackendBreaker(time);
         Hardware = new PlaybackHardwareService(new PlaybackHardwareProbe(runner, time, renderDevices), Breaker, time, NullLogger<PlaybackHardwareService>.Instance);
         Capabilities = new PlaybackServerCapabilityProvider(Settings, Slots, Hardware);
-        Admission = new PlaybackAdmissionService(Settings, Slots, Hardware);
+        Sessions = new PlaybackStreamSessionStore(time);
+        Admission = new PlaybackAdmissionService(Settings, Slots, Hardware, Sessions);
     }
 
     public string DataRoot { get; }
@@ -53,6 +54,8 @@ internal sealed class PlaybackServerTestKit
     public PlaybackHardwareService Hardware { get; }
 
     public PlaybackServerCapabilityProvider Capabilities { get; }
+
+    public PlaybackStreamSessionStore Sessions { get; }
 
     public PlaybackAdmissionService Admission { get; }
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Jularr.Web.Features.Playback.Transcoding;
 
 namespace Jularr.Web.Features.Playback;
 
@@ -111,6 +112,8 @@ public static class LivePlaybackCommand
 public sealed class LivePlaybackStream : Stream
 {
     private const int PrefixBufferSize = 16 * 1024;
+    private const int MaxDiagnosticLines = 20;
+    private const int MaxDiagnosticLineLength = 200;
 
     private readonly Stream _output;
     private readonly Task<string> _errors;
@@ -154,11 +157,13 @@ public sealed class LivePlaybackStream : Stream
     /// <summary>
     /// Starts ffmpeg with prepared arguments writing fragmented MP4 to stdout. The optional
     /// lease (a transcode slot) is released when the response stream is disposed; when the
-    /// start itself throws, the lease is not touched and stays with the caller.
+    /// start itself throws, the lease is not touched and stays with the caller. <paramref name="onProgress"/> receives the measured
+    /// progress of the encoder while it runs (its <c>-progress</c> blocks share the stderr pipe).
     /// </summary>
     public static LivePlaybackStream Start(
         IReadOnlyList<string> arguments,
-        IDisposable? lease = null)
+        IDisposable? lease = null,
+        Action<PlaybackTranscodeSample>? onProgress = null)
     {
         var process = new Process
         {
@@ -183,7 +188,47 @@ public sealed class LivePlaybackStream : Stream
             throw new InvalidOperationException("Could not start ffmpeg playback stream.");
         }
 
-        return new LivePlaybackStream(process.StandardOutput.BaseStream, process.StandardError.ReadToEndAsync(), () => EndProcess(process), lease);
+        return new LivePlaybackStream(process.StandardOutput.BaseStream, ReadDiagnosticsAsync(process.StandardError, onProgress), () => EndProcess(process), lease);
+    }
+
+    /// <summary>
+    /// Drains stderr for the life of the process (a full pipe would stall the encoder). Progress blocks go to <paramref name="onProgress"/>;
+    /// only the last few diagnostic lines are kept, so a stream that runs for hours holds a bounded amount of text.
+    /// </summary>
+    public static async Task<string> ReadDiagnosticsAsync(TextReader reader, Action<PlaybackTranscodeSample>? onProgress)
+    {
+        var parser = new FfmpegProgressParser();
+        var tail = new Queue<string>();
+        try
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                if (parser.TryFeed(line, out var sample))
+                {
+                    if (sample is not null)
+                    {
+                        onProgress?.Invoke(sample);
+                    }
+
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(line))
+                {
+                    tail.Enqueue(line.Length <= MaxDiagnosticLineLength ? line : line[..MaxDiagnosticLineLength]);
+                    if (tail.Count > MaxDiagnosticLines)
+                    {
+                        tail.Dequeue();
+                    }
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+            // Ending the stream disposes the process and its pipes; what was read until then is the diagnostic.
+        }
+
+        return string.Join('\n', tail);
     }
 
     /// <summary>

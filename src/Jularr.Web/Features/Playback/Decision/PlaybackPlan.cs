@@ -94,6 +94,8 @@ public static class PlaybackReasonCodes
     public const string DirectOnlyRequested = "direct_only_requested";
     public const string TranscodingDisabled = "transcoding_disabled";
     public const string TranscoderBusy = "transcoder_busy";
+    public const string TranscodeTooSlow = "transcode_too_slow";
+    public const string TranscodeUnsustainable = "transcode_unsustainable";
     public const string TranscodeTargetUnsupported = "transcode_target_unsupported";
     public const string NoDeliveryTransport = "no_delivery_transport";
     public const string LimitIgnoredNoTranscoder = "limit_ignored_no_transcoder";

@@ -7,6 +7,7 @@ public static class PlaybackAdmissionCodes
 {
     public const string TranscodingDisabled = "transcoding_disabled";
     public const string TranscoderBusy = "transcoder_busy";
+    public const string TranscoderOverloaded = "transcoder_overloaded";
     public const string CacheBudgetExhausted = "cache_budget_exhausted";
     public const string CacheFreeSpaceLow = "cache_free_space_low";
     public const string CacheFolderNotOwned = "cache_folder_not_owned";
@@ -18,11 +19,25 @@ public static class PlaybackAdmissionCodes
         {
             TranscodingDisabled => "Server transcoding is turned off.",
             TranscoderBusy => "Every server transcode slot is in use.",
+            TranscoderOverloaded => "The server is already converting video more slowly than real time.",
             CacheBudgetExhausted => "The server playback cache is full.",
             CacheFreeSpaceLow => "The server playback cache volume is low on free space.",
             CacheFolderNotOwned => "The server playback cache folder holds files that are not Jularr's.",
             ProfileSessionLimit => "This profile already runs the most playback sessions it may.",
             _ => throw new ArgumentOutOfRangeException(nameof(code))
+        };
+
+    /// <summary>
+    /// Seconds after which asking again is sensible (the <c>Retry-After</c> of the refusal); null when only an Admin can change the outcome.
+    /// The server never queues a refused delivery: the client decides whether and when to ask again.
+    /// </summary>
+    public static int? RetryAfterSeconds(string code) =>
+        code switch
+        {
+            TranscoderBusy or ProfileSessionLimit => 15,
+            TranscoderOverloaded => 30,
+            CacheBudgetExhausted or CacheFreeSpaceLow => 60,
+            _ => null
         };
 }
 
@@ -61,9 +76,10 @@ public static class PlaybackCostClasses
 /// the encoder the breaker allows, the slot limit of the delivery's cost class and the per-profile
 /// cap. Every ffmpeg-spawning route, plan-based or legacy, goes through here so the Admin limits
 /// are real. The HLS cache budget is checked by the cache owner (<see cref="HlsPlaybackSessionManager"/>)
-/// when the session directory is created.
+/// when the session directory is created. A server whose running transcodes of the same kind already stay under real time refuses a
+/// new one at once (<see cref="PlaybackAdmissionCodes.TranscoderOverloaded"/>) instead of queueing it.
 /// </summary>
-public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore settings, PlaybackTranscodeSlots slots, PlaybackHardwareService hardware)
+public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore settings, PlaybackTranscodeSlots slots, PlaybackHardwareService hardware, PlaybackStreamSessionStore sessions)
 {
     public PlaybackAdmission Admit(PlaybackPlan plan, string profileId)
     {
@@ -144,6 +160,11 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
         if (transcodes && !settings.Current.TranscodingEnabled)
         {
             return new PlaybackAdmission(costClass, encoder, null, PlaybackAdmissionCodes.TranscodingDisabled);
+        }
+
+        if (transcodes && sessions.IsTranscodeOverloaded(costClass == PlaybackCostClass.HardwareVideo))
+        {
+            return new PlaybackAdmission(costClass, encoder, null, PlaybackAdmissionCodes.TranscoderOverloaded);
         }
 
         var lease = slots.TryAcquire(costClass, profileId);

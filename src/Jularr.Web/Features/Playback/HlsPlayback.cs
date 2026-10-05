@@ -115,7 +115,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     /// Starts one bounded HLS session whose ffmpeg arguments the caller builds for the
     /// session directory (a playback plan's remux or transcode). The optional lease (a
     /// transcode slot) is released when the session ends, also when it never starts. A full
-    /// cache refuses the session with a <see cref="PlaybackAdmissionRefusedException"/>.
+    /// cache refuses the session with a <see cref="PlaybackAdmissionRefusedException"/>. <paramref name="onProgress"/> receives the
+    /// measured progress of the encoder while it runs.
     /// </summary>
     public async Task<HlsPlaybackSession> StartAsync(
         Guid episodeId,
@@ -123,7 +124,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         double startSeconds,
         Func<string, IReadOnlyList<string>> buildArguments,
         IDisposable? lease,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<PlaybackTranscodeSample>? onProgress = null)
     {
         ArgumentNullException.ThrowIfNull(buildArguments);
         if (string.IsNullOrWhiteSpace(profileId))
@@ -169,6 +171,10 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                 try
                 {
                     process = _startProcess(buildArguments(directory));
+                    if (onProgress is not null && process is IFfmpegProgressSource progressSource)
+                    {
+                        progressSource.ProgressReported += onProgress;
+                    }
                 }
                 catch
                 {
@@ -848,12 +854,13 @@ internal sealed class CacheUsage
 }
 
 /// <summary>The real ffmpeg of an HLS session. Arguments are passed as a list, never through a shell.</summary>
-public sealed class FfmpegHlsProcess : IHlsEncoderProcess
+public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
 {
     private const int MaxSummaryLength = 200;
 
     private readonly Process _process;
     private readonly Lock _gate = new();
+    private readonly FfmpegProgressParser _progress = new();
     private string _lastLine = "";
 
     private FfmpegHlsProcess(Process process)
@@ -903,6 +910,8 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess
         }
     }
 
+    public event Action<PlaybackTranscodeSample>? ProgressReported;
+
     public static FfmpegHlsProcess Start(IReadOnlyList<string> arguments)
     {
         var process = new Process
@@ -939,7 +948,8 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess
 
     public void Dispose() => _process.Dispose();
 
-    // ffmpeg prints the failing step last, and stderr must be drained anyway or a full pipe stalls the encoder.
+    // ffmpeg prints the failing step last, and stderr must be drained anyway or a full pipe stalls the encoder. Progress blocks share the pipe
+    // and must never replace the failing step as the summary.
     private void OnErrorLine(object sender, DataReceivedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(e.Data))
@@ -948,6 +958,16 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess
         }
 
         var line = e.Data.Trim();
+        if (_progress.TryFeed(line, out var sample))
+        {
+            if (sample is not null)
+            {
+                ProgressReported?.Invoke(sample);
+            }
+
+            return;
+        }
+
         lock (_gate)
         {
             _lastLine = line.Length <= MaxSummaryLength ? line : line[..MaxSummaryLength];

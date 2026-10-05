@@ -132,6 +132,13 @@ public static class PlaybackDeliveryCommand
             arguments.Add("-y");
         }
 
+        // The speed of an encode is what admission and adaptation need to know; a stream copy has none worth measuring. Progress goes to
+        // stderr because the progressive response owns stdout; the process owners recognise its lines (FfmpegProgressParser).
+        if (!video.Copy)
+        {
+            arguments.AddRange(["-progress", "pipe:2", "-nostats"]);
+        }
+
         arguments.AddRange(["-fflags", "+genpts"]);
         if (startSeconds > 0)
         {

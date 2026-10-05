@@ -21,7 +21,8 @@ public sealed record PlaybackDecisionRequest(
     PlaybackNetworkConditions? Network = null,
     PlaybackModePreference ModePreference = PlaybackModePreference.Auto,
     IReadOnlySet<PlaybackDeliveryMode>? FailedModes = null,
-    int? CurrentTargetKbps = null);
+    int? CurrentTargetKbps = null,
+    PlaybackAdaptationDirective? Adaptation = null);
 
 /// <summary>
 /// The one playback decision for every Jularr client. It walks Direct Play → Direct Stream
@@ -85,8 +86,8 @@ public static class PlaybackDecisionEngine
         var client = request.Client;
         var network = request.Network ?? new PlaybackNetworkConditions();
         var failed = request.FailedModes ?? new HashSet<PlaybackDeliveryMode>();
-        var limit = PlaybackAutoQuality.Resolve(request.Quality, network, request.CurrentTargetKbps);
         var sourceKbps = media.OverallBitrateKbps;
+        var limit = PlaybackAutoQuality.Resolve(request.Quality, network, request.CurrentTargetKbps, request.Adaptation, sourceKbps);
         var quality = new PlaybackQualityResolution(
             request.Quality,
             network.Class,
@@ -253,6 +254,10 @@ public static class PlaybackDecisionEngine
         else if (server.AvailableTranscodeSlots <= 0)
         {
             transcodeReasons.Add(Reason(PlaybackReasonCodes.TranscoderBusy, PlaybackReasonSeverity.Blocker, PlaybackDeliveryMode.Transcode));
+        }
+        else if (server.EncoderTooSlow)
+        {
+            transcodeReasons.Add(Reason(PlaybackReasonCodes.TranscodeUnsustainable, PlaybackReasonSeverity.Blocker, PlaybackDeliveryMode.Transcode));
         }
         else if (transport == PlaybackTransport.None)
         {
@@ -529,6 +534,7 @@ public static class PlaybackDecisionEngine
             PlaybackLimitSource.Preset => PlaybackReasonCodes.QualityLimit,
             PlaybackLimitSource.NetworkDefault => PlaybackReasonCodes.RemoteStartLimit,
             PlaybackLimitSource.Stalls => PlaybackReasonCodes.StallLimit,
+            PlaybackLimitSource.TranscodeSpeed => PlaybackReasonCodes.TranscodeTooSlow,
             _ => PlaybackReasonCodes.BandwidthLimit
         };
 

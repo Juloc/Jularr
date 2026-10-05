@@ -7,7 +7,8 @@ namespace Jularr.Web.Features.Playback.Decision;
 /// false when ffmpeg is missing (no remux, no transcode); <see cref="TranscodingEnabled"/> is
 /// the administrator's switch; the free slots bound concurrent encodes of the encoder's cost
 /// class. <see cref="H264Encoder"/> is the detected encoder (software when no hardware passed
-/// its test); <see cref="SuspendedHardware"/> names a preferred backend skipped by its breaker.
+/// its test); <see cref="SuspendedHardware"/> names a preferred backend skipped by its breaker. <see cref="EncoderTooSlow"/> says every
+/// encoder left to choose from already failed to keep up with real time for this title, so no transcode can be sustained.
 /// </summary>
 public sealed record PlaybackServerCapabilities(
     bool ProcessingAvailable,
@@ -18,7 +19,8 @@ public sealed record PlaybackServerCapabilities(
     bool CanToneMap,
     bool CanBurnInSubtitles,
     PlaybackBackendSuspension? SuspendedHardware = null,
-    PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal)
+    PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal,
+    bool EncoderTooSlow = false)
 {
     public const string SoftwareH264Encoder = "libx264";
 
