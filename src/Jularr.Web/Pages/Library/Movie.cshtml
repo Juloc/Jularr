@@ -33,8 +33,26 @@
 <partial name="_VideoDetailHero" model="Model" />
 
 <div class="vd-body">
+    <div class="vd-main">
+        <partial name="_VideoDetailRelated" model="Model" />
+
+        @if (detail.AlsoKnownAs.Count > 0)
+        {
+            <section class="vd-card" aria-labelledby="vd-about-title">
+                <h2 id="vd-about-title">@ui["library.video.aboutHeading"]</h2>
+                <dl class="vd-facts">
+                    <div>
+                        <dt>@ui["library.video.alsoKnownAs"]</dt>
+                        <dd>@string.Join(" · ", detail.AlsoKnownAs)</dd>
+                    </div>
+                </dl>
+            </section>
+        }
+    </div>
+
     @if (detail.Versions.Count > 0)
     {
+        <aside class="vd-aside" aria-label="@ui["library.video.versionsHeading"]">
         <section class="vd-card" aria-labelledby="vd-versions-title">
             <h2 id="vd-versions-title">@ui["library.video.versionsHeading"]</h2>
             @if (hasLanguages)
@@ -104,20 +122,6 @@
                 </ol>
             </details>
         </section>
-    }
-
-    <partial name="_VideoDetailRelated" model="Model" />
-
-    @if (detail.AlsoKnownAs.Count > 0)
-    {
-        <section class="vd-card" aria-labelledby="vd-about-title">
-            <h2 id="vd-about-title">@ui["library.video.aboutHeading"]</h2>
-            <dl class="vd-facts">
-                <div>
-                    <dt>@ui["library.video.alsoKnownAs"]</dt>
-                    <dd>@string.Join(" · ", detail.AlsoKnownAs)</dd>
-                </div>
-            </dl>
-        </section>
+        </aside>
     }
 </div>

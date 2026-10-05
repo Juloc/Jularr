@@ -59,7 +59,7 @@ public sealed class ProfileActivityPageTests
         var list = fixture.Attach(new ProfileIndexModel(fixture.Db, Account("user-a", isOwner: false), fixture.Shell), "user-a", isOwner: false);
         Assert.IsInstanceOfType<PageResult>(await list.OnGetAsync(null, CancellationToken.None));
         Assert.IsFalse(list.Links.Any(item => item.Id == "admin"));
-        CollectionAssert.Contains(list.Elsewhere.Select(item => item.Id).ToArray(), "library");
+        CollectionAssert.Contains(list.Elsewhere.Select(item => item.Id).ToArray(), "watchlist", "Destinations outside the bottom bar are listed on Profile.");
 
         var owner = fixture.Attach(new ProfileIndexModel(fixture.Db, Account("owner", isOwner: true), fixture.Shell), "owner", isOwner: true);
         Assert.IsInstanceOfType<PageResult>(await owner.OnGetAsync("admin", CancellationToken.None));

@@ -194,8 +194,11 @@ public static class UiNavigationCatalog
     public static readonly string[] ProfileLinkIds =
         ["settings-account", "activity", "settings-offline", "profile-devices", "settings", "admin"];
 
-    /// <summary>Phone bottom bar, in order. Everything else is reached from Profile or search.</summary>
-    public static readonly string[] MobilePrimaryIds = ["home", "calendar", "watchlist", "profile"];
+    /// <summary>
+    /// Phone bottom bar, in order (docs/UX.md, INFORMATION_ARCHITECTURE.md, mockups/home): Home, Library, Calendar, Learning and
+    /// Profile; Learning is absent for a profile without it. Everything else is reached from Profile or search.
+    /// </summary>
+    public static readonly string[] MobilePrimaryIds = ["home", "library", "calendar", "learn", "profile"];
 
     /// <summary>Readers whose sidebar shows the open book, novel or manga with its progress.</summary>
     public static readonly string[] CurrentReadingRoots = ["/Books/Read", "/Novels/Read", "/Manga/Read"];
@@ -251,7 +254,7 @@ public sealed record UiShellNavigation(
     IReadOnlyList<UiNavigationItem> MobilePrimary,
     bool ShowCurrentReading = false)
 {
-    public const int MaxMobilePrimaryItems = 4;
+    public const int MaxMobilePrimaryItems = 5;
 
     /// <summary>The section expanded in the sidebar, if any. Never more than one.</summary>
     public UiNavigationItem? Expanded => Secondary.FirstOrDefault(item => item.IsExpanded);

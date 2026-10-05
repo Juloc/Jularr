@@ -1,17 +1,24 @@
 @page "/Library/Watch/{workId:guid}/{episodeId:guid?}"
+@using Jularr.Web.Ui
 @model Jularr.Web.Pages.Library.WatchModel
 @* The web player of a Movie or one episode of a Series. It renders the same player stage and scripts as every other
-   video; only the canonical target and its routes differ (Features/Playback/VideoPlayerStageView). *@
+   video; only the canonical target and its routes differ (Features/Playback/VideoPlayerStageView). The stage owns the
+   title and episode line (docs/mockups/player/SPEC.md, top chrome), so the page adds only the way back. *@
 @{
     var ui = Model.Ui;
     ViewData["Title"] = Model.EpisodeLine is { } line ? $"{Model.Title} · {line}" : Model.Title;
+    var backLink = new ContextBackLinkModel(Model.BackUrl, $"← {ui["library.video.backToDetails"]}", "back-link");
 }
 
 @section Head {
     <link rel="stylesheet" href="~/css/player.css" asp-append-version="true" />
 }
+@section Scripts {
+    <script src="~/js/context-back-link.js" asp-append-version="true"></script>
+}
 
-<div class="watch-layout">
+<partial name="_ContextBackLink" model="backLink" />
+<div class="watch-layout is-single">
     <div class="watch-main">
         @if (Model.Stage is { } stage)
         {
@@ -21,24 +28,10 @@
         else
         {
             <div class="empty-state">
+                <h1>@Model.Title</h1>
                 <h3>@ui["library.watch.noMediaTitle"]</h3>
                 <p>@ui["library.video.noMediaBody"]</p>
             </div>
         }
     </div>
-
-    <aside class="watch-side" aria-label="@ui["library.video.sideAria"]">
-        <section class="watch-info">
-            <div class="watch-info-copy">
-                <h1 class="watch-title">@Model.Title</h1>
-                @if (Model.EpisodeLine is { } episodeLine)
-                {
-                    <div class="watch-facts"><span class="watch-fact">@episodeLine</span></div>
-                }
-            </div>
-        </section>
-        <div class="watch-actions">
-            <a class="button" href="@Model.BackUrl">@ui["library.video.backToDetails"]</a>
-        </div>
-    </aside>
 </div>

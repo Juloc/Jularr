@@ -41,7 +41,7 @@ public sealed class PermissionDerivedShellTests
             UiShellNavigation.BuildLibraryTabs("/Books", books).Select(tab => tab.Id).ToArray());
 
         var (_, elsewhere) = UiShellNavigation.BuildProfile(learningVisible: false, User, books);
-        Assert.AreEqual("/Books", elsewhere.Single(item => item.Id == "library").Href);
+        Assert.AreEqual("/Books", nav.MobilePrimary.Single(item => item.Id == "library").Href, "The phone bar leads to the same only media type.");
 
         var hrefs = nav.Primary.Concat(nav.Secondary).Concat(nav.MobilePrimary).Concat(elsewhere)
             .Select(item => item.Href)

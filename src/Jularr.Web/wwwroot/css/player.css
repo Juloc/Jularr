@@ -547,7 +547,17 @@
 /* Subtitles sit above the control bar and drop down when it hides. */
 .watch-main .player-subtitle-stack { bottom: 96px; transition: bottom .22s ease; z-index: 4; }
 .video-stage[data-chrome-state="hidden"] .player-subtitle-stack { bottom: 40px; }
-.watch-main .player-error { position: absolute; top: 70px; inset-inline: 16px; z-index: 9; margin: 0; }
+/* The stage is a dark surface in both themes (the video letterbox is the player background), so everything drawn on it
+   uses light-on-dark values instead of the page theme tokens, which turn dark in the light theme. */
+.watch-main .player-error {
+    position: absolute; top: 70px; inset-inline: 16px; z-index: 9; margin: 0;
+    background: rgba(120, 24, 24, .88); color: #ffe6e6; font-size: 13px;
+}
+.playback-preparation .eyebrow { color: rgba(255, 255, 255, .7); }
+/* :root outranks the theme catalog's control background, which is light in the light theme. */
+:root .playback-preparation-actions .button { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .3); color: #fff; }
+:root .playback-preparation-actions .button:hover { background: rgba(255, 255, 255, .22); }
+:root .playback-preparation-actions .button-primary { background: var(--accent); border-color: transparent; color: var(--on-accent); }
 .watch-main .player-learning-sheet { z-index: 10; }
 .watch-main .post-play { z-index: 11; }
 .watch-main .player-skip-segment { bottom: 90px; z-index: 6; }
@@ -605,6 +615,8 @@
 .watch-manage-header form { margin: 0; }
 .watch-manage-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 
+.watch-layout.is-single { grid-template-columns: minmax(0, 1fr); }
+
 @media (max-width: 1180px) {
     .watch-layout { grid-template-columns: 1fr; }
     .watch-side { position: static; }
@@ -619,6 +631,12 @@
 }
 @media (max-width: 520px) {
     .watch-main .player-panel { margin-inline: -14px; }
+    .watch-main .playback-preparation { gap: 6px; padding: 12px; }
+    .watch-main .playback-preparation .eyebrow { display: none; }
+    /* Before the video shows, the stage is tall enough for heading, failure banner and status without overlapping. */
+    .watch-main .video-stage.player-placeholder { aspect-ratio: auto; min-height: 330px; }
+    .watch-main .player-error { top: 64px; }
+    .watch-main .video-stage.player-placeholder .playback-preparation { inset: 108px 0 56px; }
     .player-top { padding: 10px; }
     .player-heading span[lang] { display: none; }
     .player-bottom { padding: 0 8px 6px; }

@@ -69,14 +69,14 @@ public sealed partial class AppShellNavigationTests
     [DataRow(true, false)]
     [DataRow(false, true)]
     [DataRow(true, true)]
-    public void MobileBarHasFourTabsAndProfileReachesEveryOtherDestination(
+    public void MobileBarFollowsTheUxDocAndProfileReachesEveryOtherDestination(
         bool learningVisible,
         bool isOwner)
     {
         var nav = UiShellNavigation.Build("/", learningVisible, isOwner ? Owner : User);
 
         CollectionAssert.AreEqual(
-            new[] { "home", "calendar", "watchlist", "profile" },
+            learningVisible ? new[] { "home", "library", "calendar", "learn", "profile" } : new[] { "home", "library", "calendar", "profile" },
             nav.MobilePrimary.Select(item => item.Id).ToArray());
         Assert.IsTrue(nav.MobilePrimary.Count <= UiShellNavigation.MaxMobilePrimaryItems);
 
@@ -138,14 +138,18 @@ public sealed partial class AppShellNavigationTests
 
     [TestMethod]
     [DataRow("/", "home", "home")]
-    [DataRow("/Library/Anime/7a4c", "library", "profile")]
-    [DataRow("/Novels/Read/7a4c", "library", "profile")]
-    [DataRow("/Books/Read/7a4c", "library", "profile")]
-    [DataRow("/Franchises/7", "watchlist", "watchlist")]
+    [DataRow("/Library", "library", "library")]
+    [DataRow("/Library/Anime/7a4c", "library", "library")]
+    [DataRow("/Library/Movie/7a4c", "library", "library")]
+    [DataRow("/Library/Series/7a4c", "library", "library")]
+    [DataRow("/Library/Watch/7a4c", "library", "library")]
+    [DataRow("/Novels/Read/7a4c", "library", "library")]
+    [DataRow("/Books/Read/7a4c", "library", "library")]
+    [DataRow("/Franchises/7", "watchlist", "profile")]
     [DataRow("/Calendar", "calendar", "calendar")]
     [DataRow("/Activity", "activity", "profile")]
-    [DataRow("/Learn/Kana", "learn", "profile")]
-    [DataRow("/Statistics", "learn", "profile")]
+    [DataRow("/Learn/Kana", "learn", "learn")]
+    [DataRow("/Statistics", "learn", "learn")]
     [DataRow("/Profile", "profile", "profile")]
     [DataRow("/Profile/settings", "profile", "profile")]
     [DataRow("/Profile/Account", "settings", "profile")]
