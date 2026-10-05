@@ -35,10 +35,10 @@ public sealed class PlaybackServerResourceService(
     {
         // Yielding first hands control back to the host, so a slow ffmpeg cannot hold up startup.
         await Task.Yield();
+        // Detection runs beside the sweeper, never in front of it: the cache needs its cleanup whether or not ffmpeg answers.
+        var detection = hardware.DetectAsync(stoppingToken);
         try
         {
-            // Detection runs beside the sweeper, never in front of it: the cache needs its cleanup whether or not ffmpeg answers.
-            var detection = hardware.DetectAsync(stoppingToken);
             using var timer = new PeriodicTimer(SweepInterval, time);
             do
             {
@@ -52,6 +52,17 @@ public sealed class PlaybackServerResourceService(
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
+        }
+        finally
+        {
+            // The detection in flight is awaited so shutdown leaves no running ffmpeg probe behind.
+            try
+            {
+                await detection;
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
         }
     }
 

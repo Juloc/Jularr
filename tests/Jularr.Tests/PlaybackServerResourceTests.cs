@@ -34,18 +34,18 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
-    [DataRow("", PlaybackTranscodingSettingsRules.PathRequired)]
-    [DataRow("   ", PlaybackTranscodingSettingsRules.PathRequired)]
-    [DataRow("relative/cache", PlaybackTranscodingSettingsRules.PathNotAbsolute)]
-    [DataRow("../cache", PlaybackTranscodingSettingsRules.PathNotAbsolute)]
-    [DataRow("/data/playback-cache/../../etc", PlaybackTranscodingSettingsRules.PathTraversal)]
-    [DataRow("/data/..", PlaybackTranscodingSettingsRules.PathTraversal)]
-    [DataRow("/data\\..\\etc", PlaybackTranscodingSettingsRules.PathTraversal)]
-    [DataRow("/", PlaybackTranscodingSettingsRules.PathInvalid)]
-    [DataRow("/data/cache\0x", PlaybackTranscodingSettingsRules.PathInvalid)]
-    public void CacheFolderMustBeAnAbsolutePathWithoutTraversal(string path, string expected)
+    [DataRow("", PlaybackSettingsIssueCode.PathRequired)]
+    [DataRow("   ", PlaybackSettingsIssueCode.PathRequired)]
+    [DataRow("relative/cache", PlaybackSettingsIssueCode.PathNotAbsolute)]
+    [DataRow("../cache", PlaybackSettingsIssueCode.PathNotAbsolute)]
+    [DataRow("/data/playback-cache/../../etc", PlaybackSettingsIssueCode.PathTraversal)]
+    [DataRow("/data/..", PlaybackSettingsIssueCode.PathTraversal)]
+    [DataRow("/data\\..\\etc", PlaybackSettingsIssueCode.PathTraversal)]
+    [DataRow("/", PlaybackSettingsIssueCode.PathInvalid)]
+    [DataRow("/data/cache\0x", PlaybackSettingsIssueCode.PathInvalid)]
+    public void CacheFolderMustBeAnAbsolutePathWithoutTraversal(string path, PlaybackSettingsIssueCode expected)
     {
-        Assert.AreEqual(expected, PlaybackTranscodingSettingsRules.ValidatePath(path));
+        Assert.AreEqual((PlaybackSettingsIssueCode?)expected, PlaybackTranscodingSettingsRules.ValidatePath(path));
     }
 
     [TestMethod]
@@ -109,7 +109,7 @@ public sealed class PlaybackServerResourceTests
         var traversal = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = "/data/cache/../../etc" });
 
         Assert.IsFalse(traversal.Succeeded);
-        Assert.AreEqual(PlaybackTranscodingSettingsRules.PathTraversal, traversal.Issues.Single().Code);
+        Assert.AreEqual(PlaybackSettingsIssueCode.PathTraversal, traversal.Issues.Single().Code);
         Assert.AreEqual(PlaybackTranscodingSettings.Default, kit.Settings.Current);
         Assert.IsFalse(Directory.Exists(kit.DataRoot), "A rejected save writes nothing.");
     }
@@ -126,7 +126,7 @@ public sealed class PlaybackServerResourceTests
 
             var result = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = Path.Combine(blocker, "hls") });
 
-            Assert.AreEqual(PlaybackTranscodingSettingsRules.PathNotWritable, result.Issues.Single().Code);
+            Assert.AreEqual(PlaybackSettingsIssueCode.PathNotWritable, result.Issues.Single().Code);
         }
         finally
         {
@@ -148,7 +148,7 @@ public sealed class PlaybackServerResourceTests
 
             await File.WriteAllTextAsync(file, """{ "hlsCachePath": "/data/../etc", "softwareVideoSessions": 3 }""");
             var exception = await Assert.ThrowsAsync<InvalidDataException>(() => kit.Settings.LoadAsync());
-            StringAssert.Contains(exception.Message, PlaybackTranscodingSettingsRules.PathTraversal);
+            StringAssert.Contains(exception.Message, nameof(PlaybackSettingsIssueCode.PathTraversal));
 
             await File.WriteAllTextAsync(file, """{ "softwareVideoSessions": 3 }""");
             var partial = await kit.Settings.LoadAsync();
@@ -309,7 +309,7 @@ public sealed class PlaybackServerResourceTests
         try
         {
             var rejected = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = foreign });
-            Assert.AreEqual(PlaybackTranscodingSettingsRules.PathNotEmpty, rejected.Issues.Single().Code);
+            Assert.AreEqual(PlaybackSettingsIssueCode.PathNotEmpty, rejected.Issues.Single().Code);
             Assert.IsFalse(PlaybackCacheOwnership.IsOwnedRoot(foreign));
 
             var empty = Path.Combine(kit.DataRoot, "empty-cache");
@@ -355,7 +355,7 @@ public sealed class PlaybackServerResourceTests
 
         Assert.AreEqual(1, first.PrunedForPolicy);
         Assert.IsFalse(cache.Manager.IsActive(runaway.SessionId, "profile-1"), "The largest running session outgrew the budget.");
-        Assert.AreEqual(HlsSessionEndReasons.CacheBudget, cache.Manager.EndReason(runaway.SessionId));
+        Assert.AreEqual(HlsSessionEndReason.CacheBudget, cache.Manager.EndReason(runaway.SessionId));
         Assert.IsTrue(cache.Manager.IsActive(small.SessionId, "profile-0"));
         Assert.IsFalse(Directory.Exists(cache.SessionDirectory(runaway.SessionId)));
     }
@@ -494,7 +494,7 @@ public sealed class PlaybackServerResourceTests
         Assert.AreEqual(1, cache.Manager.ReapExitedProcesses());
 
         Assert.AreEqual(0, cache.Slots.Active(PlaybackCostClass.SoftwareVideo), "The slot of a crashed encoder is released by the reap, not at idle expiry.");
-        Assert.AreEqual(HlsSessionEndReasons.EncoderExited, cache.Manager.EndReason(session.SessionId));
+        Assert.AreEqual(HlsSessionEndReason.EncoderExited, cache.Manager.EndReason(session.SessionId));
         Assert.IsFalse(Directory.Exists(cache.SessionDirectory(session.SessionId)));
     }
 
@@ -592,7 +592,7 @@ public sealed class PlaybackServerResourceTests
     [TestMethod]
     public void APercentSignWouldBreakTheSegmentFilenameTemplateAndIsRefused()
     {
-        Assert.AreEqual(PlaybackTranscodingSettingsRules.PathInvalid, PlaybackTranscodingSettingsRules.ValidatePath("/data/cache%05d"));
+        Assert.AreEqual(PlaybackSettingsIssueCode.PathInvalid, PlaybackTranscodingSettingsRules.ValidatePath("/data/cache%05d"));
     }
 
     [TestMethod]
@@ -705,7 +705,7 @@ public sealed class PlaybackServerResourceTests
         cache.FreeBytes = (5L << 30) - 50 * 1024;
         cache.Manager.Sweep();
         Assert.IsFalse(cache.Manager.IsActive(session.SessionId, "profile-0"), "Ending it clears the floor.");
-        Assert.AreEqual(HlsSessionEndReasons.CacheFreeSpace, cache.Manager.EndReason(session.SessionId));
+        Assert.AreEqual(HlsSessionEndReason.CacheFreeSpace, cache.Manager.EndReason(session.SessionId));
     }
 
     [TestMethod]
@@ -730,7 +730,7 @@ public sealed class PlaybackServerResourceTests
         var result = cache.Manager.Sweep();
         Assert.IsFalse(leftover.Exists, "The retired folder's aged leftovers are swept.");
         Assert.IsTrue(result.OrphanDirectories >= 1);
-        Assert.AreEqual(HlsSessionEndReasons.CacheBudget, cache.Manager.EndReason(running.SessionId), "The old folder's session is the largest and ends first when the budget is exceeded.");
+        Assert.AreEqual(HlsSessionEndReason.CacheBudget, cache.Manager.EndReason(running.SessionId), "The old folder's session is the largest and ends first when the budget is exceeded.");
     }
 
     [TestMethod]

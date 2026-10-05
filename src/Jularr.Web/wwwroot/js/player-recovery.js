@@ -6,15 +6,15 @@
     const maxRecoveries = 3;
     const stableSeconds = 30;
 
-    // status is { state, reason } from GET stream-session, { gone: true } when the session no longer exists, or null
-    // when the server could not be asked. Only a stream the server ended (or lost) is planned again with the same
-    // mode. A crashed encoder is a verdict on the mode, so that case takes the normal fallback to another mode.
+    // status is { state, reason, recoverable } from GET stream-session, { gone: true } when the session no longer exists, or null
+    // when the server could not be asked. The server says whether planning the same mode again makes sense (an encoder crash is
+    // a verdict on the mode, so it takes the normal fallback to another mode); the player only bounds the number of attempts.
     const shouldReplanSameMode = (status, recoveries) => {
         if (!status || recoveries >= maxRecoveries) {
             return false;
         }
 
-        return status.gone === true || (status.state === "ended" && status.reason !== "encoder_exited");
+        return status.gone === true || (status.state === "ended" && status.recoverable === true);
     };
 
     // The budget of recoveries returns only after real playback: stableSeconds of media time past the recovery

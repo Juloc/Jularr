@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -56,8 +57,18 @@ public sealed record ClientPlaybackPlanResponse(
     ClientVideoTarget Target,
     long ResumePositionMs);
 
-/// <summary>Whether the server still runs the session's stream. <see cref="State"/> is "active" or "ended"; <see cref="Reason"/> says why an ended one ended when the server knows.</summary>
-public sealed record ClientStreamSessionStatus(string State, string? Reason);
+/// <summary>
+/// Whether the server still runs the session's stream. <see cref="Reason"/> says why an ended one ended when the server knows;
+/// <see cref="Recoverable"/> is the server's verdict that planning the same mode again is sensible (an encoder crash is not).
+/// </summary>
+public sealed record ClientStreamSessionStatus(StreamSessionState State, HlsSessionEndReason? Reason, bool Recoverable);
+
+[JsonConverter(typeof(SnakeCaseEnumConverter<StreamSessionState>))]
+public enum StreamSessionState
+{
+    Active,
+    Ended
+}
 
 public sealed record ClientVideoProgressUpdate(
     ClientVideoTarget? Target,
@@ -308,6 +319,7 @@ public static class ClientApiPlaybackPlanEndpoints
             double? startSeconds,
             PlaybackStreamSessionStore sessions,
             PlaybackAdmissionService admission,
+            ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -366,6 +378,8 @@ public static class ClientApiPlaybackPlanEndpoints
             }
             catch (Exception exception) when (exception is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
             {
+                // The client gets the safe generic failure; the cause stays in the server log, once, at the request boundary.
+                loggerFactory.CreateLogger("Jularr.Playback.Delivery").LogWarning(exception, "The progressive stream of playback session {SessionId} could not start.", sessionId);
                 return StartFailed();
             }
         })
@@ -377,6 +391,7 @@ public static class ClientApiPlaybackPlanEndpoints
             PlaybackStreamSessionStore sessions,
             PlaybackAdmissionService admission,
             HlsPlaybackSessionManager manager,
+            ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -441,6 +456,7 @@ public static class ClientApiPlaybackPlanEndpoints
             catch (Exception exception) when (
                 exception is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
             {
+                loggerFactory.CreateLogger("Jularr.Playback.Delivery").LogWarning(exception, "The HLS stream of playback session {SessionId} could not start.", sessionId);
                 return StartFailed();
             }
         })
@@ -471,7 +487,7 @@ public static class ClientApiPlaybackPlanEndpoints
             {
                 return Results.NotFound(new ClientErrorResponse(
                     "hls_asset_not_found",
-                    $"The HLS playback segment is unavailable or expired ({manager.EndReason(hlsSessionId) ?? "unknown"})."));
+                    $"The HLS playback segment is unavailable or expired ({(manager.EndReason(hlsSessionId)?.ToString() ?? "unknown")})."));
             }
 
             if (fileName == "index.m3u8")
@@ -509,9 +525,14 @@ public static class ClientApiPlaybackPlanEndpoints
                 return SessionNotFound();
             }
 
-            var ended = session.HlsSessionId is { } hlsSessionId && !manager.IsActive(hlsSessionId, currentAccount.ProfileId);
             httpContext.Response.Headers.CacheControl = "no-store";
-            return Results.Ok(new ClientStreamSessionStatus(ended ? "ended" : "active", ended ? manager.EndReason(session.HlsSessionId!.Value) : null));
+            if (session.HlsSessionId is not { } hlsSessionId || manager.IsActive(hlsSessionId, currentAccount.ProfileId))
+            {
+                return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Active, null, Recoverable: false));
+            }
+
+            var reason = manager.EndReason(hlsSessionId);
+            return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Ended, reason, Recoverable: reason != HlsSessionEndReason.EncoderExited));
         })
         .RequireRateLimiting(RateLimitPolicy);
 

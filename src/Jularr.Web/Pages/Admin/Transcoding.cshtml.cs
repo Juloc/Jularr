@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Localization;
@@ -125,9 +126,9 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
     private string IssueText(PlaybackSettingsIssue issue) =>
         issue.Code switch
         {
-            PlaybackTranscodingSettingsRules.LimitRange => Ui.Format("admin.transcoding.error.limit_range", ("max", PlaybackTranscodingSettings.MaxSessionsPerClass)),
-            PlaybackTranscodingSettingsRules.BudgetRange => Ui.Format("admin.transcoding.error.budget_range", ("min", PlaybackTranscodingSettings.MinCacheBudgetGiB), ("max", PlaybackTranscodingSettings.MaxCacheBudgetGiB)),
-            PlaybackTranscodingSettingsRules.FloorRange => Ui.Format("admin.transcoding.error.floor_range", ("max", PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB)),
-            _ => Ui[$"admin.transcoding.error.{issue.Code}"]
+            PlaybackSettingsIssueCode.LimitRange => Ui.Format("admin.transcoding.error.limit_range", ("max", PlaybackTranscodingSettings.MaxSessionsPerClass)),
+            PlaybackSettingsIssueCode.BudgetRange => Ui.Format("admin.transcoding.error.budget_range", ("min", PlaybackTranscodingSettings.MinCacheBudgetGiB), ("max", PlaybackTranscodingSettings.MaxCacheBudgetGiB)),
+            PlaybackSettingsIssueCode.FloorRange => Ui.Format("admin.transcoding.error.floor_range", ("max", PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB)),
+            _ => Ui[$"admin.transcoding.error.{JsonNamingPolicy.SnakeCaseLower.ConvertName(issue.Code.ToString())}"]
         };
 }

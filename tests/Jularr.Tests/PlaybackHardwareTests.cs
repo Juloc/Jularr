@@ -172,15 +172,14 @@ public sealed class PlaybackHardwareTests
         var time = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-05T10:00:00Z"));
         var breaker = new PlaybackBackendBreaker(time);
 
-        breaker.RecordFailure(PlaybackHardwareBackend.Nvenc, "start_failed", "no device");
-        breaker.RecordFailure(PlaybackHardwareBackend.Nvenc, "start_failed", "no device");
+        breaker.RecordFailure(PlaybackHardwareBackend.Nvenc, "no device");
+        breaker.RecordFailure(PlaybackHardwareBackend.Nvenc, "no device");
         Assert.IsFalse(breaker.State(PlaybackHardwareBackend.Nvenc).IsOpen, "Two failures are not enough.");
 
-        breaker.RecordFailure(PlaybackHardwareBackend.Nvenc, "start_timed_out", "slow");
+        breaker.RecordFailure(PlaybackHardwareBackend.Nvenc, "slow");
         var open = breaker.State(PlaybackHardwareBackend.Nvenc);
         Assert.IsTrue(open.IsOpen);
         Assert.AreEqual(3, open.ConsecutiveFailures);
-        Assert.AreEqual("start_timed_out", open.LastFailureReason);
         Assert.AreEqual("slow", open.LastFailureDetail);
         Assert.AreEqual(time.GetUtcNow() + TimeSpan.FromMinutes(10), open.OpenUntilUtc);
         Assert.IsFalse(breaker.State(PlaybackHardwareBackend.Qsv).IsOpen, "A breaker is per backend.");
@@ -196,18 +195,18 @@ public sealed class PlaybackHardwareTests
     {
         var time = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-05T10:00:00Z"));
         var breaker = new PlaybackBackendBreaker(time);
-        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start_failed");
-        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start_failed");
+        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start failed");
+        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start failed");
         breaker.RecordSuccess(PlaybackHardwareBackend.Qsv);
-        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start_failed");
+        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start failed");
         Assert.IsFalse(breaker.State(PlaybackHardwareBackend.Qsv).IsOpen, "Only consecutive failures count.");
 
-        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start_failed");
-        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start_failed");
+        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start failed");
+        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start failed");
         time.Advance(PlaybackBackendBreaker.OpenDuration);
         Assert.IsFalse(breaker.State(PlaybackHardwareBackend.Qsv).IsOpen);
 
-        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start_failed");
+        breaker.RecordFailure(PlaybackHardwareBackend.Qsv, "start failed");
         Assert.IsTrue(breaker.State(PlaybackHardwareBackend.Qsv).IsOpen, "The single trial session after the cooldown failed.");
 
         time.Advance(PlaybackBackendBreaker.OpenDuration);
@@ -224,7 +223,6 @@ public sealed class PlaybackHardwareTests
         var next = kit.Hardware.Choose();
         Assert.AreEqual(PlaybackHardwareBackend.Qsv, next.Target.Backend);
         Assert.AreEqual(PlaybackHardwareBackend.Nvenc, next.Suspended!.Backend);
-        Assert.AreEqual("start_failed", next.Suspended.Reason);
 
         Open(kit.Breaker, PlaybackHardwareBackend.Qsv);
         var software = kit.Hardware.Choose();
@@ -374,11 +372,6 @@ public sealed class PlaybackHardwareTests
                 Assert.IsFalse(string.IsNullOrWhiteSpace(PlaybackAdmissionCodes.Message(code)));
             }
         }
-
-        foreach (var reason in new[] { PlaybackStartFailure.StartFailed })
-        {
-            Assert.IsTrue(Jularr.Web.Features.Localization.UiTranslationResources.TryGet($"admin.health.hardware.reason.{reason}", out _), reason);
-        }
     }
 
     private static async Task<PlaybackServerTestKit> DetectedKitAsync(string[] hardwareEncoders, string[] accelerations, TimeProvider? time = null)
@@ -395,7 +388,7 @@ public sealed class PlaybackHardwareTests
     {
         for (var failure = 0; failure < PlaybackBackendBreaker.FailureThreshold; failure++)
         {
-            breaker.RecordFailure(backend, PlaybackStartFailure.StartFailed, "ffmpeg exited");
+            breaker.RecordFailure(backend, "ffmpeg exited");
         }
     }
 }

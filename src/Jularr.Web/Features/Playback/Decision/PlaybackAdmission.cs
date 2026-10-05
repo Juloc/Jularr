@@ -41,12 +41,6 @@ public sealed class PlaybackAdmissionRefusedException(string code) : InvalidOper
     public string Code { get; } = code;
 }
 
-/// <summary>Why a started delivery failed: a stable <see cref="Reason"/> code the plan text and Admin map, and the bounded raw <see cref="Detail"/> for Admin only.</summary>
-public sealed record PlaybackStartFailure(string Reason, string? Detail = null)
-{
-    public const string StartFailed = "start_failed";
-}
-
 public static class PlaybackCostClasses
 {
     public static PlaybackCostClass For(PlaybackPlan plan, PlaybackEncoderTarget encoder)
@@ -101,7 +95,7 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
         ArgumentNullException.ThrowIfNull(start);
         var admitted = Admit(plan, profileId);
         PlaybackHardwareBackend failedBackend = PlaybackHardwareBackend.Software;
-        PlaybackStartFailure? hardwareFailure = null;
+        string? hardwareFailure = null;
         var decodeSuspected = false;
         while (true)
         {
@@ -127,7 +121,7 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
                 else
                 {
                     failedBackend = admitted.Encoder.Backend;
-                    hardwareFailure = new PlaybackStartFailure(PlaybackStartFailure.StartFailed, exception.Message);
+                    hardwareFailure = exception.Message;
                     next = PlaybackEncoderTarget.Software;
                 }
 
@@ -158,7 +152,7 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
     }
 
     // What a successful start proves about the backends involved.
-    private void Settle(PlaybackAdmission succeeded, bool decodeSuspected, PlaybackHardwareBackend failedBackend, PlaybackStartFailure? hardwareFailure)
+    private void Settle(PlaybackAdmission succeeded, bool decodeSuspected, PlaybackHardwareBackend failedBackend, string? hardwareFailure)
     {
         if (succeeded.Encoder.IsHardware)
         {
@@ -171,7 +165,7 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
         }
         else if (hardwareFailure is not null)
         {
-            hardware.Breaker.RecordFailure(failedBackend, hardwareFailure.Reason, hardwareFailure.Detail);
+            hardware.Breaker.RecordFailure(failedBackend, hardwareFailure);
         }
     }
 }

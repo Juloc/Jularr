@@ -11,14 +11,14 @@ namespace Jularr.Tests;
 public sealed class PlayerRecoveryTests
 {
     [TestMethod]
-    [DataRow("{ state: 'ended', reason: 'idle' }", 0, true)]
-    [DataRow("{ state: 'ended', reason: 'cache_budget' }", 2, true)]
-    [DataRow("{ state: 'ended', reason: null }", 0, true)]
+    [DataRow("{ state: 'ended', reason: 'idle', recoverable: true }", 0, true)]
+    [DataRow("{ state: 'ended', reason: 'cache_budget', recoverable: true }", 2, true)]
+    [DataRow("{ state: 'ended', reason: null, recoverable: true }", 0, true)]
     [DataRow("{ gone: true }", 1, true)]
-    [DataRow("{ state: 'ended', reason: 'encoder_exited' }", 0, false)]
-    [DataRow("{ state: 'active', reason: null }", 0, false)]
+    [DataRow("{ state: 'ended', reason: 'encoder_exited', recoverable: false }", 0, false)]
+    [DataRow("{ state: 'active', reason: null, recoverable: false }", 0, false)]
     [DataRow("null", 0, false)]
-    [DataRow("{ state: 'ended', reason: 'idle' }", 3, false)]
+    [DataRow("{ state: 'ended', reason: 'idle', recoverable: true }", 3, false)]
     [DataRow("{ gone: true }", 3, false)]
     public void OnlyAServerEndedStreamWithinTheBudgetIsPlannedAgainWithTheSameMode(string status, int recoveries, bool expected)
     {
@@ -42,7 +42,7 @@ public sealed class PlayerRecoveryTests
             let recoveries = 0;
             let replans = 0;
             for (let attempt = 0; attempt < 20; attempt++) {
-                if (recovery.shouldReplanSameMode({ state: 'ended', reason: 'cache_budget' }, recoveries)) {
+                if (recovery.shouldReplanSameMode({ state: 'ended', reason: 'cache_budget', recoverable: true }, recoveries)) {
                     recoveries += 1;
                     replans += 1;
                     recoveries = recovery.recoveriesAfterProgress(recoveries, 5);

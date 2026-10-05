@@ -548,6 +548,7 @@ public static class ClientApiEndpoints
             MediaAvailabilityService mediaAvailability,
             HlsPlaybackSessionManager hlsSessions,
             PlaybackAdmissionService admission,
+            ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -643,6 +644,7 @@ public static class ClientApiEndpoints
                 TimeoutException or
                 System.ComponentModel.Win32Exception)
             {
+                loggerFactory.CreateLogger("Jularr.Playback.Delivery").LogWarning(exception, "The compatibility HLS stream of episode {EpisodeId} could not start.", episodeId);
                 return Results.Json(
                     new ClientErrorResponse(
                         "hls_start_failed",
@@ -685,6 +687,7 @@ public static class ClientApiEndpoints
             PlaybackService playbackService,
             MediaAvailabilityService mediaAvailability,
             PlaybackAdmissionService admission,
+            ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -782,6 +785,7 @@ public static class ClientApiEndpoints
                 System.ComponentModel.Win32Exception)
             {
                 admitted.Lease?.Dispose();
+                loggerFactory.CreateLogger("Jularr.Playback.Delivery").LogWarning(exception, "The compatibility stream of episode {EpisodeId} could not start.", episodeId);
                 return Results.Json(
                     new ClientErrorResponse(
                         "playback_start_failed",

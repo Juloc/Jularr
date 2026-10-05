@@ -267,13 +267,12 @@
                     {
                         <small class="muted">@detail</small>
                     }
-                    @if (breaker.ConsecutiveFailures > 0 && breaker.LastFailureReason is { } reason)
+                    @if (breaker.ConsecutiveFailures > 0)
                     {
-                        var reasonText = ui[$"admin.health.hardware.reason.{reason}"];
                         <small class="muted">
                             @(breaker.IsOpen
-                                ? ui.Format("admin.health.hardware.breakerOpen", ("until", breaker.OpenUntilUtc!.Value.ToLocalTime().ToString("t")), ("reason", reasonText))
-                                : ui.Format("admin.health.hardware.breakerFailures", ("count", breaker.ConsecutiveFailures), ("reason", reasonText)))
+                                ? ui.Format("admin.health.hardware.breakerOpen", ("until", breaker.OpenUntilUtc!.Value.ToLocalTime().ToString("t")))
+                                : ui.Format("admin.health.hardware.breakerFailures", ("count", breaker.ConsecutiveFailures)))
                         </small>
                         @if (breaker.LastFailureDetail is { } failureDetail)
                         {

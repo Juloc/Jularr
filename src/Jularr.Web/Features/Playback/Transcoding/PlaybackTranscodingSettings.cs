@@ -59,21 +59,25 @@ public sealed record PlaybackTranscodingSettings(
         };
 }
 
-/// <summary>One rejected setting: the field name and a stable code the Admin page maps to text.</summary>
-public sealed record PlaybackSettingsIssue(string Field, string Code);
+/// <summary>Why a setting was rejected; the Admin page maps each code to its localized text.</summary>
+public enum PlaybackSettingsIssueCode
+{
+    PathRequired,
+    PathNotAbsolute,
+    PathTraversal,
+    PathInvalid,
+    PathNotWritable,
+    PathNotEmpty,
+    LimitRange,
+    BudgetRange,
+    FloorRange
+}
+
+/// <summary>One rejected setting: the field name and why.</summary>
+public sealed record PlaybackSettingsIssue(string Field, PlaybackSettingsIssueCode Code);
 
 public static class PlaybackTranscodingSettingsRules
 {
-    public const string PathRequired = "path_required";
-    public const string PathNotAbsolute = "path_not_absolute";
-    public const string PathTraversal = "path_traversal";
-    public const string PathInvalid = "path_invalid";
-    public const string PathNotWritable = "path_not_writable";
-    public const string PathNotEmpty = "path_not_empty";
-    public const string LimitRange = "limit_range";
-    public const string BudgetRange = "budget_range";
-    public const string FloorRange = "floor_range";
-
     /// <summary>
     /// The syntactic rules of the settings. The path may not climb out of where the administrator
     /// pointed it: every segment is checked on the raw text because normalizing first would
@@ -87,7 +91,7 @@ public static class PlaybackTranscodingSettingsRules
         {
             if (settings.LimitFor(costClass) is < 0 or > PlaybackTranscodingSettings.MaxSessionsPerClass)
             {
-                issues.Add(new PlaybackSettingsIssue(costClass.ToString(), LimitRange));
+                issues.Add(new PlaybackSettingsIssue(costClass.ToString(), PlaybackSettingsIssueCode.LimitRange));
             }
         }
 
@@ -95,13 +99,13 @@ public static class PlaybackTranscodingSettingsRules
         if (budget < PlaybackTranscodingSettings.MinCacheBudgetBytes ||
             budget > PlaybackTranscodingSettings.MaxCacheBudgetGiB * PlaybackTranscodingSettings.BytesPerGiB)
         {
-            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.CacheBudgetBytes), BudgetRange));
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.CacheBudgetBytes), PlaybackSettingsIssueCode.BudgetRange));
         }
 
         var floor = settings.FreeSpaceFloorBytes;
         if (floor < 0 || floor > PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB * PlaybackTranscodingSettings.BytesPerGiB)
         {
-            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes), FloorRange));
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes), PlaybackSettingsIssueCode.FloorRange));
         }
 
         if (ValidatePath(settings.HlsCachePath) is { } pathIssue)
@@ -112,38 +116,38 @@ public static class PlaybackTranscodingSettingsRules
         return issues;
     }
 
-    public static string? ValidatePath(string? path)
+    public static PlaybackSettingsIssueCode? ValidatePath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return PathRequired;
+            return PlaybackSettingsIssueCode.PathRequired;
         }
 
         var trimmed = path.Trim();
         if (trimmed.Any(character => character == '\0' || char.IsControl(character)) || trimmed.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
         {
-            return PathInvalid;
+            return PlaybackSettingsIssueCode.PathInvalid;
         }
 
         if (!trimmed.StartsWith('/') && !Path.IsPathFullyQualified(trimmed))
         {
-            return PathNotAbsolute;
+            return PlaybackSettingsIssueCode.PathNotAbsolute;
         }
 
         if (trimmed.Split('/', '\\').Any(segment => segment == ".."))
         {
-            return PathTraversal;
+            return PlaybackSettingsIssueCode.PathTraversal;
         }
 
         // "%" starts a pattern in ffmpeg's segment filename template (-hls_segment_filename), so it cannot be part of the folder.
         if (trimmed.Contains('%'))
         {
-            return PathInvalid;
+            return PlaybackSettingsIssueCode.PathInvalid;
         }
 
         // A filesystem root would make the cache sweeper treat unrelated top-level folders as sessions.
         var full = Path.GetFullPath(trimmed);
-        return string.Equals(full, Path.GetPathRoot(full), StringComparison.Ordinal) ? PathInvalid : null;
+        return string.Equals(full, Path.GetPathRoot(full), StringComparison.Ordinal) ? PlaybackSettingsIssueCode.PathInvalid : null;
     }
 
     /// <summary>The canonical stored form of a validated path: trimmed, without a trailing separator.</summary>
@@ -223,12 +227,12 @@ public sealed class PlaybackTranscodingSettingsStore
         var issues = PlaybackTranscodingSettingsRules.Validate(normalized).ToList();
         if (issues.Count == 0 && !PlaybackCacheOwnership.IsOwnedRoot(normalized.HlsCachePath))
         {
-            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackTranscodingSettingsRules.PathNotEmpty));
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackSettingsIssueCode.PathNotEmpty));
         }
 
         if (issues.Count == 0 && !TryMarkWritable(normalized.HlsCachePath))
         {
-            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackTranscodingSettingsRules.PathNotWritable));
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackSettingsIssueCode.PathNotWritable));
         }
 
         if (issues.Count > 0)

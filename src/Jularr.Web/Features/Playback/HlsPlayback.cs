@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Admin;
 using Jularr.Web.Features.Playback.Decision;
@@ -71,7 +72,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     private readonly object _gate = new();
     private readonly ConcurrentDictionary<Guid, Entry> _sessions = new();
     private readonly Lock _endGate = new();
-    private readonly Dictionary<Guid, string> _endReasons = [];
+    private readonly Dictionary<Guid, HlsSessionEndReason> _endReasons = [];
     private readonly Queue<Guid> _endOrder = [];
     private readonly HashSet<string> _retiredRoots = new(StringComparer.Ordinal);
     private string? _activeRoot;
@@ -260,11 +261,11 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         !HasCrashed(entry);
 
     /// <summary>Why a session that was ended without its player asking (idle, cache policy, encoder crash) is gone; null when unknown or when it was ended normally.</summary>
-    public string? EndReason(Guid sessionId)
+    public HlsSessionEndReason? EndReason(Guid sessionId)
     {
         lock (_endGate)
         {
-            return _endReasons.GetValueOrDefault(sessionId);
+            return _endReasons.TryGetValue(sessionId, out var reason) ? reason : null;
         }
     }
 
@@ -318,7 +319,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         {
             if (entry.LastAccessUtc < cutoff)
             {
-                Remove(entry.SessionId, HlsSessionEndReasons.Idle);
+                Remove(entry.SessionId, HlsSessionEndReason.Idle);
                 removed++;
             }
         }
@@ -541,7 +542,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             }
 
             usage.Forget(victim.SessionId);
-            Remove(victim.SessionId, overBudget ? HlsSessionEndReasons.CacheBudget : HlsSessionEndReasons.CacheFreeSpace);
+            Remove(victim.SessionId, overBudget ? HlsSessionEndReason.CacheBudget : HlsSessionEndReason.CacheFreeSpace);
         }
     }
 
@@ -718,12 +719,12 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             return false;
         }
 
-        Remove(entry.SessionId, HlsSessionEndReasons.EncoderExited);
+        Remove(entry.SessionId, HlsSessionEndReason.EncoderExited);
         return true;
     }
 
     /// <summary>Kills the encoder, frees its slot and deletes its files. A reason is remembered so a late request can be answered with it.</summary>
-    private void Remove(Guid sessionId, string? reason = null)
+    private void Remove(Guid sessionId, HlsSessionEndReason? reason = null)
     {
         if (!_sessions.TryRemove(sessionId, out var entry))
         {
@@ -732,7 +733,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
         if (reason is not null)
         {
-            RememberEnding(sessionId, reason);
+            RememberEnding(sessionId, reason.Value);
         }
 
         try
@@ -754,7 +755,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         TryDeleteDirectory(entry.DirectoryPath);
     }
 
-    private void RememberEnding(Guid sessionId, string reason)
+    private void RememberEnding(Guid sessionId, HlsSessionEndReason reason)
     {
         lock (_endGate)
         {
@@ -823,13 +824,14 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     }
 }
 
-/// <summary>Why a session ended without its player asking; the endpoints tell a late request.</summary>
-public static class HlsSessionEndReasons
+/// <summary>Why a session ended without its player asking; the status endpoint tells a late request. Serialized as snake_case.</summary>
+[JsonConverter(typeof(SnakeCaseEnumConverter<HlsSessionEndReason>))]
+public enum HlsSessionEndReason
 {
-    public const string Idle = "idle";
-    public const string CacheBudget = "cache_budget";
-    public const string CacheFreeSpace = "cache_free_space";
-    public const string EncoderExited = "encoder_exited";
+    Idle,
+    CacheBudget,
+    CacheFreeSpace,
+    EncoderExited
 }
 
 /// <summary>Bytes of the HLS cache folder, per session directory and in total, measured once per pass.</summary>

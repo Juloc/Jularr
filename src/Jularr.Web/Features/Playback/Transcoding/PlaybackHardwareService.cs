@@ -5,7 +5,6 @@ public sealed record PlaybackBreakerState(
     int ConsecutiveFailures,
     bool IsOpen,
     DateTimeOffset? OpenUntilUtc,
-    string? LastFailureReason,
     string? LastFailureDetail,
     DateTimeOffset? LastFailureAtUtc);
 
@@ -27,19 +26,18 @@ public sealed class PlaybackBackendBreaker(TimeProvider time)
         lock (_gate)
         {
             return _entries.TryGetValue(backend, out var entry)
-                ? new PlaybackBreakerState(backend, entry.ConsecutiveFailures, entry.OpenUntil > time.GetUtcNow(), entry.OpenUntil, entry.LastFailureReason, entry.LastFailureDetail, entry.LastFailureAt)
-                : new PlaybackBreakerState(backend, 0, false, null, null, null, null);
+                ? new PlaybackBreakerState(backend, entry.ConsecutiveFailures, entry.OpenUntil > time.GetUtcNow(), entry.OpenUntil, entry.LastFailureDetail, entry.LastFailureAt)
+                : new PlaybackBreakerState(backend, 0, false, null, null, null);
         }
     }
 
-    public void RecordFailure(PlaybackHardwareBackend backend, string reason, string? detail = null)
+    public void RecordFailure(PlaybackHardwareBackend backend, string detail)
     {
         lock (_gate)
         {
             var now = time.GetUtcNow();
             var entry = _entries.GetValueOrDefault(backend) ?? new Entry();
             entry.ConsecutiveFailures++;
-            entry.LastFailureReason = reason;
             entry.LastFailureDetail = detail;
             entry.LastFailureAt = now;
             if (entry.ConsecutiveFailures >= FailureThreshold)
@@ -68,14 +66,13 @@ public sealed class PlaybackBackendBreaker(TimeProvider time)
     {
         public int ConsecutiveFailures { get; set; }
         public DateTimeOffset? OpenUntil { get; set; }
-        public string? LastFailureReason { get; set; }
         public string? LastFailureDetail { get; set; }
         public DateTimeOffset? LastFailureAt { get; set; }
     }
 }
 
 /// <summary>A detected backend that is skipped for now because its breaker is open.</summary>
-public sealed record PlaybackBackendSuspension(PlaybackHardwareBackend Backend, string? Reason, DateTimeOffset? UntilUtc);
+public sealed record PlaybackBackendSuspension(PlaybackHardwareBackend Backend, DateTimeOffset? UntilUtc);
 
 /// <summary>The encoder the next delivery uses, plus the preferred backend that was skipped on the way (for the plan's "why").</summary>
 public sealed record PlaybackEncoderChoice(PlaybackEncoderTarget Target, PlaybackBackendSuspension? Suspended);
@@ -156,7 +153,7 @@ public sealed class PlaybackHardwareService(PlaybackHardwareProbe probe, Playbac
 
                 if (breaker.State(backend) is { IsOpen: true } open)
                 {
-                    suspended ??= new PlaybackBackendSuspension(backend, open.LastFailureReason, open.OpenUntilUtc);
+                    suspended ??= new PlaybackBackendSuspension(backend, open.OpenUntilUtc);
                     continue;
                 }
 
