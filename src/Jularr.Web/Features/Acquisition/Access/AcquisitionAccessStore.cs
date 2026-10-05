@@ -21,7 +21,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
 
     private const int MaxPatchAttempts = 8;
 
-    private sealed record StatusChange(AcquisitionRequestStatus Expected, AcquisitionRequestStatus New, string? Message);
+    private sealed record StatusChange(AcquisitionRequestStatus Expected, Func<string?, AcquisitionStatusOutcome> Choose);
 
     private const string Columns =
         """
@@ -272,16 +272,18 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
     /// <see cref="PatchPayloadAsync(Guid, Func{string?, string?}, CancellationToken)"/> and a status change in one write: the status only
     /// moves from <paramref name="expected"/> to <paramref name="status"/> together with the payload, so the two can never disagree.
     /// Returns false when the request is gone, is no longer in <paramref name="expected"/>, or the new status would open a second request
-    /// for the title; nothing is written then. A null <paramref name="message"/> keeps the message.
+    /// for the title; nothing is written then. A null <paramref name="message"/> keeps the message, and the request only counts as changed
+    /// (<c>UpdatedAt</c>) when its status really changes, so a patch does not restart the stale-search clock of a claimed request.
     /// </summary>
-    public Task<bool> PatchPayloadAsync(
-        Guid id,
-        Func<string?, string?> patch,
-        AcquisitionRequestStatus expected,
-        AcquisitionRequestStatus status,
-        string? message,
-        CancellationToken cancellationToken) =>
-        PatchAsync(id, patch, new StatusChange(expected, status, message), cancellationToken);
+    public Task<bool> PatchPayloadAsync(Guid id, Func<string?, string?> patch, AcquisitionRequestStatus expected, AcquisitionRequestStatus status, string? message, CancellationToken cancellationToken) =>
+        PatchAsync(id, patch, new StatusChange(expected, _ => new AcquisitionStatusOutcome(status, message)), cancellationToken);
+
+    /// <summary>
+    /// The same write where the new status is chosen from the payload stored at that moment (and the write is conditional on that very
+    /// payload), for a result that is only true while the payload still says what the run read.
+    /// </summary>
+    public Task<bool> PatchPayloadAsync(Guid id, Func<string?, string?> patch, AcquisitionRequestStatus expected, Func<string?, AcquisitionStatusOutcome> choose, CancellationToken cancellationToken) =>
+        PatchAsync(id, patch, new StatusChange(expected, choose), cancellationToken);
 
     private Task<bool> PatchAsync(Guid id, Func<string?, string?> patch, StatusChange? change, CancellationToken cancellationToken) =>
         WithConnectionAsync(async connection =>
@@ -307,7 +309,8 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                     ? """UPDATE "AcquisitionRequests" SET "PayloadJson" = @next WHERE "Id" = @id AND "PayloadJson" IS NOT DISTINCT FROM @current::text;"""
                     : """
                       UPDATE "AcquisitionRequests"
-                      SET "PayloadJson" = @next, "Status" = @status, "StatusMessage" = COALESCE(@message, "StatusMessage"), "UpdatedAt" = @now
+                      SET "PayloadJson" = @next, "Status" = @status, "StatusMessage" = COALESCE(@message, "StatusMessage"),
+                          "ResultUrl" = COALESCE(@resultUrl, "ResultUrl"), "UpdatedAt" = CASE WHEN "Status" = @status THEN "UpdatedAt" ELSE @now END
                       WHERE "Id" = @id AND "PayloadJson" IS NOT DISTINCT FROM @current::text AND "Status" = @expected;
                       """;
                 Add(write, "@id", id.ToString());
@@ -315,9 +318,11 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                 Add(write, "@current", current);
                 if (change is not null)
                 {
+                    var outcome = change.Choose(current);
                     Add(write, "@expected", AcquisitionAccessNames.Status(change.Expected));
-                    Add(write, "@status", AcquisitionAccessNames.Status(change.New));
-                    Add(write, "@message", change.Message);
+                    Add(write, "@status", AcquisitionAccessNames.Status(outcome.Status));
+                    Add(write, "@message", outcome.Message);
+                    Add(write, "@resultUrl", outcome.ResultUrl);
                     Add(write, "@now", DateTime.UtcNow);
                 }
 

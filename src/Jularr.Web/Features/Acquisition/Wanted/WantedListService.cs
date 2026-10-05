@@ -68,8 +68,8 @@ public sealed class WantedListService(
             return items;
         }
 
-        var workIds = await videoWorks.ResolveAsync(video.Select(item => wanted[item.RequestId!.Value]), cancellationToken);
-        var tvWorks = video.Where(item => item.Kind == MediaAcquisitionKind.Tv && workIds.ContainsKey(item.RequestId!.Value)).Select(item => workIds[item.RequestId!.Value]).Distinct().ToArray();
+        var works = await videoWorks.ResolveAsync(video.Select(item => wanted[item.RequestId!.Value]), cancellationToken);
+        var tvWorks = video.Where(item => item.Kind == MediaAcquisitionKind.Tv && works.ContainsKey(item.RequestId!.Value)).Select(item => works[item.RequestId!.Value].WorkId).Distinct().ToArray();
         var episodes = tvWorks.Length == 0
             ? []
             : await db.WorkEpisodes.AsNoTracking()
@@ -96,19 +96,22 @@ public sealed class WantedListService(
             }
 
             var request = wanted[item.RequestId!.Value];
-            if (!workIds.TryGetValue(request.Id, out var workId))
+            if (!works.TryGetValue(request.Id, out var work))
             {
                 rows.Add(item with { DetailUrl = null });
                 continue;
             }
 
+            var workId = work.WorkId;
+            var selection = VideoRequestSelection.For(request, workId);
             var profileId = profiles.ResolveProfileId(item.Kind, workId);
             var videoRow = item with
             {
                 WorkId = workId,
                 DetailUrl = VideoWorkLinks.DetailPath(item.Kind, workId),
                 ProfileId = profileId,
-                ProfileName = profileId is null ? null : ProfileName(profiles, profileId)
+                ProfileName = profileId is null ? null : ProfileName(profiles, profileId),
+                CanSearch = item.CanSearch && selection.Payload.Monitored
             };
             if (item.Kind == MediaAcquisitionKind.Movie)
             {
@@ -116,7 +119,6 @@ public sealed class WantedListService(
                 continue;
             }
 
-            var selection = VideoRequestSelection.For(request, workId);
             var payload = selection.Payload;
             var missing = episodes
                 .Where(episode => episode.WorkId == workId && !withFiles.Contains(episode.Id) && (episode.AiredAt is null || episode.AiredAt <= now) && selection.Includes(episode.Id, episode.SeasonId, episode.AiredAt))

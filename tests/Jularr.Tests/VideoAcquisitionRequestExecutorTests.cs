@@ -33,6 +33,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
         Assert.AreEqual(AcquisitionRequestStatus.Completed, completed.Status);
         Assert.AreEqual(1, host.Importer.Imports);
         Assert.IsTrue(await host.HasPlayableAsync(workEpisodeId: null));
+        Assert.AreEqual($"/Library/Movie/{host.Work.Id:D}", completed.ResultUrl, "A finished request still points at the canonical Movie page.");
     }
 
     [TestMethod]

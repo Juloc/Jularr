@@ -250,9 +250,9 @@
                                     {
                                         <a class="button" asp-page="/Admin/Wanted">@ui["admin.requests.wanted"]</a>
                                     }
-                                    @if (Model.VideoWorks.TryGetValue(request.Id, out var workId) && request.Status != AcquisitionRequestStatus.Pending)
+                                    @if (Model.VideoWorks.TryGetValue(request.Id, out var work) && request.Status != AcquisitionRequestStatus.Pending)
                                     {
-                                        <a class="button" href="@VideoWorkLinks.AdminPath(request.Kind, workId)">@ui["admin.media.manage"]</a>
+                                        <a class="button" href="@VideoWorkLinks.AdminPath(request.Kind, work.WorkId)">@ui["admin.media.manage"]</a>
                                     }
                                     @if (request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed)
                                     {

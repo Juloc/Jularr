@@ -67,6 +67,9 @@ public static class VideoWorkLinks
     };
 }
 
+/// <summary>The canonical Work a Movie or TV request names.</summary>
+public sealed record VideoRequestWork(Guid WorkId, string Title, int? Year);
+
 /// <summary>
 /// Finds the canonical Work of Movie and TV requests. A request names its title by provider identity; the engine
 /// resolves the same identity when it searches, so this is the read-side twin of that lookup. One query covers
@@ -74,13 +77,13 @@ public static class VideoWorkLinks
 /// </summary>
 public sealed class VideoRequestWorkResolver(AppDbContext db)
 {
-    /// <summary>The Work id per request id, for the Movie and TV requests among <paramref name="requests"/>.</summary>
-    public async Task<IReadOnlyDictionary<Guid, Guid>> ResolveAsync(IEnumerable<AcquisitionRequest> requests, CancellationToken cancellationToken)
+    /// <summary>The Work per request id, for the Movie and TV requests among <paramref name="requests"/>.</summary>
+    public async Task<IReadOnlyDictionary<Guid, VideoRequestWork>> ResolveAsync(IEnumerable<AcquisitionRequest> requests, CancellationToken cancellationToken)
     {
         var video = requests.Where(request => request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv).ToArray();
         if (video.Length == 0)
         {
-            return new Dictionary<Guid, Guid>();
+            return new Dictionary<Guid, VideoRequestWork>();
         }
 
         var providers = video.Select(request => Provider(request)).Distinct().ToArray();
@@ -92,17 +95,17 @@ public sealed class VideoRequestWorkResolver(AppDbContext db)
                       && (work.MediaType == WorkMediaType.Movie || work.MediaType == WorkMediaType.Series)
                       && providers.Contains(identity.Provider)
                       && externalIds.Contains(identity.ExternalId)
-                select new { work.MediaType, identity.Provider, identity.ExternalId, WorkId = work.Id })
+                select new { work.MediaType, identity.Provider, identity.ExternalId, WorkId = work.Id, Title = work.CanonicalTitle, work.Year })
             .ToListAsync(cancellationToken);
 
-        var works = new Dictionary<Guid, Guid>();
+        var works = new Dictionary<Guid, VideoRequestWork>();
         foreach (var request in video)
         {
             var type = VideoWorkLinks.WorkType(request.Kind);
             var match = identities.FirstOrDefault(identity => identity.MediaType == type && identity.Provider == Provider(request) && identity.ExternalId == request.ExternalId.Trim());
             if (match is not null)
             {
-                works[request.Id] = match.WorkId;
+                works[request.Id] = new VideoRequestWork(match.WorkId, match.Title, match.Year);
             }
         }
 

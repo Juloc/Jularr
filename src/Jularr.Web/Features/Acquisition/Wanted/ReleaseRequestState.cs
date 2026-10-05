@@ -150,7 +150,7 @@ public sealed class ReleaseRequestTracker(
 
         tried.Add(next.Identity);
         var triedReleases = tried.Order(StringComparer.OrdinalIgnoreCase).ToArray();
-        await SaveAsync(
+        var saved = (TPayload)await SaveAsync(
             request,
             payload with
             {
@@ -181,7 +181,7 @@ public sealed class ReleaseRequestTracker(
         {
             await SaveAsync(
                 request,
-                payload with
+                saved with
                 {
                     TriedReleases = triedReleases,
                     Searches = searches,
@@ -198,7 +198,7 @@ public sealed class ReleaseRequestTracker(
         var retryAt = Now + SearchBackoff(searches);
         await SaveAsync(
             request,
-            payload with
+            saved with
             {
                 TriedReleases = triedReleases,
                 Searches = searches,
@@ -212,12 +212,16 @@ public sealed class ReleaseRequestTracker(
             outcome.OperationId);
     }
 
-    /// <summary>Stores the search state of a payload; fields another owner changed meanwhile survive (see <see cref="ReleaseRequestPayload.Reconcile"/>).</summary>
-    public Task SaveAsync(
-        AcquisitionRequest request,
-        ReleaseRequestPayload payload,
-        CancellationToken cancellationToken) =>
-        requests.PatchPayloadAsync(request.Id, stored => payload.Reconcile(stored).Serialize(), cancellationToken);
+    /// <summary>
+    /// Stores the search state of a payload; fields another owner changed meanwhile survive (see <see cref="ReleaseRequestPayload.Reconcile"/>).
+    /// Returns the payload as stored, which a later save of the same run continues from so it is not treated as older than the edit this one met.
+    /// </summary>
+    public async Task<ReleaseRequestPayload> SaveAsync(AcquisitionRequest request, ReleaseRequestPayload payload, CancellationToken cancellationToken)
+    {
+        var merged = payload;
+        await requests.PatchPayloadAsync(request.Id, stored => (merged = payload.Reconcile(stored)).Serialize(), cancellationToken);
+        return merged;
+    }
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 }

@@ -166,11 +166,22 @@ public sealed record AcquisitionSubmission(AcquisitionRequest Request, bool Alre
 /// <summary>The status and message a request had just before a conditional status change took it over.</summary>
 public sealed record AcquisitionStatusTransition(AcquisitionRequestStatus PreviousStatus, string? PreviousMessage);
 
+/// <summary>The status a request moves to, with its message and result address.</summary>
+public sealed record AcquisitionStatusOutcome(AcquisitionRequestStatus Status, string? Message, string? ResultUrl = null);
+
 public sealed record AcquisitionExecution(
     AcquisitionRequestStatus Status,
     string? Message,
     Guid? OperationId = null,
-    string? ResultUrl = null);
+    string? ResultUrl = null)
+{
+    /// <summary>
+    /// For a result that ends the request because of what the run read (monitoring off, everything available): given the payload stored when
+    /// the result is written, whether that is still true. When it is not, somebody changed the request meanwhile and the request goes back
+    /// to Approved to be looked at again instead of being ended by a stale result.
+    /// </summary>
+    public Func<string?, bool>? StillApplies { get; init; }
+}
 
 /// <summary>Starts the automatic acquisition for one media type.</summary>
 public interface IAcquisitionRequestExecutor

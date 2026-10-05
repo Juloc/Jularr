@@ -315,12 +315,20 @@ public sealed class AcquisitionRequestService(
         return await RequireAsync(id, cancellationToken);
     }
 
+    /// <summary>The status of a result that was computed from a payload: the result itself while the payload still says what the run read, else back to Approved.</summary>
+    private static AcquisitionStatusOutcome StatusOf(AcquisitionExecution result, bool stillApplies) =>
+        stillApplies
+            ? new AcquisitionStatusOutcome(result.Status, result.Message, result.ResultUrl)
+            : new AcquisitionStatusOutcome(AcquisitionRequestStatus.Approved, "The request changed while it was being worked on; searching again.", result.ResultUrl);
+
     private async Task ApplyExecutionAsync(AcquisitionRequest request, AcquisitionExecution result, CancellationToken cancellationToken)
     {
         // Searching is what the run (or the Manual Search claim) set before. If somebody moved the request on meanwhile (an Admin ending it), that
         // is not overwritten, except that a download which was already handed over is always recorded: it exists and its import must complete.
-        var applied = await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], result.Status, result.Message, result.OperationId, result.ResultUrl, cancellationToken);
-        if (applied is null && result.Status == AcquisitionRequestStatus.Downloading)
+        var applied = result.StillApplies is { } stillApplies
+            ? await store.PatchPayloadAsync(request.Id, stored => stored, AcquisitionRequestStatus.Searching, stored => StatusOf(result, stillApplies(stored)), cancellationToken)
+            : await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], result.Status, result.Message, result.OperationId, result.ResultUrl, cancellationToken) is not null;
+        if (!applied && result.Status == AcquisitionRequestStatus.Downloading)
         {
             await store.UpdateStatusAsync(request.Id, result.Status, result.Message, result.OperationId, result.ResultUrl, null, cancellationToken);
         }

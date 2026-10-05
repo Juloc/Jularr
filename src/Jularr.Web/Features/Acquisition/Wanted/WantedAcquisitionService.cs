@@ -59,6 +59,8 @@ public sealed class WantedAcquisitionService(
 
     public const string InterruptedSearchMessage = "The previous search was interrupted. Searching again.";
 
+    public const string InterruptedDownloadMessage = "The previous search was interrupted. Checking the download.";
+
     public const string CancelledMessage =
         "The download was cancelled, so no other release was grabbed. Approve the request again to search.";
 
@@ -400,8 +402,12 @@ public sealed class WantedAcquisitionService(
         var recovered = 0;
         foreach (var request in await store.ListByStatusAsync(handler.Kind, AcquisitionRequestStatus.Searching, cancellationToken))
         {
-            if (request.OperationId is null && nowUtc - request.UpdatedAt >= StaleSearchingAfter
-                && await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], AcquisitionRequestStatus.Approved, InterruptedSearchMessage, null, cancellationToken) is not null)
+            // The claim sets UpdatedAt and nothing else touches it while the status stays Searching, so its age says whether a worker still has it.
+            // A request that already has a download linked goes back to Downloading, where its operation is followed, never to a new search.
+            var back = request.OperationId is null ? AcquisitionRequestStatus.Approved : AcquisitionRequestStatus.Downloading;
+            var message = back == AcquisitionRequestStatus.Approved ? InterruptedSearchMessage : InterruptedDownloadMessage;
+            if (nowUtc - request.UpdatedAt >= StaleSearchingAfter
+                && await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], back, message, null, cancellationToken) is not null)
             {
                 recovered++;
             }

@@ -235,14 +235,14 @@ public sealed class VideoAdminSurfaceTests
         var works = await movie.Get<VideoRequestWorkResolver>().ResolveAsync([request, unknown, book], CancellationToken.None);
 
         Assert.AreEqual(1, works.Count);
-        Assert.AreEqual(movie.Work.Id, works[request.Id]);
-        Assert.AreEqual($"/Library/Movie/{movie.Work.Id:D}", VideoWorkLinks.DetailPath(MediaAcquisitionKind.Movie, works[request.Id]));
-        Assert.AreEqual($"/Library/Series/{movie.Work.Id:D}", VideoWorkLinks.DetailPath(MediaAcquisitionKind.Tv, works[request.Id]));
+        Assert.AreEqual(new VideoRequestWork(movie.Work.Id, "Dune", 2021), works[request.Id]);
+        Assert.AreEqual($"/Library/Movie/{movie.Work.Id:D}", VideoWorkLinks.DetailPath(MediaAcquisitionKind.Movie, works[request.Id].WorkId));
+        Assert.AreEqual($"/Library/Series/{movie.Work.Id:D}", VideoWorkLinks.DetailPath(MediaAcquisitionKind.Tv, works[request.Id].WorkId));
 
         await using var series = await SeriesHostAsync();
         var tv = await series.CreateApprovedAsync();
         var seriesWorks = await series.Get<VideoRequestWorkResolver>().ResolveAsync([tv], CancellationToken.None);
-        Assert.AreEqual(series.Work.Id, seriesWorks[tv.Id]);
+        Assert.AreEqual(series.Work.Id, seriesWorks[tv.Id].WorkId);
     }
 
     [TestMethod]
@@ -688,6 +688,169 @@ public sealed class VideoAdminSurfaceTests
         Assert.AreEqual(AcquisitionRequestStatus.Completed, done.Status);
         Assert.IsFalse(VideoRequestPayload.Parse(done.PayloadJson)!.Monitored);
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
+    }
+
+    [TestMethod]
+    public async Task AnOffResultIsDroppedWhenAnAdminEditFollowedWhatTheRunRead()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021));
+        var monitoring = host.Get<VideoMonitoringService>();
+        var requests = host.Get<AcquisitionRequestService>();
+        await host.Requests.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
+        await monitoring.SetMovieMonitoredAsync(host.Work.Id, false, CancellationToken.None);
+        var read = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
+        Assert.IsFalse(read.Monitored);
+        var offResult = new AcquisitionExecution(AcquisitionRequestStatus.Rejected, VideoMonitoringService.MonitoringTurnedOff) { StillApplies = VideoRequestPayload.StillAtRevision(read.ScopeRevision) };
+
+        // Admin switches monitoring on after the run read Off and before its result is written.
+        await monitoring.SetMovieMonitoredAsync(host.Work.Id, true, CancellationToken.None);
+        await requests.ApplyManualExecutionAsync(request.Id, offResult, CancellationToken.None);
+
+        var after = await host.GetAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, after.Status, "The stale Off does not end a request that was switched on again.");
+        Assert.IsTrue(VideoRequestPayload.Parse(after.PayloadJson)!.Monitored);
+
+        await requests.ApplyManualExecutionAsync(request.Id, offResult with { StillApplies = VideoRequestPayload.StillAtRevision(VideoRequestPayload.Parse(after.PayloadJson)!.ScopeRevision) }, CancellationToken.None);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, (await host.GetAsync(request.Id)).Status, "Only a request that is still being searched is ended by a result.");
+    }
+
+    [TestMethod]
+    public async Task AResultThatEndsTheRequestStandsWhenNothingChangedAndIsDroppedOverAWiderScope()
+    {
+        await using var host = await SeriesHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var monitoring = host.Get<VideoMonitoringService>();
+        var requests = host.Get<AcquisitionRequestService>();
+        await monitoring.SetSeriesAsync(host.Work.Id, "custom", [], [host.EpisodeId!.Value], false, CancellationToken.None);
+        await host.Requests.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
+        var revision = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!.ScopeRevision;
+        var allAvailable = new AcquisitionExecution(AcquisitionRequestStatus.Completed, "All requested TV episodes are available.") { StillApplies = VideoRequestPayload.StillAtRevision(revision) };
+
+        await requests.ApplyManualExecutionAsync(request.Id, allAvailable, CancellationToken.None);
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, (await host.GetAsync(request.Id)).Status, "Nothing changed, so the result ends the request.");
+
+        await using var widened = await SeriesHostAsync();
+        var second = await widened.CreateApprovedAsync();
+        await widened.Get<VideoMonitoringService>().SetSeriesAsync(widened.Work.Id, "custom", [], [widened.EpisodeId!.Value], false, CancellationToken.None);
+        await widened.Requests.TryTransitionStatusAsync(second.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
+        var read = VideoRequestPayload.Parse((await widened.GetAsync(second.Id)).PayloadJson)!.ScopeRevision;
+        await widened.Get<VideoMonitoringService>().SetSeriesAsync(widened.Work.Id, "all", [], [], false, CancellationToken.None);
+
+        await widened.Get<AcquisitionRequestService>().ApplyManualExecutionAsync(second.Id, allAvailable with { StillApplies = VideoRequestPayload.StillAtRevision(read) }, CancellationToken.None);
+
+        var after = await widened.GetAsync(second.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, after.Status, "A result computed from the narrower scope does not end the widened one.");
+        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, VideoRequestPayload.Parse(after.PayloadJson)!.Scope);
+    }
+
+    [TestMethod]
+    public async Task ADroppedGrabNeverMarksItsReleaseAsTried()
+    {
+        await using var host = await SeriesHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.Indexer.OnSearch = async () =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+        };
+
+        var pass = Task.Run(() => host.ProcessAsync(DateTime.UtcNow));
+        await entered.Task;
+        await host.Get<VideoMonitoringService>().SetSeriesAsync(host.Work.Id, "custom", [], [host.SecondEpisodeId!.Value], false, CancellationToken.None);
+        release.SetResult();
+        await pass;
+
+        var payload = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
+        Assert.IsTrue(payload.TriedReleases is null or { Count: 0 }, "The release of the dropped grab is not tried for the new scope.");
+        Assert.AreEqual(0, payload.Searches);
+    }
+
+    [TestMethod]
+    public async Task ARequestWithADownloadLinkedThatWasLeftSearchingGoesBackToItsDownloadNotToANewSearch()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.StartAsync();
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
+        await host.Requests.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Downloading], AcquisitionRequestStatus.Searching, "Searching", null, CancellationToken.None);
+
+        await host.ProcessAsync(DateTime.UtcNow.AddHours(1));
+
+        var recovered = await host.GetAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, recovered.Status);
+        Assert.AreEqual(request.OperationId, recovered.OperationId);
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "The download is followed, not started again.");
+    }
+
+    [TestMethod]
+    public async Task AnEditDoesNotRestartTheStaleClockOfAClaimedRequest()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021));
+        await host.Requests.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
+        var claimed = await host.GetAsync(request.Id);
+
+        await host.Requests.PatchPayloadAsync(request.Id, stored => stored, AcquisitionRequestStatus.Searching, AcquisitionRequestStatus.Searching, "edit", CancellationToken.None);
+        Assert.AreEqual(claimed.UpdatedAt, (await host.GetAsync(request.Id)).UpdatedAt, "The status did not change, so neither did the claim's age.");
+
+        await host.Requests.PatchPayloadAsync(request.Id, stored => stored, AcquisitionRequestStatus.Searching, AcquisitionRequestStatus.Approved, "done", CancellationToken.None);
+        Assert.AreNotEqual(claimed.UpdatedAt, (await host.GetAsync(request.Id)).UpdatedAt);
+    }
+
+    [TestMethod]
+    public async Task ARefusedDownloadAfterAnEditKeepsItsBackOffAndProblem()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021));
+        host.Environment.Client.GrabResults.Enqueue(new Jularr.Web.Features.Acquisition.Sabnzbd.SabnzbdGrabResult(false, [], "Invalid NZB"));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.Indexer.OnSearch = async () =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+        };
+
+        var pass = Task.Run(() => host.ProcessAsync(DateTime.UtcNow));
+        await entered.Task;
+        await host.Get<VideoMonitoringService>().SetMovieMonitoredAsync(host.Work.Id, true, CancellationToken.None);
+        release.SetResult();
+        await pass;
+
+        var after = await host.GetAsync(request.Id);
+        var payload = VideoRequestPayload.Parse(after.PayloadJson)!;
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, after.Status);
+        Assert.IsNotNull(payload.NextSearchUtc, "The back-off of the refused download is stored although an edit was met by the run's first save.");
+        StringAssert.Contains(payload.LastProblem ?? "", "Invalid NZB");
+    }
+
+    [TestMethod]
+    public async Task AFailedRequestThatWasSwitchedOffOffersNoSearchAndAnEditReplacesAStaleMessage()
+    {
+        await using var host = await MovieHostAsync();
+        var off = VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021) with { Monitored = false };
+        var failed = await host.Requests.CreateAsync(
+            new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", host.TmdbId, "Dune", null, null, off.Serialize()),
+            "owner",
+            AcquisitionRequestStatus.Failed,
+            "owner",
+            CancellationToken.None);
+        var wanted = host.Get<WantedListService>();
+
+        Assert.IsFalse((await wanted.LoadAsync(CancellationToken.None)).Single().CanSearch, "A request that is off is not searched or retried.");
+
+        await host.Requests.PatchPayloadAsync(failed.Id, stored => (VideoRequestPayload.Parse(stored)! with { Monitored = true }).Serialize(), CancellationToken.None);
+        Assert.IsTrue((await wanted.LoadAsync(CancellationToken.None)).Single().CanSearch);
+
+        await using var waiting = await MovieHostAsync();
+        var request = await waiting.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, waiting.Work.Id, "Dune", 2021));
+        await waiting.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Approved, "No release found. Searching again 2030-01-01 00:00 UTC.", null, null, null, CancellationToken.None);
+
+        await waiting.Get<VideoMonitoringService>().SetMovieMonitoredAsync(waiting.Work.Id, true, CancellationToken.None);
+
+        Assert.AreEqual(VideoMonitoringService.MonitoringChanged, (await waiting.GetAsync(request.Id)).StatusMessage);
     }
 
     private static async Task<int> CountQueriesAsync(VideoAcquisitionTestHost host)

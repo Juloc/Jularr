@@ -58,6 +58,9 @@ public sealed class VideoMonitoringService(
     /// <summary>The message of a request that ended because monitoring was turned off.</summary>
     public const string MonitoringTurnedOff = "Monitoring was turned off.";
 
+    /// <summary>The message of a waiting request after an edit; it replaces a "searching again at ..." that the edit made obsolete.</summary>
+    public const string MonitoringChanged = "Monitoring changed. Searching again.";
+
     private const int MaxAttempts = 4;
 
     /// <summary>The open request of the Work under any of its provider identities, or null.</summary>
@@ -89,13 +92,7 @@ public sealed class VideoMonitoringService(
     /// the choice would include but the checklist left out are excluded explicitly. Throws <see cref="ArgumentException"/> for an unknown
     /// scope or a season or episode that does not belong to the Series.
     /// </summary>
-    public async Task<VideoMonitoringOutcome> SetSeriesAsync(
-        Guid workId,
-        string? scope,
-        IReadOnlyCollection<Guid> seasonIds,
-        IReadOnlyCollection<Guid> episodeIds,
-        bool monitorFuture,
-        CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome> SetSeriesAsync(Guid workId, string? scope, IReadOnlyCollection<Guid> seasonIds, IReadOnlyCollection<Guid> episodeIds, bool monitorFuture, CancellationToken cancellationToken)
     {
         var work = await db.Works.AsNoTracking().SingleOrDefaultAsync(x => x.Id == workId && x.MediaType == WorkMediaType.Series, cancellationToken);
         if (work is null)
@@ -169,7 +166,8 @@ public sealed class VideoMonitoringService(
                 {
                     var ends = !on && open.Status == AcquisitionRequestStatus.Approved;
                     var endStatus = ends ? await engine.StatusWhenMonitoringStopsAsync(kind, work.Id, cancellationToken) : open.Status;
-                    if (await requests.PatchPayloadAsync(open.Id, stored => Edited(stored, seed, edit), open.Status, endStatus, ends ? MonitoringTurnedOff : null, cancellationToken))
+                    var message = ends ? MonitoringTurnedOff : open.Status == AcquisitionRequestStatus.Approved ? MonitoringChanged : null;
+                    if (await requests.PatchPayloadAsync(open.Id, stored => Edited(stored, seed, edit), open.Status, endStatus, message, cancellationToken))
                     {
                         return VideoMonitoringOutcome.Saved;
                     }

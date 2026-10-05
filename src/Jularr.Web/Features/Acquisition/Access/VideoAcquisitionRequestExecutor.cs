@@ -54,6 +54,9 @@ public sealed record VideoRequestPayload(
     /// <summary>Admin-owned: counts every Admin change, so a search that started before one can tell and keep the change's wake-up.</summary>
     public int ScopeRevision { get; init; }
 
+    /// <summary>Whether the payload stored now still has the Admin scope revision a run read; the guard of a result that ends a request.</summary>
+    public static Func<string?, bool> StillAtRevision(int revision) => stored => (Parse(stored)?.ScopeRevision ?? 0) == revision;
+
     public static VideoRequestPayload? Parse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -160,6 +163,7 @@ public sealed partial class VideoAcquisitionEngine(
     QualityProfileStore profiles,
     ReleaseRequestTracker tracker,
     AcquisitionAccessStore requestStore,
+    VideoRequestWorkResolver works,
     TimeProvider clock)
 {
     public const string OperationKind = "video-usenet-download";
@@ -192,7 +196,7 @@ public sealed partial class VideoAcquisitionEngine(
 
         if (!payload.Monitored)
         {
-            return await MonitoringOffAsync(request.Kind, payload.WorkId, cancellationToken);
+            return await MonitoringOffAsync(request.Kind, payload.WorkId, payload.ScopeRevision, cancellationToken);
         }
 
         VideoUnit? unit = null;
@@ -214,10 +218,10 @@ public sealed partial class VideoAcquisitionEngine(
                 var continuation = await TvContinuationAsync(request, payload, cancellationToken);
                 if (!continuation.KeepOpen)
                 {
-                    return new AcquisitionExecution(
-                        AcquisitionRequestStatus.Completed,
-                        "All requested TV episodes are available.",
-                        ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
+                    return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "All requested TV episodes are available.", ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId))
+                    {
+                        StillApplies = VideoRequestPayload.StillAtRevision(payload.ScopeRevision)
+                    };
                 }
 
                 var waiting = payload with
@@ -252,12 +256,6 @@ public sealed partial class VideoAcquisitionEngine(
         var evaluation = await SearchAndEvaluateAsync(request.Kind, payload, unit, profile, cancellationToken);
         var ranked = Rank(evaluation.Releases);
 
-        // Admin may have changed monitoring while the indexers were searched; look again before anything is stored or grabbed.
-        if (await StopWhenNoLongerWantedAsync(request, payload.WorkId, unit, cancellationToken) is { } stopped)
-        {
-            return stopped;
-        }
-
         return await GrabAsync(request, payload, unit, ranked, FailureMessage(evaluation.Search, request.Kind), cancellationToken);
     }
 
@@ -274,43 +272,36 @@ public sealed partial class VideoAcquisitionEngine(
         CancellationToken cancellationToken,
         VideoGrabProgress? progress = null)
     {
+        // Admin may have changed monitoring while the indexers were searched; look again before anything is stored or grabbed, so a grab that is
+        // dropped never marks its release as tried. A Manual Search grab chose its episode itself, so only Off applies to it. An Off that lands
+        // after this look is handled by the download's own lifecycle.
+        if (await StopWhenNoLongerWantedAsync(request, payload.WorkId, progress is null ? unit : null, cancellationToken) is { } stopped)
+        {
+            return stopped;
+        }
+
         var downloadTitle = request.Kind == MediaAcquisitionKind.Movie ? "Download Movie" : "Download TV";
         var mediaTarget = unit is null ? VideoWorkLinks.WorkTarget(payload.WorkId) : VideoWorkLinks.EpisodeTarget(unit.Id);
         var candidates = releases.Select(x => new ReleaseRequestCandidate(x.Candidate.Identity, x.Candidate.Title, x.Candidate.InternalDownloadUri!)).ToArray();
-        AcquisitionExecution execution;
-        try
-        {
-            execution = await tracker.ContinueAsync(
-                request,
-                payload,
-                candidates,
-                noReleaseReason,
-                async release =>
+        var execution = await tracker.ContinueAsync(
+            request,
+            payload,
+            candidates,
+            noReleaseReason,
+            async release =>
+            {
+                progress?.SubmitStarted = true;
+                var spec = new DownloadSubmissionSpec(OperationKind, downloadTitle, payload.Title, request.RequestedByProfileId, release.DownloadUri, release.Title, request.Kind, MediaTargetKey: mediaTarget);
+                var outcome = await downloads.SubmitAsync(spec, cancellationToken);
+                if (outcome.Accepted && progress is not null)
                 {
-                    // The last look before the download is handed over (a Manual Search grab chose its episode itself, so only Off applies); an Off that
-                    // lands after it is handled by the download's own lifecycle.
-                    if (await StopWhenNoLongerWantedAsync(request, payload.WorkId, progress is null ? unit : null, cancellationToken) is { } stoppedBeforeGrab)
-                    {
-                        throw new GrabNoLongerWantedException(stoppedBeforeGrab);
-                    }
+                    progress.Accepted = true;
+                    progress.OperationId = outcome.OperationId;
+                }
 
-                    progress?.SubmitStarted = true;
-                    var spec = new DownloadSubmissionSpec(OperationKind, downloadTitle, payload.Title, request.RequestedByProfileId, release.DownloadUri, release.Title, request.Kind, MediaTargetKey: mediaTarget);
-                    var outcome = await downloads.SubmitAsync(spec, cancellationToken);
-                    if (outcome.Accepted && progress is not null)
-                    {
-                        progress.Accepted = true;
-                        progress.OperationId = outcome.OperationId;
-                    }
-
-                    return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
-                },
-                cancellationToken);
-        }
-        catch (GrabNoLongerWantedException exception)
-        {
-            return exception.Result;
-        }
+                return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
+            },
+            cancellationToken);
 
         return execution with { ResultUrl = VideoWorkLinks.DetailPath(request.Kind, payload.WorkId) };
     }
@@ -352,8 +343,12 @@ public sealed partial class VideoAcquisitionEngine(
         return hasMedia ? AcquisitionRequestStatus.Completed : AcquisitionRequestStatus.Rejected;
     }
 
-    private async Task<AcquisitionExecution> MonitoringOffAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken) =>
-        new(await StatusWhenMonitoringStopsAsync(kind, workId, cancellationToken), VideoMonitoringService.MonitoringTurnedOff, ResultUrl: VideoWorkLinks.DetailPath(kind, workId));
+    /// <summary>The result of an Off the run read at <paramref name="scopeRevision"/>; it ends the request only while no Admin edit has followed.</summary>
+    private async Task<AcquisitionExecution> MonitoringOffAsync(MediaAcquisitionKind kind, Guid workId, int scopeRevision, CancellationToken cancellationToken) =>
+        new(await StatusWhenMonitoringStopsAsync(kind, workId, cancellationToken), VideoMonitoringService.MonitoringTurnedOff, ResultUrl: VideoWorkLinks.DetailPath(kind, workId))
+        {
+            StillApplies = VideoRequestPayload.StillAtRevision(scopeRevision)
+        };
 
     /// <summary>
     /// Re-reads the request and returns how the execution ends when Admin turned monitoring off meanwhile (completed) or removed the
@@ -365,7 +360,7 @@ public sealed partial class VideoAcquisitionEngine(
         var selection = VideoRequestSelection.For(fresh, workId);
         if (!selection.Payload.Monitored)
         {
-            return await MonitoringOffAsync(request.Kind, workId, cancellationToken);
+            return await MonitoringOffAsync(request.Kind, workId, selection.Payload.ScopeRevision, cancellationToken);
         }
 
         return unit is not null && !selection.Includes(unit.Id, unit.SeasonId, unit.AiredAt)
@@ -440,26 +435,9 @@ public sealed partial class VideoAcquisitionEngine(
         return true;
     }
 
-    private async Task<VideoTarget?> ResolveTargetAsync(
-        AcquisitionRequest request,
-        CancellationToken cancellationToken)
-    {
-        var workType = request.Kind == MediaAcquisitionKind.Movie
-            ? WorkMediaType.Movie
-            : WorkMediaType.Series;
-        var provider = request.Provider.Trim().ToLowerInvariant();
-        var externalId = request.ExternalId.Trim();
-
-        return await (
-            from identity in db.WorkExternalIdentities.AsNoTracking()
-            join work in db.Works.AsNoTracking() on identity.WorkId equals work.Id
-            where identity.MediaType == workType
-                  && identity.Provider == provider
-                  && identity.ExternalId == externalId
-                  && work.MediaType == workType
-            select new VideoTarget(work.Id, work.CanonicalTitle, work.Year))
-            .SingleOrDefaultAsync(cancellationToken);
-    }
+    /// <summary>The canonical Work of the request, from the one identity lookup (<see cref="VideoRequestWorkResolver"/>), or null when it no longer exists.</summary>
+    private async Task<VideoRequestWork?> ResolveTargetAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
+        (await works.ResolveAsync([request], cancellationToken)).GetValueOrDefault(request.Id);
 
     public async Task<bool> HasMovieFileAsync(Guid workId, CancellationToken cancellationToken) =>
         await db.MediaAssets.AsNoTracking()
@@ -692,13 +670,7 @@ public sealed partial class VideoAcquisitionEngine(
                 ? "No suitable Movie release matched the requested title and quality profile."
                 : "No suitable TV release matched the requested episode and quality profile.";
 
-    /// <summary>Thrown inside the release submission when the grab must not happen; ends the execution with <see cref="Result"/>.</summary>
-    private sealed class GrabNoLongerWantedException(AcquisitionExecution result) : Exception
-    {
-        public AcquisitionExecution Result { get; } = result;
-    }
 
-    private sealed record VideoTarget(Guid WorkId, string Title, int? Year);
 
     private sealed record TvContinuation(
         bool KeepOpen,

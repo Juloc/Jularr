@@ -54,14 +54,14 @@ public sealed class RequestsModel(
     public bool CanEditSettings => JularrPolicies.Allows(User, JularrPolicies.AcquisitionSettings);
 
     /// <summary>The canonical Work of each Movie and TV request on the page, by request id; a request whose Work does not exist has no entry.</summary>
-    public IReadOnlyDictionary<Guid, Guid> VideoWorks { get; private set; } = new Dictionary<Guid, Guid>();
+    public IReadOnlyDictionary<Guid, VideoRequestWork> VideoWorks { get; private set; } = new Dictionary<Guid, VideoRequestWork>();
 
     /// <summary>
     /// Where "View media" goes: the canonical Library page of a Movie or Series Work, never a search or a path, and the
     /// result address of the other media types. Null when there is nothing to open yet.
     /// </summary>
     public string? ViewUrl(AcquisitionRequest request) => request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
-        ? VideoWorks.TryGetValue(request.Id, out var workId) ? VideoWorkLinks.DetailPath(request.Kind, workId) : null
+        ? VideoWorks.TryGetValue(request.Id, out var work) ? VideoWorkLinks.DetailPath(request.Kind, work.WorkId) : null
         : request.ResultUrl;
 
     /// <summary>The requester's chosen options besides the audio language, which has its own column.</summary>

@@ -321,6 +321,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
     }
 }
 
+// A plain property: HttpContextAccessor keeps its context in an AsyncLocal that does not survive the async setup method.
 internal sealed class FixedAccessor(HttpContext context) : IHttpContextAccessor
 {
     public HttpContext? HttpContext { get; set; } = context;
@@ -402,8 +403,7 @@ internal sealed class RecordingVideoImporter(
         db.AddRange(version, asset, file);
         await db.SaveChangesAsync(cancellationToken);
 
-        return CompletedDownloadImportResult.Completed(
-            "Imported canonical video.",
-            $"/Search?q={Uri.EscapeDataString(payload.Title)}");
+        // The real Movie/TV adapters return no result address, so the request keeps the canonical page its execution set.
+        return CompletedDownloadImportResult.Completed("Imported canonical video.", resultUrl: null);
     }
 }
