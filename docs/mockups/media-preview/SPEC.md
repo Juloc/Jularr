@@ -348,7 +348,7 @@ TV uses the same data but a remote-first presentation.
 Recommended:
 - large preview/hero region adjacent to or above browse rows;
 - trailer after stable focus delay;
-- Play/Continue/Request and Details as large focusable actions;
+- Play/Continue/Start watching/Request and Details as large focusable actions;
 - no tiny metadata chips;
 - no trailer restart while focus is still moving quickly;
 - one active trailer maximum.
@@ -465,3 +465,8 @@ Approved visual direction:
 The owner will upload the approved mockup image into this folder.
 
 Text specification wins over imagery on conflict.
+
+
+## Instant Play integration
+
+Binding specification: `docs/mockups/instant-play/SPEC.md`.
