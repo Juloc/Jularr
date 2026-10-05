@@ -236,7 +236,7 @@ public sealed partial class StorageCacheScanner(
         var found = new List<ReclaimCandidate>();
         foreach (var directory in Directory.EnumerateDirectories(root))
         {
-            if (!IsPlainDirectory(directory))
+            if (!PlaybackCacheOwnership.IsDeletableSession(root, directory))
             {
                 continue;
             }

@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Audiobooks;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Storage;
 using Jularr.Web.Features.Storage.Insights;
 using Microsoft.EntityFrameworkCore;
@@ -255,6 +256,9 @@ public sealed class StorageInsightsTests
                 Path.Combine(basePath, "data", "cache", "artwork"),
                 Path.Combine(basePath, "data", "media-segment-cache", "fingerprints"),
                 Path.Combine(basePath, "data", "manga-cache"));
+            // The HLS folder is Jularr's: the session manager marks the root with its first session, and only marked roots are cleaned.
+            Directory.CreateDirectory(Layout.HlsRoot);
+            PlaybackCacheOwnership.MarkRoot(Layout.HlsRoot);
             Coordinator = new StorageAvailabilityCoordinator();
             Usage = new StorageUsageService(
                 db,

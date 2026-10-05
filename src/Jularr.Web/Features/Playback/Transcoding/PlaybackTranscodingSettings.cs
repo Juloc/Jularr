@@ -70,7 +70,6 @@ public static class PlaybackTranscodingSettingsRules
     public const string PathInvalid = "path_invalid";
     public const string PathNotWritable = "path_not_writable";
     public const string PathNotEmpty = "path_not_empty";
-    public const string CacheMarkerFileName = ".jularr-hls-cache";
     public const string LimitRange = "limit_range";
     public const string BudgetRange = "budget_range";
     public const string FloorRange = "floor_range";
@@ -136,28 +135,15 @@ public static class PlaybackTranscodingSettingsRules
             return PathTraversal;
         }
 
+        // "%" starts a pattern in ffmpeg's segment filename template (-hls_segment_filename), so it cannot be part of the folder.
+        if (trimmed.Contains('%'))
+        {
+            return PathInvalid;
+        }
+
         // A filesystem root would make the cache sweeper treat unrelated top-level folders as sessions.
         var full = Path.GetFullPath(trimmed);
         return string.Equals(full, Path.GetPathRoot(full), StringComparison.Ordinal) ? PathInvalid : null;
-    }
-
-    /// <summary>
-    /// Whether the folder is Jularr's: marked by an earlier session, the default folder, or holding nothing but session directories.
-    /// The sweeper deletes directories and the budget counts bytes, so pointing the cache at a folder with other content must be refused.
-    /// </summary>
-    public static bool IsOwnedCacheRoot(string root) =>
-        !Directory.Exists(root) ||
-        File.Exists(Path.Combine(root, CacheMarkerFileName)) ||
-        string.Equals(root.TrimEnd('/', '\\'), PlaybackTranscodingSettings.DefaultHlsCachePath, StringComparison.Ordinal) ||
-        !Directory.EnumerateFileSystemEntries(root).Any();
-
-    public static void MarkCacheRoot(string root)
-    {
-        var marker = Path.Combine(root, CacheMarkerFileName);
-        if (!File.Exists(marker))
-        {
-            File.WriteAllBytes(marker, []);
-        }
     }
 
     /// <summary>The canonical stored form of a validated path: trimmed, without a trailing separator.</summary>
@@ -196,6 +182,21 @@ public sealed class PlaybackTranscodingSettingsStore
 
     public PlaybackTranscodingSettings Current => Volatile.Read(ref _current);
 
+    /// <summary>Reads the stored settings without touching <see cref="Current"/>; what an Admin page shows is not what the server enforces until it is saved or loaded at startup.</summary>
+    public async Task<PlaybackTranscodingSettings> ReadStoredAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            return await ReadAsync(cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Startup: makes the stored settings the ones the server enforces.</summary>
     public async Task<PlaybackTranscodingSettings> LoadAsync(CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken);
@@ -220,7 +221,7 @@ public sealed class PlaybackTranscodingSettingsStore
         ArgumentNullException.ThrowIfNull(settings);
         var normalized = settings with { HlsCachePath = PlaybackTranscodingSettingsRules.NormalizePath(settings.HlsCachePath ?? "") };
         var issues = PlaybackTranscodingSettingsRules.Validate(normalized).ToList();
-        if (issues.Count == 0 && !PlaybackTranscodingSettingsRules.IsOwnedCacheRoot(normalized.HlsCachePath))
+        if (issues.Count == 0 && !PlaybackCacheOwnership.IsOwnedRoot(normalized.HlsCachePath))
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackTranscodingSettingsRules.PathNotEmpty));
         }

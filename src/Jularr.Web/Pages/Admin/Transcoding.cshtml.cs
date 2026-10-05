@@ -50,12 +50,13 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         try
         {
-            Fill(await store.LoadAsync(cancellationToken));
+            // A read for display: what the server enforces (store.Current) is not touched by opening the page.
+            Fill(await store.ReadStoredAsync(cancellationToken));
         }
-        catch (InvalidDataException)
+        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException)
         {
-            // The broken file is not reset behind the administrator's back: the form shows the defaults and says so; only a save replaces the file.
-            ModelState.AddModelError(string.Empty, Ui["admin.transcoding.storedInvalid"]);
+            // The broken or unreadable file is not reset behind the administrator's back: the form shows the defaults and says so; only a save replaces the file.
+            ModelState.AddModelError(string.Empty, Ui[exception is InvalidDataException ? "admin.transcoding.storedInvalid" : "admin.transcoding.storedUnreadable"]);
             Fill(PlaybackTranscodingSettings.Default);
         }
     }
@@ -125,10 +126,7 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
         issue.Code switch
         {
             PlaybackTranscodingSettingsRules.LimitRange => Ui.Format("admin.transcoding.error.limit_range", ("max", PlaybackTranscodingSettings.MaxSessionsPerClass)),
-            PlaybackTranscodingSettingsRules.BudgetRange => Ui.Format(
-                "admin.transcoding.error.budget_range",
-                ("min", PlaybackTranscodingSettings.MinCacheBudgetGiB),
-                ("max", PlaybackTranscodingSettings.MaxCacheBudgetGiB)),
+            PlaybackTranscodingSettingsRules.BudgetRange => Ui.Format("admin.transcoding.error.budget_range", ("min", PlaybackTranscodingSettings.MinCacheBudgetGiB), ("max", PlaybackTranscodingSettings.MaxCacheBudgetGiB)),
             PlaybackTranscodingSettingsRules.FloorRange => Ui.Format("admin.transcoding.error.floor_range", ("max", PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB)),
             _ => Ui[$"admin.transcoding.error.{issue.Code}"]
         };
