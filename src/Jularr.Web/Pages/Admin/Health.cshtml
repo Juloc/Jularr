@@ -259,6 +259,10 @@
                         </span>
                         <strong class="status-pill @stateClass">@ui[$"admin.health.hardware.state.{stateKey}"]</strong>
                     </div>
+                    @if (Model.DecodeDisabled.Contains(backend))
+                    {
+                        <small class="muted">@ui["admin.health.hardware.decodeDisabled"]</small>
+                    }
                     @if (status?.Detail is { } detail)
                     {
                         <small class="muted">@detail</small>

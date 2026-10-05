@@ -56,6 +56,9 @@ public sealed record ClientPlaybackPlanResponse(
     ClientVideoTarget Target,
     long ResumePositionMs);
 
+/// <summary>Whether the server still runs the session's stream. <see cref="State"/> is "active" or "ended"; <see cref="Reason"/> says why an ended one ended when the server knows.</summary>
+public sealed record ClientStreamSessionStatus(string State, string? Reason);
+
 public sealed record ClientVideoProgressUpdate(
     ClientVideoTarget? Target,
     long PositionMs,
@@ -300,12 +303,13 @@ public static class ClientApiPlaybackPlanEndpoints
                 : Results.File(asset.Path, asset.ContentType);
         });
 
-        group.MapGet("/stream-sessions/{sessionId:guid}/stream", (
+        group.MapGet("/stream-sessions/{sessionId:guid}/stream", async (
             Guid sessionId,
             double? startSeconds,
             PlaybackStreamSessionStore sessions,
             PlaybackAdmissionService admission,
-            CurrentAccountContext currentAccount) =>
+            CurrentAccountContext currentAccount,
+            CancellationToken cancellationToken) =>
         {
             var session = sessions.Get(sessionId, currentAccount.ProfileId);
             if (session is null)
@@ -332,43 +336,37 @@ public static class ClientApiPlaybackPlanEndpoints
                     "The media file of this playback session is unavailable."));
             }
 
-            var admitted = admission.Admit(session.Plan);
-            while (true)
+            try
             {
-                if (!admitted.Admitted)
-                {
-                    return Refused(admitted.RefusalCode!);
-                }
-
-                try
-                {
-                    // The stream reports its first bytes (the encoder works) or an early exit (it does not) to the breaker.
-                    var current = admitted;
-                    var live = LivePlaybackStream.Start(
-                        PlaybackDeliveryCommand.Progressive(session.SourcePath, session.Plan, start, current.Encoder),
-                        current.Lease,
-                        failure => admission.ReportStart(current, failure));
-                    return Results.File(live, "video/mp4", enableRangeProcessing: false);
-                }
-                catch (Exception exception) when (
-                    exception is InvalidOperationException or System.ComponentModel.Win32Exception)
-                {
-                    admitted.Lease?.Dispose();
-                    admission.ReportStart(admitted, new PlaybackStartFailure(PlaybackStartFailure.StartFailed, exception.Message));
-                    if (!admitted.Encoder.IsHardware)
+                // The response only starts once ffmpeg produced its first bytes, so a failing encoder can still be replaced by the fallback.
+                var live = await admission.StartAsync(
+                    session.Plan,
+                    currentAccount.ProfileId,
+                    async admitted =>
                     {
-                        return StartFailed();
-                    }
-
-                    // The hardware encoder could not even start: this session continues on software.
-                    admitted = admission.AdmitSoftwareFallback();
-                }
-                catch
-                {
-                    // Anything else (an invalid argument set) is a bug, but it must not leak the slot.
-                    admitted.Lease?.Dispose();
-                    throw;
-                }
+                        LivePlaybackStream? stream = null;
+                        try
+                        {
+                            stream = LivePlaybackStream.Start(PlaybackDeliveryCommand.Progressive(session.SourcePath, session.Plan, start, admitted.Encoder), admitted.Lease);
+                            await stream.WaitForFirstBytesAsync(PlaybackDeliveryCommand.FirstOutputTimeout, cancellationToken);
+                            return stream;
+                        }
+                        catch
+                        {
+                            stream?.Dispose();
+                            admitted.Lease?.Dispose();
+                            throw;
+                        }
+                    });
+                return Results.File(live, "video/mp4", enableRangeProcessing: false);
+            }
+            catch (PlaybackAdmissionRefusedException refusal)
+            {
+                return Refused(refusal.Code);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
+            {
+                return StartFailed();
             }
         })
         .RequireRateLimiting(RateLimitPolicy);
@@ -414,41 +412,16 @@ public static class ClientApiPlaybackPlanEndpoints
                 var hlsSessionId = await session.EnsureHlsAsync(
                     start,
                     running => manager.IsActive(running, session.ProfileId),
-                    async token =>
-                    {
-                        var admitted = admission.Admit(session.Plan);
-                        while (true)
-                        {
-                            if (!admitted.Admitted)
-                            {
-                                throw new PlaybackAdmissionRefusedException(admitted.RefusalCode!);
-                            }
-
-                            try
-                            {
-                                var current = admitted;
-                                var hls = await manager.StartAsync(
-                                    session.EpisodeId,
-                                    session.ProfileId,
-                                    start,
-                                    directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory, current.Encoder),
-                                    current.Lease,
-                                    token);
-                                admission.ReportStart(current, null);
-                                return hls.SessionId;
-                            }
-                            catch (Exception exception) when (
-                                admitted.Encoder.IsHardware &&
-                                exception is not PlaybackAdmissionRefusedException &&
-                                exception is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
-                            {
-                                // The manager released the failed attempt's slot; this session continues on software.
-                                var reason = exception is TimeoutException ? PlaybackStartFailure.StartTimedOut : PlaybackStartFailure.StartFailed;
-                                admission.ReportStart(admitted, new PlaybackStartFailure(reason, exception.Message));
-                                admitted = admission.AdmitSoftwareFallback();
-                            }
-                        }
-                    },
+                    token => admission.StartAsync(
+                        session.Plan,
+                        session.ProfileId,
+                        async admitted => (Guid?)(await manager.StartAsync(
+                            session.EpisodeId,
+                            session.ProfileId,
+                            start,
+                            directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory, admitted.Encoder),
+                            admitted.Lease,
+                            token)).SessionId),
                     previous => manager.Stop(previous, session.ProfileId),
                     cancellationToken);
                 if (hlsSessionId is not { } started)
@@ -498,7 +471,7 @@ public static class ClientApiPlaybackPlanEndpoints
             {
                 return Results.NotFound(new ClientErrorResponse(
                     "hls_asset_not_found",
-                    "The HLS playback segment is unavailable or expired."));
+                    $"The HLS playback segment is unavailable or expired ({manager.EndReason(hlsSessionId) ?? "unknown"})."));
             }
 
             if (fileName == "index.m3u8")
@@ -519,6 +492,26 @@ public static class ClientApiPlaybackPlanEndpoints
 
             manager.PruneBehind(hlsSessionId, currentAccount.ProfileId, fileName);
             return Results.File(asset.Path, asset.ContentType, enableRangeProcessing: asset.EnableRangeProcessing);
+        });
+
+        // The player cannot read the HTTP status behind a failed video element, so it asks here whether the server ended
+        // the session itself (idle, cache policy, encoder crash) and then re-plans with the same mode instead of blaming the mode.
+        group.MapGet("/stream-sessions/{sessionId:guid}", (
+            Guid sessionId,
+            PlaybackStreamSessionStore sessions,
+            HlsPlaybackSessionManager manager,
+            HttpContext httpContext,
+            CurrentAccountContext currentAccount) =>
+        {
+            var session = sessions.Get(sessionId, currentAccount.ProfileId);
+            if (session is null)
+            {
+                return SessionNotFound();
+            }
+
+            var ended = session.HlsSessionId is { } hlsSessionId && !manager.IsActive(hlsSessionId, currentAccount.ProfileId);
+            httpContext.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(new ClientStreamSessionStatus(ended ? "ended" : "active", ended ? manager.EndReason(session.HlsSessionId!.Value) : null));
         });
 
         group.MapDelete("/stream-sessions/{sessionId:guid}", async (
@@ -818,7 +811,7 @@ public static class ClientApiPlaybackPlanEndpoints
             "invalid_start_position",
             "startSeconds must be a finite value greater than or equal to zero."));
 
-    private static IResult Refused(string code) =>
+    internal static IResult Refused(string code) =>
         Results.Json(
             new ClientErrorResponse(code, PlaybackAdmissionCodes.Message(code)),
             statusCode: StatusCodes.Status503ServiceUnavailable);

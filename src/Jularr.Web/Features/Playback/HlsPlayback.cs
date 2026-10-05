@@ -23,12 +23,15 @@ public sealed record HlsPlaybackAsset(
     bool EnableRangeProcessing);
 
 /// <summary>What one cache sweep removed.</summary>
-public sealed record HlsSweepResult(int ExpiredSessions, int PrunedForPolicy, int OrphanDirectories);
+public sealed record HlsSweepResult(int ExpiredSessions, int PrunedForPolicy, int OrphanDirectories, int CrashedSessions = 0);
 
 /// <summary>One running ffmpeg of an HLS session; the seam that lets the cache rules be tested without starting ffmpeg.</summary>
 public interface IHlsEncoderProcess : IDisposable
 {
     bool HasExited { get; }
+
+    /// <summary>The exit code once the process has exited, otherwise null.</summary>
+    int? ExitCode { get; }
 
     /// <summary>The last line ffmpeg printed to stderr, bounded; the reason an early exit is reported with.</summary>
     string ErrorSummary { get; }
@@ -52,20 +55,22 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     public static readonly TimeSpan IdleLifetime = TimeSpan.FromMinutes(10);
 
     /// <summary>
-    /// A session untouched for this long may be dropped to make room under the cache budget. A
-    /// playing session reads a segment every few seconds, so a minute of silence means a paused
-    /// or abandoned player; the idle lifetime itself is far too long to relieve a full cache.
+    /// A session untouched for this long may be dropped to make room under the cache budget. A playing
+    /// session reads a segment every few seconds and a player may buffer ahead for up to two minutes (the
+    /// largest buffer preset), so shorter silence is not proof of an abandoned player; the idle lifetime
+    /// itself is far too long to relieve a full cache.
     /// </summary>
-    public static readonly TimeSpan BudgetPruneIdleAfter = TimeSpan.FromMinutes(1);
+    public static readonly TimeSpan BudgetPruneIdleAfter = TimeSpan.FromMinutes(2);
+
+    /// <summary>How many involuntarily ended sessions are remembered so a late request can be told why.</summary>
+    private const int MaxRememberedEndings = 128;
 
     private static readonly Regex s_segmentPattern =
         new("^segment-[0-9]{5}\\.m4s$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    private static readonly Regex s_sessionDirectoryPattern =
-        new("^[0-9a-f]{32}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
     private readonly object _gate = new();
     private readonly ConcurrentDictionary<Guid, Entry> _sessions = new();
+    private readonly ConcurrentDictionary<Guid, string> _endReasons = new();
     private readonly PlaybackTranscodingSettingsStore _settings;
     private readonly TimeProvider _time;
     private readonly HlsProcessStarter _startProcess;
@@ -99,13 +104,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         PlaybackQualityCap qualityCap = PlaybackQualityCap.Auto,
         IDisposable? lease = null)
     {
-        var session = await StartAsync(
-            episodeId,
-            profileId,
-            startSeconds,
-            directory => BuildArguments(sourcePath, directory, startSeconds, audioStreamIndex, qualityCap),
-            lease,
-            cancellationToken);
+        var session = await StartAsync(episodeId, profileId, startSeconds, directory => BuildArguments(sourcePath, directory, startSeconds, audioStreamIndex, qualityCap), lease, cancellationToken);
         return session with { AudioStreamIndex = audioStreamIndex, QualityCap = qualityCap };
     }
 
@@ -136,29 +135,28 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             throw new ArgumentOutOfRangeException(nameof(startSeconds));
         }
 
-        ThrowIfDisposed();
-        CleanupExpired();
-
         Entry entry;
         try
         {
+            ThrowIfDisposed();
+            CleanupExpired();
             lock (_gate)
             {
-                EvictForProfileCapacity(profileId);
-
+                // Admission first: a refused start must not cost the profile its own running session.
                 var policy = _settings.Current;
                 Directory.CreateDirectory(policy.HlsCachePath);
-                if (!PlaybackTranscodingSettingsRules.IsOwnedCacheRoot(policy.HlsCachePath))
+                if (!PlaybackCacheOwnership.IsOwnedRoot(policy.HlsCachePath))
                 {
-                    throw new InvalidOperationException("The HLS cache folder holds files that are not Jularr's; point the cache at an empty folder.");
+                    throw new PlaybackAdmissionRefusedException(PlaybackAdmissionCodes.CacheFolderNotOwned);
                 }
 
-                PlaybackTranscodingSettingsRules.MarkCacheRoot(policy.HlsCachePath);
-                if (PruneToPolicy(policy) is { } refusal)
+                PlaybackCacheOwnership.MarkRoot(policy.HlsCachePath);
+                if (PruneToPolicy(policy, terminateRunning: false) is { } refusal)
                 {
                     throw new PlaybackAdmissionRefusedException(refusal);
                 }
 
+                EvictForProfileCapacity(profileId);
                 var sessionId = Guid.NewGuid();
                 var directory = Path.Combine(policy.HlsCachePath, sessionId.ToString("N"));
                 Directory.CreateDirectory(directory);
@@ -174,8 +172,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                     throw;
                 }
 
-                var now = _time.GetUtcNow();
-                entry = new Entry(sessionId, episodeId, profileId, directory, process, startSeconds, now, lease);
+                entry = new Entry(sessionId, episodeId, profileId, directory, process, startSeconds, _time.GetUtcNow(), lease);
                 _sessions[sessionId] = entry;
             }
         }
@@ -252,7 +249,11 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
     public bool IsActive(Guid sessionId, string profileId) =>
         _sessions.TryGetValue(sessionId, out var entry) &&
-        string.Equals(entry.ProfileId, profileId, StringComparison.Ordinal);
+        string.Equals(entry.ProfileId, profileId, StringComparison.Ordinal) &&
+        !ReapIfCrashed(entry);
+
+    /// <summary>Why a session that was ended without its player asking (idle, cache policy, encoder crash) is gone; null when unknown or when it was ended normally.</summary>
+    public string? EndReason(Guid sessionId) => _endReasons.GetValueOrDefault(sessionId);
 
     /// <summary>Ends a session early (a client stopped or switched streams).</summary>
     public void Stop(Guid sessionId, string profileId)
@@ -276,7 +277,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         if (!_sessions.TryGetValue(sessionId, out var entry) ||
             entry.EpisodeId != episodeId ||
             !string.Equals(entry.ProfileId, profileId, StringComparison.Ordinal) ||
-            !AllowedAsset(fileName))
+            !AllowedAsset(fileName) ||
+            ReapIfCrashed(entry))
         {
             return null;
         }
@@ -303,7 +305,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         {
             if (entry.LastAccessUtc < cutoff)
             {
-                Remove(entry.SessionId);
+                Remove(entry.SessionId, HlsSessionEndReasons.Idle);
                 removed++;
             }
         }
@@ -312,24 +314,32 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     }
 
     /// <summary>
-    /// One pass of the background cleanup: expires idle sessions, drops idle sessions while the cache
-    /// is over its budget or the volume under its free-space floor, and removes session directories
-    /// no live session owns (left behind by a crashed process).
+    /// Ends sessions whose ffmpeg exited with an error and releases the slot of every session whose ffmpeg
+    /// exited at all: a finished remux stays readable but no longer occupies an encoder slot.
+    /// </summary>
+    public int ReapExitedProcesses() => _sessions.Values.Count(ReapIfCrashed);
+
+    /// <summary>
+    /// One pass of the background cleanup: ends crashed sessions and expires idle ones, then enforces the
+    /// cache policy on what is running (idle sessions first, then at most one running session, the largest,
+    /// so a runaway remux cannot outgrow the budget or the free-space floor), and removes session
+    /// directories no live session owns (left behind by a crashed process).
     /// </summary>
     public HlsSweepResult Sweep()
     {
         ThrowIfDisposed();
+        var crashed = ReapExitedProcesses();
         var expired = CleanupExpired();
         lock (_gate)
         {
+            var policy = _settings.Current;
             var before = _sessions.Count;
-            var refusal = PruneToPolicy(_settings.Current);
-            if (refusal is not null)
+            if (PruneToPolicy(policy, terminateRunning: true) is { } refusal)
             {
-                _logger.LogWarning("The HLS cache cannot get under its policy by dropping idle sessions: {Reason}.", refusal);
+                _logger.LogWarning("The HLS cache is over its policy but no session is left to end: {Reason}.", refusal);
             }
 
-            return new HlsSweepResult(expired, before - _sessions.Count, RemoveOrphanDirectories(_settings.Current.HlsCachePath));
+            return new HlsSweepResult(expired, before - _sessions.Count, RemoveOrphanDirectories(policy.HlsCachePath), crashed);
         }
     }
 
@@ -439,9 +449,9 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     {
         var playlist = Path.Combine(entry.DirectoryPath, "index.m3u8");
         var init = Path.Combine(entry.DirectoryPath, "init.mp4");
-        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        var started = _time.GetTimestamp();
 
-        while (DateTimeOffset.UtcNow < deadline)
+        while (_time.GetElapsedTime(started) < PlaybackDeliveryCommand.FirstOutputTimeout)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -467,15 +477,19 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     }
 
     /// <summary>
-    /// Drops the oldest idle sessions until the cache is under its budget and the volume above
-    /// its free-space floor. Returns the refusal code when idle sessions are not enough: playing
-    /// sessions are never dropped. Callers hold <see cref="gate"/>.
+    /// Ends sessions until the cache is under its budget and the volume above its free-space floor.
+    /// Idle sessions go first, oldest first. With <paramref name="terminateRunning"/> one running
+    /// session, the largest, may follow (a runaway remux must not outgrow the budget); admission never
+    /// ends a running session. Returns the refusal code when that is not enough. The cache is measured
+    /// once; every ended session is subtracted from that measurement. Callers hold the gate.
     /// </summary>
-    private string? PruneToPolicy(PlaybackTranscodingSettings policy)
+    private string? PruneToPolicy(PlaybackTranscodingSettings policy, bool terminateRunning)
     {
+        var usage = MeasureCache(policy.HlsCachePath);
+        var terminated = false;
         while (true)
         {
-            var overBudget = MeasureBytes(policy.HlsCachePath) >= policy.CacheBudgetBytes;
+            var overBudget = usage.TotalBytes >= policy.CacheBudgetBytes;
             var belowFloor = _freeSpace(policy.HlsCachePath) is { } free && free < policy.FreeSpaceFloorBytes;
             if (!overBudget && !belowFloor)
             {
@@ -483,25 +497,59 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             }
 
             var idleBefore = _time.GetUtcNow() - BudgetPruneIdleAfter;
-            var oldestIdle = _sessions.Values.Where(x => x.LastAccessUtc <= idleBefore).MinBy(x => x.LastAccessUtc);
-            if (oldestIdle is null)
+            var victim = _sessions.Values.Where(x => x.LastAccessUtc <= idleBefore).MinBy(x => x.LastAccessUtc);
+            if (victim is null && terminateRunning && !terminated)
+            {
+                victim = _sessions.Values.MaxBy(x => usage.BytesOf(x.SessionId));
+                terminated = victim is not null;
+            }
+
+            if (victim is null)
             {
                 return overBudget ? PlaybackAdmissionCodes.CacheBudgetExhausted : PlaybackAdmissionCodes.CacheFreeSpaceLow;
             }
 
-            Remove(oldestIdle.SessionId);
+            usage.Forget(victim.SessionId);
+            Remove(victim.SessionId, overBudget ? HlsSessionEndReasons.CacheBudget : HlsSessionEndReasons.CacheFreeSpace);
         }
     }
 
-    private static long MeasureBytes(string root)
+    /// <summary>One walk over the cache folder: bytes per session directory, and everything else lumped together.</summary>
+    private static CacheUsage MeasureCache(string root)
     {
+        var usage = new CacheUsage();
         if (!Directory.Exists(root))
         {
-            return 0;
+            return usage;
         }
 
+        foreach (var entry in new DirectoryInfo(root).EnumerateFileSystemInfos())
+        {
+            if (entry is DirectoryInfo directory)
+            {
+                var bytes = SumBytes(directory);
+                if (PlaybackCacheOwnership.IsSessionDirectoryName(directory.Name) && Guid.TryParseExact(directory.Name, "N", out var sessionId))
+                {
+                    usage.Add(sessionId, bytes);
+                }
+                else
+                {
+                    usage.AddOther(bytes);
+                }
+            }
+            else if (entry is FileInfo file)
+            {
+                usage.AddOther(file.Length);
+            }
+        }
+
+        return usage;
+    }
+
+    private static long SumBytes(DirectoryInfo directory)
+    {
         long total = 0;
-        foreach (var file in new DirectoryInfo(root).EnumerateFiles("*", SearchOption.AllDirectories))
+        foreach (var file in directory.EnumerateFiles("*", SearchOption.AllDirectories))
         {
             try
             {
@@ -518,18 +566,18 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
     private int RemoveOrphanDirectories(string root)
     {
-        // Only a folder Jularr created or was pointed at while empty is swept; a foreign folder may hold GUID-named directories of its own.
-        if (!Directory.Exists(root) || !PlaybackTranscodingSettingsRules.IsOwnedCacheRoot(root))
+        if (!Directory.Exists(root))
         {
             return 0;
         }
 
         var cutoff = _time.GetUtcNow() - IdleLifetime;
         var removed = 0;
-        foreach (var directory in new DirectoryInfo(root).EnumerateDirectories().Where(x => s_sessionDirectoryPattern.IsMatch(x.Name)))
+        foreach (var directory in new DirectoryInfo(root).EnumerateDirectories())
         {
+            // The ownership policy (shared with Admin Storage cleanup) decides what may be deleted at all.
             var owned = _sessions.Values.Any(x => string.Equals(Path.GetFileName(x.DirectoryPath), directory.Name, StringComparison.Ordinal));
-            if (owned || new DateTimeOffset(directory.LastWriteTimeUtc, TimeSpan.Zero) >= cutoff)
+            if (owned || !PlaybackCacheOwnership.IsDeletableSession(root, directory.FullName) || new DateTimeOffset(directory.LastWriteTimeUtc, TimeSpan.Zero) >= cutoff)
             {
                 continue;
             }
@@ -568,11 +616,39 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         }
     }
 
-    private void Remove(Guid sessionId)
+    /// <summary>Ends a session whose ffmpeg exited with an error; returns true when it was removed. A clean exit only frees the encoder slot.</summary>
+    private bool ReapIfCrashed(Entry entry)
+    {
+        if (!entry.Process.HasExited)
+        {
+            return false;
+        }
+
+        entry.ReleaseLease();
+        if (entry.Process.ExitCode is null or 0)
+        {
+            return false;
+        }
+
+        Remove(entry.SessionId, HlsSessionEndReasons.EncoderExited);
+        return true;
+    }
+
+    /// <summary>Kills the encoder, frees its slot and deletes its files. A reason is remembered so a late request can be answered with it.</summary>
+    private void Remove(Guid sessionId, string? reason = null)
     {
         if (!_sessions.TryRemove(sessionId, out var entry))
         {
             return;
+        }
+
+        if (reason is not null)
+        {
+            _endReasons[sessionId] = reason;
+            while (_endReasons.Count > MaxRememberedEndings && _endReasons.Keys.FirstOrDefault() is var oldest && oldest != Guid.Empty)
+            {
+                _endReasons.TryRemove(oldest, out _);
+            }
         }
 
         try
@@ -588,7 +664,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         finally
         {
             entry.Process.Dispose();
-            entry.Lease?.Dispose();
+            entry.ReleaseLease();
         }
 
         TryDeleteDirectory(entry.DirectoryPath);
@@ -629,7 +705,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     {
         private long _lastAccessTicks = createdAtUtc.UtcTicks;
 
-        public IDisposable? Lease { get; } = lease;
+        private IDisposable? _lease = lease;
+
         public Guid SessionId { get; } = sessionId;
         public Guid EpisodeId { get; } = episodeId;
         public string ProfileId { get; } = profileId;
@@ -640,7 +717,36 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         public DateTimeOffset LastAccessUtc => new(Interlocked.Read(ref _lastAccessTicks), TimeSpan.Zero);
 
         public void Touch(DateTimeOffset now) => Interlocked.Exchange(ref _lastAccessTicks, now.UtcTicks);
+
+        /// <summary>Frees the encoder slot once; safe to call from any path that notices the encoder is gone.</summary>
+        public void ReleaseLease() => Interlocked.Exchange(ref _lease, null)?.Dispose();
     }
+}
+
+/// <summary>Why a session ended without its player asking; the endpoints tell a late request.</summary>
+public static class HlsSessionEndReasons
+{
+    public const string Idle = "idle";
+    public const string CacheBudget = "cache_budget";
+    public const string CacheFreeSpace = "cache_free_space";
+    public const string EncoderExited = "encoder_exited";
+}
+
+/// <summary>Bytes of the HLS cache folder, per session directory and in total, measured once per pass.</summary>
+internal sealed class CacheUsage
+{
+    private readonly Dictionary<Guid, long> _perSession = [];
+    private long _other;
+
+    public long TotalBytes => _other + _perSession.Values.Sum();
+
+    public long BytesOf(Guid sessionId) => _perSession.GetValueOrDefault(sessionId);
+
+    public void Add(Guid sessionId, long bytes) => _perSession[sessionId] = bytes;
+
+    public void AddOther(long bytes) => _other += bytes;
+
+    public void Forget(Guid sessionId) => _perSession.Remove(sessionId);
 }
 
 /// <summary>The real ffmpeg of an HLS session. Arguments are passed as a list, never through a shell.</summary>
@@ -658,6 +764,8 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess
     }
 
     public bool HasExited => _process.HasExited;
+
+    public int? ExitCode => _process.HasExited ? _process.ExitCode : null;
 
     public string ErrorSummary
     {

@@ -85,8 +85,15 @@ public sealed record PlaybackEncoderChoice(PlaybackEncoderTarget Target, Playbac
 /// is the one place that decides which backend a delivery uses; detection runs at startup and on
 /// an Admin "Re-detect", never on a playback request.
 /// </summary>
-public sealed class PlaybackHardwareService(PlaybackHardwareProbe probe, PlaybackBackendBreaker breaker, ILogger<PlaybackHardwareService> logger)
+public sealed class PlaybackHardwareService(PlaybackHardwareProbe probe, PlaybackBackendBreaker breaker, TimeProvider time, ILogger<PlaybackHardwareService> logger)
 {
+    public static readonly TimeSpan RetryStart = TimeSpan.FromMinutes(1);
+    public static readonly TimeSpan RetryMax = TimeSpan.FromMinutes(10);
+
+    private readonly Lock _decodeGate = new();
+    private readonly HashSet<PlaybackHardwareBackend> _decodeDisabled = [];
+    private int _failedRuns;
+    private DateTimeOffset _nextRetryAt;
     private readonly SemaphoreSlim _detectGate = new(1, 1);
     private PlaybackHardwareCapabilities? _detected;
     private string? _detectionError;
@@ -111,20 +118,21 @@ public sealed class PlaybackHardwareService(PlaybackHardwareProbe probe, Playbac
             var result = await probe.DetectAsync(cancellationToken);
             Volatile.Write(ref _detected, result);
             Volatile.Write(ref _detectionError, null);
+            NoteRun(result.FfmpegAvailable);
 
             // A fresh test encode that passes is stronger evidence than the failure run that opened the breaker.
             foreach (var status in result.Backends.Where(x => x.State == PlaybackBackendState.Available))
             {
                 breaker.RecordSuccess(status.Backend);
+                ClearDecodeDisabled(status.Backend);
             }
 
-            logger.LogInformation(
-                "Playback hardware detection finished: {Backends}.",
-                string.Join(", ", result.Backends.Select(x => $"{PlaybackHardwareBackends.Name(x.Backend)}={x.State}")));
+            logger.LogInformation("Playback hardware detection finished: {Backends}.", string.Join(", ", result.Backends.Select(x => $"{PlaybackHardwareBackends.Name(x.Backend)}={x.State}")));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Volatile.Write(ref _detectionError, exception.Message);
+            NoteRun(succeeded: false);
             logger.LogError(exception, "Playback hardware detection failed.");
         }
         finally
@@ -152,7 +160,7 @@ public sealed class PlaybackHardwareService(PlaybackHardwareProbe probe, Playbac
                     continue;
                 }
 
-                return new PlaybackEncoderChoice(new PlaybackEncoderTarget(backend, status.Device, status.HardwareDecoding), suspended);
+                return new PlaybackEncoderChoice(new PlaybackEncoderTarget(backend, status.Device, status.HardwareDecoding && !IsHardwareDecodingDisabled(backend)), suspended);
             }
         }
 
@@ -174,6 +182,53 @@ public sealed class PlaybackHardwareService(PlaybackHardwareProbe probe, Playbac
             return PlaybackEncoderTarget.Software;
         }
 
-        return new PlaybackEncoderTarget(backend, status.Device, status.HardwareDecoding);
+        return new PlaybackEncoderTarget(backend, status.Device, status.HardwareDecoding && !IsHardwareDecodingDisabled(backend));
+    }
+
+    public bool IsHardwareDecodingDisabled(PlaybackHardwareBackend backend)
+    {
+        lock (_decodeGate)
+        {
+            return _decodeDisabled.Contains(backend);
+        }
+    }
+
+    /// <summary>A start that failed on the device's decoder but worked with software decoding: the encoder stays in use, the decoder is off until the next detection that passes.</summary>
+    public void DisableHardwareDecoding(PlaybackHardwareBackend backend)
+    {
+        lock (_decodeGate)
+        {
+            _decodeDisabled.Add(backend);
+        }
+
+        logger.LogWarning("Hardware decoding on {Backend} failed while its encoder works; decoding falls back to software.", PlaybackHardwareBackends.Name(backend));
+    }
+
+    /// <summary>
+    /// Whether a detection should run again: the last one found ffmpeg missing, timed out or failing (or ended in an
+    /// error), and its backoff (1 minute doubling to 10) has passed. A transient problem at startup must not
+    /// block every remux and transcode until an Admin clicks Re-detect.
+    /// </summary>
+    public bool IsRedetectionDue() => Volatile.Read(ref _failedRuns) > 0 && time.GetUtcNow() >= _nextRetryAt;
+
+    private void ClearDecodeDisabled(PlaybackHardwareBackend backend)
+    {
+        lock (_decodeGate)
+        {
+            _decodeDisabled.Remove(backend);
+        }
+    }
+
+    private void NoteRun(bool succeeded)
+    {
+        if (succeeded)
+        {
+            Volatile.Write(ref _failedRuns, 0);
+            return;
+        }
+
+        var failures = Interlocked.Increment(ref _failedRuns);
+        var delay = TimeSpan.FromTicks(Math.Min(RetryMax.Ticks, RetryStart.Ticks << Math.Min(failures - 1, 8)));
+        _nextRetryAt = time.GetUtcNow() + delay;
     }
 }

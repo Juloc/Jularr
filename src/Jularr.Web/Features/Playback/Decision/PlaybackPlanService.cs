@@ -116,7 +116,8 @@ public sealed class PlaybackServerCapabilityProvider(
         return PlaybackServerCapabilities.Software(slots.Available(costClass)) with
         {
             // Until the first detection finished the server behaves as it always did: ffmpeg is assumed, hardware is not.
-            ProcessingAvailable = hardware.Detected?.FfmpegAvailable ?? true,
+            // Only "not found" blocks remux and transcode; a timeout or a failed run is transient and the sweeper detects again.
+            ProcessingAvailable = hardware.Detected?.FfmpegState is not PlaybackFfmpegState.NotFound,
             TranscodingEnabled = settings.Current.TranscodingEnabled,
             H264Encoder = PlaybackHardwareBackends.H264Encoder(choice.Target.Backend),
             MaxTranscodeHeight = choice.Target.IsHardware ? PlaybackServerCapabilities.HardwareMaxHeight : PlaybackServerCapabilities.SoftwareMaxHeight,

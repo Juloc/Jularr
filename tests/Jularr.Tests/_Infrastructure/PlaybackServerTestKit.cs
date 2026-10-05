@@ -33,7 +33,7 @@ internal sealed class PlaybackServerTestKit
         Settings = new PlaybackTranscodingSettingsStore(dataRoot);
         Slots = new PlaybackTranscodeSlots(Settings);
         Breaker = new PlaybackBackendBreaker(time);
-        Hardware = new PlaybackHardwareService(new PlaybackHardwareProbe(runner, time, renderDevices), Breaker, NullLogger<PlaybackHardwareService>.Instance);
+        Hardware = new PlaybackHardwareService(new PlaybackHardwareProbe(runner, time, renderDevices), Breaker, time, NullLogger<PlaybackHardwareService>.Instance);
         Capabilities = new PlaybackServerCapabilityProvider(Settings, Slots, Hardware);
         Admission = new PlaybackAdmissionService(Settings, Slots, Hardware);
     }
@@ -96,6 +96,11 @@ internal sealed class ManualTimeProvider(DateTimeOffset now) : TimeProvider
     public override DateTimeOffset GetUtcNow() => _current;
 
     public void Advance(TimeSpan by) => _current += by;
+
+    // Elapsed-time measurements (a probe that "times out") follow the manual clock too.
+    public override long GetTimestamp() => _current.UtcTicks;
+
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
 }
 
 /// <summary>Plans built by hand, so resource and argument tests do not depend on the decision engine's choices.</summary>

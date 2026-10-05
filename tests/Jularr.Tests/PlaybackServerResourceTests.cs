@@ -217,88 +217,6 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
-    public void AdmissionRefusesWithAnExplicitCodeWhenTheClassIsFull()
-    {
-        var kit = PlaybackServerTestKit.Create();
-        var plan = Transcode(Video());
-        using var first = kit.Admission.Admit(plan).Lease;
-        using var second = kit.Admission.Admit(plan).Lease;
-
-        var refused = kit.Admission.Admit(plan);
-
-        Assert.IsFalse(refused.Admitted);
-        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderBusy, refused.RefusalCode);
-        Assert.IsNull(refused.Lease);
-        Assert.IsTrue(kit.Admission.Admit(Remux()).Admitted, "Remux has its own six slots.");
-    }
-
-    [TestMethod]
-    public async Task AdmissionRefusesTranscodesButNotRemuxWhenTranscodingIsOff()
-    {
-        var kit = PlaybackServerTestKit.Create();
-        try
-        {
-            await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { TranscodingEnabled = false, HlsCachePath = Path.Combine(kit.DataRoot, "hls") });
-
-            Assert.AreEqual(PlaybackAdmissionCodes.TranscodingDisabled, kit.Admission.Admit(Transcode(Video())).RefusalCode);
-            Assert.IsTrue(kit.Admission.Admit(Remux()).Admitted);
-            Assert.IsFalse(kit.Capabilities.Current().TranscodingEnabled, "The decision engine sees the same switch.");
-        }
-        finally
-        {
-            Directory.Delete(kit.DataRoot, recursive: true);
-        }
-    }
-
-    [TestMethod]
-    public async Task AdmissionPicksTheHardwareClassOnlyWhileTheBreakerIsClosed()
-    {
-        var time = new ManualTimeProvider(s_start);
-        var kit = PlaybackServerTestKit.Create(time, PlaybackServerTestKit.Ffmpeg(["h264_nvenc"], []));
-        await kit.Hardware.DetectAsync(CancellationToken.None);
-        var plan = Transcode(Video(encoder: "h264_nvenc"));
-
-        var hardware = kit.Admission.Admit(plan);
-        Assert.AreEqual(PlaybackCostClass.HardwareVideo, hardware.CostClass);
-        Assert.AreEqual(PlaybackHardwareBackend.Nvenc, hardware.Encoder.Backend);
-        hardware.Lease!.Dispose();
-
-        for (var failure = 0; failure < PlaybackBackendBreaker.FailureThreshold; failure++)
-        {
-            kit.Admission.ReportStart(hardware, new PlaybackStartFailure(PlaybackStartFailure.StartFailed, "exit 1"));
-        }
-
-        var fallback = kit.Admission.Admit(plan);
-        Assert.AreEqual(PlaybackCostClass.SoftwareVideo, fallback.CostClass, "Three failed starts moved the session to software automatically.");
-        Assert.AreEqual(PlaybackHardwareBackend.Software, fallback.Encoder.Backend);
-        fallback.Lease!.Dispose();
-
-        time.Advance(PlaybackBackendBreaker.OpenDuration);
-        Assert.AreEqual(PlaybackCostClass.HardwareVideo, kit.Admission.Admit(plan).CostClass, "After the cooldown the backend gets a trial session.");
-    }
-
-    [TestMethod]
-    public void ASoftwareFallbackTakesASoftwareSlotAndSoftwareFailuresNeverOpenABreaker()
-    {
-        var kit = PlaybackServerTestKit.Create();
-        using var first = kit.Admission.AdmitSoftwareFallback().Lease;
-        using var second = kit.Admission.AdmitSoftwareFallback().Lease;
-        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderBusy, kit.Admission.AdmitSoftwareFallback().RefusalCode);
-
-        var software = new PlaybackAdmission(PlaybackCostClass.SoftwareVideo, PlaybackEncoderTarget.Software, null, null);
-        for (var i = 0; i < 5; i++)
-        {
-            kit.Admission.ReportStart(software, new PlaybackStartFailure(PlaybackStartFailure.StartFailed));
-        }
-
-        foreach (var backend in PlaybackHardwareBackends.SelectionOrder)
-        {
-            Assert.AreEqual(0, kit.Breaker.State(backend).ConsecutiveFailures);
-        }
-
-    }
-
-    [TestMethod]
     public async Task TheCacheShedsTheOldestIdleSessionFirstAndAdmitsTheNewOne()
     {
         await using var cache = await CacheAsync(budgetBytes: 1L << 20);
@@ -392,7 +310,7 @@ public sealed class PlaybackServerResourceTests
         {
             var rejected = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = foreign });
             Assert.AreEqual(PlaybackTranscodingSettingsRules.PathNotEmpty, rejected.Issues.Single().Code);
-            Assert.IsFalse(PlaybackTranscodingSettingsRules.IsOwnedCacheRoot(foreign));
+            Assert.IsFalse(PlaybackCacheOwnership.IsOwnedRoot(foreign));
 
             var empty = Path.Combine(kit.DataRoot, "empty-cache");
             var saved = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = empty });
@@ -415,13 +333,47 @@ public sealed class PlaybackServerResourceTests
         var idle = await cache.StartAsync("profile-0", segmentBytes: 300 * 1024);
         cache.Time.Advance(TimeSpan.FromMinutes(2));
         var playing = await cache.StartAsync("profile-1", segmentBytes: 300 * 1024);
-        cache.Grow(playing, 800 * 1024);
+        cache.Grow(playing, 500 * 1024);
 
         var result = cache.Manager.Sweep();
 
         Assert.AreEqual(1, result.PrunedForPolicy);
         Assert.IsFalse(cache.Manager.IsActive(idle.SessionId, "profile-0"));
-        Assert.IsTrue(cache.Manager.IsActive(playing.SessionId, "profile-1"));
+        Assert.IsTrue(cache.Manager.IsActive(playing.SessionId, "profile-1"), "Dropping the idle session was enough; the running one stays.");
+    }
+
+    [TestMethod]
+    public async Task ARunawaySessionIsEndedByTheSweeperWithAReasonAndAtMostOnePerPass()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 20);
+        var small = await cache.StartAsync("profile-0", segmentBytes: 100 * 1024);
+        var runaway = await cache.StartAsync("profile-1", segmentBytes: 100 * 1024);
+        cache.Grow(runaway, 1100 * 1024);
+        cache.Time.Advance(TimeSpan.FromSeconds(30));
+
+        var first = cache.Manager.Sweep();
+
+        Assert.AreEqual(1, first.PrunedForPolicy);
+        Assert.IsFalse(cache.Manager.IsActive(runaway.SessionId, "profile-1"), "The largest running session outgrew the budget.");
+        Assert.AreEqual(HlsSessionEndReasons.CacheBudget, cache.Manager.EndReason(runaway.SessionId));
+        Assert.IsTrue(cache.Manager.IsActive(small.SessionId, "profile-0"));
+        Assert.IsFalse(Directory.Exists(cache.SessionDirectory(runaway.SessionId)));
+    }
+
+    [TestMethod]
+    public async Task AnIdleSessionIsNotShedBeforeAPlayerCouldHaveBufferedAheadUnlessTheBudgetIsExceeded()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 20);
+        var paused = await cache.StartAsync("profile-0", segmentBytes: 400 * 1024);
+        cache.Time.Advance(TimeSpan.FromSeconds(90));
+        await cache.StartAsync("profile-1", segmentBytes: 400 * 1024);
+
+        Assert.IsTrue(cache.Manager.IsActive(paused.SessionId, "profile-0"), "Under the budget, a 90 second pause is a buffering player.");
+
+        await cache.StartAsync("profile-2", segmentBytes: 700 * 1024);
+        var refused = await Assert.ThrowsAsync<PlaybackAdmissionRefusedException>(() => cache.StartAsync("profile-3", segmentBytes: 1));
+        Assert.AreEqual(PlaybackAdmissionCodes.CacheBudgetExhausted, refused.Code, "Over the budget with nothing idle for two minutes, admission is refused.");
+        Assert.IsTrue(cache.Manager.IsActive(paused.SessionId, "profile-0"));
     }
 
     [TestMethod]
@@ -460,7 +412,7 @@ public sealed class PlaybackServerResourceTests
         var runner = new BlockingRunner(gate.Task);
         var time = new ManualTimeProvider(s_start);
         var kit = PlaybackServerTestKit.Create(time);
-        var hardware = new PlaybackHardwareService(new PlaybackHardwareProbe(runner, time, () => []), kit.Breaker, NullLogger<PlaybackHardwareService>.Instance);
+        var hardware = new PlaybackHardwareService(new PlaybackHardwareProbe(runner, time, () => []), kit.Breaker, time, NullLogger<PlaybackHardwareService>.Instance);
         using var manager = kit.Hls(_ => new FakeHlsProcess());
         var saved = await new PlaybackTranscodingSettingsStore(kit.DataRoot).SaveAsync(PlaybackTranscodingSettings.Default with { SoftwareVideoSessions = 1, HlsCachePath = Path.Combine(kit.DataRoot, "hls") });
         Assert.IsTrue(saved.Succeeded);
@@ -484,6 +436,27 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task TheCacheIsSweptWhileDetectionNeverAnswers()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var stale = await cache.StartAsync("profile-0", segmentBytes: 10);
+        cache.Time.Advance(HlsPlaybackSessionManager.IdleLifetime + TimeSpan.FromMinutes(1));
+        var hardware = new PlaybackHardwareService(new PlaybackHardwareProbe(new BlockingRunner(new TaskCompletionSource().Task), cache.Time, () => []), cache.Kit.Breaker, cache.Time, NullLogger<PlaybackHardwareService>.Instance);
+        var service = new PlaybackServerResourceService(cache.Kit.Settings, hardware, cache.Manager, cache.Time, NullLogger<PlaybackServerResourceService>.Instance);
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+
+            await WaitUntilAsync(() => !cache.Manager.IsActive(stale.SessionId, "profile-0"));
+            Assert.IsNull(hardware.Detected, "The sweeper did not wait for the detection.");
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
     public async Task TheHostedServiceKeepsRunningWhenTheStoredPolicyIsBroken()
     {
         var kit = PlaybackServerTestKit.Create();
@@ -500,6 +473,141 @@ public sealed class PlaybackServerResourceTests
         finally
         {
             await service.StopAsync(CancellationToken.None);
+            Directory.Delete(kit.DataRoot, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task ACrashedEncoderEndsItsSessionAndFreesItsSlotWhenTheSessionIsPolled()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var lease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
+        var session = await cache.Manager.StartAsync(Guid.NewGuid(), "profile-0", 0, cache.Arguments, lease, CancellationToken.None);
+        Assert.AreEqual(1, cache.Slots.Active(PlaybackCostClass.SoftwareVideo));
+
+        cache.Processes[0].HasExited = true;
+        cache.Processes[0].ExitCode = 1;
+
+        Assert.IsFalse(cache.Manager.IsActive(session.SessionId, "profile-0"), "A dead session is not a running one.");
+        Assert.AreEqual(0, cache.Slots.Active(PlaybackCostClass.SoftwareVideo), "The slot of a crashed encoder is released at once, not at idle expiry.");
+        Assert.AreEqual(HlsSessionEndReasons.EncoderExited, cache.Manager.EndReason(session.SessionId));
+        Assert.IsFalse(Directory.Exists(cache.SessionDirectory(session.SessionId)));
+    }
+
+    [TestMethod]
+    public async Task AFinishedRemuxFreesItsSlotButStaysReadable()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var episode = Guid.NewGuid();
+        var lease = cache.Slots.TryAcquire(PlaybackCostClass.Remux);
+        var session = await cache.Manager.StartAsync(episode, "profile-0", 0, cache.Arguments, lease, CancellationToken.None);
+
+        cache.Processes[0].HasExited = true;
+        cache.Processes[0].ExitCode = 0;
+
+        Assert.IsTrue(cache.Manager.IsActive(session.SessionId, "profile-0"));
+        Assert.IsNotNull(cache.Manager.GetAsset(session.SessionId, episode, "profile-0", "index.m3u8"), "A completed remux is still served until it expires.");
+        Assert.AreEqual(0, cache.Slots.Active(PlaybackCostClass.Remux), "No encoder runs any more.");
+        Assert.IsNull(cache.Manager.EndReason(session.SessionId));
+    }
+
+    [TestMethod]
+    public async Task TheSweeperReapsCrashedEncodersWithoutAPlaybackRequest()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var lease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
+        await cache.Manager.StartAsync(Guid.NewGuid(), "profile-0", 0, cache.Arguments, lease, CancellationToken.None);
+        cache.Processes[0].HasExited = true;
+        cache.Processes[0].ExitCode = 137;
+
+        var result = cache.Manager.Sweep();
+
+        Assert.AreEqual(1, result.CrashedSessions);
+        Assert.AreEqual(0, cache.Manager.ActiveSessions);
+        Assert.AreEqual(0, cache.Slots.Active(PlaybackCostClass.SoftwareVideo));
+    }
+
+    [TestMethod]
+    public async Task ARefusedStartNeverCostsTheProfileItsOwnRunningSession()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 20);
+        var first = await cache.StartAsync("profile-0", segmentBytes: 600 * 1024);
+        var second = await cache.StartAsync("profile-0", segmentBytes: 600 * 1024);
+        Assert.AreEqual(2, HlsPlaybackSessionManager.MaxSessionsPerProfile);
+
+        var refusal = await Assert.ThrowsAsync<PlaybackAdmissionRefusedException>(() => cache.StartAsync("profile-0", segmentBytes: 1));
+
+        Assert.AreEqual(PlaybackAdmissionCodes.CacheBudgetExhausted, refusal.Code);
+        Assert.IsTrue(cache.Manager.IsActive(first.SessionId, "profile-0"), "The refusal came before any eviction.");
+        Assert.IsTrue(cache.Manager.IsActive(second.SessionId, "profile-0"));
+    }
+
+    [TestMethod]
+    public async Task ACacheFolderThatIsNotJularrsIsRefusedAtStartAndLeftUntouched()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        var foreign = Path.Combine(kit.DataRoot, "shared");
+        Directory.CreateDirectory(foreign);
+        Directory.CreateDirectory(Path.Combine(kit.DataRoot, "playback"));
+        await File.WriteAllTextAsync(Path.Combine(foreign, "photos.txt"), "mine");
+        await File.WriteAllTextAsync(
+            Path.Combine(kit.DataRoot, "playback", PlaybackTranscodingSettingsStore.FileName),
+            $"{{ \"hlsCachePath\": \"{foreign.Replace('\\', '/')}\" }}");
+        try
+        {
+            await kit.Settings.LoadAsync();
+            using var manager = kit.Hls(_ => new FakeHlsProcess());
+            var lease = kit.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
+
+            var refusal = await Assert.ThrowsAsync<PlaybackAdmissionRefusedException>(() => manager.StartAsync(Guid.NewGuid(), "profile-0", 0, directory => [directory], lease, CancellationToken.None));
+
+            Assert.AreEqual(PlaybackAdmissionCodes.CacheFolderNotOwned, refusal.Code);
+            Assert.AreEqual(0, kit.Slots.Active(PlaybackCostClass.SoftwareVideo));
+            Assert.IsFalse(File.Exists(Path.Combine(foreign, PlaybackCacheOwnership.MarkerFileName)), "A foreign folder is never marked as Jularr's.");
+            Assert.IsTrue(File.Exists(Path.Combine(foreign, "photos.txt")));
+        }
+        finally
+        {
+            Directory.Delete(kit.DataRoot, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task OnlySessionDirectoriesOfAnOwnedRootAreDeletable()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var session = await cache.StartAsync("profile-0", segmentBytes: 10);
+        var other = Directory.CreateDirectory(Path.Combine(cache.Root, "not-a-session"));
+
+        Assert.IsTrue(PlaybackCacheOwnership.IsDeletableSession(cache.Root, cache.SessionDirectory(session.SessionId)));
+        Assert.IsFalse(PlaybackCacheOwnership.IsDeletableSession(cache.Root, other.FullName), "Only 32-hex session directories.");
+        Assert.IsFalse(PlaybackCacheOwnership.IsDeletableSession(cache.Root, cache.Root), "Never the root itself.");
+        Assert.IsFalse(PlaybackCacheOwnership.IsDeletableSession(Path.Combine(cache.Root, "elsewhere"), cache.SessionDirectory(session.SessionId)), "Only direct children of the root.");
+    }
+
+    [TestMethod]
+    public void APercentSignWouldBreakTheSegmentFilenameTemplateAndIsRefused()
+    {
+        Assert.AreEqual(PlaybackTranscodingSettingsRules.PathInvalid, PlaybackTranscodingSettingsRules.ValidatePath("/data/cache%05d"));
+    }
+
+    [TestMethod]
+    public async Task OpeningTheSettingsPageReadsWithoutChangingWhatTheServerEnforces()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        var other = new PlaybackTranscodingSettingsStore(kit.DataRoot);
+        try
+        {
+            var saved = await other.SaveAsync(PlaybackTranscodingSettings.Default with { SoftwareVideoSessions = 1, HlsCachePath = Path.Combine(kit.DataRoot, "hls") });
+            Assert.IsTrue(saved.Succeeded);
+
+            var read = await kit.Settings.ReadStoredAsync();
+
+            Assert.AreEqual(1, read.SoftwareVideoSessions);
+            Assert.AreEqual(PlaybackTranscodingSettings.Default, kit.Settings.Current, "A read for display is not a load.");
+        }
+        finally
+        {
             Directory.Delete(kit.DataRoot, recursive: true);
         }
     }
@@ -541,6 +649,8 @@ public sealed class PlaybackServerResourceTests
             FreeBytes = freeBytes;
             Manager = _kit.Hls(StartProcess, _ => FreeBytes);
         }
+
+        public PlaybackServerTestKit Kit => _kit;
 
         public string Root { get; }
 
@@ -603,6 +713,8 @@ public sealed class PlaybackServerResourceTests
     private sealed class FakeHlsProcess : IHlsEncoderProcess
     {
         public bool HasExited { get; set; }
+
+        public int? ExitCode { get; set; }
 
         public string ErrorSummary { get; set; } = "";
 

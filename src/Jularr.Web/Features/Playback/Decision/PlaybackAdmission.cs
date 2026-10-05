@@ -9,6 +9,8 @@ public static class PlaybackAdmissionCodes
     public const string TranscoderBusy = "transcoder_busy";
     public const string CacheBudgetExhausted = "cache_budget_exhausted";
     public const string CacheFreeSpaceLow = "cache_free_space_low";
+    public const string CacheFolderNotOwned = "cache_folder_not_owned";
+    public const string ProfileSessionLimit = "profile_session_limit";
 
     /// <summary>The API error text of a refusal; the code is the machine-readable part clients translate.</summary>
     public static string Message(string code) =>
@@ -18,6 +20,8 @@ public static class PlaybackAdmissionCodes
             TranscoderBusy => "Every server transcode slot is in use.",
             CacheBudgetExhausted => "The server playback cache is full.",
             CacheFreeSpaceLow => "The server playback cache volume is low on free space.",
+            CacheFolderNotOwned => "The server playback cache folder holds files that are not Jularr's.",
+            ProfileSessionLimit => "This profile already runs the most playback sessions it may.",
             _ => throw new ArgumentOutOfRangeException(nameof(code))
         };
 }
@@ -41,7 +45,6 @@ public sealed class PlaybackAdmissionRefusedException(string code) : InvalidOper
 public sealed record PlaybackStartFailure(string Reason, string? Detail = null)
 {
     public const string StartFailed = "start_failed";
-    public const string StartTimedOut = "start_timed_out";
 }
 
 public static class PlaybackCostClasses
@@ -61,52 +64,108 @@ public static class PlaybackCostClasses
 
 /// <summary>
 /// Admission of a delivery against the server resource policy: the Admin's transcoding switch,
-/// the encoder the breaker allows and the slot limit of the delivery's cost class. The HLS cache
-/// budget is checked by the cache owner (<see cref="HlsPlaybackSessionManager"/>) when the
-/// session directory is created.
+/// the encoder the breaker allows, the slot limit of the delivery's cost class and the per-profile
+/// cap. Every ffmpeg-spawning route, plan-based or legacy, goes through here so the Admin limits
+/// are real. The HLS cache budget is checked by the cache owner (<see cref="HlsPlaybackSessionManager"/>)
+/// when the session directory is created.
 /// </summary>
 public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore settings, PlaybackTranscodeSlots slots, PlaybackHardwareService hardware)
 {
-    public PlaybackAdmission Admit(PlaybackPlan plan)
+    public PlaybackAdmission Admit(PlaybackPlan plan, string profileId)
     {
         ArgumentNullException.ThrowIfNull(plan);
         var encoder = plan.TranscodesVideo ? hardware.Resolve(plan.Video!.Encoder) : PlaybackEncoderTarget.Software;
-        var costClass = PlaybackCostClasses.For(plan, encoder);
-        if (plan.TranscodesVideo && !settings.Current.TranscodingEnabled)
+        return AdmitAttempt(plan, profileId, encoder);
+    }
+
+    /// <summary>An admission for a legacy delivery that has no plan: a software transcode or a remux.</summary>
+    public PlaybackAdmission AdmitLegacy(PlaybackCostClass costClass, string profileId)
+    {
+        var transcodes = costClass is PlaybackCostClass.SoftwareVideo or PlaybackCostClass.HardwareVideo;
+        return Acquire(costClass, PlaybackEncoderTarget.Software, profileId, transcodes);
+    }
+
+    /// <summary>
+    /// Runs one delivery start with the automatic fallbacks and the breaker accounting. A hardware start that
+    /// fails is first retried on the same encoder with software decoding when it decoded on the device (a
+    /// device that encodes but cannot decode must not lose its encoder), then on software. Only a failure
+    /// that the software fallback of the same request then survives counts against the backend: when
+    /// software fails too, the source or the environment is at fault and nothing is recorded. A timeout,
+    /// a refusal or an invalid argument set is never retried and never counted. <paramref name="start"/>
+    /// owns the admission's lease and must release it when the attempt fails.
+    /// </summary>
+    public async Task<TResult> StartAsync<TResult>(PlaybackPlan plan, string profileId, Func<PlaybackAdmission, Task<TResult>> start)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(start);
+        var admitted = Admit(plan, profileId);
+        PlaybackHardwareBackend failedBackend = PlaybackHardwareBackend.Software;
+        PlaybackStartFailure? hardwareFailure = null;
+        var decodeSuspected = false;
+        while (true)
+        {
+            if (!admitted.Admitted)
+            {
+                throw new PlaybackAdmissionRefusedException(admitted.RefusalCode!);
+            }
+
+            try
+            {
+                var result = await start(admitted);
+                Settle(admitted, decodeSuspected, failedBackend, hardwareFailure);
+                return result;
+            }
+            catch (Exception exception) when (admitted.Encoder.IsHardware && exception is (InvalidOperationException and not PlaybackAdmissionRefusedException) or System.ComponentModel.Win32Exception)
+            {
+                PlaybackEncoderTarget next;
+                if (PlaybackDeliveryCommand.UsesHardwareDecoding(admitted.Encoder, plan.Video!))
+                {
+                    decodeSuspected = true;
+                    next = admitted.Encoder with { HardwareDecoding = false };
+                }
+                else
+                {
+                    failedBackend = admitted.Encoder.Backend;
+                    hardwareFailure = new PlaybackStartFailure(PlaybackStartFailure.StartFailed, exception.Message);
+                    next = PlaybackEncoderTarget.Software;
+                }
+
+                // The failed attempt released its slot; the next one needs its own.
+                admitted = AdmitAttempt(plan, profileId, next);
+            }
+        }
+    }
+
+    private PlaybackAdmission AdmitAttempt(PlaybackPlan plan, string profileId, PlaybackEncoderTarget encoder) =>
+        Acquire(PlaybackCostClasses.For(plan, encoder), encoder, profileId, plan.TranscodesVideo);
+
+    private PlaybackAdmission Acquire(PlaybackCostClass costClass, PlaybackEncoderTarget encoder, string profileId, bool transcodes)
+    {
+        if (transcodes && !settings.Current.TranscodingEnabled)
         {
             return new PlaybackAdmission(costClass, encoder, null, PlaybackAdmissionCodes.TranscodingDisabled);
         }
 
-        var lease = slots.TryAcquire(costClass);
-        return new PlaybackAdmission(costClass, encoder, lease, lease is null ? PlaybackAdmissionCodes.TranscoderBusy : null);
+        var lease = slots.TryAcquire(costClass, profileId);
+        var refusal = lease is not null ? null : slots.ActiveFor(profileId) >= PlaybackTranscodeSlots.MaxPerProfile ? PlaybackAdmissionCodes.ProfileSessionLimit : PlaybackAdmissionCodes.TranscoderBusy;
+        return new PlaybackAdmission(costClass, encoder, lease, refusal);
     }
 
-    /// <summary>
-    /// A software admission for a session whose hardware start failed. The failed attempt already
-    /// released its slot, so this takes a software slot instead; the admission is refused when none is free.
-    /// </summary>
-    public PlaybackAdmission AdmitSoftwareFallback()
+    // What a successful start proves about the backends involved.
+    private void Settle(PlaybackAdmission succeeded, bool decodeSuspected, PlaybackHardwareBackend failedBackend, PlaybackStartFailure? hardwareFailure)
     {
-        var lease = slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
-        return new PlaybackAdmission(PlaybackCostClass.SoftwareVideo, PlaybackEncoderTarget.Software, lease, lease is null ? PlaybackAdmissionCodes.TranscoderBusy : null);
-    }
+        if (succeeded.Encoder.IsHardware)
+        {
+            if (decodeSuspected)
+            {
+                hardware.DisableHardwareDecoding(succeeded.Encoder.Backend);
+            }
 
-    /// <summary>Counts a hardware start toward the breaker (a null failure is a success); software starts never open a breaker.</summary>
-    public void ReportStart(PlaybackAdmission admission, PlaybackStartFailure? failure)
-    {
-        ArgumentNullException.ThrowIfNull(admission);
-        if (!admission.Encoder.IsHardware)
-        {
-            return;
+            hardware.Breaker.RecordSuccess(succeeded.Encoder.Backend);
         }
-
-        if (failure is null)
+        else if (hardwareFailure is not null)
         {
-            hardware.Breaker.RecordSuccess(admission.Encoder.Backend);
-        }
-        else
-        {
-            hardware.Breaker.RecordFailure(admission.Encoder.Backend, failure.Reason, failure.Detail);
+            hardware.Breaker.RecordFailure(failedBackend, hardwareFailure.Reason, hardwareFailure.Detail);
         }
     }
 }

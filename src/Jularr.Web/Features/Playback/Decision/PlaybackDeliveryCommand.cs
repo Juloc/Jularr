@@ -14,6 +14,9 @@ public static class PlaybackDeliveryCommand
 {
     public const int HlsSegmentSeconds = 4;
 
+    /// <summary>How long a new delivery may take to produce its first output (a sleeping disk or a slow source needs time); silence is not an encoder failure.</summary>
+    public static readonly TimeSpan FirstOutputTimeout = TimeSpan.FromSeconds(10);
+
     // Linear-light tone mapping to BT.709 SDR; the H.264 output is always 8-bit SDR.
     public const string ToneMapFilter =
         "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv";
@@ -215,7 +218,7 @@ public static class PlaybackDeliveryCommand
     /// tone mapping or burn-in, whose software filters need the picture in system memory.
     /// Everything else is decoded in software and only the encode runs on the device.
     /// </summary>
-    private static bool UsesHardwareDecoding(PlaybackEncoderTarget encoder, PlaybackVideoOutput video) =>
+    public static bool UsesHardwareDecoding(PlaybackEncoderTarget encoder, PlaybackVideoOutput video) =>
         encoder is { HardwareDecoding: true, Backend: PlaybackHardwareBackend.Nvenc or PlaybackHardwareBackend.Qsv or PlaybackHardwareBackend.Vaapi } &&
         !video.ToneMap &&
         video.BurnInSubtitleStreamIndex is null &&

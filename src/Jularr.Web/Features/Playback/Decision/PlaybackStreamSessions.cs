@@ -11,41 +11,78 @@ namespace Jularr.Web.Features.Playback.Decision;
 /// </summary>
 public sealed class PlaybackTranscodeSlots(PlaybackTranscodingSettingsStore settings)
 {
+    /// <summary>How many deliveries one profile may run at once across all cost classes (two HLS sessions plus a progressive stream or a seek restart in flight).</summary>
+    public const int MaxPerProfile = 3;
+
+    private readonly Lock _gate = new();
     private readonly int[] _active = new int[Enum.GetValues<PlaybackCostClass>().Length];
+    private readonly Dictionary<string, int> _perProfile = [];
 
     public int Capacity(PlaybackCostClass costClass) => settings.Current.LimitFor(costClass);
 
-    public int Active(PlaybackCostClass costClass) => Volatile.Read(ref _active[(int)costClass]);
+    public int Active(PlaybackCostClass costClass)
+    {
+        lock (_gate)
+        {
+            return _active[(int)costClass];
+        }
+    }
 
     public int Available(PlaybackCostClass costClass) => Math.Max(0, Capacity(costClass) - Active(costClass));
 
-    public IDisposable? TryAcquire(PlaybackCostClass costClass)
+    public int ActiveFor(string profileId)
     {
-        var capacity = Capacity(costClass);
-        while (true)
+        lock (_gate)
         {
-            var current = Volatile.Read(ref _active[(int)costClass]);
-            if (current >= capacity)
+            return _perProfile.GetValueOrDefault(profileId);
+        }
+    }
+
+    /// <summary>Takes a slot of the class, and one of the profile's <see cref="MaxPerProfile"/>; null when either is exhausted.</summary>
+    public IDisposable? TryAcquire(PlaybackCostClass costClass, string? profileId = null)
+    {
+        lock (_gate)
+        {
+            if (_active[(int)costClass] >= Capacity(costClass) || (profileId is not null && _perProfile.GetValueOrDefault(profileId) >= MaxPerProfile))
             {
                 return null;
             }
 
-            if (Interlocked.CompareExchange(ref _active[(int)costClass], current + 1, current) == current)
+            _active[(int)costClass]++;
+            if (profileId is not null)
             {
-                return new Lease(this, costClass);
+                _perProfile[profileId] = _perProfile.GetValueOrDefault(profileId) + 1;
             }
+
+            return new Lease(this, costClass, profileId);
         }
     }
 
-    private sealed class Lease(PlaybackTranscodeSlots owner, PlaybackCostClass costClass) : IDisposable
+    private sealed class Lease(PlaybackTranscodeSlots owner, PlaybackCostClass costClass, string? profileId) : IDisposable
     {
         private int _released;
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _released, 1) == 0)
+            if (Interlocked.Exchange(ref _released, 1) != 0)
             {
-                Interlocked.Decrement(ref owner._active[(int)costClass]);
+                return;
+            }
+
+            lock (owner._gate)
+            {
+                owner._active[(int)costClass]--;
+                if (profileId is not null && owner._perProfile.TryGetValue(profileId, out var count))
+                {
+                    if (count <= 1)
+                    {
+                        owner._perProfile.Remove(profileId);
+                    }
+                    else
+                    {
+                        owner._perProfile[profileId] = count - 1;
+                    }
+                }
             }
         }
     }

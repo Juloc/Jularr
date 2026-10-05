@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using Jularr.Web.Features.Playback.Decision;
 
 namespace Jularr.Web.Features.Playback;
 
@@ -111,21 +110,20 @@ public static class LivePlaybackCommand
 
 public sealed class LivePlaybackStream : Stream
 {
+    private const int PrefixBufferSize = 16 * 1024;
+
     private readonly Process _process;
     private readonly Stream _output;
     private readonly Task<string> _stderrDrain;
-    private bool _disposed;
-
     private readonly IDisposable? _lease;
-    private readonly Action<PlaybackStartFailure?>? _onOutcome;
-    private int _outcomeReported;
-    private bool _producedOutput;
+    private bool _disposed;
+    private byte[] _prefix = [];
+    private int _prefixOffset;
 
-    private LivePlaybackStream(Process process, IDisposable? lease, Action<PlaybackStartFailure?>? onOutcome)
+    private LivePlaybackStream(Process process, IDisposable? lease)
     {
         _process = process;
         _lease = lease;
-        _onOutcome = onOutcome;
         _output = process.StandardOutput.BaseStream;
         _stderrDrain = process.StandardError.ReadToEndAsync();
     }
@@ -135,24 +133,25 @@ public sealed class LivePlaybackStream : Stream
         PlaybackPreparationPlan plan,
         double startSeconds = 0,
         int? audioStreamIndex = null,
-        PlaybackQualityCap qualityCap = PlaybackQualityCap.Auto) =>
-        Start(LivePlaybackCommand.BuildArguments(
-            sourcePath,
-            plan,
-            startSeconds,
-            audioStreamIndex,
-            qualityCap));
+        PlaybackQualityCap qualityCap = PlaybackQualityCap.Auto,
+        IDisposable? lease = null) =>
+        Start(
+            LivePlaybackCommand.BuildArguments(
+                sourcePath,
+                plan,
+                startSeconds,
+                audioStreamIndex,
+                qualityCap),
+            lease);
 
     /// <summary>
     /// Starts ffmpeg with prepared arguments writing fragmented MP4 to stdout. The optional
-    /// lease (a transcode slot) is released when the response stream is disposed. <paramref name="onOutcome"/>
-    /// is called once: with null when the first bytes arrive (the encoder works) or with a failure when ffmpeg
-    /// exits with an error before producing any.
+    /// lease (a transcode slot) is released when the response stream is disposed; when the
+    /// start itself throws, the lease is not touched and stays with the caller.
     /// </summary>
     public static LivePlaybackStream Start(
         IReadOnlyList<string> arguments,
-        IDisposable? lease = null,
-        Action<PlaybackStartFailure?>? onOutcome = null)
+        IDisposable? lease = null)
     {
         var process = new Process
         {
@@ -177,7 +176,40 @@ public sealed class LivePlaybackStream : Stream
             throw new InvalidOperationException("Could not start ffmpeg playback stream.");
         }
 
-        return new LivePlaybackStream(process, lease, onOutcome);
+        return new LivePlaybackStream(process, lease);
+    }
+
+    /// <summary>
+    /// Waits until ffmpeg has produced its first bytes, which the stream then serves first. A response
+    /// that has not started can still fail over to another encoder; once bytes flow it cannot. Throws
+    /// <see cref="InvalidOperationException"/> when ffmpeg ends without output and
+    /// <see cref="TimeoutException"/> when it stays silent for <paramref name="timeout"/>.
+    /// </summary>
+    public async Task WaitForFirstBytesAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(timeout);
+        var buffer = new byte[PrefixBufferSize];
+        int read;
+        try
+        {
+            read = await _output.ReadAsync(buffer, timeoutSource.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("ffmpeg produced no output in time.");
+        }
+
+        if (read == 0)
+        {
+            var detail = await Task.WhenAny(_stderrDrain, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken)) == _stderrDrain
+                ? _stderrDrain.Result.Trim().Split('\n')[^1].Trim()
+                : "";
+            throw new InvalidOperationException($"ffmpeg exited before producing output: {(detail.Length <= 200 ? detail : detail[..200])}");
+        }
+
+        _prefix = buffer[..read];
+        _prefixOffset = 0;
     }
 
     public override bool CanRead => true;
@@ -196,19 +228,19 @@ public sealed class LivePlaybackStream : Stream
     }
 
     public override int Read(byte[] buffer, int offset, int count) =>
-        Produced(_output.Read(buffer, offset, count));
+        TakePrefix(buffer.AsSpan(offset, count)) is var served and > 0 ? served : _output.Read(buffer, offset, count);
 
     public override async Task<int> ReadAsync(
         byte[] buffer,
         int offset,
         int count,
         CancellationToken cancellationToken) =>
-        Produced(await _output.ReadAsync(buffer, offset, count, cancellationToken));
+        TakePrefix(buffer.AsSpan(offset, count)) is var served and > 0 ? served : await _output.ReadAsync(buffer, offset, count, cancellationToken);
 
     public override async ValueTask<int> ReadAsync(
         Memory<byte> buffer,
         CancellationToken cancellationToken = default) =>
-        Produced(await _output.ReadAsync(buffer, cancellationToken));
+        TakePrefix(buffer.Span) is var served and > 0 ? served : await _output.ReadAsync(buffer, cancellationToken);
 
     public override long Seek(long offset, SeekOrigin origin) =>
         throw new NotSupportedException();
@@ -219,24 +251,19 @@ public sealed class LivePlaybackStream : Stream
     public override void Write(byte[] buffer, int offset, int count) =>
         throw new NotSupportedException();
 
-    // The first bytes prove the encoder works; later reads need no further reporting.
-    private int Produced(int bytesRead)
+    // The bytes read ahead by WaitForFirstBytesAsync belong at the front of the response.
+    private int TakePrefix(Span<byte> destination)
     {
-        if (bytesRead > 0 && !_producedOutput)
+        var available = _prefix.Length - _prefixOffset;
+        if (available <= 0 || destination.IsEmpty)
         {
-            _producedOutput = true;
-            ReportOutcome(null);
+            return 0;
         }
 
-        return bytesRead;
-    }
-
-    private void ReportOutcome(PlaybackStartFailure? failure)
-    {
-        if (Interlocked.Exchange(ref _outcomeReported, 1) == 0)
-        {
-            _onOutcome?.Invoke(failure);
-        }
+        var count = Math.Min(available, destination.Length);
+        _prefix.AsSpan(_prefixOffset, count).CopyTo(destination);
+        _prefixOffset += count;
+        return count;
     }
 
     protected override void Dispose(bool disposing)
@@ -248,14 +275,6 @@ public sealed class LivePlaybackStream : Stream
         }
 
         _disposed = true;
-
-        // Judged before the kill below: a process this stream ends itself must not look like an encoder failure.
-        if (!_producedOutput && _onOutcome is not null && _process.HasExited && _process.ExitCode != 0)
-        {
-            var detail = _stderrDrain.IsCompletedSuccessfully ? _stderrDrain.Result.Trim().Split('\n')[^1].Trim() : null;
-            ReportOutcome(new PlaybackStartFailure(PlaybackStartFailure.StartFailed, detail is { Length: > 200 } ? detail[..200] : detail));
-        }
-
         try
         {
             _output.Dispose();
@@ -274,7 +293,6 @@ public sealed class LivePlaybackStream : Stream
             }
 
             _process.Dispose();
-            _ = _stderrDrain;
             _lease?.Dispose();
         }
 

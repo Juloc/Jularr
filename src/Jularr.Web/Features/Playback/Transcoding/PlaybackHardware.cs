@@ -93,8 +93,19 @@ public sealed record PlaybackBackendStatus(
     bool HardwareDecoding = false,
     string? Detail = null);
 
-public sealed record PlaybackHardwareCapabilities(DateTimeOffset DetectedAtUtc, bool FfmpegAvailable, IReadOnlyList<PlaybackBackendStatus> Backends)
+/// <summary>What the ffmpeg check found: a timeout or a failing run is transient and says nothing about whether ffmpeg is installed.</summary>
+public enum PlaybackFfmpegState
 {
+    Available,
+    NotFound,
+    TimedOut,
+    Failed
+}
+
+public sealed record PlaybackHardwareCapabilities(DateTimeOffset DetectedAtUtc, PlaybackFfmpegState FfmpegState, IReadOnlyList<PlaybackBackendStatus> Backends)
+{
+    public bool FfmpegAvailable => FfmpegState == PlaybackFfmpegState.Available;
+
     public PlaybackBackendStatus? Status(PlaybackHardwareBackend backend) => Backends.FirstOrDefault(x => x.Backend == backend);
 }
 
@@ -137,13 +148,17 @@ public sealed partial class PlaybackHardwareProbe(
     public async Task<PlaybackHardwareCapabilities> DetectAsync(CancellationToken cancellationToken)
     {
         var detectedAt = time.GetUtcNow();
+        var started = time.GetTimestamp();
         var encoderList = await runner.RunAsync(Executable, ["-hide_banner", "-encoders"], ListTimeout, cancellationToken);
         if (encoderList is not { ExitCode: 0 })
         {
-            var detail = encoderList is null ? "ffmpeg was not found or did not respond." : Summarize(encoderList.Error);
+            // The runner answers null both when ffmpeg cannot start and when it ran out of time; only the elapsed time tells them apart.
+            var timedOut = encoderList is null && time.GetElapsedTime(started) >= ListTimeout;
+            var state = encoderList is null ? (timedOut ? PlaybackFfmpegState.TimedOut : PlaybackFfmpegState.NotFound) : PlaybackFfmpegState.Failed;
+            var detail = encoderList is null ? (timedOut ? "ffmpeg did not answer in time." : "ffmpeg was not found.") : Summarize(encoderList.Error);
             return new PlaybackHardwareCapabilities(
                 detectedAt,
-                FfmpegAvailable: false,
+                state,
                 [.. PlaybackHardwareBackends.SelectionOrder.Select(backend => new PlaybackBackendStatus(backend, PlaybackBackendState.FfmpegUnavailable, Detail: detail))]);
         }
 
@@ -165,7 +180,7 @@ public sealed partial class PlaybackHardwareProbe(
             statuses.Add(await TestBackendAsync(backend, decoding, cancellationToken));
         }
 
-        return new PlaybackHardwareCapabilities(detectedAt, FfmpegAvailable: true, statuses);
+        return new PlaybackHardwareCapabilities(detectedAt, PlaybackFfmpegState.Available, statuses);
     }
 
     /// <summary>Encoder names from <c>ffmpeg -encoders</c> lines such as <c> V....D h264_nvenc   NVIDIA NVENC H.264 encoder</c>.</summary>

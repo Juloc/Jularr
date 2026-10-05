@@ -155,7 +155,11 @@
     let streamSessionId = null;
     let planGeneration = 0;
     const failedModes = new Set();
-    const streamIsLive = () => delivery !== null && delivery.transport !== "file";
+    // The server ends a stream itself when it sits idle, the cache policy needs room or its encoder crashes. That
+    // says nothing against the mode, so the same mode is planned again a bounded number of times.
+    const maxSessionRecoveries = 3;
+    let sessionRecoveries = 0;
+    const streamIsLive =() => delivery !== null && delivery.transport !== "file";
 
     const readSceneStartSeconds = () => {
         const value = new URL(window.location.href).searchParams.get("at");
@@ -1707,6 +1711,33 @@
         showPostPlay();
     });
 
+    video.addEventListener("playing", () => {
+        sessionRecoveries = 0;
+    });
+
+    // A failed video element carries no HTTP status, so the stream session is asked whether the server ended it.
+    const serverEndedSession = async () => {
+        const template = root.dataset.streamSessionUrlTemplate;
+        if (!streamSessionId || !template || !streamIsLive()) {
+            return false;
+        }
+
+        try {
+            const response = await fetch(template.replace("__session__", streamSessionId), {
+                credentials: "same-origin",
+                cache: "no-store",
+                headers: { "Accept": "application/json" }
+            });
+            if (response.status === 404) {
+                return true;
+            }
+
+            return response.ok && (await response.json()).state === "ended";
+        } catch {
+            return false;
+        }
+    };
+
     video.addEventListener("error", async () => {
         storageWakeRequested = storageWakeRequested || playbackWasRequested;
         const availability = await readStorageAvailability();
@@ -1722,6 +1753,15 @@
                 storageRecoveryActive = false;
                 startStorageRetry(false);
             }
+            return;
+        }
+
+        if (sessionRecoveries < maxSessionRecoveries && await serverEndedSession()) {
+            sessionRecoveries += 1;
+            pendingResumeTime = absoluteCurrentTime();
+            resumeShouldPlay = playbackWasRequested;
+            showPlayerError(text["playback.status.retrying"]);
+            void applyPlayback();
             return;
         }
 

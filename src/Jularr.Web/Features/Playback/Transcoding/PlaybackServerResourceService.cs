@@ -37,12 +37,18 @@ public sealed class PlaybackServerResourceService(
         await Task.Yield();
         try
         {
-            await hardware.DetectAsync(stoppingToken);
+            // Detection runs beside the sweeper, never in front of it: the cache needs its cleanup whether or not ffmpeg answers.
+            var detection = hardware.DetectAsync(stoppingToken);
             using var timer = new PeriodicTimer(SweepInterval, time);
-            while (await timer.WaitForNextTickAsync(stoppingToken))
+            do
             {
                 SweepOnce();
+                if (detection.IsCompleted && hardware.IsRedetectionDue())
+                {
+                    detection = hardware.DetectAsync(stoppingToken);
+                }
             }
+            while (await timer.WaitForNextTickAsync(stoppingToken));
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -54,11 +60,12 @@ public sealed class PlaybackServerResourceService(
         try
         {
             var result = hls.Sweep();
-            if (result.ExpiredSessions + result.PrunedForPolicy + result.OrphanDirectories > 0)
+            if (result.ExpiredSessions + result.PrunedForPolicy + result.OrphanDirectories + result.CrashedSessions > 0)
             {
                 logger.LogInformation(
-                    "HLS cache sweep removed {Expired} expired sessions, {Pruned} sessions for the cache policy and {Orphans} orphaned directories.",
+                    "HLS cache sweep removed {Expired} expired and {Crashed} crashed sessions, {Pruned} sessions for the cache policy and {Orphans} orphaned directories.",
                     result.ExpiredSessions,
+                    result.CrashedSessions,
                     result.PrunedForPolicy,
                     result.OrphanDirectories);
             }

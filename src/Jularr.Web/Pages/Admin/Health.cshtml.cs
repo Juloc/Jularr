@@ -44,6 +44,8 @@ public sealed class HealthModel(
 
     public IReadOnlyList<PlaybackBreakerState> Breakers { get; private set; } = [];
 
+    public IReadOnlyList<PlaybackHardwareBackend> DecodeDisabled { get; private set; } = [];
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -84,5 +86,6 @@ public sealed class HealthModel(
         HardwareDetectionError = hardware.DetectionError;
         EncoderInUse = hardware.Choose().Target;
         Breakers = [.. PlaybackHardwareBackends.SelectionOrder.Select(hardware.Breaker.State)];
+        DecodeDisabled = [.. PlaybackHardwareBackends.SelectionOrder.Where(hardware.IsHardwareDecodingDisabled)];
     }
 }

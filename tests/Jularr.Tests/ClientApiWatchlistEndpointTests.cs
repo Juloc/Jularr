@@ -42,7 +42,7 @@ public sealed class ClientApiWatchlistEndpointTests
         builder.Services.AddSingleton<MediaAvailabilityService>(_ => null!);
         builder.Services.AddSingleton<PlaybackService>(_ => null!);
         builder.Services.AddSingleton<Jularr.Web.Features.Playback.HlsPlaybackSessionManager>(_ => null!);
-        builder.Services.AddSingleton<Jularr.Web.Features.Playback.Decision.PlaybackTranscodeSlots>(_ => null!);
+        builder.Services.AddSingleton<Jularr.Web.Features.Playback.Decision.PlaybackAdmissionService>(_ => null!);
         builder.Services.AddSingleton<LibraryRootAvailabilityService>(_ => null!);
         builder.Services.AddSingleton<WakeOnLanService>(_ => null!);
         builder.Services.AddSingleton<MediaSegmentService>(_ => null!);

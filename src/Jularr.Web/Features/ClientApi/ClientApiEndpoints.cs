@@ -547,7 +547,7 @@ public static class ClientApiEndpoints
             PlaybackService playbackService,
             MediaAvailabilityService mediaAvailability,
             HlsPlaybackSessionManager hlsSessions,
-            PlaybackTranscodeSlots slots,
+            PlaybackAdmissionService admission,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -606,12 +606,10 @@ public static class ClientApiEndpoints
             }
 
             // This compatibility fallback always encodes with libx264, so it is a software video delivery.
-            var lease = slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
-            if (lease is null)
+            var admitted = admission.AdmitLegacy(PlaybackCostClass.SoftwareVideo, currentAccount.ProfileId);
+            if (!admitted.Admitted)
             {
-                return Results.Json(
-                    new ClientErrorResponse(PlaybackAdmissionCodes.TranscoderBusy, PlaybackAdmissionCodes.Message(PlaybackAdmissionCodes.TranscoderBusy)),
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+                return ClientApiPlaybackPlanEndpoints.Refused(admitted.RefusalCode!);
             }
 
             try
@@ -627,7 +625,7 @@ public static class ClientApiEndpoints
                     cancellationToken,
                     stream.AudioStreamIndex,
                     stream.QualityCap,
-                    lease);
+                    admitted.Lease);
 
                 return Results.Redirect(
                     ClientApiRoutes.HlsPlaylist(
@@ -638,9 +636,7 @@ public static class ClientApiEndpoints
             }
             catch (PlaybackAdmissionRefusedException refusal)
             {
-                return Results.Json(
-                    new ClientErrorResponse(refusal.Code, PlaybackAdmissionCodes.Message(refusal.Code)),
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+                return ClientApiPlaybackPlanEndpoints.Refused(refusal.Code);
             }
             catch (Exception exception) when (
                 exception is InvalidOperationException or
@@ -688,6 +684,7 @@ public static class ClientApiEndpoints
             string? quality,
             PlaybackService playbackService,
             MediaAvailabilityService mediaAvailability,
+            PlaybackAdmissionService admission,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -761,17 +758,19 @@ public static class ClientApiEndpoints
                     enableRangeProcessing: true);
             }
 
+            // A copy is a remux; anything else is a libx264 software transcode. Both obey the Admin limits.
+            var admitted = admission.AdmitLegacy(
+                stream.LivePlan!.VideoMode == PlaybackVideoMode.Copy ? PlaybackCostClass.Remux : PlaybackCostClass.SoftwareVideo,
+                currentAccount.ProfileId);
+            if (!admitted.Admitted)
+            {
+                return ClientApiPlaybackPlanEndpoints.Refused(admitted.RefusalCode!);
+            }
+
             try
             {
-                var start = NormalizeStart(
-                    startSeconds,
-                    stream.DurationSeconds);
-                var live = LivePlaybackStream.Start(
-                    stream.SourcePath,
-                    stream.LivePlan!,
-                    start,
-                    stream.AudioStreamIndex,
-                    stream.QualityCap);
+                var start = NormalizeStart(startSeconds, stream.DurationSeconds);
+                var live = LivePlaybackStream.Start(stream.SourcePath, stream.LivePlan!, start, stream.AudioStreamIndex, stream.QualityCap, admitted.Lease);
 
                 return Results.File(
                     live,
@@ -782,11 +781,17 @@ public static class ClientApiEndpoints
                 exception is InvalidOperationException or
                 System.ComponentModel.Win32Exception)
             {
+                admitted.Lease?.Dispose();
                 return Results.Json(
                     new ClientErrorResponse(
                         "playback_start_failed",
                         "The server could not start the compatibility stream."),
                     statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+            catch
+            {
+                admitted.Lease?.Dispose();
+                throw;
             }
         });
 

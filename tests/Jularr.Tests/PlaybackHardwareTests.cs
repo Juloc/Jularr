@@ -293,6 +293,67 @@ public sealed class PlaybackHardwareTests
     }
 
     [TestMethod]
+    public async Task AMissingFfmpegBlocksProcessingButATimeoutOrFailingRunDoesNot()
+    {
+        var time = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-05T10:00:00Z"));
+
+        var missing = PlaybackServerTestKit.Create(time, new FakeMediaProcessRunner(_ => null));
+        await missing.Hardware.DetectAsync(CancellationToken.None);
+        Assert.AreEqual(PlaybackFfmpegState.NotFound, missing.Hardware.Detected!.FfmpegState);
+        Assert.IsFalse(missing.Capabilities.Current().ProcessingAvailable);
+
+        var slow = PlaybackServerTestKit.Create(time, new FakeMediaProcessRunner(_ =>
+        {
+            time.Advance(PlaybackHardwareProbe.ListTimeout);
+            return null;
+        }));
+        await slow.Hardware.DetectAsync(CancellationToken.None);
+        Assert.AreEqual(PlaybackFfmpegState.TimedOut, slow.Hardware.Detected!.FfmpegState);
+        StringAssert.Contains(slow.Hardware.Detected.Backends[0].Detail!, "in time");
+        Assert.IsTrue(slow.Capabilities.Current().ProcessingAvailable, "A sleeping disk or a busy host must not block every remux and transcode.");
+
+        var failing = PlaybackServerTestKit.Create(time, new FakeMediaProcessRunner(_ => new MediaProcessResult(1, "", "Segmentation fault")));
+        await failing.Hardware.DetectAsync(CancellationToken.None);
+        Assert.AreEqual(PlaybackFfmpegState.Failed, failing.Hardware.Detected!.FfmpegState);
+        Assert.IsTrue(failing.Capabilities.Current().ProcessingAvailable);
+    }
+
+    [TestMethod]
+    public async Task DetectionIsRepeatedWithABoundedBackoffWhileFfmpegIsNotAvailable()
+    {
+        var time = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-05T10:00:00Z"));
+        var healthy = false;
+        var ffmpeg = PlaybackServerTestKit.Ffmpeg(["libx264"], []);
+        var runner = new FakeMediaProcessRunner(arguments => healthy ? ffmpeg.RunAsync("ffmpeg", arguments, TimeSpan.Zero, CancellationToken.None).Result : null);
+        var kit = PlaybackServerTestKit.Create(time, runner);
+        Assert.IsFalse(kit.Hardware.IsRedetectionDue(), "Nothing to repeat before the first run.");
+
+        await kit.Hardware.DetectAsync(CancellationToken.None);
+        Assert.IsFalse(kit.Hardware.IsRedetectionDue(), "The first retry waits a minute.");
+        time.Advance(PlaybackHardwareService.RetryStart);
+        Assert.IsTrue(kit.Hardware.IsRedetectionDue());
+
+        await kit.Hardware.DetectAsync(CancellationToken.None);
+        time.Advance(PlaybackHardwareService.RetryStart);
+        Assert.IsFalse(kit.Hardware.IsRedetectionDue(), "The backoff doubled.");
+        time.Advance(PlaybackHardwareService.RetryStart);
+        Assert.IsTrue(kit.Hardware.IsRedetectionDue());
+
+        for (var run = 0; run < 12; run++)
+        {
+            await kit.Hardware.DetectAsync(CancellationToken.None);
+            time.Advance(PlaybackHardwareService.RetryMax);
+            Assert.IsTrue(kit.Hardware.IsRedetectionDue(), "The backoff never exceeds ten minutes.");
+        }
+
+        healthy = true;
+        await kit.Hardware.DetectAsync(CancellationToken.None);
+        time.Advance(PlaybackHardwareService.RetryMax);
+        Assert.IsTrue(kit.Hardware.Detected!.FfmpegAvailable);
+        Assert.IsFalse(kit.Hardware.IsRedetectionDue(), "A healthy detection ends the retries.");
+    }
+
+    [TestMethod]
     public void EveryNewReasonAndRefusalCodeHasUserText()
     {
         foreach (var code in new[]
@@ -302,7 +363,9 @@ public sealed class PlaybackHardwareTests
                      PlaybackAdmissionCodes.TranscodingDisabled,
                      PlaybackAdmissionCodes.TranscoderBusy,
                      PlaybackAdmissionCodes.CacheBudgetExhausted,
-                     PlaybackAdmissionCodes.CacheFreeSpaceLow
+                     PlaybackAdmissionCodes.CacheFreeSpaceLow,
+                     PlaybackAdmissionCodes.CacheFolderNotOwned,
+                     PlaybackAdmissionCodes.ProfileSessionLimit
                  })
         {
             Assert.IsTrue(Jularr.Web.Features.Localization.UiTranslationResources.TryGet($"playback.reason.{code}", out _), $"playback.reason.{code} is missing.");
@@ -312,7 +375,7 @@ public sealed class PlaybackHardwareTests
             }
         }
 
-        foreach (var reason in new[] { PlaybackStartFailure.StartFailed, PlaybackStartFailure.StartTimedOut })
+        foreach (var reason in new[] { PlaybackStartFailure.StartFailed })
         {
             Assert.IsTrue(Jularr.Web.Features.Localization.UiTranslationResources.TryGet($"admin.health.hardware.reason.{reason}", out _), reason);
         }
