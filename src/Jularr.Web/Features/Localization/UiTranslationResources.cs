@@ -3322,7 +3322,7 @@ public static class UiTranslationResources
         M("companion.markKnown", "Known", "Companion", "Button", "Mark the selected companion word as already known.", "concise action", 16),
         M("companion.seekBack10", "−10 s", "Companion", "Button", "Seek the TV playback 10 seconds backward from the companion.", "very short control label", 8),
         M("companion.playPause", "Play / Pause", "Companion", "Button", "Toggle play/pause on the paired TV playback session.", "concise action", 20),
-        M("companion.seekForward10", "+10 s", "Companion", "Button", "Seek the TV playback 10 seconds forward from the companion.", "very short control label", 8),
+        M("companion.seekForward10", "+30 s", "Companion", "Button", "Seek the TV playback 30 seconds forward from the companion.", "very short control label", 8),
         M("companion.repeatSentence", "Repeat sentence", "Companion", "Button", "Replay the current subtitle sentence on the TV from the companion.", "concise action", 24),
         M("companion.openEpisode", "Open episode", "Companion", "Link", "Open the full episode/learning view for the currently paired playback session.", "concise navigation action", 20),
 
@@ -3603,7 +3603,7 @@ public static class UiTranslationResources
         M("library.watch.exitFullscreen", "Exit full screen", "Library", "Button", "Leaves full screen.", "very short player action", 24),
         M("library.watch.systemPlayer", "Open in system player", "Library", "Button", "Hands playback to the video player built into the device (iPhone and iPad only); the normal full screen button never does this.", "short player action", 28),
         M("library.watch.systemPlayerHint", "Subtitles, Learning and the Jularr controls are not available in the system player.", "Library", "Body", "Hint under the system player button: the device player replaces the Jularr controls and overlays until it is closed.", "short neutral hint", 90),
-        M("library.watch.noMediaTitle","No playable file yet", "Library", "Heading", "Shown instead of the player when the episode has no media file.", "short empty-state heading", 40),
+        M("library.watch.noMediaTitle", "No playable file yet", "Library", "Heading", "Shown instead of the player when the episode has no media file.", "short empty-state heading", 40),
         M("library.watch.noMediaBody", "This episode is in the library but no video file has been found for it yet.", "Library", "Body", "Explains why no player is shown.", "neutral empty-state copy", 110),
         M("library.watch.sideAria", "Anime details and episodes", "Library", "Accessibility", "Accessible name of the side panel next to the player.", "short accessible label", 48),
         M("library.watch.episodeCount", "{count} episodes", "Library", "Label", "Episode count fact next to the anime title.", "short fact", 24, new Dictionary<string, string> { ["count"] = "Number of episodes." }),

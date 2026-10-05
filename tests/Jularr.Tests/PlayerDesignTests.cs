@@ -111,6 +111,25 @@ public sealed class PlayerDesignTests
     }
 
     [TestMethod]
+    public void NativeAndroidPlayersReadTheSeekIncrementsFromTheTokensInsteadOfHardcodingThem()
+    {
+        var root = FindRepositoryRoot();
+        foreach (var file in new[]
+                 {
+                     Path.Combine("app-tv", "src", "main", "kotlin", "de", "juloc", "jularr", "tv", "TvPlayerScreen.kt"),
+                     Path.Combine("app-tv", "src", "main", "kotlin", "de", "juloc", "jularr", "tv", "TvPlayerInteraction.kt"),
+                     Path.Combine("app-mobile", "src", "main", "kotlin", "de", "juloc", "jularr", "mobile", "NativePlayerScreen.kt")
+                 })
+        {
+            var source = File.ReadAllText(Path.Combine(root, "clients", "android", file));
+            Assert.IsFalse(
+                System.Text.RegularExpressions.Regex.IsMatch(source, @"(seekBy|SeekBy)(-?10_000)|currentPosition [-+] 10_000"),
+                $"{file} must seek by design.seek (10 s back, 30 s forward), not a hardcoded step.");
+            StringAssert.Contains(source, "seek.");
+        }
+    }
+
+    [TestMethod]
     public void WebPlayerControlsUseCanonicalIconsTokensAndActions()
     {
         var root = FindRepositoryRoot();

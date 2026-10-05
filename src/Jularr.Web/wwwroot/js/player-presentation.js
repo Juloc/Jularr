@@ -18,7 +18,9 @@
     const transientErrors = new Set(["NotAllowedError", "InvalidStateError", "AbortError"]);
     const historyMarker = "jularrPlayerTheater";
 
-    const create = ({ win, stage, video, capabilities, onUpdate }) => {
+    // closePanels() closes the deepest open menu or sheet and reports whether it did; Escape and the back gesture
+    // use it before they leave Theater.
+    const create = ({ win, stage, video, capabilities, onUpdate, closePanels }) => {
         const doc = win.document;
         const panel = stage.parentElement;
         const supported = {
@@ -27,7 +29,9 @@
             pictureInPicture: [...capabilities.pictureInPicture]
         };
         let theater = false;
-        let theaterHistoryEntry = false;
+        // The history entry that gives Theater its back gesture, and a back() of ours whose popstate is still on its way.
+        let historyEntry = false;
+        let pendingBack = false;
         let savedScroll = null;
         let mode = modes.inline;
         stage.dataset.presentation = mode;
@@ -54,34 +58,41 @@
             const previousMode = mode;
             mode = resolveMode();
             stage.dataset.presentation = mode;
+            // The page scroll lock follows the surface that really is Theater: not while the video is popped out.
+            if (mode === modes.theater) doc.documentElement.dataset.playerTheater = "true";
+            else delete doc.documentElement.dataset.playerTheater;
             onUpdate?.({ ...state(), previousMode });
         };
 
         const report = (what, error) => win.console?.warn?.(`Jularr player: ${what} failed (${error?.name || "error"}).`);
 
         // --- Theater: the same stage fixed over the viewport (CSS keys off data-presentation) ---------------
+        // The back gesture leaves Theater through one marker entry on top of the page entry. Every exit removes it
+        // again with back() (async: pendingBack swallows that popstate), so no route needs an extra Back press. A
+        // page left while the marker is on top (a link, autoplay, reload) is cleaned up when it is loaded again.
+        const pushMarker = () => {
+            try {
+                win.history.pushState({ [historyMarker]: true }, "");
+                historyEntry = true;
+            } catch (error) {
+                report("history entry", error);
+            }
+        };
+
         const enterTheater = () => {
             if (theater) return;
             theater = true;
             savedScroll = { x: win.scrollX, y: win.scrollY };
             // The stage leaves the page flow; the panel keeps its height so the page behind does not jump.
             panel.style.minHeight = `${stage.offsetHeight}px`;
-            doc.documentElement.dataset.playerTheater = "true";
-            try {
-                // The system back gesture leaves Theater instead of the page.
-                win.history.pushState({ [historyMarker]: true }, "");
-                theaterHistoryEntry = true;
-            } catch (error) {
-                report("history entry", error);
-            }
-
+            // A back() still in flight would pop a fresh entry: the marker is pushed when it has arrived.
+            if (!pendingBack) pushMarker();
             sync();
         };
 
         const leaveTheater = () => {
             if (!theater) return;
             theater = false;
-            delete doc.documentElement.dataset.playerTheater;
             panel.style.minHeight = "";
             if (savedScroll && (win.scrollX !== savedScroll.x || win.scrollY !== savedScroll.y)) {
                 win.scrollTo(savedScroll.x, savedScroll.y);
@@ -89,9 +100,10 @@
 
             savedScroll = null;
             sync();
-            if (theaterHistoryEntry) {
-                theaterHistoryEntry = false;
-                if (win.history.state?.[historyMarker]) win.history.back();
+            if (historyEntry) {
+                historyEntry = false;
+                pendingBack = true;
+                win.history.back();
             }
         };
 
@@ -187,12 +199,25 @@
 
         doc.addEventListener("keydown", event => {
             // A menu or other handler that already used Escape keeps it.
-            if (event.key === "Escape" && theater && !event.defaultPrevented && !elementFullscreenActive()) leaveTheater();
+            if (event.key !== "Escape" || !theater || event.defaultPrevented || elementFullscreenActive()) return;
+            if (!closePanels?.()) leaveTheater();
         });
         win.addEventListener("popstate", () => {
-            theaterHistoryEntry = false;
-            leaveTheater();
+            if (pendingBack) {
+                pendingBack = false;
+                if (theater && !historyEntry) pushMarker();
+                return;
+            }
+
+            if (!theater || !historyEntry) return;
+            // The user's own back gesture already removed the marker; open panels close first and Theater stays.
+            historyEntry = false;
+            if (closePanels?.()) pushMarker();
+            else leaveTheater();
         });
+
+        // A marker entry that outlived its page: leave it behind in one step instead of costing a Back press.
+        if (win.history.state?.[historyMarker]) win.history.back();
 
         return Object.freeze({ state, toggleFullscreen, toggleNativeFullscreen, togglePictureInPicture });
     };

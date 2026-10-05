@@ -1,5 +1,7 @@
 package de.juloc.jularr.tv
 
+import de.juloc.jularr.core.design.PlayerSeekSteps
+
 enum class TvLearningLayer {
     CLOSED,
     SENTENCE,
@@ -77,6 +79,7 @@ object TvPlayerInteraction {
     fun left(
         state: TvPlayerUiState,
         wordCount: Int,
+        seek: PlayerSeekSteps,
     ): TvPlayerTransition =
         when (state.learningLayer) {
             TvLearningLayer.WORD,
@@ -95,7 +98,7 @@ object TvPlayerInteraction {
                 if (state.controlsVisible) {
                     TvPlayerTransition(state)
                 } else {
-                    TvPlayerTransition(state, listOf(TvPlayerEffect.SeekBy(-10_000)))
+                    TvPlayerTransition(state, listOf(TvPlayerEffect.SeekBy(-seek.backMs)))
                 }
             }
         }
@@ -103,6 +106,7 @@ object TvPlayerInteraction {
     fun right(
         state: TvPlayerUiState,
         wordCount: Int,
+        seek: PlayerSeekSteps,
     ): TvPlayerTransition =
         when (state.learningLayer) {
             TvLearningLayer.WORD,
@@ -121,7 +125,7 @@ object TvPlayerInteraction {
                 if (state.controlsVisible) {
                     TvPlayerTransition(state)
                 } else {
-                    TvPlayerTransition(state, listOf(TvPlayerEffect.SeekBy(10_000)))
+                    TvPlayerTransition(state, listOf(TvPlayerEffect.SeekBy(seek.forwardMs)))
                 }
             }
         }

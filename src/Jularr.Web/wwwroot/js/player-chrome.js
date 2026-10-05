@@ -261,7 +261,19 @@
         stage,
         video,
         capabilities: window.JularrPlaybackCapabilities.probePresentation(document, stage, video),
-        onUpdate: renderPresentation
+        onUpdate: renderPresentation,
+        // Back and Escape close the deepest panel (learning sheet above the settings menu) before Theater itself.
+        closePanels: () => {
+            const sheet = stage.querySelector("[data-word-inspector]");
+            if (sheet && !sheet.hidden) {
+                design.dispatch(root, design.actions.closeOverlay);
+                return true;
+            }
+
+            if (!settingsOpen()) return false;
+            setSettings(false);
+            return true;
+        }
     });
     for (const button of stage.querySelectorAll("[data-chrome-fullscreen]")) {
         button.addEventListener("click", () => void presentation.toggleFullscreen());

@@ -410,6 +410,8 @@ Every player supports the same semantic actions:
 
 Platform controls invoke these actions. Platforms must not invent alternative meanings for the same action.
 
+The action ids are stable identifiers (companion, session hub and Client API wire values) and carry no duration: `seekBack10` and `seekForward10` keep their names. Every client seeks by the canonical increments of `playback.seekBackSeconds` (10) and `playback.seekForwardSeconds` (30) in `design/player/player-tokens.json`, read from the synced token asset (`PlayerSeekSteps` in `core-design`), never by a number hardcoded in the client or taken from the id.
+
 ### 6.2 Learn-current-line behavior
 
 When the user opens learning for the current cue:
@@ -451,6 +453,7 @@ design/player/
 - focus/selected/pressed states
 - animation durations
 - control auto-hide durations
+- manual seek increments (`playback.seekBackSeconds`, `playback.seekForwardSeconds`)
 - TV scaling/safe-area multipliers
 
 `player-icons.json` owns semantic icon IDs and vector path data. Build tooling generates/validates the web and Android forms from these canonical inputs. Do not hand-maintain separate semantic icon sets.

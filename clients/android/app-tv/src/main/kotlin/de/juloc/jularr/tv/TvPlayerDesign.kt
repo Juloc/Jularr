@@ -3,6 +3,7 @@ package de.juloc.jularr.tv
 import android.content.Context
 import androidx.compose.ui.graphics.Color
 import de.juloc.jularr.core.design.PlayerDesignConfigLoader
+import de.juloc.jularr.core.design.PlayerSeekSteps
 
 data class TvPlayerDesign(
     val overlay: Color,
@@ -20,6 +21,7 @@ data class TvPlayerDesign(
     val controlSizeDp: Int,
     val subtitlePreferredSp: Int,
     val controlsAutoHideMs: Long,
+    val seek: PlayerSeekSteps,
 )
 
 object TvPlayerDesignLoader {
@@ -41,6 +43,7 @@ object TvPlayerDesignLoader {
             controlSizeDp = config.tvControlSizeDp,
             subtitlePreferredSp = config.subtitlePreferredSp,
             controlsAutoHideMs = config.controlsAutoHideMs,
+            seek = config.seek,
         )
     }
 }

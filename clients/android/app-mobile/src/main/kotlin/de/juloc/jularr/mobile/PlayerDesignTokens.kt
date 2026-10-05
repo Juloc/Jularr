@@ -3,6 +3,7 @@ package de.juloc.jularr.mobile
 import android.content.Context
 import androidx.compose.ui.graphics.Color
 import de.juloc.jularr.core.design.PlayerDesignConfigLoader
+import de.juloc.jularr.core.design.PlayerSeekSteps
 
 data class MobilePlayerDesign(
     val overlay: Color,
@@ -19,6 +20,7 @@ data class MobilePlayerDesign(
     val spacingLargeDp: Int,
     val subtitlePreferredSp: Int,
     val controlsAutoHideMs: Long,
+    val seek: PlayerSeekSteps,
 )
 
 object MobilePlayerDesignLoader {
@@ -39,6 +41,7 @@ object MobilePlayerDesignLoader {
             spacingLargeDp = config.spacingLargeDp,
             subtitlePreferredSp = config.subtitlePreferredSp,
             controlsAutoHideMs = config.controlsAutoHideMs,
+            seek = config.seek,
         )
     }
 }
