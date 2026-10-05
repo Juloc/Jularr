@@ -9,7 +9,10 @@ Parent implementation pack:
 
 Primary backlog:
 - #839 — true Offline cold-start + unified local Reader repository;
-- #840 — device-local Offline actions on consumer detail surfaces.
+- #840 — device-local Offline actions on consumer detail surfaces;
+- #851 — Games first-class Offline/install projection through a Games-owned local package owner;
+- #861 — package lifecycle hardening: atomic replacement, capacity accounting and resource reuse;
+- #862 — future Games offline save reconciliation for divergent multi-device changes.
 
 This document is intentionally code-structure-specific. It applies the current Jularr architecture and maintainability rules before implementation starts.
 
@@ -478,6 +481,14 @@ Repeated identical confirmation:
 - does not create a duplicate queue entry.
 
 A materially different selection can create/update a different package revision, but the client must still reconcile overlap rather than duplicate identical resources.
+
+The contract must leave room for safe local generations/resources used by #861:
+- a logical package identity is stable across updates;
+- a candidate generation/revision is not Ready until fully verified;
+- resource identity includes enough version/hash information for deterministic reuse;
+- the old Ready generation stays addressable until the client atomically commits the candidate.
+
+A1 does not need to implement full local reference counting/garbage collection, but it must not define a wire shape that makes atomic replacement or known-resource reuse impossible later.
 
 ---
 
@@ -966,6 +977,21 @@ Do not send physical free-space data to the server merely for package planning.
 
 Do not label PWA quota as device disk free space.
 
+### Device-wide accounting with owner-scoped visibility
+
+Admission must reason about **all Jularr-managed bytes physically retained on the current device/browser**, not only the active profile's visible packages.
+
+This includes retained-but-locked packages of another profile because those bytes still consume the same disk/quota.
+
+Privacy remains owner-scoped:
+- active profile sees itemized details only for its own accessible packages;
+- when hidden-owner bytes affect capacity, expose only an aggregate reserved/other-profile amount where necessary;
+- never reveal another profile's title, artwork, progress, filenames or package identity.
+
+The local capacity owner therefore needs a device-total usage view plus owner-scoped item views. It must not create a server-side device inventory.
+
+Jularr-managed Games packages participate in the same physical capacity accounting through their Games adapter. External launcher installations do not unless the integration authoritatively manages those bytes.
+
 ---
 
 # 24. Module gates and authorization
@@ -1427,9 +1453,11 @@ Phase A is complete only when:
 - PWA has one durable Offline owner bootstrap;
 - Android has one durable Offline owner authority;
 - one read-only local catalog projection exists per client;
-- catalog contains both Reading and media packages;
+- catalog contains Reading, media and Games adapter projections when the client supports them;
 - all new packages carry canonical identity + origin;
 - old packages migrate without unnecessary re-download;
+- package/resource identity supports atomic replacement and known-resource reuse without forcing a destructive update;
+- device admission can account for retained hidden-owner bytes without exposing their metadata;
 - profile/server isolation fails closed;
 - no duplicate queue/progress/notification state is introduced;
 - tests cover owner migration, target validation and projection;
