@@ -52,6 +52,7 @@
     string OperationStatusLabel(OperationStatus status) => ui["admin.operations.status." + AdminActivityQuery.StatusName(status)];
 }
 @section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-media-detail.css" asp-append-version="true" />
 }
 
@@ -124,7 +125,7 @@
                     <input type="hidden" name="profileId" value="@acquisition.ProfileId" />
                     <partial name="_AdminMediaSettingsFields" model="acquisition" />
                     <button class="admmd-toggle @(acquisition.Monitored ? "is-on" : "")" type="submit" aria-pressed="@(acquisition.Monitored ? "true" : "false")">
-                        <span class="admmd-switch" aria-hidden="true"></span>
+                        <span class="admin-switch" aria-hidden="true"></span>
                         @(acquisition.Monitored ? ui["admin.media.monitored"] : ui["admin.media.monitor"])
                     </button>
                 </form>
@@ -249,7 +250,7 @@ else
                                         aria-label="@ui.Format(turnOn ? "admin.media.monitorItem" : "admin.media.unmonitorItem", ("name", groupName))"
                                         disabled="@(!acquisition.Monitored)"
                                         title="@(acquisition.Monitored ? null : ui["admin.media.monitorFirst"])">
-                                    <span class="admmd-switch" aria-hidden="true"></span>
+                                    <span class="admin-switch" aria-hidden="true"></span>
                                 </button>
                             </form>
                         }
@@ -337,7 +338,7 @@ else
                                                     aria-label="@ui.Format(episode.Monitored ? "admin.media.unmonitorItem" : "admin.media.monitorItem", ("name", episodeName))"
                                                     disabled="@(!acquisition.Monitored)"
                                                     title="@(acquisition.Monitored ? null : ui["admin.media.monitorFirst"])">
-                                                <span class="admmd-switch" aria-hidden="true"></span>
+                                                <span class="admin-switch" aria-hidden="true"></span>
                                             </button>
                                         </form>
                                     </span>

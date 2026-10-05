@@ -1,4 +1,4 @@
-@model (IReadOnlyList<Jularr.Web.Features.Library.AdminVideoFile> Files, Jularr.Web.Features.Localization.UiTextBundle Ui)
+@model (IReadOnlyList<Jularr.Web.Features.Library.AdminVideoFile> Files, Jularr.Web.Features.Localization.UiTextBundle Ui, string Open)
 @using Jularr.Web.Features.Storage
 @{
     var ui = Model.Ui;
@@ -41,6 +41,7 @@
             </dl>
             <form method="post" asp-page-handler="ReanalyzeFile" class="admmd-file-actions">
                 <input type="hidden" name="fileId" value="@file.Id" />
+                <input type="hidden" name="open" value="@Model.Open" />
                 <button class="button" type="submit">@ui["admin.media.file.reanalyze"]</button>
             </form>
         </li>

@@ -166,14 +166,18 @@ public sealed class VideoAdminPagesRenderTests
         var second = series.SecondEpisodeId!.Value.ToString();
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=EpisodeMonitor", [new("episodeId", second), new("monitored", "false")]));
         var payload = VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.Custom, payload.Scope);
-        CollectionAssert.DoesNotContain(payload.SelectedEpisodeIds, series.SecondEpisodeId!.Value);
-        StringAssert.Contains(await host.GetHtmlAsync(page), "Partial");
+        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, payload.Scope);
+        CollectionAssert.Contains(payload.ExcludedEpisodeIds!, series.SecondEpisodeId!.Value);
+        var partial = await host.GetHtmlAsync(page);
+        StringAssert.Contains(partial, "Partial");
+        StringAssert.Contains(partial, "aria-checked=\"mixed\"");
+        Assert.IsFalse(Regex.IsMatch(partial, "role=\"switch\"[^>]*aria-checked=\"mixed\""), "A switch is never mixed; only the checkbox of a season or Series is.");
 
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "2"), new("monitored", "false")]));
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "1"), new("monitored", "true")]));
         var restored = VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!;
-        Assert.IsTrue(restored.SelectedEpisodeIds.Contains(series.SecondEpisodeId!.Value), "Switching a season on monitors all of its episodes again.");
+        CollectionAssert.DoesNotContain(restored.ExcludedEpisodeIds!, series.SecondEpisodeId!.Value, "Switching a season on monitors all of its episodes again.");
+        Assert.AreEqual(HttpStatusCode.BadRequest, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("monitored", "false")]), "A missing season never means the specials.");
 
         var before = (await series.GetAsync(request.Id)).PayloadJson;
         Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(page, $"{page}?handler=EpisodeMonitor", [new("episodeId", Guid.NewGuid().ToString()), new("monitored", "true")]));
@@ -183,6 +187,29 @@ public sealed class VideoAdminPagesRenderTests
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeriesScope", [new("scope", "future")]));
         Assert.AreEqual(VideoRequestScope.FutureOnly, VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!.Scope);
         Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(page, $"/Admin/Media/series/{Guid.NewGuid():D}?handler=SeriesScope", [new("scope", "all")]));
+    }
+
+    [TestMethod]
+    public async Task ReanalysingAFileOnlyReachesFilesOfTheTitleTheRowBelongsTo()
+    {
+        await using var movie = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Movie, "Dune", 2021, "438631", DuneRelease);
+        await movie.AttachFileAsync(null, "Dune.2021.1080p.mkv", 2048);
+        var other = await movie.AddWorkAsync("Other Film", "999");
+        await using var host = await VideoAdminPageHost.CreateAsync(movie);
+        var page = $"/Admin/Media/movie/{movie.Work.Id:D}";
+        var detail = (await movie.Get<Jularr.Web.Features.Library.AdminVideoMediaService>().LoadAsync(MediaAcquisitionKind.Movie, movie.Work.Id, CancellationToken.None))!;
+        var ownFile = detail.Files.Single().Id;
+        static async Task<IReadOnlyList<Jularr.Web.Features.Operations.OperationSnapshot>> ReanalysesAsync(VideoAcquisitionTestHost video) =>
+            await video.Operations.ListAsync(new Jularr.Web.Features.Operations.OperationListFilter(Kind: "video-reanalyze-media"), CancellationToken.None);
+
+        StringAssert.Contains(await host.GetHtmlAsync(page), "name=\"open\"");
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(page, $"{page}?handler=ReanalyzeFile", [new("fileId", Guid.NewGuid().ToString())]));
+        var otherPage = $"/Admin/Media/movie/{other.Id:D}";
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(otherPage, $"{otherPage}?handler=ReanalyzeFile", [new("fileId", ownFile.ToString())]), "A file of another title is not reachable through this one.");
+        Assert.AreEqual(0, (await ReanalysesAsync(movie)).Count, "A refused file starts no analysis.");
+
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=ReanalyzeFile", [new("fileId", ownFile.ToString()), new("open", "v-abc")]));
+        Assert.AreEqual(1, (await ReanalysesAsync(movie)).Count);
     }
 
     [TestMethod]

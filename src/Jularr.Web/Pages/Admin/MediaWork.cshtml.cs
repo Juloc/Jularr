@@ -73,11 +73,13 @@ public sealed class MediaWorkModel(
 
     /// <summary>Sets what is monitored of a whole Series: all episodes, future episodes only, or nothing. Seasons and episodes have their own switches.</summary>
     public async Task<IActionResult> OnPostSeriesScopeAsync(string kind, Guid id, string? scope, CancellationToken cancellationToken) =>
-        await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeriesAsync(id, scope, [], [], monitorFuture: false, token), cancellationToken, MediaAcquisitionKind.Tv);
+        await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeriesAsync(id, scope, token), cancellationToken, MediaAcquisitionKind.Tv);
 
     /// <summary>Monitors or unmonitors one season of a Series independently of the others.</summary>
-    public async Task<IActionResult> OnPostSeasonMonitorAsync(string kind, Guid id, int season, bool monitored, CancellationToken cancellationToken) =>
-        await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeasonMonitoredAsync(id, season, monitored, token), cancellationToken, MediaAcquisitionKind.Tv, $"s{season}");
+    public async Task<IActionResult> OnPostSeasonMonitorAsync(string kind, Guid id, int? season, bool monitored, CancellationToken cancellationToken) =>
+        season is not { } seasonNumber
+            ? BadRequest()
+            : await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeasonMonitoredAsync(id, seasonNumber, monitored, token), cancellationToken, MediaAcquisitionKind.Tv, $"s{seasonNumber}");
 
     /// <summary>Monitors or unmonitors one episode of a Series.</summary>
     public async Task<IActionResult> OnPostEpisodeMonitorAsync(string kind, Guid id, Guid episodeId, bool monitored, string? open, CancellationToken cancellationToken) =>
@@ -119,8 +121,7 @@ public sealed class MediaWorkModel(
         Guid id,
         Guid fileId,
         string? open,
-        [FromServices] MediaInventoryService inventory,
-        [FromServices] OperationRunner operations,
+        [FromServices] MediaFileReanalysisService reanalysis,
         CancellationToken cancellationToken)
     {
         if (!VideoWorkLinks.TryParseAdminKind(kind, out var mediaKind) || !await IsEnabledAsync(mediaKind, cancellationToken))
@@ -131,22 +132,13 @@ public sealed class MediaWorkModel(
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         if (!await details.OwnsFileAsync(id, fileId, cancellationToken))
         {
-            TempData["Error"] = Ui["admin.media.fileGone"];
-            return Back(mediaKind, id, open);
+            return NotFound();
         }
 
         try
         {
-            var entry = await operations.RunAsync(
-                new OperationDescriptor(ReanalyzeOperationKind, "Video", "Re-analyse video media", ProfileId: currentAccount.ProfileId, Lane: OperationLane.Normal, Retryable: false),
-                async (_, token) =>
-                {
-                    await inventory.InvalidateAsync([fileId], token);
-                    return await inventory.EnsureAnalyzedAsync(fileId, token);
-                },
-                null,
-                cancellationToken);
-            TempData["Notice"] = entry?.Status == MediaAnalysisStatus.Succeeded ? Ui["admin.media.reanalyzed"] : Ui["admin.media.reanalyzeIncomplete"];
+            var status = await reanalysis.ReanalyzeAsync(fileId, new OperationDescriptor(ReanalyzeOperationKind, "Video", "Re-analyse video media", ProfileId: currentAccount.ProfileId), cancellationToken);
+            TempData["Notice"] = status == MediaAnalysisStatus.Succeeded ? Ui["admin.media.reanalyzed"] : Ui["admin.media.reanalyzeIncomplete"];
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or DbException)
         {

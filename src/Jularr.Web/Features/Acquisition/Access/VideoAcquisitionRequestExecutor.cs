@@ -51,6 +51,9 @@ public sealed record VideoRequestPayload(
     /// <summary>Admin-owned: episodes the selection would include that were unchecked on purpose.</summary>
     public Guid[]? ExcludedEpisodeIds { get; init; }
 
+    /// <summary>Admin-owned: seasons switched off as a whole, so episodes added to them later stay unmonitored whatever the scope.</summary>
+    public Guid[]? ExcludedSeasonIds { get; init; }
+
     /// <summary>Admin-owned: counts every Admin change, so a search that started before one can tell and keep the change's wake-up.</summary>
     public int ScopeRevision { get; init; }
 
@@ -102,6 +105,7 @@ public sealed record VideoRequestPayload(
             Monitored = stored.Monitored,
             MonitorFutureFromUtc = stored.MonitorFutureFromUtc,
             ExcludedEpisodeIds = stored.ExcludedEpisodeIds,
+            ExcludedSeasonIds = stored.ExcludedSeasonIds,
             ScopeRevision = stored.ScopeRevision
         };
         return stored.ScopeRevision == ScopeRevision
@@ -140,17 +144,26 @@ public sealed class VideoRequestSelection(VideoRequestPayload payload, DateTime 
     private readonly HashSet<Guid> selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
     private readonly HashSet<Guid> selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
     private readonly HashSet<Guid> excludedEpisodes = (payload.ExcludedEpisodeIds ?? []).ToHashSet();
+    private readonly HashSet<Guid> excludedSeasons = (payload.ExcludedSeasonIds ?? []).ToHashSet();
 
     /// <summary>"Future" is what aired after this moment: the one Admin set on the last scope change, else the creation of the request.</summary>
     private readonly DateTime futureFromUtc = payload.MonitorFutureFromUtc ?? requestCreatedAt;
 
+    /// <summary>
+    /// An excluded episode is never included; an episode of an excluded season only when it was switched on by itself. Whatever the scope,
+    /// an episode or season the admin selected explicitly is included, so one switch never has to rewrite the scope.
+    /// </summary>
     public bool Includes(Guid episodeId, Guid? seasonId, DateTime? airedAt) =>
         payload.Monitored
         && !excludedEpisodes.Contains(episodeId)
+        && (seasonId is not { } excluded || !excludedSeasons.Contains(excluded) || selectedEpisodes.Contains(episodeId))
         && payload.Scope switch
         {
             VideoRequestScope.AllCurrentAndFuture => true,
-            VideoRequestScope.FutureOnly => airedAt is not null && airedAt > futureFromUtc,
+            VideoRequestScope.FutureOnly =>
+                selectedEpisodes.Contains(episodeId)
+                || seasonId is { } futureSeason && selectedSeasons.Contains(futureSeason)
+                || airedAt is not null && airedAt > futureFromUtc,
             VideoRequestScope.Custom =>
                 selectedEpisodes.Contains(episodeId)
                 || seasonId is { } season && selectedSeasons.Contains(season)

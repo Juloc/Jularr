@@ -48,7 +48,6 @@ public sealed class VideoMonitoringService(
     AcquisitionAccessStore requests,
     AcquisitionRequestService requestService,
     VideoAcquisitionEngine engine,
-    VideoRequestScopeResolver scopes,
     QualityProfileStore profiles,
     TimeProvider clock)
 {
@@ -83,40 +82,15 @@ public sealed class VideoMonitoringService(
         var work = await db.Works.AsNoTracking().SingleOrDefaultAsync(x => x.Id == workId && x.MediaType == WorkMediaType.Movie, cancellationToken);
         return work is null
             ? VideoMonitoringOutcome.NotFound
-            : await ApplyAsync(work, MediaAcquisitionKind.Movie, monitored, payload => payload with { Monitored = monitored }, cancellationToken);
+            : await ApplyAsync(work, MediaAcquisitionKind.Movie, monitored, (payload, _) => payload with { Monitored = monitored }, cancellationToken);
     }
 
     /// <summary>
-    /// Sets what is monitored of a Series: <c>all</c>, <c>future</c>, <c>custom</c> (the given seasons, episodes and, with
-    /// <paramref name="monitorFuture"/>, later episodes) or <see cref="OffScope"/>. A custom choice that selects nothing is off. Episodes
-    /// the choice would include but the checklist left out are excluded explicitly. Throws <see cref="ArgumentException"/> for an unknown
-    /// scope or a season or episode that does not belong to the Series.
+    /// Sets what a whole Series monitors: <c>all</c> (every episode and every future one), <c>future</c> (episodes that air from now on) or
+    /// <see cref="OffScope"/>. It replaces every selection and exclusion made before. Throws <see cref="ArgumentException"/> for any other scope;
+    /// a custom selection is made one season or episode at a time with <see cref="SetSeasonMonitoredAsync"/> and <see cref="SetEpisodeMonitoredAsync"/>.
     /// </summary>
-    public async Task<VideoMonitoringOutcome> SetSeriesAsync(Guid workId, string? scope, IReadOnlyCollection<Guid> seasonIds, IReadOnlyCollection<Guid> episodeIds, bool monitorFuture, CancellationToken cancellationToken)
-    {
-        var work = await db.Works.AsNoTracking().SingleOrDefaultAsync(x => x.Id == workId && x.MediaType == WorkMediaType.Series, cancellationToken);
-        return work is null
-            ? VideoMonitoringOutcome.NotFound
-            : await ApplySeriesScopeAsync(work, scope, seasonIds, episodeIds, monitorFuture, expectedRevision: null, cancellationToken);
-    }
-
-    /// <summary>
-    /// Monitors or unmonitors every episode of one season and leaves the rest of the Series as it is. The season is selected as a whole, so
-    /// episodes added to it later are monitored too. Returns <see cref="VideoMonitoringOutcome.NotFound"/> for a season the Series does not have.
-    /// </summary>
-    public Task<VideoMonitoringOutcome> SetSeasonMonitoredAsync(Guid workId, int seasonNumber, bool monitored, CancellationToken cancellationToken) =>
-        SetUnitMonitoredAsync(workId, seasonNumber, null, monitored, cancellationToken);
-
-    /// <summary>Monitors or unmonitors one episode and leaves the rest of the Series as it is.</summary>
-    public Task<VideoMonitoringOutcome> SetEpisodeMonitoredAsync(Guid workId, Guid episodeId, bool monitored, CancellationToken cancellationToken) =>
-        SetUnitMonitoredAsync(workId, null, episodeId, monitored, cancellationToken);
-
-    /// <summary>
-    /// Turns what the Series monitors now (whatever its scope) into the custom selection with the one season or episode changed. The
-    /// change is only written while the request still has the Admin revision this read, so two edits at the same moment never overwrite
-    /// each other: the later one reports <see cref="VideoMonitoringOutcome.Conflict"/> and is looked at again.
-    /// </summary>
-    private async Task<VideoMonitoringOutcome> SetUnitMonitoredAsync(Guid workId, int? seasonNumber, Guid? episodeId, bool monitored, CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome> SetSeriesAsync(Guid workId, string? scope, CancellationToken cancellationToken)
     {
         var work = await db.Works.AsNoTracking().SingleOrDefaultAsync(x => x.Id == workId && x.MediaType == WorkMediaType.Series, cancellationToken);
         if (work is null)
@@ -124,88 +98,101 @@ public sealed class VideoMonitoringService(
             return VideoMonitoringOutcome.NotFound;
         }
 
-        var episodes = await db.WorkEpisodes.AsNoTracking()
-            .Where(x => x.WorkId == workId)
-            .Select(x => new { x.Id, x.SeasonId, x.SeasonNumber, x.AiredAt })
-            .ToListAsync(cancellationToken);
-        var targets = episodes.Where(x => episodeId is null ? x.SeasonNumber == seasonNumber : x.Id == episodeId).ToList();
-        if (targets.Count == 0)
+        if (scope == OffScope)
+        {
+            return await ApplyAsync(work, MediaAcquisitionKind.Tv, on: false, (payload, _) => payload with { Monitored = false }, cancellationToken);
+        }
+
+        if (!VideoRequestScopeResolver.TryParseScope(scope, out var parsed) || parsed == VideoRequestScope.Custom)
+        {
+            throw new ArgumentException("Choose all, future or off.", nameof(scope));
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        return await ApplyAsync(
+            work,
+            MediaAcquisitionKind.Tv,
+            on: true,
+            (payload, _) => payload with
+            {
+                Monitored = true,
+                Scope = parsed,
+                SelectedEpisodeIds = [],
+                SelectedSeasonIds = [],
+                ExcludedEpisodeIds = [],
+                ExcludedSeasonIds = [],
+                MonitorFuture = true,
+                MonitorFutureFromUtc = now
+            },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Monitors or unmonitors every episode of one season and leaves the rest of the Series as it is, including the episodes that are added to
+    /// that season later. Returns <see cref="VideoMonitoringOutcome.NotFound"/> for a season the Series does not have.
+    /// </summary>
+    public async Task<VideoMonitoringOutcome> SetSeasonMonitoredAsync(Guid workId, int seasonNumber, bool monitored, CancellationToken cancellationToken)
+    {
+        var loaded = await LoadEpisodesAsync(workId, cancellationToken);
+        if (loaded is null)
         {
             return VideoMonitoringOutcome.NotFound;
         }
 
-        var request = await FindOpenRequestAsync(MediaAcquisitionKind.Tv, workId, cancellationToken)
-            ?? await FindStoppedRequestAsync(MediaAcquisitionKind.Tv, workId, cancellationToken);
-        var read = request is null ? null : VideoRequestPayload.Of(request, workId, work.CanonicalTitle, work.Year);
-        var selection = request is null ? null : new VideoRequestSelection(read!, request.CreatedAt);
-        var episodeIds = episodes.Where(x => selection?.Includes(x.Id, x.SeasonId, x.AiredAt) == true).Select(x => x.Id).ToHashSet();
-        var seasonIds = (read?.SelectedSeasonIds ?? []).ToHashSet();
-        var targetIds = targets.Select(x => x.Id);
-        if (monitored)
-        {
-            episodeIds.UnionWith(targetIds);
-        }
-        else
-        {
-            episodeIds.ExceptWith(targetIds);
-        }
+        var (work, episodes) = loaded.Value;
 
-        if (episodeId is null && targets[0].SeasonId is { } seasonId)
-        {
-            if (monitored)
-            {
-                seasonIds.Add(seasonId);
-            }
-            else
-            {
-                seasonIds.Remove(seasonId);
-            }
-        }
-
-        var future = read is { Monitored: true } && read.MonitorFuture;
-        return await ApplySeriesScopeAsync(work, "custom", seasonIds, episodeIds, future, read?.ScopeRevision ?? 0, cancellationToken);
+        var targets = episodes.Where(episode => episode.SeasonNumber == seasonNumber).ToList();
+        var seasonId = targets.Count > 0 && targets.All(episode => episode.SeasonId == targets[0].SeasonId) ? targets[0].SeasonId : null;
+        return targets.Count == 0 ? VideoMonitoringOutcome.NotFound : await SwitchUnitAsync(work, targets, seasonId, monitored, cancellationToken);
     }
 
-    private async Task<VideoMonitoringOutcome> ApplySeriesScopeAsync(
-        Work work,
-        string? scope,
-        IReadOnlyCollection<Guid> seasonIds,
-        IReadOnlyCollection<Guid> episodeIds,
-        bool monitorFuture,
-        int? expectedRevision,
-        CancellationToken cancellationToken)
+    /// <summary>Monitors or unmonitors one episode and leaves the rest of the Series as it is.</summary>
+    public async Task<VideoMonitoringOutcome> SetEpisodeMonitoredAsync(Guid workId, Guid episodeId, bool monitored, CancellationToken cancellationToken)
     {
-        var workId = work.Id;
-        var off = scope == OffScope || scope == "custom" && seasonIds.Count == 0 && episodeIds.Count == 0 && !monitorFuture;
-        if (off)
+        var loaded = await LoadEpisodesAsync(workId, cancellationToken);
+        if (loaded is null)
         {
-            return await ApplyAsync(work, MediaAcquisitionKind.Tv, on: false, Revised(expectedRevision, payload => payload with { Monitored = false }), cancellationToken);
+            return VideoMonitoringOutcome.NotFound;
         }
 
-        if (!VideoRequestScopeResolver.TryParseScope(scope, out var parsed))
-        {
-            throw new ArgumentException("Choose all, future, custom or off.", nameof(scope));
-        }
+        var (work, episodes) = loaded.Value;
 
-        var chosen = await scopes.BuildTvPayloadAsync(work, new VideoRequestScopeChoice(parsed, seasonIds, episodeIds, monitorFuture), cancellationToken);
-        var now = clock.GetUtcNow().UtcDateTime;
-        chosen = chosen with { MonitorFutureFromUtc = now };
-        if (parsed == VideoRequestScope.Custom)
-        {
-            var checkedEpisodes = episodeIds.ToHashSet();
-            var selection = new VideoRequestSelection(chosen, now);
-            var episodes = await db.WorkEpisodes.AsNoTracking().Where(x => x.WorkId == workId).Select(x => new { x.Id, x.SeasonId, x.AiredAt }).ToListAsync(cancellationToken);
-            chosen = chosen with { ExcludedEpisodeIds = [.. episodes.Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt) && !checkedEpisodes.Contains(x.Id)).Select(x => x.Id)] };
-        }
-
-        return await ApplyAsync(work, MediaAcquisitionKind.Tv, on: true, Revised(expectedRevision, payload => ScopeOf(payload, chosen)), cancellationToken);
+        var targets = episodes.Where(episode => episode.Id == episodeId).ToList();
+        return targets.Count == 0 ? VideoMonitoringOutcome.NotFound : await SwitchUnitAsync(work, targets, wholeSeasonId: null, monitored, cancellationToken);
     }
 
-    /// <summary>The edit, refused with <see cref="PayloadConflictException"/> when the stored payload moved on from the revision the caller read.</summary>
-    private static Func<VideoRequestPayload, VideoRequestPayload> Revised(int? expectedRevision, Func<VideoRequestPayload, VideoRequestPayload> edit) =>
-        expectedRevision is null
-            ? edit
-            : payload => payload.ScopeRevision == expectedRevision ? edit(payload) : throw new PayloadConflictException();
+    private async Task<(Work Work, List<VideoEpisodeRef> Episodes)?> LoadEpisodesAsync(Guid workId, CancellationToken cancellationToken)
+    {
+        var work = await db.Works.AsNoTracking().SingleOrDefaultAsync(x => x.Id == workId && x.MediaType == WorkMediaType.Series, cancellationToken);
+        if (work is null)
+        {
+            return null;
+        }
+
+        var episodes = await db.WorkEpisodes.AsNoTracking()
+            .Where(x => x.WorkId == workId)
+            .Select(x => new VideoEpisodeRef(x.Id, x.SeasonId, x.SeasonNumber, x.AiredAt))
+            .ToListAsync(cancellationToken);
+        return (work, episodes);
+    }
+
+    /// <summary>
+    /// Applies <see cref="VideoUnitMonitoring.Switch"/> to the stored payload inside the compare-and-set write, so a concurrent edit of another
+    /// unit is never overwritten. The read before it only decides whether the Series stays monitored (a switch that leaves nothing selected
+    /// ends the request like monitoring Off).
+    /// </summary>
+    private async Task<VideoMonitoringOutcome> SwitchUnitAsync(Work work, List<VideoEpisodeRef> targets, Guid? wholeSeasonId, bool monitored, CancellationToken cancellationToken)
+    {
+        var request = await FindOpenRequestAsync(MediaAcquisitionKind.Tv, work.Id, cancellationToken)
+            ?? await FindStoppedRequestAsync(MediaAcquisitionKind.Tv, work.Id, cancellationToken);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var read = request is null ? Unmonitored(work) : VideoRequestPayload.Of(request, work.Id, work.CanonicalTitle, work.Year);
+        var on = VideoUnitMonitoring.Switch(read, request?.CreatedAt ?? now, now, targets, wholeSeasonId, monitored).Monitored;
+        return await ApplyAsync(work, MediaAcquisitionKind.Tv, on, (payload, created) => VideoUnitMonitoring.Switch(payload, created, now, targets, wholeSeasonId, monitored), cancellationToken);
+    }
+
+    private static VideoRequestPayload Unmonitored(Work work) =>
+        VideoRequestPayload.Default(MediaAcquisitionKind.Tv, work.Id, work.CanonicalTitle, work.Year) with { Monitored = false };
 
     /// <summary>Assigns the quality profile of one Work, or clears the override with a blank id.</summary>
     public async Task<VideoMonitoringOutcome> SetProfileAsync(MediaAcquisitionKind kind, Guid workId, string? profileId, CancellationToken cancellationToken)
@@ -220,23 +207,12 @@ public sealed class VideoMonitoringService(
         return VideoMonitoringOutcome.Saved;
     }
 
-    private static VideoRequestPayload ScopeOf(VideoRequestPayload payload, VideoRequestPayload chosen) => payload with
-    {
-        Monitored = true,
-        Scope = chosen.Scope,
-        SelectedEpisodeIds = chosen.SelectedEpisodeIds,
-        SelectedSeasonIds = chosen.SelectedSeasonIds,
-        MonitorFuture = chosen.MonitorFuture,
-        MonitorFutureFromUtc = chosen.MonitorFutureFromUtc,
-        ExcludedEpisodeIds = chosen.ExcludedEpisodeIds
-    };
-
     /// <summary>
     /// Writes <paramref name="edit"/> to the title's request: the open one, else the one monitoring Off ended (reopened with its requester),
     /// else a new request. Every write is conditional on the status it was decided from, so a concurrent change makes it look again instead of
     /// leaving a status and a payload that disagree. Off with nothing open changes nothing.
     /// </summary>
-    private async Task<VideoMonitoringOutcome> ApplyAsync(Work work, MediaAcquisitionKind kind, bool on, Func<VideoRequestPayload, VideoRequestPayload> edit, CancellationToken cancellationToken)
+    private async Task<VideoMonitoringOutcome> ApplyAsync(Work work, MediaAcquisitionKind kind, bool on, Func<VideoRequestPayload, DateTime, VideoRequestPayload> edit, CancellationToken cancellationToken)
     {
         var seed = VideoRequestPayload.Default(kind, work.Id, work.CanonicalTitle, work.Year);
         try
@@ -249,7 +225,7 @@ public sealed class VideoMonitoringService(
                     var ends = !on && open.Status == AcquisitionRequestStatus.Approved;
                     var endStatus = ends ? await engine.StatusWhenMonitoringStopsAsync(kind, work.Id, cancellationToken) : open.Status;
                     var message = ends ? MonitoringTurnedOff : open.Status == AcquisitionRequestStatus.Approved ? MonitoringChanged : null;
-                    if (await requests.PatchPayloadAsync(open.Id, stored => Edited(stored, seed, edit), open.Status, endStatus, message, cancellationToken))
+                    if (await requests.PatchPayloadAsync(open.Id, stored => Edited(stored, seed, edit, open.CreatedAt), open.Status, endStatus, message, cancellationToken))
                     {
                         return VideoMonitoringOutcome.Saved;
                     }
@@ -269,7 +245,7 @@ public sealed class VideoMonitoringService(
 
                 if (await FindStoppedRequestAsync(kind, work.Id, cancellationToken) is { } stopped)
                 {
-                    if (await requests.PatchPayloadAsync(stopped.Id, stored => Edited(stored, seed, edit), stopped.Status, AcquisitionRequestStatus.Approved, "Monitoring was turned on again.", cancellationToken))
+                    if (await requests.PatchPayloadAsync(stopped.Id, stored => Edited(stored, seed, edit, stopped.CreatedAt), stopped.Status, AcquisitionRequestStatus.Approved, "Monitoring was turned on again.", cancellationToken))
                     {
                         return VideoMonitoringOutcome.Saved;
                     }
@@ -282,7 +258,7 @@ public sealed class VideoMonitoringService(
                     return VideoMonitoringOutcome.NotAcquirable;
                 }
 
-                var draft = new AcquisitionRequestDraft(kind, identity.Provider, identity.ExternalId, work.CanonicalTitle, null, null, edit(seed).Serialize());
+                var draft = new AcquisitionRequestDraft(kind, identity.Provider, identity.ExternalId, work.CanonicalTitle, null, null, edit(seed with { Monitored = false }, clock.GetUtcNow().UtcDateTime).Serialize());
                 if (!(await requestService.SubmitWithOutcomeAsync(draft, cancellationToken)).AlreadyRequested)
                 {
                     return VideoMonitoringOutcome.Saved;
@@ -301,10 +277,10 @@ public sealed class VideoMonitoringService(
     /// The stored payload after an Admin change: the edit itself, a new revision and a fresh search. Turning monitoring on after it was off
     /// also forgets what the earlier search tried, so a reopened request does not start in a back-off.
     /// </summary>
-    private static string Edited(string? stored, VideoRequestPayload seed, Func<VideoRequestPayload, VideoRequestPayload> edit)
+    private static string Edited(string? stored, VideoRequestPayload seed, Func<VideoRequestPayload, DateTime, VideoRequestPayload> edit, DateTime requestCreatedAt)
     {
         var current = VideoRequestPayload.Parse(stored) ?? seed;
-        var next = edit(current) with { ScopeRevision = current.ScopeRevision + 1, Searches = 0, NextSearchUtc = null, LastProblem = null };
+        var next = edit(current, requestCreatedAt) with { ScopeRevision = current.ScopeRevision + 1, Searches = 0, NextSearchUtc = null, LastProblem = null };
         return (!current.Monitored && next.Monitored
             ? next with { TriedReleases = null, ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null }
             : next).Serialize();

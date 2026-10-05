@@ -144,6 +144,7 @@ builder.Services.AddHttpClient(GitHubReleaseCheckService.HttpClientName, client 
 // Singleton: caches the last GitHub release check in memory across requests (#528), never on GET.
 builder.Services.AddSingleton<GitHubReleaseCheckService>();
 builder.Services.AddScoped<OperationRunner>();
+builder.Services.AddScoped<MediaFileReanalysisService>();
 builder.Services.AddSingleton<IPasswordHasher<OwnerAccount>, PasswordHasher<OwnerAccount>>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>

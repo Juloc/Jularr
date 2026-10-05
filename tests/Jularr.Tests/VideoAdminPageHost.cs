@@ -85,6 +85,10 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
                     services.AddScoped<VideoRequestWorkResolver>();
                     services.AddScoped<VideoMonitoringService>();
                     services.AddScoped<AdminVideoMediaService>();
+                    services.AddSingleton<IMediaProbeRunner, FakeMediaProbeRunner>();
+                    services.AddSingleton<MediaInventoryService>();
+                    services.AddScoped<Jularr.Web.Features.Operations.OperationRunner>();
+                    services.AddScoped<MediaFileReanalysisService>();
                     services.AddScoped<WantedListService>();
                 })
                 .Configure(app =>

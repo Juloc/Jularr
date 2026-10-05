@@ -32,7 +32,7 @@
         groups.style.setProperty("--admmd-template", track);
     };
 
-    const groups = document.querySelector("[data-columns-key]");
+    const groups = document.querySelector("[data-admin-media-groups], [data-admin-media-versions]");
     if (groups) {
         const hidden = readHidden();
         groups.querySelectorAll("input[data-column-toggle]").forEach(toggle => {
@@ -52,7 +52,14 @@
     }
 
     // After a monitoring change the page comes back with the season or episode in the address: open it and its season.
-    const target = location.hash.length > 1 ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+    const readHash = () => {
+        try {
+            return decodeURIComponent(location.hash.slice(1));
+        } catch {
+            return "";
+        }
+    };
+    const target = readHash() ? document.getElementById(readHash()) : null;
     if (target instanceof HTMLDetailsElement) {
         target.open = true;
         target.parentElement?.closest("details")?.setAttribute("open", "");

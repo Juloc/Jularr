@@ -209,8 +209,7 @@ public sealed class MediaDetailModel(
         string? view,
         string? open,
         string? ep,
-        [FromServices] MediaInventoryService inventory,
-        [FromServices] OperationRunner operations,
+        [FromServices] MediaFileReanalysisService reanalysis,
         CancellationToken cancellationToken)
     {
         if (!await IsAnimeEnabledAsync(cancellationToken))
@@ -233,22 +232,8 @@ public sealed class MediaDetailModel(
 
         try
         {
-            var entry = await operations.RunAsync(
-                new OperationDescriptor(
-                    ReanalyzeOperationKind,
-                    "Anime",
-                    "Re-analyse anime media",
-                    ProfileId: currentAccount.ProfileId,
-                    Lane: OperationLane.Normal,
-                    Retryable: false),
-                async (_, token) =>
-                {
-                    await inventory.InvalidateAsync([fileId], token);
-                    return await inventory.EnsureAnalyzedAsync(fileId, token);
-                },
-                null,
-                cancellationToken);
-            TempData["AcquisitionNotice"] = entry?.Status == MediaAnalysisStatus.Succeeded
+            var status = await reanalysis.ReanalyzeAsync(fileId, new OperationDescriptor(ReanalyzeOperationKind, "Anime", "Re-analyse anime media", ProfileId: currentAccount.ProfileId), cancellationToken);
+            TempData["AcquisitionNotice"] = status == MediaAnalysisStatus.Succeeded
                 ? Ui["admin.media.reanalyzed"]
                 : Ui["admin.media.reanalyzeIncomplete"];
         }

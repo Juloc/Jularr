@@ -95,9 +95,9 @@
                         {
                             <input type="hidden" name="scope" value="@(turnOn ? "all" : VideoMonitoringService.OffScope)" />
                         }
-                        <button class="admmd-toggle @(medium == AdminMediaMonitoring.On ? "is-on" : medium == AdminMediaMonitoring.Partial ? "is-partial" : "")" type="submit" role="switch"
+                        <button class="admmd-toggle @(medium == AdminMediaMonitoring.On ? "is-on" : medium == AdminMediaMonitoring.Partial ? "is-partial" : "")" type="submit" role="@(isMovie ? "switch" : "checkbox")"
                                 aria-checked="@(medium == AdminMediaMonitoring.On ? "true" : medium == AdminMediaMonitoring.Partial ? "mixed" : "false")">
-                            <span class="admmd-switch" aria-hidden="true"></span>
+                            <span class="admin-switch" aria-hidden="true"></span>
                             @(medium == AdminMediaMonitoring.Off ? ui["admin.media.monitor"] : ui["admin.media.monitored"])
                         </button>
                     </form>
@@ -170,7 +170,7 @@
     }
     else
     {
-        <div class="admmd-groups admmd-groups-versions" data-admin-media-versions data-columns-key="movie">
+        <div class="admmd-groups admmd-groups-versions" data-admin-media-versions>
             <div class="admmd-toolbar admmd-toolbar-inline">
                 <h2>@ui["admin.media.stat.versions"]</h2>
                 <partial name="_AdminMediaColumns" model="ui" />
@@ -221,7 +221,7 @@
                                 <span class="admmd-ep-size" data-col="size">@Bytes(version.SizeBytes)</span>
                             </summary>
                             <div class="admmd-ep-body">
-                                <partial name="_AdminVideoFiles" model="(version.Files, ui)" />
+                                <partial name="_AdminVideoFiles" model='(version.Files, ui, "v-" + version.Id.ToString("N"))' />
                             </div>
                         </details>
                     </li>
@@ -238,7 +238,7 @@ else
     }
     else
     {
-        <div class="admmd-groups" data-admin-media-groups data-columns-key="series">
+        <div class="admmd-groups" data-admin-media-groups>
             <div class="admmd-toolbar admmd-toolbar-inline">
                 <h2>@ui["admin.media.stat.seasons"]</h2>
                 <partial name="_AdminMediaColumns" model="ui" />
@@ -294,10 +294,10 @@ else
                                     <input type="hidden" name="season" value="@season.Number" />
                                     <input type="hidden" name="monitored" value="@(seasonTurnOn ? "true" : "false")" />
                                     <button class="admmd-toggle admmd-toggle-icon @(seasonMonitoring == AdminMediaMonitoring.On ? "is-on" : seasonMonitoring == AdminMediaMonitoring.Partial ? "is-partial" : "")"
-                                            type="submit" role="switch"
+                                            type="submit" role="checkbox"
                                             aria-checked="@(seasonMonitoring == AdminMediaMonitoring.On ? "true" : seasonMonitoring == AdminMediaMonitoring.Partial ? "mixed" : "false")"
                                             aria-label="@ui.Format(seasonTurnOn ? "admin.media.monitorItem" : "admin.media.unmonitorItem", ("name", seasonName))">
-                                        <span class="admmd-switch" aria-hidden="true"></span>
+                                        <span class="admin-switch" aria-hidden="true"></span>
                                     </button>
                                 </form>
                             }
@@ -364,7 +364,7 @@ else
                                                     <input type="hidden" name="open" value="e@(episode.Season)x@(episode.Number)" />
                                                     <button class="admmd-toggle admmd-toggle-icon @(episode.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(episode.Monitored ? "true" : "false")"
                                                             aria-label="@ui.Format(episode.Monitored ? "admin.media.unmonitorItem" : "admin.media.monitorItem", ("name", episodeName))">
-                                                        <span class="admmd-switch" aria-hidden="true"></span>
+                                                        <span class="admin-switch" aria-hidden="true"></span>
                                                     </button>
                                                 </form>
                                             }
@@ -381,7 +381,7 @@ else
                                         }
                                         else
                                         {
-                                            <partial name="_AdminVideoFiles" model="(episode.Files, ui)" />
+                                            <partial name="_AdminVideoFiles" model='(episode.Files, ui, "e" + episode.Season + "x" + episode.Number)' />
                                         }
                                     </div>
                                 </details>

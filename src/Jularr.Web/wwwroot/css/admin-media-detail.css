@@ -53,18 +53,6 @@
 .admmd-toggle.is-on { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--accent-text); }
 .admmd-toggle:disabled { cursor: not-allowed; opacity: .5; }
 .admmd-toggle-icon { padding: 0; border: 0; background: transparent; min-height: 32px; min-width: 44px; justify-content: center; }
-.admmd-switch {
-    position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px; background: var(--border);
-    transition: background .15s ease;
-}
-.admmd-switch::after {
-    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
-    background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: transform .15s ease;
-}
-.is-on > .admmd-switch { background: var(--accent); }
-.is-on > .admmd-switch::after { transform: translateX(14px); }
-.is-partial > .admmd-switch { background: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.is-partial > .admmd-switch::after { transform: translateX(7px); }
 
 /* Toolbar ------------------------------------------------------------------------------------ */
 .admmd-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }

@@ -56,7 +56,8 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
             nameof(SoftwareVideoSessions) => SoftwareVideoSessions,
             nameof(HardwareVideoSessions) => HardwareVideoSessions,
             nameof(RemuxSessions) => RemuxSessions,
-            _ => AudioOnlySessions
+            nameof(AudioOnlySessions) => AudioOnlySessions,
+            _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Not a session limit field.")
         };
 
     public string? FieldError(string field) => ModelState.TryGetValue(field, out var entry) ? entry.Errors.FirstOrDefault()?.ErrorMessage : null;

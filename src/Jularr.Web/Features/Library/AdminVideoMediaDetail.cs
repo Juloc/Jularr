@@ -8,16 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Library;
 
 /// <summary>One local file of a Movie or an episode, with the facts the Admin media page shows. <paramref name="Location"/> is the library root and the folder below it.</summary>
-public sealed record AdminVideoFile(
-    Guid Id,
-    string Name,
-    long SizeBytes,
-    string? Quality,
-    IReadOnlyList<string> Audio,
-    IReadOnlyList<string> Subtitles,
-    string Location,
-    string? Container,
-    string? VideoCodec);
+public sealed record AdminVideoFile(Guid Id, string Name, long SizeBytes, string? Quality, IReadOnlyList<string> Audio, IReadOnlyList<string> Subtitles, string Location, string? Container, string? VideoCodec);
 
 /// <summary>One version of a Movie (a release such as "1080p WEB-DL" or "4K HDR Remux") with the local files that make it up.</summary>
 public sealed record AdminVideoVersion(Guid Id, string? Label, string? ReleaseGroup, IReadOnlyList<AdminVideoFile> Files)

@@ -46,17 +46,6 @@
 .admset-switch-copy { display: grid; gap: 2px; min-width: 0; }
 .admset-switch-copy strong { font-size: 14px; }
 .admset-switch-copy span { color: var(--muted); font-size: 13px; }
-.admset-switch {
-    appearance: none; flex: none; position: relative; width: 44px; height: 26px; margin: 0; border-radius: 999px;
-    background: var(--border); cursor: pointer; transition: background .15s ease;
-}
-.admset-switch::after {
-    content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
-    background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: transform .15s ease;
-}
-.admset-switch:checked { background: var(--accent); }
-.admset-switch:checked::after { transform: translateX(18px); }
-.admset-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .admset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .admset-actions form { margin: 0; }
@@ -89,9 +78,6 @@
     .admset-actions .button { flex: 1 1 100%; min-height: 44px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .admset-switch, .admset-switch::after { transition: none; }
-}
 
 /* Inline control of a table row, e.g. a root or policy choice. */
 .admset-control {

@@ -361,6 +361,7 @@ public sealed class AdminMediaDetailPageRenderTests
                         services.AddSingleton<IMediaProbeRunner, FakeMediaProbeRunner>();
                         services.AddSingleton<MediaInventoryService>();
                         services.AddScoped<OperationRunner>();
+                        services.AddScoped<MediaFileReanalysisService>();
                     })
                     .Configure(app =>
                     {
