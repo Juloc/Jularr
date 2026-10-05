@@ -326,13 +326,15 @@ public sealed class DiscoverRequestTests
         StringAssert.Contains(series, "<option value=\"all\">All current + future</option>");
         StringAssert.Contains(series, "<option value=\"future\">Future only</option>");
         StringAssert.Contains(series, "<option value=\"custom\">Custom</option>");
+        StringAssert.Contains(series, ">Request settings</h3>");
         StringAssert.Contains(series, "Included content");
+        StringAssert.Contains(series, ">Ep 1<");
         StringAssert.Contains(series, "Season 1");
         StringAssert.Contains(series, "Specials");
         StringAssert.Contains(series, "Future seasons and episodes");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(series, "data-dc-rq-scope[ >]").Count, "One Scope control, no second independent one.");
         Assert.IsFalse(series.Contains("name=\"audio\"", StringComparison.Ordinal));
-        Assert.AreEqual(string.Empty, movie.Trim());
+        Assert.AreEqual(string.Empty, movie.Trim(), "A movie has no settings group, so not even the settings heading.");
         StringAssert.Contains(anime, "name=\"audio\"");
         StringAssert.Contains(anime, "<option value=\"ja\" selected=\"selected\">日本語</option>");
         Assert.IsFalse(anime.Contains("data-dc-rq-scope", StringComparison.Ordinal));
@@ -362,6 +364,22 @@ public sealed class DiscoverRequestTests
         StringAssert.Contains(created, "data-status=\"pending\"");
         StringAssert.Contains(created, "href=\"/Requests\"");
         StringAssert.Contains(existing, ">Already requested</h3>");
+        StringAssert.Contains(created, "waiting for approval.</p>");
+
+        var searching = request with { Status = AcquisitionRequestStatus.Searching };
+        var importing = request with { Status = AcquisitionRequestStatus.Importing };
+        var settingsOfRequested = WebUtility.HtmlDecode(await renderer.RenderAsync(
+            "/Pages/Discover/_DiscoverRequestSettings.cshtml",
+            new DiscoverRequestSettingsView(UiTextBundle.English, MediaAcquisitionKind.Tv, searching, [], null, null)));
+        var preparing = WebUtility.HtmlDecode(await renderer.RenderAsync(
+            "/Pages/Discover/_DiscoverRequestResult.cshtml",
+            new DiscoverRequestResultView(UiTextBundle.English, importing, true, [], 0)));
+
+        StringAssert.Contains(settingsOfRequested, ">Already requested</h3>");
+        StringAssert.Contains(settingsOfRequested, ">Looking for media</strong>");
+        StringAssert.Contains(settingsOfRequested, "data-dc-rq-result");
+        Assert.IsFalse(settingsOfRequested.Contains("data-dc-rq-scope", StringComparison.Ordinal), "An open request replaces the settings form.");
+        StringAssert.Contains(preparing, ">Preparing</strong>");
     }
 
     [TestMethod]

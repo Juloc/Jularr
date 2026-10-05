@@ -173,6 +173,40 @@ public sealed class LibraryBrowseTests
     }
 
     [TestMethod]
+    public void TheSearchNarrowsTheTitlesByNameStaysInTheAddressAndIsNoFilter()
+    {
+        var entries = new[] { Entry("Frieren"), Entry("Solo Leveling"), Entry("Leveling Up", mediaType: WorkMediaType.Movie) };
+        var query = Parse("q=%20LEVELING%20&sort=title&type=anime");
+
+        Assert.AreEqual("LEVELING", query.Search);
+        Assert.AreEqual(0, query.ActiveFilterCount);
+        Assert.AreEqual("/Library?type=anime&q=LEVELING&sort=title", LibraryBrowse.Href(query));
+        CollectionAssert.AreEqual(new[] { "Solo Leveling" }, LibraryBrowse.Apply(entries, query, LibraryLanguagePreference.None).Select(x => x.Card.Title).ToArray());
+        Assert.IsNull(Parse("q=%20%20").Search);
+        Assert.AreEqual(LibraryBrowse.MaxSearchLength, Parse("q=" + new string('x', 500)).Search!.Length);
+        Assert.AreEqual("LEVELING", query.WithoutFilters().Search, "Resetting filters keeps what was searched for.");
+    }
+
+    [TestMethod]
+    public void AToolbarFormRepeatsTheOtherControlsAsHiddenFields()
+    {
+        var query = Parse("type=movie&q=dune&sort=title&view=list&year=2024");
+
+        CollectionAssert.AreEqual(
+            new[] { "type=movie", "sort=title", "view=list", "year=2024" },
+            LibraryBrowse.Parameters(query with { Search = null }).Select(x => x.Key + "=" + x.Value).ToArray());
+    }
+
+    [TestMethod]
+    public void APartialTitleShowsHowManyUnitsAreAvailableAndNoOtherWording()
+    {
+        var card = LibraryCardView.Create(Entry("Attack on Titan", playable: 18, missing: 6), LibraryLanguagePreference.None, Ui);
+
+        Assert.AreEqual("18 / 24 available", card.Availability?.Label);
+        Assert.AreEqual(LibraryAvailabilityState.Partial, card.Availability?.State);
+    }
+
+    [TestMethod]
     public void ActiveFilterCountCountsEveryChosenValueAndSortOrLayoutDoNotCount()
     {
         Assert.AreEqual(0, new LibraryBrowseQuery { Sort = LibrarySort.Title, Layout = LibraryLayout.List }.ActiveFilterCount);

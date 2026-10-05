@@ -1,5 +1,5 @@
 /* Library (docs/mockups/library): a Library | Collections switch, the media-type tabs, one toolbar
-   (count, Filters, Sort, layout) and a poster grid that shares the Home/Discover card grammar. Filters
+   (search, count, Filters, Sort, layout) and a poster grid that shares the Home/Discover card grammar. Filters
    and Sort open as popovers on desktop and as bottom sheets on a phone. Surfaces use the shared theme
    tokens, so light, dark and every accent work unchanged. State is shown with tints, weight and small
    icons only, never a coloured left edge on a card or row (CssAccentStripeTests). */
@@ -23,9 +23,16 @@
 .lib-switch-item.is-active, .lib-switch-item.is-active:hover { background: var(--accent); color: var(--on-accent); }
 
 /* Toolbar ------------------------------------------------------------------------------------- */
-.lib-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.lib-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.lib-search { position: relative; display: flex; align-items: center; flex: 1 1 260px; min-width: 0; max-width: 380px; }
+.lib-search .lib-icon { position: absolute; inset-inline-start: 12px; color: var(--muted); pointer-events: none; }
+.lib-search input {
+    width: 100%; min-width: 0; min-height: 38px; padding: 0 12px 0 36px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px; font-weight: 600;
+}
+.lib-search input::placeholder { color: var(--muted); font-weight: 500; }
 .lib-count { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.lib-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lib-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-inline-start: auto; }
 .lib-btn, .lib-icon-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     min-height: 38px; border: 1px solid var(--border); border-radius: 10px;
@@ -69,7 +76,8 @@
     border: 0; border-top: 1px solid var(--border);
 }
 .lib-group:first-child { border-top: 0; padding-top: 2px; }
-.lib-group legend { padding: 0; margin-bottom: 4px; color: var(--text); font-size: 13px; font-weight: 800; }
+/* Floated, the legend is an ordinary grid item instead of sitting in the fieldset's top border. */
+.lib-group legend { float: left; width: 100%; padding: 0; margin-bottom: 4px; color: var(--text); font-size: 13px; font-weight: 800; }
 .lib-check { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; cursor: pointer; }
 .lib-check input { flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
 .lib-check-count { margin-inline-start: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -131,7 +139,7 @@
 
 /* Poster grid --------------------------------------------------------------------------------- */
 .lib-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 24px 18px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 24px 18px;
     margin: 0; padding: 0; list-style: none;
 }
 .lib-grid > li { min-width: 0; }
@@ -205,20 +213,32 @@
 /* List layout: the same card as a compact row. */
 .lib-list { grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .lib-list .lib-card {
-    grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 6px 14px; padding: 10px 12px;
+    display: flex; align-items: center; gap: 14px; padding: 10px 12px;
     border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface);
 }
 .lib-list .lib-card:hover { background: var(--surface-2); }
-.lib-list .lib-card-art { grid-row: 1 / span 2; border-radius: 8px; box-shadow: none; }
+.lib-list .lib-card-art { flex: none; width: 56px; border-radius: 8px; box-shadow: none; }
 .lib-list .lib-card-initial { font-size: 22px; }
-.lib-list .lib-card-body { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
-.lib-list .lib-card-head { flex: 1 1 240px; }
-.lib-list .lib-card-status { flex: 0 0 120px; }
-.lib-list .lib-card-progress { flex: 0 0 170px; }
-.lib-list .lib-langs { flex: 0 1 auto; }
+/* Fixed columns so state, status, progress and languages line up from row to row; a part a title lacks leaves its cell empty. */
+.lib-list .lib-card-body {
+    display: grid; flex: 1; align-items: center; gap: 6px 18px;
+    grid-template-columns: minmax(0, 1fr) 150px 130px 170px 240px 32px;
+    grid-template-areas: "title state status progress langs menu";
+}
+.lib-list .lib-card-head { display: contents; }
+.lib-list .lib-card-title { grid-area: title; }
+.lib-list .lib-state { grid-area: state; }
+.lib-list .lib-card-status { grid-area: status; }
+.lib-list .lib-card-progress { grid-area: progress; }
+.lib-list .lib-langs { grid-area: langs; }
+.lib-list .lib-menu { grid-area: menu; }
 .lib-list .lib-state {
-    position: static; grid-column: 2; justify-self: start; background: transparent; backdrop-filter: none;
-    padding: 0; color: var(--muted); overflow: visible;
+    position: static; background: transparent; backdrop-filter: none;
+    padding: 0; color: var(--muted); overflow: visible; max-width: none;
+}
+@media (max-width: 1100px) {
+    .lib-list .lib-card-body { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title menu" "state state" "status status" "progress progress" "langs langs"; row-gap: 0; }
+    .lib-list :is(.lib-state, .lib-card-status, .lib-card-progress, .lib-langs) { margin-top: 6px; }
 }
 .lib-list .lib-state-partial .lib-icon { color: var(--warning-text); }
 .lib-list .lib-state-requested .lib-icon { color: var(--accent-text); }
@@ -249,14 +269,18 @@
 
 /* Phone: two-column posters, Filters and Sort as bottom sheets ---------------------------------- */
 @media (max-width: 760px) {
-    .lib-toolbar { gap: 8px; }
-    .lib-count { flex: 1 0 100%; }
-    /* Filters, Sort and the layout switch share a row while they fit; the Sort label then drops to its own line instead of being cut. */
-    .lib-controls { flex: 1 0 100%; flex-wrap: wrap; }
-    .lib-controls > .lib-pop { flex: 1 1 110px; min-width: 0; }
-    .lib-controls > .lib-sort { flex-basis: 210px; }
+    /* Search on its own row; below it the count with the layout switch, then Filters and Sort side by side. */
+    .lib-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px; }
+    .lib-search { grid-column: 1 / -1; max-width: none; }
+    .lib-search input { min-height: 44px; }
+    .lib-count { align-self: center; }
+    .lib-controls { display: contents; }
+    .lib-controls > .lib-layout { grid-column: 2; grid-row: 2; justify-self: end; }
+    .lib-controls > .lib-pop { grid-row: 3; min-width: 0; }
+    .lib-controls > a.lib-btn { grid-column: 2; }
+    .lib-controls > .lib-filter { grid-column: 1; }
+    .lib-controls > .lib-sort { grid-column: 2; }
     .lib-controls > .lib-pop > .lib-btn, .lib-controls > a.lib-btn { width: 100%; min-height: 44px; }
-    .lib-controls > a.lib-btn { flex: 1; }
     .lib-icon-btn { width: 44px; min-height: 44px; }
     .lib-sort .lib-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -273,8 +297,7 @@
     body:has(.lib-pop[open]) { overflow: hidden; }
 
     .lib-grid:not(.lib-list) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; }
-    .lib-list .lib-card { grid-template-columns: 48px minmax(0, 1fr); }
-    .lib-list .lib-card-status, .lib-list .lib-card-progress { flex: 1 1 100%; }
+    .lib-list .lib-card-art { width: 48px; }
     .lib-collections { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px 12px; }
     .lib-menu-button { width: 36px; height: 36px; }
 }

@@ -67,7 +67,7 @@
     });
 
     document.addEventListener("submit", event => {
-        if (event.target instanceof HTMLFormElement && event.target.hasAttribute("data-lib-filters")) {
+        if (event.target instanceof HTMLFormElement && event.target.hasAttribute("data-lib-form")) {
             setBusy(true);
         }
     });

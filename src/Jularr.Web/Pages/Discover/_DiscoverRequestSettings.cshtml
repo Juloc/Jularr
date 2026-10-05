@@ -19,14 +19,13 @@
 }
 @if (Model.Existing is { } existing)
 {
-    <p class="dc-rq-notice"
-       role="status"
-       data-dc-rq-existing
-       data-request-id="@existing.Id"
-       data-status="@AcquisitionAccessNames.Status(existing.Status)">
-        <strong>@ui["discover.request.exists"]</strong>
-        <span>@ui["requests.status." + AcquisitionAccessNames.Status(existing.Status)]</span>
-    </p>
+    @* An open request already covers this title: the dialog shows its state instead of a second form. *@
+    <partial name="_DiscoverRequestResult" model="new DiscoverRequestResultView(ui, existing, true, [], 0)" />
+}
+
+@if (Model.OffersScope || Model.OffersLanguage)
+{
+    <h3 class="dc-rq-section">@ui["discover.request.settings"]</h3>
 }
 
 @if (Model.OffersScope)
@@ -72,10 +71,10 @@
                         <ul class="dc-rq-episodes" id="dc-rq-e-@index" hidden>
                             @foreach (var episode in season.Episodes)
                             {
-                                <li>
+                                <li title="@episode.Title">
                                     <input type="checkbox" id="dc-rq-ep-@episode.Id" value="@episode.Id" data-dc-rq-episode />
                                     <label for="dc-rq-ep-@episode.Id">
-                                        <span>@episode.Number</span>
+                                        <span>@ui.Format("discover.request.episode", ("number", episode.Number))</span>
                                         @if (!string.IsNullOrWhiteSpace(episode.Title))
                                         {
                                             <small>@episode.Title</small>

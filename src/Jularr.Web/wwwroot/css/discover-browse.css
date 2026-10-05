@@ -8,6 +8,7 @@
 .dc-page :is(a, button, summary, select, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dc-icon { flex: none; }
 .dc-page [hidden] { display: none !important; }
+.dc-page .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 /* Heading and search ---------------------------------------------------------------------------- */
 .dc-head h1 { margin: 0; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.1; letter-spacing: -.02em; }
@@ -140,7 +141,8 @@
 .dc-grid > li { min-width: 0; }
 
 /* Card ---------------------------------------------------------------------------------------------- */
-.dc-card { position: relative; display: grid; align-content: start; gap: 10px; min-width: 0; }
+/* The card fills its row item and pins the Request action to the bottom, so the actions of one row line up whatever the title length. */
+.dc-card { position: relative; display: grid; grid-template-rows: auto 1fr; height: 100%; gap: 10px; min-width: 0; }
 .dc-art {
     position: relative; display: block; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 12px;
     background: var(--surface-2); box-shadow: var(--shadow-card);
@@ -151,7 +153,7 @@
     background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--accent-text);
     font-size: 44px; font-weight: 800;
 }
-.dc-card-body { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.dc-card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .dc-card-title { margin: 0; font-size: 14px; line-height: 1.3; font-weight: 700; }
 .dc-card-title a {
     display: -webkit-box; overflow: hidden; color: var(--text); overflow-wrap: anywhere;
@@ -161,7 +163,7 @@
 .dc-card:hover .dc-card-title a, .dc-card-title a:focus-visible { color: var(--accent-text); }
 .dc-card-meta { margin: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
 .dc-card-action {
-    position: relative; z-index: 2; display: flex; width: 100%; min-height: 36px; margin-top: 2px;
+    position: relative; z-index: 2; display: flex; width: 100%; min-height: 42px; margin-top: auto; padding-top: 6px;
 }
 .dc-card-action > :is(.button, .dc-request-live) { width: 100%; justify-content: center; }
 .dc-card-request { min-height: 36px; padding: 6px 10px; font-size: 12px; }

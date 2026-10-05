@@ -82,7 +82,7 @@ public sealed class LibraryPageRenderTests
         StringAssert.Contains(starfallCard, "lib-lang is-preferred\">DE<");
         StringAssert.Contains(starfallCard, ">JA<");
         StringAssert.Contains(starfallCard, ">EN<");
-        StringAssert.Contains(starfallCard, "Partly available");
+        StringAssert.Matches(starfallCard, new Regex(@"\d+ / \d+ available"));
 
         var amberCard = Between(html, "<article class=\"lib-card lib-card-missing\"", "</article>");
         StringAssert.Contains(amberCard, "Amber Nights");
@@ -260,7 +260,7 @@ public sealed class LibraryPageRenderTests
         var seriesPage = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library?type=series", asOwner: false));
         StringAssert.Contains(seriesPage, "Dark Harbor");
         StringAssert.Contains(seriesPage, $"href=\"/Library/Series/{series.Id}\"");
-        StringAssert.Contains(seriesPage, "Partly available");
+        StringAssert.Matches(seriesPage, new Regex(@"\d+ / \d+ available"));
         Assert.IsFalse(seriesPage.Contains("Moon Empire", StringComparison.Ordinal));
     }
 

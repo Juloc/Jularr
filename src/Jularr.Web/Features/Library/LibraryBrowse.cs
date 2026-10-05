@@ -112,6 +112,9 @@ public sealed record LibraryBrowseQuery
     /// <summary>The media-type scope of the Library (a tab, not a filter); null shows every video type.</summary>
     public WorkMediaType? MediaType { get; init; }
 
+    /// <summary>Case-insensitive title text of the in-library search; never searches outside the Library.</summary>
+    public string? Search { get; init; }
+
     public LibrarySort Sort { get; init; }
     public LibraryLayout Layout { get; init; }
     public IReadOnlyList<LibraryProgressState> Progress { get; init; } = [];
@@ -308,7 +311,7 @@ public sealed record LibraryCardView(
             LibraryAvailabilityState.Requested => new(
                 state,
                 ui["requests.status." + AcquisitionAccessNames.Status(entry.Card.Availability!.Request!.Value)]),
-            LibraryAvailabilityState.Partial => new(state, ui["library.browse.availability.partial"]),
+            LibraryAvailabilityState.Partial => new(state, ui.Format("library.browse.availability.partialCount", ("available", entry.PlayableUnits), ("total", entry.PlayableUnits + entry.MissingUnits))),
             LibraryAvailabilityState.Missing => new(state, ui["library.browse.availability.missing"]),
             _ => null
         };
@@ -335,6 +338,8 @@ public sealed record LibraryCardView(
 public static class LibraryBrowse
 {
     public const string BasePath = "/Library";
+
+    public const int MaxSearchLength = 100;
 
     /// <summary>
     /// The detail address of a title. Movies and Series are keyed by their Work; an Anime is still keyed by its legacy
@@ -439,6 +444,7 @@ public static class LibraryBrowse
         return new LibraryBrowseQuery
         {
             Collections = string.Equals(First("section"), "collections", StringComparison.OrdinalIgnoreCase),
+            Search = First("q") is { } search ? search[..Math.Min(search.Length, MaxSearchLength)] : null,
             MediaType = mediaType is { } scope && VideoMediaTypes.Contains(scope) ? scope : null,
             Sort = SortOrder.FirstOrDefault(sort => SortName(sort) == sortValue),
             Layout = string.Equals(First("view"), "list", StringComparison.OrdinalIgnoreCase)
@@ -461,27 +467,36 @@ public static class LibraryBrowse
     /// <summary>The address of a view: only what differs from the plain Library is written.</summary>
     public static string Href(LibraryBrowseQuery query)
     {
+        var parts = Parameters(query).Select(parameter => $"{parameter.Key}={Uri.EscapeDataString(parameter.Value)}").ToArray();
+        return parts.Length == 0 ? BasePath : BasePath + "?" + string.Join('&', parts);
+    }
+
+    /// <summary>The address parameters of a view, also the hidden fields a toolbar form repeats so one control keeps the others.</summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> Parameters(LibraryBrowseQuery query)
+    {
         ArgumentNullException.ThrowIfNull(query);
 
-        var parts = new List<string>();
+        List<KeyValuePair<string, string>> parts = [];
         void Add(string key, string? value)
         {
             if (!string.IsNullOrEmpty(value))
             {
-                parts.Add($"{key}={Uri.EscapeDataString(value)}");
+                parts.Add(new(key, value));
             }
         }
 
         if (query.Collections)
         {
             Add("section", "collections");
-            return BasePath + "?" + string.Join('&', parts);
+            return parts;
         }
 
         if (query.MediaType is { } mediaType)
         {
             Add("type", WorkMediaTypes.ToStorage(mediaType));
         }
+
+        Add("q", query.Search);
 
         if (query.Sort != LibrarySort.Recent)
         {
@@ -514,7 +529,7 @@ public static class LibraryBrowse
         Add("status", query.Status is { } status ? StatusName(status) : null);
         Add("format", query.Format);
 
-        return parts.Count == 0 ? BasePath : BasePath + "?" + string.Join('&', parts);
+        return parts;
     }
 
     /// <summary>The state of the body from the read and the query.</summary>
@@ -622,7 +637,8 @@ public static class LibraryBrowse
         _ => "library.browse.scope.anime"
     };
     public static bool Matches(LibraryCardEntry entry, LibraryBrowseQuery query, LibraryLanguagePreference preference) =>
-        (query.Progress.Count == 0 || query.Progress.Contains(ProgressOf(entry)))
+        (query.Search is null || entry.Card.Title.Contains(query.Search, StringComparison.InvariantCultureIgnoreCase))
+        && (query.Progress.Count == 0 || query.Progress.Contains(ProgressOf(entry)))
         && (query.Availability.Count == 0 || query.Availability.Any(state => Matches(entry, state)))
         && (!query.PreferredLanguage || preference.IsAvailableIn(entry))
         && (query.AudioLanguage is null || Has(entry.Card.AudioLanguages, query.AudioLanguage))

@@ -15,14 +15,6 @@
         <partial name="_LibraryCardArt" model="card" />
     </a>
 
-    @if (card.Availability is { } availability)
-    {
-        <span class="lib-state lib-state-@availability.CssModifier">
-            <partial name="_LibraryIcon" model="availability.CssModifier" />
-            @availability.Label
-        </span>
-    }
-
     <div class="lib-card-body">
         <div class="lib-card-head">
             <h3 class="lib-card-title"><a href="@card.Href">@card.Title</a></h3>
@@ -38,6 +30,15 @@
                 </details>
             }
         </div>
+
+        @if (card.Availability is { } availability)
+        {
+            @* On the poster in the grid, a plain label in the list row. *@
+            <span class="lib-state lib-state-@availability.CssModifier">
+                <partial name="_LibraryIcon" model="availability.CssModifier" />
+                @availability.Label
+            </span>
+        }
 
         @if (!string.IsNullOrWhiteSpace(card.StatusText))
         {

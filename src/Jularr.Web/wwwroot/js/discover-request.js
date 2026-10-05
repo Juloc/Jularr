@@ -166,11 +166,12 @@
     const episodeBoxes = row => [...row.querySelectorAll("[data-dc-rq-episode]")];
 
     function prepare() {
-        const existing = body.querySelector("[data-dc-rq-existing]");
+        const existing = body.querySelector("[data-dc-rq-result]");
         if (existing) {
-            // The title already has an open request: show it instead of creating a second one.
-            submit.hidden = true;
-            notify({ requestId: existing.dataset.requestId, status: existing.dataset.status, done: false });
+            // The title already has an open request: its state replaces the form, with its own actions instead of the footer.
+            foot.hidden = true;
+            notify(resultPayload(existing));
+            body.querySelector("#dc-rq-result-title")?.focus();
             return;
         }
 
@@ -317,6 +318,17 @@
         root.dispatchEvent(new CustomEvent("dc:request-created", { detail: { identity: owner, payload } }));
     }
 
+    function resultPayload(result) {
+        return {
+            requestId: result.dataset.requestId,
+            status: result.dataset.status,
+            progress: Number(result.dataset.progress),
+            message: result.dataset.message || null,
+            resultUrl: result.dataset.resultUrl || null,
+            done: result.dataset.done === "true"
+        };
+    }
+
     form.addEventListener("submit", async event => {
         event.preventDefault();
         if (submitting || submit.disabled) return;
@@ -352,14 +364,7 @@
             const view = document.createElement("div");
             view.innerHTML = markup;
             const result = view.querySelector("[data-dc-rq-result]");
-            notify({
-                requestId: result.dataset.requestId,
-                status: result.dataset.status,
-                progress: Number(result.dataset.progress),
-                message: result.dataset.message || null,
-                resultUrl: result.dataset.resultUrl || null,
-                done: result.dataset.done === "true"
-            }, current);
+            notify(resultPayload(result), current);
             if (identity === current) {
                 body.replaceChildren(...view.childNodes);
                 foot.hidden = true;
