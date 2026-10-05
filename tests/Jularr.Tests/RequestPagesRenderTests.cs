@@ -295,6 +295,7 @@ public sealed class RequestPagesRenderTests
                         services.AddSingleton(settings);
                         services.AddSingleton(new QualityProfileStore(new DirectoryInfo(Path.Combine(data.FullName, "quality"))));
                         services.AddScoped<AcquisitionAccessStore>();
+                        services.AddScoped<VideoRequestWorkResolver>();
                         // The Library page's Collections view.
                         services.AddScoped<Jularr.Web.Features.MediaFacts.MediaFactsService>();
                         services.AddScoped<Jularr.Web.Features.Franchises.FranchiseStore>();

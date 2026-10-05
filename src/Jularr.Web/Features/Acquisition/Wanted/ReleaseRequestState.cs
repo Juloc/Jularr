@@ -20,6 +20,12 @@ public abstract record ReleaseRequestPayload
 
     public string? LastProblem { get; init; }
 
+    /// <summary>
+    /// Merges this payload (what a search computed from the request it read) into the payload stored now, so a field that another
+    /// owner changed while the search ran is not written back stale. The default has no such fields and keeps this payload.
+    /// </summary>
+    public virtual ReleaseRequestPayload Reconcile(string? storedJson) => this;
+
     /// <summary>Serializes the whole payload (media fields included) for the request store.</summary>
     public string Serialize() =>
         JsonSerializer.Serialize(this, GetType(), JsonSerializerOptions.Web);
@@ -206,14 +212,12 @@ public sealed class ReleaseRequestTracker(
             outcome.OperationId);
     }
 
+    /// <summary>Stores the search state of a payload; fields another owner changed meanwhile survive (see <see cref="ReleaseRequestPayload.Reconcile"/>).</summary>
     public Task SaveAsync(
         AcquisitionRequest request,
         ReleaseRequestPayload payload,
         CancellationToken cancellationToken) =>
-        requests.UpdatePayloadAsync(
-            request.Id,
-            payload.Serialize(),
-            cancellationToken);
+        requests.PatchPayloadAsync(request.Id, stored => payload.Reconcile(stored).Serialize(), cancellationToken);
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 }

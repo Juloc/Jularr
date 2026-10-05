@@ -231,7 +231,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         var season = release?.SeasonNumber ?? 1;
         var episode = release?.EpisodeStart ?? 1;
         var canonicalRequest = request?.Request is { } storedRequest
-            ? VideoAcquisitionEngine.ReadPayload(storedRequest)
+            ? VideoRequestPayload.Parse(storedRequest.PayloadJson)
             : null;
         var year = canonicalRequest?.Year
             ?? TryParseYear(request?.Request?.Title)

@@ -317,14 +317,13 @@ public sealed class AcquisitionRequestService(
 
     private async Task ApplyExecutionAsync(AcquisitionRequest request, AcquisitionExecution result, CancellationToken cancellationToken)
     {
-        await store.UpdateStatusAsync(
-            request.Id,
-            result.Status,
-            result.Message,
-            result.OperationId,
-            result.ResultUrl,
-            null,
-            cancellationToken);
+        // Searching is what the run (or the Manual Search claim) set before. If somebody moved the request on meanwhile (an Admin ending it), that
+        // is not overwritten, except that a download which was already handed over is always recorded: it exists and its import must complete.
+        var applied = await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], result.Status, result.Message, result.OperationId, result.ResultUrl, cancellationToken);
+        if (applied is null && result.Status == AcquisitionRequestStatus.Downloading)
+        {
+            await store.UpdateStatusAsync(request.Id, result.Status, result.Message, result.OperationId, result.ResultUrl, null, cancellationToken);
+        }
 
         // Every media kind's executor reports Downloading the moment it finds and grabs an
         // accepted release, so this one spot covers #579's "ReleaseAvailable when a wanted

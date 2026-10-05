@@ -68,6 +68,9 @@ public sealed record WantedItem(
 
     public Guid? AnimeId { get; init; }
 
+    /// <summary>The canonical Work of a Movie or TV row; the target of its Admin media page and detail link.</summary>
+    public Guid? WorkId { get; init; }
+
     public int? Season { get; init; }
 
     public int? Episode { get; init; }

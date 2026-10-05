@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.DownloadClients;
+using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Import;
-using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
@@ -40,14 +40,77 @@ public sealed record VideoRequestPayload(
     Guid[]? SelectedSeasonIds = null) : ReleaseRequestPayload
 {
     /// <summary>
+    /// Admin-owned (see <see cref="Reconcile"/>): false when monitoring was turned off. An unmonitored request is completed by the next
+    /// pass and never searches; a request without this field is monitored.
+    /// </summary>
+    public bool Monitored { get; init; } = true;
+
+    /// <summary>Admin-owned: the moment "future" counts from; null means the request's creation, which <see cref="VideoRequestSelection"/> applies.</summary>
+    public DateTime? MonitorFutureFromUtc { get; init; }
+
+    /// <summary>Admin-owned: episodes the selection would include that were unchecked on purpose.</summary>
+    public Guid[]? ExcludedEpisodeIds { get; init; }
+
+    /// <summary>Admin-owned: counts every Admin change, so a search that started before one can tell and keep the change's wake-up.</summary>
+    public int ScopeRevision { get; init; }
+
+    public static VideoRequestPayload? Parse(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<VideoRequestPayload>(json, JsonSerializerOptions.Web);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A search computes its payload from the request it read at the start and stores it at the end. Admin edits the scope in between
+    /// (VideoMonitoringService), so what is stored now wins for every Admin-owned field; when an edit happened meanwhile its wake-up
+    /// (search count, next search, last problem) wins too, so the edit is looked at by the next pass instead of waiting out a back-off.
+    /// </summary>
+    public override ReleaseRequestPayload Reconcile(string? storedJson)
+    {
+        if (Parse(storedJson) is not { } stored)
+        {
+            return this;
+        }
+
+        var merged = this with
+        {
+            Scope = stored.Scope,
+            SelectedEpisodeIds = stored.SelectedEpisodeIds,
+            SelectedSeasonIds = stored.SelectedSeasonIds,
+            MonitorFuture = stored.MonitorFuture,
+            Monitored = stored.Monitored,
+            MonitorFutureFromUtc = stored.MonitorFutureFromUtc,
+            ExcludedEpisodeIds = stored.ExcludedEpisodeIds,
+            ScopeRevision = stored.ScopeRevision
+        };
+        return stored.ScopeRevision == ScopeRevision
+            ? merged
+            : merged with { Searches = stored.Searches, NextSearchUtc = stored.NextSearchUtc, LastProblem = stored.LastProblem };
+    }
+
+    /// <summary>
     /// The payload a request carries; a request without a readable one covers the whole Movie, or the whole Series with future
     /// episodes. The executor and the detail pages both read a request through this, so they agree on its scope.
     /// </summary>
     public static VideoRequestPayload Of(AcquisitionRequest request, Guid workId, string title, int? year) =>
-        VideoAcquisitionEngine.ReadPayload(request)
-        ?? (request.Kind == MediaAcquisitionKind.Movie
+        Parse(request.PayloadJson) ?? Default(request.Kind, workId, title, year);
+
+    /// <summary>The scope of a title requested without a choice: the whole Movie, or every episode of a Series and every future one.</summary>
+    public static VideoRequestPayload Default(MediaAcquisitionKind kind, Guid workId, string title, int? year) =>
+        kind == MediaAcquisitionKind.Movie
             ? new VideoRequestPayload(workId, title, year, VideoRequestScope.WholeWork, [], MonitorFuture: false)
-            : new VideoRequestPayload(workId, title, year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true));
+            : new VideoRequestPayload(workId, title, year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true);
 }
 
 /// <summary>
@@ -64,38 +127,24 @@ public sealed class VideoRequestSelection(VideoRequestPayload payload, DateTime 
 
     private readonly HashSet<Guid> selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
     private readonly HashSet<Guid> selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
+    private readonly HashSet<Guid> excludedEpisodes = (payload.ExcludedEpisodeIds ?? []).ToHashSet();
+
+    /// <summary>"Future" is what aired after this moment: the one Admin set on the last scope change, else the creation of the request.</summary>
+    private readonly DateTime futureFromUtc = payload.MonitorFutureFromUtc ?? requestCreatedAt;
 
     public bool Includes(Guid episodeId, Guid? seasonId, DateTime? airedAt) =>
-        payload.Scope switch
+        payload.Monitored
+        && !excludedEpisodes.Contains(episodeId)
+        && payload.Scope switch
         {
             VideoRequestScope.AllCurrentAndFuture => true,
-            VideoRequestScope.FutureOnly => airedAt is not null && airedAt > requestCreatedAt,
+            VideoRequestScope.FutureOnly => airedAt is not null && airedAt > futureFromUtc,
             VideoRequestScope.Custom =>
                 selectedEpisodes.Contains(episodeId)
                 || seasonId is { } season && selectedSeasons.Contains(season)
-                || (payload.MonitorFuture && airedAt is not null && airedAt > requestCreatedAt),
+                || (payload.MonitorFuture && airedAt is not null && airedAt > futureFromUtc),
             _ => false
         };
-}
-
-/// <summary>Owns the per-kind generic monitoring stores without registering two ambiguous MonitoringStore instances.</summary>
-public sealed class VideoAcquisitionMonitoringStores
-{
-    private readonly MonitoringStore movie;
-    private readonly MonitoringStore tv;
-
-    public VideoAcquisitionMonitoringStores(string dataRoot)
-    {
-        movie = new MonitoringStore(dataRoot, MediaAcquisitionKind.Movie);
-        tv = new MonitoringStore(dataRoot, MediaAcquisitionKind.Tv);
-    }
-
-    public MonitoringStore For(MediaAcquisitionKind kind) => kind switch
-    {
-        MediaAcquisitionKind.Movie => movie,
-        MediaAcquisitionKind.Tv => tv,
-        _ => throw new ArgumentOutOfRangeException(nameof(kind))
-    };
 }
 
 /// <summary>
@@ -111,7 +160,6 @@ public sealed partial class VideoAcquisitionEngine(
     QualityProfileStore profiles,
     ReleaseRequestTracker tracker,
     AcquisitionAccessStore requestStore,
-    VideoAcquisitionMonitoringStores monitoring,
     TimeProvider clock)
 {
     public const string OperationKind = "video-usenet-download";
@@ -142,7 +190,10 @@ public sealed partial class VideoAcquisitionEngine(
             Year = target.Year
         };
 
-        await EnsureMonitoringAsync(request, payload, cancellationToken);
+        if (!payload.Monitored)
+        {
+            return await MonitoringOffAsync(request.Kind, payload.WorkId, cancellationToken);
+        }
 
         VideoUnit? unit = null;
         if (request.Kind == MediaAcquisitionKind.Movie)
@@ -152,7 +203,7 @@ public sealed partial class VideoAcquisitionEngine(
                 return new AcquisitionExecution(
                     AcquisitionRequestStatus.Completed,
                     "Movie is already available in the library.",
-                    ResultUrl: ResultUrl(payload.Title));
+                    ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
             }
         }
         else
@@ -166,7 +217,7 @@ public sealed partial class VideoAcquisitionEngine(
                     return new AcquisitionExecution(
                         AcquisitionRequestStatus.Completed,
                         "All requested TV episodes are available.",
-                        ResultUrl: ResultUrl(payload.Title));
+                        ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
                 }
 
                 var waiting = payload with
@@ -185,7 +236,7 @@ public sealed partial class VideoAcquisitionEngine(
                     continuation.HasMissingDue
                         ? "Searching for the next requested TV episode."
                         : "Waiting for the next requested TV episode to become available.",
-                    ResultUrl: ResultUrl(payload.Title));
+                    ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
             }
 
             payload = WithActiveUnit(payload, unit);
@@ -200,6 +251,12 @@ public sealed partial class VideoAcquisitionEngine(
         var profile = await profiles.ResolveAsync(request.Kind, target.WorkId, cancellationToken);
         var evaluation = await SearchAndEvaluateAsync(request.Kind, payload, unit, profile, cancellationToken);
         var ranked = Rank(evaluation.Releases);
+
+        // Admin may have changed monitoring while the indexers were searched; look again before anything is stored or grabbed.
+        if (await StopWhenNoLongerWantedAsync(request, payload.WorkId, unit, cancellationToken) is { } stopped)
+        {
+            return stopped;
+        }
 
         return await GrabAsync(request, payload, unit, ranked, FailureMessage(evaluation.Search, request.Kind), cancellationToken);
     }
@@ -217,48 +274,45 @@ public sealed partial class VideoAcquisitionEngine(
         CancellationToken cancellationToken,
         VideoGrabProgress? progress = null)
     {
-        var releaseKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var release in releases)
+        var downloadTitle = request.Kind == MediaAcquisitionKind.Movie ? "Download Movie" : "Download TV";
+        var mediaTarget = unit is null ? VideoWorkLinks.WorkTarget(payload.WorkId) : VideoWorkLinks.EpisodeTarget(unit.Id);
+        var candidates = releases.Select(x => new ReleaseRequestCandidate(x.Candidate.Identity, x.Candidate.Title, x.Candidate.InternalDownloadUri!)).ToArray();
+        AcquisitionExecution execution;
+        try
         {
-            releaseKeys.TryAdd(release.Candidate.Identity, release.Score!.Candidate.Release.ReleaseKey);
+            execution = await tracker.ContinueAsync(
+                request,
+                payload,
+                candidates,
+                noReleaseReason,
+                async release =>
+                {
+                    // The last look before the download is handed over (a Manual Search grab chose its episode itself, so only Off applies); an Off that
+                    // lands after it is handled by the download's own lifecycle.
+                    if (await StopWhenNoLongerWantedAsync(request, payload.WorkId, progress is null ? unit : null, cancellationToken) is { } stoppedBeforeGrab)
+                    {
+                        throw new GrabNoLongerWantedException(stoppedBeforeGrab);
+                    }
+
+                    progress?.SubmitStarted = true;
+                    var spec = new DownloadSubmissionSpec(OperationKind, downloadTitle, payload.Title, request.RequestedByProfileId, release.DownloadUri, release.Title, request.Kind, MediaTargetKey: mediaTarget);
+                    var outcome = await downloads.SubmitAsync(spec, cancellationToken);
+                    if (outcome.Accepted && progress is not null)
+                    {
+                        progress.Accepted = true;
+                        progress.OperationId = outcome.OperationId;
+                    }
+
+                    return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
+                },
+                cancellationToken);
+        }
+        catch (GrabNoLongerWantedException exception)
+        {
+            return exception.Result;
         }
 
-        var execution = await tracker.ContinueAsync(
-            request,
-            payload,
-            releases.Select(x => new ReleaseRequestCandidate(x.Candidate.Identity, x.Candidate.Title, x.Candidate.InternalDownloadUri!)).ToArray(),
-            noReleaseReason,
-            async release =>
-            {
-                progress?.SubmitStarted = true;
-                var outcome = await downloads.SubmitAsync(
-                    new DownloadSubmissionSpec(
-                        OperationKind,
-                        request.Kind == MediaAcquisitionKind.Movie ? "Download Movie" : "Download TV",
-                        payload.Title,
-                        request.RequestedByProfileId,
-                        release.DownloadUri,
-                        release.Title,
-                        request.Kind,
-                        MediaTargetKey: unit is null ? $"work:{payload.WorkId:D}" : $"work-episode:{unit.Id:D}"),
-                    cancellationToken);
-
-                if (outcome.Accepted && progress is not null)
-                {
-                    progress.Accepted = true;
-                    progress.OperationId = outcome.OperationId;
-                }
-
-                if (outcome.Accepted && releaseKeys.TryGetValue(release.Identity, out var releaseKey))
-                {
-                    await RecordGrabbedAsync(request.Kind, payload, releaseKey, cancellationToken);
-                }
-
-                return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
-            },
-            cancellationToken);
-
-        return execution with { ResultUrl = ResultUrl(payload.Title) };
+        return execution with { ResultUrl = VideoWorkLinks.DetailPath(request.Kind, payload.WorkId) };
     }
 
     private static VideoRequestPayload WithActiveUnit(VideoRequestPayload payload, VideoUnit unit) =>
@@ -284,21 +338,39 @@ public sealed partial class VideoAcquisitionEngine(
         return new VideoSearchEvaluation(profile, search, Evaluate(kind, payload.Title, unit, search.Releases, profile));
     }
 
-    public static VideoRequestPayload? ReadPayload(AcquisitionRequest request)
+    /// <summary>
+    /// How a request ends when monitoring is turned off: Completed when the title has local media, otherwise Rejected, so a requester never
+    /// sees "available" for a title nothing was acquired for.
+    /// </summary>
+    public async Task<AcquisitionRequestStatus> StatusWhenMonitoringStopsAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.PayloadJson))
+        var hasMedia = kind == MediaAcquisitionKind.Movie
+            ? await HasMovieFileAsync(workId, cancellationToken)
+            : await db.MediaAssets.AsNoTracking()
+                .Where(asset => asset.WorkId == workId && asset.WorkEpisodeId != null && asset.Kind == MediaAssetKind.Video)
+                .AnyAsync(asset => db.StoredFiles.Any(file => file.MediaAssetId == asset.Id), cancellationToken);
+        return hasMedia ? AcquisitionRequestStatus.Completed : AcquisitionRequestStatus.Rejected;
+    }
+
+    private async Task<AcquisitionExecution> MonitoringOffAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken) =>
+        new(await StatusWhenMonitoringStopsAsync(kind, workId, cancellationToken), VideoMonitoringService.MonitoringTurnedOff, ResultUrl: VideoWorkLinks.DetailPath(kind, workId));
+
+    /// <summary>
+    /// Re-reads the request and returns how the execution ends when Admin turned monitoring off meanwhile (completed) or removed the
+    /// episode being searched from the selection (back to waiting, so the next pass picks the new selection); null when the search is still wanted.
+    /// </summary>
+    private async Task<AcquisitionExecution?> StopWhenNoLongerWantedAsync(AcquisitionRequest request, Guid workId, VideoUnit? unit, CancellationToken cancellationToken)
+    {
+        var fresh = await requestStore.GetAsync(request.Id, cancellationToken) ?? request;
+        var selection = VideoRequestSelection.For(fresh, workId);
+        if (!selection.Payload.Monitored)
         {
-            return null;
+            return await MonitoringOffAsync(request.Kind, workId, cancellationToken);
         }
 
-        try
-        {
-            return JsonSerializer.Deserialize<VideoRequestPayload>(request.PayloadJson, JsonSerializerOptions.Web);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        return unit is not null && !selection.Includes(unit.Id, unit.SeasonId, unit.AiredAt)
+            ? new AcquisitionExecution(AcquisitionRequestStatus.Approved, "The monitored episodes changed; searching again.", ResultUrl: VideoWorkLinks.DetailPath(request.Kind, workId))
+            : null;
     }
 
     public async Task PrepareAfterProblemAsync(
@@ -306,15 +378,13 @@ public sealed partial class VideoAcquisitionEngine(
         string problem,
         CancellationToken cancellationToken)
     {
-        var payload = ReadPayload(request);
+        var payload = VideoRequestPayload.Parse(request.PayloadJson);
         if (payload is null)
         {
             return;
         }
 
-        await RecordFailedAsync(request.Kind, payload, cancellationToken);
-        var next = ReleaseRequestTracker.AfterProblem(payload, problem);
-        await requestStore.UpdatePayloadAsync(request.Id, next.Serialize(), cancellationToken);
+        await tracker.SaveAsync(request, ReleaseRequestTracker.AfterProblem(payload, problem), cancellationToken);
     }
 
     /// <summary>
@@ -326,13 +396,12 @@ public sealed partial class VideoAcquisitionEngine(
         AcquisitionRequest request,
         CancellationToken cancellationToken)
     {
-        var payload = ReadPayload(request);
+        var payload = VideoRequestPayload.Parse(request.PayloadJson);
         if (payload is null)
         {
             return false;
         }
 
-        await ClearAttemptAsync(request.Kind, payload, cancellationToken);
         if (request.Kind == MediaAcquisitionKind.Movie)
         {
             return false;
@@ -365,7 +434,7 @@ public sealed partial class VideoAcquisitionEngine(
                 ? "Imported episode(s). Searching for the next requested episode."
                 : "Imported requested episodes. Waiting for the next requested TV episode.",
             request.OperationId,
-            ResultUrl(reset.Title),
+            VideoWorkLinks.DetailPath(request.Kind, reset.WorkId),
             decidedByProfileId: null,
             cancellationToken);
         return true;
@@ -392,82 +461,7 @@ public sealed partial class VideoAcquisitionEngine(
             .SingleOrDefaultAsync(cancellationToken);
     }
 
-    private async Task EnsureMonitoringAsync(
-        AcquisitionRequest request,
-        VideoRequestPayload payload,
-        CancellationToken cancellationToken)
-    {
-        var store = monitoring.For(request.Kind);
-        var key = WorkKey(payload.WorkId);
-        Dictionary<int, bool> seasonOverrides = [];
-        Dictionary<string, bool> episodeOverrides = new(StringComparer.OrdinalIgnoreCase);
-        var monitored = true;
-
-        if (request.Kind == MediaAcquisitionKind.Tv)
-        {
-            var episodes = await db.WorkEpisodes.AsNoTracking()
-                .Where(x => x.WorkId == payload.WorkId)
-                .Select(x => new { x.Id, x.SeasonId, x.SeasonNumber, x.EpisodeNumber, x.AiredAt })
-                .ToListAsync(cancellationToken);
-
-            if (payload.Scope == VideoRequestScope.FutureOnly)
-            {
-                foreach (var episode in episodes.Where(x => x.AiredAt is not null && x.AiredAt <= request.CreatedAt))
-                {
-                    episodeOverrides[MonitoringEngine.EpisodeOverrideKey(episode.SeasonNumber, episode.EpisodeNumber)] = false;
-                }
-            }
-            else if (payload.Scope == VideoRequestScope.Custom)
-            {
-                monitored = payload.MonitorFuture;
-                var selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
-                var selectedSeasonIds = (payload.SelectedSeasonIds ?? []).ToHashSet();
-                HashSet<int> selectedSeasonNumbers = selectedSeasonIds.Count == 0
-                    ? []
-                    : (await db.WorkSeasons.AsNoTracking()
-                        .Where(x => x.WorkId == payload.WorkId && selectedSeasonIds.Contains(x.Id))
-                        .Select(x => x.SeasonNumber)
-                        .ToListAsync(cancellationToken))
-                    .ToHashSet();
-                foreach (var seasonNumber in selectedSeasonNumbers)
-                {
-                    seasonOverrides[seasonNumber] = true;
-                }
-
-                foreach (var episode in episodes)
-                {
-                    var explicitSelection = selectedEpisodes.Contains(episode.Id) || selectedSeasonNumbers.Contains(episode.SeasonNumber);
-                    var wasCurrentAtRequest = episode.AiredAt is null || episode.AiredAt <= request.CreatedAt;
-                    if (explicitSelection)
-                    {
-                        episodeOverrides[MonitoringEngine.EpisodeOverrideKey(episode.SeasonNumber, episode.EpisodeNumber)] = true;
-                    }
-                    else if (payload.MonitorFuture && wasCurrentAtRequest)
-                    {
-                        episodeOverrides[MonitoringEngine.EpisodeOverrideKey(episode.SeasonNumber, episode.EpisodeNumber)] = false;
-                    }
-                }
-            }
-        }
-
-        await store.UpdateAsync(state =>
-        {
-            var settings = new Dictionary<string, MonitorSettings>(state.Anime, StringComparer.OrdinalIgnoreCase);
-            settings.TryGetValue(key, out var previous);
-            settings[key] = new MonitorSettings(
-                key,
-                monitored,
-                SearchOnAdd: true,
-                SeasonOverrides: seasonOverrides,
-                EpisodeOverrides: episodeOverrides,
-                IndexerIds: previous?.IndexerIds,
-                TagIds: previous?.TagIds,
-                TargetRootId: previous?.TargetRootId);
-            return state with { Anime = settings };
-        }, cancellationToken);
-    }
-
-    private async Task<bool> HasMovieFileAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<bool> HasMovieFileAsync(Guid workId, CancellationToken cancellationToken) =>
         await db.MediaAssets.AsNoTracking()
             .Where(x => x.WorkId == workId
                         && x.WorkEpisodeId == null
@@ -698,63 +692,11 @@ public sealed partial class VideoAcquisitionEngine(
                 ? "No suitable Movie release matched the requested title and quality profile."
                 : "No suitable TV release matched the requested episode and quality profile.";
 
-    private async Task RecordGrabbedAsync(
-        MediaAcquisitionKind kind,
-        VideoRequestPayload payload,
-        string releaseKey,
-        CancellationToken cancellationToken)
+    /// <summary>Thrown inside the release submission when the grab must not happen; ends the execution with <see cref="Result"/>.</summary>
+    private sealed class GrabNoLongerWantedException(AcquisitionExecution result) : Exception
     {
-        if (ActiveKey(kind, payload) is not { } key)
-        {
-            return;
-        }
-
-        await monitoring.For(kind).UpdateAsync(
-            state => MonitoringEngine.MarkGrabbed(state, key, releaseKey, clock.GetUtcNow()),
-            cancellationToken);
+        public AcquisitionExecution Result { get; } = result;
     }
-
-    private async Task RecordFailedAsync(
-        MediaAcquisitionKind kind,
-        VideoRequestPayload payload,
-        CancellationToken cancellationToken)
-    {
-        if (ActiveKey(kind, payload) is not { } key)
-        {
-            return;
-        }
-
-        await monitoring.For(kind).UpdateAsync(
-            state => MonitoringEngine.MarkFailed(state, key, null, clock.GetUtcNow()),
-            cancellationToken);
-    }
-
-    private async Task ClearAttemptAsync(
-        MediaAcquisitionKind kind,
-        VideoRequestPayload payload,
-        CancellationToken cancellationToken)
-    {
-        if (ActiveKey(kind, payload) is not { } key)
-        {
-            return;
-        }
-
-        await monitoring.For(kind).UpdateAsync(
-            state => MonitoringEngine.ClearAttempt(state, key, clock.GetUtcNow(), "Import completed."),
-            cancellationToken);
-    }
-
-    private static MonitoredUnitKey? ActiveKey(MediaAcquisitionKind kind, VideoRequestPayload payload) =>
-        kind == MediaAcquisitionKind.Movie
-            ? MonitoredUnitKey.ForItem(WorkKey(payload.WorkId))
-            : payload.ActiveSeasonNumber is int season && payload.ActiveEpisodeNumber is int episode
-                ? MonitoredUnitKey.ForEpisode(WorkKey(payload.WorkId), season, episode)
-                : null;
-
-    private static string WorkKey(Guid workId) => $"work:{workId:D}";
-
-    private static string ResultUrl(string title) =>
-        $"/Search?q={Uri.EscapeDataString(title)}";
 
     private sealed record VideoTarget(Guid WorkId, string Title, int? Year);
 
@@ -772,7 +714,7 @@ public abstract class VideoWantedRequestHandler(
 
     public bool IsSearchDue(AcquisitionRequest request, DateTime nowUtc)
     {
-        var payload = VideoAcquisitionEngine.ReadPayload(request);
+        var payload = VideoRequestPayload.Parse(request.PayloadJson);
         return payload is null || ReleaseRequestTracker.IsSearchDue(payload, nowUtc);
     }
 

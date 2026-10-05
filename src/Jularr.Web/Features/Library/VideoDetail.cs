@@ -112,7 +112,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             .ToListAsync(cancellationToken);
         var preference = await LoadPreferenceAsync(profileId, cancellationToken);
         var snapshots = await progress.ListAsync(profileId, [workId], cancellationToken);
-        var open = tmdbId is null ? null : await requests.FindOpenAsync(AcquisitionKind(mediaType), TmdbDiscoveryProvider.ProviderKey, tmdbId, cancellationToken);
+        var open = tmdbId is null ? null : await requests.FindOpenAsync(VideoWorkLinks.AcquisitionKind(mediaType), TmdbDiscoveryProvider.ProviderKey, tmdbId, cancellationToken);
         var related = await LoadRelatedAsync(workId, visibleMediaTypes, cancellationToken);
 
         IReadOnlyList<VideoDetailVersion> versions = [];
@@ -152,10 +152,8 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             episodes,
             ResolveNext(episodes, snapshots),
             related,
-            tmdbId is null ? null : new VideoDetailRequest(AcquisitionKind(mediaType), mediaType == WorkMediaType.Movie ? "movie" : "tv", TmdbDiscoveryProvider.ProviderKey, tmdbId, open));
+            tmdbId is null ? null : new VideoDetailRequest(VideoWorkLinks.AcquisitionKind(mediaType), mediaType == WorkMediaType.Movie ? "movie" : "tv", TmdbDiscoveryProvider.ProviderKey, tmdbId, open));
     }
-
-    private static MediaAcquisitionKind AcquisitionKind(WorkMediaType mediaType) => mediaType == WorkMediaType.Movie ? MediaAcquisitionKind.Movie : MediaAcquisitionKind.Tv;
 
     private static VideoNext? ResolveNext(IReadOnlyList<VideoDetailEpisode> episodes, IReadOnlyList<MediaProgressSnapshot> snapshots)
     {

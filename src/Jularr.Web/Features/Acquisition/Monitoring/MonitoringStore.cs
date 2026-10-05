@@ -1,14 +1,12 @@
 using System.Text.Json;
-using Jularr.Web.Features.Acquisition.Access;
 
 namespace Jularr.Web.Features.Acquisition.Monitoring;
 
 /// <summary>
-/// The JSON settings store for monitoring state, one file per media type under
-/// <c>/data/acquisition</c>. Anime keeps the historical <c>monitoring.json</c> path (and shape) so
-/// existing state loads unchanged; every other media type gets its own <c>monitoring-{kind}.json</c>,
-/// so the kinds never share a file or collide on work keys. State is a single-writer JSON document
-/// written atomically via a temp file + move, guarded by an in-process gate.
+/// The JSON settings store of the anime monitoring state (<c>/data/acquisition/monitoring.json</c>).
+/// State is a single-writer JSON document written atomically via a temp file + move, guarded by an
+/// in-process gate. Movie and TV monitoring is not stored here: it is part of the request payload
+/// (VideoMonitoringService).
 /// </summary>
 public sealed class MonitoringStore
 {
@@ -19,16 +17,10 @@ public sealed class MonitoringStore
         WriteIndented = true
     };
 
-    public MonitoringStore(string dataRoot, MediaAcquisitionKind kind = MediaAcquisitionKind.Anime)
+    public MonitoringStore(string dataRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataRoot);
-
-        // Anime is the historical single-file store; its path is preserved for parity. Other media
-        // types get a per-kind file next to it.
-        var fileName = kind == MediaAcquisitionKind.Anime
-            ? "monitoring.json"
-            : $"monitoring-{AcquisitionAccessNames.Kind(kind)}.json";
-        _path = Path.Combine(dataRoot, "acquisition", fileName);
+        _path = Path.Combine(dataRoot, "acquisition", "monitoring.json");
     }
 
     public async Task<MonitoringState> LoadAsync(CancellationToken cancellationToken = default)

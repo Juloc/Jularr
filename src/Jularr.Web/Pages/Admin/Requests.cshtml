@@ -140,6 +140,7 @@
                         var language = AdminRequestQuery.LanguageOf(request);
                         var requester = Model.ProfileNames.GetValueOrDefault(request.RequestedByProfileId) ?? request.RequestedByProfileId;
                         var isBookLike = request.Kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel;
+                        var isVideo = request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv;
                         <tr class="admreq-row">
                             <td class="admreq-cell-title">
                               <div class="admreq-title-wrap">
@@ -150,7 +151,7 @@
                                     }
                                 </span>
                                 <span class="admreq-copy">
-                                    @if (request.ResultUrl is { } resultUrl)
+                                    @if (Model.ViewUrl(request) is { } resultUrl)
                                     {
                                         <a class="admreq-title" href="@resultUrl">@request.Title</a>
                                     }
@@ -225,7 +226,7 @@
                                             <button class="button button-danger" type="submit">@ui["admin.requests.reject"]</button>
                                         </form>
                                     }
-                                    @if (request.Status == AcquisitionRequestStatus.Approved && isBookLike)
+                                    @if (request.Status == AcquisitionRequestStatus.Approved && (isBookLike || isVideo))
                                     {
                                         <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
@@ -241,9 +242,13 @@
                                     }
                                     @if (request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Searching
                                         or AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing
-                                        && request.Kind == MediaAcquisitionKind.Anime)
+                                        && (request.Kind == MediaAcquisitionKind.Anime || isVideo))
                                     {
                                         <a class="button" asp-page="/Admin/Wanted">@ui["admin.requests.wanted"]</a>
+                                    }
+                                    @if (Model.VideoWorks.TryGetValue(request.Id, out var workId) && request.Status != AcquisitionRequestStatus.Pending)
+                                    {
+                                        <a class="button" href="@VideoWorkLinks.AdminPath(request.Kind, workId)">@ui["admin.media.manage"]</a>
                                     }
                                     @if (request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed)
                                     {
@@ -259,7 +264,7 @@
                                             <button class="button" type="submit">@ui["admin.requests.reopen"]</button>
                                         </form>
                                     }
-                                    @if (request.ResultUrl is { } viewUrl && request.Status != AcquisitionRequestStatus.Pending)
+                                    @if (Model.ViewUrl(request) is { } viewUrl && request.Status != AcquisitionRequestStatus.Pending)
                                     {
                                         <a class="button" href="@viewUrl">@ui["admin.requests.viewMedia"]</a>
                                     }

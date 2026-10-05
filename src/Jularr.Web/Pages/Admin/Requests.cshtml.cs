@@ -24,6 +24,7 @@ public sealed class RequestsModel(
     AcquisitionRequestService requests,
     AcquisitionRequestSettingsStore settings,
     QualityProfileStore qualityProfiles,
+    VideoRequestWorkResolver videoWorks,
     ILogger<RequestsModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
@@ -51,6 +52,17 @@ public sealed class RequestsModel(
 
     /// <summary>Whether the signed-in account may change rules and settings (the queue itself needs only the page policy).</summary>
     public bool CanEditSettings => JularrPolicies.Allows(User, JularrPolicies.AcquisitionSettings);
+
+    /// <summary>The canonical Work of each Movie and TV request on the page, by request id; a request whose Work does not exist has no entry.</summary>
+    public IReadOnlyDictionary<Guid, Guid> VideoWorks { get; private set; } = new Dictionary<Guid, Guid>();
+
+    /// <summary>
+    /// Where "View media" goes: the canonical Library page of a Movie or Series Work, never a search or a path, and the
+    /// result address of the other media types. Null when there is nothing to open yet.
+    /// </summary>
+    public string? ViewUrl(AcquisitionRequest request) => request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
+        ? VideoWorks.TryGetValue(request.Id, out var workId) ? VideoWorkLinks.DetailPath(request.Kind, workId) : null
+        : request.ResultUrl;
 
     /// <summary>The requester's chosen options besides the audio language, which has its own column.</summary>
     public IReadOnlyList<string> OptionsOf(AcquisitionRequest request) =>
@@ -121,6 +133,7 @@ public sealed class RequestsModel(
                 .OrderBy(requester => requester.Name, StringComparer.CurrentCultureIgnoreCase)
                 .ToArray();
             Queue = AdminRequestQuery.Build(rows, filter, ProfileNames);
+            VideoWorks = await videoWorks.ResolveAsync(Queue.Items, cancellationToken);
         }
         catch (Exception exception) when (exception is DbException or InvalidOperationException or FormatException)
         {
@@ -243,6 +256,12 @@ public sealed class RequestsModel(
 
     public async Task<IActionResult> OnPostApproveAsync(Guid id, string? returnUrl, CancellationToken cancellationToken)
     {
+        // Approve, retry and "search now" are one action; a Movie or TV request runs through the same executor as every other kind.
+        if (!await IsManageableAsync(id, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var request = await requests.ApproveAsync(id, cancellationToken);
         TempData["Status"] = request.StatusMessage ?? request.Title;
         return Back(returnUrl);
@@ -250,18 +269,33 @@ public sealed class RequestsModel(
 
     public async Task<IActionResult> OnPostRejectAsync(Guid id, string? note, string? returnUrl, CancellationToken cancellationToken)
     {
+        if (!await IsManageableAsync(id, cancellationToken))
+        {
+            return NotFound();
+        }
+
         await requests.RejectAsync(id, note, cancellationToken);
         return Back(returnUrl);
     }
 
     public async Task<IActionResult> OnPostCompleteAsync(Guid id, string? returnUrl, CancellationToken cancellationToken)
     {
+        if (!await IsManageableAsync(id, cancellationToken))
+        {
+            return NotFound();
+        }
+
         await requests.MarkCompletedAsync(id, cancellationToken);
         return Back(returnUrl);
     }
 
     public async Task<IActionResult> OnPostReopenAsync(Guid id, string? returnUrl, CancellationToken cancellationToken)
     {
+        if (!await IsManageableAsync(id, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var request = await requests.ReopenAsync(id, cancellationToken);
         if (request.Status != AcquisitionRequestStatus.Pending)
         {
@@ -270,6 +304,13 @@ public sealed class RequestsModel(
         }
 
         return Back(returnUrl);
+    }
+
+    /// <summary>Whether the request exists and its media module is on; the queue does not list the others, so no action may reach them.</summary>
+    private async Task<bool> IsManageableAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await LoadEnabledKindsAsync(cancellationToken);
+        return await store.GetAsync(id, cancellationToken) is { } request && EnabledKinds.Contains(request.Kind);
     }
 
     private async Task LoadEnabledKindsAsync(CancellationToken cancellationToken)

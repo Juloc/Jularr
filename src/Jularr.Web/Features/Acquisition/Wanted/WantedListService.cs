@@ -4,6 +4,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Artwork;
+using Jularr.Web.Features.Library;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
@@ -19,7 +20,9 @@ public sealed class WantedListService(
     AnimeMonitoringStore monitoring,
     AnimeQualityProfileStore qualityProfiles,
     AppDbContext db,
-    IEnumerable<IAcquisitionRequestExecutor> executors)
+    VideoRequestWorkResolver videoWorks,
+    IEnumerable<IAcquisitionRequestExecutor> executors,
+    TimeProvider clock)
 {
     /// <summary>The most requests one read looks at (the request store caps a page anyway).</summary>
     public const int RequestLimit = 5000;
@@ -32,16 +35,116 @@ public sealed class WantedListService(
         var searchable = executors.Select(executor => executor.Kind).ToHashSet();
 
         var items = new List<WantedItem>();
+        var wanted = new Dictionary<Guid, AcquisitionRequest>();
         foreach (var request in await requests.ListAllAsync(RequestLimit, cancellationToken))
         {
             if (FromRequest(request, searchable.Contains(request.Kind), profiles) is { } item)
             {
                 items.Add(item);
+                wanted[request.Id] = request;
             }
         }
 
-        items.AddRange(await LoadMonitoredAsync(profiles, cancellationToken));
-        return items;
+        var rows = await LoadVideoRowsAsync(items, wanted, profiles, cancellationToken);
+        rows.AddRange(await LoadMonitoredAsync(profiles, cancellationToken));
+        return rows;
+    }
+
+    /// <summary>
+    /// Movie and TV requests refer to their canonical Work: a Movie is one row, a Series becomes one row per season
+    /// that still misses aired episodes the request covers (from WorkSeason/WorkEpisode and the files of the Work), so
+    /// no Movie or TV row depends on anime keys. The reads are set-based: one identity query, one episode query and one
+    /// file query for all video requests together.
+    /// </summary>
+    private async Task<List<WantedItem>> LoadVideoRowsAsync(
+        List<WantedItem> items,
+        Dictionary<Guid, AcquisitionRequest> wanted,
+        QualityProfileState profiles,
+        CancellationToken cancellationToken)
+    {
+        var video = items.Where(item => item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv).ToList();
+        if (video.Count == 0)
+        {
+            return items;
+        }
+
+        var workIds = await videoWorks.ResolveAsync(video.Select(item => wanted[item.RequestId!.Value]), cancellationToken);
+        var tvWorks = video.Where(item => item.Kind == MediaAcquisitionKind.Tv && workIds.ContainsKey(item.RequestId!.Value)).Select(item => workIds[item.RequestId!.Value]).Distinct().ToArray();
+        var episodes = tvWorks.Length == 0
+            ? []
+            : await db.WorkEpisodes.AsNoTracking()
+                .Where(episode => tvWorks.Contains(episode.WorkId))
+                .Select(episode => new { episode.Id, episode.WorkId, episode.SeasonId, episode.SeasonNumber, episode.EpisodeNumber, episode.AiredAt })
+                .ToListAsync(cancellationToken);
+        var withFiles = tvWorks.Length == 0
+            ? []
+            : (await db.MediaAssets.AsNoTracking()
+                    .Where(asset => tvWorks.Contains(asset.WorkId) && asset.WorkEpisodeId != null && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
+                    .Select(asset => asset.WorkEpisodeId!.Value)
+                    .Distinct()
+                    .ToListAsync(cancellationToken))
+                .ToHashSet();
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var rows = new List<WantedItem>(items.Count);
+        foreach (var item in items)
+        {
+            if (item.Kind is not (MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv))
+            {
+                rows.Add(item);
+                continue;
+            }
+
+            var request = wanted[item.RequestId!.Value];
+            if (!workIds.TryGetValue(request.Id, out var workId))
+            {
+                rows.Add(item with { DetailUrl = null });
+                continue;
+            }
+
+            var profileId = profiles.ResolveProfileId(item.Kind, workId);
+            var videoRow = item with
+            {
+                WorkId = workId,
+                DetailUrl = VideoWorkLinks.DetailPath(item.Kind, workId),
+                ProfileId = profileId,
+                ProfileName = profileId is null ? null : ProfileName(profiles, profileId)
+            };
+            if (item.Kind == MediaAcquisitionKind.Movie)
+            {
+                rows.Add(videoRow);
+                continue;
+            }
+
+            var selection = VideoRequestSelection.For(request, workId);
+            var payload = selection.Payload;
+            var missing = episodes
+                .Where(episode => episode.WorkId == workId && !withFiles.Contains(episode.Id) && (episode.AiredAt is null || episode.AiredAt <= now) && selection.Includes(episode.Id, episode.SeasonId, episode.AiredAt))
+                .GroupBy(episode => episode.SeasonNumber)
+                .OrderBy(season => season.Key)
+                .ToArray();
+            if (missing.Length == 0)
+            {
+                rows.Add(videoRow);
+                continue;
+            }
+
+            // Only the season holding the episode in flight carries the request's search/download state; the rest queue behind it.
+            var inFlight = item.Status is WantedStatus.Searching or WantedStatus.Downloading or WantedStatus.Importing;
+            foreach (var season in missing)
+            {
+                rows.Add(videoRow with
+                {
+                    Id = $"{item.Id}:s{season.Key}",
+                    Status = inFlight && payload.ActiveSeasonNumber != season.Key ? WantedStatus.Requested : item.Status,
+                    Season = season.Key,
+                    Scope = RequestScope.Episodes,
+                    Selection = RequestSelectionText.FormatEpisodes(season.Select(episode => new RequestEpisode(season.Key, episode.EpisodeNumber)))
+                });
+            }
+        }
+
+        return rows;
     }
 
     private async Task<IReadOnlyList<WantedItem>> LoadMonitoredAsync(

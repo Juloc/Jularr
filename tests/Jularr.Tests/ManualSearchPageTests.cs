@@ -31,8 +31,8 @@ public sealed class ManualSearchPageTests
 {
     private const string OwnerHeader = "X-Test-Owner";
 
-    private static Task<VideoAcquisitionRequestExecutorTests.Host> MovieHostAsync() =>
-        VideoAcquisitionRequestExecutorTests.Host.CreateAsync(
+    private static Task<VideoAcquisitionTestHost> MovieHostAsync() =>
+        VideoAcquisitionTestHost.CreateAsync(
             MediaAcquisitionKind.Movie,
             "Dune",
             2021,
@@ -41,7 +41,7 @@ public sealed class ManualSearchPageTests
             "Dune.2021.720p.WEB-DL.x264-MID",
             moreReleases: ["Dune.2021.480p.WEB-DL.x264-LOW", "Arrival.2016.1080p.WEB-DL.x264-GROUP"]);
 
-    private static async Task<string> IdentityOfAsync(VideoAcquisitionRequestExecutorTests.Host video, Guid requestId, string title)
+    private static async Task<string> IdentityOfAsync(VideoAcquisitionTestHost video, Guid requestId, string title)
     {
         var result = await video.Get<VideoManualSearchService>().SearchAsync(requestId, null, refresh: true, CancellationToken.None);
         return result!.Candidates.Single(candidate => candidate.Title == title).Identity;
@@ -128,7 +128,7 @@ public sealed class ManualSearchPageTests
     [TestMethod]
     public async Task ATvRequestOffersTheMissingEpisodesAndSearchesTheChosenOne()
     {
-        await using var video = await VideoAcquisitionRequestExecutorTests.Host.CreateAsync(
+        await using var video = await VideoAcquisitionTestHost.CreateAsync(
             MediaAcquisitionKind.Tv,
             "Severance",
             2022,
@@ -154,7 +154,7 @@ public sealed class ManualSearchPageTests
     [TestMethod]
     public async Task AStaleEpisodeLinkShowsTheChangedTargetInsteadOfSearching()
     {
-        await using var video = await VideoAcquisitionRequestExecutorTests.Host.CreateAsync(
+        await using var video = await VideoAcquisitionTestHost.CreateAsync(
             MediaAcquisitionKind.Tv,
             "Severance",
             2022,
@@ -198,7 +198,7 @@ public sealed class ManualSearchPageTests
         Assert.IsInstanceOfType<NotFoundResult>((await PostAsync(video, Guid.NewGuid(), eligible)).Result);
     }
 
-    private static async Task<(IActionResult Result, ManualSearchModel Page)> PostAsync(VideoAcquisitionRequestExecutorTests.Host video, Guid requestId, string identity)
+    private static async Task<(IActionResult Result, ManualSearchModel Page)> PostAsync(VideoAcquisitionTestHost video, Guid requestId, string identity)
     {
         var httpContext = new DefaultHttpContext
         {
@@ -244,7 +244,7 @@ public sealed class ManualSearchPageTests
             this.server = server;
         }
 
-        public static async Task<PageHost> CreateAsync(VideoAcquisitionRequestExecutorTests.Host video)
+        public static async Task<PageHost> CreateAsync(VideoAcquisitionTestHost video)
         {
             var host = await new HostBuilder()
                 .ConfigureWebHost(web => web

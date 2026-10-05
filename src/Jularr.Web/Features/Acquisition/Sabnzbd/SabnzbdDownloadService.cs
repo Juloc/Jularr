@@ -182,13 +182,14 @@ public sealed class SabnzbdDownloadService(
                 "A newer release already replaced this download for the same episodes.");
         }
 
-        // Request-backed Books, Manga and Light Novel downloads: once Wanted moved the request on to
+        // Request-backed Books, Manga, Light Novel, Movie and TV downloads: once Wanted moved the request on to
         // a newer release, retrying this one would start a download nobody imports.
         var requests = new AcquisitionAccessStore(db);
         var request = await requests.FindByOperationAsync(operation.Id, cancellationToken);
         var requestDownload = operation.Kind is
             ReadingAcquisitionEngine.OperationKind or
-            Books.BookAcquisitionExecutor.OperationKind;
+            Books.BookAcquisitionExecutor.OperationKind or
+            VideoAcquisitionEngine.OperationKind;
         if (requestDownload && request is null)
         {
             return new SabnzbdActionOutcome(

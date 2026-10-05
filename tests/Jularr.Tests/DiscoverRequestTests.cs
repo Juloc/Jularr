@@ -182,7 +182,7 @@ public sealed class DiscoverRequestTests
 
         var result = ResultOf(await host.Page(Alice).OnPostRequestAsync(Form("tv", BreakingBad, scope: scope), CancellationToken.None));
 
-        var payload = VideoAcquisitionEngine.ReadPayload(result.Request)!;
+        var payload = VideoRequestPayload.Parse(result.Request.PayloadJson)!;
         Assert.AreEqual(expected, payload.Scope);
         Assert.IsTrue(payload.MonitorFuture, "Future monitoring is part of the Scope, never a second toggle.");
         Assert.AreEqual(0, payload.SelectedEpisodeIds.Length);
@@ -202,7 +202,7 @@ public sealed class DiscoverRequestTests
 
         var result = ResultOf(await page.OnPostRequestAsync(form, CancellationToken.None));
 
-        var payload = VideoAcquisitionEngine.ReadPayload(result.Request)!;
+        var payload = VideoRequestPayload.Parse(result.Request.PayloadJson)!;
         Assert.AreEqual(VideoRequestScope.Custom, payload.Scope);
         CollectionAssert.AreEqual(form.SeasonIds, payload.SelectedSeasonIds);
         CollectionAssert.AreEqual(form.EpisodeIds, payload.SelectedEpisodeIds);

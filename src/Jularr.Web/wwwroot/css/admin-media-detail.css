@@ -70,6 +70,7 @@
 .admmd-view { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
 .admmd-view-option { padding: 6px 14px; border-radius: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
 .admmd-view-option.is-active { background: var(--accent); color: var(--on-accent); }
+button.admmd-view-option { border: 0; background: transparent; font: inherit; font-weight: 700; cursor: pointer; }
 .admmd-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .admmd-actions form { margin: 0; }
 .admmd-actions .button { white-space: nowrap; }
@@ -132,6 +133,8 @@ details[open] > summary .admmd-chevron .admmd-icon { transform: rotate(90deg); }
 .admmd-ep-quality, .admmd-ep-files, .admmd-ep-size { font-size: 13px; font-variant-numeric: tabular-nums; }
 .admmd-ep-langs { display: flex; flex-wrap: wrap; gap: 4px; }
 .admmd-ep-monitor { justify-self: end; }
+.admmd-hit { display: inline-grid; place-items: center; min-width: 32px; min-height: 32px; cursor: pointer; }
+.admmd-hit input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .admmd-ep-monitor form { margin: 0; }
 
 .admmd-icon { flex: none; }
@@ -208,6 +211,8 @@ details[open] > summary .admmd-chevron .admmd-icon { transform: rotate(90deg); }
     .admmd-more-menu a { padding: 12px 10px; }
     .admmd-toggle { min-height: 44px; }
     .admmd-toggle-icon { min-width: 48px; min-height: 44px; }
+    .admmd-hit { min-width: 44px; min-height: 44px; }
+    .admmd-hit input { width: 22px; height: 22px; }
     .admmd-cols { display: none; }
     .admmd-group-head {
         grid-template-columns: 20px minmax(0, 1fr) auto;

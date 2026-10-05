@@ -243,6 +243,10 @@
                                     {
                                         <a class="button" href="/Admin/Media/@managedId">@ui["admin.media.manage"]</a>
                                     }
+                                    @if (item.WorkId is { } workId)
+                                    {
+                                        <a class="button" href="@VideoWorkLinks.AdminPath(item.Kind, workId)">@ui["admin.media.manage"]</a>
+                                    }
                                     @if (item.DetailUrl is { } detailUrl)
                                     {
                                         <a class="button" href="@detailUrl">@ui["admin.requests.viewMedia"]</a>

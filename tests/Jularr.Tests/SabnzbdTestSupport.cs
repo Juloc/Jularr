@@ -146,21 +146,28 @@ internal sealed class FakeSabnzbdClient : ISabnzbdClient
         CancellationToken cancellationToken) =>
         Task.FromResult(new SabnzbdConnectionTestResult(true, "test", CanMonitor: true));
 
-    public Task<SabnzbdGrabResult> GrabAsync(
+    /// <summary>Lets a test hold a grab open before it counts, to change something while a download is being handed over.</summary>
+    public Func<Task>? BeforeGrab { get; set; }
+
+    public async Task<SabnzbdGrabResult> GrabAsync(
         SabnzbdConnection connection,
         SabnzbdGrabRequest grab,
         CancellationToken cancellationToken)
     {
+        if (BeforeGrab is { } gate)
+        {
+            await gate();
+        }
+
         Grabs.Add(grab);
         if (GrabException is not null)
         {
             throw GrabException;
         }
 
-        return Task.FromResult(
-            GrabResults.Count > 0
-                ? GrabResults.Dequeue()
-                : new SabnzbdGrabResult(true, [$"SABnzbd_nzo_{++nextId}"]));
+        return GrabResults.Count > 0
+            ? GrabResults.Dequeue()
+            : new SabnzbdGrabResult(true, [$"SABnzbd_nzo_{++nextId}"]);
     }
 
     public Task<SabnzbdGrabResult> AddFileAsync(

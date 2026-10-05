@@ -179,7 +179,7 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
 
         if (request?.Request is { } acquisition)
         {
-            var requestedYear = VideoAcquisitionEngine.ReadPayload(acquisition)?.Year
+            var requestedYear = VideoRequestPayload.Parse(acquisition.PayloadJson)?.Year
                 ?? TryParseYear(acquisition.Title)
                 ?? release?.AirDate?.Year
                 ?? TryParseYear(name);

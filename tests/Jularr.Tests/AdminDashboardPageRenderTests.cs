@@ -337,6 +337,7 @@ public sealed class AdminDashboardPageRenderTests
                         services.AddSingleton(new QualityProfileStore(new DirectoryInfo(Path.Combine(data.FullName, "quality"))));
                         services.AddSingleton(monitoring);
                         services.AddScoped<AcquisitionAccessStore>();
+                        services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestWorkResolver>();
                         services.AddScoped<IAcquisitionRequestExecutor>(_ => new StubExecutor(MediaAcquisitionKind.Book));
                         services.AddScoped<WantedListService>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();

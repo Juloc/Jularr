@@ -527,6 +527,9 @@ builder.Services.AddScoped<IndexerSearchCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestScopeResolver>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestWorkResolver>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Monitoring.VideoMonitoringService>();
+builder.Services.AddScoped<Jularr.Web.Features.Library.AdminVideoMediaService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.WantedListService>();
 builder.Services.AddScoped<Jularr.Web.Features.Library.AdminMediaDetailService>();
 // Request experience (#597): auto-approval rules and requester-selectable quality profiles are
@@ -538,7 +541,6 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRe
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
-builder.Services.AddSingleton(_ => new Jularr.Web.Features.Acquisition.Access.VideoAcquisitionMonitoringStores("/data"));
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.VideoManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.MovieAcquisitionRequestExecutor>();

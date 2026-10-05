@@ -19,8 +19,8 @@ public sealed class VideoManualSearchTests
     private const string DuneRejectedQuality = "Dune.2021.480p.WEB-DL.x264-LOW";
     private const string OtherTitle = "Arrival.2016.1080p.WEB-DL.x264-GROUP";
 
-    private static Task<VideoAcquisitionRequestExecutorTests.Host> MovieHostAsync() =>
-        VideoAcquisitionRequestExecutorTests.Host.CreateAsync(
+    private static Task<VideoAcquisitionTestHost> MovieHostAsync() =>
+        VideoAcquisitionTestHost.CreateAsync(
             MediaAcquisitionKind.Movie,
             "Dune",
             2021,
@@ -29,8 +29,8 @@ public sealed class VideoManualSearchTests
             DuneLowerQuality,
             moreReleases: [DuneRejectedQuality, OtherTitle]);
 
-    private static Task<VideoAcquisitionRequestExecutorTests.Host> TvHostAsync() =>
-        VideoAcquisitionRequestExecutorTests.Host.CreateAsync(
+    private static Task<VideoAcquisitionTestHost> TvHostAsync() =>
+        VideoAcquisitionTestHost.CreateAsync(
             MediaAcquisitionKind.Tv,
             "Severance",
             2022,

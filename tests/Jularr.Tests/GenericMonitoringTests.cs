@@ -129,43 +129,6 @@ public sealed class GenericMonitoringTests
         Assert.AreEqual(MonitoringGranularity.Item, registry.MonitoringGranularityFor(MediaAcquisitionKind.Book));
     }
 
-    // ---- Store: one file per media type, no cross-kind bleed -----------------------------------
-
-    [TestMethod]
-    public async Task StoreKeepsOneFilePerKindWithoutSharingState()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "jularr-monitoring-kinds-" + Guid.NewGuid());
-        try
-        {
-            var animeStore = new MonitoringStore(root);
-            var movieStore = new MonitoringStore(root, MediaAcquisitionKind.Movie);
-
-            await animeStore.SaveAsync(State(EpisodeSettings("anime")));
-            await movieStore.SaveAsync(State(new MonitorSettings(
-                "movie",
-                Monitored: true,
-                SearchOnAdd: true,
-                SeasonOverrides: new Dictionary<int, bool>(),
-                EpisodeOverrides: new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase))));
-
-            Assert.IsTrue(File.Exists(Path.Combine(root, "acquisition", "monitoring.json")));
-            Assert.IsTrue(File.Exists(Path.Combine(root, "acquisition", "monitoring-movie.json")));
-
-            var anime = await new MonitoringStore(root).LoadAsync();
-            var movie = await new MonitoringStore(root, MediaAcquisitionKind.Movie).LoadAsync();
-
-            CollectionAssert.AreEquivalent(new[] { "anime" }, anime.Anime.Keys.ToArray());
-            CollectionAssert.AreEquivalent(new[] { "movie" }, movie.Anime.Keys.ToArray());
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
-        }
-    }
-
     // ---- Parity: legacy state written before granularity existed loads as episode granularity ---
 
     [TestMethod]

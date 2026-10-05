@@ -2,7 +2,10 @@ using System.Net;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Frontend;
@@ -185,6 +188,37 @@ public sealed class AdminActivityPageRenderTests
     }
 
     [TestMethod]
+    public async Task MovieAndTvDownloadsAreAcquisitionWorkLinkedToTheirAdminMediaPage()
+    {
+        await using var host = await ActivityHost.CreateAsync();
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Dune" };
+        var series = new Work { MediaType = WorkMediaType.Series, CanonicalTitle = "Severance" };
+        var episode = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 2 };
+        host.Db.Works.AddRange(movie, series);
+        host.Db.WorkEpisodes.Add(episode);
+        await host.Db.SaveChangesAsync();
+        var store = new OperationStore(host.Db);
+
+        async Task DownloadAsync(string title, string subject, MediaAcquisitionKind kind, string target)
+        {
+            var details = new DownloadOperationDetails(Guid.NewGuid(), kind, "movies", TargetKey: target).Serialize();
+            var id = await store.CreateAsync(new OperationDescriptor(VideoAcquisitionEngine.OperationKind, "External downloads", title, subject, IsDownload: true, Details: details));
+            await store.MarkRunningAsync(id);
+        }
+
+        await DownloadAsync("Download Movie", "Dune", MediaAcquisitionKind.Movie, VideoWorkLinks.WorkTarget(movie.Id));
+        await DownloadAsync("Download TV", "Severance", MediaAcquisitionKind.Tv, VideoWorkLinks.EpisodeTarget(episode.Id));
+
+        var html = await host.GetHtmlAsync("/Admin/Operations");
+
+        StringAssert.Contains(html, "Download Movie");
+        StringAssert.Contains(html, "Download TV");
+        Assert.AreEqual(2, Regex.Matches(html, "admact-tag-acquisition").Count, "Both are acquisition work.");
+        StringAssert.Contains(html, $"href=\"/Admin/Media/movie/{movie.Id:D}\"");
+        StringAssert.Contains(html, $"href=\"/Admin/Media/series/{series.Id:D}\"");
+    }
+
+    [TestMethod]
     public async Task RetryAndCancelRunTheActionAndReturnToTheFilteredList()
     {
         await using var host = await ActivityHost.CreateAsync();
@@ -326,6 +360,7 @@ public sealed class AdminActivityPageRenderTests
                         services.AddAuthentication("test").AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, NoAnswerHandler>("test", _ => { });
                         services.AddLogging();
                         services.AddSingleton<IOperationActions>(actions);
+                        services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestWorkResolver>();
                         services.AddScoped<Jularr.Web.Features.Acquisition.Sabnzbd.SabnzbdAcquisitionStore>();
                         services.AddSingleton<ViteAssetManifest>();
                         services.AddScoped<CurrentAccountContext>();

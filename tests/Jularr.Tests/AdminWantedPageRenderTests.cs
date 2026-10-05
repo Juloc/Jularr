@@ -267,6 +267,7 @@ public sealed class AdminWantedPageRenderTests
                         services.AddSingleton(monitoring);
                         services.AddSingleton<AnimeAcquisitionScheduler>();
                         services.AddScoped<AcquisitionAccessStore>();
+                        services.AddScoped<VideoRequestWorkResolver>();
                         services.AddScoped<IAcquisitionRequestExecutor>(_ => new StubExecutor(MediaAcquisitionKind.Book));
                         services.AddScoped<IAcquisitionRequestExecutor>(_ => new StubExecutor(MediaAcquisitionKind.Manga));
                         services.AddScoped<AcquisitionRequestService>();

@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Auth;
@@ -16,7 +17,8 @@ namespace Jularr.Web.Pages.Admin;
 public sealed class OperationModel(
     AppDbContext db,
     IOperationActions actions,
-    SabnzbdAcquisitionStore acquisitions) : PageModel
+    SabnzbdAcquisitionStore acquisitions,
+    VideoRequestWorkResolver videoWorks) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -28,6 +30,9 @@ public sealed class OperationModel(
 
     /// <summary>Routing and completed-download import details of an external download, when recorded.</summary>
     public DownloadOperationDetails? DownloadDetails { get; private set; }
+
+    /// <summary>The Admin media page of the Movie or Series this download belongs to, when it is a Movie/TV download.</summary>
+    public string? MediaLink { get; private set; }
 
     public bool IsSabnzbdJob =>
         SabnzbdDownloadService.IsSabnzbdOperation(Operation);
@@ -134,6 +139,7 @@ public sealed class OperationModel(
         }
 
         DownloadDetails = DownloadOperationDetails.TryParse(operation.Details, out var details) ? details : null;
+        MediaLink = (await videoWorks.ResolveOperationLinksAsync([operation], cancellationToken)).GetValueOrDefault(operation.Id);
         Logs = await store.ListLogsAsync(
             new OperationLogFilter(OperationId: id, Limit: 300),
             cancellationToken);
