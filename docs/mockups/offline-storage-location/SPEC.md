@@ -357,6 +357,8 @@ A failed migration must leave the last verified usable copy intact whenever phys
 
 Migration operates through the existing canonical offline package ownership.
 
+For Games, migration delegates to the Games-owned managed install/package owner (#851). The shared storage flow coordinates destination choice/progress only; it does not move ROM/disc/install resources behind the Games owner's back.
+
 It must not:
 - create a second Work/Edition/Asset identity;
 - reset MediaProgress/Reading progress;
@@ -512,6 +514,8 @@ Only applies when **Only store new downloads there** or intentionally split stor
 
 The storage owner must maintain explicit location metadata per local package/file.
 
+For Games, location metadata remains Games-owned and must keep multi-file/multi-disc releases logically consistent.
+
 The UI must be able to truthfully explain that existing content remains on the previous location.
 
 Do not present a single-location label if content is intentionally split and the product cannot explain/manage that split.
@@ -660,7 +664,8 @@ Do not include:
 - [ ] Migration is restart-safe and recoverable.
 - [ ] Active playback/reading is not invalidated by premature source deletion.
 - [ ] Removed/unavailable removable storage pauses/reports rather than silently falling back.
-- [ ] Migration does not alter canonical media identity, progress, Smart Offline origin or explicit ownership.
+- [ ] Migration does not alter canonical media identity, Games Game/GameRelease identity, progress/save ownership, Smart Offline origin or explicit ownership.
+- [ ] Jularr-managed Game packages migrate only through the Games-owned storage/install participant and preserve profile saves.
 - [ ] Long-running migration does not trap the user inside a blocking modal.
 - [ ] Migration does not count as ordinary media-download badge activity.
 - [ ] Success and action-required failures use existing toast/Bell semantics.
