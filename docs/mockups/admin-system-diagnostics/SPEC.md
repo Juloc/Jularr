@@ -302,9 +302,11 @@ Preferred route/state:
 
 A different internal route is acceptable if the shared Admin shell requires it, but Database remains a secondary System & Diagnostics destination rather than a new main-sidebar item.
 
-Approved future mockup asset name:
+Mockup asset location follows `docs/mockups/README.md`: all mockup images for this spec live beside this `SPEC.md` in `docs/mockups/admin-system-diagnostics/`.
 
-`docs/mockups/admin-system-diagnostics/database-overview-light.png`
+First Database Overview mockup filename:
+
+`database-overview-light.png`
 
 The first approved mockup is **Desktop / Light / Clean / Detailed mode**. Dark, Original Jularr and Compact reuse the same information architecture.
 
