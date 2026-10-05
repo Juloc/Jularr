@@ -37,7 +37,18 @@ public sealed record VideoRequestPayload(
     Guid? ActiveWorkEpisodeId = null,
     int? ActiveSeasonNumber = null,
     int? ActiveEpisodeNumber = null,
-    Guid[]? SelectedSeasonIds = null) : ReleaseRequestPayload;
+    Guid[]? SelectedSeasonIds = null) : ReleaseRequestPayload
+{
+    /// <summary>
+    /// The payload a request carries; a request without a readable one covers the whole Movie, or the whole Series with future
+    /// episodes. The executor and the detail pages both read a request through this, so they agree on its scope.
+    /// </summary>
+    public static VideoRequestPayload Of(AcquisitionRequest request, Guid workId, string title, int? year) =>
+        VideoAcquisitionEngine.ReadPayload(request)
+        ?? (request.Kind == MediaAcquisitionKind.Movie
+            ? new VideoRequestPayload(workId, title, year, VideoRequestScope.WholeWork, [], MonitorFuture: false)
+            : new VideoRequestPayload(workId, title, year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true));
+}
 
 /// <summary>
 /// The one owner of which TV episodes a request covers: the executor uses it to decide what to search and the
@@ -45,6 +56,12 @@ public sealed record VideoRequestPayload(
 /// </summary>
 public sealed class VideoRequestSelection(VideoRequestPayload payload, DateTime requestCreatedAt)
 {
+    /// <summary>The selection of an open request of a Series Work; the request title stands in until the payload says more.</summary>
+    public static VideoRequestSelection For(AcquisitionRequest request, Guid workId) =>
+        new(VideoRequestPayload.Of(request, workId, request.Title, null), request.CreatedAt);
+
+    public VideoRequestPayload Payload => payload;
+
     private readonly HashSet<Guid> selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
     private readonly HashSet<Guid> selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
 
@@ -117,7 +134,7 @@ public sealed class VideoAcquisitionEngine(
                 "The canonical Movie/TV Work for this provider identity no longer exists.");
         }
 
-        var payload = ReadPayload(request) ?? DefaultPayload(request, target);
+        var payload = VideoRequestPayload.Of(request, target.WorkId, target.Title, target.Year);
         payload = payload with
         {
             WorkId = target.WorkId,
@@ -345,23 +362,6 @@ public sealed class VideoAcquisitionEngine(
             select new VideoTarget(work.Id, work.CanonicalTitle, work.Year))
             .SingleOrDefaultAsync(cancellationToken);
     }
-
-    private static VideoRequestPayload DefaultPayload(AcquisitionRequest request, VideoTarget target) =>
-        request.Kind == MediaAcquisitionKind.Movie
-            ? new VideoRequestPayload(
-                target.WorkId,
-                target.Title,
-                target.Year,
-                VideoRequestScope.WholeWork,
-                [],
-                MonitorFuture: false)
-            : new VideoRequestPayload(
-                target.WorkId,
-                target.Title,
-                target.Year,
-                VideoRequestScope.AllCurrentAndFuture,
-                [],
-                MonitorFuture: true);
 
     private async Task EnsureMonitoringAsync(
         AcquisitionRequest request,

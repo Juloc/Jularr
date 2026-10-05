@@ -1,14 +1,21 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Storage;
+using Jularr.Web.Features.Subtitles;
+using Jularr.Web.Features.Vocabulary;
+using Jularr.Web.Infrastructure;
 using Jularr.Web.Frontend;
 using Jularr.Web.Pages.Library;
 using Microsoft.AspNetCore.Builder;
@@ -92,6 +99,18 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddSingleton<StorageAvailabilityCoordinator>();
                     services.AddScoped<LibraryRootAvailabilityService>();
                     services.AddScoped<MediaAvailabilityService>();
+                    // Only the trickplay routes use it; none of them is called, so its generator and queue are not built.
+                    services.AddSingleton<CanonicalPlayerNavigationAssetService>(_ => null!);
+                    services.AddSingleton(_ => new PlaybackTranscodeSlots());
+                    services.AddSingleton<PlaybackServerCapabilityProvider>();
+                    services.AddSingleton<PlaybackStreamSessionStore>();
+                    services.AddScoped<ActiveSessionService>();
+                    services.AddScoped<PlaybackPlanService>();
+                    services.AddSingleton<IJapaneseMorphology, NoMorphology>();
+                    services.AddScoped<PlaybackCueProjector>();
+                    services.AddSingleton<MediaProcessRunner>();
+                    services.AddScoped<EmbeddedSubtitleExtractor>();
+                    services.AddScoped<PlaybackService>();
                 })
                 .Configure(app =>
                 {
@@ -108,7 +127,11 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     });
                     app.UseRouting();
                     app.UseAuthorization();
-                    app.UseEndpoints(endpoints => endpoints.MapRazorPages());
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapRazorPages();
+                        endpoints.MapClientApiPlaybackPlanV1();
+                    });
                 }))
             .StartAsync();
 
@@ -127,6 +150,40 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
 
         using var response = await client.GetAsync(path);
         return (response.StatusCode, System.Net.WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync()));
+    }
+
+    /// <summary>Attaches a real (tiny) file the fake probe describes with <paramref name="probeJson"/>, exactly as an import does.</summary>
+    public async Task AttachVideoAsync(Work work, WorkEpisode? episode, string fileName, string probeJson = MediaProbeFixtures.H264Stereo)
+    {
+        if (!Db.LibraryRoots.Any())
+        {
+            Db.LibraryRoots.Add(new LibraryRoot { Name = "Media", Path = MediaDirectory });
+            await Db.SaveChangesAsync();
+        }
+
+        var path = Path.Combine(MediaDirectory, fileName);
+        await File.WriteAllBytesAsync(path, [1, 2, 3]);
+        Probe.Returns(path, probeJson);
+        await new CanonicalMediaStorageService(Db).AttachVideoAsync(work.Id, episode?.Id, path, MediaDirectory, CancellationToken.None);
+    }
+
+    /// <summary>Sends a JSON request to the client API as the signed-in profile (or the owner).</summary>
+    public async Task<(HttpStatusCode Status, string Body)> SendAsync(HttpMethod method, string path, object? body = null, bool asOwner = false)
+    {
+        using var client = server.CreateClient();
+        if (asOwner)
+        {
+            client.DefaultRequestHeaders.Add(OwnerHeader, "true");
+        }
+
+        using var request = new HttpRequestMessage(method, path);
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body);
+        }
+
+        using var response = await client.SendAsync(request);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
     /// <summary>The page of an existing title; fails with the response when it is not a plain 200.</summary>
@@ -153,6 +210,11 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
         catch (UnauthorizedAccessException)
         {
         }
+    }
+
+    private sealed class NoMorphology : IJapaneseMorphology
+    {
+        public IReadOnlyList<JapaneseMorphToken> Analyze(string text) => [];
     }
 
     private static string FindWebProjectRoot()

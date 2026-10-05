@@ -29,6 +29,9 @@ public static class PlayerDesign
 
     public static int SeekStepSeconds => LazySeekStep.Value;
 
+    /// <summary>The icons the player scripts swap at runtime (play/pause, mute, full screen); every other icon is rendered by the server.</summary>
+    public static IReadOnlyDictionary<string, PlayerIcon> ScriptIcons { get; } = new[] { "play", "pause", "volume", "volumeMuted", "fullscreen", "fullscreenExit" }.ToDictionary(id => id, Icon);
+
     public static PlayerIcon Icon(string id) =>
         Icons.TryGetValue(id, out var icon)
             ? icon

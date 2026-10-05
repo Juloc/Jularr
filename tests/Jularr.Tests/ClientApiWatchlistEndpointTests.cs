@@ -1,3 +1,4 @@
+using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.MediaSegments;
@@ -5,6 +6,7 @@ using Jularr.Web.Features.Pairing;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.PlaybackSessions;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Speech;
 using Jularr.Web.Features.Storage;
 using Jularr.Web.Features.Watchlist;
@@ -42,6 +44,9 @@ public sealed class ClientApiWatchlistEndpointTests
         builder.Services.AddSingleton<LibraryRootAvailabilityService>(_ => null!);
         builder.Services.AddSingleton<WakeOnLanService>(_ => null!);
         builder.Services.AddSingleton<MediaSegmentService>(_ => null!);
+        // The video access filter runs on every client route but only reads these for a request that names a video target.
+        builder.Services.AddSingleton<IAppShellService>(_ => null!);
+        builder.Services.AddSingleton<AppDbContext>(_ => null!);
         builder.Services.AddSingleton<WatchlistStore>(_ => null!);
         builder.Services.AddSingleton<WatchlistLibraryResolver>(_ => null!);
         builder.Services.AddSingleton<PlaybackSessionStore>(_ => null!);

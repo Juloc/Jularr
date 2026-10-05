@@ -22,7 +22,8 @@ public static class ClientApiEndpoints
     {
         var group = endpoints
             .MapGroup(ClientApiContract.BasePath)
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .AddEndpointFilter<ClientVideoAccessFilter>();
 
         group.MapGet("/capabilities", async (HttpContext context) =>
             {

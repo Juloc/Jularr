@@ -59,9 +59,10 @@ public sealed record VideoDetail(
     IReadOnlyList<VideoDetailRelated> Related,
     VideoDetailRequest? Request)
 {
-    public IReadOnlySet<string> Audio => (MediaType == WorkMediaType.Movie ? Versions.SelectMany(x => x.Audio) : Episodes.SelectMany(x => x.Audio)).ToHashSet(StringComparer.Ordinal);
+    /// <summary>The languages of every version (Movie) or episode (Series), computed once.</summary>
+    public IReadOnlySet<string> Audio { get; } = (MediaType == WorkMediaType.Movie ? Versions.SelectMany(x => x.Audio) : Episodes.SelectMany(x => x.Audio)).ToHashSet(StringComparer.Ordinal);
 
-    public IReadOnlySet<string> Subtitles => (MediaType == WorkMediaType.Movie ? Versions.SelectMany(x => x.Subtitles) : Episodes.SelectMany(x => x.Subtitles)).ToHashSet(StringComparer.Ordinal);
+    public IReadOnlySet<string> Subtitles { get; } = (MediaType == WorkMediaType.Movie ? Versions.SelectMany(x => x.Subtitles) : Episodes.SelectMany(x => x.Subtitles)).ToHashSet(StringComparer.Ordinal);
 
     public int? MovieRuntimeMinutes => Versions.Select(x => x.RuntimeMinutes).Max();
 }
@@ -240,9 +241,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var filesByEpisode = files.Where(x => x.WorkEpisodeId is not null).ToLookup(x => x.WorkEpisodeId!.Value);
         var tracksByEpisode = tracks.Where(x => x.WorkEpisodeId is not null).ToLookup(x => x.WorkEpisodeId!.Value);
         var progressByEpisode = snapshots.Where(x => x.WorkEpisodeId is not null).ToDictionary(x => x.WorkEpisodeId!.Value);
-        // A request without a readable payload covers the whole series, exactly as the executor treats it.
-        var payload = open is null ? null : VideoAcquisitionEngine.ReadPayload(open) ?? new VideoRequestPayload(workId, open.Title, null, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true);
-        var selection = open is null || payload is null ? null : new VideoRequestSelection(payload, open.CreatedAt);
+        var selection = open is null ? null : VideoRequestSelection.For(open, workId);
 
         return
         [
@@ -257,7 +256,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
                 // A request covers the title as a whole; only the episodes its scope includes show its state, and while
                 // it is downloading only the episode the executor is on is "Downloading" (the rest wait as "Requested").
                 var requestStatus = selection is not null && selection.Includes(row.Id, row.SeasonId, row.AiredAt) ? open!.Status : (AcquisitionRequestStatus?)null;
-                if (requestStatus is AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing && payload!.ActiveWorkEpisodeId is { } active && active != row.Id)
+                if (requestStatus is AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing && selection!.Payload.ActiveWorkEpisodeId is { } active && active != row.Id)
                 {
                     requestStatus = AcquisitionRequestStatus.Approved;
                 }

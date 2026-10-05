@@ -12,7 +12,10 @@ namespace Jularr.Web.Features.ClientApi;
 
 public sealed record ClientVideoTarget(
     Guid WorkId,
-    Guid? WorkEpisodeId);
+    Guid? WorkEpisodeId)
+{
+    public bool IsValid => WorkId != Guid.Empty && (WorkEpisodeId is null || WorkEpisodeId != Guid.Empty);
+}
 
 /// <summary>
 /// One playback-plan request for every client (web, PWA, Android, TV). The capability
@@ -118,7 +121,8 @@ public static class ClientApiPlaybackPlanEndpoints
     {
         var group = endpoints
             .MapGroup(ClientApiContract.BasePath)
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .AddEndpointFilter<ClientVideoAccessFilter>();
 
         group.MapPost("/episodes/{episodeId:guid}/playback-plan", async (
             Guid episodeId,
@@ -152,7 +156,7 @@ public static class ClientApiPlaybackPlanEndpoints
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
-            if (!ValidTarget(request.Target))
+            if (request.Target is not { IsValid: true })
             {
                 return Results.BadRequest(new ClientErrorResponse(
                     "invalid_playback_target",
@@ -181,7 +185,7 @@ public static class ClientApiPlaybackPlanEndpoints
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            if (request.Target is not { } target || !ValidTarget(target))
+            if (request.Target is not { IsValid: true } target)
             {
                 return Results.BadRequest(new ClientErrorResponse(
                     "invalid_playback_target",
@@ -216,7 +220,7 @@ public static class ClientApiPlaybackPlanEndpoints
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
-            if (!ValidTarget(update.Target) ||
+            if (update.Target is not { IsValid: true } ||
                 update.PositionMs < 0 ||
                 update.DurationMs is < 0)
             {
@@ -253,9 +257,7 @@ public static class ClientApiPlaybackPlanEndpoints
             Guid workId,
             Guid? workEpisodeId,
             CanonicalMediaStorageService storage,
-            MediaAvailabilityService mediaAvailability,
-            MediaInventoryService inventory,
-            EmbeddedSubtitleExtractor extractor,
+            PlaybackService playback,
             CancellationToken cancellationToken) =>
         {
             if (!PlaybackTrackIds.TryParse(trackId, out var streamIndex))
@@ -264,21 +266,10 @@ public static class ClientApiPlaybackPlanEndpoints
             }
 
             var file = await storage.ResolveVideoAsync(workId, workEpisodeId, cancellationToken);
-            if (file is null || await mediaAvailability.CheckMediaAsync(file.StoredFileId, force: false, cancellationToken) is not { IsAvailable: true } || !File.Exists(file.Path))
-            {
-                return Results.NotFound(new ClientErrorResponse("video_target_not_found", "The canonical video target is not locally playable."));
-            }
-
-            var extracted = await extractor.ExtractTextStreamAsync(file.Path, streamIndex, cancellationToken);
-            if (extracted is null)
-            {
-                return Results.NotFound(new ClientErrorResponse("subtitle_track_not_found", "The requested embedded text subtitle stream is unavailable."));
-            }
-
-            var technical = (await inventory.GetAsync(file.StoredFileId, cancellationToken))?.Technical;
-            var language = technical?.SubtitleStreams.FirstOrDefault(x => x.Index == streamIndex)?.Language;
-            var cues = new PlaybackEmbeddedSubtitleCues(PlaybackTrackIds.Format(streamIndex), language, SubtitleParser.ParseFormat(extracted.Format, extracted.Content));
-            return Results.Ok(ClientApiMappings.ToClientEmbeddedSubtitleCues(cues));
+            var cues = file is null ? null : await playback.GetEmbeddedSubtitleCuesAsync(file.StoredFileId, file.Path, streamIndex, cancellationToken);
+            return cues is null
+                ? Results.NotFound(new ClientErrorResponse("subtitle_track_not_found", "The requested embedded text subtitle stream is unavailable."))
+                : Results.Ok(ClientApiMappings.ToClientEmbeddedSubtitleCues(cues));
         })
         .RequireRateLimiting(RateLimitPolicy);
 
@@ -627,11 +618,6 @@ public static class ClientApiPlaybackPlanEndpoints
             track.IsDefault,
             track.IsForced,
             track.IsText);
-
-    private static bool ValidTarget(ClientVideoTarget? target) =>
-        target is not null &&
-        target.WorkId != Guid.Empty &&
-        (target.WorkEpisodeId is null || target.WorkEpisodeId != Guid.Empty);
 
     private static ClientPlaybackPlanResponse ToResponse(
         PlaybackPlanOutcome outcome,

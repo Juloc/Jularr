@@ -20,21 +20,6 @@ public sealed class VideoWatchPageTests
         return work;
     }
 
-    /// <summary>Attaches a real (tiny) file the fake probe describes as H.264 + AAC, exactly as an import does.</summary>
-    private static async Task AttachFileAsync(VideoDetailPageTestHost host, Work work, WorkEpisode? episode, string name)
-    {
-        if (!host.Db.LibraryRoots.Any())
-        {
-            host.Db.LibraryRoots.Add(new LibraryRoot { Name = "Media", Path = host.MediaDirectory });
-            await host.Db.SaveChangesAsync();
-        }
-
-        var path = Path.Combine(host.MediaDirectory, name);
-        await File.WriteAllBytesAsync(path, [1, 2, 3]);
-        host.Probe.Returns(path, MediaProbeFixtures.H264Stereo);
-        await new CanonicalMediaStorageService(host.Db).AttachVideoAsync(work.Id, episode?.Id, path, host.MediaDirectory, CancellationToken.None);
-    }
-
     [TestMethod]
     public async Task TheCanonicalTargetIsValidatedBeforeAnythingIsRendered()
     {
@@ -78,7 +63,7 @@ public sealed class VideoWatchPageTests
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var seed = new LibraryCanonicalSeed(host.Db);
         var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire");
-        await AttachFileAsync(host, movie, null, "moon-empire.mp4");
+        await host.AttachVideoAsync(movie, null, "moon-empire.mp4");
         await seed.SetProgressAsync(VideoDetailPageTestHost.Profile, movie, null, 900_000, 1_440_000, completed: false, DateTime.UtcNow);
 
         var html = await host.GetOkAsync($"/Library/Watch/{movie.Id}");
@@ -111,8 +96,8 @@ public sealed class VideoWatchPageTests
         var first = await seed.AddEpisodeAsync(series, 1, 1);
         await seed.AddEpisodeAsync(series, 1, 2);
         var third = await seed.AddEpisodeAsync(series, 1, 3);
-        await AttachFileAsync(host, series, first, "s01e01.mp4");
-        await AttachFileAsync(host, series, third, "s01e03.mp4");
+        await host.AttachVideoAsync(series, first, "s01e01.mp4");
+        await host.AttachVideoAsync(series, third, "s01e03.mp4");
 
         var html = await host.GetOkAsync($"/Library/Watch/{series.Id}/{first.Id}");
 
@@ -128,7 +113,7 @@ public sealed class VideoWatchPageTests
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire");
-        await AttachFileAsync(host, movie, null, "moon-empire.mp4");
+        await host.AttachVideoAsync(movie, null, "moon-empire.mp4");
         await host.Capabilities.SetRoleDefaultAsync(AccountRole.User, WorkMediaType.Movie, MediaCapability.Hidden);
 
         Assert.AreEqual(HttpStatusCode.NotFound, (await host.GetAsync($"/Library/Watch/{movie.Id}")).Status);
