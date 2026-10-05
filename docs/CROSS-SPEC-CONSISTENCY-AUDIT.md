@@ -356,3 +356,17 @@ Next work should be:
 1. implement/consolidate the target Admin shell and redirects without losing current functionality;
 2. migrate legacy settings/state to their canonical owners;
 3. execute dependency-ordered implementation, with Anime/Movie/TV request -> acquisition -> import -> playback as the primary product path.
+
+
+## 30. Remaining Admin cross-cutting ownership — aligned
+
+The last generic Admin ownership questions are now fixed:
+
+- custom Groups are deferred until multi-group/deny/override semantics are explicitly approved; V1 must not invent placeholder group persistence;
+- durable administrative audit is a typed append-oriented contract exposed through System & Diagnostics/contextual links, distinct from Activity/History and technical Logs;
+- Naming/organization is contextual to LibraryRoot/library management and the importer/library layer, not a permanent Admin destination;
+- Mapping/identity correction is contextual to Media Detail/To-Do/Reconciliation, not a permanent Admin destination;
+- UI translation management is a child of General Settings → Language & Localization;
+- API Keys remains transitional until a broader API & Automation contract is separately approved.
+
+No additional generic Admin top-level page is required for these concerns.
