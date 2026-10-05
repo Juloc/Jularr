@@ -73,8 +73,14 @@ public sealed class HealthModel(
     // Detection runs a short test encode per backend, so it is an explicit action and never part of a GET.
     public async Task<IActionResult> OnPostRedetectAsync(CancellationToken cancellationToken)
     {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         await hardware.DetectAsync(cancellationToken);
-        return RedirectToPage();
+        if (hardware.DetectionError is null)
+        {
+            TempData["Status"] = Ui["admin.health.hardware.redetected"];
+        }
+
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "hardware");
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken)

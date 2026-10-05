@@ -1,0 +1,116 @@
+/* Shared Admin settings and diagnostics building blocks (docs/mockups/admin-general-settings/SPEC.md and
+   docs/mockups/admin-system-diagnostics/SPEC.md): a section card with a tinted icon tile, title and subtitle, a field grid
+   with label, control and helper text, a labelled switch row, and the compact component table. Theme tokens only, so
+   Light, Dark and every accent work unchanged. Never a coloured edge on a card or row. */
+
+.admset-sections { display: grid; gap: 16px; align-items: start; margin-bottom: 20px; }
+.settings-grid + .admset-sections { margin-top: 16px; }
+.admset-section {
+    display: grid; gap: 16px; min-width: 0; padding: 18px;
+    border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card);
+}
+.admset-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.admset-head > div { min-width: 0; }
+.admset-head h2 { margin: 0; font-size: 17px; }
+.admset-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.admset-tile {
+    display: inline-grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 12px;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface)); color: var(--accent-text);
+}
+.admset-tile svg { width: 20px; height: 20px; }
+.admset-head > .admin-tag { margin-inline-start: auto; }
+
+.admset-notice {
+    margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface-2); font-size: 13px;
+}
+.admset-notice[role="alert"] { border-color: color-mix(in srgb, var(--danger-text) 40%, var(--border)); color: var(--danger-text); }
+
+.admset-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 18px; }
+.admset-field { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.admset-field > label, .admset-field > .admset-label { color: var(--text); font-size: 13px; font-weight: 700; }
+.admset-field input:not([type="checkbox"]), .admset-field select {
+    width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--field-bg); color: var(--text); font: inherit; font-size: 14px;
+}
+.admset-field input:focus-visible, .admset-field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.admset-field-wide { grid-column: 1 / -1; }
+.admset-hint { color: var(--muted); font-size: 12px; }
+.admset-hint-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.admset-error { color: var(--danger-text); font-size: 12px; font-weight: 600; }
+.admset-error:empty { display: none; }
+.admset-field input.input-validation-error { border-color: var(--danger-text); }
+
+/* A switch row: the label and its consequence on the left, the switch on the right. */
+.admset-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; cursor: pointer; }
+.admset-switch-copy { display: grid; gap: 2px; min-width: 0; }
+.admset-switch-copy strong { font-size: 14px; }
+.admset-switch-copy span { color: var(--muted); font-size: 13px; }
+.admset-switch {
+    appearance: none; flex: none; position: relative; width: 44px; height: 26px; margin: 0; border-radius: 999px;
+    background: var(--border); cursor: pointer; transition: background .15s ease;
+}
+.admset-switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: transform .15s ease;
+}
+.admset-switch:checked { background: var(--accent); }
+.admset-switch:checked::after { transform: translateX(18px); }
+.admset-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.admset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admset-actions form { margin: 0; }
+
+/* Component table: a name with its detail, a state tag and an action; stacked on a narrow container. */
+.admset-table-wrap { container-type: inline-size; }
+.admset-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admset-table th {
+    padding: 8px 10px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em;
+    text-align: start; text-transform: uppercase; white-space: nowrap;
+}
+.admset-table td { padding: 10px; border-top: 1px solid var(--border); vertical-align: middle; }
+.admset-table td > small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.admset-name { display: grid; gap: 2px; min-width: 0; }
+.admset-name strong { font-size: 14px; }
+.admset-name code { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+@container (max-width: 560px) {
+    .admset-table, .admset-table tbody { display: grid; }
+    .admset-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .admset-table tr { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid var(--border); }
+    .admset-table tbody tr:first-child { border-top: 0; }
+    .admset-table td { padding: 0; border: 0; }
+}
+
+@media (max-width: 760px) {
+    .admset-section { padding: 14px; }
+    .admset-fields { grid-template-columns: minmax(0, 1fr); }
+    .admset-field input:not([type="checkbox"]), .admset-field select { min-height: 44px; }
+    .admset-actions .button { flex: 1 1 100%; min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admset-switch, .admset-switch::after { transition: none; }
+}
+
+/* Inline control of a table row, e.g. a root or policy choice. */
+.admset-control {
+    width: 100%; min-width: 0; max-width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px;
+}
+.admset-control:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.admset-cell-actions { text-align: end; white-space: nowrap; }
+.admset-cell-actions form { margin: 0; }
+.admset-table td > .admin-tag { margin-top: 4px; }
+
+@container (max-width: 560px) {
+    .admset-table td[data-label]::before {
+        content: attr(data-label); display: block; margin-bottom: 3px; color: var(--muted);
+        font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    }
+    .admset-cell-actions { text-align: start; }
+    .admset-cell-actions .button { width: 100%; min-height: 44px; }
+    .admset-control { min-height: 44px; }
+}
+.admset-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.admset-link { justify-self: start; }

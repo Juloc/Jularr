@@ -252,3 +252,14 @@
 .usenet-form-check span { color: var(--text) !important; font-size: 13px !important; }
 .usenet-form-actions { display: flex; gap: 8px; }
 @media (max-width: 640px) { .usenet-form { grid-template-columns: minmax(0, 1fr); } }
+
+/* Settings → Acquisition: panels keep their own height instead of stretching to the tallest neighbour. */
+.acquisition-grid { align-items: start; }
+.acquisition-folder { display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.acquisition-folder h3 { margin: 0; font-size: 15px; }
+.acquisition-destination {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+}
+.acquisition-destination .admset-label { color: var(--muted); font-size: 12px; font-weight: 700; }
+.acquisition-destination .admin-tag { margin-inline-start: auto; }

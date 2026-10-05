@@ -49,6 +49,18 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
 
     public int Running(PlaybackCostClass costClass) => slots.Active(costClass);
 
+    /// <summary>The value of one per-class session field, addressed by the form field name the page posts.</summary>
+    public int SessionLimit(string field) =>
+        field switch
+        {
+            nameof(SoftwareVideoSessions) => SoftwareVideoSessions,
+            nameof(HardwareVideoSessions) => HardwareVideoSessions,
+            nameof(RemuxSessions) => RemuxSessions,
+            _ => AudioOnlySessions
+        };
+
+    public string? FieldError(string field) => ModelState.TryGetValue(field, out var entry) ? entry.Errors.FirstOrDefault()?.ErrorMessage : null;
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
