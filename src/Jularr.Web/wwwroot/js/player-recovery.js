@@ -1,5 +1,6 @@
 // What the player does when its stream breaks and the server may have ended it itself (idle expiry, cache policy,
-// encoder crash). One rule, loaded before episode-player.js, so the decision is testable without a page.
+// encoder crash), and when the server advises another quality while playback is healthy. One rule each, loaded before
+// episode-player.js, so the decisions are testable without a page.
 (() => {
     "use strict";
 
@@ -30,5 +31,53 @@
         return step > 0 && step <= maxStepSeconds ? playedSeconds + step : playedSeconds;
     };
 
-    window.JularrStreamRecovery = Object.freeze({ maxRecoveries, stableSeconds, shouldReplanSameMode, recoveriesAfterProgress, accumulatePlayed });
+    // The server advises step_down / step_up in the answer of a telemetry report (#403). The server already paces its advice (a step up
+    // needs a stable minute and comes at most every two minutes), so this only bounds a misbehaving or very noisy answer: never while
+    // paused or while a plan is being replaced, at least adviceMinIntervalMs between two switches and at most maxAdviceSwitches in the
+    // adviceWindowMs. Following an advice never touches the recovery budget or the failed modes: a stall is not a verdict on a mode.
+    const adviceMinIntervalMs = 30000;
+    const maxAdviceSwitches = 6;
+    const adviceWindowMs = 600000;
+
+    const createAdviceGate = () => {
+        let switches = [];
+        return {
+            // The switch times still inside the window, oldest first.
+            recent(nowMs) {
+                switches = switches.filter(at => nowMs - at < adviceWindowMs);
+                return switches;
+            },
+            record(nowMs) {
+                switches.push(nowMs);
+            }
+        };
+    };
+
+    // True (and the switch recorded) when the advice may be followed now.
+    const followAdvice = (gate, advice, { paused, busy }, nowMs) => {
+        if ((advice !== "step_down" && advice !== "step_up") || paused || busy) {
+            return false;
+        }
+
+        const recent = gate.recent(nowMs);
+        if (recent.length >= maxAdviceSwitches || (recent.length > 0 && nowMs - recent[recent.length - 1] < adviceMinIntervalMs)) {
+            return false;
+        }
+
+        gate.record(nowMs);
+        return true;
+    };
+
+    window.JularrStreamRecovery = Object.freeze({
+        maxRecoveries,
+        stableSeconds,
+        shouldReplanSameMode,
+        recoveriesAfterProgress,
+        accumulatePlayed,
+        adviceMinIntervalMs,
+        maxAdviceSwitches,
+        adviceWindowMs,
+        createAdviceGate,
+        followAdvice
+    });
 })();

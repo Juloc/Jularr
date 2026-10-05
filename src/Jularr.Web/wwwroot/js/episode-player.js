@@ -162,6 +162,10 @@
     const buffering = window.JularrPlayerBuffering;
     const stalls = buffering.createStallTracker();
     const throughput = buffering.createThroughputEstimator();
+    // How often the player may follow the server's quality advice (player-recovery.js); the server paces its advice, this bounds a bad one.
+    const adviceGate = streamRecovery.createAdviceGate();
+    // What the server measured while converting this session's video, from the telemetry answers; shown in the diagnostics only.
+    let transcodeReading = null;
     let sessionRecoveries = 0;
     let playedSinceRecovery = 0;
     let lastPlayedTime = 0;
@@ -573,6 +577,11 @@
             const stallSummary = stalls.snapshot(nowMs);
             rows.push(["stalls", format("playback.diagnostics.stallsValue", { count: stallSummary.count, seconds: (stallSummary.totalMs / 1000).toFixed(1) })]);
             rows.push(["throughput", mbps(throughput.value(nowMs))]);
+            if (transcodeReading) {
+                rows.push(["transcodeSpeed", joined(
+                    format("playback.diagnostics.speedValue", { speed: transcodeReading.speed }),
+                    transcodeReading.fps ? format("playback.diagnostics.fpsValue", { fps: transcodeReading.fps }) : null)]);
+            }
             const frames = typeof video.getVideoPlaybackQuality === "function" ? video.getVideoPlaybackQuality() : null;
             if (frames && frames.totalVideoFrames > 0) {
                 rows.push(["droppedFrames", `${frames.droppedVideoFrames} / ${frames.totalVideoFrames}`]);
@@ -1027,6 +1036,7 @@
     const beginTelemetrySession = () => {
         stalls.resetSession();
         throughput.reset();
+        transcodeReading = null;
         telemetrySequence = 0;
         lastReportedState = null;
         telemetryAvailable = Boolean(streamSessionId && telemetryUrlTemplate);
@@ -1050,6 +1060,31 @@
         });
     };
 
+    // The server asked for another quality: plan again at the same position with the same selections. Unlike a choice of the viewer this
+    // keeps failedModes (a stall is no verdict on a mode), resets no recovery budget and shows no error; the new plan's reasons and the
+    // compact status already say what changed.
+    const followQualityAdvice = () => {
+        pendingResumeTime = absoluteCurrentTime();
+        resumeShouldPlay = !video.paused && !video.ended;
+        void applyPlayback();
+    };
+
+    // The answer of a report: the server's conversion speed for the diagnostics and its advice, which is followed at most as often as the
+    // gate allows and never while a plan is being replaced. An answer for a session that was replaced meanwhile is stale.
+    const applyTelemetryAnswer = (answer, sessionAtSend) => {
+        if (!answer || sessionAtSend !== streamSessionId) {
+            return;
+        }
+
+        transcodeReading = Number.isFinite(answer.transcodeSpeed)
+            ? { speed: answer.transcodeSpeed, fps: Number.isFinite(answer.transcodeFps) ? answer.transcodeFps : null }
+            : null;
+        const busy = !plan || video.hidden || storageRecoveryActive;
+        if (streamRecovery.followAdvice(adviceGate, answer.advice, { paused: video.paused || video.ended, busy }, performance.now())) {
+            followQualityAdvice();
+        }
+    };
+
     // force: the evidence goes out even when the state did not change, e.g. just before a new plan replaces this session.
     const sendTelemetry = async (force = false) => {
         if (!telemetryAvailable || !streamSessionId || video.hidden) {
@@ -1063,6 +1098,7 @@
         }
 
         lastReportedState = state;
+        const sessionAtSend = streamSessionId;
         const nowMs = performance.now();
         const body = buffering.buildReport({
             sequence: ++telemetrySequence,
@@ -1086,6 +1122,9 @@
                 telemetryAvailable = false;
             } else if (!response.ok) {
                 console.warn("The playback telemetry was refused.", response.status);
+            } else if (!force) {
+                // The flush before a re-plan only delivers evidence; its answer must not start another re-plan.
+                applyTelemetryAnswer(await response.json().catch(() => null), sessionAtSend);
             }
         } catch (error) {
             console.warn("The playback telemetry could not be sent.", error);

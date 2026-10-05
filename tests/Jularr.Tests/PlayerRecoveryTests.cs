@@ -58,6 +58,85 @@ public sealed class PlayerRecoveryTests
     }
 
     [TestMethod]
+    public void OnlyAStepAdviceOfTheServerIsFollowedAndNeverWhilePausedOrReplanning()
+    {
+        Assert.IsTrue(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_down', { paused: false, busy: false }, 1000);"));
+        Assert.IsTrue(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_up', { paused: false, busy: false }, 1000);"));
+        foreach (var advice in new[] { "'none'", "undefined", "null", "''", "'STEP_DOWN'", "'step_sideways'", "1" })
+        {
+            Assert.IsFalse(Run($"const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, {advice}, {{ paused: false, busy: false }}, 1000);"), advice);
+        }
+
+        Assert.IsFalse(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_down', { paused: true, busy: false }, 1000);"), "A paused player is not re-planned.");
+        Assert.IsFalse(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_down', { paused: false, busy: true }, 1000);"), "A plan is already being replaced.");
+    }
+
+    [TestMethod]
+    public void FollowingAdviceIsBoundedByAnIntervalAndAWindowAndADeniedAnswerCostsNothing()
+    {
+        const string spacing = """
+            const recovery = window.JularrStreamRecovery;
+            const gate = recovery.createAdviceGate();
+            const idle = { paused: false, busy: false };
+            const results = [];
+            results.push(recovery.followAdvice(gate, 'step_down', idle, 0));
+            results.push(recovery.followAdvice(gate, 'step_down', idle, recovery.adviceMinIntervalMs - 1));
+            results.push(recovery.followAdvice(gate, 'step_down', idle, recovery.adviceMinIntervalMs - 1));
+            results.push(recovery.followAdvice(gate, 'step_up', idle, recovery.adviceMinIntervalMs));
+            return results.join(',');
+            """;
+        Assert.AreEqual("true,false,false,true", Evaluate(spacing).AsString(), "The interval counts from the last followed advice; a refused answer does not extend it.");
+
+        const string flood = """
+            const recovery = window.JularrStreamRecovery;
+            const gate = recovery.createAdviceGate();
+            const idle = { paused: false, busy: false };
+            let followed = 0;
+            for (let step = 0; step < 100; step++) {
+                if (recovery.followAdvice(gate, 'step_down', idle, step * recovery.adviceMinIntervalMs)) {
+                    followed += 1;
+                }
+            }
+            return followed;
+            """;
+        Assert.AreEqual(30.0, RunNumber(flood), "At most 6 per 10 minutes: an advice every 30 s for 50 minutes is followed 6 times in each of the five windows.");
+
+        const string reopening = """
+            const recovery = window.JularrStreamRecovery;
+            const gate = recovery.createAdviceGate();
+            const idle = { paused: false, busy: false };
+            for (let step = 0; step < recovery.maxAdviceSwitches; step++) {
+                recovery.followAdvice(gate, 'step_up', idle, step * recovery.adviceMinIntervalMs);
+            }
+            const denied = recovery.followAdvice(gate, 'step_up', idle, recovery.maxAdviceSwitches * recovery.adviceMinIntervalMs);
+            const later = recovery.followAdvice(gate, 'step_up', idle, recovery.adviceWindowMs + 1);
+            return `${denied},${later}`;
+            """;
+        Assert.AreEqual("false,true", Evaluate(reopening).AsString(), "The sixth switch inside 10 minutes is the last; the window then opens again.");
+    }
+
+    [TestMethod]
+    public void ThePlayerFollowsAdviceThroughTheGateAtTheSamePositionWithoutBlamingTheMode()
+    {
+        var root = PlayerControlsTests.RepositoryRoot();
+        var player = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js")).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var start = player.IndexOf("const followQualityAdvice = () => {", StringComparison.Ordinal);
+        var follow = player[start..player.IndexOf("\n    };", start, StringComparison.Ordinal)];
+        StringAssert.Contains(follow, "pendingResumeTime = absoluteCurrentTime();", "The position is kept.");
+        StringAssert.Contains(follow, "resumeShouldPlay = !video.paused && !video.ended;", "Playing or paused stays as it is.");
+        StringAssert.Contains(follow, "void applyPlayback();", "The same plan path keeps the selections and the ActiveSession (replacesSessionId).");
+        foreach (var forbidden in new[] { "failedModes", "sessionRecoveries", "showPlayerError", "streamSessionId = null" })
+        {
+            Assert.IsFalse(follow.Contains(forbidden, StringComparison.Ordinal), $"Following advice must not touch {forbidden}.");
+        }
+
+        StringAssert.Contains(player, "streamRecovery.followAdvice(adviceGate, answer.advice,");
+        StringAssert.Contains(player, "} else if (!force) {", "The flush before a re-plan only delivers evidence; its answer never starts another re-plan.");
+        StringAssert.Contains(player, "sessionAtSend !== streamSessionId", "An answer for a replaced session is stale.");
+    }
+
+    [TestMethod]
     public void ThePlayerAsksTheRuleBeforeItBlamesTheModeAndLoadsItFirst()
     {
         var root = PlayerControlsTests.RepositoryRoot();

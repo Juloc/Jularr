@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Infrastructure;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -44,7 +45,7 @@ public sealed class PlaybackTelemetryEndpointTests
         var other = await host.SendAsync(HttpMethod.Put, s_path + session.Id + "/telemetry", Body(), profile: "someone-else");
         var missing = await host.SendAsync(HttpMethod.Put, s_path + Guid.NewGuid() + "/telemetry", Body(), profile: Owner);
 
-        Assert.AreEqual(HttpStatusCode.NoContent, own.Status, own.Body);
+        Assert.AreEqual(HttpStatusCode.OK, own.Status, own.Body);
         Assert.AreEqual(HttpStatusCode.NotFound, other.Status, "Another profile's session does not exist for this caller.");
         StringAssert.Contains(other.Body, "stream_session_not_found");
         Assert.AreEqual(HttpStatusCode.NotFound, missing.Status);
@@ -67,9 +68,10 @@ public sealed class PlaybackTelemetryEndpointTests
         var again = await host.SendAsync(HttpMethod.Put, url, Body(sequence: 5, buffer: 20), profile: Owner);
         var older = await host.SendAsync(HttpMethod.Put, url, Body(sequence: 4, buffer: 1), profile: Owner);
 
-        Assert.AreEqual(HttpStatusCode.NoContent, first.Status);
-        Assert.AreEqual(HttpStatusCode.NoContent, again.Status);
-        Assert.AreEqual(HttpStatusCode.NoContent, older.Status);
+        Assert.AreEqual(HttpStatusCode.OK, first.Status);
+        Assert.AreEqual(HttpStatusCode.OK, again.Status);
+        Assert.AreEqual(HttpStatusCode.OK, older.Status);
+        Assert.AreEqual(first.Body, again.Body, "The answer is a reading of the session, so a repeat answers exactly like the first.");
         Assert.AreEqual(5, session.Telemetry.Latest!.Sequence);
         Assert.AreEqual(20, session.Telemetry.Latest.BufferAheadSeconds);
     }
@@ -128,9 +130,43 @@ public sealed class PlaybackTelemetryEndpointTests
 
         var response = await host.SendAsync(HttpMethod.Put, s_path + session.Id + "/telemetry", Body(buffer: 0, throughput: null, stalls: 0, stallMs: 0, state: "buffering"), profile: Owner);
 
-        Assert.AreEqual(HttpStatusCode.NoContent, response.Status, response.Body);
+        Assert.AreEqual(HttpStatusCode.OK, response.Status, response.Body);
         Assert.IsNull(session.Telemetry.Latest!.ThroughputKbps);
         Assert.AreEqual(PlaybackClientState.Buffering, session.Telemetry.Latest.State);
+    }
+
+    [TestMethod]
+    public async Task TheAnswerCarriesTheAdviceAndWhatTheServerMeasuredWhileConverting()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var session = NewSession(host);
+        var url = s_path + session.Id + "/telemetry";
+
+        var plain = await host.SendAsync(HttpMethod.Put, url, Body(sequence: 1), profile: Owner);
+        session.BeginTranscodeRun(PlaybackHardwareBackend.Software)!(new PlaybackTranscodeSample(1.94, 48.5, 30));
+        var measured = await host.SendAsync(HttpMethod.Put, url, Body(sequence: 2), profile: Owner);
+
+        using var first = JsonDocument.Parse(plain.Body);
+        Assert.AreEqual("none", first.RootElement.GetProperty("advice").GetString());
+        Assert.AreEqual(JsonValueKind.Null, first.RootElement.GetProperty("reason").ValueKind, "No advice has no reason.");
+        Assert.AreEqual(JsonValueKind.Null, first.RootElement.GetProperty("transcodeSpeed").ValueKind, "Nothing was measured yet.");
+        using var second = JsonDocument.Parse(measured.Body);
+        Assert.AreEqual(1.94, second.RootElement.GetProperty("transcodeSpeed").GetDouble());
+        Assert.AreEqual(48.5, second.RootElement.GetProperty("transcodeFps").GetDouble());
+    }
+
+    [TestMethod]
+    public void AdviceAndReasonAreSnakeCaseCodesOnTheWire()
+    {
+        var json = JsonSerializer.Serialize(
+            new ClientTelemetryAnswer(PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.TranscodeTooSlow, 0.62, 12.5),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.AreEqual("""{"advice":"step_down","reason":"transcode_too_slow","transcodeSpeed":0.62,"transcodeFps":12.5}""", json);
+        foreach (var reason in Enum.GetValues<PlaybackAdaptationReason>())
+        {
+            Assert.IsFalse(string.IsNullOrEmpty(JsonSerializer.Serialize(reason, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Trim('"')));
+        }
     }
 
     [TestMethod]

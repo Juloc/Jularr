@@ -919,7 +919,7 @@ public static class ClientApiPlaybackPlanEndpoints
             "startSeconds must be a finite value greater than or equal to zero."));
 
     /// <summary>An admission refusal: 503 with the stable code, and a <c>Retry-After</c> where asking again can help. Nothing is queued server-side.</summary>
-    internal static IResult Refused(string code) => new RefusalResult(code);
+    public static IResult Refused(string code) => new RefusalResult(code);
 
     private sealed class RefusalResult(string code) : IResult
     {

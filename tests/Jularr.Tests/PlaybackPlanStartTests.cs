@@ -171,7 +171,7 @@ public sealed partial class PlaybackPlanStartTests
             Assert.IsTrue(UiTranslationResources.TryGet(key, out _), $"{key} is used by the player but missing.");
         }
 
-        foreach (var row in new[] { "mode", "source", "delivered", "audio", "quality", "support", "processing", "buffer", "bufferPolicy", "stalls", "throughput", "droppedFrames" })
+        foreach (var row in new[] { "mode", "source", "delivered", "audio", "quality", "support", "processing", "buffer", "bufferPolicy", "stalls", "throughput", "transcodeSpeed", "droppedFrames" })
         {
             StringAssert.Contains(player, $"[\"{row}\",");
             Assert.IsTrue(UiTranslationResources.TryGet($"playback.diagnostics.{row}", out _), $"playback.diagnostics.{row} is missing.");
