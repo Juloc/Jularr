@@ -5,8 +5,9 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class VideoProgressArchitectureGuardTests
 {
-    // Whole-word match: ClientEpisodeProgress, EpisodeProgressService and EpisodeProgressSnapshot are other types.
-    private static readonly Regex LegacyProgressTables = new(@"\b(EpisodeProgress|EpisodePlaybackHistoryEntry)\b|\bEpisodePlaybackHistory\b", RegexOptions.Compiled);
+    // Matches uses of the legacy entities and their DbSets only; ClientEpisodeProgress, EpisodeProgressService and
+    // read-model members that merely share the name are other things.
+    private static readonly Regex LegacyProgressTables = new(@"<(EpisodeProgress|EpisodePlaybackHistoryEntry)>|\bnew (EpisodeProgress|EpisodePlaybackHistoryEntry)\b|\b[dD]b\.(EpisodeProgress|EpisodePlaybackHistory)\b", RegexOptions.Compiled);
 
     // The legacy tables are only a one-time migration source: the EF mapping, the entity classes and the canonical backfill may name them.
     private static readonly string[] AllowedFiles =

@@ -108,8 +108,7 @@ internal sealed class EpisodeFlowFixture : IAsyncDisposable
         if (withMedia)
         {
             // Canonical Continue Watching only offers episodes that have a canonical video Asset.
-            var bridge = new LegacyWorkBridge(Db, new WorkService(Db), new WorkStructureService(Db));
-            await new CanonicalVideoStorageBackfillService(Db, bridge, new CanonicalMediaStorageService(Db)).BackfillLegacyAnimeAsync(null, CancellationToken.None);
+            await CanonicalProgressSeed.AttachCanonicalVideoAsync(Db);
         }
 
         return episode;

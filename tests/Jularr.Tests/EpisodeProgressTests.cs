@@ -335,6 +335,31 @@ public sealed class EpisodeProgressTests
     }
 
     [TestMethod]
+    public async Task BackfilledLegacyProgressWithAnOpenEpisodeBetweenGivesCompletedThroughOne()
+    {
+        await using var fixture = await EpisodeFlowFixture.CreateAsync();
+        var anime = await fixture.AddAnimeAsync("backfill-gap");
+        var first = await fixture.AddEpisodeAsync(anime, 1, 1);
+        var second = await fixture.AddEpisodeAsync(anime, 1, 2, withMedia: false);
+        var third = await fixture.AddEpisodeAsync(anime, 1, 3);
+        foreach (var completed in new[] { first, third })
+        {
+            fixture.Db.EpisodeProgress.Add(new EpisodeProgress { ProfileId = "reader", EpisodeId = completed.Id, IsCompleted = true, UpdatedAt = DateTime.UtcNow.AddDays(-1) });
+        }
+
+        await fixture.Db.SaveChangesAsync();
+
+        var videoProgress = new VideoProgressService(fixture.Db);
+        var resolver = new CanonicalVideoTargetResolver(fixture.Db, new LegacyWorkBridge(fixture.Db, new WorkService(fixture.Db), new WorkStructureService(fixture.Db)));
+        Assert.AreEqual(2, await new CanonicalVideoProgressBackfillService(fixture.Db, resolver, videoProgress).BackfillLegacyAnimeAsync());
+
+        var completion = Assert.ContainsSingle(await videoProgress.GetCompletedThroughAsync("reader"));
+        Assert.AreEqual(1, completion.CompletedThrough?.EpisodeNumber, "E1 and E3 completed with E2 never watched gives 1, with a canonical row for every legacy episode.");
+        var rows = await fixture.Db.WorkEpisodes.Where(x => x.WorkId == completion.WorkId).CountAsync();
+        Assert.AreEqual(3, rows, "The backfill bridges every legacy episode, including the one without a file.");
+    }
+
+    [TestMethod]
     public async Task AutoplayNextDefaultsOffAndIsProfileScoped()
     {
         await using var fixture = await EpisodeFlowFixture.CreateAsync();

@@ -3,6 +3,7 @@ using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jularr.Tests;
 
@@ -51,7 +52,7 @@ internal static class CanonicalProgressSeed
         }
 
         var bridge = new LegacyWorkBridge(db, new WorkService(db), new WorkStructureService(db));
-        await new CanonicalVideoStorageBackfillService(db, bridge, new CanonicalMediaStorageService(db)).BackfillLegacyAnimeAsync(null, CancellationToken.None);
+        await new CanonicalVideoStorageBackfillService(db, bridge, new CanonicalMediaStorageService(db), NullLogger<CanonicalVideoStorageBackfillService>.Instance).BackfillLegacyAnimeAsync(null, CancellationToken.None);
     }
 
     /// <summary>Canonical progress rows (any profile unless one is given) of the legacy episodes of one anime.</summary>
