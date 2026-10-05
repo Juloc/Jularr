@@ -363,6 +363,12 @@ public static class ClientApiPlaybackPlanEndpoints
                     // The hardware encoder could not even start: this session continues on software.
                     admitted = admission.AdmitSoftwareFallback();
                 }
+                catch
+                {
+                    // Anything else (an invalid argument set) is a bug, but it must not leak the slot.
+                    admitted.Lease?.Dispose();
+                    throw;
+                }
             }
         })
         .RequireRateLimiting(RateLimitPolicy);

@@ -129,7 +129,7 @@ public sealed partial class PlaybackHardwareProbe(
     TimeProvider time,
     Func<IReadOnlyList<string>> renderDevices)
 {
-    public const string Executable = "ffmpeg";
+    private const string Executable = "ffmpeg";
     public static readonly TimeSpan ListTimeout = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan TestEncodeTimeout = TimeSpan.FromSeconds(20);
     private const int MaxDetailLength = 200;

@@ -69,6 +69,8 @@ public static class PlaybackTranscodingSettingsRules
     public const string PathTraversal = "path_traversal";
     public const string PathInvalid = "path_invalid";
     public const string PathNotWritable = "path_not_writable";
+    public const string PathNotEmpty = "path_not_empty";
+    public const string CacheMarkerFileName = ".jularr-hls-cache";
     public const string LimitRange = "limit_range";
     public const string BudgetRange = "budget_range";
     public const string FloorRange = "floor_range";
@@ -139,6 +141,25 @@ public static class PlaybackTranscodingSettingsRules
         return string.Equals(full, Path.GetPathRoot(full), StringComparison.Ordinal) ? PathInvalid : null;
     }
 
+    /// <summary>
+    /// Whether the folder is Jularr's: marked by an earlier session, the default folder, or holding nothing but session directories.
+    /// The sweeper deletes directories and the budget counts bytes, so pointing the cache at a folder with other content must be refused.
+    /// </summary>
+    public static bool IsOwnedCacheRoot(string root) =>
+        !Directory.Exists(root) ||
+        File.Exists(Path.Combine(root, CacheMarkerFileName)) ||
+        string.Equals(root.TrimEnd('/', '\\'), PlaybackTranscodingSettings.DefaultHlsCachePath, StringComparison.Ordinal) ||
+        !Directory.EnumerateFileSystemEntries(root).Any();
+
+    public static void MarkCacheRoot(string root)
+    {
+        var marker = Path.Combine(root, CacheMarkerFileName);
+        if (!File.Exists(marker))
+        {
+            File.WriteAllBytes(marker, []);
+        }
+    }
+
     /// <summary>The canonical stored form of a validated path: trimmed, without a trailing separator.</summary>
     public static string NormalizePath(string path) => path.Trim().TrimEnd('/', '\\');
 }
@@ -199,6 +220,11 @@ public sealed class PlaybackTranscodingSettingsStore
         ArgumentNullException.ThrowIfNull(settings);
         var normalized = settings with { HlsCachePath = PlaybackTranscodingSettingsRules.NormalizePath(settings.HlsCachePath ?? "") };
         var issues = PlaybackTranscodingSettingsRules.Validate(normalized).ToList();
+        if (issues.Count == 0 && !PlaybackTranscodingSettingsRules.IsOwnedCacheRoot(normalized.HlsCachePath))
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackTranscodingSettingsRules.PathNotEmpty));
+        }
+
         if (issues.Count == 0 && !IsWritableDirectory(normalized.HlsCachePath))
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackTranscodingSettingsRules.PathNotWritable));

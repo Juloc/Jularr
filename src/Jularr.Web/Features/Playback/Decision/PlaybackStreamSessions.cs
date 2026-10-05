@@ -39,11 +39,11 @@ public sealed class PlaybackTranscodeSlots(PlaybackTranscodingSettingsStore sett
 
     private sealed class Lease(PlaybackTranscodeSlots owner, PlaybackCostClass costClass) : IDisposable
     {
-        private int released;
+        private int _released;
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref released, 1) == 0)
+            if (Interlocked.Exchange(ref _released, 1) == 0)
             {
                 Interlocked.Decrement(ref owner._active[(int)costClass]);
             }

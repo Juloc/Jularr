@@ -11,8 +11,8 @@ public sealed record PlaybackBreakerState(
 
 /// <summary>
 /// Stops sending sessions to a hardware encoder that keeps failing. Three consecutive failures
-/// open a backend for ten minutes; afterwards one trial session is allowed (the count is kept,
-/// so that trial's failure reopens it at once and its success clears the count).
+/// open a backend for ten minutes; afterwards sessions may use it again (the count is kept,
+/// so the next failure reopens it at once and a success clears the count).
 /// </summary>
 public sealed class PlaybackBackendBreaker(TimeProvider time)
 {

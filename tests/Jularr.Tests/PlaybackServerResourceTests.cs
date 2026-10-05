@@ -382,6 +382,33 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task AForeignFolderIsNeitherAcceptedNorSweptAndAFailedStartLeavesNoDirectory()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        var foreign = Path.Combine(kit.DataRoot, "shared");
+        var lookalike = Directory.CreateDirectory(Path.Combine(foreign, Guid.NewGuid().ToString("N")));
+        lookalike.LastWriteTimeUtc = DateTime.UtcNow.AddDays(-5);
+        try
+        {
+            var rejected = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = foreign });
+            Assert.AreEqual(PlaybackTranscodingSettingsRules.PathNotEmpty, rejected.Issues.Single().Code);
+            Assert.IsFalse(PlaybackTranscodingSettingsRules.IsOwnedCacheRoot(foreign));
+
+            var empty = Path.Combine(kit.DataRoot, "empty-cache");
+            var saved = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = empty });
+            Assert.IsTrue(saved.Succeeded);
+            using var manager = kit.Hls(_ => throw new System.ComponentModel.Win32Exception("ffmpeg missing"));
+            await Assert.ThrowsAsync<System.ComponentModel.Win32Exception>(() => manager.StartAsync(Guid.NewGuid(), "profile-0", 0, directory => [directory], null, CancellationToken.None));
+            Assert.AreEqual(0, Directory.GetDirectories(empty).Length, "A start that fails leaves no session directory behind.");
+            Assert.IsTrue(lookalike.Exists);
+        }
+        finally
+        {
+            Directory.Delete(kit.DataRoot, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public async Task TheSweeperAlsoEnforcesTheBudgetOnGrowingSessions()
     {
         await using var cache = await CacheAsync(budgetBytes: 1L << 20);

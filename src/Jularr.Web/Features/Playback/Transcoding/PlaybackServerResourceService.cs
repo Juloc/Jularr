@@ -22,7 +22,7 @@ public sealed class PlaybackServerResourceService(
         {
             await settings.LoadAsync(cancellationToken);
         }
-        catch (InvalidDataException exception)
+        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException)
         {
             // The server keeps running on the defaults; the Admin page reports the broken file when it is opened.
             logger.LogError(exception, "The stored playback transcoding settings are invalid; the defaults apply until they are saved again.");
@@ -49,7 +49,7 @@ public sealed class PlaybackServerResourceService(
         }
     }
 
-    public void SweepOnce()
+    private void SweepOnce()
     {
         try
         {
@@ -63,7 +63,7 @@ public sealed class PlaybackServerResourceService(
                     result.OrphanDirectories);
             }
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "The HLS cache sweep failed; it is retried on the next interval.");
         }

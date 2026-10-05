@@ -148,6 +148,12 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
                 var policy = _settings.Current;
                 Directory.CreateDirectory(policy.HlsCachePath);
+                if (!PlaybackTranscodingSettingsRules.IsOwnedCacheRoot(policy.HlsCachePath))
+                {
+                    throw new InvalidOperationException("The HLS cache folder holds files that are not Jularr's; point the cache at an empty folder.");
+                }
+
+                PlaybackTranscodingSettingsRules.MarkCacheRoot(policy.HlsCachePath);
                 if (PruneToPolicy(policy) is { } refusal)
                 {
                     throw new PlaybackAdmissionRefusedException(refusal);
@@ -157,7 +163,17 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                 var directory = Path.Combine(policy.HlsCachePath, sessionId.ToString("N"));
                 Directory.CreateDirectory(directory);
 
-                var process = _startProcess(buildArguments(directory));
+                IHlsEncoderProcess process;
+                try
+                {
+                    process = _startProcess(buildArguments(directory));
+                }
+                catch
+                {
+                    TryDeleteDirectory(directory);
+                    throw;
+                }
+
                 var now = _time.GetUtcNow();
                 entry = new Entry(sessionId, episodeId, profileId, directory, process, startSeconds, now, lease);
                 _sessions[sessionId] = entry;
@@ -502,7 +518,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
     private int RemoveOrphanDirectories(string root)
     {
-        if (!Directory.Exists(root))
+        // Only a folder Jularr created or was pointed at while empty is swept; a foreign folder may hold GUID-named directories of its own.
+        if (!Directory.Exists(root) || !PlaybackTranscodingSettingsRules.IsOwnedCacheRoot(root))
         {
             return 0;
         }
