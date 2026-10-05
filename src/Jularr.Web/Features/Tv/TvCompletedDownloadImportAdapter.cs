@@ -4,22 +4,23 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Storage;
 
 namespace Jularr.Web.Features.Tv;
 
 /// <summary>
-/// The TV importer behind the shared completed-download dispatcher and the TV inbox scan (#594). Each video
-/// file of a completed download (one episode, or many for a season pack) is placed into the series library as
-/// <c>Series (Year)/Season 01/Series - S01E02.ext</c> (with its subtitle/nfo sidecars) and recorded as one
-/// episode of a <see cref="TvSeries"/> bridged to the universal media core, reusing the universal
-/// season/episode structure. When no TV library folder is configured the files are imported in place. Series
-/// and season/episode numbers come from the acquisition request when there is one, otherwise from the release
-/// name via the shared scene parser (never a filename-only provider match).
+/// The TV importer behind the shared completed-download dispatcher and the TV inbox scan (#594). Each video file of a completed
+/// download (one episode, or many for a season pack) is placed into the default TV LibraryRoot (Storage owns the destination and
+/// the placement policy, #815) as <c>Series (Year)/Season 01/Series - S01E02.ext</c> with its subtitle/nfo sidecars and recorded
+/// as one episode of a <see cref="TvSeries"/> bridged to the universal media core, reusing the universal season/episode
+/// structure. Without an enabled default root nothing is placed and nothing is read in place: the import waits with an
+/// explanation until the owner chooses a root. Series and season/episode numbers come from the acquisition request when there is
+/// one, otherwise from the release name via the shared scene parser (never a filename-only provider match).
 /// </summary>
 public sealed partial class TvCompletedDownloadImportAdapter(
     TvLibraryService series,
     MediaAcquisitionRegistry registry,
-    AnimeImportSettingsStore importSettings,
+    LibraryRootRoutingService routing,
     IHardLinkCreator hardLinks,
     ILogger<TvCompletedDownloadImportAdapter> logger,
     CanonicalMediaStorageService? canonicalStorage = null)
@@ -33,9 +34,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
     [GeneratedRegex(@"(?<year>(?:19|20)\d{2})", RegexOptions.CultureInvariant)]
     private static partial Regex YearRegex();
 
-    public async Task<CompletedDownloadImportResult> ImportAsync(
-        CompletedDownloadImportRequest request,
-        CancellationToken cancellationToken)
+    public async Task<CompletedDownloadImportResult> ImportAsync(CompletedDownloadImportRequest request, CancellationToken cancellationToken)
     {
         var files = CompletedDownloadFiles.Enumerate(request.SourcePath, out var error);
         if (error is not null)
@@ -43,92 +42,54 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             return CompletedDownloadImportResult.RetryLater(error);
         }
 
-        var videos = files
-            .Where(file => CompletedDownloadFiles.IsVideo(file.Path))
-            .OrderBy(file => file.Path, StringComparer.Ordinal)
-            .ToList();
+        var videos = files.Where(file => CompletedDownloadFiles.IsVideo(file.Path)).OrderBy(file => file.Path, StringComparer.Ordinal).ToList();
         if (videos.Count == 0)
         {
             return CompletedDownloadImportResult.RejectRelease(NoVideoFileReason);
         }
 
+        var route = await routing.ResolveDefaultAsync(LibraryContentType.Tv, cancellationToken);
+        if (route is null)
+        {
+            return CompletedDownloadImportResult.RetryLater(LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Tv));
+        }
+
+        if (!Directory.Exists(route.Path))
+        {
+            return CompletedDownloadImportResult.RetryLater($"The TV library root '{route.Name}' is not available.");
+        }
+
         try
         {
-            var settings = await importSettings.LoadAsync(cancellationToken);
-            var library = settings.LibraryFor(MediaAcquisitionKind.Tv);
-            var mode = settings.ModeFor(MediaAcquisitionKind.Tv);
-            var (action, allowFallback) = ImportFileTransfer.Resolve(mode);
-            var placer = new LibraryFilePlacer(new ImportFileTransfer(hardLinks));
-
-            var imported = 0;
-            var canonicalAttachments = new List<CanonicalVideoAttachment>();
-            CompletedDownloadPlacement? placement = null;
+            var placed = new List<PlacedEpisode>();
             foreach (var video in videos)
             {
-                var meta = ResolveMetadata(request, video.Path);
-                string? seriesFolder = library is not null
-                    ? Path.Combine(library.LibraryRoot!, TvNaming.SeriesFolderName(meta.Series, meta.Year))
-                    : Path.GetDirectoryName(video.Path);
-
-                var entry = await series.EnsureSeriesAsync(
-                    meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, seriesFolder, cancellationToken);
-                var workEpisode = await series.EnsureEpisodeAsync(
-                    entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
-                var storedVideoPath = Path.GetFullPath(video.Path);
-                var storageRootPath = Path.GetDirectoryName(storedVideoPath);
-
-                if (library is not null)
-                {
-                    var seasonFolder = Path.Combine(seriesFolder!, TvNaming.SeasonFolderName(meta.Season));
-                    var destination = Path.Combine(
-                        seasonFolder,
-                        TvNaming.EpisodeFileName(
-                            meta.Series, meta.Season, meta.Episode, meta.EpisodeTitle, Path.GetExtension(video.Path)));
-
-                    if (LibraryFilePlacer.FindDestinationConflict(destination, []) is null)
-                    {
-                        var sidecars = BuildSidecars(files, video.Path, Path.GetFileNameWithoutExtension(destination));
-                        placer.Place(new LibraryFilePlacement(video.Path, destination, action, allowFallback, sidecars, []));
-                    }
-
-                    storedVideoPath = Path.GetFullPath(destination);
-                    storageRootPath = Path.GetFullPath(library.LibraryRoot!);
-                    placement = new CompletedDownloadPlacement(seriesFolder!, mode);
-                }
-
-                canonicalAttachments.Add(new CanonicalVideoAttachment(
-                    entry.WorkId,
-                    workEpisode.Id,
-                    storedVideoPath,
-                    storageRootPath));
-                imported++;
+                placed.Add(await PlaceAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken));
             }
 
             if (canonicalStorage is not null)
             {
-                await canonicalStorage.AttachVideosAsync(canonicalAttachments, cancellationToken);
+                await canonicalStorage.AttachVideosAsync(placed.Select(episode => episode.Attachment).ToList(), cancellationToken);
             }
 
-            await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, $"Imported {imported} episode(s).");
+            await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, $"Imported {placed.Count} episode(s).");
             return CompletedDownloadImportResult.Completed(
-                $"Imported {imported} episode(s).", resultUrl: null, placement);
+                $"Imported {placed.Count} episode(s).",
+                resultUrl: null,
+                new CompletedDownloadPlacement(placed[^1].SeriesFolder, ImportFileTransfer.ModeFor(route.PlacementPolicy)));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception exception) when (
-            exception is IOException or UnauthorizedAccessException or CrossDeviceLinkException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or CrossDeviceLinkException)
         {
             logger.LogWarning(exception, "TV import is waiting for storage for '{SourcePath}'.", request.SourcePath);
             return CompletedDownloadImportResult.RetryLater("The TV import is waiting for storage.");
         }
     }
 
-    public async Task<MediaInboxImportResult> ImportInboxAsync(
-        string inboxRoot,
-        IReadOnlyCollection<string> excludedFolders,
-        CancellationToken cancellationToken)
+    public async Task<MediaInboxImportResult> ImportInboxAsync(string inboxRoot, IReadOnlyCollection<string> excludedFolders, CancellationToken cancellationToken)
     {
         var files = CompletedDownloadFiles.Enumerate(inboxRoot, out var error);
         if (error is not null)
@@ -136,8 +97,18 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             return new MediaInboxImportResult(0, error);
         }
 
-        var imported = 0;
-        var canonicalAttachments = new List<CanonicalVideoAttachment>();
+        var route = await routing.ResolveDefaultAsync(LibraryContentType.Tv, cancellationToken);
+        if (route is null)
+        {
+            return new MediaInboxImportResult(0, LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Tv));
+        }
+
+        if (!Directory.Exists(route.Path))
+        {
+            return new MediaInboxImportResult(0, $"The TV library root '{route.Name}' is not available.");
+        }
+
+        var placed = new List<PlacedEpisode>();
         foreach (var file in files)
         {
             if (!CompletedDownloadFiles.IsVideo(file.Path) || IsExcluded(file.Path, excludedFolders))
@@ -145,27 +116,40 @@ public sealed partial class TvCompletedDownloadImportAdapter(
                 continue;
             }
 
-            var meta = ResolveMetadata(request: null, file.Path);
-            var entry = await series.EnsureSeriesAsync(
-                meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, Path.GetDirectoryName(file.Path), cancellationToken);
-            var workEpisode = await series.EnsureEpisodeAsync(
-                entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
-            canonicalAttachments.Add(new CanonicalVideoAttachment(
-                entry.WorkId,
-                workEpisode.Id,
-                file.Path,
-                inboxRoot));
-            imported++;
+            placed.Add(await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken));
         }
 
         if (canonicalStorage is not null)
         {
-            await canonicalStorage.AttachVideosAsync(canonicalAttachments, cancellationToken);
+            await canonicalStorage.AttachVideosAsync(placed.Select(episode => episode.Attachment).ToList(), cancellationToken);
         }
 
-        return new MediaInboxImportResult(
-            imported,
-            imported == 0 ? "No new episodes in the inbox." : $"Imported {imported} episode(s) from the inbox.");
+        return new MediaInboxImportResult(placed.Count, placed.Count == 0 ? "No new episodes in the inbox." : $"Imported {placed.Count} episode(s) from the inbox.");
+    }
+
+    /// <summary>
+    /// Places one episode into the TV root with the root's placement policy and records the series and episode. Idempotent: an episode
+    /// already placed at the destination is left as is and only its records are refreshed.
+    /// </summary>
+    private async Task<PlacedEpisode> PlaceAsync(LibraryRootRoute route, IReadOnlyList<CompletedDownloadFile> files, string videoPath, EpisodeMetadata meta, CancellationToken cancellationToken)
+    {
+        var (action, allowFallback) = ImportFileTransfer.Resolve(ImportFileTransfer.ModeFor(route.PlacementPolicy));
+        var seriesFolder = Path.Combine(route.Path, TvNaming.SeriesFolderName(meta.Series, meta.Year));
+        var destination = Path.Combine(seriesFolder, TvNaming.SeasonFolderName(meta.Season), TvNaming.EpisodeFileName(meta.Series, meta.Season, meta.Episode, meta.EpisodeTitle, Path.GetExtension(videoPath)));
+        if (!MediaInboxImportService.IsBelow(destination, route.Path))
+        {
+            throw new InvalidOperationException("The episode destination would leave its library root.");
+        }
+
+        var entry = await series.EnsureSeriesAsync(meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, seriesFolder, cancellationToken);
+        var workEpisode = await series.EnsureEpisodeAsync(entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
+        if (LibraryFilePlacer.FindDestinationConflict(destination, []) is null)
+        {
+            var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
+            new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
+        }
+
+        return new PlacedEpisode(new CanonicalVideoAttachment(entry.WorkId, workEpisode.Id, Path.GetFullPath(destination), Path.GetFullPath(route.Path)), seriesFolder);
     }
 
     private EpisodeMetadata ResolveMetadata(CompletedDownloadImportRequest? request, string videoPath)
@@ -262,4 +246,6 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         string? EpisodeTitle,
         string? TmdbId,
         string? TvdbId);
+
+    private readonly record struct PlacedEpisode(CanonicalVideoAttachment Attachment, string SeriesFolder);
 }

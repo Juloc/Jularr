@@ -540,6 +540,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRe
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
 builder.Services.AddSingleton(_ => new Jularr.Web.Features.Acquisition.Access.VideoAcquisitionMonitoringStores("/data"));
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.VideoManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.MovieAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.TvAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Acquisition.Access.MovieWantedRequestHandler>();
@@ -791,6 +792,9 @@ try
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
     await Jularr.Web.Features.Acquisition.Import.MediaFolderSettingsMigration.RunAtStartupAsync(
+        app.Services,
+        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
+    await Jularr.Web.Features.Acquisition.Import.VideoLibraryRootMigration.RunAtStartupAsync(
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
     var migratedBibles = await BookTranslationMemoryStore

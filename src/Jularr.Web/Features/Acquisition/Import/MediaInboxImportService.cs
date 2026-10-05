@@ -1,6 +1,8 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Storage;
 
 namespace Jularr.Web.Features.Acquisition.Import;
 
@@ -14,6 +16,7 @@ public sealed class MediaInboxImportService(
     AnimeImportSettingsStore settings,
     IEnumerable<IMediaInboxImportAdapter> adapters,
     OperationRunner operations,
+    LibraryRootRoutingService routing,
     IInstanceModuleService? instanceModules = null)
 {
     public const string OperationKind = "media-inbox-import";
@@ -22,8 +25,18 @@ public sealed class MediaInboxImportService(
     [
         MediaAcquisitionKind.Manga,
         MediaAcquisitionKind.LightNovel,
-        MediaAcquisitionKind.Book
+        MediaAcquisitionKind.Book,
+        MediaAcquisitionKind.Movie,
+        MediaAcquisitionKind.Tv
     ];
+
+    /// <summary>The LibraryRoot content type whose default root receives this media type's imports, or null while its importer still reads a per-media library folder.</summary>
+    public static LibraryContentType? RoutedContentType(MediaAcquisitionKind kind) => kind switch
+    {
+        MediaAcquisitionKind.Movie => LibraryContentType.Movie,
+        MediaAcquisitionKind.Tv => LibraryContentType.Tv,
+        _ => null
+    };
 
     public async Task<string?> InboxAsync(
         MediaAcquisitionKind kind,
@@ -56,6 +69,12 @@ public sealed class MediaInboxImportService(
         if (!Directory.Exists(root))
         {
             throw new InvalidOperationException($"The {Label(kind)} inbox '{root}' is not available.");
+        }
+
+        // Scanning an inbox that is, contains or sits inside the destination root would import library files onto themselves.
+        if (RoutedContentType(kind) is { } contentType && await routing.ResolveDefaultAsync(contentType, cancellationToken) is { } route && Overlaps(root, route.Path))
+        {
+            throw new InvalidOperationException($"The {Label(kind)} inbox overlaps the {Label(kind)} library root. Choose an inbox outside the library.");
         }
 
         // An older layout keeps the Light Novel inbox inside the Books inbox; a scan never
@@ -99,6 +118,12 @@ public sealed class MediaInboxImportService(
         MediaAcquisitionKind.Audiobook => "Audiobooks",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
+
+    /// <summary>Two folders are the same or one lies inside the other.</summary>
+    public static bool Overlaps(string left, string right) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)), StringComparison.Ordinal) ||
+        IsBelow(left, right) ||
+        IsBelow(right, left);
 
     public static bool IsBelow(string path, string root)
     {

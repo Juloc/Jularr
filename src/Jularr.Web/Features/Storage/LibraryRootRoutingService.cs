@@ -7,6 +7,16 @@ namespace Jularr.Web.Features.Storage;
 /// <summary>Owns specialized LibraryRoot content routing and the effective placement policy returned to importers.</summary>
 public sealed class LibraryRootRoutingService(AppDbContext db)
 {
+    /// <summary>
+    /// The content types whose importers already resolve their destination through this service. Types not listed here
+    /// still read their legacy per-media library folder until their importer is migrated.
+    /// </summary>
+    public static readonly LibraryContentType[] ImporterRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv];
+
+    /// <summary>Why an importer cannot place media: no enabled default LibraryRoot is configured for the content type.</summary>
+    public static string MissingDefaultMessage(LibraryContentType contentType) =>
+        $"No default {(contentType == LibraryContentType.Tv ? "TV" : contentType.ToString())} library root is configured. Choose one under Admin → Storage; the import resumes automatically.";
+
     public async Task<LibraryRootRoute?> ResolveDefaultAsync(LibraryContentType contentType, CancellationToken cancellationToken = default) =>
         await (
             from assignment in db.LibraryRootContentAssignments.AsNoTracking()
@@ -96,6 +106,36 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Makes an enabled LibraryRoot the default destination of a content type and sets how imports are placed into it. The root becomes
+    /// a supported root of the type when it was not yet. The placement policy belongs to the root, so it applies to every content type
+    /// the root serves.
+    /// </summary>
+    public async Task AssignDefaultAsync(LibraryContentType contentType, Guid libraryRootId, LibraryPlacementPolicy placementPolicy, CancellationToken cancellationToken = default)
+    {
+        if (!Enum.IsDefined(placementPolicy))
+        {
+            throw new ArgumentOutOfRangeException(nameof(placementPolicy));
+        }
+
+        var root = await db.LibraryRoots.SingleOrDefaultAsync(candidate => candidate.Id == libraryRootId, cancellationToken)
+            ?? throw new InvalidOperationException("The LibraryRoot no longer exists.");
+
+        if (!root.IsEnabled)
+        {
+            throw new InvalidOperationException("A disabled LibraryRoot cannot be the default destination.");
+        }
+
+        await SetSupportedAsync(libraryRootId, contentType, true, cancellationToken);
+        await SetDefaultAsync(contentType, libraryRootId, cancellationToken);
+
+        if (root.PlacementPolicy != placementPolicy)
+        {
+            root.PlacementPolicy = placementPolicy;
+            await db.SaveChangesAsync(cancellationToken);
+        }
     }
 }
 

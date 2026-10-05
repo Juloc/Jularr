@@ -11,6 +11,7 @@ using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Media.Optimization;
+using Jularr.Web.Features.Storage;
 using Jularr.Web.Features.Storage.FolderBrowse;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +35,7 @@ public sealed class AcquisitionModel(
     CurrentAccountContext currentAccount,
     MediaInboxImportService inboxes,
     FolderBrowseService folders,
+    LibraryRootRoutingService routing,
     AppDbContext db,
     ILogger<AcquisitionModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
@@ -44,6 +46,12 @@ public sealed class AcquisitionModel(
     public AnimeImportSettingsState ImportSettings { get; private set; } = AnimeImportSettingsState.Empty();
     public AcquisitionPolicyState Policy { get; private set; } = AcquisitionPolicyState.Empty();
     public IReadOnlyList<LibraryRoot> Roots { get; private set; } = [];
+
+    /// <summary>The Storage-owned default destination of each importer-routed media type; a missing entry means imports of that type wait.</summary>
+    public IReadOnlyDictionary<MediaAcquisitionKind, LibraryRootRoute> Destinations { get; private set; } = new Dictionary<MediaAcquisitionKind, LibraryRootRoute>();
+
+    /// <summary>Roots that serve a content type: their placement policy belongs to Storage, not to the import mode table of this page.</summary>
+    public IReadOnlySet<Guid> RoutedRootIds { get; private set; } = new HashSet<Guid>();
     public IReadOnlyList<IndexerEntry> IndexerEntries { get; private set; } = [];
     public bool AniListAutoMonitorEnabled { get; private set; }
     public InstanceModuleSettings InstanceModules { get; private set; } = InstanceModuleSettings.Default;
@@ -113,6 +121,12 @@ public sealed class AcquisitionModel(
     public static bool HasLibraryFolder(MediaAcquisitionKind kind) =>
         MediaFolderKindsStatic.Contains(kind);
 
+    /// <summary>Movies and TV place imports into the default LibraryRoot chosen in Admin → Storage instead of a folder set here.</summary>
+    public static bool IsRouted(MediaAcquisitionKind kind) =>
+        MediaInboxImportService.RoutedContentType(kind) is not null;
+
+    public string ImportPolicyLabel(LibraryPlacementPolicy policy) => ImportModeLabel(ImportFileTransfer.ModeFor(policy));
+
     private static readonly MediaAcquisitionKind[] MediaFolderKindsStatic =
         [MediaAcquisitionKind.Manga, MediaAcquisitionKind.LightNovel, MediaAcquisitionKind.Book];
 
@@ -155,6 +169,16 @@ public sealed class AcquisitionModel(
         if (!IsAbsolute(library) || !IsAbsolute(inbox))
         {
             TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.libraryRootAbsolute"];
+            return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "media-folders");
+        }
+
+        // An inbox that is, contains or sits inside the destination root would import library files onto themselves.
+        if (inbox is not null &&
+            MediaInboxImportService.RoutedContentType(kind) is { } contentType &&
+            await routing.ResolveDefaultAsync(contentType, cancellationToken) is { } route &&
+            MediaInboxImportService.Overlaps(inbox, route.Path))
+        {
+            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.inboxOverlapsDestination"];
             return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "media-folders");
         }
 
@@ -606,6 +630,17 @@ public sealed class AcquisitionModel(
         ImportSettings = await importSettings.LoadAsync(cancellationToken);
         Policy = await policyStore.LoadAsync(cancellationToken);
         Roots = await db.LibraryRoots.AsNoTracking().OrderBy(root => root.Name).ToArrayAsync(cancellationToken);
+        RoutedRootIds = (await db.LibraryRootContentAssignments.AsNoTracking().Select(assignment => assignment.LibraryRootId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+        var destinations = new Dictionary<MediaAcquisitionKind, LibraryRootRoute>();
+        foreach (var kind in MediaInboxImportService.InboxKinds)
+        {
+            if (MediaInboxImportService.RoutedContentType(kind) is { } contentType && await routing.ResolveDefaultAsync(contentType, cancellationToken) is { } route)
+            {
+                destinations[kind] = route;
+            }
+        }
+
+        Destinations = destinations;
         IndexerEntries = (await indexerStore.LoadAllAsync(cancellationToken)).OrderBy(entry => entry.Priority).ToArray();
         var autoMonitor = await aniListAutoMonitorStore.LoadAsync(cancellationToken);
         AniListAutoMonitorEnabled = autoMonitor.IsEnabled(currentAccount.ProfileId);

@@ -19,6 +19,89 @@
 
 <partial name="_AdminNavigation" model="Model.Ui" />
 
+@if (!string.IsNullOrWhiteSpace(Model.Error))
+{
+    <p class="metadata-error" role="alert">@Model.Error</p>
+}
+
+@if (Model.Destinations.Count > 0)
+{
+    <section class="panel" id="destinations" data-storage-destinations>
+        <div class="panel-heading"><h2>@ui["admin.storage.destinations.title"]</h2></div>
+        <p class="muted">@ui["admin.storage.destinations.hint"]</p>
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">@ui["admin.storage.destinations.column.type"]</th>
+                    <th scope="col">@ui["admin.storage.destinations.column.root"]</th>
+                    <th scope="col">@ui["admin.storage.destinations.column.placement"]</th>
+                    <th scope="col" aria-label="@ui["admin.wanted.col.actions"]"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var destination in Model.Destinations)
+                {
+                    var current = destination.Default;
+                    var formId = $"destination-{destination.ContentType}";
+                    <tr>
+                        <td data-label="@ui["admin.storage.destinations.column.type"]">@Model.ContentTypeLabel(destination.ContentType)</td>
+                        @if (Model.CanManageDestinations)
+                        {
+                            <td data-label="@ui["admin.storage.destinations.column.root"]">
+                                <select name="libraryRootId" form="@formId" aria-label="@ui["admin.storage.destinations.column.root"]: @Model.ContentTypeLabel(destination.ContentType)">
+                                    <option value="">@ui["admin.storage.destinations.none"]</option>
+                                    @foreach (var root in Model.EnabledRoots)
+                                    {
+                                        <option value="@root.Id" selected="@(current?.LibraryRootId == root.Id)">@root.Name · @root.Path</option>
+                                    }
+                                </select>
+                                @if (current is null)
+                                {
+                                    <small class="muted">@ui["admin.storage.destinations.waiting"]</small>
+                                }
+                            </td>
+                            <td data-label="@ui["admin.storage.destinations.column.placement"]">
+                                <select name="placementPolicy" form="@formId" aria-label="@ui["admin.storage.destinations.column.placement"]: @Model.ContentTypeLabel(destination.ContentType)">
+                                    @foreach (var policy in Enum.GetValues<Jularr.Web.Features.Library.LibraryPlacementPolicy>())
+                                    {
+                                        <option value="@policy" selected="@((current?.PlacementPolicy ?? Jularr.Web.Features.Library.LibraryPlacementPolicy.HardlinkOrCopy) == policy)">@Model.PlacementLabel(policy)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <form id="@formId" method="post" asp-page-handler="Destination">
+                                    <input type="hidden" name="contentType" value="@destination.ContentType" />
+                                    <button class="button" type="submit">@ui["common.save"]</button>
+                                </form>
+                            </td>
+                        }
+                        else
+                        {
+                            <td data-label="@ui["admin.storage.destinations.column.root"]">
+                                @if (current is null)
+                                {
+                                    <span class="muted">@ui["admin.storage.destinations.waiting"]</span>
+                                }
+                                else
+                                {
+                                    <strong>@current.Name</strong>
+                                    <small class="muted">@current.Path</small>
+                                }
+                            </td>
+                            <td data-label="@ui["admin.storage.destinations.column.placement"]">@(current is null ? "—" : Model.PlacementLabel(current.PlacementPolicy))</td>
+                            <td></td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (Model.EnabledRoots.Count == 0)
+        {
+            <p class="muted">@ui["admin.storage.destinations.noRoots"]</p>
+        }
+    </section>
+}
+
 <section class="panel" data-storage-roots>
     <div class="panel-heading"><h2>@ui["admin.storage.roots.title"]</h2></div>
     @if (usage.Roots.Count == 0)

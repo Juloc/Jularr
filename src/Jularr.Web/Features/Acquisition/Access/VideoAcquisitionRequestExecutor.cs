@@ -102,7 +102,7 @@ public sealed class VideoAcquisitionMonitoringStores
 /// Shared Movie/TV Request -> Wanted -> Usenet execution. It deliberately owns no timer: retries,
 /// download state and completed-import dispatch stay in WantedAcquisitionService.
 /// </summary>
-public sealed class VideoAcquisitionEngine(
+public sealed partial class VideoAcquisitionEngine(
     AppDbContext db,
     IndexerSearchCoordinator indexers,
     DownloadClientStore downloadClients,
@@ -188,45 +188,45 @@ public sealed class VideoAcquisitionEngine(
                     ResultUrl: ResultUrl(payload.Title));
             }
 
-            payload = payload with
-            {
-                ActiveWorkEpisodeId = unit.Id,
-                ActiveSeasonNumber = unit.SeasonNumber,
-                ActiveEpisodeNumber = unit.EpisodeNumber,
-                NextSearchUtc = null
-            };
+            payload = WithActiveUnit(payload, unit);
         }
 
-        if (!await indexers.HasEnabledIndexerAsync(cancellationToken))
+        var setupProblem = await FindSetupProblemAsync(cancellationToken);
+        if (setupProblem != VideoAcquisitionSetupProblem.None)
         {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Failed, "No Usenet indexer is configured.");
-        }
-
-        if (!(await downloadClients.LoadAllAsync(cancellationToken)).Any(entry => entry.Enabled))
-        {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Failed, "No download client is configured.");
+            return new AcquisitionExecution(AcquisitionRequestStatus.Failed, SetupProblemMessage(setupProblem));
         }
 
         var profile = await profiles.ResolveAsync(request.Kind, target.WorkId, cancellationToken);
-        var search = request.Kind == MediaAcquisitionKind.Movie
-            ? await SearchMovieAsync(payload, cancellationToken)
-            : await SearchTvAsync(payload, unit!, cancellationToken);
-        var ranked = Rank(request.Kind, payload.Title, unit, search.Releases, profile);
+        var evaluation = await SearchAndEvaluateAsync(request.Kind, payload, unit, profile, cancellationToken);
+        var ranked = Rank(evaluation.Releases);
 
-        var releaseKeys = ranked.ToDictionary(
-            x => x.Candidate.Identity,
-            x => x.Score.Candidate.Release.ReleaseKey,
-            StringComparer.OrdinalIgnoreCase);
+        return await GrabAsync(request, payload, unit, ranked, FailureMessage(evaluation.Search, request.Kind), cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the tracker lifecycle over the given releases (best first) and submits the first untried one through the shared
+    /// download-client path. Automatic acquisition passes every ranked release; Manual Search passes the one the owner selected.
+    /// </summary>
+    private async Task<AcquisitionExecution> GrabAsync(
+        AcquisitionRequest request,
+        VideoRequestPayload payload,
+        VideoUnit? unit,
+        IReadOnlyList<VideoReleaseEvaluation> releases,
+        string noReleaseReason,
+        CancellationToken cancellationToken)
+    {
+        var releaseKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var release in releases)
+        {
+            releaseKeys.TryAdd(release.Candidate.Identity, release.Score!.Candidate.Release.ReleaseKey);
+        }
 
         var execution = await tracker.ContinueAsync(
             request,
             payload,
-            ranked.Select(x => new ReleaseRequestCandidate(
-                    x.Candidate.Identity,
-                    x.Candidate.Title,
-                    x.Candidate.InternalDownloadUri!))
-                .ToArray(),
-            FailureMessage(search, request.Kind),
+            releases.Select(x => new ReleaseRequestCandidate(x.Candidate.Identity, x.Candidate.Title, x.Candidate.InternalDownloadUri!)).ToArray(),
+            noReleaseReason,
             async release =>
             {
                 var outcome = await downloads.SubmitAsync(
@@ -238,9 +238,7 @@ public sealed class VideoAcquisitionEngine(
                         release.DownloadUri,
                         release.Title,
                         request.Kind,
-                        MediaTargetKey: unit is null
-                            ? $"work:{payload.WorkId:D}"
-                            : $"work-episode:{unit.Id:D}"),
+                        MediaTargetKey: unit is null ? $"work:{payload.WorkId:D}" : $"work-episode:{unit.Id:D}"),
                     cancellationToken);
 
                 if (outcome.Accepted && releaseKeys.TryGetValue(release.Identity, out var releaseKey))
@@ -253,6 +251,29 @@ public sealed class VideoAcquisitionEngine(
             cancellationToken);
 
         return execution with { ResultUrl = ResultUrl(payload.Title) };
+    }
+
+    private static VideoRequestPayload WithActiveUnit(VideoRequestPayload payload, VideoUnit unit) =>
+        payload with
+        {
+            ActiveWorkEpisodeId = unit.Id,
+            ActiveSeasonNumber = unit.SeasonNumber,
+            ActiveEpisodeNumber = unit.EpisodeNumber,
+            NextSearchUtc = null
+        };
+
+    /// <summary>The one search + scoring pipeline: automatic acquisition and Manual Search both read their candidates from here.</summary>
+    private async Task<VideoSearchEvaluation> SearchAndEvaluateAsync(
+        MediaAcquisitionKind kind,
+        VideoRequestPayload payload,
+        VideoUnit? unit,
+        QualityProfile profile,
+        CancellationToken cancellationToken)
+    {
+        var search = kind == MediaAcquisitionKind.Movie
+            ? await SearchMovieAsync(payload, cancellationToken)
+            : await SearchTvAsync(payload, unit!, cancellationToken);
+        return new VideoSearchEvaluation(profile, search, Evaluate(kind, payload.Title, unit, search.Releases, profile));
     }
 
     public static VideoRequestPayload? ReadPayload(AcquisitionRequest request)
@@ -567,7 +588,12 @@ public sealed class VideoAcquisitionEngine(
                 unit.EpisodeNumber),
             cancellationToken);
 
-    private IReadOnlyList<RankedVideoRelease> Rank(
+    /// <summary>
+    /// Parses and scores every returned candidate against the requested title and unit. Candidates that cannot be grabbed stay in the
+    /// result with the reason, so Manual Search can explain them; automatic acquisition ranks only the grabbable ones. Identity is
+    /// decided before the score: a high score never repairs a wrong title, season or episode.
+    /// </summary>
+    private IReadOnlyList<VideoReleaseEvaluation> Evaluate(
         MediaAcquisitionKind kind,
         string title,
         VideoUnit? unit,
@@ -575,56 +601,56 @@ public sealed class VideoAcquisitionEngine(
         QualityProfile profile)
     {
         var parser = registry.ParserFor(kind);
-        var ranked = new List<RankedVideoRelease>();
+        var evaluations = new List<VideoReleaseEvaluation>(candidates.Count);
         foreach (var candidate in candidates)
         {
-            if (candidate.InternalDownloadUri is null
-                || candidate.Protocol is not null
-                   && !candidate.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase)
-                || !parser.TryParse(candidate.Title, out var parsed)
-                || !TitleMatches(title, parsed.SeriesTitle))
+            if (candidate.InternalDownloadUri is null)
             {
-                continue;
+                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.NoDownload));
             }
-
-            if (unit is not null && !Covers(parsed, unit))
+            else if (candidate.Protocol is not null && !candidate.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
             {
-                continue;
+                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.NotUsenet));
             }
-
-            var score = ReleaseScorer.Score(
-                profile,
-                new ReleaseCandidate(parsed, candidate.SizeBytes, candidate.Indexer, candidate.Identity));
-            if (score.Accepted)
+            else if (!parser.TryParse(candidate.Title, out var parsed))
             {
-                ranked.Add(new RankedVideoRelease(candidate, score));
+                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.Unparseable));
+            }
+            else
+            {
+                var identity = !TitleMatches(title, parsed.SeriesTitle) ? VideoIdentityMatch.WrongTitle : unit is null ? VideoIdentityMatch.Matches : Coverage(parsed, unit);
+                var score = ReleaseScorer.Score(profile, new ReleaseCandidate(parsed, candidate.SizeBytes, candidate.Indexer, candidate.Identity));
+                evaluations.Add(new VideoReleaseEvaluation(candidate, parsed, score, identity));
             }
         }
 
-        return ranked
-            .OrderBy(x => x.Score.QualityRank)
-            .ThenByDescending(x => x.Score.Score)
+        return evaluations;
+    }
+
+    private static IReadOnlyList<VideoReleaseEvaluation> Rank(IReadOnlyList<VideoReleaseEvaluation> evaluations) =>
+        evaluations
+            .Where(x => x.IsGrabbable)
+            .OrderBy(x => x.Score!.QualityRank)
+            .ThenByDescending(x => x.Score!.Score)
             .ThenByDescending(x => x.Candidate.PublishedAt)
             .ThenBy(x => x.Candidate.Title, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-    }
 
-    private static bool Covers(ReleaseInfo release, VideoUnit unit)
+    private static VideoIdentityMatch Coverage(ReleaseInfo release, VideoUnit unit)
     {
         if (release.SeasonNumber != unit.SeasonNumber)
         {
-            return false;
+            return VideoIdentityMatch.WrongSeason;
         }
 
         if (release.IsSeasonPack)
         {
-            return true;
+            return VideoIdentityMatch.ContainsTarget;
         }
 
-        return release.EpisodeStart is int start
-               && release.EpisodeEnd is int end
-               && unit.EpisodeNumber >= start
-               && unit.EpisodeNumber <= end;
+        return release.EpisodeStart is int start && release.EpisodeEnd is int end && unit.EpisodeNumber >= start && unit.EpisodeNumber <= end
+            ? VideoIdentityMatch.Matches
+            : VideoIdentityMatch.WrongEpisode;
     }
 
     private static bool TitleMatches(string requested, string candidate)
@@ -723,18 +749,6 @@ public sealed class VideoAcquisitionEngine(
         $"/Search?q={Uri.EscapeDataString(title)}";
 
     private sealed record VideoTarget(Guid WorkId, string Title, int? Year);
-
-    private sealed record VideoUnit(
-        Guid Id,
-        Guid? SeasonId,
-        int SeasonNumber,
-        int EpisodeNumber,
-        DateTime? AiredAt,
-        bool HasFile);
-
-    private sealed record RankedVideoRelease(
-        ProwlarrReleaseCandidate Candidate,
-        ReleaseScoreResult Score);
 
     private sealed record TvContinuation(
         bool KeepOpen,

@@ -73,21 +73,29 @@
                     {
                         <tr>
                             <td>@root.Name</td>
-                            <td>@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var mode) ? Model.ImportModeLabel(mode) : ui["settings.acquisition.usesDefault"])</td>
-                            <td>
-                                <form method="post" asp-page-handler="ImportMode" class="acquisition-inline-form">
-                                    <input type="hidden" name="defaultImportMode" value="@Model.ImportSettings.DefaultImportMode" />
-                                    <input type="hidden" name="rootId" value="@root.Id" />
-                                    <select name="rootImportMode">
-                                        <option value="">@ui["settings.acquisition.usesDefault"]</option>
-                                @foreach (var mode in Enum.GetValues<ImportMode>())
-                                        {
-                                            <option value="@mode" selected="@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var current) && current == mode)">@Model.ImportModeLabel(mode)</option>
-                                        }
-                                    </select>
-                                    <button class="button" type="submit">@ui["settings.acquisition.set"]</button>
-                                </form>
-                            </td>
+                            @if (Model.RoutedRootIds.Contains(root.Id))
+                            {
+                                <td>@Model.ImportPolicyLabel(root.PlacementPolicy)</td>
+                                <td><a asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.placementInStorage"]</a></td>
+                            }
+                            else
+                            {
+                                <td>@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var mode) ? Model.ImportModeLabel(mode) : ui["settings.acquisition.usesDefault"])</td>
+                                <td>
+                                    <form method="post" asp-page-handler="ImportMode" class="acquisition-inline-form">
+                                        <input type="hidden" name="defaultImportMode" value="@Model.ImportSettings.DefaultImportMode" />
+                                        <input type="hidden" name="rootId" value="@root.Id" />
+                                        <select name="rootImportMode">
+                                            <option value="">@ui["settings.acquisition.usesDefault"]</option>
+                                    @foreach (var mode in Enum.GetValues<ImportMode>())
+                                            {
+                                                <option value="@mode" selected="@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var current) && current == mode)">@Model.ImportModeLabel(mode)</option>
+                                            }
+                                        </select>
+                                        <button class="button" type="submit">@ui["settings.acquisition.set"]</button>
+                                    </form>
+                                </td>
+                            }
                         </tr>
                     }
                 </tbody>
@@ -131,6 +139,26 @@
                             }
                         </select>
                     </label>
+                }
+                else if (Jularr.Web.Pages.Settings.AcquisitionModel.IsRouted(kind))
+                {
+                    if (Model.Destinations.TryGetValue(kind, out var destination))
+                    {
+                        <p>
+                            <strong>@ui["settings.acquisition.destinationLabel"]:</strong>
+                            @destination.Name · @Model.ImportPolicyLabel(destination.PlacementPolicy)
+                            @if (Model.CanManageStorage)
+                            {
+                                <small class="muted">@destination.Path</small>
+                            }
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="muted">@ui["settings.acquisition.destinationMissing"]</p>
+                    }
+
+                    <a asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.destinationChange"]</a>
                 }
                 else
                 {

@@ -208,7 +208,22 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                             Path.Combine(dataDirectory.FullName, "anilist-auto-monitor")));
                         services.AddScoped(_ => new AcquisitionBackupService(
                             Path.Combine(dataDirectory.FullName, "acquisition-backup")));
+                        services.AddScoped<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
                         services.AddScoped<MediaInboxImportService>();
+                        // Admin → Storage: usage and cache cleanup read the same inventory and cache folders as in production.
+                        services.AddSingleton<Jularr.Web.Features.Storage.StorageAvailabilityCoordinator>();
+                        services.AddScoped<Jularr.Web.Features.Storage.StorageIntegrityService>();
+                        services.AddSingleton(new Jularr.Web.Features.Storage.Insights.StorageCacheLayout(
+                            Path.Combine(dataDirectory.FullName, "cache", "playback"),
+                            Path.Combine(dataDirectory.FullName, "cache", "hls"),
+                            Path.Combine(dataDirectory.FullName, "cache", "trickplay"),
+                            Path.Combine(dataDirectory.FullName, "cache", "artwork"),
+                            Path.Combine(dataDirectory.FullName, "cache", "fingerprints"),
+                            Path.Combine(dataDirectory.FullName, "cache", "manga")));
+                        services.AddScoped<Jularr.Web.Features.Storage.LibraryRootAvailabilityService>();
+                        services.AddScoped<Jularr.Web.Features.Storage.Insights.StorageUsageService>();
+                        services.AddScoped<Jularr.Web.Features.Storage.Insights.StorageCacheScanner>();
+                        services.AddScoped<Jularr.Web.Features.Storage.Insights.StorageCleanupService>();
                         // The same folder browser Program.cs registers; the page reads its checks.
                         services.AddFolderBrowse(dataDirectory.FullName);
                         services.AddHttpClient();

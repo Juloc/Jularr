@@ -3,21 +3,22 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Storage;
 
 namespace Jularr.Web.Features.Movies;
 
 /// <summary>
-/// The Movie importer behind the shared completed-download dispatcher and the Movie inbox scan (#593).
-/// A completed download's largest video file is placed into the movie library as
-/// <c>Title (Year)/Title (Year).ext</c> (with its subtitle/nfo sidecars) and recorded as one
-/// <see cref="Movie"/> bridged to the universal media core; when no movie library folder is configured the
-/// file is imported in place. Metadata comes from the acquisition request when there is one, otherwise from
-/// the release name via the shared scene parser (never a filename-only provider match).
+/// The Movie importer behind the shared completed-download dispatcher and the Movie inbox scan (#593). A completed download's
+/// largest video file is placed into the default Movie LibraryRoot (Storage owns the destination and the placement policy,
+/// #815) as <c>Title (Year)/Title (Year).ext</c> with its subtitle/nfo sidecars and recorded as one <see cref="Movie"/> bridged
+/// to the universal media core. Without an enabled default root nothing is placed and nothing is read in place: the import
+/// waits with an explanation until the owner chooses a root. Metadata comes from the acquisition request when there is one,
+/// otherwise from the release name via the shared scene parser (never a filename-only provider match).
 /// </summary>
 public sealed partial class MovieCompletedDownloadImportAdapter(
     MovieLibraryService movies,
     MediaAcquisitionRegistry registry,
-    AnimeImportSettingsStore importSettings,
+    LibraryRootRoutingService routing,
     IHardLinkCreator hardLinks,
     ILogger<MovieCompletedDownloadImportAdapter> logger,
     CanonicalMediaStorageService? canonicalStorage = null)
@@ -31,9 +32,7 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
     [GeneratedRegex(@"(?<year>(?:19|20)\d{2})", RegexOptions.CultureInvariant)]
     private static partial Regex YearRegex();
 
-    public async Task<CompletedDownloadImportResult> ImportAsync(
-        CompletedDownloadImportRequest request,
-        CancellationToken cancellationToken)
+    public async Task<CompletedDownloadImportResult> ImportAsync(CompletedDownloadImportRequest request, CancellationToken cancellationToken)
     {
         var files = CompletedDownloadFiles.Enumerate(request.SourcePath, out var error);
         if (error is not null)
@@ -42,89 +41,58 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
             return CompletedDownloadImportResult.RetryLater(error);
         }
 
-        var video = files
-            .Where(file => CompletedDownloadFiles.IsVideo(file.Path))
-            .OrderByDescending(file => file.SizeBytes)
-            .FirstOrDefault();
+        var video = files.Where(file => CompletedDownloadFiles.IsVideo(file.Path)).OrderByDescending(file => file.SizeBytes).FirstOrDefault();
         if (video is null)
         {
             return CompletedDownloadImportResult.RejectRelease(NoVideoFileReason);
         }
 
-        var metadata = ResolveMetadata(request, video.Path);
+        var route = await routing.ResolveDefaultAsync(LibraryContentType.Movie, cancellationToken);
+        if (route is null)
+        {
+            return CompletedDownloadImportResult.RetryLater(LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Movie));
+        }
+
+        if (!Directory.Exists(route.Path))
+        {
+            return CompletedDownloadImportResult.RetryLater($"The Movie library root '{route.Name}' is not available.");
+        }
 
         try
         {
-            var settings = await importSettings.LoadAsync(cancellationToken);
-            var library = settings.LibraryFor(MediaAcquisitionKind.Movie);
-            string? libraryPath;
-            var storedVideoPath = Path.GetFullPath(video.Path);
-            var storageRootPath = Path.GetDirectoryName(storedVideoPath);
-            CompletedDownloadPlacement? placement = null;
-
-            if (library is not null)
-            {
-                var mode = settings.ModeFor(MediaAcquisitionKind.Movie);
-                var (action, allowFallback) = ImportFileTransfer.Resolve(mode);
-                var folder = Path.Combine(library.LibraryRoot!, MovieNaming.FolderName(metadata.Title, metadata.Year));
-                var destination = Path.Combine(
-                    folder, MovieNaming.FileName(metadata.Title, metadata.Year, Path.GetExtension(video.Path)));
-
-                // Idempotent: a movie already placed here is left as is (re-import only refreshes the record).
-                if (LibraryFilePlacer.FindDestinationConflict(destination, []) is null)
-                {
-                    var sidecars = BuildSidecars(files, video.Path, Path.GetFileNameWithoutExtension(destination));
-                    await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, "Placing the movie in the library.");
-                    new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(
-                        new LibraryFilePlacement(video.Path, destination, action, allowFallback, sidecars, []));
-                }
-
-                libraryPath = folder;
-                storedVideoPath = Path.GetFullPath(destination);
-                storageRootPath = Path.GetFullPath(library.LibraryRoot!);
-                placement = new CompletedDownloadPlacement(folder, mode);
-            }
-            else
-            {
-                libraryPath = Path.GetDirectoryName(video.Path);
-            }
-
-            var entry = await movies.EnsureAsync(
-                metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, libraryPath, cancellationToken);
-            if (canonicalStorage is not null)
-            {
-                await canonicalStorage.AttachVideoAsync(
-                    entry.WorkId,
-                    workEpisodeId: null,
-                    storedVideoPath,
-                    storageRootPath,
-                    cancellationToken);
-            }
-
-            return CompletedDownloadImportResult.Completed(
-                $"Imported movie \"{entry.Movie.Title}\".", resultUrl: null, placement);
+            await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, "Placing the movie in the library.");
+            var placed = await PlaceAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken);
+            var mode = ImportFileTransfer.ModeFor(route.PlacementPolicy);
+            return CompletedDownloadImportResult.Completed($"Imported movie \"{placed.Movie.Title}\".", resultUrl: null, new CompletedDownloadPlacement(placed.Folder, mode));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception exception) when (
-            exception is IOException or UnauthorizedAccessException or CrossDeviceLinkException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or CrossDeviceLinkException)
         {
             logger.LogWarning(exception, "Movie import is waiting for storage for '{SourcePath}'.", request.SourcePath);
             return CompletedDownloadImportResult.RetryLater("The movie import is waiting for storage.");
         }
     }
 
-    public async Task<MediaInboxImportResult> ImportInboxAsync(
-        string inboxRoot,
-        IReadOnlyCollection<string> excludedFolders,
-        CancellationToken cancellationToken)
+    public async Task<MediaInboxImportResult> ImportInboxAsync(string inboxRoot, IReadOnlyCollection<string> excludedFolders, CancellationToken cancellationToken)
     {
         var files = CompletedDownloadFiles.Enumerate(inboxRoot, out var error);
         if (error is not null)
         {
             return new MediaInboxImportResult(0, error);
+        }
+
+        var route = await routing.ResolveDefaultAsync(LibraryContentType.Movie, cancellationToken);
+        if (route is null)
+        {
+            return new MediaInboxImportResult(0, LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Movie));
+        }
+
+        if (!Directory.Exists(route.Path))
+        {
+            return new MediaInboxImportResult(0, $"The Movie library root '{route.Name}' is not available.");
         }
 
         var imported = 0;
@@ -135,26 +103,40 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
                 continue;
             }
 
-            var metadata = ResolveMetadata(request: null, file.Path);
-            var entry = await movies.EnsureAsync(
-                metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId,
-                Path.GetDirectoryName(file.Path), cancellationToken);
-            if (canonicalStorage is not null)
-            {
-                await canonicalStorage.AttachVideoAsync(
-                    entry.WorkId,
-                    workEpisodeId: null,
-                    file.Path,
-                    inboxRoot,
-                    cancellationToken);
-            }
-
+            await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken);
             imported++;
         }
 
-        return new MediaInboxImportResult(
-            imported,
-            imported == 0 ? "No new movies in the inbox." : $"Imported {imported} movie(s) from the inbox.");
+        return new MediaInboxImportResult(imported, imported == 0 ? "No new movies in the inbox." : $"Imported {imported} movie(s) from the inbox.");
+    }
+
+    /// <summary>
+    /// Places one video into the Movie root with the root's placement policy and records it. Idempotent: a movie already placed at the
+    /// destination is left as is and only its record is refreshed, so re-running an inbox that keeps its sources never duplicates.
+    /// </summary>
+    private async Task<(Movie Movie, string Folder)> PlaceAsync(LibraryRootRoute route, IReadOnlyList<CompletedDownloadFile> files, string videoPath, MovieMetadata metadata, CancellationToken cancellationToken)
+    {
+        var (action, allowFallback) = ImportFileTransfer.Resolve(ImportFileTransfer.ModeFor(route.PlacementPolicy));
+        var folder = Path.Combine(route.Path, MovieNaming.FolderName(metadata.Title, metadata.Year));
+        var destination = Path.Combine(folder, MovieNaming.FileName(metadata.Title, metadata.Year, Path.GetExtension(videoPath)));
+        if (!MediaInboxImportService.IsBelow(destination, route.Path))
+        {
+            throw new InvalidOperationException("The movie destination would leave its library root.");
+        }
+
+        if (LibraryFilePlacer.FindDestinationConflict(destination, []) is null)
+        {
+            var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
+            new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
+        }
+
+        var entry = await movies.EnsureAsync(metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, folder, cancellationToken);
+        if (canonicalStorage is not null)
+        {
+            await canonicalStorage.AttachVideoAsync(entry.WorkId, workEpisodeId: null, Path.GetFullPath(destination), Path.GetFullPath(route.Path), cancellationToken);
+        }
+
+        return (entry.Movie, folder);
     }
 
     private MovieMetadata ResolveMetadata(CompletedDownloadImportRequest? request, string videoPath)
@@ -181,7 +163,15 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
         }
 
         var title = release?.SeriesTitle is { Length: > 0 } seriesTitle ? seriesTitle : name;
-        return new MovieMetadata(title, release?.AirDate?.Year ?? TryParseYear(name), null, imdb);
+        var year = release?.AirDate?.Year ?? TryParseYear(name);
+
+        // Without season numbering the scene parser keeps the release year in the title ("Inception 2010"); the naming adds it again.
+        if (year is int releaseYear && title.EndsWith($" {releaseYear}", StringComparison.Ordinal) && title.Length > 5)
+        {
+            title = title[..^5].TrimEnd();
+        }
+
+        return new MovieMetadata(title, year, null, imdb);
     }
 
     private static int? TryParseYear(string? text)

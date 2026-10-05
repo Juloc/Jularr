@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Movies;
+using Jularr.Web.Features.Storage;
 using Jularr.Web.Features.Tv;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -21,19 +22,16 @@ public sealed class MovieTvImportTests
     private static MediaAcquisitionRegistry Registry() =>
         new([new MovieAcquisitionRegistration(), new TvAcquisitionRegistration()]);
 
-    private static async Task<AnimeImportSettingsStore> SettingsWithLibraryAsync(
-        string dataRoot, MediaAcquisitionKind kind, string libraryRoot)
+    internal static async Task<LibraryRootRoutingService> RoutingWithDefaultAsync(
+        AppDbContext db, LibraryContentType contentType, string libraryRoot, LibraryPlacementPolicy policy = LibraryPlacementPolicy.Copy)
     {
-        var store = new AnimeImportSettingsStore(dataRoot);
-        await store.UpdateAsync(state => state with
-        {
-            DefaultImportMode = ImportMode.Copy,
-            MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>
-            {
-                [kind] = new MediaLibraryTarget(LibraryRoot: libraryRoot)
-            }
-        });
-        return store;
+        var root = new LibraryRoot { Name = contentType.ToString(), Path = libraryRoot, PlacementPolicy = policy };
+        db.LibraryRoots.Add(root);
+        await db.SaveChangesAsync();
+        var routing = new LibraryRootRoutingService(db);
+        await routing.SetSupportedAsync(root.Id, contentType, true);
+        await routing.SetDefaultAsync(contentType, root.Id);
+        return routing;
     }
 
     [TestMethod]
@@ -45,12 +43,12 @@ public sealed class MovieTvImportTests
         File.WriteAllText(Path.Combine(download, "Inception.2010.1080p.BluRay.x264-GROUP.mkv"), "video");
         File.WriteAllText(Path.Combine(download, "Inception.2010.1080p.BluRay.x264-GROUP.en.srt"), "subs");
         var library = temp.Dir("library");
-        var settings = await SettingsWithLibraryAsync(temp.Root, MediaAcquisitionKind.Movie, library);
+        var routing = await RoutingWithDefaultAsync(db, LibraryContentType.Movie, library);
 
         var adapter = new MovieCompletedDownloadImportAdapter(
             new MovieLibraryService(db, Bridge(db)),
             Registry(),
-            settings,
+            routing,
             new FileSystemHardLinkCreator(),
             NullLogger<MovieCompletedDownloadImportAdapter>.Instance,
             new CanonicalMediaStorageService(db));
@@ -85,12 +83,12 @@ public sealed class MovieTvImportTests
         var download = temp.Dir("download");
         File.WriteAllText(Path.Combine(download, "Breaking.Bad.S01E02.1080p.BluRay.x264-GROUP.mkv"), "video");
         var library = temp.Dir("library");
-        var settings = await SettingsWithLibraryAsync(temp.Root, MediaAcquisitionKind.Tv, library);
+        var routing = await RoutingWithDefaultAsync(db, LibraryContentType.Tv, library);
 
         var adapter = new TvCompletedDownloadImportAdapter(
             new TvLibraryService(db, Bridge(db), new WorkStructureService(db)),
             Registry(),
-            settings,
+            routing,
             new FileSystemHardLinkCreator(),
             NullLogger<TvCompletedDownloadImportAdapter>.Instance,
             new CanonicalMediaStorageService(db));
@@ -173,25 +171,35 @@ public sealed class MovieTvImportTests
     }
 
     [TestMethod]
-    public async Task MovieInboxImportsEachVideo()
+    public async Task MovieInboxPlacesEachVideoIntoTheDefaultRootAndIsIdempotent()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         using var temp = new TempWorkspace();
         var inbox = temp.Dir("inbox");
-        File.WriteAllText(Path.Combine(inbox, "The Matrix (1999).mkv"), "video");
+        var library = temp.Dir("library");
+        File.WriteAllText(Path.Combine(inbox, "Inception.2010.1080p.BluRay.x264-GROUP.mkv"), "video");
+        var routing = await RoutingWithDefaultAsync(db, LibraryContentType.Movie, library);
 
         var adapter = new MovieCompletedDownloadImportAdapter(
             new MovieLibraryService(db, Bridge(db)),
             Registry(),
-            new AnimeImportSettingsStore(temp.Root),
+            routing,
             new FileSystemHardLinkCreator(),
-            NullLogger<MovieCompletedDownloadImportAdapter>.Instance);
+            NullLogger<MovieCompletedDownloadImportAdapter>.Instance,
+            new CanonicalMediaStorageService(db));
 
         var result = await adapter.ImportInboxAsync(inbox, [], CancellationToken.None);
 
         Assert.AreEqual(1, result.Imported);
         Assert.AreEqual(1, await db.Movies.CountAsync());
         Assert.AreEqual(WorkMediaType.Movie, (await db.Works.SingleAsync()).MediaType);
+        var placed = Path.Combine(library, "Inception (2010)", "Inception (2010).mkv");
+        Assert.IsTrue(File.Exists(placed), "The inbox video is placed into the default Movie root. Found: " + string.Join(", ", Directory.GetFiles(library, "*", SearchOption.AllDirectories)));
+        Assert.IsTrue(File.Exists(Path.Combine(inbox, "Inception.2010.1080p.BluRay.x264-GROUP.mkv")), "The Copy policy of the root keeps the inbox source.");
+
+        await adapter.ImportInboxAsync(inbox, [], CancellationToken.None);
+        Assert.AreEqual(1, await db.Movies.CountAsync(), "A second scan recognizes the file instead of importing it again.");
+        Assert.AreEqual(1, await db.StoredFiles.CountAsync());
     }
 
     private static LegacyWorkBridge Bridge(AppDbContext db) =>

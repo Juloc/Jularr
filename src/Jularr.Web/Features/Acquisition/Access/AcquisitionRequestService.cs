@@ -294,6 +294,23 @@ public sealed class AcquisitionRequestService(
             result = new AcquisitionExecution(AcquisitionRequestStatus.Failed, exception.Message);
         }
 
+        await ApplyExecutionAsync(request, result, cancellationToken);
+        return await RequireAsync(request.Id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Applies the outcome of a release the owner selected by hand (Manual Search) exactly as the outcome of an automatic
+    /// execution: the same status, operation link and release-available notification.
+    /// </summary>
+    public async Task<AcquisitionRequest> ApplyManualExecutionAsync(Guid id, AcquisitionExecution result, CancellationToken cancellationToken)
+    {
+        RequireRequestManager();
+        await ApplyExecutionAsync(await RequireAsync(id, cancellationToken), result, cancellationToken);
+        return await RequireAsync(id, cancellationToken);
+    }
+
+    private async Task ApplyExecutionAsync(AcquisitionRequest request, AcquisitionExecution result, CancellationToken cancellationToken)
+    {
         await store.UpdateStatusAsync(
             request.Id,
             result.Status,
@@ -310,8 +327,6 @@ public sealed class AcquisitionRequestService(
         {
             await PublishReleaseAvailableAsync(request, result, cancellationToken);
         }
-
-        return await RequireAsync(request.Id, cancellationToken);
     }
 
     /// <summary>

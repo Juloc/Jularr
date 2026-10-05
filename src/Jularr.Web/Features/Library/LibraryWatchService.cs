@@ -112,6 +112,7 @@ public sealed class LibraryWatchService(
         return await db.LibraryRoots
             .AsNoTracking()
             .Where(x => x.IsEnabled)
+            .ServingAnime(db)
             .Select(x => new WatchedRoot(x.Id, x.Path, x.ReconciliationIntervalMinutes, x.LastScannedAt))
             .ToArrayAsync(cancellationToken);
     }

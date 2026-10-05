@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.Access;
@@ -5,6 +6,7 @@ using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Health;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Indexers;
+using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
@@ -259,6 +261,18 @@ public sealed class VideoAcquisitionRequestExecutorTests
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
     }
 
+    // A plain property: HttpContextAccessor keeps its context in an AsyncLocal that does not survive the async setup method.
+    private sealed class FixedAccessor(HttpContext context) : IHttpContextAccessor
+    {
+        public HttpContext? HttpContext { get; set; } = context;
+    }
+
+    private static HttpContext OwnerRequest() =>
+        new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "owner"), new Claim(ClaimTypes.Role, AccountRoles.Owner)], "test"))
+        };
+
     private static ProwlarrReleaseCandidate Candidate(string title) =>
         new(
             title,
@@ -278,13 +292,15 @@ public sealed class VideoAcquisitionRequestExecutorTests
             new Uri($"https://indexer.invalid/download/{Uri.EscapeDataString(title)}"),
             null);
 
-    private sealed class Host : IAsyncDisposable
+    internal sealed class Host : IAsyncDisposable
     {
         private readonly ServiceProvider services;
+        private readonly IServiceCollection descriptors;
 
         private Host(
             SabnzbdTestEnvironment environment,
             ServiceProvider services,
+            IServiceCollection descriptors,
             RecordingVideoImporter importer,
             MediaAcquisitionKind kind,
             Work work,
@@ -293,6 +309,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
         {
             Environment = environment;
             this.services = services;
+            this.descriptors = descriptors;
             Importer = importer;
             Kind = kind;
             Work = work;
@@ -301,6 +318,11 @@ public sealed class VideoAcquisitionRequestExecutorTests
         }
 
         public SabnzbdTestEnvironment Environment { get; }
+
+        /// <summary>The registrations behind <see cref="Get{T}"/>, for hosts that serve the same services over HTTP.</summary>
+        public IServiceCollection Descriptors => descriptors;
+
+        public T Get<T>() where T : notnull => services.GetRequiredService<T>();
         public RecordingVideoImporter Importer { get; }
         public MediaAcquisitionKind Kind { get; }
         public Work Work { get; }
@@ -317,7 +339,8 @@ public sealed class VideoAcquisitionRequestExecutorTests
             string firstRelease,
             string? secondRelease = null,
             bool addEpisode = false,
-            bool addSecondEpisode = false)
+            bool addSecondEpisode = false,
+            IReadOnlyList<string>? moreReleases = null)
         {
             var environment = await SabnzbdTestSupport.CreateEnvironmentAsync();
             var directory = environment.Directory;
@@ -378,7 +401,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
                 new IndexerSettings("https://indexer.invalid", [2000, 5000], [], 100),
                 "indexer-key"));
 
-            var candidates = new[] { firstRelease, secondRelease }
+            var candidates = new[] { firstRelease, secondRelease }.Concat(moreReleases ?? [])
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Select(x => Candidate(x!))
                 .ToArray();
@@ -407,10 +430,11 @@ public sealed class VideoAcquisitionRequestExecutorTests
                 .AddSingleton<IDownloadClient>(new SabnzbdDownloadClient(environment.Client))
                 .AddSingleton(new AnimeImportSettingsStore(directory.FullName))
                 .AddSingleton(_ => new AcquisitionAccessStore(db))
-                .AddSingleton(new CurrentAccountContext(new HttpContextAccessor()))
+                .AddSingleton(new CurrentAccountContext(new FixedAccessor(OwnerRequest())))
                 .AddSingleton<ReleaseRequestTracker>()
                 .AddSingleton(new VideoAcquisitionMonitoringStores(directory.FullName))
                 .AddSingleton<VideoAcquisitionEngine>()
+                .AddSingleton<VideoManualSearchService>()
                 .AddSingleton<IJularrEventPublisher, RecordingEventPublisher>()
                 .AddSingleton<IMediaCapabilityService>(
                     new MediaCapabilityService(new MediaCapabilityStore(directory.FullName)))
@@ -435,12 +459,12 @@ public sealed class VideoAcquisitionRequestExecutorTests
                     .AddSingleton<IWantedRequestHandler, TvWantedRequestHandler>();
             }
 
-            return new Host(environment, services.BuildServiceProvider(), importer, kind, work, episode?.Id, secondEpisode?.Id);
+            return new Host(environment, services.BuildServiceProvider(), services, importer, kind, work, episode?.Id, secondEpisode?.Id);
         }
 
-        public async Task<AcquisitionRequest> StartAsync(VideoRequestPayload? payload = null)
-        {
-            var created = await Requests.CreateAsync(
+        /// <summary>An approved request that no scheduler pass has searched yet, as Manual Search finds it.</summary>
+        public async Task<AcquisitionRequest> CreateApprovedAsync(VideoRequestPayload? payload = null) =>
+            await Requests.CreateAsync(
                 new AcquisitionRequestDraft(
                     Kind,
                     "tmdb",
@@ -454,6 +478,9 @@ public sealed class VideoAcquisitionRequestExecutorTests
                 "owner",
                 CancellationToken.None);
 
+        public async Task<AcquisitionRequest> StartAsync(VideoRequestPayload? payload = null)
+        {
+            var created = await CreateApprovedAsync(payload);
             await ProcessAsync(DateTime.UtcNow);
             return await GetAsync(created.Id);
         }
@@ -518,7 +545,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
             Task.FromResult(releases);
     }
 
-    private sealed class RecordingVideoImporter(
+    internal sealed class RecordingVideoImporter(
         AppDbContext db,
         MediaAcquisitionKind kind) : ICompletedDownloadImportAdapter
     {
