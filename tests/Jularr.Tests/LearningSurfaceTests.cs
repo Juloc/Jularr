@@ -108,7 +108,7 @@ public sealed class LearningSurfaceTests
                 LearningCapability.ContentMetrics,
                 true,
                 CancellationToken.None);
-            var home =new Jularr.Web.Pages.IndexModel(db, account);
+            var home = EpisodeFlowFixture.Home(db, account);
             await home.OnGetAsync(CancellationToken.None);
             Assert.AreEqual(9, home.RecentEpisodes.Single().PreparedOccurrences);
 

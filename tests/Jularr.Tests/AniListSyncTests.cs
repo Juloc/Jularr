@@ -69,6 +69,35 @@ public sealed class AniListSyncTests
     }
 
     [TestMethod]
+    public async Task GapBeforeAFinishedEpisodeStopsTheWrittenProgressAndNeverLowersAsync()
+    {
+        await using var fixture = await SyncFixture.CreateAsync();
+        await fixture.ConnectAsync(Owner, 42, OwnerToken);
+        await fixture.EnableAsync(Owner, AniListSyncMode.OnCompletion);
+        var anime = await fixture.AddAnimeAsync("Gap Anime", 555, episodes: 12);
+        fixture.Remote.Put(OwnerToken, 555, progress: 0);
+
+        await CanonicalProgressSeed.SetAsync(fixture.Db, Owner, anime.Episodes[0], 0, null, true, fixture.Time.Ago(TimeSpan.FromMinutes(10)));
+        await CanonicalProgressSeed.SetAsync(fixture.Db, Owner, anime.Episodes[2], 0, null, true, fixture.Time.Ago(TimeSpan.FromSeconds(5)));
+        var written = await fixture.RunAsync();
+
+        Assert.AreEqual(1, written.Written);
+        Assert.AreEqual(1, fixture.Remote.Progress(OwnerToken, 555), "E1 and E3 finished with E2 open must write 1, never 3.");
+
+        fixture.Time.Advance(TimeSpan.FromMinutes(10));
+        await CanonicalProgressSeed.SetAsync(fixture.Db, Owner, anime.Episodes[1], 0, null, true, fixture.Time.Ago(TimeSpan.FromSeconds(5)));
+        await fixture.RunAsync();
+        Assert.AreEqual(3, fixture.Remote.Progress(OwnerToken, 555), "Closing the gap advances to the next open episode.");
+
+        fixture.Time.Advance(TimeSpan.FromMinutes(10));
+        var callsBefore = fixture.Remote.Calls;
+        await CanonicalProgressSeed.SetAsync(fixture.Db, Owner, anime.Episodes[3], 600_000, 1_440_000, false, fixture.Time.Ago(TimeSpan.FromSeconds(5)));
+        await fixture.RunAsync();
+        Assert.AreEqual(callsBefore, fixture.Remote.Calls, "A seek or partial watch of E4 is only a resume point and never reaches AniList.");
+        Assert.AreEqual(3, fixture.Remote.Progress(OwnerToken, 555));
+    }
+
+    [TestMethod]
     public async Task RepeatingAniListEntryWritesForwardProgressAsync()
     {
         await using var fixture = await SyncFixture.CreateAsync();
@@ -817,19 +846,16 @@ public sealed class AniListSyncTests
         public async Task WatchAsync(string profileId, TestAnime anime, int number, bool completed, DateTime updatedAt)
         {
             var episodeId = anime.Episodes[number - 1];
-            var progress = await Db.EpisodeProgress.SingleOrDefaultAsync(
-                x => x.ProfileId == profileId && x.EpisodeId == episodeId);
-            if (progress is null)
+            // Watching proceeds in order: finishing episode N means episodes 1..N-1 were finished before it.
+            if (completed)
             {
-                progress = new EpisodeProgress { ProfileId = profileId, EpisodeId = episodeId };
-                Db.Add(progress);
+                foreach (var earlier in anime.Episodes.Take(number - 1))
+                {
+                    await CanonicalProgressSeed.SetAsync(Db, profileId, earlier, 0, null, true, updatedAt.AddMinutes(-1));
+                }
             }
 
-            progress.PositionMs = completed ? 1_400_000 : 600_000;
-            progress.DurationMs = 1_440_000;
-            progress.IsCompleted = completed;
-            progress.UpdatedAt = updatedAt;
-            await Db.SaveChangesAsync();
+            await CanonicalProgressSeed.SetAsync(Db, profileId, episodeId, completed ? 1_400_000 : 600_000, 1_440_000, completed, updatedAt);
             Db.ChangeTracker.Clear();
         }
 

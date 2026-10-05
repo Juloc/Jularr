@@ -12,6 +12,7 @@ using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Novels;
+using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Tracking;
@@ -1551,6 +1552,30 @@ public sealed partial class AniListAccountService(
                     "Special/unnumbered episodes are not synced automatically.",
                     episode.Number,
                     episode.AnimeTitle));
+        }
+
+        // AniList progress means completed episodes only: the episode must be completed in canonical MediaProgress
+        // and, for regular episodes, lie within the contiguous CompletedThrough prefix of the anime.
+        var localProgress = (await new VideoProgressService(db).GetLegacyEpisodeProgressAsync(
+                currentAccount.ProfileId,
+                [episode.AnimeId],
+                cancellationToken))
+            .SingleOrDefault(x => x.EpisodeId == episodeId);
+        var completedThrough = episode.SeasonNumber > 0
+            ? await FindLatestWatchedEpisodeAsync(episode.AnimeId, cancellationToken)
+            : null;
+        var isCompletedLocally = localProgress is { IsCompleted: true } &&
+            (episode.SeasonNumber <= 0 ||
+             (completedThrough is not null &&
+              (episode.SeasonNumber, episode.Number).CompareTo((completedThrough.SeasonNumber, completedThrough.Number)) <= 0));
+        if (!isCompletedLocally)
+        {
+            return ProgressContext.Blocked(
+                AniListProgressPreview.Blocked(
+                    $"Finish S{episode.SeasonNumber:00}E{episode.Number:00} and every episode before it in Jularr before syncing. An episode that is only in progress is never written to AniList.",
+                    episode.Number,
+                    episode.AnimeTitle),
+                AniListExternalProgressStateKind.NoLocalProgress);
         }
 
         ResolvedAnimeEpisodeMetadata? resolved;

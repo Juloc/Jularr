@@ -14,11 +14,17 @@ data class TvProgressWrite(
     val completed: Boolean,
 )
 
+/**
+ * Decides when playback progress is written and whether the write declares completion. The server never infers
+ * completion from a position, so a seek or scrub past the threshold stays a resume point: completion is declared
+ * only while the position was reached by playback itself (a heartbeat arrives only while playing, a seek ends it).
+ */
 class TvProgressPolicy(
     private val heartbeatIntervalMs: Long = 5_000,
     private val completionThreshold: Double = 0.95,
 ) {
     private var lastPersistedAtMs: Long? = null
+    private var reachedByPlayback = false
 
     init {
         require(heartbeatIntervalMs > 0)
@@ -31,6 +37,12 @@ class TvProgressPolicy(
         positionMs: Long,
         durationMs: Long?,
     ): TvProgressWrite? {
+        when (event) {
+            TvProgressEvent.HEARTBEAT -> reachedByPlayback = true
+            TvProgressEvent.SEEK -> reachedByPlayback = false
+            else -> Unit
+        }
+
         val normalizedPosition = positionMs.coerceAtLeast(0)
         val normalizedDuration = durationMs?.takeIf { it > 0 }
         val immediate = event != TvProgressEvent.HEARTBEAT
@@ -43,9 +55,9 @@ class TvProgressPolicy(
         }
 
         lastPersistedAtMs = nowMs
-        val completed = normalizedDuration?.let {
+        val completed = reachedByPlayback && normalizedDuration?.let {
             normalizedPosition.toDouble() / it.toDouble() >= completionThreshold
-        } ?: false
+        } == true
 
         return TvProgressWrite(
             positionMs = normalizedPosition,

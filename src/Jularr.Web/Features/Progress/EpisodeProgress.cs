@@ -2,14 +2,16 @@ using System.Globalization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Playback;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Progress;
 
 /// <summary>
-/// Canonical per-profile playback state of one episode: the resume position
-/// (<see cref="PositionMs"/>) and the watched flag (<see cref="IsCompleted"/>).
+/// Legacy per-profile episode progress row. Canonical progress lives in <c>MediaProgress</c> (see
+/// <see cref="VideoProgressService"/>); this table is only the source of the one-time
+/// <see cref="CanonicalVideoProgressBackfillService"/> and has no runtime writer or reader.
 /// </summary>
 public sealed class EpisodeProgress
 {
@@ -23,8 +25,8 @@ public sealed class EpisodeProgress
 }
 
 /// <summary>
-/// One bounded, user-owned playback session entry. History is personal recall
-/// only; it never drives watched state, resume or Continue Watching.
+/// Legacy playback history row; like <see cref="EpisodeProgress"/> it only feeds the one-time canonical backfill.
+/// Canonical history is <c>MediaPlaybackHistory</c>.
 /// </summary>
 public sealed class EpisodePlaybackHistoryEntry
 {
@@ -215,222 +217,85 @@ public sealed record PlaybackPreferencesUpdate(
     double? DefaultPlaybackSpeed = null);
 
 /// <summary>
-/// Owner of all canonical episode playback facts for the current profile:
-/// resume position, watched state, previous/next resolution, Continue
-/// Watching, bounded personal history and playback preferences.
+/// Legacy-identity adapter for pages and clients that still route by <c>Episode.Id</c>. It owns no progress state:
+/// every read and write goes through the canonical <see cref="VideoProgressService"/> (<c>MediaProgress</c>,
+/// <c>MediaPlaybackHistory</c>) for the current profile, so there is exactly one runtime writer. It also owns the
+/// profile playback preferences and the previous/next local episode flow.
 /// </summary>
 public sealed class EpisodeProgressService(
     AppDbContext db,
     CurrentAccountContext currentAccount,
-    VideoProgressService? videoProgress = null,
-    CanonicalVideoTargetResolver? canonicalTargets = null)
+    VideoProgressService videoProgress,
+    CanonicalVideoTargetResolver canonicalTargets)
 {
-    /// <summary>Playback at or beyond this share of the duration marks the episode watched.</summary>
-    public const double CompletionThreshold = VideoProgressService.CompletionThreshold;
-
     /// <summary>Positions below this are accidental starts: never resumed and never create state.</summary>
     public const long MinimumResumeMs = VideoProgressService.MinimumResumeMs;
 
     /// <summary>Maximum number of personal history entries kept per profile.</summary>
     public const int HistoryLimit = VideoProgressService.HistoryLimit;
 
-    public const int ContinueWatchingLimit = 12;
-
-    /// <summary>Checkpoints of the same episode within this gap extend one history entry.</summary>
-    public static readonly TimeSpan HistorySessionGap = VideoProgressService.HistorySessionGap;
-
-    private const int ContinueWatchingCandidateLimit = 500;
+    public const int ContinueWatchingLimit = VideoProgressService.ContinueWatchingLimit;
 
     public static string FormatPosition(long positionMs)
     {
         var position = TimeSpan.FromMilliseconds(Math.Max(0, positionMs));
         return position.TotalHours >= 1
-            ? position.ToString(@"h\:mm\:ss", System.Globalization.CultureInfo.InvariantCulture)
-            : position.ToString(@"m\:ss", System.Globalization.CultureInfo.InvariantCulture);
+            ? position.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
+            : position.ToString(@"m\:ss", CultureInfo.InvariantCulture);
     }
 
     public async Task<EpisodeProgressSnapshot?> GetAsync(
         Guid episodeId,
         CancellationToken cancellationToken = default)
     {
-        if (videoProgress is not null && canonicalTargets is not null)
+        var animeId = await db.Episodes
+            .AsNoTracking()
+            .Where(x => x.Id == episodeId)
+            .Select(x => (Guid?)x.AnimeId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (animeId is null)
         {
-            var target = await canonicalTargets.ResolveLegacyEpisodeAsync(episodeId, cancellationToken);
-            if (target is null)
-            {
-                return null;
-            }
-
-            var canonical = await videoProgress.GetAsync(
-                currentAccount.ProfileId,
-                target,
-                cancellationToken);
-            return canonical is null
-                ? null
-                : new EpisodeProgressSnapshot(
-                    episodeId,
-                    canonical.PositionMs,
-                    canonical.DurationMs,
-                    canonical.IsCompleted,
-                    canonical.UpdatedAt);
+            return null;
         }
 
-        var row = await (
-            from episode in db.Episodes.AsNoTracking()
-            join progressValue in db.EpisodeProgress
-                    .AsNoTracking()
-                    .Where(x => x.ProfileId == currentAccount.ProfileId)
-                on episode.Id equals progressValue.EpisodeId into progressRows
-            from progress in progressRows.DefaultIfEmpty()
-            where episode.Id == episodeId
-            select new
-            {
-                episode.Id,
-                PositionMs = progress == null ? 0L : progress.PositionMs,
-                DurationMs = progress == null ? null : progress.DurationMs,
-                IsCompleted = progress != null && progress.IsCompleted,
-                UpdatedAt = progress == null ? (DateTime?)null : progress.UpdatedAt
-            })
-            .SingleOrDefaultAsync(cancellationToken);
-
+        var rows = await videoProgress.GetLegacyEpisodeProgressAsync(currentAccount.ProfileId, [animeId.Value], cancellationToken);
+        var row = rows.SingleOrDefault(x => x.EpisodeId == episodeId);
         return row is null
-            ? null
-            : new EpisodeProgressSnapshot(
-                row.Id,
-                row.PositionMs,
-                row.DurationMs,
-                row.IsCompleted,
-                row.UpdatedAt);
+            ? new EpisodeProgressSnapshot(episodeId, 0, null, false, null)
+            : ToSnapshot(row);
     }
 
-    public async Task<IReadOnlyDictionary<Guid, EpisodeProgressSnapshot>> GetForAnimeAsync(
-        Guid animeId,
+    public async Task<IReadOnlyDictionary<Guid, EpisodeProgressSnapshot>> GetForAnimesAsync(
+        IReadOnlyCollection<Guid> animeIds,
         CancellationToken cancellationToken = default)
     {
-        var rows = await (
-            from progress in db.EpisodeProgress.AsNoTracking()
-            join episode in db.Episodes.AsNoTracking()
-                on progress.EpisodeId equals episode.Id
-            where progress.ProfileId == currentAccount.ProfileId &&
-                  episode.AnimeId == animeId
-            select progress)
-            .ToListAsync(cancellationToken);
-
+        var rows = await videoProgress.GetLegacyEpisodeProgressAsync(currentAccount.ProfileId, animeIds, cancellationToken);
         return rows.ToDictionary(x => x.EpisodeId, ToSnapshot);
     }
 
     /// <summary>
-    /// Stores a playback checkpoint. Reaching the completion threshold marks the
-    /// episode watched and clears the resume position. Watched state is sticky:
-    /// later partial checkpoints (for example a rewatch) update the resume
-    /// position but never flip the episode back to unwatched; only
-    /// <see cref="SetWatchedAsync"/> can do that. A first checkpoint below
-    /// <see cref="MinimumResumeMs"/> is an accidental start and is not persisted.
+    /// Stores a playback checkpoint through <see cref="VideoProgressService.UpdateAsync"/>; see
+    /// <see cref="MediaProgressUpdate"/> for the completion contract.
     /// </summary>
     public async Task<EpisodeProgressSnapshot?> UpdateAsync(
         Guid episodeId,
         EpisodeProgressUpdate update,
         CancellationToken cancellationToken = default)
     {
-        MediaProgressSnapshot? canonicalSnapshot = null;
-        if (videoProgress is not null && canonicalTargets is not null)
-        {
-            var target = await canonicalTargets.ResolveLegacyEpisodeAsync(episodeId, cancellationToken);
-            if (target is null)
-            {
-                return null;
-            }
-
-            canonicalSnapshot = await videoProgress.UpdateAsync(
-                currentAccount.ProfileId,
-                target,
-                new MediaProgressUpdate(update.PositionMs, update.DurationMs, update.Completed),
-                cancellationToken);
-            if (canonicalSnapshot is null)
-            {
-                return null;
-            }
-        }
-
-        var episodeExists = await db.Episodes
-            .AsNoTracking()
-            .AnyAsync(x => x.Id == episodeId, cancellationToken);
-        if (!episodeExists)
+        var target = await canonicalTargets.ResolveLegacyEpisodeAsync(episodeId, cancellationToken);
+        if (target is null)
         {
             return null;
         }
 
-        var positionMs = Math.Max(0, update.PositionMs);
-        long? durationMs = update.DurationMs is > 0
-            ? update.DurationMs
-            : null;
-
-        if (durationMs is { } duration)
-        {
-            positionMs = Math.Min(positionMs, duration);
-        }
-
-        var progress = await db.EpisodeProgress
-            .SingleOrDefaultAsync(
-                x => x.ProfileId == currentAccount.ProfileId &&
-                     x.EpisodeId == episodeId,
-                cancellationToken);
-
-        var finalDurationMs = durationMs ?? progress?.DurationMs;
-        var reachedEnd = update.Completed ||
-            (finalDurationMs is { } knownDuration &&
-             positionMs >= knownDuration * CompletionThreshold);
-
-        if (progress is null && !reachedEnd && positionMs < MinimumResumeMs)
-        {
-            return new EpisodeProgressSnapshot(
-                episodeId,
-                positionMs,
-                durationMs,
-                false,
-                null);
-        }
-
-        var now = DateTime.UtcNow;
-
-        if (progress is null)
-        {
-            progress = new EpisodeProgress
-            {
-                ProfileId = currentAccount.ProfileId,
-                EpisodeId = episodeId
-            };
-            db.EpisodeProgress.Add(progress);
-        }
-
-        progress.DurationMs = finalDurationMs;
-        progress.PositionMs = reachedEnd ? 0 : positionMs;
-        progress.IsCompleted = progress.IsCompleted || reachedEnd;
-        progress.UpdatedAt = now;
-
-        var trimHistory = await RecordHistoryAsync(
-            episodeId,
-            reachedEnd ? finalDurationMs ?? positionMs : positionMs,
-            finalDurationMs,
-            reachedEnd,
-            now,
+        var snapshot = await videoProgress.UpdateAsync(
+            currentAccount.ProfileId,
+            target,
+            new MediaProgressUpdate(update.PositionMs, update.DurationMs, update.Completed),
             cancellationToken);
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        if (trimHistory)
-        {
-            await TrimHistoryAsync(cancellationToken);
-        }
-
-        return canonicalSnapshot is null
-            ? ToSnapshot(progress)
-            : new EpisodeProgressSnapshot(
-                episodeId,
-                canonicalSnapshot.PositionMs,
-                canonicalSnapshot.DurationMs,
-                canonicalSnapshot.IsCompleted,
-                canonicalSnapshot.UpdatedAt);
+        return snapshot is null
+            ? null
+            : ToSnapshot(episodeId, snapshot);
     }
 
     /// <summary>
@@ -443,68 +308,16 @@ public sealed class EpisodeProgressService(
         bool watched,
         CancellationToken cancellationToken = default)
     {
-        var episodeExists = await db.Episodes
-            .AsNoTracking()
-            .AnyAsync(x => x.Id == episodeId, cancellationToken);
-        if (!episodeExists)
+        var target = await canonicalTargets.ResolveLegacyEpisodeAsync(episodeId, cancellationToken);
+        if (target is null)
         {
             return null;
         }
 
-        MediaProgressSnapshot? canonicalSnapshot = null;
-        if (videoProgress is not null && canonicalTargets is not null)
-        {
-            var target = await canonicalTargets.ResolveLegacyEpisodeAsync(episodeId, cancellationToken);
-            if (target is null)
-            {
-                return null;
-            }
-
-            canonicalSnapshot = await videoProgress.SetCompletedAsync(
-                currentAccount.ProfileId,
-                target,
-                watched,
-                cancellationToken);
-            if (canonicalSnapshot is null)
-            {
-                return null;
-            }
-        }
-
-        var progress = await db.EpisodeProgress
-            .SingleOrDefaultAsync(
-                x => x.ProfileId == currentAccount.ProfileId &&
-                     x.EpisodeId == episodeId,
-                cancellationToken);
-
-        if (progress is null)
-        {
-            if (!watched)
-            {
-                return new EpisodeProgressSnapshot(episodeId, 0, null, false, null);
-            }
-
-            progress = new EpisodeProgress
-            {
-                ProfileId = currentAccount.ProfileId,
-                EpisodeId = episodeId
-            };
-            db.EpisodeProgress.Add(progress);
-        }
-
-        progress.IsCompleted = watched;
-        progress.PositionMs = 0;
-        progress.UpdatedAt = DateTime.UtcNow;
-
-        await db.SaveChangesAsync(cancellationToken);
-        return canonicalSnapshot is null
-            ? ToSnapshot(progress)
-            : new EpisodeProgressSnapshot(
-                episodeId,
-                canonicalSnapshot.PositionMs,
-                canonicalSnapshot.DurationMs,
-                canonicalSnapshot.IsCompleted,
-                canonicalSnapshot.UpdatedAt);
+        var snapshot = await videoProgress.SetCompletedAsync(currentAccount.ProfileId, target, watched, cancellationToken);
+        return snapshot is null
+            ? null
+            : ToSnapshot(episodeId, snapshot);
     }
 
     /// <summary>
@@ -564,205 +377,88 @@ public sealed class EpisodeProgressService(
     }
 
     /// <summary>
-    /// Continue Watching: at most one item per anime, anchored on that anime's
-    /// most recently updated meaningful progress row (resumable or watched).
-    /// An unfinished anchor resumes that episode; a watched anchor surfaces the
-    /// canonical next local episode when it is not watched yet. Items are
-    /// ordered by anchor update time (newest first) with the episode id as a
-    /// stable tie-break.
+    /// Anime view of the shared <see cref="VideoProgressService.GetContinueWatchingAsync"/> projection, addressed by
+    /// legacy episode identity and decorated with the preferred title and cover.
     /// </summary>
     public async Task<IReadOnlyList<ContinueWatchingItem>> GetContinueWatchingAsync(
         int limit = ContinueWatchingLimit,
         CancellationToken cancellationToken = default)
     {
-        var candidates = await (
-            from progress in db.EpisodeProgress.AsNoTracking()
-            join episode in db.Episodes.AsNoTracking()
-                on progress.EpisodeId equals episode.Id
-            where progress.ProfileId == currentAccount.ProfileId &&
-                  (progress.IsCompleted || progress.PositionMs >= MinimumResumeMs) &&
-                  db.MediaFiles.Any(media => media.EpisodeId == episode.Id)
-            orderby progress.UpdatedAt descending
-            select new
-            {
-                progress.EpisodeId,
-                episode.AnimeId,
-                progress.PositionMs,
-                progress.DurationMs,
-                progress.IsCompleted,
-                progress.UpdatedAt
-            })
-            .Take(ContinueWatchingCandidateLimit)
-            .ToListAsync(cancellationToken);
+        var items = await videoProgress.GetContinueWatchingAsync(currentAccount.ProfileId, limit, WorkMediaType.Anime, cancellationToken);
+        var identities = await videoProgress.GetLegacyEpisodeIdentitiesAsync([.. items.Where(x => x.WorkEpisodeId.HasValue).Select(x => x.WorkEpisodeId!.Value)], cancellationToken);
+        var details = await LoadEpisodeDetailsAsync([.. identities.Values.Select(x => x.EpisodeId)], cancellationToken);
 
-        var anchors = candidates
-            .OrderByDescending(x => x.UpdatedAt)
-            .ThenBy(x => x.EpisodeId.ToString("D"), StringComparer.Ordinal)
-            .GroupBy(x => x.AnimeId)
-            .Select(group => group.First())
-            .ToArray();
-
-        var completedAnimeIds = anchors
-            .Where(x => x.IsCompleted)
-            .Select(x => x.AnimeId)
-            .ToArray();
-
-        IReadOnlyList<LocalEpisodeRow> localEpisodes = completedAnimeIds.Length == 0
-            ? []
-            : await LoadLocalEpisodesAsync(completedAnimeIds, null, cancellationToken);
-        var localEpisodesByAnime = localEpisodes
-            .GroupBy(x => x.AnimeId)
-            .ToDictionary(
-                group => group.Key,
-                group => (IReadOnlyCollection<EpisodeOrderKey>)group
-                    .Select(x => x.Key)
-                    .ToArray());
-
-        var selections = new List<(ContinueWatchingKind Kind, Guid EpisodeId, DateTime AnchorUpdatedAt)>();
-        var nextEpisodeIds = new List<Guid>();
-
-        foreach (var anchor in anchors)
+        var result = new List<ContinueWatchingItem>(items.Count);
+        foreach (var item in items)
         {
-            if (!anchor.IsCompleted)
-            {
-                selections.Add((ContinueWatchingKind.Resume, anchor.EpisodeId, anchor.UpdatedAt));
-                continue;
-            }
-
-            if (!localEpisodesByAnime.TryGetValue(anchor.AnimeId, out var animeEpisodes))
+            if (item.WorkEpisodeId is not { } workEpisodeId ||
+                !identities.TryGetValue(workEpisodeId, out var identity) ||
+                !details.TryGetValue(identity.EpisodeId, out var detail))
             {
                 continue;
             }
 
-            var next = EpisodeSequence.Resolve(animeEpisodes, anchor.EpisodeId).NextEpisodeId;
-            if (next is { } nextId)
-            {
-                selections.Add((ContinueWatchingKind.UpNext, nextId, anchor.UpdatedAt));
-                nextEpisodeIds.Add(nextId);
-            }
+            var kind = item.Kind == VideoContinueWatchingKind.Resume
+                ? ContinueWatchingKind.Resume
+                : ContinueWatchingKind.UpNext;
+            var resumeMs = item.ResumePositionMs >= MinimumResumeMs ? item.ResumePositionMs : 0;
+            result.Add(new ContinueWatchingItem(
+                kind,
+                identity.EpisodeId,
+                identity.AnimeId,
+                detail.AnimeTitle,
+                detail.SeasonNumber,
+                detail.Number,
+                detail.Title,
+                resumeMs,
+                item.DurationMs,
+                item.UpdatedAt,
+                AnimeArtworkStore.ResolveSeasonPosterUrl(identity.AnimeId, detail.SeasonNumber, detail.CoverImageUrl)));
         }
 
-        var nextProgress = nextEpisodeIds.Count == 0
-            ? new Dictionary<Guid, EpisodeProgress>()
-            : await db.EpisodeProgress
-                .AsNoTracking()
-                .Where(x =>
-                    x.ProfileId == currentAccount.ProfileId &&
-                    nextEpisodeIds.Contains(x.EpisodeId))
-                .ToDictionaryAsync(x => x.EpisodeId, cancellationToken);
-
-        var progressByEpisode = candidates.ToDictionary(x => x.EpisodeId);
-        var selected = selections
-            .Where(x =>
-                x.Kind == ContinueWatchingKind.Resume ||
-                !nextProgress.TryGetValue(x.EpisodeId, out var progress) ||
-                !progress.IsCompleted)
-            .Take(limit)
-            .ToArray();
-
-        if (selected.Length == 0)
-        {
-            return [];
-        }
-
-        var selectedIds = selected.Select(x => x.EpisodeId).ToArray();
-        var details = await (
-            from episode in db.Episodes.AsNoTracking()
-            join anime in db.Anime.AsNoTracking() on episode.AnimeId equals anime.Id
-            join metadataValue in db.AnimeMetadata.AsNoTracking()
-                on anime.Id equals metadataValue.AnimeId into metadataRows
-            from metadata in metadataRows.DefaultIfEmpty()
-            where selectedIds.Contains(episode.Id)
-            select new
-            {
-                episode.Id,
-                episode.AnimeId,
-                AnimeTitle = metadata == null ? anime.Title : metadata.PreferredTitle,
-                episode.SeasonNumber,
-                episode.Number,
-                episode.Title,
-                CoverImageUrl = metadata == null ? null : metadata.CoverImageUrl
-            })
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
-
-        return selected
-            .Where(x => details.ContainsKey(x.EpisodeId))
-            .Select(x =>
-            {
-                var detail = details[x.EpisodeId];
-                long resumeMs = 0;
-                long? durationMs = null;
-
-                if (x.Kind == ContinueWatchingKind.Resume)
-                {
-                    var progress = progressByEpisode[x.EpisodeId];
-                    resumeMs = progress.PositionMs;
-                    durationMs = progress.DurationMs;
-                }
-                else if (nextProgress.TryGetValue(x.EpisodeId, out var next))
-                {
-                    resumeMs = next.PositionMs >= MinimumResumeMs ? next.PositionMs : 0;
-                    durationMs = next.DurationMs;
-                }
-
-                return new ContinueWatchingItem(
-                    x.Kind,
-                    detail.Id,
-                    detail.AnimeId,
-                    detail.AnimeTitle,
-                    detail.SeasonNumber,
-                    detail.Number,
-                    detail.Title,
-                    resumeMs,
-                    durationMs,
-                    x.AnchorUpdatedAt,
-                    AnimeArtworkStore.ResolveSeasonPosterUrl(
-                        detail.AnimeId,
-                        detail.SeasonNumber,
-                        detail.CoverImageUrl));
-            })
-            .ToArray();
+        return result;
     }
 
+    /// <summary>Anime view of the canonical <c>MediaPlaybackHistory</c>, addressed by legacy episode identity.</summary>
     public async Task<IReadOnlyList<PlaybackHistoryItem>> GetHistoryAsync(
         CancellationToken cancellationToken = default)
     {
-        var rows = await (
-            from entry in db.EpisodePlaybackHistory.AsNoTracking()
-            join episode in db.Episodes.AsNoTracking() on entry.EpisodeId equals episode.Id
-            join anime in db.Anime.AsNoTracking() on episode.AnimeId equals anime.Id
-            join metadataValue in db.AnimeMetadata.AsNoTracking()
-                on anime.Id equals metadataValue.AnimeId into metadataRows
-            from metadata in metadataRows.DefaultIfEmpty()
-            where entry.ProfileId == currentAccount.ProfileId
-            orderby entry.LastPlayedAt descending
-            select new PlaybackHistoryItem(
+        var entries = (await videoProgress.GetHistoryAsync(currentAccount.ProfileId, cancellationToken))
+            .Where(x => x.WorkEpisodeId.HasValue && x.MediaType == WorkMediaType.Anime)
+            .ToArray();
+        var identities = await videoProgress.GetLegacyEpisodeIdentitiesAsync([.. entries.Select(x => x.WorkEpisodeId!.Value)], cancellationToken);
+        var details = await LoadEpisodeDetailsAsync([.. identities.Values.Select(x => x.EpisodeId)], cancellationToken);
+
+        var result = new List<PlaybackHistoryItem>(entries.Length);
+        foreach (var entry in entries)
+        {
+            if (!identities.TryGetValue(entry.WorkEpisodeId!.Value, out var identity) ||
+                !details.TryGetValue(identity.EpisodeId, out var detail))
+            {
+                continue;
+            }
+
+            result.Add(new PlaybackHistoryItem(
                 entry.Id,
-                episode.Id,
-                anime.Id,
-                metadata == null ? anime.Title : metadata.PreferredTitle,
-                episode.SeasonNumber,
-                episode.Number,
-                episode.Title,
+                identity.EpisodeId,
+                identity.AnimeId,
+                detail.AnimeTitle,
+                detail.SeasonNumber,
+                detail.Number,
+                detail.Title,
                 entry.StartedAt,
                 entry.LastPlayedAt,
                 entry.PositionMs,
                 entry.DurationMs,
-                entry.ReachedEnd))
-            .Take(HistoryLimit)
-            .ToListAsync(cancellationToken);
+                entry.ReachedEnd));
+        }
 
-        return rows
-            .OrderByDescending(x => x.LastPlayedAt)
-            .ThenBy(x => x.Id.ToString("D"), StringComparer.Ordinal)
-            .ToArray();
+        return result;
     }
 
     /// <summary>Clears only the current profile's history; watched state and resume positions stay.</summary>
     public Task<int> ClearHistoryAsync(CancellationToken cancellationToken = default) =>
-        db.EpisodePlaybackHistory
-            .Where(x => x.ProfileId == currentAccount.ProfileId)
-            .ExecuteDeleteAsync(cancellationToken);
+        videoProgress.ClearHistoryAsync(currentAccount.ProfileId, cancellationToken);
 
     public async Task<PlaybackPreferencesSnapshot> GetPreferencesAsync(
         CancellationToken cancellationToken = default)
@@ -845,62 +541,30 @@ public sealed class EpisodeProgressService(
             preferences.PreferredSubtitleLanguage,
             preferences.DefaultPlaybackSpeed);
 
-    private async Task<bool> RecordHistoryAsync(
-        Guid episodeId,
-        long positionMs,
-        long? durationMs,
-        bool reachedEnd,
-        DateTime now,
+    private async Task<IReadOnlyDictionary<Guid, EpisodeDetail>> LoadEpisodeDetailsAsync(
+        IReadOnlyCollection<Guid> episodeIds,
         CancellationToken cancellationToken)
     {
-        var latest = await db.EpisodePlaybackHistory
-            .Where(x => x.ProfileId == currentAccount.ProfileId)
-            .OrderByDescending(x => x.LastPlayedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (latest is not null &&
-            latest.EpisodeId == episodeId &&
-            now - latest.LastPlayedAt <= HistorySessionGap)
+        if (episodeIds.Count == 0)
         {
-            latest.LastPlayedAt = now;
-            latest.PositionMs = positionMs;
-            latest.DurationMs = durationMs ?? latest.DurationMs;
-            latest.ReachedEnd = latest.ReachedEnd || reachedEnd;
-            return false;
+            return new Dictionary<Guid, EpisodeDetail>();
         }
 
-        db.EpisodePlaybackHistory.Add(new EpisodePlaybackHistoryEntry
-        {
-            ProfileId = currentAccount.ProfileId,
-            EpisodeId = episodeId,
-            StartedAt = now,
-            LastPlayedAt = now,
-            PositionMs = positionMs,
-            DurationMs = durationMs,
-            ReachedEnd = reachedEnd
-        });
-        return true;
-    }
-
-    private async Task TrimHistoryAsync(CancellationToken cancellationToken)
-    {
-        var staleIds = await db.EpisodePlaybackHistory
-            .AsNoTracking()
-            .Where(x => x.ProfileId == currentAccount.ProfileId)
-            .OrderByDescending(x => x.LastPlayedAt)
-            .ThenByDescending(x => x.StartedAt)
-            .Skip(HistoryLimit)
-            .Select(x => x.Id)
-            .ToListAsync(cancellationToken);
-
-        if (staleIds.Count == 0)
-        {
-            return;
-        }
-
-        await db.EpisodePlaybackHistory
-            .Where(x => staleIds.Contains(x.Id))
-            .ExecuteDeleteAsync(cancellationToken);
+        return await (
+            from episode in db.Episodes.AsNoTracking()
+            join anime in db.Anime.AsNoTracking() on episode.AnimeId equals anime.Id
+            join metadataValue in db.AnimeMetadata.AsNoTracking()
+                on anime.Id equals metadataValue.AnimeId into metadataRows
+            from metadata in metadataRows.DefaultIfEmpty()
+            where episodeIds.Contains(episode.Id)
+            select new EpisodeDetail(
+                episode.Id,
+                metadata == null ? anime.Title : metadata.PreferredTitle,
+                episode.SeasonNumber,
+                episode.Number,
+                episode.Title,
+                metadata == null ? null : metadata.CoverImageUrl))
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
     }
 
     private async Task<IReadOnlyList<LocalEpisodeRow>> LoadLocalEpisodesAsync(
@@ -920,13 +584,19 @@ public sealed class EpisodeProgressService(
                 x.Number))
             .ToListAsync(cancellationToken);
 
-    private static EpisodeProgressSnapshot ToSnapshot(EpisodeProgress progress) =>
-        new(
-            progress.EpisodeId,
-            progress.PositionMs,
-            progress.DurationMs,
-            progress.IsCompleted,
-            progress.UpdatedAt);
+    private static EpisodeProgressSnapshot ToSnapshot(LegacyEpisodeProgress row) =>
+        new(row.EpisodeId, row.PositionMs, row.DurationMs, row.IsCompleted, row.UpdatedAt);
+
+    private static EpisodeProgressSnapshot ToSnapshot(Guid episodeId, MediaProgressSnapshot snapshot) =>
+        new(episodeId, snapshot.PositionMs, snapshot.DurationMs, snapshot.IsCompleted, snapshot.UpdatedAt);
+
+    private sealed record EpisodeDetail(
+        Guid Id,
+        string AnimeTitle,
+        int SeasonNumber,
+        int Number,
+        string Title,
+        string? CoverImageUrl);
 
     private sealed record LocalEpisodeRow(
         Guid Id,

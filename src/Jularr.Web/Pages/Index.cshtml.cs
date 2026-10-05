@@ -25,11 +25,10 @@ namespace Jularr.Web.Pages;
 public sealed class IndexModel(
     AppDbContext db,
     CurrentAccountContext currentAccount,
+    EpisodeProgressService progress,
     MediaRecommendationService? recommendations = null,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
-    private readonly EpisodeProgressService progress = new(db, currentAccount);
-
     /// <summary>
     /// The Home media-type filters, parsed from <c>?type=</c> the same way as Discover's
     /// <c>category</c>. Home no longer renders a chip row (the approved mockup has none), but links

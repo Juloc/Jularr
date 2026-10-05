@@ -2,7 +2,9 @@ using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Pages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +13,7 @@ namespace Jularr.Tests;
 internal sealed class EpisodeFlowFixture : IAsyncDisposable
 {
     private readonly string path;
+    private readonly List<string> mediaPaths = [];
     private LibraryRoot? root;
 
     private EpisodeFlowFixture(string path, AppDbContext db)
@@ -43,7 +46,15 @@ internal sealed class EpisodeFlowFixture : IAsyncDisposable
     }
 
     public EpisodeProgressService Service(string profileId) =>
-        new(Db, Account(profileId));
+        ProgressService(Db, Account(profileId));
+
+    /// <summary>The legacy-identity adapter wired to the canonical video owners, as the application composes it.</summary>
+    public static EpisodeProgressService ProgressService(AppDbContext db, CurrentAccountContext account) =>
+        new(db, account, new VideoProgressService(db), new CanonicalVideoTargetResolver(db, new LegacyWorkBridge(db, new WorkService(db), new WorkStructureService(db))));
+
+    /// <summary>The Home page wired like the application: progress through the shared adapter.</summary>
+    public static IndexModel Home(AppDbContext db, CurrentAccountContext account) =>
+        new(db, account, ProgressService(db, account));
 
     public async Task<Anime> AddAnimeAsync(string key)
     {
@@ -78,31 +89,57 @@ internal sealed class EpisodeFlowFixture : IAsyncDisposable
                 Db.Add(root);
             }
 
+            var mediaPath = Path.Combine(
+                Path.GetTempPath(),
+                $"{anime.Key}-s{seasonNumber:00}e{number:00}-{Guid.NewGuid():N}.mkv");
+            await File.WriteAllBytesAsync(mediaPath, [0]);
+            mediaPaths.Add(mediaPath);
             Db.Add(new MediaFile
             {
                 LibraryRootId = root.Id,
                 EpisodeId = episode.Id,
-                Path = Path.Combine(
-                    Path.GetTempPath(),
-                    $"{anime.Key}-s{seasonNumber:00}e{number:00}-{Guid.NewGuid():N}.mkv"),
+                Path = mediaPath,
                 SizeBytes = 1,
                 LastWriteTimeUtc = DateTime.UtcNow
             });
         }
 
         await Db.SaveChangesAsync();
+        if (withMedia)
+        {
+            // Canonical Continue Watching only offers episodes that have a canonical video Asset.
+            var bridge = new LegacyWorkBridge(Db, new WorkService(Db), new WorkStructureService(Db));
+            await new CanonicalVideoStorageBackfillService(Db, bridge, new CanonicalMediaStorageService(Db)).BackfillLegacyAnimeAsync(null, CancellationToken.None);
+        }
+
         return episode;
     }
 
+    /// <summary>Moves the canonical progress row of one legacy episode to a fixed timestamp.</summary>
     public async Task SetUpdatedAtAsync(
         string profileId,
         Guid episodeId,
         DateTime updatedAt)
     {
-        var progress = await Db.EpisodeProgress.SingleAsync(
-            x => x.ProfileId == profileId && x.EpisodeId == episodeId);
-        progress.UpdatedAt = updatedAt;
-        await Db.SaveChangesAsync();
+        var updated = await Db.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE "MediaProgress" p
+            SET "UpdatedAt" = {0}
+            FROM "WorkEpisodes" we, "WorkSourceLinks" l, "Episodes" e
+            WHERE p."ProfileId" = {1}
+              AND p."WorkEpisodeId" = we."Id"
+              AND l."SourceKind" = {2}
+              AND l."WorkId" = we."WorkId"
+              AND e."Id" = {3}
+              AND e."AnimeId" = l."SourceId"
+              AND e."SeasonNumber" = we."SeasonNumber"
+              AND e."Number" = we."EpisodeNumber"
+            """,
+            updatedAt,
+            profileId,
+            (int)WorkSourceKind.Anime,
+            episodeId);
+        Assert.AreEqual(1, updated, "Expected exactly one canonical progress row.");
     }
 
     public static CurrentAccountContext Account(string profileId)
@@ -130,6 +167,10 @@ internal sealed class EpisodeFlowFixture : IAsyncDisposable
     {
         await Db.DisposeAsync();
         File.Delete(path);
+        foreach (var mediaPath in mediaPaths)
+        {
+            File.Delete(mediaPath);
+        }
     }
 
     private static AppDbContext CreateContext(string path) =>

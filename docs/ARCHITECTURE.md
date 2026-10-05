@@ -469,6 +469,8 @@ Client capabilities + requested canonical unit
 
 Web, Android and TV use the same planning semantics. They may render completely different controls.
 
+Completion contract of video progress: a checkpoint carries the exact resume position and a client-declared `completed` flag. The server never infers completion from a position, because a seek, scrub or resume can land past the threshold without the content having been watched. Clients declare completion only when playback itself reached `VideoProgressService.CompletionThreshold` or ended, or when the user marks the item watched. A completed item keeps its completed state while a later rewatch stores a new resume position, and Continue Watching offers that resume. `CompletedThrough` is the contiguous completed prefix of a work's regular canonical episodes, owned by `VideoProgressService.GetCompletedThroughAsync`; AniList write-back reads only that projection. The legacy `EpisodeProgress` / `EpisodePlaybackHistory` tables are a one-time backfill source with no runtime reader or writer.
+
 ## 13. Reader/translation flow
 
 ```text

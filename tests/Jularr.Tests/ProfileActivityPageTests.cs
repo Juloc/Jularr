@@ -132,7 +132,7 @@ public sealed class ProfileActivityPageTests
         {
             var account = Account(profileId, isOwner);
             var page = Attach(
-                new ActivityIndexModel(Db, account, new EpisodeProgressService(Db, account), new AcquisitionAccessStore(Db)),
+                new ActivityIndexModel(Db, account, EpisodeFlowFixture.ProgressService(Db, account), new AcquisitionAccessStore(Db)),
                 profileId,
                 isOwner);
             await page.OnGetAsync(CancellationToken.None);

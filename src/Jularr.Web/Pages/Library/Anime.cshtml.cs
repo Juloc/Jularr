@@ -274,8 +274,8 @@ public sealed class AnimeModel(
                     group.Where(x => x.State is UserTermState.Known or UserTermState.Learning)
                         .Sum(x => x.Occurrences)));
 
-        var progressByEpisode = await episodeProgressService.GetForAnimeAsync(
-            id,
+        var progressByEpisode = await episodeProgressService.GetForAnimesAsync(
+            [id],
             cancellationToken);
         var mediaByEpisode = await AnimeEpisodeMediaQuery.LoadAsync(db, id, cancellationToken);
         var preferences = await episodeProgressService.GetPreferencesAsync(cancellationToken);

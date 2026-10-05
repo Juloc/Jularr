@@ -351,7 +351,7 @@ public sealed class MediaSegmentTests
             playback,
             new LearningService(fixture.Db, new FsrsReviewScheduler(), account),
             availability,
-            new EpisodeProgressService(fixture.Db, account),
+            EpisodeFlowFixture.ProgressService(fixture.Db, account),
             account,
             segments);
 

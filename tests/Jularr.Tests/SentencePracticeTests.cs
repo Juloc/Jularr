@@ -208,17 +208,12 @@ public sealed class SentencePracticeTests
             Text = text
         });
 
+        await fixture.Db.SaveChangesAsync();
         if (watched)
         {
-            fixture.Db.EpisodeProgress.Add(new EpisodeProgress
-            {
-                ProfileId = LanguageInspectorFixture.Profile,
-                EpisodeId = episode.Id,
-                PositionMs = startMs
-            });
+            await CanonicalProgressSeed.SetAsync(fixture.Db, LanguageInspectorFixture.Profile, episode.Id, startMs, null, false);
         }
 
-        await fixture.Db.SaveChangesAsync();
         return episode.Id;
     }
 

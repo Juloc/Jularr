@@ -20,7 +20,7 @@ public sealed record AnimeMappingApplyResult(
 /// entry.
 ///
 /// Safe remap: provider mappings are keyed by <c>AnimeId</c> + local episode range; watch progress
-/// (<c>EpisodeProgress</c>) is keyed by the stable <c>EpisodeId</c>. Changing a mapping only rewrites
+/// (canonical <c>MediaProgress</c>) is keyed by the canonical work episode. Changing a mapping only rewrites
 /// provider coordinates and never touches progress rows.
 /// </summary>
 public sealed class AnimeMappingApplyService(

@@ -90,15 +90,9 @@ public sealed class OfflinePrefetchCandidateSource(
             .Where(x => x.SizeBytes is > 0)
             .ToList();
 
-        var localIds = local.Select(x => x.Id).ToArray();
-        var watched = (await db.EpisodeProgress
-            .AsNoTracking()
-            .Where(x =>
-                x.ProfileId == currentAccount.ProfileId &&
-                x.IsCompleted &&
-                localIds.Contains(x.EpisodeId))
-            .Select(x => x.EpisodeId)
-            .ToListAsync(cancellationToken))
+        var watched = (await episodeProgress.GetForAnimesAsync(animeIds, cancellationToken))
+            .Where(x => x.Value.IsCompleted)
+            .Select(x => x.Key)
             .ToHashSet();
 
         var byId = local.ToDictionary(x => x.Id);

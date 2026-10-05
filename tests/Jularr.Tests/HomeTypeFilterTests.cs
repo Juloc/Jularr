@@ -139,14 +139,15 @@ public sealed class HomeTypeFilterTests
             LastWriteTimeUtc = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
+        await CanonicalProgressSeed.AttachCanonicalVideoAsync(db);
 
-        var progress = new EpisodeProgressService(db, EpisodeFlowFixture.Account(Profile));
+        var progress = EpisodeFlowFixture.ProgressService(db, EpisodeFlowFixture.Account(Profile));
         await progress.UpdateAsync(episode.Id, new EpisodeProgressUpdate(500_000, 1_400_000, false));
     }
 
     private static async Task<IndexModel> LoadHomeAsync(AppDbContext db, string? type)
     {
-        var home = new IndexModel(db, EpisodeFlowFixture.Account(Profile));
+        var home = EpisodeFlowFixture.Home(db, EpisodeFlowFixture.Account(Profile));
         await home.OnGetAsync(CancellationToken.None, type);
         return home;
     }

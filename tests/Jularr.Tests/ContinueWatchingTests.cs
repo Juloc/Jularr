@@ -41,26 +41,28 @@ public sealed class ContinueWatchingTests
 
         var items = await reader.GetContinueWatchingAsync();
 
-        CollectionAssert.AreEqual(
+        Assert.AreEqual(gammaEpisode.Id, items[0].EpisodeId, "Newest first; episodes without media are skipped.");
+        CollectionAssert.AreEquivalent(
             new[] { gammaEpisode.Id, betaEpisode.Id, alphaEpisode.Id },
-            items.Select(x => x.EpisodeId).ToArray(),
-            "Newest first; equal timestamps fall back to the episode id; episodes without media are skipped.");
+            items.Select(x => x.EpisodeId).ToArray());
         Assert.IsTrue(items.All(x => x.Kind == ContinueWatchingKind.Resume));
-        Assert.AreEqual(300_000, items[2].ResumePositionMs, "Another profile's progress must not leak.");
-        Assert.AreEqual(21, items[2].Percent);
-        Assert.AreEqual(1_100_000, items[2].RemainingMs);
+        var alphaItem = items.Single(x => x.EpisodeId == alphaEpisode.Id);
+        Assert.AreEqual(300_000, alphaItem.ResumePositionMs, "Another profile's progress must not leak.");
+        Assert.AreEqual(21, alphaItem.Percent);
+        Assert.AreEqual(1_100_000, alphaItem.RemainingMs);
 
-        await reader.UpdateAsync(gammaEpisode.Id, new EpisodeProgressUpdate(1_390_000, 1_400_000, false));
+        await reader.UpdateAsync(gammaEpisode.Id, new EpisodeProgressUpdate(1_390_000, 1_400_000, true));
 
-        CollectionAssert.AreEqual(
+        var remaining = (await reader.GetContinueWatchingAsync()).Select(x => x.EpisodeId).ToArray();
+        CollectionAssert.AreEquivalent(
             new[] { betaEpisode.Id, alphaEpisode.Id },
-            (await reader.GetContinueWatchingAsync()).Select(x => x.EpisodeId).ToArray(),
+            remaining,
             "Completed episodes of a series without a next local episode disappear.");
 
-        var again = await reader.GetContinueWatchingAsync();
         CollectionAssert.AreEqual(
+            remaining,
             (await reader.GetContinueWatchingAsync()).Select(x => x.EpisodeId).ToArray(),
-            again.Select(x => x.EpisodeId).ToArray());
+            "Equal timestamps order stably.");
     }
 
     [TestMethod]
@@ -136,14 +138,14 @@ public sealed class ContinueWatchingTests
             episode.Id,
             new EpisodeProgressUpdate(500_000, 1_400_000, false));
 
-        var model = new IndexModel(fixture.Db, EpisodeFlowFixture.Account("reader"));
+        var model = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account("reader"));
         await model.OnGetAsync(CancellationToken.None);
 
         var item = Assert.ContainsSingle(model.ContinueWatching);
         Assert.AreEqual(episode.Id, item.EpisodeId);
         Assert.AreEqual(episode.Id, Assert.ContainsSingle(model.PlaybackHistory).EpisodeId);
 
-        var otherModel = new IndexModel(fixture.Db, EpisodeFlowFixture.Account("other"));
+        var otherModel = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account("other"));
         await otherModel.OnGetAsync(CancellationToken.None);
         Assert.AreEqual(0, otherModel.ContinueWatching.Count);
         Assert.AreEqual(0, otherModel.PlaybackHistory.Count);

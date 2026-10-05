@@ -53,7 +53,7 @@ public sealed class HomePageQueryTests
             };
             var currentAccount = new CurrentAccountContext(
                 new HttpContextAccessor { HttpContext = httpContext });
-            var model = new IndexModel(db, currentAccount);
+            var model = EpisodeFlowFixture.Home(db, currentAccount);
 
             await model.OnGetAsync(CancellationToken.None);
 

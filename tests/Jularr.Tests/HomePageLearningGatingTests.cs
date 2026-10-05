@@ -173,7 +173,7 @@ public sealed class HomePageLearningGatingTests
             return new Fixture(path, db);
         }
 
-        public IndexModel Home() => new(Db, Account());
+        public IndexModel Home() => EpisodeFlowFixture.Home(Db, Account());
 
         public Task SetModeAsync(LearningMode mode) =>
             new LearningConfigurationStore(Db).SetModeAsync(

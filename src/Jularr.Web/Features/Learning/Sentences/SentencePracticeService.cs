@@ -4,6 +4,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Ai;
 using Jularr.Web.Features.Learning.Courses;
 using Jularr.Web.Features.Learning.LanguageAssistance;
+using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Learning.Sentences;
@@ -198,12 +199,19 @@ public sealed class SentencePracticeService(
         return result;
     }
 
+    /// <summary>Episodes with any canonical progress for the profile: the content it actually consumed.</summary>
+    private async Task<Guid[]> LoadConsumedEpisodeIdsAsync(
+        string profileId,
+        CancellationToken cancellationToken) =>
+        [.. (await new VideoProgressService(db).GetLegacyEpisodeProgressAsync(profileId, null, cancellationToken)).Select(x => x.EpisodeId)];
+
     /// <summary>Anime subtitle sentences of words the profile tracks.</summary>
     private async Task<IReadOnlyList<Candidate>> LoadSubtitleCandidatesAsync(
         string profileId,
         int limit,
         CancellationToken cancellationToken)
     {
+        var consumedEpisodeIds = await LoadConsumedEpisodeIdsAsync(profileId, cancellationToken);
         var rows = await (
             from termState in LearningQueries.TermStates(db, profileId)
             join term in db.Terms.AsNoTracking() on termState.TermId equals term.Id
@@ -212,7 +220,7 @@ public sealed class SentencePracticeService(
             join anime in db.Anime.AsNoTracking() on episode.AnimeId equals anime.Id
             join track in db.SubtitleTracks.AsNoTracking() on episode.Id equals track.EpisodeId
             join cue in db.SubtitleCues.AsNoTracking() on track.Id equals cue.SubtitleTrackId
-            let consumed = db.EpisodeProgress.Any(x => x.ProfileId == profileId && x.EpisodeId == episode.Id)
+            let consumed = consumedEpisodeIds.Contains(episode.Id)
             let active = termState.State == UserTermState.Learning || termState.State == UserTermState.Saved
             where termState.SentencePracticeEnabled
                 && (active || termState.State == UserTermState.Known)
@@ -273,12 +281,13 @@ public sealed class SentencePracticeService(
             languages = [JapaneseLanguage];
         }
 
+        var consumedEpisodeIds = await LoadConsumedEpisodeIdsAsync(profileId, cancellationToken);
         var rows = await (
             from track in db.SubtitleTracks.AsNoTracking()
             join cue in db.SubtitleCues.AsNoTracking() on track.Id equals cue.SubtitleTrackId
             join episode in db.Episodes.AsNoTracking() on track.EpisodeId equals episode.Id
             join anime in db.Anime.AsNoTracking() on episode.AnimeId equals anime.Id
-            let consumed = db.EpisodeProgress.Any(x => x.ProfileId == profileId && x.EpisodeId == episode.Id)
+            let consumed = consumedEpisodeIds.Contains(episode.Id)
             where languages.Contains(track.Language)
                 && cue.Text.Length >= 2
                 && cue.Text.Length <= SentencePracticeText.MaxLength

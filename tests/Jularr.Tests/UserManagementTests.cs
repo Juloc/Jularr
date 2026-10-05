@@ -166,14 +166,9 @@ public sealed class UserManagementTests
             {
                 ProfileId = user.Id
             });
-            db.EpisodeProgress.Add(new EpisodeProgress
-            {
-                ProfileId = user.Id,
-                EpisodeId = episode.Id,
-                PositionMs = 30_000,
-                DurationMs = 100_000
-            });
             await db.SaveChangesAsync();
+            await CanonicalProgressSeed.SetAsync(db, user.Id, episode.Id, 30_000, 100_000, false);
+            await CanonicalProgressSeed.SetAsync(db, owner.Id, episode.Id, 40_000, 100_000, false);
 
             await auth.DeleteUserAsync(user.Id);
 
@@ -184,7 +179,8 @@ public sealed class UserManagementTests
             Assert.AreEqual(0, await db.LearningCardReviews.CountAsync(x => x.ProfileId == user.Id));
             Assert.AreEqual(1, await db.LearningUnits.CountAsync(x => x.TermId == term.Id));
             Assert.AreEqual(0, await db.LearningPreferences.CountAsync(x => x.ProfileId == user.Id));
-            Assert.AreEqual(0, await db.EpisodeProgress.CountAsync(x => x.ProfileId == user.Id));
+            Assert.AreEqual(0, await CanonicalProgressSeed.CountAsync(db, "MediaProgress", user.Id), "The deleted profile's canonical progress is removed.");
+            Assert.AreEqual(1, await CanonicalProgressSeed.CountAsync(db, "MediaProgress", owner.Id), "Other profiles keep their canonical progress.");
             Assert.AreEqual(1, await db.Terms.CountAsync(x => x.Id == term.Id));
             Assert.AreEqual(1, await db.Anime.CountAsync(x => x.Id == anime.Id));
 

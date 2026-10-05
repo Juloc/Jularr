@@ -62,15 +62,7 @@ public sealed class AnimeMappingApplyServiceTests
 
         // A viewer has watched local episode 3.
         var episode3 = fixture.EpisodeIds[3];
-        fixture.Db.EpisodeProgress.Add(new EpisodeProgress
-        {
-            ProfileId = ProfileId,
-            EpisodeId = episode3,
-            PositionMs = 123_456,
-            DurationMs = 1_440_000,
-            IsCompleted = true
-        });
-        await fixture.Db.SaveChangesAsync();
+        await CanonicalProgressSeed.SetAsync(fixture.Db, ProfileId, episode3, 123_456, 1_440_000, true);
 
         // Apply mapping A (AniList 100), then remap to mapping B (AniList 200).
         await fixture.Service.ApplyAsync(
@@ -78,7 +70,7 @@ public sealed class AnimeMappingApplyServiceTests
             [new AnimeMappingRange(1, 1, 12, "anilist", "100", 1, RemoteEpisodeCount: 12)],
             ProfileId, CancellationToken.None);
 
-        var afterFirst = await ReadProgressAsync(fixture.Db, episode3);
+        var afterFirst = await ReadProgressAsync(fixture, episode3);
         Assert.IsNotNull(afterFirst);
 
         var remap = await fixture.Service.ApplyAsync(
@@ -93,12 +85,12 @@ public sealed class AnimeMappingApplyServiceTests
         Assert.AreEqual(7, applied[0].ResolveRemoteEpisode(3));
 
         // Progress survives the remap unchanged — it keys on the stable EpisodeId, not provider coords.
-        var afterRemap = await ReadProgressAsync(fixture.Db, episode3);
+        var afterRemap = await ReadProgressAsync(fixture, episode3);
         Assert.IsNotNull(afterRemap);
         Assert.AreEqual(episode3, afterRemap!.EpisodeId);
         Assert.AreEqual(123_456, afterRemap.PositionMs);
         Assert.IsTrue(afterRemap.IsCompleted);
-        Assert.AreEqual(1, await fixture.Db.EpisodeProgress.CountAsync());
+        Assert.AreEqual(1, (await CanonicalProgressSeed.RowsAsync(fixture.Db, fixture.AnimeId)).Count);
     }
 
     [TestMethod]
@@ -118,8 +110,8 @@ public sealed class AnimeMappingApplyServiceTests
         Assert.IsTrue(audit.Any(x => x.Action == MappingAuditStore.ActionUnmapped));
     }
 
-    private static async Task<EpisodeProgress?> ReadProgressAsync(AppDbContext db, Guid episodeId) =>
-        await db.EpisodeProgress.AsNoTracking().SingleOrDefaultAsync(x => x.EpisodeId == episodeId);
+    private static async Task<LegacyEpisodeProgress?> ReadProgressAsync(Fixture fixture, Guid episodeId) =>
+        (await CanonicalProgressSeed.RowsAsync(fixture.Db, fixture.AnimeId)).SingleOrDefault(x => x.EpisodeId == episodeId);
 
     private sealed class Fixture : IAsyncDisposable
     {

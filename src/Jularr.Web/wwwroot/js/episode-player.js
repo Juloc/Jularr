@@ -18,6 +18,7 @@
     let offlineMediaUrl = "";
     const planUrl = root.dataset.playbackPlanUrl || "";
     const persistedResumeSeconds = Number(root.dataset.resumeSeconds);
+    const completionThreshold = Number(root.dataset.completionThreshold);
     const video = root.querySelector("[data-playback-video]");
     const stage = root.querySelector("[data-video-stage]");
     const placeholder = root.querySelector("[data-playback-placeholder]");
@@ -245,6 +246,29 @@
     let lastProgressSentAt = Date.now();
     let lastProgressPositionMs = -1;
 
+    // The server never infers completion from a position, so a seek or scrub past the threshold stays a resume
+    // point. Completion is declared only when playback runs through to the threshold: naturalPositionMs follows
+    // the position only while it advances in small playback steps, a seek leaves it behind.
+    const naturalStepMs = 2500;
+    let naturalPositionMs = -1;
+    let lastClockPositionMs = -1;
+
+    const trackNaturalPlayback = () => {
+        const positionMs = Math.round(absoluteCurrentTime() * 1000);
+        const stepMs = positionMs - lastClockPositionMs;
+        lastClockPositionMs = positionMs;
+        if (!video.seeking && !video.paused && stepMs >= 0 && stepMs <= naturalStepMs * playbackSpeed) {
+            naturalPositionMs = positionMs;
+        }
+    };
+
+    const reachedCompletionNaturally = (positionMs) =>
+        hasKnownDuration &&
+        Number.isFinite(completionThreshold) &&
+        naturalPositionMs >= 0 &&
+        Math.abs(positionMs - naturalPositionMs) <= naturalStepMs * playbackSpeed &&
+        positionMs >= durationSeconds * 1000 * completionThreshold;
+
     // Bounded checkpoints: at most one regular write per 15 seconds while
     // playing; pause, end, restart and page close flush immediately.
     const persistProgress = (completed = false, force = false) => {
@@ -263,7 +287,7 @@
             return;
         }
 
-        sendProgress(positionMs, completed, force);
+        sendProgress(positionMs, completed || reachedCompletionNaturally(positionMs), force);
     };
 
     const sendProgress = (positionMs, completed, keepalive) => {
@@ -1598,6 +1622,7 @@
     });
 
     video.addEventListener("timeupdate", () => {
+        trackNaturalPlayback();
         updateTimeline();
         sync();
         persistProgress();

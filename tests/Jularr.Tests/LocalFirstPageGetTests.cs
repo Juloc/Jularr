@@ -431,7 +431,7 @@ public sealed class LocalFirstPageGetTests
                 new Jularr.Web.Features.Shell.AppShellService(
                     new MediaCapabilityService(new MediaCapabilityStore(root))));
 
-            return new Jularr.Web.Pages.IndexModel(Db, OwnerAccount, recommendations);
+            return new Jularr.Web.Pages.IndexModel(Db, OwnerAccount, EpisodeFlowFixture.ProgressService(Db, OwnerAccount), recommendations);
         }
 
         public LibraryIndexModel LibraryPage() => new(

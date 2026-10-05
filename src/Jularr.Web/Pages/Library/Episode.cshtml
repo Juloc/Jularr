@@ -55,6 +55,7 @@ else if (Model.Playback.Media is { } media)
              data-storage-availability-url="@ClientApiRoutes.MediaAvailability(media.MediaFileId)"
              data-player-bootstrap-url="@ClientApiRoutes.Player(Model.EpisodeId)"
              data-progress-url="@ClientApiRoutes.Progress(Model.EpisodeId)"
+             data-completion-threshold="@Jularr.Web.Features.Progress.VideoProgressService.CompletionThreshold.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)"
              data-resume-seconds="@Model.ResumePositionSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)"
              data-next-url="@(Model.NextEpisodeUrl ?? "")"
              data-autoplay-next="@((Model.Flow?.AutoplayNext == true).ToString().ToLowerInvariant())"

@@ -34,10 +34,46 @@ public sealed record MediaProgressSnapshot(
             : 0;
 }
 
+/// <summary>
+/// One playback checkpoint. <paramref name="Completed"/> is the client's declaration that playback naturally reached
+/// <see cref="VideoProgressService.CompletionThreshold"/> of the duration, ended, or that the user marked the item watched.
+/// The server never infers completion from the position alone: a seek, scrub or resume can land past the threshold
+/// without the content having been watched, and such a position is only a resume point.
+/// </summary>
 public sealed record MediaProgressUpdate(
     long PositionMs,
     long? DurationMs,
     bool Completed);
+
+/// <summary>Furthest episode of a work that is completed without a gap before it.</summary>
+public sealed record CompletedEpisodeRef(Guid WorkEpisodeId, int SeasonNumber, int EpisodeNumber);
+
+/// <summary>
+/// Canonical completion projection of one work for one profile. <see cref="CompletedThrough"/> is the highest regular
+/// episode (specials excluded) in season/episode order whose predecessors are all completed; a single uncompleted
+/// episode stops it. <see cref="UpdatedAt"/> is the newest regular-episode progress write, completed or not.
+/// </summary>
+public sealed record VideoWorkCompletion(Guid WorkId, DateTime UpdatedAt, CompletedEpisodeRef? CompletedThrough);
+
+/// <summary>
+/// Canonical progress of one Anime episode addressed through its legacy library identity, for pages and clients that
+/// still route by <c>Episode.Id</c>. Read-only projection of <c>MediaProgress</c>.
+/// </summary>
+public sealed record LegacyEpisodeProgress(
+    string ProfileId,
+    Guid EpisodeId,
+    Guid AnimeId,
+    string AnimeTitle,
+    string EpisodeTitle,
+    int SeasonNumber,
+    int EpisodeNumber,
+    long PositionMs,
+    long? DurationMs,
+    bool IsCompleted,
+    DateTime UpdatedAt);
+
+/// <summary>Legacy library identity of one canonical Anime episode.</summary>
+public sealed record LegacyEpisodeIdentity(Guid WorkEpisodeId, Guid EpisodeId, Guid AnimeId);
 
 public enum VideoContinueWatchingKind
 {
@@ -81,6 +117,7 @@ public sealed record MediaPlaybackHistoryItem(
 
 public sealed class VideoProgressService(AppDbContext db)
 {
+    /// <summary>Share of the duration that natural playback must reach before a client may declare completion.</summary>
     public const double CompletionThreshold = 0.95;
     public const long MinimumResumeMs = 30_000;
     public const int HistoryLimit = 50;
@@ -146,9 +183,7 @@ public sealed class VideoProgressService(AppDbContext db)
         }
 
         var finalDurationMs = durationMs ?? current?.DurationMs;
-        var reachedEnd = update.Completed ||
-                         (finalDurationMs is { } knownDuration &&
-                          positionMs >= knownDuration * CompletionThreshold);
+        var reachedEnd = update.Completed;
 
         if (current is null && !reachedEnd && positionMs < MinimumResumeMs)
         {
@@ -258,13 +293,21 @@ public sealed class VideoProgressService(AppDbContext db)
             currentIndex + 1 < episodes.Count ? episodes[currentIndex + 1].Id : null);
     }
 
+    /// <summary>
+    /// Shared Continue Watching for Movie, Series and Anime: one item per work, anchored on the work's most recently
+    /// updated meaningful progress row. An unfinished anchor resumes; a completed anchor that carries a later rewatch
+    /// resume position resumes that rewatch (the item stays completed); otherwise a completed episode anchor surfaces
+    /// the next playable uncompleted episode. <paramref name="mediaType"/> narrows the projection to one media type.
+    /// </summary>
     public async Task<IReadOnlyList<VideoContinueWatchingItem>> GetContinueWatchingAsync(
         string profileId,
         int limit = ContinueWatchingLimit,
+        WorkMediaType? mediaType = null,
         CancellationToken cancellationToken = default)
     {
         ValidateProfile(profileId);
         limit = Math.Clamp(limit, 1, ContinueWatchingLimit);
+        var mediaTypeFilter = mediaType is { } requested ? (int)requested : -1;
 
         var rows = await db.Database.SqlQueryRaw<ContinueWatchingDbRow>(
                 """
@@ -284,6 +327,7 @@ public sealed class VideoProgressService(AppDbContext db)
                 LEFT JOIN "WorkEpisodes" e ON e."Id" = p."WorkEpisodeId"
                 WHERE p."ProfileId" = {0}
                   AND (p."IsCompleted" = TRUE OR p."PositionMs" >= {1})
+                  AND ({2} < 0 OR w."MediaType" = {2})
                   AND EXISTS (
                       SELECT 1
                       FROM "MediaAssets" a
@@ -299,7 +343,8 @@ public sealed class VideoProgressService(AppDbContext db)
                 LIMIT 500
                 """,
                 profileId,
-                MinimumResumeMs)
+                MinimumResumeMs,
+                mediaTypeFilter)
             .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
@@ -351,7 +396,7 @@ public sealed class VideoProgressService(AppDbContext db)
                 break;
             }
 
-            if (!anchor.IsCompleted)
+            if (!anchor.IsCompleted || anchor.PositionMs >= MinimumResumeMs)
             {
                 result.Add(ToContinueWatching(VideoContinueWatchingKind.Resume, anchor));
                 continue;
@@ -425,7 +470,7 @@ public sealed class VideoProgressService(AppDbContext db)
                 JOIN "Works" w ON w."Id" = h."WorkId"
                 LEFT JOIN "WorkEpisodes" e ON e."Id" = h."WorkEpisodeId"
                 WHERE h."ProfileId" = {0}
-                ORDER BY h."LastPlayedAt" DESC, h."StartedAt" DESC
+                ORDER BY h."LastPlayedAt" DESC, h."StartedAt" DESC, h."Id"
                 LIMIT 50
                 """,
                 profileId)
@@ -448,6 +493,19 @@ public sealed class VideoProgressService(AppDbContext db)
             .ToArray();
     }
 
+    /// <summary>
+    /// Removes the canonical progress and history of a deleted profile. The canonical tables are not part of the EF
+    /// model, so the generic profile-table sweep cannot reach them.
+    /// </summary>
+    public async Task DeleteProfileDataAsync(
+        string profileId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateProfile(profileId);
+        await db.Database.ExecuteSqlRawAsync("""DELETE FROM "MediaProgress" WHERE "ProfileId" = {0}""", [profileId], cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("""DELETE FROM "MediaPlaybackHistory" WHERE "ProfileId" = {0}""", [profileId], cancellationToken);
+    }
+
     public Task<int> ClearHistoryAsync(
         string profileId,
         CancellationToken cancellationToken = default)
@@ -457,6 +515,133 @@ public sealed class VideoProgressService(AppDbContext db)
             """DELETE FROM "MediaPlaybackHistory" WHERE "ProfileId" = {0}""",
             [profileId],
             cancellationToken);
+    }
+
+    /// <summary>
+    /// The one definition of <see cref="VideoWorkCompletion.CompletedThrough"/>: the contiguous completed prefix of a
+    /// work's regular canonical episodes. Returns one entry per work in which the profile has regular-episode progress;
+    /// <paramref name="workId"/> narrows the projection to a single work.
+    /// </summary>
+    public async Task<IReadOnlyList<VideoWorkCompletion>> GetCompletedThroughAsync(
+        string profileId,
+        Guid? workId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateProfile(profileId);
+        var rows = await db.Database.SqlQueryRaw<CompletionDbRow>(
+                """
+                SELECT we."WorkId",
+                       we."Id" AS "WorkEpisodeId",
+                       we."SeasonNumber",
+                       we."EpisodeNumber",
+                       COALESCE(p."IsCompleted", FALSE) AS "IsCompleted",
+                       p."UpdatedAt"
+                FROM "WorkEpisodes" we
+                LEFT JOIN "MediaProgress" p ON p."WorkEpisodeId" = we."Id" AND p."ProfileId" = {0}
+                WHERE we."SeasonNumber" > 0
+                  AND we."EpisodeNumber" > 0
+                  AND ({1}::uuid IS NULL OR we."WorkId" = {1})
+                  AND EXISTS (
+                      SELECT 1
+                      FROM "MediaProgress" started
+                      WHERE started."ProfileId" = {0} AND started."WorkId" = we."WorkId"
+                  )
+                ORDER BY we."WorkId", we."SeasonNumber", we."EpisodeNumber"
+                """,
+                profileId,
+                (object?)workId ?? DBNull.Value)
+            .ToListAsync(cancellationToken);
+
+        var completions = new List<VideoWorkCompletion>();
+        foreach (var work in rows.GroupBy(x => x.WorkId))
+        {
+            var updatedAt = work.Max(x => x.UpdatedAt);
+            if (updatedAt is null)
+            {
+                continue;
+            }
+
+            CompletedEpisodeRef? completedThrough = null;
+            foreach (var episode in work)
+            {
+                if (!episode.IsCompleted)
+                {
+                    break;
+                }
+
+                completedThrough = new CompletedEpisodeRef(episode.WorkEpisodeId, episode.SeasonNumber, episode.EpisodeNumber);
+            }
+
+            completions.Add(new VideoWorkCompletion(work.Key, updatedAt.Value, completedThrough));
+        }
+
+        return completions;
+    }
+
+    /// <summary>
+    /// Canonical progress rows addressed by legacy library identity. <paramref name="profileId"/> and
+    /// <paramref name="animeIds"/> are optional filters; null means every profile or every anime.
+    /// </summary>
+    public async Task<IReadOnlyList<LegacyEpisodeProgress>> GetLegacyEpisodeProgressAsync(
+        string? profileId,
+        IReadOnlyCollection<Guid>? animeIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (profileId is not null)
+        {
+            ValidateProfile(profileId);
+        }
+
+        return await db.Database.SqlQueryRaw<LegacyEpisodeProgress>(
+                """
+                SELECT p."ProfileId",
+                       e."Id" AS "EpisodeId",
+                       e."AnimeId",
+                       a."Title" AS "AnimeTitle",
+                       e."Title" AS "EpisodeTitle",
+                       e."SeasonNumber",
+                       e."Number" AS "EpisodeNumber",
+                       p."PositionMs",
+                       p."DurationMs",
+                       p."IsCompleted",
+                       p."UpdatedAt"
+                FROM "MediaProgress" p
+                JOIN "WorkEpisodes" we ON we."Id" = p."WorkEpisodeId"
+                JOIN "WorkSourceLinks" l ON l."SourceKind" = {2} AND l."WorkId" = we."WorkId"
+                JOIN "Episodes" e ON e."AnimeId" = l."SourceId" AND e."SeasonNumber" = we."SeasonNumber" AND e."Number" = we."EpisodeNumber"
+                JOIN "Anime" a ON a."Id" = e."AnimeId"
+                WHERE ({0}::text IS NULL OR p."ProfileId" = {0})
+                  AND ({1}::uuid[] IS NULL OR e."AnimeId" = ANY({1}))
+                """,
+                (object?)profileId ?? DBNull.Value,
+                (object?)animeIds?.ToArray() ?? DBNull.Value,
+                (int)WorkSourceKind.Anime)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>Maps canonical Anime episodes back to the legacy library identity that pages and clients route by.</summary>
+    public async Task<IReadOnlyDictionary<Guid, LegacyEpisodeIdentity>> GetLegacyEpisodeIdentitiesAsync(
+        IReadOnlyCollection<Guid> workEpisodeIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (workEpisodeIds.Count == 0)
+        {
+            return new Dictionary<Guid, LegacyEpisodeIdentity>();
+        }
+
+        var rows = await db.Database.SqlQueryRaw<LegacyEpisodeIdentity>(
+                """
+                SELECT we."Id" AS "WorkEpisodeId", e."Id" AS "EpisodeId", e."AnimeId"
+                FROM "WorkEpisodes" we
+                JOIN "WorkSourceLinks" l ON l."SourceKind" = {1} AND l."WorkId" = we."WorkId"
+                JOIN "Episodes" e ON e."AnimeId" = l."SourceId" AND e."SeasonNumber" = we."SeasonNumber" AND e."Number" = we."EpisodeNumber"
+                WHERE we."Id" = ANY({0})
+                """,
+                workEpisodeIds.ToArray(),
+                (int)WorkSourceKind.Anime)
+            .ToListAsync(cancellationToken);
+
+        return rows.GroupBy(x => x.WorkEpisodeId).ToDictionary(group => group.Key, group => group.First());
     }
 
     public async Task ImportProgressAsync(
@@ -487,7 +672,7 @@ public sealed class VideoProgressService(AppDbContext db)
         await UpdateProgressRowAsync(
             profileId,
             target,
-            completed ? 0 : Math.Max(0, positionMs),
+            Math.Max(0, positionMs),
             durationMs is > 0 ? durationMs : null,
             completed,
             updatedAt,
@@ -920,6 +1105,14 @@ public sealed class VideoProgressService(AppDbContext db)
         bool IsCompleted,
         DateTime UpdatedAt);
 
+    private sealed record CompletionDbRow(
+        Guid WorkId,
+        Guid WorkEpisodeId,
+        int SeasonNumber,
+        int EpisodeNumber,
+        bool IsCompleted,
+        DateTime? UpdatedAt);
+
     private sealed record HistoryIdentityDbRow(
         Guid Id,
         Guid WorkId,
@@ -1036,6 +1229,12 @@ public sealed class CanonicalVideoTargetResolver(
     }
 }
 
+/// <summary>
+/// One-time migration of the legacy <c>EpisodeProgress</c> / <c>EpisodePlaybackHistory</c> rows into canonical
+/// <c>MediaProgress</c> / <c>MediaPlaybackHistory</c>. Migrated rows are consumed: the legacy tables have no runtime
+/// writer or reader any more, and keeping imported history rows would resurrect entries the profile later cleared or
+/// that the bounded canonical history trimmed.
+/// </summary>
 public sealed class CanonicalVideoProgressBackfillService(
     AppDbContext db,
     CanonicalVideoTargetResolver targets,
@@ -1061,7 +1260,7 @@ public sealed class CanonicalVideoProgressBackfillService(
             }
         }
 
-        var imported = 0;
+        var importedProgressIds = new List<Guid>();
         foreach (var row in legacyProgress)
         {
             if (!resolved.TryGetValue(row.EpisodeId, out var target))
@@ -1069,17 +1268,11 @@ public sealed class CanonicalVideoProgressBackfillService(
                 continue;
             }
 
-            await progress.ImportProgressAsync(
-                row.ProfileId,
-                target,
-                row.PositionMs,
-                row.DurationMs,
-                row.IsCompleted,
-                row.UpdatedAt,
-                cancellationToken);
-            imported++;
+            await progress.ImportProgressAsync(row.ProfileId, target, row.PositionMs, row.DurationMs, row.IsCompleted, row.UpdatedAt, cancellationToken);
+            importedProgressIds.Add(row.Id);
         }
 
+        var importedHistoryIds = new List<Guid>();
         foreach (var row in legacyHistory)
         {
             if (!resolved.TryGetValue(row.EpisodeId, out var target))
@@ -1087,18 +1280,12 @@ public sealed class CanonicalVideoProgressBackfillService(
                 continue;
             }
 
-            await progress.ImportHistoryAsync(
-                row.Id,
-                row.ProfileId,
-                target,
-                row.StartedAt,
-                row.LastPlayedAt,
-                row.PositionMs,
-                row.DurationMs,
-                row.ReachedEnd,
-                cancellationToken);
+            await progress.ImportHistoryAsync(row.Id, row.ProfileId, target, row.StartedAt, row.LastPlayedAt, row.PositionMs, row.DurationMs, row.ReachedEnd, cancellationToken);
+            importedHistoryIds.Add(row.Id);
         }
 
-        return imported;
+        await db.EpisodeProgress.Where(x => importedProgressIds.Contains(x.Id)).ExecuteDeleteAsync(cancellationToken);
+        await db.EpisodePlaybackHistory.Where(x => importedHistoryIds.Contains(x.Id)).ExecuteDeleteAsync(cancellationToken);
+        return importedProgressIds.Count;
     }
 }

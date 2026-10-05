@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Progress;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -259,6 +260,8 @@ public sealed class OwnerAuthService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         await DeleteProfileDataAsync(account.Id, cancellationToken);
+        await new VideoProgressService(db).DeleteProfileDataAsync(account.Id, cancellationToken);
+        await new ActiveSessionService(db, TimeProvider.System).DeleteProfileSessionsAsync(account.Id, cancellationToken);
         db.OwnerAccounts.Remove(account);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

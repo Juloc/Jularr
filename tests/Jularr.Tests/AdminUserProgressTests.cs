@@ -55,15 +55,6 @@ public sealed class AdminUserProgressTests
             };
             db.Add(anime);
             db.Add(episode);
-            db.EpisodeProgress.Add(new EpisodeProgress
-            {
-                ProfileId = "reader",
-                EpisodeId = episode.Id,
-                PositionMs = 45_000,
-                DurationMs = 90_000,
-                UpdatedAt = now.AddMinutes(-2)
-            });
-
             var work = new NovelWork
             {
                 SourceProvider = "fake",
@@ -111,6 +102,7 @@ public sealed class AdminUserProgressTests
                 LearningTestData.Review("reader", learningCard.Id, now.AddMinutes(-1)));
 
             await db.SaveChangesAsync();
+            await CanonicalProgressSeed.SetAsync(db, "reader", episode.Id, 45_000, 90_000, false, now.AddMinutes(-2));
 
             var service = new AdminUserProgressService(db);
             var users = await service.GetAsync();

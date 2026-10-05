@@ -1,7 +1,9 @@
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.Metadata;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaMapping;
+using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Tracking;
@@ -163,27 +165,23 @@ public sealed partial class AniListAccountService
             return null;
         }
 
-        var counts = await (
-            from episode in db.Episodes.AsNoTracking()
-            where episode.AnimeId == animeId &&
-                  episode.SeasonNumber > 0 &&
-                  episode.Number > 0
-            select new
-            {
-                Watched = db.EpisodeProgress.Any(x =>
-                    x.EpisodeId == episode.Id &&
-                    x.ProfileId == currentAccount.ProfileId &&
-                    x.IsCompleted)
-            })
-            .ToListAsync(cancellationToken);
+        var episodeCount = await db.Episodes
+            .AsNoTracking()
+            .CountAsync(
+                x => x.AnimeId == animeId && x.SeasonNumber > 0 && x.Number > 0,
+                cancellationToken);
+        var progress = await new VideoProgressService(db).GetLegacyEpisodeProgressAsync(
+            currentAccount.ProfileId,
+            [animeId],
+            cancellationToken);
+        var watchedCount = progress.Count(x => x.IsCompleted && x.SeasonNumber > 0 && x.EpisodeNumber > 0);
 
         var latest = await FindLatestWatchedEpisodeAsync(
             animeId,
             cancellationToken);
-        var watchedCount = counts.Count(x => x.Watched);
         var localText = latest is null
             ? "No episodes watched yet"
-            : $"{watchedCount} of {counts.Count} episodes watched · latest S{latest.SeasonNumber:00}E{latest.Number:00}";
+            : $"{watchedCount} of {episodeCount} episodes watched · latest S{latest.SeasonNumber:00}E{latest.Number:00}";
 
         var identity = await ResolveAnimeIdentityAsync(
             animeId,
@@ -220,18 +218,11 @@ public sealed partial class AniListAccountService
             return null;
         }
 
-        var progress = await db.EpisodeProgress
-            .AsNoTracking()
-            .Where(x =>
-                x.EpisodeId == episodeId &&
-                x.ProfileId == currentAccount.ProfileId)
-            .Select(x => new
-            {
-                x.IsCompleted,
-                x.PositionMs,
-                x.DurationMs
-            })
-            .SingleOrDefaultAsync(cancellationToken);
+        var progress = (await new VideoProgressService(db).GetLegacyEpisodeProgressAsync(
+                currentAccount.ProfileId,
+                [episode.AnimeId],
+                cancellationToken))
+            .SingleOrDefault(x => x.EpisodeId == episodeId);
 
         var code = $"S{episode.SeasonNumber:00}E{episode.Number:00}";
         var hasProgress = progress is not null &&
@@ -382,23 +373,36 @@ public sealed partial class AniListAccountService
             identity.ReviewReason);
     }
 
-    private Task<LatestWatchedEpisode?> FindLatestWatchedEpisodeAsync(
+    /// <summary>
+    /// The anime's canonical CompletedThrough episode (see <see cref="VideoProgressService.GetCompletedThroughAsync"/>)
+    /// addressed by its legacy episode identity: the only episode whose number AniList write-back may use.
+    /// </summary>
+    private async Task<LatestWatchedEpisode?> FindLatestWatchedEpisodeAsync(
         Guid animeId,
-        CancellationToken cancellationToken) =>
-        (from progress in db.EpisodeProgress.AsNoTracking()
-         join episode in db.Episodes.AsNoTracking()
-             on progress.EpisodeId equals episode.Id
-         where progress.ProfileId == currentAccount.ProfileId &&
-               progress.IsCompleted &&
-               episode.AnimeId == animeId &&
-               episode.SeasonNumber > 0 &&
-               episode.Number > 0
-         orderby episode.SeasonNumber descending, episode.Number descending
-         select new LatestWatchedEpisode(
-             episode.Id,
-             episode.SeasonNumber,
-             episode.Number))
-        .FirstOrDefaultAsync(cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var workId = await db.WorkSourceLinks
+            .AsNoTracking()
+            .Where(x => x.SourceKind == WorkSourceKind.Anime && x.SourceId == animeId)
+            .Select(x => (Guid?)x.WorkId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (workId is null)
+        {
+            return null;
+        }
+
+        var videoProgress = new VideoProgressService(db);
+        var completion = (await videoProgress.GetCompletedThroughAsync(currentAccount.ProfileId, workId, cancellationToken)).SingleOrDefault();
+        if (completion?.CompletedThrough is not { } through)
+        {
+            return null;
+        }
+
+        var identities = await videoProgress.GetLegacyEpisodeIdentitiesAsync([through.WorkEpisodeId], cancellationToken);
+        return identities.TryGetValue(through.WorkEpisodeId, out var identity)
+            ? new LatestWatchedEpisode(identity.EpisodeId, through.SeasonNumber, through.EpisodeNumber)
+            : null;
+    }
 
     private async Task<ExternalIdentity> ResolveAnimeIdentityAsync(
         Guid animeId,

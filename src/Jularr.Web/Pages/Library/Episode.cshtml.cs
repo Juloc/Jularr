@@ -233,7 +233,7 @@ public sealed class EpisodeModel(
             .ThenBy(x => x.Number)
             .Select(x => new { x.Id, x.SeasonNumber, x.Number, x.Title })
             .ToListAsync(cancellationToken);
-        var progress = await episodeProgressService.GetForAnimeAsync(animeId, cancellationToken);
+        var progress = await episodeProgressService.GetForAnimesAsync([animeId], cancellationToken);
 
         Episodes = rows
             .Select(row =>

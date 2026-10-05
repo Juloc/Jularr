@@ -82,4 +82,52 @@ class TvProgressPolicyTest {
         assertFalse(incomplete!!.completed)
         assertTrue(complete!!.completed)
     }
+
+    @Test
+    fun seekPastThresholdIsOnlyAResumePointUntilPlaybackContinues() {
+        val policy = TvProgressPolicy()
+        policy.evaluate(
+            TvProgressEvent.HEARTBEAT,
+            nowMs = 1_000,
+            positionMs = 10_000,
+            durationMs = 100_000,
+        )
+
+        val seek = policy.evaluate(
+            TvProgressEvent.SEEK,
+            nowMs = 1_100,
+            positionMs = 96_000,
+            durationMs = 100_000,
+        )
+        val close = policy.evaluate(
+            TvProgressEvent.CLOSE,
+            nowMs = 1_200,
+            positionMs = 96_000,
+            durationMs = 100_000,
+        )
+        val resumed = policy.evaluate(
+            TvProgressEvent.HEARTBEAT,
+            nowMs = 7_000,
+            positionMs = 97_000,
+            durationMs = 100_000,
+        )
+
+        assertFalse(seek!!.completed)
+        assertFalse(close!!.completed)
+        assertTrue(resumed!!.completed)
+    }
+
+    @Test
+    fun startingPastThresholdWithoutPlaybackDoesNotComplete() {
+        val policy = TvProgressPolicy()
+
+        val close = policy.evaluate(
+            TvProgressEvent.CLOSE,
+            nowMs = 1_000,
+            positionMs = 96_000,
+            durationMs = 100_000,
+        )
+
+        assertFalse(close!!.completed)
+    }
 }

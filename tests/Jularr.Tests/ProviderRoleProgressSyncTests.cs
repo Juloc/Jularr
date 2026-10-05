@@ -29,7 +29,7 @@ public sealed class ProviderRoleProgressSyncTests
     {
         await using var fixture = await Fixture.CreateAsync();
         var anime = await fixture.AddAnimeAsync("Example Anime", "555", episodes: 4);
-        await fixture.MarkWatchedAsync(anime, 2);
+        await fixture.MarkWatchedAsync(anime, 1, 2);
         await fixture.ConnectAsync(viewerId: 42, OwnerToken);
 
         var remote = new AniListSyncTests.SyncRemote();
@@ -45,7 +45,7 @@ public sealed class ProviderRoleProgressSyncTests
     {
         await using var fixture = await Fixture.CreateAsync();
         var anime = await fixture.AddAnimeAsync("Example Anime", "555", episodes: 4);
-        await fixture.MarkWatchedAsync(anime, 2);
+        await fixture.MarkWatchedAsync(anime, 1, 2);
         await fixture.ConnectAsync(viewerId: 42, OwnerToken);
         await fixture.Roles.SetWorkOverrideAsync(
             anime.Id, MappingProviderRole.ProgressTracking, MappingProviders.Mal, CancellationToken.None);
@@ -183,15 +183,9 @@ public sealed class ProviderRoleProgressSyncTests
         {
             foreach (var number in numbers)
             {
-                Db.Add(new EpisodeProgress
-                {
-                    ProfileId = Owner,
-                    EpisodeId = anime.Episodes[number - 1],
-                    IsCompleted = true
-                });
+                await CanonicalProgressSeed.SetAsync(Db, Owner, anime.Episodes[number - 1], 0, null, true);
             }
 
-            await Db.SaveChangesAsync();
             Db.ChangeTracker.Clear();
         }
 
