@@ -11,7 +11,7 @@ namespace Jularr.Web.Features.Library;
 /// <param name="PlayableUnits">Episodes (or specials, for a title that only has those) with a file.</param>
 /// <param name="MissingUnits">Known episodes without a file, plus the ones a finished title's provider lists beyond the library.</param>
 /// <param name="LastWatchedAt">The last meaningful watch progress of the profile; null when never watched.</param>
-/// <param name="WorkId">The canonical identity of the title; the Card href of an Anime is still keyed by its legacy record.</param>
+/// <param name="WorkId">The canonical identity of the title; the Card href of an Anime is still keyed by its legacy record, and empty for titles without a detail page yet.</param>
 /// <param name="RuntimeMinutes">The runtime of a Movie from its analysed file; null for episodic titles and when unknown.</param>
 /// <param name="RemainingMinutes">What is left of a Movie that is in progress; null otherwise.</param>
 public sealed record LibraryCardEntry(
@@ -182,7 +182,7 @@ public sealed record LibraryScopeTab(string LabelKey, string Href, bool IsActive
 /// <summary>Everything one Library card renders, resolved and localised; build it with <see cref="Create"/>.</summary>
 public sealed record LibraryCardView(
     string Title,
-    string Href,
+    string? Href,
     string? PosterUrl,
     string Initial,
     string? StatusText,
@@ -266,7 +266,7 @@ public sealed record LibraryCardView(
 
         return new LibraryCardView(
             card.Title,
-            card.Href,
+            string.IsNullOrEmpty(card.Href) ? null : card.Href,
             entry.PosterUrl,
             InitialOf(card.Title),
             statusText,
@@ -280,17 +280,6 @@ public sealed record LibraryCardView(
             action);
     }
 
-    /// <summary>
-    /// The canonical detail address of a title. An Anime is still keyed by its legacy record id until its
-    /// detail page moves to the Work; Movies and Series are keyed by the Work.
-    /// </summary>
-    public static string DetailHref(WorkMediaType mediaType, Guid id) => mediaType switch
-    {
-        WorkMediaType.Anime => $"/Library/Anime/{id}",
-        WorkMediaType.Series => $"/Library/Series/{id}",
-        WorkMediaType.Movie => $"/Library/Movie/{id}",
-        _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
-    };
 
     private static string FormatRuntime(int minutes) =>
         minutes >= 60 ? $"{minutes / 60}h {minutes % 60:00}m" : $"{minutes}m";
@@ -343,6 +332,18 @@ public sealed record LibraryCardView(
 public static class LibraryBrowse
 {
     public const string BasePath = "/Library";
+
+    /// <summary>
+    /// The detail address of a title; an Anime is keyed by its legacy record id until its detail page moves to the
+    /// Work. Movies and Series have no detail page yet, so their cards are not links (null) until a later slice
+    /// builds /Library/Movie/{workId} and /Library/Series/{workId}.
+    /// </summary>
+    public static string? DetailHref(WorkMediaType mediaType, Guid id) => mediaType switch
+    {
+        WorkMediaType.Anime => $"/Library/Anime/{id}",
+        WorkMediaType.Series or WorkMediaType.Movie => null,
+        _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
+    };
 
     private static readonly LibraryProgressState[] ProgressOrder =
         [LibraryProgressState.NotStarted, LibraryProgressState.InProgress, LibraryProgressState.Completed];
@@ -593,10 +594,7 @@ public static class LibraryBrowse
     /// The media-type tabs: All (only when several video types are visible) and each visible video type as a scope of this page,
     /// then the other Library destinations the profile may browse. Sort and filters stay when switching scope.
     /// </summary>
-    public static IReadOnlyList<LibraryScopeTab> ScopeTabs(
-        LibraryBrowseQuery query,
-        IReadOnlyCollection<WorkMediaType> visibleVideoTypes,
-        IEnumerable<UiNavigationItem> otherTabs)
+    public static IReadOnlyList<LibraryScopeTab> ScopeTabs(LibraryBrowseQuery query, IReadOnlyCollection<WorkMediaType> visibleVideoTypes, IEnumerable<UiNavigationItem> otherTabs)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(visibleVideoTypes);

@@ -9,6 +9,7 @@ using Jularr.Web.Features.Subtitles;
 using Jularr.Web.Ui;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jularr.Tests;
 
@@ -43,8 +44,8 @@ public sealed class LibraryCanonicalReadTests
             new[] { WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie },
             read.Entries.Select(x => x.MediaType).ToArray());
         Assert.AreEqual($"/Library/Anime/{anime.Anime.Id}", Entry(read, anime.Work.Id).Card.Href, "Anime keeps its legacy-keyed detail route.");
-        Assert.AreEqual($"/Library/Series/{series.Id}", Entry(read, series.Id).Card.Href);
-        Assert.AreEqual($"/Library/Movie/{movie.Id}", Entry(read, movie.Id).Card.Href);
+        Assert.AreEqual(string.Empty, Entry(read, series.Id).Card.Href, "Series have no detail page yet.");
+        Assert.AreEqual(string.Empty, Entry(read, movie.Id).Card.Href, "Movies have no detail page yet.");
         Assert.AreEqual(MediaBannerKind.Series, Entry(read, series.Id).Card.Kind);
         Assert.AreEqual(2021, Entry(read, series.Id).Card.Year);
         Assert.AreEqual(124, Entry(read, movie.Id).RuntimeMinutes, "Runtime comes from the analysed file.");
@@ -62,7 +63,7 @@ public sealed class LibraryCanonicalReadTests
         await seed.AddVideoAsync(book, null);
 
         var movies = await new LibraryMediaCardQuery(fixture.Db).GetEntriesAsync(Alice, [WorkMediaType.Movie], CancellationToken.None);
-        var anime = await new LibraryMediaCardQuery(fixture.Db).GetAnimeEntriesAsync(Alice, CancellationToken.None);
+        var anime = await new LibraryMediaCardQuery(fixture.Db).GetEntriesAsync(Alice, [WorkMediaType.Anime], CancellationToken.None);
         var everything = await ReadAsync(fixture, Alice);
         var nothing = await new LibraryMediaCardQuery(fixture.Db).GetEntriesAsync(Alice, [], CancellationToken.None);
 
@@ -186,7 +187,7 @@ public sealed class LibraryCanonicalReadTests
         Assert.AreEqual(2, aliceSeries.Card.Progress?.NextNumber, "Alice resumes episode 2.");
         Assert.AreEqual(25, aliceSeries.Card.Progress?.Percent, "One of four episodes is watched.");
         Assert.AreEqual(BaseTime.AddMinutes(1), aliceSeries.LastWatchedAt);
-        Assert.AreEqual($"/Library/Series/{series.Id}", aliceSeries.Card.Progress?.NextUrl, "Series play from their detail page.");
+        Assert.AreEqual(string.Empty, aliceSeries.Card.Progress?.NextUrl);
 
         var bobSeries = Entry(bob, series.Id);
         Assert.AreEqual(4, bobSeries.Card.Progress?.NextNumber, "Bob continues after his own episode 3, whatever Alice watched.");
@@ -334,7 +335,7 @@ public sealed class LibraryCanonicalReadTests
             Assert.AreEqual(1, await fixture.Db.MediaAssets.CountAsync(x => x.WorkId == workId && x.WorkEpisodeId != null));
             Assert.IsTrue(links.Any(x => x.SourceKind == WorkSourceKind.Anime && x.SourceId == emptyAnime.Id));
 
-            var read = await new LibraryMediaCardQuery(fixture.Db).GetAnimeEntriesAsync(Alice, CancellationToken.None);
+            var read = await new LibraryMediaCardQuery(fixture.Db).GetEntriesAsync(Alice, [WorkMediaType.Anime], CancellationToken.None);
             var entry = read.Entries.Single(x => x.WorkId == workId);
             Assert.AreEqual(1, entry.PlayableUnits);
             Assert.AreEqual(1, entry.MissingUnits, "The episode without a file stays a known, missing unit.");
@@ -344,6 +345,54 @@ public sealed class LibraryCanonicalReadTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [TestMethod]
+    public async Task TheBackfillSkipsAFileThatIsMissingOnDiskAndKeepsBridgingTheRest()
+    {
+        await using var fixture = await EpisodeFlowFixture.CreateAsync();
+        var directory = Path.Combine(Path.GetTempPath(), $"jularr-library-stale-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var anime = await fixture.AddAnimeAsync("unmounted");
+            var present = await fixture.AddEpisodeAsync(anime, 1, 1, withMedia: false);
+            var stale = await fixture.AddEpisodeAsync(anime, 1, 2, withMedia: false);
+            var presentPath = Path.Combine(directory, "e1.mkv");
+            await File.WriteAllBytesAsync(presentPath, [1]);
+            var root = new LibraryRoot { Name = "Anime", Path = directory };
+            fixture.Db.Add(root);
+            fixture.Db.Add(new StoredFile { LibraryRootId = root.Id, EpisodeId = present.Id, Path = presentPath, SizeBytes = 1, LastWriteTimeUtc = DateTime.UtcNow });
+            fixture.Db.Add(new StoredFile { LibraryRootId = root.Id, EpisodeId = stale.Id, Path = Path.Combine(directory, "gone.mkv"), SizeBytes = 1, LastWriteTimeUtc = DateTime.UtcNow });
+            await fixture.Db.SaveChangesAsync();
+
+            var backfill = CreateBackfill(fixture.Db);
+            Assert.AreEqual(1, await backfill.BackfillLegacyAnimeAsync(libraryRootId: null, CancellationToken.None), "Startup must not fail on a file of unmounted media.");
+            Assert.AreEqual(0, await backfill.BackfillLegacyAnimeAsync(libraryRootId: null, CancellationToken.None), "A rerun skips the missing file again.");
+
+            Assert.AreEqual(1, await fixture.Db.MediaAssets.CountAsync());
+            Assert.AreEqual(2, await fixture.Db.WorkEpisodes.CountAsync(), "The episode of the missing file is still bridged as a known unit.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task ARequestedOrCreatedAnimeIsInTheLibraryWithoutAScan()
+    {
+        await using var fixture = await EpisodeFlowFixture.CreateAsync();
+        var anime = new Anime { Key = "fresh", Title = "Fresh Anime" };
+        fixture.Db.Add(anime);
+        await fixture.Db.SaveChangesAsync();
+        var bridge = new LegacyWorkBridge(fixture.Db, new WorkService(fixture.Db), new WorkStructureService(fixture.Db));
+
+        await bridge.EnsureWorkForAnimeAsync(anime, CancellationToken.None);
+
+        var entry = Assert.ContainsSingle((await ReadAsync(fixture, Alice)).Entries);
+        Assert.AreEqual($"/Library/Anime/{anime.Id}", entry.Card.Href);
+        Assert.AreEqual(0, entry.PlayableUnits);
     }
 
     private static Task<LibraryEntries> ReadAsync(EpisodeFlowFixture fixture, string profile) =>
@@ -388,7 +437,7 @@ public sealed class LibraryCanonicalReadTests
     }
 
     private static CanonicalVideoStorageBackfillService CreateBackfill(AppDbContext db) =>
-        new(db, new LegacyWorkBridge(db, new WorkService(db), new WorkStructureService(db)), new CanonicalMediaStorageService(db));
+        new(db, new LegacyWorkBridge(db, new WorkService(db), new WorkStructureService(db)), new CanonicalMediaStorageService(db), NullLogger<CanonicalVideoStorageBackfillService>.Instance);
 
     private sealed class CommandCounter : DbCommandInterceptor
     {

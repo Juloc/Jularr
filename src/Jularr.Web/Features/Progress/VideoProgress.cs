@@ -107,21 +107,20 @@ public sealed class VideoProgressService(AppDbContext db)
     }
 
     /// <summary>
-    /// Every canonical progress row of one profile in a single read, for browse surfaces that show
-    /// continue state for many Works at once instead of loading each target through <see cref="GetAsync"/>.
+    /// The canonical progress rows of one profile for the given Works in a single read, for browse surfaces that
+    /// show continue state for many Works at once instead of loading each target through <see cref="GetAsync"/>.
     /// </summary>
-    public async Task<IReadOnlyList<MediaProgressSnapshot>> ListAsync(
-        string profileId,
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MediaProgressSnapshot>> ListAsync(string profileId, IReadOnlyCollection<Guid> workIds, CancellationToken cancellationToken = default)
     {
         ValidateProfile(profileId);
         var rows = await db.Database.SqlQueryRaw<MediaProgressDbRow>(
                 """
                 SELECT "Id", "ProfileId", "WorkId", "WorkEpisodeId", "PositionMs", "DurationMs", "IsCompleted", "UpdatedAt"
                 FROM "MediaProgress"
-                WHERE "ProfileId" = {0}
+                WHERE "ProfileId" = {0} AND "WorkId" = ANY({1})
                 """,
-                profileId)
+                profileId,
+                workIds.ToArray())
             .ToListAsync(cancellationToken);
         return [.. rows.Select(ToSnapshot)];
     }

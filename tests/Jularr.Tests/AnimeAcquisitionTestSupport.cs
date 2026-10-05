@@ -508,6 +508,9 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
 
         collection.AddSingleton<IAnimeMetadataProvider>(AniListMetadata);
         collection.AddScoped<AnimeMetadataService>();
+        collection.AddScoped<Jularr.Web.Features.MediaCore.WorkService>();
+        collection.AddScoped<Jularr.Web.Features.MediaCore.WorkStructureService>();
+        collection.AddScoped<Jularr.Web.Features.MediaCore.LegacyWorkBridge>();
         collection.AddScoped<AnimeAcquisitionRequestExecutor>();
         collection.AddScoped<SabnzbdConnectionResolver>();
         collection.AddScoped<SabnzbdDownloadService>();

@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Ui;
@@ -107,7 +108,7 @@ public sealed class MediaAvailabilityTests
         await store.CreateAsync(AnimeDraft("42"), "alice", AcquisitionRequestStatus.Searching, "owner", CancellationToken.None);
         await store.CreateAsync(AnimeDraft("7"), "alice", AcquisitionRequestStatus.Completed, "owner", CancellationToken.None);
 
-        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetAnimeEntriesAsync("alice", CancellationToken.None))
+        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetEntriesAsync("alice", [WorkMediaType.Anime], CancellationToken.None))
             .Entries
             .ToDictionary(entry => entry.Card.Title, entry => entry.Card);
         var badges = cards.ToDictionary(pair => pair.Key, pair => MediaBannerCardModel.Create(pair.Value, Ui).Availability?.Label);

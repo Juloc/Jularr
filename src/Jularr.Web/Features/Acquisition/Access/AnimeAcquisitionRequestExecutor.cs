@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,7 +34,8 @@ public sealed class AnimeAcquisitionRequestExecutor(
     AnimeMonitoringStore monitoringStore,
     AnimeAcquisitionPipeline pipeline,
     AnimeAcquisitionInventory inventory,
-    AnimeAcquisitionScheduler scheduler) : IAcquisitionRequestExecutor
+    AnimeAcquisitionScheduler scheduler,
+    LegacyWorkBridge workBridge) : IAcquisitionRequestExecutor
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Anime;
 
@@ -95,6 +97,9 @@ public sealed class AnimeAcquisitionRequestExecutor(
             db.Anime.Add(created);
             await db.SaveChangesAsync(cancellationToken);
         }
+
+        // The Library lists canonical Works, so the series must have one before the first file exists.
+        await workBridge.EnsureWorkForAnimeAsync(created, cancellationToken);
 
         var matched = await metadata.MatchAsync(created.Id, candidate, cancellationToken);
         if (!matched.Success)

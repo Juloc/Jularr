@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
@@ -365,12 +366,14 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
 public sealed class CanonicalVideoStorageBackfillService(
     AppDbContext db,
     LegacyWorkBridge bridge,
-    CanonicalMediaStorageService storage)
+    CanonicalMediaStorageService storage,
+    ILogger<CanonicalVideoStorageBackfillService> logger)
 {
+    // A stale file stays pending until a scan removes it; warn once per process instead of on every scan.
+    private static readonly ConcurrentDictionary<string, byte> WarnedMissingFiles = new(StringComparer.Ordinal);
+
     /// <returns>The number of legacy files attached to canonical video Assets.</returns>
-    public async Task<int> BackfillLegacyAnimeAsync(
-        Guid? libraryRootId,
-        CancellationToken cancellationToken)
+    public async Task<int> BackfillLegacyAnimeAsync(Guid? libraryRootId, CancellationToken cancellationToken)
     {
         var pendingFiles = await db.StoredFiles
             .AsNoTracking()
@@ -464,8 +467,9 @@ public sealed class CanonicalVideoStorageBackfillService(
         await db.SaveChangesAsync(cancellationToken);
 
         var episodeById = episodes.GroupBy(x => x.LegacyEpisodeId).ToDictionary(group => group.Key, group => group.First());
+        // A file on unmounted or removed media must not stop startup or the scan; it is attached once it is back.
         var attachments = pendingFiles
-            .Where(file => episodeById.ContainsKey(file.LegacyEpisodeId))
+            .Where(file => episodeById.ContainsKey(file.LegacyEpisodeId) && IsFilePresent(file.Path))
             .Select(file =>
             {
                 var episode = episodeById[file.LegacyEpisodeId];
@@ -476,6 +480,21 @@ public sealed class CanonicalVideoStorageBackfillService(
 
         await storage.AttachVideosAsync(attachments, cancellationToken);
         return attachments.Length;
+    }
+
+    private bool IsFilePresent(string path)
+    {
+        if (File.Exists(path))
+        {
+            return true;
+        }
+
+        if (WarnedMissingFiles.TryAdd(path, 0))
+        {
+            logger.LogWarning("Skipping the canonical video bridge for missing file {Path}; it is attached when the file is back or removed by a scan.", path);
+        }
+
+        return false;
     }
 
     private sealed record LegacyStoredFile(string Path, Guid LegacyEpisodeId);

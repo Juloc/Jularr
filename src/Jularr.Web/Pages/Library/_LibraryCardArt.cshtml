@@ -1,0 +1,10 @@
+@using Jularr.Web.Features.Library
+@model LibraryCardView
+@if (!string.IsNullOrWhiteSpace(Model.PosterUrl))
+{
+    <img src="@Model.PosterUrl" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+}
+else
+{
+    <span class="lib-card-initial">@Model.Initial</span>
+}

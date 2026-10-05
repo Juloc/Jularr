@@ -134,19 +134,21 @@ public sealed class LibraryPageRenderTests
     }
 
     [TestMethod]
-    public async Task EmptyLibraryExplainsTheNextStepForTheOwnerAndStaysQuietForOthers()
+    public async Task EmptyLibraryPointsEveryoneToDiscoverInsteadOfRootSetup()
     {
         await using var host = await ManageSheetPageTestHost.CreateAsync();
 
         var owner = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library", asOwner: true));
         StringAssert.Contains(owner, "Library is empty");
-        StringAssert.Contains(owner, "Add a root and run the first scan.");
+        StringAssert.Contains(owner, "Find something in Discover and request it.");
+        StringAssert.Contains(owner, "href=\"/Discover\"");
+        Assert.IsFalse(owner.Contains("Add a root", StringComparison.Ordinal), "Roots are an Admin concern.");
         Assert.IsFalse(owner.Contains("Import from Sonarr", StringComparison.Ordinal), "Importing is an Admin task, not a Library header action.");
         Assert.IsFalse(owner.Contains("Manage roots", StringComparison.Ordinal));
         Assert.IsFalse(owner.Contains("lib-toolbar", StringComparison.Ordinal), "Nothing to filter yet.");
 
         var member = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library", asOwner: false));
-        StringAssert.Contains(member, "Nothing is in the library yet.");
+        StringAssert.Contains(member, "Find something in Discover and request it.");
         Assert.IsFalse(member.Contains("Add a root", StringComparison.Ordinal));
         Assert.IsFalse(member.Contains("Import from Sonarr", StringComparison.Ordinal));
     }
@@ -209,7 +211,7 @@ public sealed class LibraryPageRenderTests
         var (host, starfall, amber) = await SeedAsync();
         await using var _host = host;
 
-        var read = await new LibraryMediaCardQuery(host.Db).GetAnimeEntriesAsync(Profile, CancellationToken.None);
+        var read = await new LibraryMediaCardQuery(host.Db).GetEntriesAsync(Profile, [WorkMediaType.Anime], CancellationToken.None);
 
         Assert.IsFalse(read.Degraded);
         var starfallEntry = read.Entries.Single(x => x.Card.Href.EndsWith(starfall.Anime.Id.ToString(), StringComparison.Ordinal));
@@ -248,13 +250,17 @@ public sealed class LibraryPageRenderTests
         var movies = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library?type=movie", asOwner: false));
         StringAssert.Contains(Between(movies, "<nav class=\"library-type-tabs\"", "</nav>"), "library-type-tab active\" href=\"/Library?type=movie\"");
         StringAssert.Contains(movies, "1 item");
-        StringAssert.Contains(movies, "/Library/Movie/" + movie.Id);
+        var movieCard = Between(movies, "<article class=\"lib-card", "</article>");
+        StringAssert.Contains(movieCard, "Moon Empire");
+        Assert.IsFalse(movieCard.Contains("<a ", StringComparison.Ordinal), "Movies have no detail page yet, so the card is not a link.");
+        Assert.IsFalse(movies.Contains("/Library/Movie/", StringComparison.Ordinal));
         StringAssert.Contains(movies, "2024 · 2h 04m");
         StringAssert.Contains(movies, "name=\"type\" value=\"movie\"");
         Assert.IsFalse(movies.Contains("Starfall Chronicle", StringComparison.Ordinal));
 
         var seriesPage = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library?type=series", asOwner: false));
-        StringAssert.Contains(seriesPage, "/Library/Series/" + series.Id);
+        StringAssert.Contains(seriesPage, "Dark Harbor");
+        Assert.IsFalse(seriesPage.Contains("/Library/Series/", StringComparison.Ordinal));
         StringAssert.Contains(seriesPage, "Partly available");
         Assert.IsFalse(seriesPage.Contains("Moon Empire", StringComparison.Ordinal));
     }

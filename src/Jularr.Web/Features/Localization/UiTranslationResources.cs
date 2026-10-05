@@ -3281,7 +3281,6 @@ public static class UiTranslationResources
         M("library.browse.card.preferredMissing", "Not available in your preferred language", "Library", "Tooltip", "Tooltip of the language line of a card when the title has languages but none of the profile's preferred ones.", "short explanation", 48),
         M("library.browse.availability.partial", "Partly available", "Library", "Status", "Indicator on a library card: only some episodes have a file.", "compact status", 20),
         M("library.browse.availability.missing", "Not available", "Library", "Status", "Indicator on a library card: no episode has a file and nothing is requested.", "compact status", 20),
-        M("library.browse.empty.member", "Nothing is in the library yet.", "Library", "Body", "Empty-state text for profiles that cannot manage the library.", "clear concise copy", 40),
         M("library.browse.noResults.title", "No titles match these filters", "Library", "Heading", "Heading shown when the active filters match no title.", "clear empty-state heading", 40),
         M("library.browse.noResults.reset", "Reset filters", "Library", "Link", "Clears the filters when they match no title.", "concise action", 20),
         M("library.browse.error.title", "The library could not be loaded.", "Library", "Error", "Shown instead of the titles when reading the library failed.", "neutral diagnostic", 44),
@@ -3297,7 +3296,8 @@ public static class UiTranslationResources
         M("library.browse.collections.kind.manual", "Manual", "Library", "Label", "Marker on a collection tile: the owner picked its titles by hand.", "very short label", 12),
         M("library.browse.collections.kind.smart", "Smart", "Library", "Label", "Marker on a collection tile: its titles follow a rule.", "very short label", 12),
         M("library.index.emptyTitle", "Library is empty", "Library", "Heading", "Empty-state heading shown when the library has no anime yet.", "clear empty-state heading", 24),
-        M("library.index.emptyHint", "Add a root and run the first scan.", "Library", "Body", "Empty-state hint explaining the next step to populate the library.", "clear concise copy", 44),
+        M("library.index.emptyHint", "Find something in Discover and request it.", "Library", "Body", "Empty-state hint explaining the next step to populate the library.", "clear concise copy", 44),
+        M("library.index.emptyAction", "Open Discover", "Library", "Link", "Empty-state link from an empty library to Discover.", "concise navigation action", 18),
         M("library.index.episodeCount", "{count} episodes", "Library", "Value", "Episode count caption shown on an anime's library card.", "compact metadata", 24, new Dictionary<string, string> { ["count"] = "Number of episodes." }),
 
         M("library.anime.eyebrow", "Anime library", "Library", "Eyebrow", "Short label above the anime detail page heading.", "compact section label", 20),

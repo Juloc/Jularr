@@ -29,19 +29,13 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
 {
     private static readonly MediaAcquisitionKind[] RequestKinds = [MediaAcquisitionKind.Anime, MediaAcquisitionKind.Movie, MediaAcquisitionKind.Tv];
 
-    /// <summary>The Anime scope of <see cref="GetEntriesAsync"/>, for callers that only match local Anime titles (Discover).</summary>
-    public Task<LibraryEntries> GetAnimeEntriesAsync(string profileId, CancellationToken cancellationToken) =>
-        GetEntriesAsync(profileId, [WorkMediaType.Anime], cancellationToken);
 
     /// <summary>
     /// The Library page's read model for the given media types: the banner-card facts plus what browsing needs (poster,
     /// format, when the title was added and last watched, how many units are playable or missing). A failing open-request
     /// lookup only drops the requested state and flags the result as degraded.
     /// </summary>
-    public async Task<LibraryEntries> GetEntriesAsync(
-        string profileId,
-        IReadOnlyCollection<WorkMediaType> mediaTypes,
-        CancellationToken cancellationToken)
+    public async Task<LibraryEntries> GetEntriesAsync(string profileId, IReadOnlyCollection<WorkMediaType> mediaTypes, CancellationToken cancellationToken)
     {
         var scope = LibraryBrowse.VideoMediaTypes.Where(mediaTypes.Contains).ToArray();
         if (scope.Length == 0)
@@ -113,20 +107,10 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
                 from metadata in metadataRows.DefaultIfEmpty()
                 join localValue in db.AnimeLocalMetadata.AsNoTracking() on animeValue.Id equals localValue.AnimeId into localRows
                 from local in localRows.DefaultIfEmpty()
-                select new AnimeRow(
-                    link.WorkId,
-                    animeValue.Id,
-                    metadata == null ? animeValue.Title : metadata.PreferredTitle,
-                    metadata == null ? null : metadata.Status,
-                    metadata != null && metadata.SeasonYear != null ? metadata.SeasonYear : local == null ? null : local.Year,
-                    metadata == null ? null : metadata.AverageScore,
-                    metadata == null ? null : metadata.EpisodeCount,
-                    metadata == null ? null : metadata.BannerImageUrl,
-                    metadata == null ? null : metadata.CoverImageUrl,
-                    metadata == null ? null : metadata.Provider,
-                    metadata == null ? null : metadata.ExternalId,
-                    metadata == null ? null : metadata.Format,
-                    animeValue.CreatedAt))
+                select new AnimeRow(link.WorkId, animeValue.Id, metadata == null ? animeValue.Title : metadata.PreferredTitle, metadata == null ? null : metadata.Status,
+                    metadata != null && metadata.SeasonYear != null ? metadata.SeasonYear : local == null ? null : local.Year, metadata == null ? null : metadata.AverageScore,
+                    metadata == null ? null : metadata.EpisodeCount, metadata == null ? null : metadata.BannerImageUrl, metadata == null ? null : metadata.CoverImageUrl,
+                    metadata == null ? null : metadata.Provider, metadata == null ? null : metadata.ExternalId, metadata == null ? null : metadata.Format, animeValue.CreatedAt))
                 .ToListAsync(cancellationToken);
             animeRows = anime.GroupBy(x => x.WorkId).ToDictionary(group => group.Key, group => group.OrderBy(x => x.CreatedAt).ThenBy(x => x.AnimeId).First());
 
@@ -197,7 +181,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
             select new LanguageRow(languageGroup.Key.WorkId, languageGroup.Key.Kind, languageGroup.Key.Language!, languageGroup.Count(), languageGroup.Min(x => x.StreamIndex)))
             .ToListAsync(cancellationToken);
 
-        var progress = await new VideoProgressService(db).ListAsync(profileId, cancellationToken);
+        var progress = await new VideoProgressService(db).ListAsync(profileId, workIds, cancellationToken);
         var context = new ReadContext(
             units,
             legacyEpisodeIds,
@@ -353,7 +337,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
                     : null)
             .Max();
 
-        var href = LibraryCardView.DetailHref(work.MediaType, anime?.AnimeId ?? work.Id);
+        var href = LibraryBrowse.DetailHref(work.MediaType, anime?.AnimeId ?? work.Id) ?? string.Empty;
         var poster = anime is null ? null : AnimeArtworkStore.ResolvePosterUrl(anime.AnimeId, anime.CoverImageUrl);
         var fanart = anime is null ? null : AnimeArtworkStore.ResolveFanartUrl(anime.AnimeId, anime.BannerImageUrl);
         var card = new MediaBannerCardData(
@@ -378,7 +362,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
         var files = context.MovieFiles[work.Id].ToArray();
         context.MovieProgress.TryGetValue(work.Id, out var row);
         var meaningful = row is not null && (row.IsCompleted || row.PositionMs >= VideoProgressService.MinimumResumeMs);
-        var href = LibraryCardView.DetailHref(work.MediaType, work.Id);
+        var href = LibraryBrowse.DetailHref(work.MediaType, work.Id) ?? string.Empty;
 
         var state = row is { IsCompleted: true }
             ? MediaBannerProgressState.Completed
@@ -405,14 +389,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
         return new LibraryCardEntry(card, null, null, files.Length > 0 ? 1 : 0, 0, work.CreatedAt, meaningful ? row!.UpdatedAt : null, work.Id, work.MediaType, runtimeMinutes, remainingMinutes);
     }
 
-    private static MediaBannerProgress? BuildProgress(
-        WorkRow work,
-        AnimeRow? anime,
-        string href,
-        IReadOnlyList<UnitRow> episodes,
-        IReadOnlyList<EpisodeOrderKey> playable,
-        IReadOnlyList<int> localSeasons,
-        ReadContext context)
+    private static MediaBannerProgress? BuildProgress(WorkRow work, AnimeRow? anime, string href, IReadOnlyList<UnitRow> episodes, IReadOnlyList<EpisodeOrderKey> playable, IReadOnlyList<int> localSeasons, ReadContext context)
     {
         if (ResolveNext(playable, context.EpisodeProgress) is not { } resolved)
         {
@@ -449,14 +426,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
         var nextUrl = context.LegacyEpisodeIds.TryGetValue((work.Id, next.SeasonNumber, next.Number), out var legacyEpisodeId)
             ? $"/Library/Episode/{legacyEpisodeId}"
             : href;
-        return new MediaBannerProgress(
-            resolved.State,
-            MediaBannerUnit.Episode,
-            next.Number,
-            nextUrl,
-            special ? null : total,
-            multiSeason && !special ? next.SeasonNumber : null,
-            percent);
+        return new MediaBannerProgress(resolved.State, MediaBannerUnit.Episode, next.Number, nextUrl, special ? null : total, multiSeason && !special ? next.SeasonNumber : null, percent);
     }
 
     // Most common first; ties keep the files' own track order (sidecars after embedded tracks).

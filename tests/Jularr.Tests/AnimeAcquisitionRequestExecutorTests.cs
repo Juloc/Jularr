@@ -32,6 +32,9 @@ public sealed class AnimeAcquisitionRequestExecutorTests
         var match = await environment.Db.AnimeMetadata.AsNoTracking().SingleAsync(item => item.AnimeId == anime.Id);
         Assert.AreEqual(FrierenId, match.ExternalId);
 
+        var library = await new LibraryMediaCardQuery(environment.Db).GetEntriesAsync("reader", [Jularr.Web.Features.MediaCore.WorkMediaType.Anime], CancellationToken.None);
+        Assert.AreEqual($"/Library/Anime/{anime.Id}", Assert.ContainsSingle(library.Entries).Card.Href, "A requested anime is in the Library before any scan or file.");
+
         var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
         Assert.IsTrue(settings.Monitored);
         Assert.IsTrue(settings.SearchOnAdd);

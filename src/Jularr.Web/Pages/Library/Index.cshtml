@@ -9,7 +9,6 @@
     var ui = Model.Ui;
     var query = Model.Query;
     ViewData["Title"] = ui["nav.library"];
-    var isOwner = User.IsInRole(Jularr.Web.Features.Auth.AccountRoles.Owner);
     var state = Model.State;
     var facets = Model.Facets;
     var active = query.ActiveFilterCount;
@@ -305,7 +304,8 @@
         {
             <div class="empty-state">
                 <h3>@ui["library.index.emptyTitle"]</h3>
-                <p>@ui[isOwner ? "library.index.emptyHint" : "library.browse.empty.member"]</p>
+                <p>@ui["library.index.emptyHint"]</p>
+                <a class="button" href="/Discover">@ui["library.index.emptyAction"]</a>
             </div>
         }
         else if (state == LibraryPageState.NoResults)

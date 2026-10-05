@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Progress;
@@ -265,7 +266,7 @@ public sealed class MediaBannerCardTests
         var multiSeason = await seed.AddAnimeAsync("bravo", [(1, 1, true), (2, 1, true)]);
         await seed.AddAnimeAsync("charlie", [(1, 1, false)]);
 
-        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetAnimeEntriesAsync(Profile, CancellationToken.None))
+        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetEntriesAsync(Profile, [WorkMediaType.Anime], CancellationToken.None))
             .Entries
             .Select(entry => entry.Card)
             .OrderBy(card => card.Title, StringComparer.OrdinalIgnoreCase)

@@ -303,7 +303,7 @@ public sealed class IndexModel(
 
         try
         {
-            var entries = await new LibraryMediaCardQuery(db).GetAnimeEntriesAsync(account.ProfileId, cancellationToken);
+            var entries = await new LibraryMediaCardQuery(db).GetEntriesAsync(account.ProfileId, [WorkMediaType.Anime], cancellationToken);
             return entries.Entries
                 .GroupBy(entry => entry.Card.Href, StringComparer.Ordinal)
                 .ToDictionary(
