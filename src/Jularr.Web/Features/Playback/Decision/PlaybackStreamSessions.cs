@@ -1,43 +1,43 @@
 using System.Collections.Concurrent;
+using Jularr.Web.Features.Playback.Transcoding;
 
 namespace Jularr.Web.Features.Playback.Decision;
 
 /// <summary>
-/// Bounds concurrent server encodes. A lease is held for the lifetime of one live transcode
-/// (a progressive response or an HLS session) and released when it ends.
+/// Bounds concurrent server deliveries per <see cref="PlaybackCostClass"/>. A lease is held for
+/// the lifetime of one live delivery (a progressive response or an HLS session) and released
+/// when it ends. The limits are the Admin-editable settings, read on every acquisition, so a
+/// lowered limit only stops new deliveries and never kills a running one.
 /// </summary>
-public sealed class PlaybackTranscodeSlots(int capacity = PlaybackTranscodeSlots.DefaultCapacity)
+public sealed class PlaybackTranscodeSlots(PlaybackTranscodingSettingsStore settings)
 {
-    public const int DefaultCapacity = 2;
+    private readonly int[] _active = new int[Enum.GetValues<PlaybackCostClass>().Length];
 
-    private int active;
+    public int Capacity(PlaybackCostClass costClass) => settings.Current.LimitFor(costClass);
 
-    public int Capacity { get; } = Math.Max(1, capacity);
+    public int Active(PlaybackCostClass costClass) => Volatile.Read(ref _active[(int)costClass]);
 
-    public int Active => Volatile.Read(ref active);
+    public int Available(PlaybackCostClass costClass) => Math.Max(0, Capacity(costClass) - Active(costClass));
 
-    public int Available => Math.Max(0, Capacity - Active);
-
-    public IDisposable? TryAcquire()
+    public IDisposable? TryAcquire(PlaybackCostClass costClass)
     {
+        var capacity = Capacity(costClass);
         while (true)
         {
-            var current = Volatile.Read(ref active);
-            if (current >= Capacity)
+            var current = Volatile.Read(ref _active[(int)costClass]);
+            if (current >= capacity)
             {
                 return null;
             }
 
-            if (Interlocked.CompareExchange(ref active, current + 1, current) == current)
+            if (Interlocked.CompareExchange(ref _active[(int)costClass], current + 1, current) == current)
             {
-                return new Lease(this);
+                return new Lease(this, costClass);
             }
         }
     }
 
-    private void Release() => Interlocked.Decrement(ref active);
-
-    private sealed class Lease(PlaybackTranscodeSlots owner) : IDisposable
+    private sealed class Lease(PlaybackTranscodeSlots owner, PlaybackCostClass costClass) : IDisposable
     {
         private int released;
 
@@ -45,7 +45,7 @@ public sealed class PlaybackTranscodeSlots(int capacity = PlaybackTranscodeSlots
         {
             if (Interlocked.Exchange(ref released, 1) == 0)
             {
-                owner.Release();
+                Interlocked.Decrement(ref owner._active[(int)costClass]);
             }
         }
     }

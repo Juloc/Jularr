@@ -5,10 +5,14 @@ using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Media.Compatibility;
+using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
+using Jularr.Web.Infrastructure;
 using Jularr.Web.Features.Storage;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -48,7 +52,7 @@ public sealed partial class PlaybackPlanStartTests
             fixture.Db,
             fixture.Inventory,
             store,
-            new PlaybackServerCapabilityProvider(new PlaybackTranscodeSlots()),
+            PlaybackServerTestKit.Create().Capabilities,
             new MediaAvailabilityService(fixture.Db, roots));
         var input = new PlaybackPlanInput(null, ClientKinds.Web, ChromeAgent, IPAddress.Loopback);
 
@@ -132,11 +136,18 @@ public sealed partial class PlaybackPlanStartTests
     public void PlaybackDecisionServicesAndRateLimitAreRegisteredTogether()
     {
         var services = new ServiceCollection()
+            .AddLogging()
             .AddSingleton(TimeProvider.System)
+            .AddSingleton<IMediaProcessRunner>(new FakeMediaProcessRunner(_ => null))
             .AddPlaybackDecision();
         using var provider = services.BuildServiceProvider();
 
         Assert.IsNotNull(provider.GetRequiredService<PlaybackStreamSessionStore>());
+        Assert.IsNotNull(provider.GetRequiredService<HlsPlaybackSessionManager>());
+        Assert.AreSame(provider.GetRequiredService<PlaybackHardwareService>(), provider.GetRequiredService<PlaybackHardwareService>());
+        Assert.IsTrue(
+            provider.GetServices<IHostedService>().Any(x => x is PlaybackServerResourceService),
+            "Hardware detection and the cache sweeper run in the one hosted resource service.");
         Assert.AreSame(
             provider.GetRequiredService<PlaybackTranscodeSlots>(),
             provider.GetRequiredService<PlaybackTranscodeSlots>());

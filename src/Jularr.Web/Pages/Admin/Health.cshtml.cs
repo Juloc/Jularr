@@ -4,6 +4,7 @@ using Jularr.Web.Features.Appearance;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Health;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Infrastructure.Ai;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +22,8 @@ public sealed class HealthModel(
     AppDbContext db,
     SystemHealthService health,
     GitHubReleaseCheckService updateCheck,
-    CodexCliProvider codex) : PageModel
+    CodexCliProvider codex,
+    PlaybackHardwareService hardware) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -33,6 +35,14 @@ public sealed class HealthModel(
     public UpdateStatus? Update { get; private set; }
 
     public string RunningVersion { get; } = AppBuildInfo.Version;
+
+    public PlaybackHardwareCapabilities? HardwareCapabilities { get; private set; }
+
+    public string? HardwareDetectionError { get; private set; }
+
+    public PlaybackEncoderTarget EncoderInUse { get; private set; } = PlaybackEncoderTarget.Software;
+
+    public IReadOnlyList<PlaybackBreakerState> Breakers { get; private set; } = [];
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -58,10 +68,21 @@ public sealed class HealthModel(
         return RedirectToPage();
     }
 
+    // Detection runs a short test encode per backend, so it is an explicit action and never part of a GET.
+    public async Task<IActionResult> OnPostRedetectAsync(CancellationToken cancellationToken)
+    {
+        await hardware.DetectAsync(cancellationToken);
+        return RedirectToPage();
+    }
+
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
         Snapshot = await health.GetAsync(cancellationToken);
         AiStatus = await codex.GetStatusAsync(cancellationToken);
         Update = updateCheck.GetCached();
+        HardwareCapabilities = hardware.Detected;
+        HardwareDetectionError = hardware.DetectionError;
+        EncoderInUse = hardware.Choose().Target;
+        Breakers = [.. PlaybackHardwareBackends.SelectionOrder.Select(hardware.Breaker.State)];
     }
 }

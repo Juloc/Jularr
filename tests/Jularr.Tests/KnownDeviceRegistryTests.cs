@@ -218,7 +218,7 @@ public sealed class KnownDeviceRegistryTests
             fixture.Db,
             fixture.Inventory,
             store,
-            new PlaybackServerCapabilityProvider(new PlaybackTranscodeSlots()),
+            PlaybackServerTestKit.Create().Capabilities,
             mediaAvailability: null,
             deviceRegistry: registry);
         var input = new PlaybackPlanInput(null, ClientKinds.Web, chromeAgent, IPAddress.Parse("192.168.1.2"));

@@ -25,7 +25,7 @@ public sealed class CanonicalPlaybackPlanTests
             fixture.Db,
             fixture.Inventory,
             sessions,
-            new PlaybackServerCapabilityProvider(new PlaybackTranscodeSlots()),
+            PlaybackServerTestKit.Create().Capabilities,
             canonicalStorage: storage,
             videoProgress: progress);
 
@@ -209,7 +209,7 @@ public sealed class CanonicalPlaybackPlanTests
             fixture.Db,
             fixture.Inventory,
             sessions,
-            new PlaybackServerCapabilityProvider(new PlaybackTranscodeSlots()),
+            PlaybackServerTestKit.Create().Capabilities,
             canonicalStorage: storage);
 
         var outcome = await planner.PlanAsync(

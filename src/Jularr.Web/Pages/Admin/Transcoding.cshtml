@@ -1,0 +1,82 @@
+@page
+@model Jularr.Web.Pages.Admin.TranscodingModel
+@using Jularr.Web.Features.Playback.Transcoding
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.transcoding.title"];
+}
+
+<header class="page-header">
+    <div>
+        <h1>@ui["admin.transcoding.title"]</h1>
+        <p>@ui["admin.transcoding.description"]</p>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="ui" />
+
+<form method="post" class="form-stack settings-grid">
+    <div asp-validation-summary="ModelOnly" class="validation" role="alert"></div>
+
+    <section class="panel">
+        <label class="checkbox-row">
+            <input asp-for="TranscodingEnabled" />
+            <span>@ui["admin.transcoding.enabled"]</span>
+        </label>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading"><h2>@ui["admin.transcoding.sessionsTitle"]</h2></div>
+        <div class="form-stack">
+            <label>
+                <span>@ui["admin.transcoding.softwareVideo"]</span>
+                <input asp-for="SoftwareVideoSessions" type="number" inputmode="numeric" min="0" max="@PlaybackTranscodingSettings.MaxSessionsPerClass" />
+                <small class="muted">@ui.Format("admin.transcoding.running", ("count", Model.Running(PlaybackCostClass.SoftwareVideo)))</small>
+                <span asp-validation-for="SoftwareVideoSessions" class="field-validation-error"></span>
+            </label>
+            <label>
+                <span>@ui["admin.transcoding.hardwareVideo"]</span>
+                <input asp-for="HardwareVideoSessions" type="number" inputmode="numeric" min="0" max="@PlaybackTranscodingSettings.MaxSessionsPerClass" />
+                <small class="muted">@ui.Format("admin.transcoding.running", ("count", Model.Running(PlaybackCostClass.HardwareVideo)))</small>
+                <span asp-validation-for="HardwareVideoSessions" class="field-validation-error"></span>
+            </label>
+            <label>
+                <span>@ui["admin.transcoding.remux"]</span>
+                <input asp-for="RemuxSessions" type="number" inputmode="numeric" min="0" max="@PlaybackTranscodingSettings.MaxSessionsPerClass" />
+                <small class="muted">@ui.Format("admin.transcoding.running", ("count", Model.Running(PlaybackCostClass.Remux)))</small>
+                <span asp-validation-for="RemuxSessions" class="field-validation-error"></span>
+            </label>
+            <label>
+                <span>@ui["admin.transcoding.audioOnly"]</span>
+                <input asp-for="AudioOnlySessions" type="number" inputmode="numeric" min="0" max="@PlaybackTranscodingSettings.MaxSessionsPerClass" />
+                <small class="muted">@ui.Format("admin.transcoding.running", ("count", Model.Running(PlaybackCostClass.AudioOnly)))</small>
+                <span asp-validation-for="AudioOnlySessions" class="field-validation-error"></span>
+            </label>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading"><h2>@ui["admin.transcoding.cacheTitle"]</h2></div>
+        <div class="form-stack">
+            <label>
+                <span>@ui["admin.transcoding.cachePath"]</span>
+                <input asp-for="HlsCachePath" autocomplete="off" spellcheck="false" />
+                <span asp-validation-for="HlsCachePath" class="field-validation-error"></span>
+            </label>
+            <label>
+                <span>@ui["admin.transcoding.cacheBudget"]</span>
+                <input asp-for="CacheBudgetGiB" type="number" inputmode="numeric" min="@PlaybackTranscodingSettings.MinCacheBudgetGiB" max="@PlaybackTranscodingSettings.MaxCacheBudgetGiB" />
+                <span asp-validation-for="CacheBudgetGiB" class="field-validation-error"></span>
+            </label>
+            <label>
+                <span>@ui["admin.transcoding.freeSpaceFloor"]</span>
+                <input asp-for="FreeSpaceFloorGiB" type="number" inputmode="numeric" min="0" max="@PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB" />
+                <span asp-validation-for="FreeSpaceFloorGiB" class="field-validation-error"></span>
+            </label>
+        </div>
+    </section>
+
+    <div class="inline-actions">
+        <button class="button button-primary" type="submit">@ui["admin.transcoding.save"]</button>
+    </div>
+</form>

@@ -137,6 +137,7 @@ public static class UiNavigationCatalog
             new("admin-api-keys", "admin.nav.apiKeys", "/Settings/ApiKeys", "key", Policy: JularrPolicies.AdminSystem),
             new("admin-instance", "admin.nav.instance", "/Admin/Instance", "settings", Policy: JularrPolicies.AdminSystem),
             new("admin-system", "admin.nav.system", "/Admin/System", "server", Policy: JularrPolicies.AdminSystem),
+            new("admin-transcoding", "admin.nav.transcoding", "/Admin/Transcoding", "server", Policy: JularrPolicies.AdminSystem),
             new("admin-health", "admin.nav.health", "/Admin/Health", "pulse", Policy: JularrPolicies.AdminSystem)
         ])
     ];

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Jularr.Web.Features.Playback.Decision;
 
 namespace Jularr.Web.Features.Playback;
 
@@ -110,19 +111,23 @@ public static class LivePlaybackCommand
 
 public sealed class LivePlaybackStream : Stream
 {
-    private readonly Process process;
-    private readonly Stream output;
-    private readonly Task stderrDrain;
-    private bool disposed;
+    private readonly Process _process;
+    private readonly Stream _output;
+    private readonly Task<string> _stderrDrain;
+    private bool _disposed;
 
-    private readonly IDisposable? lease;
+    private readonly IDisposable? _lease;
+    private readonly Action<PlaybackStartFailure?>? _onOutcome;
+    private int _outcomeReported;
+    private bool _producedOutput;
 
-    private LivePlaybackStream(Process process, IDisposable? lease)
+    private LivePlaybackStream(Process process, IDisposable? lease, Action<PlaybackStartFailure?>? onOutcome)
     {
-        this.process = process;
-        this.lease = lease;
-        output = process.StandardOutput.BaseStream;
-        stderrDrain = process.StandardError.ReadToEndAsync();
+        _process = process;
+        _lease = lease;
+        _onOutcome = onOutcome;
+        _output = process.StandardOutput.BaseStream;
+        _stderrDrain = process.StandardError.ReadToEndAsync();
     }
 
     public static LivePlaybackStream Start(
@@ -140,11 +145,14 @@ public sealed class LivePlaybackStream : Stream
 
     /// <summary>
     /// Starts ffmpeg with prepared arguments writing fragmented MP4 to stdout. The optional
-    /// lease (a transcode slot) is released when the response stream is disposed.
+    /// lease (a transcode slot) is released when the response stream is disposed. <paramref name="onOutcome"/>
+    /// is called once: with null when the first bytes arrive (the encoder works) or with a failure when ffmpeg
+    /// exits with an error before producing any.
     /// </summary>
     public static LivePlaybackStream Start(
         IReadOnlyList<string> arguments,
-        IDisposable? lease = null)
+        IDisposable? lease = null,
+        Action<PlaybackStartFailure?>? onOutcome = null)
     {
         var process = new Process
         {
@@ -169,7 +177,7 @@ public sealed class LivePlaybackStream : Stream
             throw new InvalidOperationException("Could not start ffmpeg playback stream.");
         }
 
-        return new LivePlaybackStream(process, lease);
+        return new LivePlaybackStream(process, lease, onOutcome);
     }
 
     public override bool CanRead => true;
@@ -188,19 +196,19 @@ public sealed class LivePlaybackStream : Stream
     }
 
     public override int Read(byte[] buffer, int offset, int count) =>
-        output.Read(buffer, offset, count);
+        Produced(_output.Read(buffer, offset, count));
 
-    public override Task<int> ReadAsync(
+    public override async Task<int> ReadAsync(
         byte[] buffer,
         int offset,
         int count,
         CancellationToken cancellationToken) =>
-        output.ReadAsync(buffer, offset, count, cancellationToken);
+        Produced(await _output.ReadAsync(buffer, offset, count, cancellationToken));
 
-    public override ValueTask<int> ReadAsync(
+    public override async ValueTask<int> ReadAsync(
         Memory<byte> buffer,
         CancellationToken cancellationToken = default) =>
-        output.ReadAsync(buffer, cancellationToken);
+        Produced(await _output.ReadAsync(buffer, cancellationToken));
 
     public override long Seek(long offset, SeekOrigin origin) =>
         throw new NotSupportedException();
@@ -211,36 +219,63 @@ public sealed class LivePlaybackStream : Stream
     public override void Write(byte[] buffer, int offset, int count) =>
         throw new NotSupportedException();
 
+    // The first bytes prove the encoder works; later reads need no further reporting.
+    private int Produced(int bytesRead)
+    {
+        if (bytesRead > 0 && !_producedOutput)
+        {
+            _producedOutput = true;
+            ReportOutcome(null);
+        }
+
+        return bytesRead;
+    }
+
+    private void ReportOutcome(PlaybackStartFailure? failure)
+    {
+        if (Interlocked.Exchange(ref _outcomeReported, 1) == 0)
+        {
+            _onOutcome?.Invoke(failure);
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
-        if (!disposing || disposed)
+        if (!disposing || _disposed)
         {
             base.Dispose(disposing);
             return;
         }
 
-        disposed = true;
+        _disposed = true;
+
+        // Judged before the kill below: a process this stream ends itself must not look like an encoder failure.
+        if (!_producedOutput && _onOutcome is not null && _process.HasExited && _process.ExitCode != 0)
+        {
+            var detail = _stderrDrain.IsCompletedSuccessfully ? _stderrDrain.Result.Trim().Split('\n')[^1].Trim() : null;
+            ReportOutcome(new PlaybackStartFailure(PlaybackStartFailure.StartFailed, detail is { Length: > 200 } ? detail[..200] : detail));
+        }
 
         try
         {
-            output.Dispose();
+            _output.Dispose();
         }
         finally
         {
             try
             {
-                if (!process.HasExited)
+                if (!_process.HasExited)
                 {
-                    process.Kill(entireProcessTree: true);
+                    _process.Kill(entireProcessTree: true);
                 }
             }
             catch (InvalidOperationException)
             {
             }
 
-            process.Dispose();
-            _ = stderrDrain;
-            lease?.Dispose();
+            _process.Dispose();
+            _ = _stderrDrain;
+            _lease?.Dispose();
         }
 
         base.Dispose(disposing);

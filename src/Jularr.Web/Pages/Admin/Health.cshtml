@@ -1,6 +1,7 @@
 @page
 @model Jularr.Web.Pages.Admin.HealthModel
 @using Jularr.Web.Features.Health
+@using Jularr.Web.Features.Playback.Transcoding
 @using Jularr.Web.Features.Storage
 @section Head {
     <link rel="stylesheet" href="~/css/admin-overview.css" asp-append-version="true" />
@@ -10,6 +11,7 @@
     ViewData["Title"] = ui["admin.nav.health"];
     var snapshot = Model.Snapshot;
     var update = Model.Update;
+    var encoderName = Model.EncoderInUse.IsHardware ? PlaybackHardwareBackends.DisplayName(Model.EncoderInUse.Backend) : ui["admin.health.hardware.software"];
 
     string Pill(HealthState state) => state switch
     {
@@ -214,5 +216,82 @@
         <form method="post" asp-page-handler="CheckUpdate">
             <button class="button" type="submit">@ui["admin.health.update.checkButton"]</button>
         </form>
+    </section>
+</div>
+
+<div class="settings-grid">
+    <section class="panel">
+        <div class="panel-heading"><h2>@ui["admin.health.hardware.title"]</h2></div>
+        <p class="muted">@ui.Format("admin.health.hardware.inUse", ("encoder", encoderName))</p>
+
+        @if (Model.HardwareCapabilities is not { } hardware)
+        {
+            <p class="muted">@ui["admin.health.hardware.pending"]</p>
+        }
+        else
+        {
+            <div class="status-list">
+                @foreach (var backend in PlaybackHardwareBackends.SelectionOrder)
+                {
+                    var status = hardware.Status(backend);
+                    var breaker = Model.Breakers.First(x => x.Backend == backend);
+                    var stateKey = status?.State switch
+                    {
+                        PlaybackBackendState.Available => "available",
+                        PlaybackBackendState.EncoderMissing => "encoderMissing",
+                        PlaybackBackendState.NoDevice => "noDevice",
+                        PlaybackBackendState.TestFailed => "testFailed",
+                        _ => "ffmpegUnavailable"
+                    };
+                    var stateClass = status?.State switch
+                    {
+                        PlaybackBackendState.Available when !breaker.IsOpen => "status-ok",
+                        PlaybackBackendState.TestFailed or PlaybackBackendState.Available => "status-warning",
+                        _ => ""
+                    };
+                    <div>
+                        <span>
+                            @PlaybackHardwareBackends.DisplayName(backend)
+                            @if (status?.Device is { } device)
+                            {
+                                <code>@device</code>
+                            }
+                        </span>
+                        <strong class="status-pill @stateClass">@ui[$"admin.health.hardware.state.{stateKey}"]</strong>
+                    </div>
+                    @if (status?.Detail is { } detail)
+                    {
+                        <small class="muted">@detail</small>
+                    }
+                    @if (breaker.ConsecutiveFailures > 0 && breaker.LastFailureReason is { } reason)
+                    {
+                        var reasonText = ui[$"admin.health.hardware.reason.{reason}"];
+                        <small class="muted">
+                            @(breaker.IsOpen
+                                ? ui.Format("admin.health.hardware.breakerOpen", ("until", breaker.OpenUntilUtc!.Value.ToLocalTime().ToString("t")), ("reason", reasonText))
+                                : ui.Format("admin.health.hardware.breakerFailures", ("count", breaker.ConsecutiveFailures), ("reason", reasonText)))
+                        </small>
+                        @if (breaker.LastFailureDetail is { } failureDetail)
+                        {
+                            <small class="muted">@failureDetail</small>
+                        }
+                    }
+                }
+            </div>
+
+            <p class="muted">@ui.Format("admin.health.hardware.detectedAt", ("when", hardware.DetectedAtUtc.ToLocalTime().ToString("g")))</p>
+        }
+
+        @if (Model.HardwareDetectionError is { } detectionError)
+        {
+            <p class="validation" role="alert">@ui.Format("admin.health.hardware.detectionFailed", ("error", detectionError))</p>
+        }
+
+        <div class="inline-actions">
+            <form method="post" asp-page-handler="Redetect">
+                <button class="button" type="submit">@ui["admin.health.hardware.redetect"]</button>
+            </form>
+            <a class="button" asp-page="/Admin/Transcoding">@ui["admin.health.hardware.settingsLink"]</a>
+        </div>
     </section>
 </div>

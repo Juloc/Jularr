@@ -4,6 +4,7 @@ using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Media.Compatibility;
 using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
 
 namespace Jularr.Tests;
 
@@ -724,19 +725,19 @@ public sealed class PlaybackDecisionEngineTests
     [TestMethod]
     public void TranscodeSlotsAreBoundedAndReleasedOnce()
     {
-        var slots = new PlaybackTranscodeSlots(2);
-        var first = slots.TryAcquire();
-        var second = slots.TryAcquire();
+        var slots = PlaybackServerTestKit.Create().Slots;
+        var first = slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
+        var second = slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
         Assert.IsNotNull(first);
         Assert.IsNotNull(second);
-        Assert.IsNull(slots.TryAcquire());
-        Assert.AreEqual(0, slots.Available);
+        Assert.IsNull(slots.TryAcquire(PlaybackCostClass.SoftwareVideo));
+        Assert.AreEqual(0, slots.Available(PlaybackCostClass.SoftwareVideo));
 
         first!.Dispose();
         first.Dispose();
-        Assert.AreEqual(1, slots.Available, "A double dispose releases one slot only.");
+        Assert.AreEqual(1, slots.Available(PlaybackCostClass.SoftwareVideo), "A double dispose releases one slot only.");
         second!.Dispose();
-        Assert.AreEqual(2, slots.Available);
+        Assert.AreEqual(2, slots.Available(PlaybackCostClass.SoftwareVideo));
     }
 
     [TestMethod]
@@ -807,7 +808,7 @@ public sealed class PlaybackDecisionEngineTests
             fixture.Db,
             fixture.Inventory,
             store,
-            new PlaybackServerCapabilityProvider(new PlaybackTranscodeSlots()));
+            PlaybackServerTestKit.Create().Capabilities);
         var input = new PlaybackPlanInput(null, "web", ChromeAgent, IPAddress.Parse("192.168.1.2"));
 
         var outcome = await service.PlanAsync(media.EpisodeId!.Value, "reader", input, CancellationToken.None);

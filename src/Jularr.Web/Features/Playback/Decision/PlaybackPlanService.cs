@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Devices;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -99,12 +100,29 @@ public static class PlaybackNetworkClassifier
 }
 
 /// <summary>
-/// The current server-side inputs of a decision: ffmpeg processing and free encode slots.
+/// The current server-side inputs of a decision: the Admin's transcoding switch, the detected
+/// encoder (hardware only when its test encode passed and its breaker is closed) and the free
+/// slots of that encoder's cost class.
 /// </summary>
-public sealed class PlaybackServerCapabilityProvider(PlaybackTranscodeSlots slots)
+public sealed class PlaybackServerCapabilityProvider(
+    PlaybackTranscodingSettingsStore settings,
+    PlaybackTranscodeSlots slots,
+    PlaybackHardwareService hardware)
 {
-    public PlaybackServerCapabilities Current() =>
-        PlaybackServerCapabilities.Software(slots.Available);
+    public PlaybackServerCapabilities Current()
+    {
+        var choice = hardware.Choose();
+        var costClass = choice.Target.IsHardware ? PlaybackCostClass.HardwareVideo : PlaybackCostClass.SoftwareVideo;
+        return PlaybackServerCapabilities.Software(slots.Available(costClass)) with
+        {
+            // Until the first detection finished the server behaves as it always did: ffmpeg is assumed, hardware is not.
+            ProcessingAvailable = hardware.Detected?.FfmpegAvailable ?? true,
+            TranscodingEnabled = settings.Current.TranscodingEnabled,
+            H264Encoder = PlaybackHardwareBackends.H264Encoder(choice.Target.Backend),
+            MaxTranscodeHeight = choice.Target.IsHardware ? PlaybackServerCapabilities.HardwareMaxHeight : PlaybackServerCapabilities.SoftwareMaxHeight,
+            SuspendedHardware = choice.Suspended
+        };
+    }
 }
 
 /// <summary>

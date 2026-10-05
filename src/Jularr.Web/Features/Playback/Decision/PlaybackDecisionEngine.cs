@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Web.Features.Media.Compatibility;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Subtitles;
 
 namespace Jularr.Web.Features.Playback.Decision;
@@ -641,6 +642,22 @@ public static class PlaybackDecisionEngine
                 toneMap ? PlaybackReasonCodes.HdrToneMapped : PlaybackReasonCodes.HdrToneMapUnavailable,
                 toneMap ? PlaybackReasonSeverity.Info : PlaybackReasonSeverity.Warning,
                 values: Values(("format", video.DynamicRange))));
+        }
+
+        // A hardware encoder is named so Diagnostics shows what converts the video; a preferred
+        // backend skipped by its circuit breaker explains why the conversion runs on something else.
+        var encoderBackend = PlaybackHardwareBackends.FromEncoder(server.H264Encoder);
+        if (encoderBackend != PlaybackHardwareBackend.Software)
+        {
+            reasons.Add(Reason(PlaybackReasonCodes.HardwareEncoder, PlaybackReasonSeverity.Info, values: Values(("backend", PlaybackHardwareBackends.DisplayName(encoderBackend)))));
+        }
+
+        if (server.SuspendedHardware is { } suspended)
+        {
+            reasons.Add(Reason(
+                PlaybackReasonCodes.HardwareEncoderSuspended,
+                PlaybackReasonSeverity.Warning,
+                values: Values(("backend", PlaybackHardwareBackends.DisplayName(suspended.Backend)))));
         }
 
         // DecideCore only asks for a burn-in the server can do (see WithoutBurnIn).

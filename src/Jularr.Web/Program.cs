@@ -330,6 +330,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 builder.Services.AddSingleton<MediaProcessRunner>();
+builder.Services.AddSingleton<IMediaProcessRunner>(services => services.GetRequiredService<MediaProcessRunner>());
 builder.Services.AddScoped<LibraryScanner>();
 builder.Services.AddScoped<CanonicalMediaStorageService>();
 builder.Services.AddScoped<CanonicalVideoStorageBackfillService>();
@@ -352,7 +353,8 @@ builder.Services.AddSingleton(new StorageWakeOptions());
 builder.Services.AddSingleton<StorageWakeCoordinator>();
 builder.Services.AddScoped<StorageIntegrityService>();
 builder.Services.AddScoped<LibraryRootRoutingService>();
-builder.Services.AddSingleton(StorageCacheLayout.Default);
+// The HLS cache lives where the Admin configured it, so the layout is resolved per request instead of frozen at startup.
+builder.Services.AddScoped(services => StorageCacheLayout.Default with { HlsRoot = services.GetRequiredService<Jularr.Web.Features.Playback.Transcoding.PlaybackTranscodingSettingsStore>().Current.HlsCachePath });
 builder.Services.AddScoped<StorageUsageService>();
 builder.Services.AddScoped<StorageCacheScanner>();
 builder.Services.AddScoped<StorageCleanupService>();

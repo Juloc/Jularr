@@ -4,6 +4,7 @@ using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Storage;
 using Jularr.Web.Features.Subtitles;
@@ -303,7 +304,7 @@ public static class ClientApiPlaybackPlanEndpoints
             Guid sessionId,
             double? startSeconds,
             PlaybackStreamSessionStore sessions,
-            PlaybackTranscodeSlots slots,
+            PlaybackAdmissionService admission,
             CurrentAccountContext currentAccount) =>
         {
             var session = sessions.Get(sessionId, currentAccount.ProfileId);
@@ -331,24 +332,37 @@ public static class ClientApiPlaybackPlanEndpoints
                     "The media file of this playback session is unavailable."));
             }
 
-            IDisposable? lease = null;
-            if (session.Plan.TranscodesVideo && (lease = slots.TryAcquire()) is null)
+            var admitted = admission.Admit(session.Plan);
+            while (true)
             {
-                return TranscoderBusy();
-            }
+                if (!admitted.Admitted)
+                {
+                    return Refused(admitted.RefusalCode!);
+                }
 
-            try
-            {
-                var live = LivePlaybackStream.Start(
-                    PlaybackDeliveryCommand.Progressive(session.SourcePath, session.Plan, start),
-                    lease);
-                return Results.File(live, "video/mp4", enableRangeProcessing: false);
-            }
-            catch (Exception exception) when (
-                exception is InvalidOperationException or System.ComponentModel.Win32Exception)
-            {
-                lease?.Dispose();
-                return StartFailed();
+                try
+                {
+                    // The stream reports its first bytes (the encoder works) or an early exit (it does not) to the breaker.
+                    var current = admitted;
+                    var live = LivePlaybackStream.Start(
+                        PlaybackDeliveryCommand.Progressive(session.SourcePath, session.Plan, start, current.Encoder),
+                        current.Lease,
+                        failure => admission.ReportStart(current, failure));
+                    return Results.File(live, "video/mp4", enableRangeProcessing: false);
+                }
+                catch (Exception exception) when (
+                    exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    admitted.Lease?.Dispose();
+                    admission.ReportStart(admitted, new PlaybackStartFailure(PlaybackStartFailure.StartFailed, exception.Message));
+                    if (!admitted.Encoder.IsHardware)
+                    {
+                        return StartFailed();
+                    }
+
+                    // The hardware encoder could not even start: this session continues on software.
+                    admitted = admission.AdmitSoftwareFallback();
+                }
             }
         })
         .RequireRateLimiting(RateLimitPolicy);
@@ -357,7 +371,8 @@ public static class ClientApiPlaybackPlanEndpoints
             Guid sessionId,
             double? startSeconds,
             PlaybackStreamSessionStore sessions,
-            PlaybackTranscodeSlots slots,
+            PlaybackAdmissionService admission,
+            HlsPlaybackSessionManager manager,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -388,7 +403,6 @@ public static class ClientApiPlaybackPlanEndpoints
 
             // Repeated requests for the same position reuse the running output; a new
             // position replaces it. Concurrent requests share one start.
-            var manager = HlsPlaybackSessionManager.Shared;
             try
             {
                 var hlsSessionId = await session.EnsureHlsAsync(
@@ -396,32 +410,54 @@ public static class ClientApiPlaybackPlanEndpoints
                     running => manager.IsActive(running, session.ProfileId),
                     async token =>
                     {
-                        IDisposable? lease = null;
-                        if (session.Plan.TranscodesVideo && (lease = slots.TryAcquire()) is null)
+                        var admitted = admission.Admit(session.Plan);
+                        while (true)
                         {
-                            return null;
-                        }
+                            if (!admitted.Admitted)
+                            {
+                                throw new PlaybackAdmissionRefusedException(admitted.RefusalCode!);
+                            }
 
-                        var hls = await manager.StartAsync(
-                            session.EpisodeId,
-                            session.ProfileId,
-                            start,
-                            directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory),
-                            lease,
-                            token);
-                        return hls.SessionId;
+                            try
+                            {
+                                var current = admitted;
+                                var hls = await manager.StartAsync(
+                                    session.EpisodeId,
+                                    session.ProfileId,
+                                    start,
+                                    directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory, current.Encoder),
+                                    current.Lease,
+                                    token);
+                                admission.ReportStart(current, null);
+                                return hls.SessionId;
+                            }
+                            catch (Exception exception) when (
+                                admitted.Encoder.IsHardware &&
+                                exception is not PlaybackAdmissionRefusedException &&
+                                exception is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
+                            {
+                                // The manager released the failed attempt's slot; this session continues on software.
+                                var reason = exception is TimeoutException ? PlaybackStartFailure.StartTimedOut : PlaybackStartFailure.StartFailed;
+                                admission.ReportStart(admitted, new PlaybackStartFailure(reason, exception.Message));
+                                admitted = admission.AdmitSoftwareFallback();
+                            }
+                        }
                     },
                     previous => manager.Stop(previous, session.ProfileId),
                     cancellationToken);
                 if (hlsSessionId is not { } started)
                 {
-                    return TranscoderBusy();
+                    return StartFailed();
                 }
 
                 return Results.Redirect(
                     ClientApiRoutes.StreamSessionHlsAsset(session.Id, started, "index.m3u8"),
                     permanent: false,
                     preserveMethod: false);
+            }
+            catch (PlaybackAdmissionRefusedException refusal)
+            {
+                return Refused(refusal.Code);
             }
             catch (Exception exception) when (
                 exception is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
@@ -436,6 +472,7 @@ public static class ClientApiPlaybackPlanEndpoints
             Guid hlsSessionId,
             string fileName,
             PlaybackStreamSessionStore sessions,
+            HlsPlaybackSessionManager manager,
             CurrentAccountContext currentAccount,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
@@ -446,7 +483,7 @@ public static class ClientApiPlaybackPlanEndpoints
                 return SessionNotFound();
             }
 
-            var asset = HlsPlaybackSessionManager.Shared.GetAsset(
+            var asset = manager.GetAsset(
                 hlsSessionId,
                 session.EpisodeId,
                 currentAccount.ProfileId,
@@ -474,7 +511,7 @@ public static class ClientApiPlaybackPlanEndpoints
                 return Results.Text(PlaybackDeliveryCommand.StartAtBeginning(playlist), asset.ContentType);
             }
 
-            HlsPlaybackSessionManager.Shared.PruneBehind(hlsSessionId, currentAccount.ProfileId, fileName);
+            manager.PruneBehind(hlsSessionId, currentAccount.ProfileId, fileName);
             return Results.File(asset.Path, asset.ContentType, enableRangeProcessing: asset.EnableRangeProcessing);
         });
 
@@ -775,9 +812,9 @@ public static class ClientApiPlaybackPlanEndpoints
             "invalid_start_position",
             "startSeconds must be a finite value greater than or equal to zero."));
 
-    private static IResult TranscoderBusy() =>
+    private static IResult Refused(string code) =>
         Results.Json(
-            new ClientErrorResponse("transcoder_busy", "Every server transcode slot is in use."),
+            new ClientErrorResponse(code, PlaybackAdmissionCodes.Message(code)),
             statusCode: StatusCodes.Status503ServiceUnavailable);
 
     private static IResult StartFailed() =>

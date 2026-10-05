@@ -106,8 +106,11 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddScoped<MediaAvailabilityService>();
                     // Only the trickplay routes use it; none of them is called, so its generator and queue are not built.
                     services.AddSingleton<CanonicalPlayerNavigationAssetService>(_ => null!);
-                    services.AddSingleton(_ => new PlaybackTranscodeSlots());
-                    services.AddSingleton<PlaybackServerCapabilityProvider>();
+                    var playbackServer = PlaybackServerTestKit.Create();
+                    services.AddSingleton(playbackServer.Slots);
+                    services.AddSingleton(playbackServer.Capabilities);
+                    services.AddSingleton(playbackServer.Admission);
+                    services.AddSingleton(playbackServer.Hls(_ => throw new InvalidOperationException("The detail page tests never start ffmpeg.")));
                     services.AddSingleton<PlaybackStreamSessionStore>();
                     services.AddScoped<ActiveSessionService>();
                     services.AddScoped<PlaybackPlanService>();

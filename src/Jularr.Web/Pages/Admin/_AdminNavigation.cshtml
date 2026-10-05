@@ -10,6 +10,7 @@
         ? InstanceModuleSettings.Default
         : await moduleService.GetAsync(Context.RequestAborted);
     var acquisitionEnabled = instanceModules.IsEnabled(InstanceModule.Acquisition);
+    string[] systemPaths = ["/Admin/System", "/Admin/Transcoding", "/Admin/Subtitles", "/Admin/Sonarr", "/Admin/Ai"];
 }
 <nav class="admin-nav" aria-label="@ui["nav.admin"]">
     <a class="admin-nav-item @(path == "/Admin" ? "active" : "")" asp-page="/Admin/Index">@ui["admin.nav.overview"]</a>
@@ -28,5 +29,5 @@
     <a class="admin-nav-item @(path.StartsWithSegments("/Admin/Logs") ? "active" : "")" asp-page="/Admin/Logs">@ui["admin.nav.logs"]</a>
     <a class="admin-nav-item @(path.StartsWithSegments("/Admin/Appearance") ? "active" : "")" asp-page="/Admin/Appearance">@ui["admin.nav.appearance"]</a>
     <a class="admin-nav-item @(path.StartsWithSegments("/Admin/Instance") ? "active" : "")" asp-page="/Admin/Instance">@ui["admin.nav.instance"]</a>
-    <a class="admin-nav-item @(path.StartsWithSegments("/Admin/System") || path.StartsWithSegments("/Admin/Subtitles") || path.StartsWithSegments("/Admin/Sonarr") || path.StartsWithSegments("/Admin/Ai") ? "active" : "")" asp-page="/Admin/System">@ui["admin.nav.system"]</a>
+    <a class="admin-nav-item @(systemPaths.Any(system => path.StartsWithSegments(system)) ? "active" : "")" asp-page="/Admin/System">@ui["admin.nav.system"]</a>
 </nav>

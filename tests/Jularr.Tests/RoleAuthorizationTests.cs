@@ -67,6 +67,7 @@ public sealed class RoleAuthorizationTests
         ["Jularr.Web.Pages.Admin.RolesModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.SonarrModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.SystemModel"] = JularrPolicies.AdminSystem,
+        ["Jularr.Web.Pages.Admin.TranscodingModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.UserModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.UsersModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.LocalizationAdmin.IndexModel"] = JularrPolicies.AdminSystem,
@@ -160,6 +161,7 @@ public sealed class RoleAuthorizationTests
     [DataRow(typeof(Jularr.Web.Pages.Admin.UsersModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Admin.SystemModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Admin.HealthModel), false)]
+    [DataRow(typeof(Jularr.Web.Pages.Admin.TranscodingModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Settings.ApiKeys.IndexModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Library.RenameModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Admin.OperationsModel), true)]
