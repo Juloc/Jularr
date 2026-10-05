@@ -320,6 +320,17 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         return session;
     }
 
+    /// <summary>
+    /// The session of the profile without counting as activity, so that polling a status never keeps an abandoned
+    /// session alive. Expired sessions are not returned (the cleanup removes them).
+    /// </summary>
+    public PlaybackStreamSession? Peek(Guid sessionId, string profileId) =>
+        sessions.TryGetValue(sessionId, out var session) &&
+        string.Equals(session.ProfileId, profileId, StringComparison.Ordinal) &&
+        time.GetUtcNow() - session.LastSeenUtc <= IdleLifetime
+            ? session
+            : null;
+
     /// <summary>Returns the session only to the profile that created it.</summary>
     public PlaybackStreamSession? Get(Guid sessionId, string profileId)
     {

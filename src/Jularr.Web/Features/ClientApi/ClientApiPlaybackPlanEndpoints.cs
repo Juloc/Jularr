@@ -503,7 +503,7 @@ public static class ClientApiPlaybackPlanEndpoints
             HttpContext httpContext,
             CurrentAccountContext currentAccount) =>
         {
-            var session = sessions.Get(sessionId, currentAccount.ProfileId);
+            var session = sessions.Peek(sessionId, currentAccount.ProfileId);
             if (session is null)
             {
                 return SessionNotFound();
@@ -512,7 +512,8 @@ public static class ClientApiPlaybackPlanEndpoints
             var ended = session.HlsSessionId is { } hlsSessionId && !manager.IsActive(hlsSessionId, currentAccount.ProfileId);
             httpContext.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new ClientStreamSessionStatus(ended ? "ended" : "active", ended ? manager.EndReason(session.HlsSessionId!.Value) : null));
-        });
+        })
+        .RequireRateLimiting(RateLimitPolicy);
 
         group.MapDelete("/stream-sessions/{sessionId:guid}", async (
             Guid sessionId,

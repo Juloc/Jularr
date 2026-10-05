@@ -70,7 +70,11 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
     private readonly object _gate = new();
     private readonly ConcurrentDictionary<Guid, Entry> _sessions = new();
-    private readonly ConcurrentDictionary<Guid, string> _endReasons = new();
+    private readonly Lock _endGate = new();
+    private readonly Dictionary<Guid, string> _endReasons = [];
+    private readonly Queue<Guid> _endOrder = [];
+    private readonly HashSet<string> _retiredRoots = new(StringComparer.Ordinal);
+    private string? _activeRoot;
     private readonly PlaybackTranscodingSettingsStore _settings;
     private readonly TimeProvider _time;
     private readonly HlsProcessStarter _startProcess;
@@ -139,6 +143,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         try
         {
             ThrowIfDisposed();
+            ReapExitedProcesses();
             CleanupExpired();
             lock (_gate)
             {
@@ -151,6 +156,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                 }
 
                 PlaybackCacheOwnership.MarkRoot(policy.HlsCachePath);
+                NoteActiveRoot(policy.HlsCachePath);
                 if (PruneToPolicy(policy, terminateRunning: false) is { } refusal)
                 {
                     throw new PlaybackAdmissionRefusedException(refusal);
@@ -247,13 +253,20 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         return deleted;
     }
 
+    /// <summary>Whether the profile has a session of this id whose encoder has not crashed. A pure read: crashed sessions are removed by <see cref="ReapExitedProcesses"/>.</summary>
     public bool IsActive(Guid sessionId, string profileId) =>
         _sessions.TryGetValue(sessionId, out var entry) &&
         string.Equals(entry.ProfileId, profileId, StringComparison.Ordinal) &&
-        !ReapIfCrashed(entry);
+        !HasCrashed(entry);
 
     /// <summary>Why a session that was ended without its player asking (idle, cache policy, encoder crash) is gone; null when unknown or when it was ended normally.</summary>
-    public string? EndReason(Guid sessionId) => _endReasons.GetValueOrDefault(sessionId);
+    public string? EndReason(Guid sessionId)
+    {
+        lock (_endGate)
+        {
+            return _endReasons.GetValueOrDefault(sessionId);
+        }
+    }
 
     /// <summary>Ends a session early (a client stopped or switched streams).</summary>
     public void Stop(Guid sessionId, string profileId)
@@ -272,13 +285,12 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         string fileName)
     {
         ThrowIfDisposed();
-        CleanupExpired();
 
         if (!_sessions.TryGetValue(sessionId, out var entry) ||
             entry.EpisodeId != episodeId ||
             !string.Equals(entry.ProfileId, profileId, StringComparison.Ordinal) ||
             !AllowedAsset(fileName) ||
-            ReapIfCrashed(entry))
+            HasCrashed(entry))
         {
             return null;
         }
@@ -289,6 +301,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             return null;
         }
 
+        // Serving a segment is the one access that keeps a session alive.
         entry.Touch(_time.GetUtcNow());
 
         return new HlsPlaybackAsset(
@@ -333,13 +346,18 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         lock (_gate)
         {
             var policy = _settings.Current;
+            NoteActiveRoot(policy.HlsCachePath);
+
+            // Orphans first: leftovers of a crashed process count against the budget, and ending a healthy session
+            // because of them would be wrong when deleting them already clears the policy.
+            var orphans = RemoveOrphanDirectories(policy.HlsCachePath) + RemoveRetiredRootOrphans();
             var before = _sessions.Count;
             if (PruneToPolicy(policy, terminateRunning: true) is { } refusal)
             {
-                _logger.LogWarning("The HLS cache is over its policy but no session is left to end: {Reason}.", refusal);
+                _logger.LogWarning("The HLS cache is over its policy and ending sessions cannot fix it: {Reason}.", refusal);
             }
 
-            return new HlsSweepResult(expired, before - _sessions.Count, RemoveOrphanDirectories(policy.HlsCachePath), crashed);
+            return new HlsSweepResult(expired, before - _sessions.Count, orphans, crashed);
         }
     }
 
@@ -486,11 +504,18 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     private string? PruneToPolicy(PlaybackTranscodingSettings policy, bool terminateRunning)
     {
         var usage = MeasureCache(policy.HlsCachePath);
+        foreach (var session in _sessions.Values.Where(x => !IsUnder(policy.HlsCachePath, x.DirectoryPath)))
+        {
+            // A session started before the cache folder was changed still fills its old folder.
+            usage.Add(session.SessionId, SumBytes(new DirectoryInfo(session.DirectoryPath)));
+        }
+
         var terminated = false;
         while (true)
         {
+            var free = _freeSpace(policy.HlsCachePath);
             var overBudget = usage.TotalBytes >= policy.CacheBudgetBytes;
-            var belowFloor = _freeSpace(policy.HlsCachePath) is { } free && free < policy.FreeSpaceFloorBytes;
+            var belowFloor = free is { } available && available < policy.FreeSpaceFloorBytes;
             if (!overBudget && !belowFloor)
             {
                 return null;
@@ -500,8 +525,14 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             var victim = _sessions.Values.Where(x => x.LastAccessUtc <= idleBefore).MinBy(x => x.LastAccessUtc);
             if (victim is null && terminateRunning && !terminated)
             {
-                victim = _sessions.Values.MaxBy(x => usage.BytesOf(x.SessionId));
-                terminated = victim is not null;
+                // Only a session whose own bytes clear the condition is worth ending: a volume that is full of other
+                // data, or orphans that have not aged out yet, cannot be fixed by killing a healthy stream.
+                var largest = _sessions.Values.MaxBy(x => usage.BytesOf(x.SessionId));
+                if (largest is not null && ClearsPolicy(policy, usage, free, usage.BytesOf(largest.SessionId)))
+                {
+                    victim = largest;
+                    terminated = true;
+                }
             }
 
             if (victim is null)
@@ -514,51 +545,71 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         }
     }
 
-    /// <summary>One walk over the cache folder: bytes per session directory, and everything else lumped together.</summary>
+    // Whether freeing this many bytes would put the cache under its budget and the volume over its floor.
+    private static bool ClearsPolicy(PlaybackTranscodingSettings policy, CacheUsage usage, long? free, long bytes) =>
+        bytes > 0 &&
+        usage.TotalBytes - bytes < policy.CacheBudgetBytes &&
+        (free is not { } available || available + bytes >= policy.FreeSpaceFloorBytes);
+
+    /// <summary>One walk over the cache folder: bytes per session directory, and everything else lumped together. Entries that vanish mid-walk are skipped.</summary>
     private static CacheUsage MeasureCache(string root)
     {
         var usage = new CacheUsage();
-        if (!Directory.Exists(root))
+        try
         {
-            return usage;
+            foreach (var entry in new DirectoryInfo(root).EnumerateFileSystemInfos())
+            {
+                if (entry is DirectoryInfo directory)
+                {
+                    var bytes = SumBytes(directory);
+                    if (PlaybackCacheOwnership.IsSessionDirectoryName(directory.Name) && Guid.TryParseExact(directory.Name, "N", out var sessionId))
+                    {
+                        usage.Add(sessionId, bytes);
+                    }
+                    else
+                    {
+                        usage.AddOther(bytes);
+                    }
+                }
+                else if (entry is FileInfo file)
+                {
+                    usage.AddOther(SafeLength(file));
+                }
+            }
         }
-
-        foreach (var entry in new DirectoryInfo(root).EnumerateFileSystemInfos())
+        catch (Exception exception) when (exception is DirectoryNotFoundException or IOException)
         {
-            if (entry is DirectoryInfo directory)
-            {
-                var bytes = SumBytes(directory);
-                if (PlaybackCacheOwnership.IsSessionDirectoryName(directory.Name) && Guid.TryParseExact(directory.Name, "N", out var sessionId))
-                {
-                    usage.Add(sessionId, bytes);
-                }
-                else
-                {
-                    usage.AddOther(bytes);
-                }
-            }
-            else if (entry is FileInfo file)
-            {
-                usage.AddOther(file.Length);
-            }
+            // The folder (or a session directory) vanished while it was measured: what was counted so far stands.
         }
 
         return usage;
     }
 
+    private static long SafeLength(FileInfo file)
+    {
+        try
+        {
+            return file.Length;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
     private static long SumBytes(DirectoryInfo directory)
     {
         long total = 0;
-        foreach (var file in directory.EnumerateFiles("*", SearchOption.AllDirectories))
+        try
         {
-            try
+            foreach (var file in directory.EnumerateFiles("*", SearchOption.AllDirectories))
             {
-                total += file.Length;
+                total += SafeLength(file);
             }
-            catch (IOException)
-            {
-                // A segment ffmpeg or a prune deleted between listing and reading no longer counts.
-            }
+        }
+        catch (Exception exception) when (exception is DirectoryNotFoundException or IOException or UnauthorizedAccessException)
+        {
+            // The directory was deleted while it was walked (a stopped session); what was counted so far stands.
         }
 
         return total;
@@ -591,6 +642,41 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         return removed;
     }
 
+    // A changed cache folder retires the old one: its running sessions end on their own, and its leftovers are swept once they age out.
+    private void NoteActiveRoot(string root)
+    {
+        if (_activeRoot is not null && !string.Equals(_activeRoot, root, StringComparison.Ordinal))
+        {
+            _retiredRoots.Add(_activeRoot);
+        }
+
+        _retiredRoots.Remove(root);
+        _activeRoot = root;
+    }
+
+    private int RemoveRetiredRootOrphans()
+    {
+        var removed = 0;
+        foreach (var root in _retiredRoots.ToArray())
+        {
+            removed += RemoveOrphanDirectories(root);
+            var stillUsed = _sessions.Values.Any(x => IsUnder(root, x.DirectoryPath)) || (Directory.Exists(root) && Directory.EnumerateDirectories(root).Any(x => PlaybackCacheOwnership.IsDeletableSession(root, x)));
+            if (!stillUsed)
+            {
+                _retiredRoots.Remove(root);
+            }
+        }
+
+        return removed;
+    }
+
+    private static bool IsUnder(string root, string path)
+    {
+        var parent = Path.GetDirectoryName(path)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var expected = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(parent, expected, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
     private void EvictForProfileCapacity(string profileId)
     {
         while (_sessions.Values.Count(
@@ -616,6 +702,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         }
     }
 
+    private static bool HasCrashed(Entry entry) => entry.Process.HasExited && entry.Process.ExitCode is not (null or 0);
+
     /// <summary>Ends a session whose ffmpeg exited with an error; returns true when it was removed. A clean exit only frees the encoder slot.</summary>
     private bool ReapIfCrashed(Entry entry)
     {
@@ -625,7 +713,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         }
 
         entry.ReleaseLease();
-        if (entry.Process.ExitCode is null or 0)
+        if (!HasCrashed(entry))
         {
             return false;
         }
@@ -644,11 +732,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
         if (reason is not null)
         {
-            _endReasons[sessionId] = reason;
-            while (_endReasons.Count > MaxRememberedEndings && _endReasons.Keys.FirstOrDefault() is var oldest && oldest != Guid.Empty)
-            {
-                _endReasons.TryRemove(oldest, out _);
-            }
+            RememberEnding(sessionId, reason);
         }
 
         try
@@ -668,6 +752,22 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         }
 
         TryDeleteDirectory(entry.DirectoryPath);
+    }
+
+    private void RememberEnding(Guid sessionId, string reason)
+    {
+        lock (_endGate)
+        {
+            if (_endReasons.TryAdd(sessionId, reason))
+            {
+                _endOrder.Enqueue(sessionId);
+            }
+
+            while (_endOrder.Count > MaxRememberedEndings)
+            {
+                _endReasons.Remove(_endOrder.Dequeue());
+            }
+        }
     }
 
     private bool TryDeleteDirectory(string path)
@@ -763,9 +863,36 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess
         _process = process;
     }
 
-    public bool HasExited => _process.HasExited;
+    // A disposed or never-started process is gone: reading its state must not throw into a sweep or a request.
+    public bool HasExited
+    {
+        get
+        {
+            try
+            {
+                return _process.HasExited;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
+            {
+                return true;
+            }
+        }
+    }
 
-    public int? ExitCode => _process.HasExited ? _process.ExitCode : null;
+    public int? ExitCode
+    {
+        get
+        {
+            try
+            {
+                return _process.HasExited ? _process.ExitCode : null;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
+            {
+                return null;
+            }
+        }
+    }
 
     public string ErrorSummary
     {

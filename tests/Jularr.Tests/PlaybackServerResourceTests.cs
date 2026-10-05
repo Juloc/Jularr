@@ -488,8 +488,12 @@ public sealed class PlaybackServerResourceTests
         cache.Processes[0].HasExited = true;
         cache.Processes[0].ExitCode = 1;
 
-        Assert.IsFalse(cache.Manager.IsActive(session.SessionId, "profile-0"), "A dead session is not a running one.");
-        Assert.AreEqual(0, cache.Slots.Active(PlaybackCostClass.SoftwareVideo), "The slot of a crashed encoder is released at once, not at idle expiry.");
+        Assert.IsFalse(cache.Manager.IsActive(session.SessionId, "profile-0"), "A dead session is not a running one, and asking does not change anything.");
+        Assert.AreEqual(1, cache.Slots.Active(PlaybackCostClass.SoftwareVideo));
+
+        Assert.AreEqual(1, cache.Manager.ReapExitedProcesses());
+
+        Assert.AreEqual(0, cache.Slots.Active(PlaybackCostClass.SoftwareVideo), "The slot of a crashed encoder is released by the reap, not at idle expiry.");
         Assert.AreEqual(HlsSessionEndReasons.EncoderExited, cache.Manager.EndReason(session.SessionId));
         Assert.IsFalse(Directory.Exists(cache.SessionDirectory(session.SessionId)));
     }
@@ -506,6 +510,7 @@ public sealed class PlaybackServerResourceTests
         cache.Processes[0].ExitCode = 0;
 
         Assert.IsTrue(cache.Manager.IsActive(session.SessionId, "profile-0"));
+        Assert.AreEqual(0, cache.Manager.ReapExitedProcesses(), "A clean exit ends nothing.");
         Assert.IsNotNull(cache.Manager.GetAsset(session.SessionId, episode, "profile-0", "index.m3u8"), "A completed remux is still served until it expires.");
         Assert.AreEqual(0, cache.Slots.Active(PlaybackCostClass.Remux), "No encoder runs any more.");
         Assert.IsNull(cache.Manager.EndReason(session.SessionId));
@@ -609,6 +614,151 @@ public sealed class PlaybackServerResourceTests
         {
             Directory.Delete(kit.DataRoot, recursive: true);
         }
+    }
+
+    [TestMethod]
+    public void OperatingSystemEntriesDoNotMakeADedicatedMountPointForeign()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"jularr-owned-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "lost+found"));
+            Directory.CreateDirectory(Path.Combine(root, ".Trash-1000"));
+            Assert.IsTrue(PlaybackCacheOwnership.IsOwnedRoot(root), "A fresh ext4 mount holds lost+found and a trash folder.");
+
+            File.WriteAllText(Path.Combine(root, "holiday.jpg"), "x");
+            Assert.IsFalse(PlaybackCacheOwnership.IsOwnedRoot(root), "Any other entry makes the folder somebody else's.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task SavingClaimsTheFolderSoLaterFilesCannotMakeItForeign()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        var cache = Path.Combine(kit.DataRoot, "claimed");
+        try
+        {
+            var saved = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = cache });
+            Assert.IsTrue(saved.Succeeded);
+            Assert.IsTrue(File.Exists(Path.Combine(cache, PlaybackCacheOwnership.MarkerFileName)), "The marker is written at save time.");
+
+            await File.WriteAllTextAsync(Path.Combine(cache, "added-later.txt"), "x");
+
+            Assert.IsTrue(PlaybackCacheOwnership.IsOwnedRoot(cache));
+        }
+        finally
+        {
+            Directory.Delete(kit.DataRoot, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task OrphansAreDeletedBeforeAHealthySessionIsEnded()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 20);
+        var session = await cache.StartAsync("profile-0", segmentBytes: 100 * 1024);
+        var orphan = Directory.CreateDirectory(Path.Combine(cache.Root, Guid.NewGuid().ToString("N")));
+        await File.WriteAllBytesAsync(Path.Combine(orphan.FullName, "segment-00000.m4s"), new byte[1100 * 1024]);
+        orphan.LastWriteTimeUtc = cache.Time.GetUtcNow().UtcDateTime - HlsPlaybackSessionManager.IdleLifetime - TimeSpan.FromMinutes(1);
+        cache.Time.Advance(TimeSpan.FromSeconds(30));
+
+        var result = cache.Manager.Sweep();
+
+        Assert.IsFalse(orphan.Exists, "The restart leftovers go first.");
+        Assert.IsTrue(cache.Manager.IsActive(session.SessionId, "profile-0"), "Deleting them already cleared the budget.");
+        Assert.AreEqual(0, result.PrunedForPolicy);
+        Assert.AreEqual(1, result.OrphanDirectories);
+    }
+
+    [TestMethod]
+    public async Task ASessionIsNotEndedForAConditionItsOwnBytesCannotClear()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 20);
+        var session = await cache.StartAsync("profile-0", segmentBytes: 100 * 1024);
+        var young = Directory.CreateDirectory(Path.Combine(cache.Root, Guid.NewGuid().ToString("N")));
+        await File.WriteAllBytesAsync(Path.Combine(young.FullName, "segment-00000.m4s"), new byte[1100 * 1024]);
+        young.LastWriteTimeUtc = cache.Time.GetUtcNow().UtcDateTime;
+        cache.Time.Advance(TimeSpan.FromSeconds(30));
+
+        var result = cache.Manager.Sweep();
+
+        Assert.IsTrue(cache.Manager.IsActive(session.SessionId, "profile-0"), "Killing a 100 KiB session cannot fix a cache that foreign or young bytes keep over its budget.");
+        Assert.IsTrue(young.Exists);
+        Assert.AreEqual(0, result.PrunedForPolicy);
+    }
+
+    [TestMethod]
+    public async Task AVolumeThatIsLowForOtherReasonsDoesNotCostTheLargestSessionButAClearableOneDoes()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30, floorBytes: 5L << 30);
+        var session = await cache.StartAsync("profile-0", segmentBytes: 100 * 1024);
+        cache.Time.Advance(TimeSpan.FromSeconds(30));
+
+        cache.FreeBytes = (5L << 30) - (10L << 20);
+        cache.Manager.Sweep();
+        Assert.IsTrue(cache.Manager.IsActive(session.SessionId, "profile-0"), "100 KiB would not lift the volume over its floor.");
+
+        cache.FreeBytes = (5L << 30) - 50 * 1024;
+        cache.Manager.Sweep();
+        Assert.IsFalse(cache.Manager.IsActive(session.SessionId, "profile-0"), "Ending it clears the floor.");
+        Assert.AreEqual(HlsSessionEndReasons.CacheFreeSpace, cache.Manager.EndReason(session.SessionId));
+    }
+
+    [TestMethod]
+    public async Task RunningSessionsOfAnOldFolderStillCountAndItsLeftoversAreSweptOnce()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 20);
+        var oldRoot = cache.Root;
+        var running = await cache.StartAsync("profile-0", segmentBytes: 600 * 1024);
+        var leftover = Directory.CreateDirectory(Path.Combine(oldRoot, Guid.NewGuid().ToString("N")));
+        await File.WriteAllBytesAsync(Path.Combine(leftover.FullName, "segment-00000.m4s"), new byte[10]);
+        leftover.LastWriteTimeUtc = cache.Time.GetUtcNow().UtcDateTime - HlsPlaybackSessionManager.IdleLifetime - TimeSpan.FromMinutes(1);
+
+        var newRoot = Path.Combine(cache.Kit.DataRoot, "hls-new");
+        Assert.IsTrue((await cache.Kit.Settings.SaveAsync(cache.Kit.Settings.Current with { HlsCachePath = newRoot })).Succeeded);
+        var inNew = await cache.StartAsync("profile-1", segmentBytes: 300 * 1024);
+        Assert.IsTrue(Directory.Exists(Path.Combine(newRoot, inNew.SessionId.ToString("N"))), "New sessions use the new folder.");
+
+        await cache.StartAsync("profile-2", segmentBytes: 400 * 1024);
+        var refusal = await Assert.ThrowsAsync<PlaybackAdmissionRefusedException>(() => cache.StartAsync("profile-3", segmentBytes: 1));
+        Assert.AreEqual(PlaybackAdmissionCodes.CacheBudgetExhausted, refusal.Code, "The old folder's running session is part of the budget until it ends.");
+
+        var result = cache.Manager.Sweep();
+        Assert.IsFalse(leftover.Exists, "The retired folder's aged leftovers are swept.");
+        Assert.IsTrue(result.OrphanDirectories >= 1);
+        Assert.AreEqual(HlsSessionEndReasons.CacheBudget, cache.Manager.EndReason(running.SessionId), "The old folder's session is the largest and ends first when the budget is exceeded.");
+    }
+
+    [TestMethod]
+    public async Task ASweepOfAVanishedCacheFolderIsHarmless()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        await cache.StartAsync("profile-0", segmentBytes: 10);
+        Directory.Delete(cache.Root, recursive: true);
+
+        var result = cache.Manager.Sweep();
+
+        Assert.AreEqual(0, result.OrphanDirectories);
+    }
+
+    [TestMethod]
+    public async Task OnlyTheNewestEndReasonsAreRemembered()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var sessions = new List<Guid>();
+        for (var i = 0; i < 140; i++)
+        {
+            sessions.Add((await cache.StartAsync($"profile-{i}", segmentBytes: 1)).SessionId);
+        }
+
+        cache.Time.Advance(HlsPlaybackSessionManager.IdleLifetime + TimeSpan.FromMinutes(1));
+        Assert.AreEqual(140, cache.Manager.CleanupExpired());
+
+        Assert.AreEqual(128, sessions.Count(id => cache.Manager.EndReason(id) is not null), "The memory is bounded; the oldest endings make room.");
     }
 
     private static List<IDisposable> Acquire(PlaybackTranscodeSlots slots, PlaybackCostClass costClass, int count) =>

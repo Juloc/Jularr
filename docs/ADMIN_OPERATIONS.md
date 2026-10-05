@@ -226,10 +226,20 @@ services:
     #       devices:
     #         - driver: nvidia
     #           count: 1
-    #           capabilities: [video]
+    #           capabilities: [gpu, video, utility]   # "gpu" is required by the Compose spec; NVENC needs "video"
 ```
 
-The Debian `ffmpeg` in the image provides VAAPI and QSV encoders, but its NVENC and AMF support depends on the build and the host driver; **Admin > Health** shows what the test encode found for each backend. The HLS cache path is changed in the Admin page, never through an environment variable.
+**The image does not contain the GPU user-space drivers.** Its runtime stage installs Debian `ffmpeg` with `--no-install-recommends`, so `mesa-va-drivers` (AMD, older Intel) and `intel-media-va-driver` (Intel Quick Sync; in Debian `non-free`, `intel-media-va-driver-non-free` for full codec support) are absent, and passing `/dev/dri` alone makes the VAAPI and QSV test encodes fail. This is deliberate: the packages are architecture and vendor specific, `intel-media-va-driver` needs the `non-free` component, and they add to the image size for every install. Operators who want VAAPI or QSV build a small derived image:
+
+```dockerfile
+FROM ghcr.io/juloc/jularr:latest
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends mesa-va-drivers vainfo && rm -rf /var/lib/apt/lists/*
+# Intel Quick Sync additionally: intel-media-va-driver (add the Debian non-free component first)
+USER 1654
+```
+
+NVENC needs no driver package in the image: the NVIDIA Container Toolkit injects the host driver libraries. Whether ffmpeg lists NVENC or AMF depends on how the Debian build was configured and on the host; **Admin > Health** shows what the test encode found for each backend, with the reason when it failed. The HLS cache path is changed in the Admin page, never through an environment variable.
 
 ## Logs and security
 

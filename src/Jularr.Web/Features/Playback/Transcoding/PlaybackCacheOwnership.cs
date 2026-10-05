@@ -12,23 +12,29 @@ public static partial class PlaybackCacheOwnership
 {
     public const string MarkerFileName = ".jularr-hls-cache";
 
+    // Entries a filesystem or operating system puts into a fresh volume by itself; a dedicated mount point is still "empty" with them.
+    private static readonly string[] s_systemEntries = ["lost+found", "$RECYCLE.BIN", "System Volume Information"];
+
     [GeneratedRegex("^[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
     private static partial Regex SessionDirectoryName();
 
     public static bool IsSessionDirectoryName(string name) => SessionDirectoryName().IsMatch(name);
 
     /// <summary>
-    /// Whether the root is Jularr's: marked by an earlier session, the default folder, or holding
-    /// nothing at all (a missing folder counts as empty). Anything else is somebody else's folder.
+    /// Whether the root is Jularr's: marked by an earlier save or session, the default folder, or holding nothing
+    /// but entries the operating system created (<c>lost+found</c>, <c>.Trash-*</c>, the Windows recycle bin). A
+    /// missing folder counts as empty. Anything else is somebody else's folder.
     /// </summary>
     public static bool IsOwnedRoot(string root) =>
         !Directory.Exists(root) ||
         File.Exists(Path.Combine(root, MarkerFileName)) ||
-        string.Equals(root.TrimEnd('/', '\\'),PlaybackTranscodingSettings.DefaultHlsCachePath, StringComparison.Ordinal) ||
-        !Directory.EnumerateFileSystemEntries(root).Any();
+        string.Equals(root.TrimEnd('/', '\\'), PlaybackTranscodingSettings.DefaultHlsCachePath, StringComparison.Ordinal) ||
+        Directory.EnumerateFileSystemEntries(root).All(IsSystemEntry);
 
+    /// <summary>Creates the folder and marks it Jularr's; throws the filesystem's own exception when it cannot be written.</summary>
     public static void MarkRoot(string root)
     {
+        Directory.CreateDirectory(root);
         var marker = Path.Combine(root, MarkerFileName);
         if (!File.Exists(marker))
         {
@@ -55,5 +61,11 @@ public static partial class PlaybackCacheOwnership
         {
             return false;
         }
+    }
+
+    private static bool IsSystemEntry(string path)
+    {
+        var name = Path.GetFileName(path);
+        return s_systemEntries.Contains(name, StringComparer.Ordinal) || name.StartsWith(".Trash-", StringComparison.Ordinal);
     }
 }

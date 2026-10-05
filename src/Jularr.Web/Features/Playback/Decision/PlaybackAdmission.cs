@@ -90,8 +90,9 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
     /// fails is first retried on the same encoder with software decoding when it decoded on the device (a
     /// device that encodes but cannot decode must not lose its encoder), then on software. Only a failure
     /// that the software fallback of the same request then survives counts against the backend: when
-    /// software fails too, the source or the environment is at fault and nothing is recorded. A timeout,
-    /// a refusal or an invalid argument set is never retried and never counted. <paramref name="start"/>
+    /// software fails too (or times out too), the source or the environment is at fault and nothing is recorded. A hung
+    /// hardware driver shows up as a timeout, so a hardware timeout takes the same path as a hardware failure; a timeout
+    /// of the software attempt, a refusal or an invalid argument set is never retried and never counted. <paramref name="start"/>
     /// owns the admission's lease and must release it when the attempt fails.
     /// </summary>
     public async Task<TResult> StartAsync<TResult>(PlaybackPlan plan, string profileId, Func<PlaybackAdmission, Task<TResult>> start)
@@ -115,7 +116,7 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
                 Settle(admitted, decodeSuspected, failedBackend, hardwareFailure);
                 return result;
             }
-            catch (Exception exception) when (admitted.Encoder.IsHardware && exception is (InvalidOperationException and not PlaybackAdmissionRefusedException) or System.ComponentModel.Win32Exception)
+            catch (Exception exception) when (admitted.Encoder.IsHardware && exception is (InvalidOperationException and not PlaybackAdmissionRefusedException) or System.ComponentModel.Win32Exception or TimeoutException)
             {
                 PlaybackEncoderTarget next;
                 if (PlaybackDeliveryCommand.UsesHardwareDecoding(admitted.Encoder, plan.Video!))
@@ -147,7 +148,12 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
         }
 
         var lease = slots.TryAcquire(costClass, profileId);
-        var refusal = lease is not null ? null : slots.ActiveFor(profileId) >= PlaybackTranscodeSlots.MaxPerProfile ? PlaybackAdmissionCodes.ProfileSessionLimit : PlaybackAdmissionCodes.TranscoderBusy;
+        string? refusal = null;
+        if (lease is null)
+        {
+            refusal = slots.ActiveFor(profileId) >= PlaybackTranscodeSlots.MaxPerProfile ? PlaybackAdmissionCodes.ProfileSessionLimit : PlaybackAdmissionCodes.TranscoderBusy;
+        }
+
         return new PlaybackAdmission(costClass, encoder, lease, refusal);
     }
 

@@ -226,7 +226,7 @@ public sealed class PlaybackTranscodingSettingsStore
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackTranscodingSettingsRules.PathNotEmpty));
         }
 
-        if (issues.Count == 0 && !IsWritableDirectory(normalized.HlsCachePath))
+        if (issues.Count == 0 && !TryMarkWritable(normalized.HlsCachePath))
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackTranscodingSettingsRules.PathNotWritable));
         }
@@ -288,15 +288,13 @@ public sealed class PlaybackTranscodingSettingsStore
         return settings with { HlsCachePath = PlaybackTranscodingSettingsRules.NormalizePath(settings.HlsCachePath) };
     }
 
-    // A marker file is the only way to know the process may really write there, not just list it.
-    private static bool IsWritableDirectory(string directory)
+    // Writing the ownership marker is the proof that the process can really write there, and it claims the folder at save time:
+    // whatever an administrator puts next to it afterwards cannot make the folder look foreign.
+    private static bool TryMarkWritable(string directory)
     {
         try
         {
-            Directory.CreateDirectory(directory);
-            var marker = Path.Combine(directory, $".jularr-write-test-{Guid.NewGuid():N}.tmp");
-            File.WriteAllBytes(marker, []);
-            File.Delete(marker);
+            PlaybackCacheOwnership.MarkRoot(directory);
             return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)

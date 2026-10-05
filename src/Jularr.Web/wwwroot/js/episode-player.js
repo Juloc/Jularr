@@ -155,11 +155,12 @@
     let streamSessionId = null;
     let planGeneration = 0;
     const failedModes = new Set();
-    // The server ends a stream itself when it sits idle, the cache policy needs room or its encoder crashes. That
-    // says nothing against the mode, so the same mode is planned again a bounded number of times.
-    const maxSessionRecoveries = 3;
+    // The server ends a stream itself when it sits idle or the cache policy needs room. That says nothing against the mode,
+    // so the same mode is planned again (see player-recovery.js for the bounds).
+    const streamRecovery = window.JularrStreamRecovery;
     let sessionRecoveries = 0;
-    const streamIsLive =() => delivery !== null && delivery.transport !== "file";
+    let recoveryStartedAt = 0;
+    const streamIsLive = () => delivery !== null && delivery.transport !== "file";
 
     const readSceneStartSeconds = () => {
         const value = new URL(window.location.href).searchParams.get("at");
@@ -1711,15 +1712,16 @@
         showPostPlay();
     });
 
-    video.addEventListener("playing", () => {
-        sessionRecoveries = 0;
+    video.addEventListener("timeupdate", () => {
+        sessionRecoveries = streamRecovery.recoveriesAfterProgress(sessionRecoveries, absoluteCurrentTime() - recoveryStartedAt);
     });
 
     // A failed video element carries no HTTP status, so the stream session is asked whether the server ended it.
-    const serverEndedSession = async () => {
+    // Null means the server could not be asked; the caller then takes the ordinary mode fallback.
+    const readStreamSessionStatus = async () => {
         const template = root.dataset.streamSessionUrlTemplate;
         if (!streamSessionId || !template || !streamIsLive()) {
-            return false;
+            return null;
         }
 
         try {
@@ -1729,12 +1731,13 @@
                 headers: { "Accept": "application/json" }
             });
             if (response.status === 404) {
-                return true;
+                return { gone: true };
             }
 
-            return response.ok && (await response.json()).state === "ended";
-        } catch {
-            return false;
+            return response.ok ? await response.json() : null;
+        } catch (error) {
+            console.warn("The stream session status could not be read.", error);
+            return null;
         }
     };
 
@@ -1756,9 +1759,10 @@
             return;
         }
 
-        if (sessionRecoveries < maxSessionRecoveries && await serverEndedSession()) {
+        if (streamRecovery.shouldReplanSameMode(await readStreamSessionStatus(), sessionRecoveries)) {
             sessionRecoveries += 1;
             pendingResumeTime = absoluteCurrentTime();
+            recoveryStartedAt = pendingResumeTime;
             resumeShouldPlay = playbackWasRequested;
             showPlayerError(text["playback.status.retrying"]);
             void applyPlayback();

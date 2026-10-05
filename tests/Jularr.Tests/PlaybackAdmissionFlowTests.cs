@@ -159,8 +159,42 @@ public sealed class PlaybackAdmissionFlowTests
             return Fail(admitted, new PlaybackAdmissionRefusedException(PlaybackAdmissionCodes.CacheFolderNotOwned));
         }));
 
-        Assert.AreEqual(3, attempts, "A sleeping NAS or a full cache says nothing about the encoder: one attempt each.");
+        Assert.AreEqual(4, attempts, "A refusal is one attempt each; a hardware timeout is retried once on software, which timed out too.");
         Assert.AreEqual(0, kit.Breaker.State(PlaybackHardwareBackend.Nvenc).ConsecutiveFailures);
+    }
+
+    [TestMethod]
+    public async Task AHungHardwareDriverThatTimesOutIsChargedOnceSoftwareServesTheRequest()
+    {
+        var kit = await HardwareKitAsync();
+        var plan = Transcode(Video(sourceCodec: "hevc", encoder: "h264_nvenc"));
+
+        for (var request = 1; request <= PlaybackBackendBreaker.FailureThreshold; request++)
+        {
+            var started = await kit.Admission.StartAsync(plan, Profile, admitted => admitted.Encoder.IsHardware ? Fail(admitted, new TimeoutException("no first segment")) : Succeed(admitted));
+            started.Lease!.Dispose();
+            Assert.AreEqual(request, kit.Breaker.State(PlaybackHardwareBackend.Nvenc).ConsecutiveFailures);
+        }
+
+        Assert.IsTrue(kit.Breaker.State(PlaybackHardwareBackend.Nvenc).IsOpen, "A hung driver opens the breaker like any other failing one.");
+    }
+
+    [TestMethod]
+    public async Task ACancelledStartIsNeitherRetriedNorChargedAndKeepsNoSlot()
+    {
+        var kit = await HardwareKitAsync();
+        var plan = Transcode(Video(sourceCodec: "hevc", encoder: "h264_nvenc"));
+        var attempts = 0;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => kit.Admission.StartAsync(plan, Profile, admitted =>
+        {
+            attempts++;
+            return Fail(admitted, new OperationCanceledException());
+        }));
+
+        Assert.AreEqual(1, attempts, "A disconnected client does not start a second encoder.");
+        Assert.AreEqual(0, kit.Breaker.State(PlaybackHardwareBackend.Nvenc).ConsecutiveFailures);
+        Assert.AreEqual(0, kit.Slots.ActiveFor(Profile), "The failed attempt's slot and the profile's share are back.");
     }
 
     [TestMethod]
@@ -175,23 +209,6 @@ public sealed class PlaybackAdmissionFlowTests
 
         Assert.AreEqual(PlaybackAdmissionCodes.TranscoderBusy, refusal.Code);
         Assert.AreEqual(0, kit.Breaker.State(PlaybackHardwareBackend.Nvenc).ConsecutiveFailures, "No software run proved the failure, so nothing is charged.");
-    }
-
-    [TestMethod]
-    public void ThePlayerReplansTheSameModeWhenTheServerEndedTheStream()
-    {
-        var root = PlayerControlsTests.RepositoryRoot();
-        var player = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
-        var endpoints = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Features", "ClientApi", "ClientApiPlaybackPlanEndpoints.cs"));
-
-        var recovery = player.IndexOf("await serverEndedSession()", StringComparison.Ordinal);
-        var blame = player.IndexOf("failedModes.add(plan.mode)", StringComparison.Ordinal);
-        Assert.IsTrue(recovery > 0 && blame > recovery, "A server-ended stream is checked before the mode is blamed.");
-        StringAssert.Contains(player, "sessionRecoveries < maxSessionRecoveries");
-        StringAssert.Contains(player, "response.status === 404");
-        StringAssert.Contains(player, "state === \"ended\"");
-        StringAssert.Contains(endpoints, "MapGet(\"/stream-sessions/{sessionId:guid}\"");
-        StringAssert.Contains(endpoints, "new ClientStreamSessionStatus(ended ? \"ended\" : \"active\"");
     }
 
     private static PlaybackPlan HardwarePlan() => Transcode(Video(encoder: "h264_nvenc"));

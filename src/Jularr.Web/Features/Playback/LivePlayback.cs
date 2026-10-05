@@ -112,21 +112,28 @@ public sealed class LivePlaybackStream : Stream
 {
     private const int PrefixBufferSize = 16 * 1024;
 
-    private readonly Process _process;
     private readonly Stream _output;
-    private readonly Task<string> _stderrDrain;
+    private readonly Task<string> _errors;
+    private readonly Action _endProcess;
     private readonly IDisposable? _lease;
     private bool _disposed;
     private byte[] _prefix = [];
     private int _prefixOffset;
 
-    private LivePlaybackStream(Process process, IDisposable? lease)
+    private LivePlaybackStream(Stream output, Task<string> errors, Action endProcess, IDisposable? lease)
     {
-        _process = process;
+        _output = output;
+        _errors = errors;
+        _endProcess = endProcess;
         _lease = lease;
-        _output = process.StandardOutput.BaseStream;
-        _stderrDrain = process.StandardError.ReadToEndAsync();
     }
+
+    /// <summary>
+    /// Wraps the output of an already running encoder. <paramref name="endProcess"/> kills and cleans up the process; it runs
+    /// on dispose, together with the pipe and the lease. This is the seam that tests a silent or dying encoder without ffmpeg.
+    /// </summary>
+    public static LivePlaybackStream Wrap(Stream output, Task<string> errors, Action endProcess, IDisposable? lease = null) =>
+        new(output, errors, endProcess, lease);
 
     public static LivePlaybackStream Start(
         string sourcePath,
@@ -176,7 +183,7 @@ public sealed class LivePlaybackStream : Stream
             throw new InvalidOperationException("Could not start ffmpeg playback stream.");
         }
 
-        return new LivePlaybackStream(process, lease);
+        return new LivePlaybackStream(process.StandardOutput.BaseStream, process.StandardError.ReadToEndAsync(), () => EndProcess(process), lease);
     }
 
     /// <summary>
@@ -187,28 +194,29 @@ public sealed class LivePlaybackStream : Stream
     /// </summary>
     public async Task WaitForFirstBytesAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
-        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutSource.CancelAfter(timeout);
+        // A pipe read of a child process does not honour cancellation once it started, so the read is raced against the
+        // timeout and the caller's token. Losing the race ends the process and closes the pipe, which also frees the lease.
         var buffer = new byte[PrefixBufferSize];
-        int read;
-        try
+        var read = _output.ReadAsync(buffer, CancellationToken.None).AsTask();
+        var wait = Task.Delay(timeout, cancellationToken);
+        if (await Task.WhenAny(read, wait) != read)
         {
-            read = await _output.ReadAsync(buffer, timeoutSource.Token);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
+            Dispose();
+            _ = read.ContinueWith(static finished => _ = finished.Exception, TaskContinuationOptions.OnlyOnFaulted);
+            cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException("ffmpeg produced no output in time.");
         }
 
-        if (read == 0)
+        var bytes = await read;
+        if (bytes == 0)
         {
-            var detail = await Task.WhenAny(_stderrDrain, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken)) == _stderrDrain
-                ? _stderrDrain.Result.Trim().Split('\n')[^1].Trim()
+            var detail = await Task.WhenAny(_errors, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken)) == _errors
+                ? _errors.Result.Trim().Split('\n')[^1].Trim()
                 : "";
             throw new InvalidOperationException($"ffmpeg exited before producing output: {(detail.Length <= 200 ? detail : detail[..200])}");
         }
 
-        _prefix = buffer[..read];
+        _prefix = buffer[..bytes];
         _prefixOffset = 0;
     }
 
@@ -283,19 +291,30 @@ public sealed class LivePlaybackStream : Stream
         {
             try
             {
-                if (!_process.HasExited)
-                {
-                    _process.Kill(entireProcessTree: true);
-                }
+                _endProcess();
             }
-            catch (InvalidOperationException)
+            finally
             {
+                _lease?.Dispose();
             }
-
-            _process.Dispose();
-            _lease?.Dispose();
         }
 
         base.Dispose(disposing);
+    }
+
+    private static void EndProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        process.Dispose();
     }
 }
