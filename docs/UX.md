@@ -162,20 +162,22 @@ Clean and Original Jularr use identical structure/behavior; only visual skin tok
 
 ## 3b. Consumer acquisition status vocabulary
 
+Binding Instant Play / Start Watching specification: `docs/mockups/instant-play/SPEC.md`.
+
 All consumer surfaces project the same user-facing Request/acquisition vocabulary.
 
 Preferred labels:
 - Waiting for approval;
 - Requested / Approved where needed;
 - Looking for media;
-- Downloading;
+- Getting episode / movie / media, with reliable progress where useful;
 - Preparing;
 - Available / Partially available;
 - Monitoring future releases;
 - Needs attention / Failed;
 - Cancelled.
 
-`Search`, `ImportJob`, importer phases, verification and post-processing are internal/Admin concepts. Consumer pages may show progress, but should use `Looking for media` and `Preparing` instead of exposing `Searching` / `Importing` as separate product states.
+`Search`, `ImportJob`, downloader/importer names, importer phases, verification and post-processing are internal/Admin concepts. Consumer pages may show reliable progress, but should use `Looking for media`, `Getting episode/movie/media` and `Preparing` instead of exposing `Searching`, `Downloading` or `Importing` as the primary Instant Play product states.
 
 This vocabulary is a projection over the canonical Request -> Wanted -> Search -> Download -> Import pipeline; it does not create a second state machine.
 
@@ -250,7 +252,7 @@ All media detail pages share a common skeleton while adapting content.
 - title and useful alternate title where configured
 - concise metadata
 - progress/status
-- primary action is state-dependent: Play / Continue / Read / Listen when usable, otherwise Request when acquisition is permitted;
+- primary action is state-dependent: Play / Continue / Read / Listen when usable; Start watching / Watch now may represent a playback intent that transparently acquires the smallest required playable unit when Playback + instant acquisition are permitted; otherwise Request is the explicit acquisition action;
 - secondary actions are personal-state/context actions such as Watchlist/Reading List, Favorite, Collection and options where supported;
 - never expose a separate consumer `Add to Library` acquisition action.
 
@@ -286,6 +288,8 @@ Audiobook:
 - recommendations
 
 User pages do not expose release-group/import internals by default.
+
+When Jularr Playback is disabled/unavailable for the instance, consumer media pages remain valid manager-only surfaces: missing media uses Request, successful acquisition ends at Available/Monitoring, and Jularr does not show Start watching, Watch now, Starting playback or Player controls.
 
 ## 7. Episode / chapter / volume interaction
 
