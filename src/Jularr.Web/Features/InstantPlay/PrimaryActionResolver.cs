@@ -103,15 +103,24 @@ public sealed record OpenRequestFacts(
     }
 
     /// <summary>The episodes the request's scope includes, by the same <see cref="VideoRequestSelection"/> the executor uses.</summary>
-    public static OpenRequestFacts ForSeries(AcquisitionRequest request, VideoRequestSelection selection, IEnumerable<(Guid Id, Guid? SeasonId, DateTime? AiredAt)> episodes) =>
-        new(
+    public static OpenRequestFacts ForSeries(AcquisitionRequest request, VideoRequestSelection selection, IEnumerable<(Guid Id, Guid? SeasonId, DateTime? AiredAt)> episodes)
+    {
+        var payload = selection.Payload;
+        var all = episodes.ToArray();
+        var excludedSeasons = (payload.ExcludedSeasonIds ?? []).ToHashSet();
+        var selected = payload.SelectedEpisodeIds.ToHashSet();
+        var excluded = (payload.ExcludedEpisodeIds ?? [])
+            .Concat(all.Where(x => x.SeasonId is { } season && excludedSeasons.Contains(season) && !selected.Contains(x.Id)).Select(x => x.Id))
+            .ToHashSet();
+        return new OpenRequestFacts(
             request.Status,
-            selection.Payload.Monitored,
+            payload.Monitored,
             false,
-            episodes.Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt)).Select(x => x.Id).ToHashSet(),
-            (selection.Payload.ExcludedEpisodeIds ?? []).ToHashSet(),
+            all.Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt)).Select(x => x.Id).ToHashSet(),
+            excluded,
             false,
-            (selection.Payload.PlaybackEpisodeIds ?? []).ToHashSet());
+            (payload.PlaybackEpisodeIds ?? []).ToHashSet());
+    }
 }
 
 /// <summary>The canonical facts about one Movie or Series Work and one profile that the primary action depends on.</summary>

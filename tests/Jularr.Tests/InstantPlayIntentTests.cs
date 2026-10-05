@@ -463,13 +463,17 @@ public sealed class InstantPlayIntentTests
         };
         var request = await host.CreateApprovedAsync(marked);
 
-        await monitoring.SetSeriesAsync(host.Work.Id, "custom", [], [host.EpisodeId!.Value], monitorFuture: false, CancellationToken.None);
-        Assert.IsFalse(PayloadOf(await host.GetAsync(request.Id)).HasPlaybackIntent, "The saved checklist replaces what was asked for earlier.");
-
+        await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, monitored: false, CancellationToken.None);
+        var afterUncheck = PayloadOf(await host.GetAsync(request.Id));
+        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, afterUncheck.PlaybackEpisodeIds, "Unchecking another episode leaves the waiting one alone.");
+        await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId.Value, monitored: false, CancellationToken.None);
+        Assert.IsFalse(PayloadOf(await host.GetAsync(request.Id)).HasPlaybackIntent, "An episode the Admin unchecked is no longer waited for.");
+        var third = await host.Environment.Db.WorkEpisodes.SingleAsync(x => x.WorkId == host.Work.Id && x.EpisodeNumber == 3);
+        await Intents(host).StartAsync(host.Work.Id, third.Id, CancellationToken.None);
         await Intents(host).StartAsync(host.Work.Id, host.SecondEpisodeId, CancellationToken.None);
         Assert.IsTrue(PayloadOf(await host.GetAsync(request.Id)).HasPlaybackIntent);
-        await monitoring.SetSeriesAsync(host.Work.Id, "off", [], [], monitorFuture: false, CancellationToken.None);
-        await monitoring.SetSeriesAsync(host.Work.Id, "all", [], [], monitorFuture: true, CancellationToken.None);
+        await monitoring.SetSeriesAsync(host.Work.Id, "off", CancellationToken.None);
+        await monitoring.SetSeriesAsync(host.Work.Id, "all", CancellationToken.None);
         var reopened = (await AllRequestsAsync(host)).Single(x => x.IsOpen);
         Assert.IsFalse(PayloadOf(reopened).HasPlaybackIntent, "Monitoring off and on again does not bring a marker back.");
     }
