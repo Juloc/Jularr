@@ -220,6 +220,23 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
         }, cancellationToken);
 
+    /// <summary>
+    /// The newest open Movie and TV requests that carry playback markers, at most <paramref name="limit"/>; the caller judges which markers
+    /// are still alive. A request has markers only while someone waits for a unit, so the set is small.
+    /// </summary>
+    public Task<IReadOnlyList<AcquisitionRequest>> ListOpenWithPlaybackMarkersAsync(int limit, CancellationToken cancellationToken) =>
+        QueryAsync(
+            $$"""
+            SELECT {{Columns}} FROM "AcquisitionRequests"
+            WHERE "Kind" IN ('movie', 'tv')
+              AND "Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing')
+              AND "PayloadJson" LIKE '%"playbackMarkers":[{%'
+            ORDER BY "UpdatedAt" DESC
+            LIMIT @limit;
+            """,
+            command => Add(command, "@limit", limit),
+            cancellationToken);
+
     public Task<IReadOnlyList<AcquisitionRequest>> ListDownloadingAsync(
         MediaAcquisitionKind kind,
         CancellationToken cancellationToken) =>

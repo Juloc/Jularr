@@ -23,6 +23,9 @@ public enum VideoRequestScope
     Custom
 }
 
+/// <summary>One profile's wait for one unit: the episode, or the Movie itself when <paramref name="WorkEpisodeId"/> is null.</summary>
+public sealed record PlaybackMarker(Guid? WorkEpisodeId, string ProfileId, DateTime AtUtc);
+
 /// <summary>
 /// Durable request/search state for Movie and TV. TV structural selection uses canonical WorkSeason
 /// and WorkEpisode ids; future monitoring is a property of the same Scope, never a second
@@ -59,24 +62,29 @@ public sealed record VideoRequestPayload(
     public int ScopeRevision { get; init; }
 
     /// <summary>
-    /// Playback intent (Instant Play): the Movie itself is what a profile asked to watch now. It is searched ahead of the rest of the
-    /// request and downloaded at high priority; it adds nothing to the scope.
+    /// Playback intents (Instant Play): the units profiles asked to watch now, each with who asked and when. A marker is searched ahead of
+    /// the rest of the request, downloaded at high priority and, for an episode, part of the selection whatever the scope says (so an
+    /// approved request can serve a play intent without a second request). It is a transient wait, not saved scope: it lapses after
+    /// <see cref="PlaybackTtl"/>, at most <see cref="MaxPlaybackMarkers"/> exist, and the importer drops a marker once its unit has a file.
     /// </summary>
-    public bool PlaybackWork { get; init; }
+    public PlaybackMarker[]? PlaybackMarkers { get; init; }
 
-    /// <summary>
-    /// Playback intent: the episodes a profile asked to watch now, newest last and at most <see cref="MaxPlaybackEpisodes"/>. They are
-    /// part of the selection whatever the scope says (so an approved request can serve a play intent without a second request),
-    /// searched before the rest and downloaded at high priority. The importer drops an episode from the list once it has a file.
-    /// </summary>
-    public Guid[]? PlaybackEpisodeIds { get; init; }
+    /// <summary>When an intent last reset the back-off of this request, so repeated intents cannot force a search every time.</summary>
+    public DateTime? PlaybackResetUtc { get; init; }
 
-    public const int MaxPlaybackEpisodes = 16;
+    public const int MaxPlaybackMarkers = 16;
 
-    public bool HasPlaybackIntent => PlaybackWork || PlaybackEpisodeIds is { Length: > 0 };
+    public static readonly TimeSpan PlaybackTtl = TimeSpan.FromHours(2);
+
+    public IEnumerable<PlaybackMarker> ActivePlaybackMarkers(DateTime nowUtc) => (PlaybackMarkers ?? []).Where(marker => nowUtc - marker.AtUtc < PlaybackTtl);
+
+    public bool HasPlaybackIntent(DateTime nowUtc) => ActivePlaybackMarkers(nowUtc).Any();
+
+    /// <summary>Whether a profile is waiting for the unit (<paramref name="workEpisodeId"/> null is the Movie itself).</summary>
+    public bool IsPlaybackUnit(Guid? workEpisodeId, DateTime nowUtc) => ActivePlaybackMarkers(nowUtc).Any(marker => marker.WorkEpisodeId == workEpisodeId);
 
     /// <summary>The payload once nobody is waiting for a unit any more.</summary>
-    public VideoRequestPayload WithoutPlaybackIntent() => this with { PlaybackWork = false, PlaybackEpisodeIds = null };
+    public VideoRequestPayload WithoutPlaybackIntent() => this with { PlaybackMarkers = null, PlaybackResetUtc = null };
 
     /// <summary>Whether the payload stored now still has the Admin scope revision a run read; the guard of a result that ends a request.</summary>
     public static Func<string?, bool> StillAtRevision(int revision) => stored => (Parse(stored)?.ScopeRevision ?? 0) == revision;
@@ -128,8 +136,8 @@ public sealed record VideoRequestPayload(
             ExcludedEpisodeIds = stored.ExcludedEpisodeIds,
             ExcludedSeasonIds = stored.ExcludedSeasonIds,
             ScopeRevision = stored.ScopeRevision,
-            PlaybackWork = stored.PlaybackWork,
-            PlaybackEpisodeIds = stored.PlaybackEpisodeIds
+            PlaybackMarkers = stored.PlaybackMarkers,
+            PlaybackResetUtc = stored.PlaybackResetUtc
         };
         return stored.ScopeRevision == ScopeRevision
             ? merged
@@ -156,11 +164,12 @@ public sealed record VideoRequestPayload(
 /// The one owner of which TV episodes a request covers: the executor uses it to decide what to search and the
 /// detail page to show each episode's request state, so the two can never disagree about the scope.
 /// </summary>
-public sealed class VideoRequestSelection(VideoRequestPayload payload, DateTime requestCreatedAt)
+/// <param name="nowUtc">The moment playback markers are judged at: a lapsed marker neither covers an episode nor orders it first; null means now.</param>
+public sealed class VideoRequestSelection(VideoRequestPayload payload, DateTime requestCreatedAt, DateTime? nowUtc = null)
 {
     /// <summary>The selection of an open request of a Series Work; the request title stands in until the payload says more.</summary>
-    public static VideoRequestSelection For(AcquisitionRequest request, Guid workId) =>
-        new(VideoRequestPayload.Of(request, workId, request.Title, null), request.CreatedAt);
+    public static VideoRequestSelection For(AcquisitionRequest request, Guid workId, DateTime? nowUtc = null) =>
+        new(VideoRequestPayload.Of(request, workId, request.Title, null), request.CreatedAt, nowUtc);
 
     public VideoRequestPayload Payload => payload;
 
@@ -168,7 +177,7 @@ public sealed class VideoRequestSelection(VideoRequestPayload payload, DateTime 
     private readonly HashSet<Guid> selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
     private readonly HashSet<Guid> excludedEpisodes = (payload.ExcludedEpisodeIds ?? []).ToHashSet();
     private readonly HashSet<Guid> excludedSeasons = (payload.ExcludedSeasonIds ?? []).ToHashSet();
-    private readonly HashSet<Guid> playbackEpisodes = (payload.PlaybackEpisodeIds ?? []).ToHashSet();
+    private readonly HashSet<Guid> playbackEpisodes = payload.ActivePlaybackMarkers(nowUtc ?? DateTime.UtcNow).Select(marker => marker.WorkEpisodeId).OfType<Guid>().ToHashSet();
 
     /// <summary>"Future" is what aired after this moment: the one Admin set on the last scope change, else the creation of the request.</summary>
     private readonly DateTime futureFromUtc = payload.MonitorFutureFromUtc ?? requestCreatedAt;
@@ -336,7 +345,7 @@ public sealed partial class VideoAcquisitionEngine(
 
         var downloadTitle = request.Kind == MediaAcquisitionKind.Movie ? "Download Movie" : "Download TV";
         // A unit a profile asked to watch now overtakes the other queued work, in the download client as well.
-        var prioritized = unit is null ? payload.PlaybackWork : payload.PlaybackEpisodeIds?.Contains(unit.Id) == true;
+        var prioritized = payload.IsPlaybackUnit(unit?.Id, clock.GetUtcNow().UtcDateTime);
         var priority = prioritized ? OperationPriority.High : OperationPriority.Normal;
         var mediaTarget = unit is null ? VideoWorkLinks.WorkTarget(payload.WorkId) : VideoWorkLinks.EpisodeTarget(unit.Id);
         var candidates = releases.Select(x => new ReleaseRequestCandidate(x.Candidate.Identity, x.Candidate.Title, x.Candidate.InternalDownloadUri!)).ToArray();
@@ -414,7 +423,7 @@ public sealed partial class VideoAcquisitionEngine(
     private async Task<AcquisitionExecution?> StopWhenNoLongerWantedAsync(AcquisitionRequest request, Guid workId, VideoUnit? unit, CancellationToken cancellationToken)
     {
         var fresh = await requestStore.GetAsync(request.Id, cancellationToken) ?? request;
-        var selection = VideoRequestSelection.For(fresh, workId);
+        var selection = VideoRequestSelection.For(fresh, workId, clock.GetUtcNow().UtcDateTime);
         if (!selection.Payload.Monitored)
         {
             return await MonitoringOffAsync(request.Kind, workId, selection.Payload.ScopeRevision, cancellationToken);
@@ -501,13 +510,12 @@ public sealed partial class VideoAcquisitionEngine(
     /// </summary>
     private async Task DropSatisfiedPlaybackIntentAsync(AcquisitionRequest request, VideoRequestPayload payload, CancellationToken cancellationToken)
     {
-        if (!payload.HasPlaybackIntent)
+        if (payload.PlaybackMarkers is not { Length: > 0 } markers)
         {
             return;
         }
 
-        var satisfiedWork = payload.PlaybackWork && request.Kind == MediaAcquisitionKind.Movie && await HasMovieFileAsync(payload.WorkId, cancellationToken);
-        var episodeIds = payload.PlaybackEpisodeIds ?? [];
+        var episodeIds = markers.Select(marker => marker.WorkEpisodeId).OfType<Guid>().ToArray();
         var withMedia = episodeIds.Length == 0
             ? []
             : await db.MediaAssets.AsNoTracking()
@@ -515,12 +523,13 @@ public sealed partial class VideoAcquisitionEngine(
                 .Select(x => x.WorkEpisodeId!.Value)
                 .Distinct()
                 .ToListAsync(cancellationToken);
-        if (satisfiedWork || withMedia.Count > 0)
+        var movieDone = request.Kind == MediaAcquisitionKind.Movie && markers.Any(marker => marker.WorkEpisodeId is null) && await HasMovieFileAsync(payload.WorkId, cancellationToken);
+        if (movieDone || withMedia.Count > 0)
         {
             await requestStore.PatchPayloadAsync(
                 request.Id,
                 stored => VideoRequestPayload.Parse(stored) is { } current
-                    ? (current with { PlaybackWork = current.PlaybackWork && !satisfiedWork, PlaybackEpisodeIds = [.. (current.PlaybackEpisodeIds ?? []).Except(withMedia)] }).Serialize()
+                    ? (current with { PlaybackMarkers = [.. (current.PlaybackMarkers ?? []).Where(marker => marker.WorkEpisodeId is { } id ? !withMedia.Contains(id) : !movieDone)] }).Serialize()
                     : stored,
                 cancellationToken);
         }
@@ -547,7 +556,7 @@ public sealed partial class VideoAcquisitionEngine(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
-        var selection = new VideoRequestSelection(payload, request.CreatedAt);
+        var selection = new VideoRequestSelection(payload, request.CreatedAt, now);
 
         return episodes
             .Where(x => !x.HasFile)
@@ -566,7 +575,7 @@ public sealed partial class VideoAcquisitionEngine(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
-        var selection = new VideoRequestSelection(payload, request.CreatedAt);
+        var selection = new VideoRequestSelection(payload, request.CreatedAt, now);
         var missingIncluded = episodes
             .Where(x => !x.HasFile)
             .Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt))
@@ -782,7 +791,7 @@ public abstract class VideoWantedRequestHandler(
         return payload is null || ReleaseRequestTracker.IsSearchDue(payload, nowUtc);
     }
 
-    public bool HasPlaybackPriority(AcquisitionRequest request) => VideoRequestPayload.Parse(request.PayloadJson)?.HasPlaybackIntent == true;
+    public bool HasPlaybackPriority(AcquisitionRequest request, DateTime nowUtc) => VideoRequestPayload.Parse(request.PayloadJson)?.HasPlaybackIntent(nowUtc) == true;
 
     public async Task ContinueAfterProblemAsync(
         AcquisitionRequest request,

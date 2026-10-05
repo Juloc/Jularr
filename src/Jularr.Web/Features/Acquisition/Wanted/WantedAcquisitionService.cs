@@ -24,7 +24,7 @@ public interface IWantedRequestHandler
     /// Whether a profile is waiting to watch what this request acquires (Instant Play). Such requests are searched ahead of the other
     /// due ones in a Wanted pass.
     /// </summary>
-    bool HasPlaybackPriority(AcquisitionRequest request) => false;
+    bool HasPlaybackPriority(AcquisitionRequest request, DateTime nowUtc) => false;
 
     Task ContinueAfterProblemAsync(
         AcquisitionRequest request,
@@ -506,7 +506,7 @@ public sealed class WantedAcquisitionService(
                 AcquisitionRequestStatus.Approved,
                 cancellationToken))
             .Where(request => handler.IsSearchDue(request, nowUtc))
-            .OrderByDescending(handler.HasPlaybackPriority)
+            .OrderByDescending(request => handler.HasPlaybackPriority(request, nowUtc))
             .ThenBy(request => request.UpdatedAt)
             .Take(MaxRequestsPerKindPerPass)
             .ToArray();

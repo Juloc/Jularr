@@ -125,7 +125,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             var movieFiles = files.Where(x => x.WorkEpisodeId is null).OrderByDescending(x => x.Height ?? 0).ThenBy(x => x.FileId);
             versions = [.. movieFiles.Select(file => ToVersion(file, tracks.Where(x => x.FileId == file.FileId)))];
             movieProgress = snapshots.FirstOrDefault(x => x.WorkEpisodeId is null);
-            playback = new MoviePlaybackFacts(workId, tmdbId is not null, open is null ? null : OpenRequestFacts.ForMovie(open), versions.Count > 0, movieProgress, work.Year is null || work.Year <= clock.GetUtcNow().Year);
+            playback = new MoviePlaybackFacts(workId, tmdbId is not null, open is null ? null : OpenRequestFacts.ForMovie(open, clock.GetUtcNow().UtcDateTime), versions.Count > 0, movieProgress, work.Year is null || work.Year <= clock.GetUtcNow().Year);
         }
         else
         {
@@ -234,8 +234,8 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var filesByEpisode = files.Where(x => x.WorkEpisodeId is not null).ToLookup(x => x.WorkEpisodeId!.Value);
         var tracksByEpisode = tracks.Where(x => x.WorkEpisodeId is not null).ToLookup(x => x.WorkEpisodeId!.Value);
         var progressByEpisode = snapshots.Where(x => x.WorkEpisodeId is not null).ToDictionary(x => x.WorkEpisodeId!.Value);
-        var selection = open is null ? null : VideoRequestSelection.For(open, workId);
         var now = clock.GetUtcNow().UtcDateTime;
+        var selection = open is null ? null : VideoRequestSelection.For(open, workId, now);
         var units = new List<SeriesUnit>(rows.Count);
 
         var episodes = rows.Select(row =>
@@ -274,7 +274,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var progress = snapshots
             .Where(x => x.WorkEpisodeId is not null && x.UpdatedAt is not null)
             .ToDictionary(x => x.WorkEpisodeId!.Value, x => new EpisodeProgressState(x.WorkEpisodeId!.Value, x.PositionMs, x.IsCompleted, x.UpdatedAt!.Value));
-        var openFacts = open is null ? null : OpenRequestFacts.ForSeries(open, selection!, rows.Select(x => (x.Id, x.SeasonId, x.AiredAt)));
+        var openFacts = open is null ? null : OpenRequestFacts.ForSeries(open, selection!, rows.Select(x => (x.Id, x.SeasonId, x.AiredAt)), now);
         return (episodes, new SeriesPlaybackFacts(workId, hasRequestIdentity, openFacts, units, progress));
     }
 

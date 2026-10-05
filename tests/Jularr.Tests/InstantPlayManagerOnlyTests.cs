@@ -148,4 +148,22 @@ public sealed class InstantPlayManagerOnlyTests
         // A kind that is not video reaches the database, which this test made unreachable: its own module switch applies, not Playback.
         await Assert.ThrowsAsync<ObjectDisposedException>(() => service.GetManifestAsync("audiobook", Guid.NewGuid(), CancellationToken.None));
     }
+
+    [TestMethod]
+    public async Task ManagerOnlyPrefetchDropsEpisodesButKeepsChapters()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"jularr-prefetch-{Guid.NewGuid():N}");
+        var modules = new InstanceModuleStore(root);
+        var store = new Jularr.Web.Features.OfflineLibrary.OfflinePrefetchPolicyStore(root, null);
+        var service = new Jularr.Web.Features.OfflineLibrary.OfflinePrefetchService(store, null!, Jularr.Web.Features.Auth.CurrentAccountContext.ForProfile("alice"), modules);
+        await store.SaveAsync("alice", (await store.LoadAsync("alice")) with { Enabled = true, IncludeEpisodes = true, IncludeChapters = true });
+
+        var playing = await service.GetPolicyAsync();
+        await modules.SetAsync(InstanceModule.Playback, false);
+        var managerOnly = await service.GetPolicyAsync();
+
+        Assert.IsTrue(playing.IncludeEpisodes);
+        Assert.IsFalse(managerOnly.IncludeEpisodes, "Episodes are video for playing.");
+        Assert.IsTrue(managerOnly.IncludeChapters, "Book and manga chapters are not playback.");
+    }
 }

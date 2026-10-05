@@ -104,6 +104,12 @@ public sealed class AcquisitionRequestService(
             return request;
         }
 
+        // A failed request that is approved again starts over: nobody is still waiting on the profile's playback intent from before it failed.
+        if (request.Status == AcquisitionRequestStatus.Failed && request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv)
+        {
+            await store.PatchPayloadAsync(id, stored => VideoRequestPayload.Parse(stored) is { PlaybackMarkers: not null } current ? current.WithoutPlaybackIntent().Serialize() : stored, cancellationToken);
+        }
+
         await store.UpdateStatusAsync(id, AcquisitionRequestStatus.Approved, null, null, null, account.ProfileId, cancellationToken);
         await PublishDecisionAsync(request, JularrEventCategory.RequestApproved, cancellationToken);
         return await ExecuteAsync(await RequireAsync(id, cancellationToken), cancellationToken);

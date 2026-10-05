@@ -96,14 +96,14 @@ public sealed record OpenRequestFacts(
     /// <summary>Whether a profile already asked to watch the unit, so it is searched and downloaded ahead of the rest.</summary>
     public bool IsPrioritized(Guid? workEpisodeId) => workEpisodeId is { } id ? PrioritizedEpisodeIds.Contains(id) : WorkPrioritized;
 
-    public static OpenRequestFacts ForMovie(AcquisitionRequest request)
+    public static OpenRequestFacts ForMovie(AcquisitionRequest request, DateTime nowUtc)
     {
         var payload = VideoRequestPayload.Parse(request.PayloadJson);
-        return new OpenRequestFacts(request.Status, payload?.Monitored ?? true, true, new HashSet<Guid>(), new HashSet<Guid>(), payload?.PlaybackWork == true, new HashSet<Guid>());
+        return new OpenRequestFacts(request.Status, payload?.Monitored ?? true, true, new HashSet<Guid>(), new HashSet<Guid>(), payload?.IsPlaybackUnit(null, nowUtc) == true, new HashSet<Guid>());
     }
 
     /// <summary>The episodes the request's scope includes, by the same <see cref="VideoRequestSelection"/> the executor uses.</summary>
-    public static OpenRequestFacts ForSeries(AcquisitionRequest request, VideoRequestSelection selection, IEnumerable<(Guid Id, Guid? SeasonId, DateTime? AiredAt)> episodes)
+    public static OpenRequestFacts ForSeries(AcquisitionRequest request, VideoRequestSelection selection, IEnumerable<(Guid Id, Guid? SeasonId, DateTime? AiredAt)> episodes, DateTime nowUtc)
     {
         var payload = selection.Payload;
         var all = episodes.ToArray();
@@ -119,7 +119,7 @@ public sealed record OpenRequestFacts(
             all.Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt)).Select(x => x.Id).ToHashSet(),
             excluded,
             false,
-            (payload.PlaybackEpisodeIds ?? []).ToHashSet());
+            payload.ActivePlaybackMarkers(nowUtc).Select(marker => marker.WorkEpisodeId).OfType<Guid>().ToHashSet());
     }
 }
 

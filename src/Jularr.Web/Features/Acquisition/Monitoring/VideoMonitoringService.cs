@@ -236,7 +236,7 @@ public sealed class VideoMonitoringService(
             // episode that is now excluded is not searched on for a profile that asked for it earlier.
             next = !current.Monitored || !next.Monitored
                 ? next.WithoutPlaybackIntent()
-                : next with { PlaybackEpisodeIds = next.PlaybackEpisodeIds?.Except(next.ExcludedEpisodeIds ?? []).ToArray() };
+                : next with { PlaybackMarkers = next.PlaybackMarkers?.Where(marker => marker.WorkEpisodeId is not { } id || !(next.ExcludedEpisodeIds ?? []).Contains(id)).ToArray() };
             return !current.Monitored && next.Monitored
                 ? next with { TriedReleases = null, ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null }
                 : next;
