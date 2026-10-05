@@ -25,7 +25,7 @@ public sealed class AnimeAcquisitionRequestExecutorTests
 
         var execution = await environment.ExecuteAnimeRequestAsync(FrierenId);
 
-        Assert.AreEqual(AcquisitionRequestStatus.Completed, execution.Status, execution.Message);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "Adding the series is not having its media: the request is only completed by the import.");
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
         Assert.AreEqual(AnimeAcquisitionEnvironment.AnimeKey, anime.Key, "The key matches the series folder the importer creates.");
         Assert.AreEqual($"/Library/Anime/{anime.Id}", execution.ResultUrl);
@@ -92,7 +92,7 @@ public sealed class AnimeAcquisitionRequestExecutorTests
 
         var execution = await environment.ExecuteAnimeRequestAsync(FrierenId);
 
-        Assert.AreEqual(AcquisitionRequestStatus.Completed, execution.Status, execution.Message);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "S01E02 is still missing, so the request is not completed.");
         Assert.AreEqual(1, await environment.Db.Anime.CountAsync());
         Assert.IsTrue((await environment.MonitoringStateAsync()).Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored);
         Assert.AreEqual(1, environment.Scheduler.QueuedRequests);

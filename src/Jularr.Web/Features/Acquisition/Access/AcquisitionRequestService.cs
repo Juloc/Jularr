@@ -127,6 +127,38 @@ public sealed class AcquisitionRequestService(
         return await ExecuteAsync(request, cancellationToken);
     }
 
+    /// <summary>
+    /// Brings a request of a monitored media type (<see cref="IMonitoredAcquisitionExecutor"/>) to the state its pipeline is in. It only
+    /// reads that state and never searches or grabs, so repeating it changes nothing; a request that somebody else moved on meanwhile
+    /// keeps its new state because the change is conditional on the status it was read with.
+    /// </summary>
+    public async Task<AcquisitionRequest> FollowMonitoredAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var request = await RequireAsync(id, cancellationToken);
+        if (!AcquisitionAccessNames.UnderwayStatuses.Contains(request.Status) || executors.OfType<IMonitoredAcquisitionExecutor>().FirstOrDefault(candidate => candidate.Kind == request.Kind) is not { } executor)
+        {
+            return request;
+        }
+
+        var observed = await executor.ObserveAsync(request, cancellationToken);
+        var unchanged = observed.Status == request.Status
+            && observed.Message == request.StatusMessage
+            && (observed.OperationId is null || observed.OperationId == request.OperationId)
+            && (observed.ResultUrl is null || observed.ResultUrl == request.ResultUrl);
+        if (unchanged)
+        {
+            return request;
+        }
+
+        if (await store.TryTransitionStatusAsync(id, [request.Status], observed.Status, observed.Message, observed.OperationId, observed.ResultUrl, cancellationToken) is not null
+            && observed.Status == AcquisitionRequestStatus.Downloading)
+        {
+            await PublishReleaseAvailableAsync(request, observed, cancellationToken);
+        }
+
+        return await RequireAsync(id, cancellationToken);
+    }
+
     public async Task RejectAsync(Guid id, string? note, CancellationToken cancellationToken)
     {
         RequireRequestManager();
@@ -283,8 +315,7 @@ public sealed class AcquisitionRequestService(
         }
 
         // Claim the request with one conditional write: a Manual Search grab (or another pass) that took it meanwhile keeps it.
-        var claimable = new[] { AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Importing };
-        if (await store.TryTransitionStatusAsync(request.Id, claimable, AcquisitionRequestStatus.Searching, null, null, cancellationToken) is null)
+        if (await store.TryTransitionStatusAsync(request.Id, AcquisitionAccessNames.UnderwayStatuses, AcquisitionRequestStatus.Searching, null, null, cancellationToken) is null)
         {
             return await RequireAsync(request.Id, cancellationToken);
         }

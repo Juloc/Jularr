@@ -17,6 +17,8 @@ using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
+using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Media.Optimization;
 using Jularr.Web.Features.MediaMapping;
@@ -148,6 +150,37 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
             CancellationToken.None);
         Db.ChangeTracker.Clear();
         return execution;
+    }
+
+    /// <summary>The owner requests an anime through the one request service (auto-approved), which runs the Anime executor.</summary>
+    public async Task<AcquisitionRequest> SubmitRequestAsync(string aniListId, AcquisitionRequestOptions? options = null)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, AniListMetadataProvider.ProviderKey, aniListId, "Frieren", null, null, Options: options);
+        var submission = await scope.ServiceProvider.GetRequiredService<AcquisitionRequestService>().SubmitWithOutcomeAsync(draft, CancellationToken.None);
+        Db.ChangeTracker.Clear();
+        return submission.Request;
+    }
+
+    /// <summary>Approves (or retries) a request, or runs an approved one again, as the owner or a background pass would.</summary>
+    public async Task<AcquisitionRequest> RunRequestAsync(Guid id, bool continued = false)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var requests = scope.ServiceProvider.GetRequiredService<AcquisitionRequestService>();
+        var request = continued ? await requests.ContinueAsync(id, CancellationToken.None) : await requests.ApproveAsync(id, CancellationToken.None);
+        Db.ChangeTracker.Clear();
+        return request;
+    }
+
+    public async Task<AcquisitionRequest> GetRequestAsync(Guid id) => (await new AcquisitionAccessStore(Db).GetAsync(id, CancellationToken.None))!;
+
+    /// <summary>One pass of the shared Wanted scheduler, which brings the open anime requests to the state of the monitoring pipeline.</summary>
+    public async Task<int> RequestPassAsync(DateTime? nowUtc = null)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var advanced = await WantedAcquisitionService.ProcessOnceAsync(scope.ServiceProvider, nowUtc ?? DateTime.UtcNow, CancellationToken.None);
+        Db.ChangeTracker.Clear();
+        return advanced;
     }
 
     public async Task<AniListAutoMonitorRunResult> RunAniListAutoMonitorAsync(string profileId)
@@ -516,6 +549,16 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddScoped<Jularr.Web.Features.MediaCore.WorkStructureService>();
         collection.AddScoped<Jularr.Web.Features.MediaCore.LegacyWorkBridge>();
         collection.AddScoped<AnimeAcquisitionRequestExecutor>();
+        collection.AddScoped<IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<AnimeAcquisitionRequestExecutor>());
+        collection.AddSingleton<RecordingEventPublisher>();
+        collection.AddScoped(provider => new AcquisitionRequestService(
+            provider.GetRequiredService<AcquisitionAccessStore>(),
+            provider.GetServices<IAcquisitionRequestExecutor>(),
+            AcquisitionAccessFixture.Account("owner", AccountRole.Owner),
+            new MediaCapabilityService(new MediaCapabilityStore(DataRoot)),
+            new AcquisitionRequestSettingsStore(DataRoot),
+            provider.GetRequiredService<RecordingEventPublisher>(),
+            NullLogger<AcquisitionRequestService>.Instance));
         collection.AddScoped<SabnzbdConnectionResolver>();
         collection.AddScoped<SabnzbdDownloadService>();
         collection.AddScoped<SabnzbdAcquisitionService>();

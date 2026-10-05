@@ -43,6 +43,22 @@ public sealed record AnimeInteractiveSearch(
 
 public sealed record AnimeGrabResult(bool Success, string Message, Guid? OperationId = null);
 
+/// <summary>Where a grabbed, not yet finished acquisition stands: downloading, waiting for its import, or imported only in part and waiting for the owner.</summary>
+public enum AnimeOpenAcquisitionStage
+{
+    Downloading,
+    Importing,
+    NeedsOwner
+}
+
+/// <summary>An acquisition that blocks a new grab for its episodes, with the latest attempt, the download Operation and (for <see cref="AnimeOpenAcquisitionStage.NeedsOwner"/>) the importer's reason.</summary>
+public sealed record AnimeOpenAcquisition(
+    SabnzbdAcquisition Acquisition,
+    SabnzbdAcquisitionAttempt Attempt,
+    OperationSnapshot Download,
+    AnimeOpenAcquisitionStage Stage,
+    string? ImportMessage);
+
 /// <summary>
 /// The one anime acquisition pipeline: refreshes wanted episodes from the library/AniList
 /// inventory, searches Prowlarr, scores releases with the assigned quality profile, checks Sonarr
@@ -503,6 +519,24 @@ public sealed class AnimeAcquisitionPipeline(
         IReadOnlyList<AnimeEpisodeKey> episodes,
         CancellationToken cancellationToken)
     {
+        var open = (await ListOpenAcquisitionsAsync(animeKey, episodes, cancellationToken)).FirstOrDefault();
+        return open is null
+            ? null
+            : open.Stage == AnimeOpenAcquisitionStage.Downloading
+                ? $"'{open.Attempt.ReleaseTitle}' is still downloading for {SabnzbdAcquisitionService.FormatEpisodes(open.Acquisition.Episodes)}."
+                : $"'{open.Attempt.ReleaseTitle}' finished downloading and waits for import.";
+    }
+
+    /// <summary>
+    /// The acquisitions of this anime that cover one of the episodes and are not finished: still downloading, or downloaded
+    /// and waiting for the import (which includes an import the owner has to resolve), newest first. The acquisition relation,
+    /// Operations and import records are the source of truth, so the answer also holds after a restart.
+    /// </summary>
+    public async Task<IReadOnlyList<AnimeOpenAcquisition>> ListOpenAcquisitionsAsync(
+        string animeKey,
+        IReadOnlyList<AnimeEpisodeKey> episodes,
+        CancellationToken cancellationToken)
+    {
         var relations = await acquisitions.LoadAsync(cancellationToken);
         var candidates = relations.Acquisitions
             .Where(item =>
@@ -513,11 +547,12 @@ public sealed class AnimeAcquisitionPipeline(
             .ToArray();
         if (candidates.Length == 0)
         {
-            return null;
+            return [];
         }
 
         var importState = await imports.LoadAsync(cancellationToken);
         var operations = new OperationStore(db);
+        var open = new List<AnimeOpenAcquisition>();
         foreach (var acquisition in candidates)
         {
             var attempt = acquisition.LatestAttempt!;
@@ -529,23 +564,26 @@ public sealed class AnimeAcquisitionPipeline(
 
             if (operation.IsActive)
             {
-                return $"'{attempt.ReleaseTitle}' is still downloading for {SabnzbdAcquisitionService.FormatEpisodes(acquisition.Episodes)}.";
+                open.Add(new AnimeOpenAcquisition(acquisition, attempt, operation, AnimeOpenAcquisitionStage.Downloading, null));
             }
-
-            if (operation.Status == OperationStatus.Succeeded)
+            else if (operation.Status == OperationStatus.Succeeded)
             {
                 var import = importState.Imports.FirstOrDefault(record => record.DownloadOperationId == operation.Id);
                 var awaitingRecovery = import is null &&
                                        operation.FinishedAtUtc is { } finished &&
                                        finished >= DateTime.UtcNow - AnimeImportExecutor.RecoveryWindow;
-                if (awaitingRecovery || import is { Status: AnimeImportStatus.Importing or AnimeImportStatus.ManualRequired })
+                if (import?.Status == AnimeImportStatus.ManualRequired)
                 {
-                    return $"'{attempt.ReleaseTitle}' finished downloading and waits for import.";
+                    open.Add(new AnimeOpenAcquisition(acquisition, attempt, operation, AnimeOpenAcquisitionStage.NeedsOwner, import.Message));
+                }
+                else if (awaitingRecovery || import?.Status == AnimeImportStatus.Importing)
+                {
+                    open.Add(new AnimeOpenAcquisition(acquisition, attempt, operation, AnimeOpenAcquisitionStage.Importing, null));
                 }
             }
         }
 
-        return null;
+        return open;
     }
 
     /// <summary>

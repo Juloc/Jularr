@@ -191,6 +191,16 @@ public interface IAcquisitionRequestExecutor
     Task<AcquisitionExecution> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// An executor of a media type that is searched, downloaded and imported by its own monitoring pipeline instead of by the request
+/// (Anime). Executing the request only puts the title under monitoring; <see cref="ObserveAsync"/> reads where that pipeline stands
+/// for the request, so a request is never reported further along than the media actually is. It only reads and never starts a search.
+/// </summary>
+public interface IMonitoredAcquisitionExecutor : IAcquisitionRequestExecutor
+{
+    Task<AcquisitionExecution> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken);
+}
+
 public sealed class AcquisitionAccessDeniedException(string message) : Exception(message);
 
 public static class AcquisitionAccessNames
@@ -233,6 +243,10 @@ public static class AcquisitionAccessNames
         MediaAcquisitionKind.Audiobook => WorkMediaType.Book,
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
+
+    /// <summary>The statuses of an approved request whose acquisition is underway: the ones a worker may take over, or bring to the state of its download.</summary>
+    public static readonly IReadOnlyList<AcquisitionRequestStatus> UnderwayStatuses =
+        [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Importing];
 
     /// <summary>Whether a request in this status still waits for a decision or for its title to arrive.</summary>
     public static bool IsOpen(AcquisitionRequestStatus status) => status is AcquisitionRequestStatus.Pending

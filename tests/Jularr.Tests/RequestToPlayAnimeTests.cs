@@ -101,6 +101,16 @@ public sealed class RequestToPlayAnimeTests
         public Task<AnimeAcquisitionRunSummary> WantedPassAsync(Anime anime) =>
             Environment.Scheduler.RunNowAsync(anime.Key, AnimeSearchTrigger.SearchOnAdd, CancellationToken.None);
 
+        /// <summary>One pass of the shared Wanted scheduler, which brings the request to the state of the Anime pipeline.</summary>
+        public Task<int> RequestPassAsync() => Environment.RequestPassAsync();
+
+        /// <summary>What the consumer's live request card reads for the request.</summary>
+        public async Task<JsonElement> ConsumerStatusAsync(Guid requestId)
+        {
+            using var scope = Environment.CreateScope();
+            return await RequestToPlayAssert.ConsumerStatusAsync(DiscoverPage(scope), requestId);
+        }
+
         /// <summary>SABnzbd finishes the latest grab into a real folder and the shared completed-download spine imports it.</summary>
         public async Task<AnimeImportRecord> DownloadAndImportAsync()
         {
@@ -146,17 +156,15 @@ public sealed class RequestToPlayAnimeTests
         var environment = world.Environment;
 
         // Discover -> Request: the Anime executor adds the series like Sonarr, creates its canonical Work and queues the search.
+        // Nothing is downloaded yet, so the request is in progress and never reads as available.
         var request = await world.RequestAsync();
-        Assert.AreEqual(AcquisitionRequestStatus.Completed, request.Status, request.StatusMessage);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status, request.StatusMessage);
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
         Assert.AreEqual($"/Library/Anime/{anime.Id}", request.ResultUrl);
         RequestToPlayAssert.AdminQueueProjectsTheRequest(request);
-        using (var scope = environment.CreateScope())
-        {
-            var status = await RequestToPlayAssert.ConsumerStatusAsync(world.DiscoverPage(scope), request.Id);
-            Assert.AreEqual("completed", status.GetProperty("status").GetString());
-            Assert.AreEqual(request.ResultUrl, status.GetProperty("resultUrl").GetString());
-        }
+        var requestedStatus = await world.ConsumerStatusAsync(request.Id);
+        Assert.AreEqual("approved", requestedStatus.GetProperty("status").GetString());
+        Assert.IsFalse(requestedStatus.GetProperty("done").GetBoolean());
 
         var requested = Assert.ContainsSingle((await new LibraryMediaCardQuery(environment.Db).GetEntriesAsync(Viewer, s_videoTypes, CancellationToken.None)).Entries);
         Assert.AreEqual(request.ResultUrl, requested.Card.Href, "A requested anime is in the Library before it has a file.");
@@ -170,8 +178,23 @@ public sealed class RequestToPlayAnimeTests
         await world.WantedPassAsync(anime);
         Assert.AreEqual(Episode1, Assert.ContainsSingle(environment.Sabnzbd.Grabs).NzbName, "The release is submitted once, whatever the number of passes and restarts.");
 
+        // The request follows the grab: Downloading, linked to the download Operation the consumer's progress reads.
+        await world.RequestPassAsync();
+        var downloading = await world.ConsumerStatusAsync(request.Id);
+        Assert.AreEqual("downloading", downloading.GetProperty("status").GetString());
+        Assert.AreEqual(request.ResultUrl, downloading.GetProperty("resultUrl").GetString());
+        Assert.IsFalse(downloading.GetProperty("done").GetBoolean());
+
         // Download -> Import: the finished job goes through the shared completed-download spine into the Anime importer.
         await world.DownloadAndImportAsync();
+
+        // The first episode is in the library and playable below, but the request also asks for episode 2, which has no release yet:
+        // it keeps looking for it instead of reporting the title as done (AnimeRequestLifecycleTests covers the Completed transition).
+        await world.RequestPassAsync();
+        var remaining = await world.ConsumerStatusAsync(request.Id);
+        Assert.AreEqual("approved", remaining.GetProperty("status").GetString());
+        Assert.AreEqual(request.ResultUrl, remaining.GetProperty("resultUrl").GetString());
+        Assert.IsFalse(remaining.GetProperty("done").GetBoolean());
         Assert.AreEqual(anime.Id, (await environment.Db.Anime.AsNoTracking().SingleAsync()).Id, "The import attaches to the requested entry.");
         var legacyFile = await environment.Db.MediaFiles.AsNoTracking().SingleAsync();
         var legacyEpisode = await environment.Db.Episodes.AsNoTracking().SingleAsync(x => x.Id == legacyFile.EpisodeId);

@@ -108,6 +108,22 @@ whose quality cannot be parsed is never offered for upgrade.
   exponentially (5 minutes, doubling up to 160 minutes). **Search wanted now** ignores the backoff but never
   searches an episode that is pending or already grabbed.
 
+## Requests
+
+A Discover request for an anime (`AnimeAcquisitionRequestExecutor`) only creates or finds the series, puts it under
+monitoring with the requested scope and queues a search; it never grabs or imports itself. The request then follows the
+shared request lifecycle, read back from this pipeline by the shared Wanted pass (`IMonitoredAcquisitionExecutor.ObserveAsync`,
+applied through `AcquisitionRequestService.FollowMonitoredAsync`), which never starts a search:
+
+- **Approved** (consumer: looking for media): nothing is downloading yet, or the series is Sonarr-managed read-only.
+- **Downloading**: an acquisition covering a missing requested episode has an active download Operation (linked to the request).
+- **Importing**: that download finished and its import is running or waiting.
+- **Failed**: the importer ended with a decision only the owner can make (the importer's reason is shown); the owner retries after fixing it.
+- **Completed**: every monitored episode the request covers has a file, and at least one does.
+
+Completed is never reported earlier, so a requested title is not shown as available before its media exists. Requests that were
+completed under the earlier behavior (on start) are left as they are.
+
 ## Search, scoring and grab
 
 For each wanted episode the pipeline creates an `anime-search` operation, queries every enabled,
