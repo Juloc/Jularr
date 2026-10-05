@@ -100,11 +100,12 @@ System & Diagnostics is one Admin destination with secondary tabs:
 
 1. **Übersicht**
 2. **Ressourcen**
-3. **Abhängigkeiten**
-4. **Logs**
-5. **Diagnose**
-6. **Updates**
-7. **Runtime**
+3. **Datenbank**
+4. **Abhängigkeiten**
+5. **Logs**
+6. **Diagnose**
+7. **Updates**
+8. **Runtime**
 
 Desktop route target may remain `/Admin/System` with tab routing/state.
 
@@ -256,7 +257,133 @@ Once the Resources tab is complete, remove the standalone `Resources` destinatio
 
 Existing `/Admin/Resources` can remain as a compatibility redirect/deep link.
 
-## 3. Abhängigkeiten
+## 3. Datenbank
+
+Purpose:
+- PostgreSQL performance/DBA diagnostics;
+- show the SQL workload actually causing database cost;
+- expose table/index/vacuum/I/O/locking evidence;
+- preserve bounded historical samples so regressions are visible across PostgreSQL statistics resets/restarts.
+
+This tab implements #859 and is Admin/System-only.
+
+### Overview
+
+Show concise evidence such as:
+- PostgreSQL version and database size;
+- active/idle connections;
+- transaction commit/rollback context;
+- cache/read/temp-I/O context;
+- deadlock count/current lock waits;
+- most expensive statement in the selected recent period;
+- slowest frequently-called statement;
+- largest table/index;
+- autovacuum/analyze warnings when evidence exists.
+
+Do not produce a fake one-number database health score.
+
+### Statements
+
+When `pg_stat_statements` is available, show normalized/query-id based statistics:
+- calls;
+- total and mean execution time;
+- min/max where available;
+- rows;
+- shared block hits/reads;
+- temp blocks;
+- I/O timing when enabled;
+- WAL/parallel metrics where supported.
+
+Sort/rank by:
+- total database time;
+- mean execution time;
+- call count;
+- physical/temp I/O;
+- rows processed.
+
+Jularr persists bounded statement-stat deltas/history so an admin can compare hour/day/week periods and detect regressions. Handle PostgreSQL statistics reset epochs explicitly.
+
+Never run arbitrary `EXPLAIN ANALYZE` automatically. It executes statements and may mutate data.
+
+If `pg_stat_statements` is unavailable, show a clear setup/unsupported state. Do not grant PostgreSQL superuser to the normal application just to obtain diagnostics.
+
+### Tables
+
+Show PostgreSQL-native table evidence such as:
+- table/data/index/total size;
+- estimated live/dead tuples;
+- sequential/index scan activity;
+- insert/update/delete/HOT-update activity where useful;
+- last vacuum/autovacuum;
+- last analyze/autoanalyze;
+- vacuum/analyze counts/times where supported.
+
+Warnings are review hints only. Do not automatically run VACUUM FULL or rewrite tables.
+
+### Indexes
+
+Show:
+- table/index name and type/definition where useful;
+- index size;
+- scan/use counters;
+- tuples read/fetched;
+- last scan where supported;
+- whether the index backs PK/UNIQUE/constraint semantics where derivable.
+
+Zero/low scans means "review candidate since the current statistics epoch", not "safe to delete".
+
+PostgreSQL does not use a SQL Server-style fragmentation percentage as the normal index-maintenance model. Baseline diagnostics use physical size + workload evidence.
+
+Optional deeper B-tree inspection via PostgreSQL `pgstattuple`/`pgstatindex` may expose density/fragmentation/page evidence **only on explicit Admin request** when the extension and privileges are available. Do not scan every index for bloat on every page load.
+
+Any REINDEX recommendation is evidence-based. No blind nightly rebuild/reorganize job.
+
+### Locks & waits
+
+Use PostgreSQL activity/lock views and blocking relationships to show:
+- long-running active queries/transactions;
+- current lock waits;
+- blocker -> blocked chains;
+- wait type/event;
+- age.
+
+Cumulative deadlocks are shown from PostgreSQL statistics. Historical detailed deadlocks come from linked Jularr incidents/log evidence when available; a current lock snapshot cannot reconstruct a past deadlock.
+
+No raw SQL editor. Cancel/terminate controls are a separate future safety decision and must not be implied by diagnostics alone.
+
+### I/O / Vacuum
+
+Where supported, show:
+- PostgreSQL I/O by relevant context;
+- physical reads/writes/bytes;
+- I/O timing when configured;
+- temp I/O;
+- checkpoint/checkpointer/bgwriter evidence;
+- WAL generation;
+- autovacuum/analyze health.
+
+`track_io_timing` has potential platform overhead and is not silently forced on every installation.
+
+### History
+
+PostgreSQL cumulative/runtime views are not a durable history. Jularr therefore stores bounded typed snapshot/delta tables for useful database metrics.
+
+History:
+- has explicit sample/reset epoch;
+- uses bounded retention and rollups;
+- is sampled by background work, not recalculated on every Admin read;
+- follows #857 resource budgets;
+- is sanitized and contains no bind parameter values/secrets.
+
+### Security
+
+Database diagnostics and exports follow #853 sanitization:
+- no connection-string secrets;
+- no bind values;
+- normalized/bounded query text only;
+- no tokens/passwords accidentally copied into retained diagnostics.
+
+## 4. Abhängigkeiten
 
 Purpose:
 - technical dependency availability and compatibility
@@ -316,7 +443,7 @@ Do not duplicate:
 
 Those belong to their owning Admin areas and can be linked from Overview if degraded.
 
-## 4. Logs
+## 5. Logs
 
 Logs remains the technical structured log explorer.
 
@@ -382,7 +509,7 @@ Do not make `Debug` or trace-level data a secret bypass.
 
 Log export must use the same sanitization policy as Diagnostics.
 
-## 5. Diagnose
+## 6. Diagnose
 
 Purpose:
 - create an admin/support diagnostic package without exposing secrets.
@@ -446,7 +573,7 @@ Retention must be explicit.
 
 If reports are generated transiently only, do not build fake history UI.
 
-## 6. Updates
+## 7. Updates
 
 Purpose:
 - show version information and check whether a newer Jularr release exists.
@@ -477,7 +604,7 @@ Actual container/image update remains an operator/deployment action unless a fut
 
 Do not render an `Install Update` action that cannot safely perform the deployment.
 
-## 7. Runtime
+## 8. Runtime
 
 Purpose:
 - inspect Jularr's global worker/job runtime
