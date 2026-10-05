@@ -71,6 +71,9 @@ public sealed record WantedItem(
     /// <summary>The canonical Work of a Movie or TV row; the target of its Admin media page and detail link.</summary>
     public Guid? WorkId { get; init; }
 
+    /// <summary>The first missing episode of a TV season row; the episode Manual Search opens on.</summary>
+    public Guid? UnitId { get; init; }
+
     public int? Season { get; init; }
 
     public int? Episode { get; init; }

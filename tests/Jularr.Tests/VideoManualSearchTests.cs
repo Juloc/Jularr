@@ -140,7 +140,7 @@ public sealed class VideoManualSearchTests
         Assert.IsNotNull(first.Request.OperationId);
         Assert.AreEqual(DuneLowerQuality, host.Environment.Client.Grabs.Single().NzbName, "The owner's choice is submitted, not the best-scored release.");
         Assert.AreEqual(MediaAcquisitionKind.Movie, host.OperationDetails(first.Request).MediaKind);
-        CollectionAssert.Contains(VideoAcquisitionEngine.ReadPayload(first.Request)!.TriedReleases!.ToArray(), identity);
+        CollectionAssert.Contains(VideoRequestPayload.Parse(first.Request.PayloadJson)!.TriedReleases!.ToArray(), identity);
 
         var second = await service.GrabAsync(request.Id, null, identity, CancellationToken.None);
 
@@ -200,7 +200,7 @@ public sealed class VideoManualSearchTests
         var outcome = await service.GrabAsync(request.Id, host.SecondEpisodeId, Candidate(result, "Severance.S01E02.1080p.WEB-DL.x264-GROUP").Identity, CancellationToken.None);
 
         Assert.AreEqual(ManualGrabStatus.Submitted, outcome.Status);
-        var payload = VideoAcquisitionEngine.ReadPayload(outcome.Request)!;
+        var payload = VideoRequestPayload.Parse(outcome.Request.PayloadJson)!;
         Assert.AreEqual(host.SecondEpisodeId, payload.ActiveWorkEpisodeId);
         Assert.AreEqual(2, payload.ActiveEpisodeNumber);
         Assert.AreEqual($"work-episode:{host.SecondEpisodeId:D}", host.OperationDetails(outcome.Request).TargetKey);

@@ -17,10 +17,11 @@ public sealed class VideoAdminPagesRenderTests
     public async Task WantedListsMovieAndSeriesRowsWithCanonicalLinksAndTheSharedActionsOnly()
     {
         await using var movie = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Movie, "Dune", 2021, "438631", DuneRelease);
-        await movie.CreateApprovedAsync();
+        var movieRequest = await movie.CreateApprovedAsync();
         await using var movieHost = await VideoAdminPageHost.CreateAsync(movie);
 
         var html = await movieHost.GetHtmlAsync("/Admin/Wanted");
+        StringAssert.Contains(html, $"href=\"/Admin/ManualSearch?id={movieRequest.Id:D}\"");
 
         StringAssert.Contains(html, "Dune");
         StringAssert.Contains(html, "admwant-tag-movie");
@@ -33,14 +34,16 @@ public sealed class VideoAdminPagesRenderTests
         Assert.IsFalse(html.Contains("BookManualSearch", StringComparison.Ordinal), "Manual search is offered only where it exists.");
 
         await using var series = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", SeveranceFirst, SeveranceSecond);
-        await series.AddEpisodeAsync(1, 1);
+        var s1e1 = await series.AddEpisodeAsync(1, 1);
         await series.AddEpisodeAsync(1, 2);
-        await series.AddEpisodeAsync(2, 1);
-        await series.CreateApprovedAsync();
+        var s2e1 = await series.AddEpisodeAsync(2, 1);
+        var seriesRequest = await series.CreateApprovedAsync();
         await using var seriesHost = await VideoAdminPageHost.CreateAsync(series);
 
         var seriesHtml = await seriesHost.GetHtmlAsync("/Admin/Wanted?type=tv");
 
+        StringAssert.Contains(seriesHtml, $"/Admin/ManualSearch?id={seriesRequest.Id:D}&unit={s1e1.Id:D}");
+        StringAssert.Contains(seriesHtml, $"/Admin/ManualSearch?id={seriesRequest.Id:D}&unit={s2e1.Id:D}");
         StringAssert.Contains(seriesHtml, "Episodes S01E01-02");
         StringAssert.Contains(seriesHtml, "Episodes S02E01");
         StringAssert.Contains(seriesHtml, $"href=\"/Library/Series/{series.Work.Id:D}\"");
@@ -61,6 +64,7 @@ public sealed class VideoAdminPagesRenderTests
         StringAssert.Contains(html, $"href=\"/Library/Movie/{movie.Work.Id:D}\"");
         StringAssert.Contains(html, $"href=\"/Admin/Media/movie/{movie.Work.Id:D}\"");
         Assert.AreEqual(1, Regex.Matches(html, @">\s*Search now\s*</button>").Count);
+        StringAssert.Contains(html, $"href=\"/Admin/ManualSearch?id={request.Id:D}\"");
         Assert.IsFalse(html.Contains("/Search?q=", StringComparison.Ordinal), "View media never goes to a search.");
         StringAssert.Contains(html, "href=\"/Admin/Wanted\"");
     }
@@ -102,6 +106,7 @@ public sealed class VideoAdminPagesRenderTests
         StringAssert.Contains(html, "Dune");
         StringAssert.Contains(html, "aria-pressed=\"false\"");
         StringAssert.Contains(html, "Quality profile");
+        Assert.IsFalse(html.Contains("/Admin/ManualSearch", StringComparison.Ordinal), "Manual search needs a request.");
         StringAssert.Contains(html, $"href=\"/Library/Movie/{movie.Work.Id:D}\"");
         Assert.IsFalse(html.Contains("data-admin-media-groups", StringComparison.Ordinal), "A Movie has no seasons.");
 
@@ -149,6 +154,8 @@ public sealed class VideoAdminPagesRenderTests
         StringAssert.Contains(html, "Season 1");
         StringAssert.Contains(html, "Season 2");
         StringAssert.Contains(html, "Upcoming");
+        StringAssert.Contains(html, $"/Admin/ManualSearch?id={request.Id:D}&unit={series.SecondEpisodeId:D}");
+        Assert.AreEqual(2, Regex.Matches(html, "/Admin/ManualSearch").Count, "The header and the one missing aired episode; the episode with a file and the upcoming one have none.");
         StringAssert.Contains(html, "All episodes");
         StringAssert.Contains(html, "Future only");
         StringAssert.Contains(html, "Save selection");

@@ -233,6 +233,10 @@
                                             <button class="button" type="submit">@ui["admin.requests.searchNow"]</button>
                                         </form>
                                     }
+                                    @if (isVideo && request.Status is (AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed))
+                                    {
+                                        <a class="button" asp-page="/Admin/ManualSearch" asp-route-id="@request.Id">@ui["admin.wanted.manualSearch"]</a>
+                                    }
                                     @if (request.Kind == MediaAcquisitionKind.Book
                                         && request.Status is (AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed))
                                     {

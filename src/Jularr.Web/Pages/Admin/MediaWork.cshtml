@@ -89,6 +89,10 @@
                         <button class="button button-primary" type="submit">@ui["admin.requests.searchNow"]</button>
                     </form>
                 }
+                @if (acquisition.CanManualSearch)
+                {
+                    <a class="button" asp-page="/Admin/ManualSearch" asp-route-id="@acquisition.OpenRequest!.Id">@ui["admin.wanted.manualSearch"]</a>
+                }
                 <a class="button" href="@VideoWorkLinks.DetailPath(detail.Kind, detail.WorkId)">@ui["admin.media.openLibrary"]</a>
             </div>
         </div>
@@ -290,6 +294,10 @@ else
                                             @if (episode.Files.Count == 0)
                                             {
                                                 <p class="admmd-none">@ui["admin.media.noFiles"]</p>
+                                                @if (acquisition.CanManualSearch && !episode.IsUpcoming)
+                                                {
+                                                    <a class="button" asp-page="/Admin/ManualSearch" asp-route-id="@acquisition.OpenRequest!.Id" asp-route-unit="@episode.Id">@ui["admin.wanted.manualSearch"]</a>
+                                                }
                                             }
                                             else
                                             {

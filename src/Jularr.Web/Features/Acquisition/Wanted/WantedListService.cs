@@ -139,6 +139,7 @@ public sealed class WantedListService(
                     Status = inFlight && payload.ActiveSeasonNumber != season.Key ? WantedStatus.Requested : item.Status,
                     Season = season.Key,
                     Scope = RequestScope.Episodes,
+                    UnitId = season.OrderBy(episode => episode.EpisodeNumber).First().Id,
                     Selection = RequestSelectionText.FormatEpisodes(season.Select(episode => new RequestEpisode(season.Key, episode.EpisodeNumber)))
                 });
             }

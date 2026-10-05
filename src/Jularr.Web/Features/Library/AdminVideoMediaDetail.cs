@@ -47,7 +47,11 @@ public sealed record AdminVideoAcquisition(
     string ProfileId,
     string ProfileName,
     string? AssignedProfileId,
-    IReadOnlyList<(string Id, string Name)> Profiles);
+    IReadOnlyList<(string Id, string Name)> Profiles)
+{
+    /// <summary>Manual Search opens for an approved request that is monitored: the states the shared Manual Search can search.</summary>
+    public bool CanManualSearch => CanSearchNow && OpenRequest is not null;
+}
 
 /// <summary>The scope of the TV monitoring as the Request dialog names it; <see cref="VideoMonitoringService.OffScope"/> when nothing is wanted.</summary>
 public sealed record AdminVideoMonitoring(bool Monitored, string Scope, bool MonitorFuture);
