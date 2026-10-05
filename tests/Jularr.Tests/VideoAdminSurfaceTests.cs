@@ -131,6 +131,76 @@ public sealed class VideoAdminSurfaceTests
     }
 
     [TestMethod]
+    public async Task AnEpisodeOrASeasonSwitchChangesOnlyItselfWhateverTheScopeWas()
+    {
+        await using var host = await SeriesHostAsync();
+        var second = await host.AddEpisodeAsync(2, 1);
+        var request = await host.CreateApprovedAsync();
+        var monitoring = host.Get<VideoMonitoringService>();
+        var details = host.Get<AdminVideoMediaService>();
+
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, false, CancellationToken.None));
+
+        var detail = (await details.LoadAsync(MediaAcquisitionKind.Tv, host.Work.Id, CancellationToken.None))!;
+        Assert.AreEqual(AdminMediaMonitoring.Partial, detail.MediumMonitoring);
+        Assert.IsFalse(detail.Episodes.Single(episode => episode.Id == host.SecondEpisodeId).Monitored);
+        Assert.IsTrue(detail.Episodes.Single(episode => episode.Id == host.EpisodeId).Monitored, "The other episodes of an All request stay monitored.");
+        Assert.IsTrue(detail.Episodes.Single(episode => episode.Id == second.Id).Monitored);
+
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetSeasonMonitoredAsync(host.Work.Id, 2, false, CancellationToken.None));
+        detail = (await details.LoadAsync(MediaAcquisitionKind.Tv, host.Work.Id, CancellationToken.None))!;
+        Assert.AreEqual(AdminMediaMonitoring.Off, detail.Seasons.Single(season => season.Number == 2).Monitoring);
+        Assert.IsTrue(detail.Episodes.Single(episode => episode.Id == host.EpisodeId).Monitored);
+
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetSeasonMonitoredAsync(host.Work.Id, 1, true, CancellationToken.None));
+        detail = (await details.LoadAsync(MediaAcquisitionKind.Tv, host.Work.Id, CancellationToken.None))!;
+        Assert.AreEqual(AdminMediaMonitoring.On, detail.Seasons.Single(season => season.Number == 1).Monitoring);
+
+        var stored = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
+        Assert.AreEqual(VideoRequestScope.Custom, stored.Scope);
+        Assert.AreEqual(3, stored.ScopeRevision, "Every unit change is one Admin revision.");
+        Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetSeasonMonitoredAsync(host.Work.Id, 9, true, CancellationToken.None));
+        Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, Guid.NewGuid(), true, CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task AMovieListsEachVersionWithItsOwnFilesAndALocationInsideItsRoot()
+    {
+        await using var host = await MovieHostAsync();
+        await host.AttachFileAsync(null, "Dune.2160p.mkv", 4096);
+        await host.AttachFileAsync(null, "Dune.1080p.mkv", 1024);
+
+        var detail = (await host.Get<AdminVideoMediaService>().LoadAsync(MediaAcquisitionKind.Movie, host.Work.Id, CancellationToken.None))!;
+
+        Assert.AreEqual(2, detail.Versions.Count);
+        Assert.AreEqual("Dune.2160p.mkv", detail.Versions[0].Files.Single().Name, "The largest version comes first.");
+        Assert.AreEqual("Video test", detail.Versions[0].Files[0].Location);
+        Assert.AreEqual(5120, detail.SizeBytes);
+        Assert.AreEqual(1, detail.Available, "A Movie is available once any version is.");
+        Assert.IsTrue(await host.Get<AdminVideoMediaService>().OwnsFileAsync(host.Work.Id, detail.Versions[0].Files[0].Id, CancellationToken.None));
+        Assert.IsFalse(await host.Get<AdminVideoMediaService>().OwnsFileAsync(Guid.NewGuid(), detail.Versions[0].Files[0].Id, CancellationToken.None), "A file of another title is never reachable.");
+    }
+
+    [TestMethod]
+    public async Task SwitchingTheLastEpisodeOffAndAnEpisodeOnAgainReusesTheSameRequest()
+    {
+        await using var host = await SeriesHostAsync(episodes: true);
+        var request = await host.CreateApprovedAsync();
+        var monitoring = host.Get<VideoMonitoringService>();
+        await monitoring.SetSeriesAsync(host.Work.Id, "custom", [], [host.EpisodeId!.Value], false, CancellationToken.None);
+
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, false, CancellationToken.None));
+        Assert.IsFalse(VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!.Monitored, "Nothing is left to monitor, so the request ends like monitoring Off.");
+
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, true, CancellationToken.None));
+        var reopened = await host.GetAsync(request.Id);
+        var payload = VideoRequestPayload.Parse(reopened.PayloadJson)!;
+        Assert.IsTrue(payload.Monitored);
+        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, payload.SelectedEpisodeIds);
+        Assert.AreEqual(1, (await host.Requests.ListAllAsync(100, CancellationToken.None)).Count);
+    }
+
+    [TestMethod]
     public async Task SeriesAllAndOffAndFutureOnlyFeedTheSameWantedPass()
     {
         await using var off = await SeriesHostAsync();

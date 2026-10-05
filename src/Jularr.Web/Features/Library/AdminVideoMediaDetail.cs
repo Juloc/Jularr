@@ -7,8 +7,29 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Library;
 
-/// <summary>One local file of a Movie or an episode, with the facts the Admin media page shows.</summary>
-public sealed record AdminVideoFile(Guid Id, string Name, long SizeBytes, string? Quality, IReadOnlyList<string> Audio, IReadOnlyList<string> Subtitles);
+/// <summary>One local file of a Movie or an episode, with the facts the Admin media page shows. <paramref name="Location"/> is the library root and the folder below it.</summary>
+public sealed record AdminVideoFile(
+    Guid Id,
+    string Name,
+    long SizeBytes,
+    string? Quality,
+    IReadOnlyList<string> Audio,
+    IReadOnlyList<string> Subtitles,
+    string Location,
+    string? Container,
+    string? VideoCodec);
+
+/// <summary>One version of a Movie (a release such as "1080p WEB-DL" or "4K HDR Remux") with the local files that make it up.</summary>
+public sealed record AdminVideoVersion(Guid Id, string? Label, string? ReleaseGroup, IReadOnlyList<AdminVideoFile> Files)
+{
+    public long SizeBytes => Files.Sum(file => file.SizeBytes);
+
+    public string? Quality => Files.Select(file => file.Quality).Aggregate((string?)null, AdminMediaDetailView.BestQuality);
+
+    public IReadOnlyList<string> Audio => [.. Files.SelectMany(file => file.Audio).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
+
+    public IReadOnlyList<string> Subtitles => [.. Files.SelectMany(file => file.Subtitles).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
+}
 
 public sealed record AdminVideoEpisode(
     Guid Id,
@@ -30,6 +51,17 @@ public sealed record AdminVideoSeason(Guid? Id, int Number, IReadOnlyList<AdminV
     public int Available => Episodes.Count(episode => episode.State == AdminMediaState.Available);
 
     public long SizeBytes => Episodes.Sum(episode => episode.SizeBytes);
+
+    /// <summary>The audio languages of the season with the number of episodes that have each, most covered first.</summary>
+    public IReadOnlyList<(string Language, int Episodes)> AudioCoverage =>
+    [
+        .. Episodes
+            .SelectMany(episode => episode.Files.SelectMany(file => file.Audio).Distinct(StringComparer.OrdinalIgnoreCase))
+            .GroupBy(code => code, StringComparer.OrdinalIgnoreCase)
+            .Select(group => (group.Key, group.Count()))
+            .OrderByDescending(item => item.Item2)
+            .ThenBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
+    ];
 
     public AdminMediaMonitoring Monitoring => Episodes.Count(episode => episode.Monitored) switch
     {
@@ -63,19 +95,33 @@ public sealed record AdminVideoMediaDetail(
     int? Year,
     AdminVideoMonitoring Monitoring,
     AdminVideoAcquisition Acquisition,
-    IReadOnlyList<AdminVideoFile> Files,
+    IReadOnlyList<AdminVideoVersion> Versions,
     IReadOnlyList<AdminVideoSeason> Seasons)
 {
     public IEnumerable<AdminVideoEpisode> Episodes => Seasons.SelectMany(season => season.Episodes);
 
-    public long SizeBytes => Kind == MediaAcquisitionKind.Movie ? Files.Sum(file => file.SizeBytes) : Episodes.Sum(episode => episode.SizeBytes);
+    /// <summary>
+    /// The one monitoring state of the medium for its header control: off when nothing is monitored, partial when a Series monitors only
+    /// some of its episodes (a selection, or future episodes only) and on otherwise.
+    /// </summary>
+    public AdminMediaMonitoring MediumMonitoring =>
+        !Monitoring.Monitored ? AdminMediaMonitoring.Off
+        : Kind == MediaAcquisitionKind.Tv && Episodes.Any(episode => !episode.Monitored) ? AdminMediaMonitoring.Partial
+        : AdminMediaMonitoring.On;
 
-    public int Available => Kind == MediaAcquisitionKind.Movie ? (Files.Count > 0 ? 1 : 0) : Episodes.Count(episode => episode.State == AdminMediaState.Available);
+    public IEnumerable<AdminVideoFile> Files => Kind == MediaAcquisitionKind.Movie ? Versions.SelectMany(version => version.Files) : Episodes.SelectMany(episode => episode.Files);
+
+    public long SizeBytes => Files.Sum(file => file.SizeBytes);
+
+    public int Available => Kind == MediaAcquisitionKind.Movie ? (Versions.Count > 0 ? 1 : 0) : Episodes.Count(episode => episode.State == AdminMediaState.Available);
 
     public int Total => Kind == MediaAcquisitionKind.Movie ? 1 : Episodes.Count();
 
     public IReadOnlyList<string> AudioLanguages =>
-        [.. (Kind == MediaAcquisitionKind.Movie ? Files : Episodes.SelectMany(episode => episode.Files)).SelectMany(file => file.Audio).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+        [.. Files.SelectMany(file => file.Audio).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+
+    public IReadOnlyList<string> SubtitleLanguages =>
+        [.. Files.SelectMany(file => file.Subtitles).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 }
 
 /// <summary>
@@ -105,9 +151,27 @@ public sealed class AdminVideoMediaService(
                 join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
                 join analysis in db.MediaTechnicalAnalyses.AsNoTracking().Where(x => x.Status == MediaAnalysisStatus.Succeeded) on file.Id equals analysis.MediaFileId into analyses
                 from analysis in analyses.DefaultIfEmpty()
+                join version in db.WorkVersions.AsNoTracking() on asset.WorkVersionId equals version.Id
+                join root in db.LibraryRoots.AsNoTracking() on file.LibraryRootId equals root.Id
                 where asset.WorkId == workId && asset.Kind == MediaAssetKind.Video
                 orderby file.Path
-                select new { asset.WorkEpisodeId, file.Id, file.Path, file.SizeBytes, analysis.Width, analysis.Height, analysis.DynamicRange })
+                select new
+                {
+                    asset.WorkEpisodeId,
+                    asset.WorkVersionId,
+                    VersionQuality = version.Quality,
+                    version.ReleaseGroup,
+                    file.Id,
+                    file.Path,
+                    file.SizeBytes,
+                    RootName = root.Name,
+                    RootPath = root.Path,
+                    analysis.Width,
+                    analysis.Height,
+                    analysis.DynamicRange,
+                    analysis.Container,
+                    analysis.VideoCodec
+                })
             .ToListAsync(cancellationToken);
         var tracks = await (
                 from track in db.MediaTracks.AsNoTracking()
@@ -117,13 +181,16 @@ public sealed class AdminVideoMediaService(
                 select new TrackRow(file.Id, track.Kind, track.Language!))
             .ToListAsync(cancellationToken);
         var languages = tracks.ToLookup(track => track.FileId);
-        var fileRows = files.Select(row => (row.WorkEpisodeId, File: new AdminVideoFile(
+        var fileRows = files.Select(row => (row.WorkEpisodeId, row.WorkVersionId, row.VersionQuality, row.ReleaseGroup, File: new AdminVideoFile(
                 row.Id,
                 AdminMediaDetailView.FileName(row.Path),
                 row.SizeBytes,
                 AdminMediaDetailView.QualityLabel(row.Width, row.Height, row.DynamicRange),
                 Languages(languages[row.Id], MediaTrackKind.Audio),
-                Languages(languages[row.Id], MediaTrackKind.Subtitle))))
+                Languages(languages[row.Id], MediaTrackKind.Subtitle),
+                string.Join('/', new[] { row.RootName, AdminMediaDetailView.Folder(row.RootPath, row.Path) }.Where(part => part.Length > 0)),
+                row.Container,
+                row.VideoCodec)))
             .ToList();
 
         var open = await monitoring.FindOpenRequestAsync(kind, workId, cancellationToken);
@@ -148,7 +215,12 @@ public sealed class AdminVideoMediaService(
                 work.Year,
                 new AdminVideoMonitoring(payload?.Monitored == true, "", false),
                 acquisition,
-                [.. fileRows.Select(row => row.File)],
+                [
+                    .. fileRows
+                        .GroupBy(row => row.WorkVersionId)
+                        .Select(group => new AdminVideoVersion(group.Key, group.First().VersionQuality, group.First().ReleaseGroup, [.. group.Select(row => row.File)]))
+                        .OrderByDescending(version => version.SizeBytes)
+                ],
                 []);
         }
 
@@ -238,6 +310,15 @@ public sealed class AdminVideoMediaService(
         [.. tracks.Where(track => track.Kind == kind).Select(track => track.Language).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
 
     private sealed record TrackRow(Guid FileId, MediaTrackKind Kind, string Language);
+
+    /// <summary>Whether <paramref name="fileId"/> is a local video file of the Work, so an action on it cannot reach another title's file.</summary>
+    public Task<bool> OwnsFileAsync(Guid workId, Guid fileId, CancellationToken cancellationToken) =>
+        (
+            from asset in db.MediaAssets.AsNoTracking()
+            join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
+            where asset.WorkId == workId && asset.Kind == MediaAssetKind.Video && file.Id == fileId
+            select file.Id
+        ).AnyAsync(cancellationToken);
 
     /// <summary>Whether the Work can be acquired at all: its modules are on, an executor exists for the kind and a provider identity names it.</summary>
     public async Task<bool> CanAcquireAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)

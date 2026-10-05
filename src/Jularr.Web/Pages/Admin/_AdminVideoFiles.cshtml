@@ -1,0 +1,48 @@
+@model (IReadOnlyList<Jularr.Web.Features.Library.AdminVideoFile> Files, Jularr.Web.Features.Localization.UiTextBundle Ui)
+@using Jularr.Web.Features.Storage
+@{
+    var ui = Model.Ui;
+}
+<ul class="admmd-files">
+    @foreach (var file in Model.Files)
+    {
+        <li class="admmd-file">
+            <div class="admmd-file-head">
+                <strong class="admmd-file-name">@file.Name</strong>
+                <span class="admmd-file-tags">
+                    @if (file.Quality is not null)
+                    {
+                        <span class="admmd-tag">@file.Quality</span>
+                    }
+                    @if (!string.IsNullOrEmpty(file.VideoCodec))
+                    {
+                        <span class="admmd-tag">@Jularr.Web.Features.Library.AdminMediaDetailView.CodecLabel(file.VideoCodec)</span>
+                    }
+                    @if (!string.IsNullOrEmpty(file.Container))
+                    {
+                        <span class="admmd-tag">@file.Container</span>
+                    }
+                    <span class="admmd-tag">@StorageHealth.FormatBytes(file.SizeBytes)</span>
+                </span>
+            </div>
+            <dl class="admmd-file-facts">
+                <div>
+                    <dt>@ui["admin.media.col.audio"]</dt>
+                    <dd>@(file.Audio.Count == 0 ? "—" : string.Join(", ", file.Audio.Select(code => code.ToUpperInvariant())))</dd>
+                </div>
+                <div>
+                    <dt>@ui["admin.media.col.subtitles"]</dt>
+                    <dd>@(file.Subtitles.Count == 0 ? "—" : string.Join(", ", file.Subtitles.Select(code => code.ToUpperInvariant())))</dd>
+                </div>
+                <div>
+                    <dt>@ui["admin.media.file.location"]</dt>
+                    <dd class="admmd-path">@(file.Location.Length == 0 ? "—" : file.Location)</dd>
+                </div>
+            </dl>
+            <form method="post" asp-page-handler="ReanalyzeFile" class="admmd-file-actions">
+                <input type="hidden" name="fileId" value="@file.Id" />
+                <button class="button" type="submit">@ui["admin.media.file.reanalyze"]</button>
+            </form>
+        </li>
+    }
+</ul>

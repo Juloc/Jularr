@@ -104,7 +104,8 @@ public sealed class VideoAdminPagesRenderTests
         var html = await host.GetHtmlAsync(page);
 
         StringAssert.Contains(html, "Dune");
-        StringAssert.Contains(html, "aria-pressed=\"false\"");
+        StringAssert.Contains(html, "role=\"switch\"");
+        StringAssert.Contains(html, "aria-checked=\"false\"");
         StringAssert.Contains(html, "Quality profile");
         Assert.IsFalse(html.Contains("/Admin/ManualSearch", StringComparison.Ordinal), "Manual search needs a request.");
         StringAssert.Contains(html, $"href=\"/Library/Movie/{movie.Work.Id:D}\"");
@@ -112,7 +113,7 @@ public sealed class VideoAdminPagesRenderTests
 
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=MovieMonitor", [new("monitored", "true")]));
         var monitored = await host.GetHtmlAsync(page);
-        StringAssert.Contains(monitored, "aria-pressed=\"true\"");
+        StringAssert.Contains(monitored, "aria-checked=\"true\"");
 
         var profiles = (await movie.Get<Jularr.Web.Features.Acquisition.Quality.QualityProfileStore>().LoadAsync(CancellationToken.None)).Profiles;
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=Profile", [new("profileId", profiles[0].Id)]));
@@ -135,7 +136,7 @@ public sealed class VideoAdminPagesRenderTests
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=MovieMonitor", [new("monitored", "true")]));
 
         Assert.AreEqual(0, (await movie.Requests.ListAllAsync(10, CancellationToken.None)).Count, "Nothing is requested for a movie that is there.");
-        StringAssert.Contains(await host.GetHtmlAsync(page), "aria-pressed=\"false\"");
+        StringAssert.Contains(await host.GetHtmlAsync(page), "aria-checked=\"false\"");
     }
 
     [TestMethod]
@@ -155,23 +156,32 @@ public sealed class VideoAdminPagesRenderTests
         StringAssert.Contains(html, "Season 2");
         StringAssert.Contains(html, "Upcoming");
         StringAssert.Contains(html, $"/Admin/ManualSearch?id={request.Id:D}&unit={series.SecondEpisodeId:D}");
-        Assert.AreEqual(2, Regex.Matches(html, "/Admin/ManualSearch").Count, "The header and the one missing aired episode; the episode with a file and the upcoming one have none.");
-        StringAssert.Contains(html, "All episodes");
-        StringAssert.Contains(html, "Future only");
-        StringAssert.Contains(html, "Save selection");
-        Assert.AreEqual(3, Regex.Matches(html, @"name=""episodeIds""").Count);
-        Assert.AreEqual(3, Regex.Matches(html, @"data-episode-monitor checked=""checked""").Count, "Every episode of an All request is monitored.");
+        Assert.AreEqual(4, Regex.Matches(html, "/Admin/ManualSearch").Count, "The header and the phone action bar, the season and the one missing aired episode; the episode with a file and the upcoming one have none.");
+        StringAssert.Contains(html, "Monitor all episodes");
+        StringAssert.Contains(html, "Monitor future episodes only");
+        Assert.AreEqual(3, Regex.Matches(html, @"name=""episodeId""").Count);
+        Assert.AreEqual(5, Regex.Matches(html, @"name=""monitored"" value=""false""").Count, "Every episode (three) and both seasons of an All request are monitored, so each switch turns its unit off.");
+        StringAssert.Contains(html, "Re-analyse");
 
-        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeriesScope", [new("scope", "custom"), new("episodeIds", series.SecondEpisodeId!.Value.ToString())]));
+        var second = series.SecondEpisodeId!.Value.ToString();
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=EpisodeMonitor", [new("episodeId", second), new("monitored", "false")]));
         var payload = VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!;
         Assert.AreEqual(VideoRequestScope.Custom, payload.Scope);
-        CollectionAssert.AreEqual(new[] { series.SecondEpisodeId!.Value }, payload.SelectedEpisodeIds);
-        StringAssert.Contains(await host.GetHtmlAsync(page), "Selection");
+        CollectionAssert.DoesNotContain(payload.SelectedEpisodeIds, series.SecondEpisodeId!.Value);
+        StringAssert.Contains(await host.GetHtmlAsync(page), "Partial");
+
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "2"), new("monitored", "false")]));
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "1"), new("monitored", "true")]));
+        var restored = VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!;
+        Assert.IsTrue(restored.SelectedEpisodeIds.Contains(series.SecondEpisodeId!.Value), "Switching a season on monitors all of its episodes again.");
 
         var before = (await series.GetAsync(request.Id)).PayloadJson;
-        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeriesScope", [new("scope", "custom"), new("episodeIds", Guid.NewGuid().ToString())]));
-        Assert.AreEqual(before, (await series.GetAsync(request.Id)).PayloadJson, "A selection that is not part of the Series is rejected.");
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(page, $"{page}?handler=EpisodeMonitor", [new("episodeId", Guid.NewGuid().ToString()), new("monitored", "true")]));
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "9"), new("monitored", "true")]));
+        Assert.AreEqual(before, (await series.GetAsync(request.Id)).PayloadJson, "An episode or season that is not part of the Series changes nothing.");
 
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeriesScope", [new("scope", "future")]));
+        Assert.AreEqual(VideoRequestScope.FutureOnly, VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!.Scope);
         Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(page, $"/Admin/Media/series/{Guid.NewGuid():D}?handler=SeriesScope", [new("scope", "all")]));
     }
 

@@ -1,5 +1,6 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.Library;
 
 namespace Jularr.Web.Pages.Admin;
 
@@ -17,6 +18,15 @@ public static class AdminStatusTone
             AcquisitionRequestStatus.Searching or AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing => "warning",
             AcquisitionRequestStatus.Completed => "accent",
             _ => "danger"
+        };
+
+    public static string Of(AdminMediaState state) =>
+        state switch
+        {
+            AdminMediaState.Available => "success",
+            AdminMediaState.Missing => "warning",
+            AdminMediaState.Failed => "danger",
+            _ => "info"
         };
 
     public static string Of(WantedStatus status) =>

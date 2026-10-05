@@ -6,6 +6,7 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.Operations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -14,9 +15,9 @@ namespace Jularr.Web.Pages.Admin;
 
 /// <summary>
 /// Admin → Media for a Movie or a Series Work (the same Admin media surface as the Anime page, keyed by the canonical
-/// Work): its header with the medium-level monitoring, seasons and episodes or the local files, and the quality profile.
-/// Every change goes through <see cref="VideoMonitoringService"/> and <see cref="AcquisitionRequestService"/>, the paths the
-/// shared Wanted pass and the Requests page already use, so there is no Movie/TV-specific state here.
+/// Work): its header with the medium-level monitoring, seasons and episodes or the versions of a Movie with their local files,
+/// and the quality profile. Every change goes through <see cref="VideoMonitoringService"/> and <see cref="AcquisitionRequestService"/>,
+/// the paths the shared Wanted pass and the Requests page already use, so there is no Movie/TV-specific state here.
 /// </summary>
 [Authorize(Policy = JularrPolicies.AdminMedia)]
 public sealed class MediaWorkModel(
@@ -24,9 +25,12 @@ public sealed class MediaWorkModel(
     AdminVideoMediaService details,
     VideoMonitoringService monitoring,
     AcquisitionRequestService requests,
+    CurrentAccountContext currentAccount,
     ILogger<MediaWorkModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
+    public const string ReanalyzeOperationKind = "video-reanalyze-media";
+
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
     public AdminVideoMediaDetail? Detail { get; private set; }
@@ -67,16 +71,17 @@ public sealed class MediaWorkModel(
     public async Task<IActionResult> OnPostMovieMonitorAsync(string kind, Guid id, bool monitored, CancellationToken cancellationToken) =>
         await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetMovieMonitoredAsync(id, monitored, token), cancellationToken, MediaAcquisitionKind.Movie);
 
-    /// <summary>Sets what is monitored of a Series: all, future, a selection of seasons and episodes, or nothing.</summary>
-    public async Task<IActionResult> OnPostSeriesScopeAsync(
-        string kind,
-        Guid id,
-        string? scope,
-        Guid[]? seasonIds,
-        Guid[]? episodeIds,
-        bool future,
-        CancellationToken cancellationToken) =>
-        await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeriesAsync(id, scope, seasonIds ?? [], episodeIds ?? [], future, token), cancellationToken, MediaAcquisitionKind.Tv);
+    /// <summary>Sets what is monitored of a whole Series: all episodes, future episodes only, or nothing. Seasons and episodes have their own switches.</summary>
+    public async Task<IActionResult> OnPostSeriesScopeAsync(string kind, Guid id, string? scope, CancellationToken cancellationToken) =>
+        await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeriesAsync(id, scope, [], [], monitorFuture: false, token), cancellationToken, MediaAcquisitionKind.Tv);
+
+    /// <summary>Monitors or unmonitors one season of a Series independently of the others.</summary>
+    public async Task<IActionResult> OnPostSeasonMonitorAsync(string kind, Guid id, int season, bool monitored, CancellationToken cancellationToken) =>
+        await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeasonMonitoredAsync(id, season, monitored, token), cancellationToken, MediaAcquisitionKind.Tv, $"s{season}");
+
+    /// <summary>Monitors or unmonitors one episode of a Series.</summary>
+    public async Task<IActionResult> OnPostEpisodeMonitorAsync(string kind, Guid id, Guid episodeId, bool monitored, string? open, CancellationToken cancellationToken) =>
+        await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetEpisodeMonitoredAsync(id, episodeId, monitored, token), cancellationToken, MediaAcquisitionKind.Tv, open);
 
     /// <summary>Assigns the quality profile of this Work; a blank profile returns to the default of the media type.</summary>
     public async Task<IActionResult> OnPostProfileAsync(string kind, Guid id, string? profileId, CancellationToken cancellationToken) =>
@@ -108,6 +113,50 @@ public sealed class MediaWorkModel(
         return Back(mediaKind, id);
     }
 
+    /// <summary>Forces one local file of this Work through the same analysis path the library uses for all of them.</summary>
+    public async Task<IActionResult> OnPostReanalyzeFileAsync(
+        string kind,
+        Guid id,
+        Guid fileId,
+        string? open,
+        [FromServices] MediaInventoryService inventory,
+        [FromServices] OperationRunner operations,
+        CancellationToken cancellationToken)
+    {
+        if (!VideoWorkLinks.TryParseAdminKind(kind, out var mediaKind) || !await IsEnabledAsync(mediaKind, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (!await details.OwnsFileAsync(id, fileId, cancellationToken))
+        {
+            TempData["Error"] = Ui["admin.media.fileGone"];
+            return Back(mediaKind, id, open);
+        }
+
+        try
+        {
+            var entry = await operations.RunAsync(
+                new OperationDescriptor(ReanalyzeOperationKind, "Video", "Re-analyse video media", ProfileId: currentAccount.ProfileId, Lane: OperationLane.Normal, Retryable: false),
+                async (_, token) =>
+                {
+                    await inventory.InvalidateAsync([fileId], token);
+                    return await inventory.EnsureAnalyzedAsync(fileId, token);
+                },
+                null,
+                cancellationToken);
+            TempData["Notice"] = entry?.Status == MediaAnalysisStatus.Succeeded ? Ui["admin.media.reanalyzed"] : Ui["admin.media.reanalyzeIncomplete"];
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or DbException)
+        {
+            logger.LogError(exception, "Re-analysing media file {FileId} of Work {WorkId} failed.", fileId, id);
+            TempData["Error"] = Ui["admin.media.reanalyzeFailed"];
+        }
+
+        return Back(mediaKind, id, open);
+    }
+
     /// <summary>
     /// Runs one change after the checks every action shares: the kind is a Movie or Series with its module on and acquisition is
     /// available for the Work (an unknown Work or a disabled module offers no controls, so it has no action either). A selection that does not belong to the Work or a profile the account may not use
@@ -119,7 +168,8 @@ public sealed class MediaWorkModel(
         string savedKey,
         Func<MediaAcquisitionKind, CancellationToken, Task<VideoMonitoringOutcome>> change,
         CancellationToken cancellationToken,
-        MediaAcquisitionKind? expected = null)
+        MediaAcquisitionKind? expected = null,
+        string? open = null)
     {
         if (!VideoWorkLinks.TryParseAdminKind(kind, out var mediaKind) || mediaKind != (expected ?? mediaKind) || !await IsEnabledAsync(mediaKind, cancellationToken))
         {
@@ -143,7 +193,7 @@ public sealed class MediaWorkModel(
             if (outcome is VideoMonitoringOutcome.Conflict or VideoMonitoringOutcome.NotAcquirable)
             {
                 TempData["Error"] = Ui[outcome == VideoMonitoringOutcome.Conflict ? "admin.media.video.conflict" : "admin.media.video.noAcquisition"];
-                return Back(mediaKind, id);
+                return Back(mediaKind, id, open);
             }
 
             TempData["Notice"] = Ui[outcome switch
@@ -162,10 +212,12 @@ public sealed class MediaWorkModel(
             TempData["Error"] = Ui["admin.media.video.notAllowed"];
         }
 
-        return Back(mediaKind, id);
+        return Back(mediaKind, id, open);
     }
 
-    private IActionResult Back(MediaAcquisitionKind kind, Guid id) => Redirect(VideoWorkLinks.AdminPath(kind, id));
+    /// <summary>Back to the page; <paramref name="open"/> names the season or episode that stays open, as an address fragment.</summary>
+    private IActionResult Back(MediaAcquisitionKind kind, Guid id, string? open = null) =>
+        Redirect(string.IsNullOrWhiteSpace(open) ? VideoWorkLinks.AdminPath(kind, id) : $"{VideoWorkLinks.AdminPath(kind, id)}#{Uri.EscapeDataString(open)}");
 
     private async Task<bool> IsEnabledAsync(MediaAcquisitionKind kind, CancellationToken cancellationToken) =>
         instanceModules is null || await instanceModules.IsEnabledAsync(AcquisitionInstanceModules.For(kind), cancellationToken);

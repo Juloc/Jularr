@@ -5,14 +5,16 @@
 @using Jularr.Web.Features.Library
 @using Jularr.Web.Features.Storage
 @using Jularr.Web.Features.Watchlist
-@* Same layout as the Anime media page (docs/mockups/admin-media-detail/SPEC.md): a header with the medium-level controls, then
-   seasons that expand into episodes (Series) or the local files directly (Movie). Only what the backend can do is offered. *@
+@* Same layout as the Anime media page (docs/mockups/admin-media-detail/SPEC.md): a header with the medium-level controls, then seasons
+   that expand into episodes (Series) or the versions of the Movie, each expanding into its real local files. Only what the backend can do
+   is offered; the rest of the approved design is not drawn as a dead control. *@
 @{
     var ui = Model.Ui;
     var detail = Model.Detail;
     ViewData["Title"] = detail?.Title ?? ui["admin.media.title"];
 
     string Bytes(long value) => StorageHealth.FormatBytes(value);
+    string Languages(IEnumerable<string> codes) => string.Join(", ", codes.Select(code => code.ToUpperInvariant()));
     string StateLabel(AdminMediaState state) => state == AdminMediaState.Available
         ? ui["library.mediaCard.availability.available"]
         : ui["admin.wanted.status." + AdminMediaDetailView.StateName(state)];
@@ -22,11 +24,14 @@
         AdminMediaMonitoring.Partial => ui["admin.media.monitoring.partial"],
         _ => ui["admin.media.monitoring.off"]
     };
+    string FileCount(int count) => count == 1 ? ui["admin.media.oneFile"] : ui.Format("admin.media.fileCount", ("count", count));
 }
 @section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-media-detail.css" asp-append-version="true" />
 }
 @section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
     <script src="~/js/admin-media-work.js" asp-append-version="true" defer></script>
 }
 
@@ -45,14 +50,19 @@
     var isMovie = detail.Kind == MediaAcquisitionKind.Movie;
     var acquisition = detail.Acquisition;
     var monitoring = detail.Monitoring;
+    var medium = detail.MediumMonitoring;
     var meta = string.Join(" · ", new[]
     {
         ui[MediaKindLabelKeys.Operation(detail.Kind)],
         detail.Year?.ToString(System.Globalization.CultureInfo.InvariantCulture)
     }.Where(part => !string.IsNullOrEmpty(part)));
     var audio = detail.AudioLanguages;
-    var missing = isMovie ? 0 : detail.Episodes.Count(episode => episode.State != AdminMediaState.Available && !episode.IsUpcoming);
+    var subtitles = detail.SubtitleLanguages;
+    var episodes = detail.Episodes.ToList();
+    var missing = isMovie ? 0 : episodes.Count(episode => episode.State != AdminMediaState.Available && !episode.IsUpcoming);
     var upcoming = ui["library.mediaCard.status.upcoming"];
+    var detailHref = VideoWorkLinks.DetailPath(detail.Kind, detail.WorkId);
+    var manualHref = acquisition.CanManualSearch ? Url.Page("/Admin/ManualSearch", new { id = acquisition.OpenRequest!.Id }) : null;
 }
 
 @if (Model.Notice is { } notice)
@@ -73,42 +83,72 @@
                 <p class="admmd-meta">@meta</p>
             </div>
             <div class="admmd-hero-actions">
-                @if (acquisition.CanAcquire && isMovie)
+                @if (acquisition.CanAcquire)
                 {
-                    <form method="post" asp-page-handler="MovieMonitor" class="admmd-monitor-form">
-                        <input type="hidden" name="monitored" value="@(monitoring.Monitored ? "false" : "true")" />
-                        <button class="admmd-toggle @(monitoring.Monitored ? "is-on" : "")" type="submit" aria-pressed="@(monitoring.Monitored ? "true" : "false")">
+                    var turnOn = medium == AdminMediaMonitoring.Off;
+                    <form method="post" asp-page-handler="@(isMovie ? "MovieMonitor" : "SeriesScope")" class="admmd-monitor-form">
+                        @if (isMovie)
+                        {
+                            <input type="hidden" name="monitored" value="@(turnOn ? "true" : "false")" />
+                        }
+                        else
+                        {
+                            <input type="hidden" name="scope" value="@(turnOn ? "all" : VideoMonitoringService.OffScope)" />
+                        }
+                        <button class="admmd-toggle @(medium == AdminMediaMonitoring.On ? "is-on" : medium == AdminMediaMonitoring.Partial ? "is-partial" : "")" type="submit" role="switch"
+                                aria-checked="@(medium == AdminMediaMonitoring.On ? "true" : medium == AdminMediaMonitoring.Partial ? "mixed" : "false")">
                             <span class="admmd-switch" aria-hidden="true"></span>
-                            @ui["admin.media.monitor"]
+                            @(medium == AdminMediaMonitoring.Off ? ui["admin.media.monitor"] : ui["admin.media.monitored"])
                         </button>
                     </form>
                 }
                 @if (acquisition.CanSearchNow)
                 {
-                    <form method="post" asp-page-handler="Search">
-                        <button class="button button-primary" type="submit">@ui["admin.requests.searchNow"]</button>
+                    <form method="post" asp-page-handler="Search" class="admmd-desktop-only">
+                        <button class="button button-primary" type="submit">@ui["admin.media.action.automatic"]</button>
                     </form>
                 }
-                @if (acquisition.CanManualSearch)
+                @if (manualHref is not null)
                 {
-                    <a class="button" asp-page="/Admin/ManualSearch" asp-route-id="@acquisition.OpenRequest!.Id">@ui["admin.wanted.manualSearch"]</a>
+                    <a class="button admmd-desktop-only" href="@manualHref">@ui["admin.wanted.manualSearch"]</a>
                 }
-                <a class="button" href="@VideoWorkLinks.DetailPath(detail.Kind, detail.WorkId)">@ui["admin.media.openLibrary"]</a>
+                <details class="admin-menu">
+                    <summary class="admin-icon-button" aria-label="@ui["admin.media.more"]"><partial name="_AdminIcon" model='"more"' /><span class="admin-icon-label">@ui["admin.media.more"]</span></summary>
+                    <div class="admin-menu-list">
+                        <a class="admin-menu-item" href="@detailHref">@ui["admin.media.openLibrary"]</a>
+                        @if (acquisition.CanAcquire && !isMovie)
+                        {
+                            <form method="post" asp-page-handler="SeriesScope">
+                                <input type="hidden" name="scope" value="all" />
+                                <button class="admin-menu-item" type="submit">@ui["admin.media.video.monitorAll"]</button>
+                            </form>
+                            <form method="post" asp-page-handler="SeriesScope">
+                                <input type="hidden" name="scope" value="future" />
+                                <button class="admin-menu-item" type="submit">@ui["admin.media.video.monitorFuture"]</button>
+                            </form>
+                        }
+                    </div>
+                </details>
             </div>
         </div>
         <dl class="admmd-stats">
-            @if (!isMovie)
+            @if (isMovie)
             {
-                <div class="admmd-stat"><dt>@ui["admin.media.stat.seasons"]</dt><dd>@detail.Seasons.Count</dd></div>
+                <div class="admmd-stat"><dt>@ui["admin.media.stat.versions"]</dt><dd>@detail.Versions.Count<small>@FileCount(detail.Files.Count())</small></dd></div>
+                <div class="admmd-stat"><dt>@ui["admin.media.col.status"]</dt><dd>@(detail.Available == 1 ? ui["library.mediaCard.availability.available"] : ui["admin.wanted.status.missing"])</dd></div>
             }
-            <div class="admmd-stat"><dt>@ui["admin.media.stat.available"]</dt><dd>@detail.Available / @detail.Total</dd></div>
-            @if (!isMovie)
+            else
             {
-                <div class="admmd-stat"><dt>@ui["admin.media.stat.missing"]</dt><dd>@missing</dd></div>
+                <div class="admmd-stat"><dt>@ui["admin.media.stat.seasons"]</dt><dd>@detail.Seasons.Count<small>@(episodes.Count == 1 ? ui["library.anime.oneEpisode"] : ui.Format("library.index.episodeCount", ("count", episodes.Count)))</small></dd></div>
+                <div class="admmd-stat"><dt>@ui["admin.media.stat.monitored"]</dt><dd>@MonitoringLabel(medium)<small>@ui.Format("admin.media.stat.monitoredOf", ("count", episodes.Count(episode => episode.Monitored)), ("total", episodes.Count))</small></dd></div>
+                <div class="admmd-stat"><dt>@ui["admin.media.stat.available"]</dt><dd>@detail.Available / @detail.Total<small>@ui.Format("admin.media.group.missing", ("count", missing))</small></dd></div>
             }
             <div class="admmd-stat"><dt>@ui["admin.media.stat.storage"]</dt><dd>@Bytes(detail.SizeBytes)</dd></div>
             <div class="admmd-stat"><dt>@ui["library.acquisitionPanel.qualityProfile"]</dt><dd>@acquisition.ProfileName</dd></div>
-            <div class="admmd-stat"><dt>@ui["admin.media.stat.audio"]</dt><dd>@(audio.Count == 0 ? "—" : string.Join(", ", audio.Select(code => code.ToUpperInvariant())))</dd></div>
+            <div class="admmd-stat">
+                <dt>@ui["admin.media.stat.languages"]</dt>
+                <dd>@(audio.Count == 0 ? "—" : Languages(audio))@if (subtitles.Count > 0){<small>@ui.Format("admin.media.stat.subtitlesOf", ("languages", Languages(subtitles)))</small>}</dd>
+            </div>
         </dl>
         @if (acquisition.OpenRequest is { } open)
         {
@@ -124,220 +164,233 @@
 
 @if (isMovie)
 {
-    @if (detail.Files.Count == 0)
+    @if (detail.Versions.Count == 0)
     {
         <p class="admmd-message muted" data-admin-media-empty>@ui["admin.media.noFiles"]</p>
     }
     else
     {
-        <ul class="admmd-files" data-admin-media-files>
-            @foreach (var file in detail.Files)
-            {
-                <li class="admmd-file">
-                    <div class="admmd-file-head">
-                        <strong class="admmd-file-name">@file.Name</strong>
-                        <span class="admmd-file-tags">
-                            @if (file.Quality is not null)
-                            {
-                                <span class="admmd-tag">@file.Quality</span>
-                            }
-                            <span class="admmd-tag">@Bytes(file.SizeBytes)</span>
-                        </span>
-                    </div>
-                    <dl class="admmd-file-facts">
-                        <div>
-                            <dt>@ui["admin.media.col.audio"]</dt>
-                            <dd>@(file.Audio.Count == 0 ? "—" : string.Join(", ", file.Audio.Select(code => code.ToUpperInvariant())))</dd>
-                        </div>
-                        <div>
-                            <dt>@ui["admin.media.col.subtitles"]</dt>
-                            <dd>@(file.Subtitles.Count == 0 ? "—" : string.Join(", ", file.Subtitles.Select(code => code.ToUpperInvariant())))</dd>
-                        </div>
-                    </dl>
-                </li>
-            }
-        </ul>
+        <div class="admmd-groups admmd-groups-versions" data-admin-media-versions data-columns-key="movie">
+            <div class="admmd-toolbar admmd-toolbar-inline">
+                <h2>@ui["admin.media.stat.versions"]</h2>
+                <partial name="_AdminMediaColumns" model="ui" />
+            </div>
+            <div class="admmd-cols" aria-hidden="true">
+                <span>@ui["admin.media.col.version"]</span>
+                <span data-col="status">@ui["admin.media.col.status"]</span>
+                <span data-col="quality">@ui["admin.media.col.quality"]</span>
+                <span data-col="audio">@ui["admin.media.col.audio"]</span>
+                <span data-col="subtitles">@ui["admin.media.col.subtitles"]</span>
+                <span data-col="files">@ui["admin.media.col.files"]</span>
+                <span data-col="size">@ui["admin.media.col.size"]</span>
+            </div>
+            <ul class="admmd-episodes">
+                @foreach (var version in detail.Versions)
+                {
+                    var versionName = version.Label ?? version.Quality ?? ui["admin.media.col.version"];
+                    <li>
+                        <details class="admmd-ep" id="v-@version.Id.ToString("N")">
+                            <summary class="admmd-ep-row">
+                                <span class="admmd-ep-title">
+                                    <span class="admmd-ep-name">
+                                        <span class="admmd-chevron"><partial name="_AdminMediaIcon" model='"chevron"' /></span>
+                                        <strong>@versionName</strong>
+                                    </span>
+                                    @if (!string.IsNullOrWhiteSpace(version.ReleaseGroup))
+                                    {
+                                        <small>@version.ReleaseGroup</small>
+                                    }
+                                </span>
+                                <span class="admmd-ep-status" data-col="status">
+                                    <span class="admin-tag admin-tag-success"><partial name="_AdminMediaIcon" model='"available"' />@StateLabel(AdminMediaState.Available)</span>
+                                </span>
+                                <span class="admmd-ep-quality" data-col="quality">@(version.Quality ?? "—")</span>
+                                <span class="admmd-ep-langs" data-col="audio" title="@ui["admin.media.col.audio"]">
+                                    @foreach (var language in version.Audio)
+                                    {
+                                        <span class="admmd-lang">@language.ToUpperInvariant()</span>
+                                    }
+                                </span>
+                                <span class="admmd-ep-langs" data-col="subtitles" title="@ui["admin.media.col.subtitles"]">
+                                    @foreach (var language in version.Subtitles)
+                                    {
+                                        <span class="admmd-lang admmd-lang-quiet">@language.ToUpperInvariant()</span>
+                                    }
+                                </span>
+                                <span class="admmd-ep-files" data-col="files">@version.Files.Count</span>
+                                <span class="admmd-ep-size" data-col="size">@Bytes(version.SizeBytes)</span>
+                            </summary>
+                            <div class="admmd-ep-body">
+                                <partial name="_AdminVideoFiles" model="(version.Files, ui)" />
+                            </div>
+                        </details>
+                    </li>
+                }
+            </ul>
+        </div>
     }
 }
 else
 {
-    @if (acquisition.CanAcquire)
-    {
-        <div class="admmd-toolbar">
-            <form method="post" asp-page-handler="SeriesScope" class="admmd-view" role="group" aria-label="@ui["admin.media.video.monitoringHeading"]">
-                @foreach (var scope in new[] { "all", "future", VideoMonitoringService.OffScope })
-                {
-                    var active = monitoring.Scope == scope;
-                    <button class="admmd-view-option @(active ? "is-active" : "")" type="submit" name="scope" value="@scope" aria-pressed="@(active ? "true" : "false")">@ui["admin.media.video.mode." + scope]</button>
-                }
-                @if (monitoring.Scope == "custom")
-                {
-                    <span class="admmd-view-option is-active">@ui["admin.media.video.mode.custom"]</span>
-                }
-            </form>
-        </div>
-    }
-
     @if (detail.Seasons.Count == 0)
     {
         <p class="admmd-message muted" data-admin-media-empty>@ui["admin.media.empty"]</p>
     }
     else
     {
-        <form method="post" asp-page-handler="SeriesScope">
-            <input type="hidden" name="scope" value="custom" />
-            <div class="admmd-groups" data-admin-media-groups>
-                <div class="admmd-cols" aria-hidden="true">
-                    <span></span>
-                    <span>@ui["admin.media.col.episode"]</span>
-                    <span>@ui["admin.media.col.status"]</span>
-                    <span>@ui["admin.media.col.quality"]</span>
-                    <span>@ui["admin.media.col.audio"]</span>
-                    <span>@ui["admin.media.col.subtitles"]</span>
-                    <span>@ui["admin.media.col.files"]</span>
-                    <span>@ui["admin.media.col.size"]</span>
-                    <span>@ui["admin.media.col.monitor"]</span>
-                </div>
-                @foreach (var season in detail.Seasons)
-                {
-                    var seasonName = Model.Name(season);
-                    var seasonMonitoring = season.Monitoring;
-                    var seasonMissing = season.Episodes.Count(episode => episode.State != AdminMediaState.Available && !episode.IsUpcoming);
-                    <details class="admmd-group" id="s@(season.Number)" data-season-group open="@(detail.Seasons.Count == 1)">
-                        <summary class="admmd-group-head">
-                            <span class="admmd-chevron"><partial name="_AdminMediaIcon" model='"chevron"' /></span>
-                            <span class="admmd-group-name">
-                                <strong>@seasonName</strong>
-                                <small>@(season.Episodes.Count == 1 ? ui["library.anime.oneEpisode"] : ui.Format("library.index.episodeCount", ("count", season.Episodes.Count))) · @Bytes(season.SizeBytes)</small>
-                            </span>
-                            <span class="admmd-group-state">
-                                <span>@ui.Format("admin.media.group.available", ("available", season.Available), ("total", season.Episodes.Count))</span>
-                                @if (seasonMissing > 0)
-                                {
-                                    <small>@ui.Format("admin.media.group.missing", ("count", seasonMissing))</small>
-                                }
-                            </span>
-                            <span class="admmd-group-langs"></span>
-                            <span class="admmd-group-monitor">
-                                <span class="admmd-monitoring admmd-monitoring-@seasonMonitoring.ToString().ToLowerInvariant()">@MonitoringLabel(seasonMonitoring)</span>
-                                @if (acquisition.CanAcquire && season.Id is not null)
-                                {
-                                    <label class="admmd-hit" hidden><input type="checkbox" data-season-monitor name="seasonIds" value="@season.Id" aria-label="@ui.Format("admin.media.monitorItem", ("name", seasonName))" /></label>
-                                }
-                            </span>
-                        </summary>
-                        <ul class="admmd-episodes">
-                            @foreach (var episode in season.Episodes)
+        <div class="admmd-groups" data-admin-media-groups data-columns-key="series">
+            <div class="admmd-toolbar admmd-toolbar-inline">
+                <h2>@ui["admin.media.stat.seasons"]</h2>
+                <partial name="_AdminMediaColumns" model="ui" />
+            </div>
+            <div class="admmd-cols" aria-hidden="true">
+                <span></span>
+                <span>@ui["admin.media.col.episode"]</span>
+                <span data-col="status">@ui["admin.media.col.status"]</span>
+                <span data-col="quality">@ui["admin.media.col.quality"]</span>
+                <span data-col="audio">@ui["admin.media.col.audio"]</span>
+                <span data-col="subtitles">@ui["admin.media.col.subtitles"]</span>
+                <span data-col="files">@ui["admin.media.col.files"]</span>
+                <span data-col="size">@ui["admin.media.col.size"]</span>
+                <span>@ui["admin.media.col.monitor"]</span>
+            </div>
+            @foreach (var season in detail.Seasons)
+            {
+                var seasonName = Model.Name(season);
+                var seasonMonitoring = season.Monitoring;
+                var seasonMissing = season.Episodes.Count(episode => episode.State != AdminMediaState.Available && !episode.IsUpcoming);
+                var firstMissing = season.Episodes.FirstOrDefault(episode => episode.State != AdminMediaState.Available && !episode.IsUpcoming);
+                var seasonTurnOn = seasonMonitoring != AdminMediaMonitoring.On;
+                <details class="admmd-group" id="s@(season.Number)" data-season-group open="@(detail.Seasons.Count == 1)">
+                    <summary class="admmd-group-head">
+                        <span class="admmd-chevron"><partial name="_AdminMediaIcon" model='"chevron"' /></span>
+                        <span class="admmd-group-name">
+                            <strong>@seasonName</strong>
+                            <small>@(season.Episodes.Count == 1 ? ui["library.anime.oneEpisode"] : ui.Format("library.index.episodeCount", ("count", season.Episodes.Count))) · @Bytes(season.SizeBytes)</small>
+                        </span>
+                        <span class="admmd-group-state">
+                            <span>@ui.Format("admin.media.group.available", ("available", season.Available), ("total", season.Episodes.Count))</span>
+                            @if (seasonMissing > 0)
                             {
-                                var stateName = AdminMediaDetailView.StateName(episode.State);
-                                var episodeName = string.IsNullOrWhiteSpace(episode.Title)
-                                    ? ui.Format("admin.media.episodeNumber", ("number", episode.Number))
-                                    : episode.Title;
-                                var quality = episode.Files.Select(file => file.Quality).Aggregate((string?)null, AdminMediaDetailView.BestQuality);
-                                <li>
-                                    <details class="admmd-ep" id="e@(episode.Season)x@(episode.Number)">
-                                        <summary class="admmd-ep-row">
-                                            <span class="admmd-ep-number">
-                                                <span class="admmd-chevron"><partial name="_AdminMediaIcon" model='"chevron"' /></span>
-                                                <span>@episode.Number</span>
-                                            </span>
-                                            <span class="admmd-ep-title">
-                                                <strong>@episodeName</strong>
-                                                @if (episode.AiredAt is { } airs)
-                                                {
-                                                    <small>@(episode.IsUpcoming ? upcoming + " · " : "")<time datetime="@airs.ToString("yyyy-MM-dd")">@airs.ToString("yyyy-MM-dd")</time></small>
-                                                }
-                                            </span>
-                                            <span class="admmd-ep-status">
-                                                @if (episode.IsUpcoming && episode.State == AdminMediaState.Missing)
-                                                {
-                                                    <span class="admmd-none">@upcoming</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="admmd-state admmd-state-@stateName">
-                                                        <partial name="_AdminMediaIcon" model="stateName" />
-                                                        @StateLabel(episode.State)
-                                                    </span>
-                                                }
-                                            </span>
-                                            <span class="admmd-ep-quality">@(quality ?? "—")</span>
-                                            <span class="admmd-ep-langs" title="@ui["admin.media.col.audio"]">
-                                                @foreach (var language in episode.Files.SelectMany(file => file.Audio).Distinct(StringComparer.OrdinalIgnoreCase))
-                                                {
-                                                    <span class="admmd-lang">@language.ToUpperInvariant()</span>
-                                                }
-                                            </span>
-                                            <span class="admmd-ep-langs" title="@ui["admin.media.col.subtitles"]">
-                                                @foreach (var language in episode.Files.SelectMany(file => file.Subtitles).Distinct(StringComparer.OrdinalIgnoreCase))
-                                                {
-                                                    <span class="admmd-lang admmd-lang-quiet">@language.ToUpperInvariant()</span>
-                                                }
-                                            </span>
-                                            <span class="admmd-ep-files">@episode.Files.Count</span>
-                                            <span class="admmd-ep-size">@(episode.Files.Count > 0 ? Bytes(episode.SizeBytes) : "—")</span>
-                                            <span class="admmd-ep-monitor">
-                                                @if (acquisition.CanAcquire)
-                                                {
-                                                    <label class="admmd-hit">
-                                                        <input type="checkbox" name="episodeIds" value="@episode.Id" data-episode-monitor checked="@episode.Monitored"
-                                                               aria-label="@ui.Format("admin.media.monitorItem", ("name", episodeName))" />
-                                                    </label>
-                                                }
-                                                else
-                                                {
-                                                    <span class="admmd-monitoring admmd-monitoring-@(episode.Monitored ? "on" : "off")">@ui["admin.media.monitoring." + (episode.Monitored ? "on" : "off")]</span>
-                                                }
-                                            </span>
-                                        </summary>
-                                        <div class="admmd-ep-body">
-                                            @if (episode.Files.Count == 0)
+                                <small>@ui.Format("admin.media.group.missing", ("count", seasonMissing))</small>
+                            }
+                        </span>
+                        <span class="admmd-group-langs" title="@ui["admin.media.col.audio"]">
+                            @foreach (var (language, count) in season.AudioCoverage.Take(4))
+                            {
+                                <span class="admmd-lang @(count < season.Episodes.Count ? "is-partial" : "")">@language.ToUpperInvariant()</span>
+                            }
+                        </span>
+                        <span class="admmd-group-monitor">
+                            <span class="admin-tag @(seasonMonitoring == AdminMediaMonitoring.On ? "admin-tag-success" : seasonMonitoring == AdminMediaMonitoring.Partial ? "admin-tag-warning" : "")">@MonitoringLabel(seasonMonitoring)</span>
+                            @if (firstMissing is not null && manualHref is not null)
+                            {
+                                <a class="admin-icon-button" asp-page="/Admin/ManualSearch" asp-route-id="@acquisition.OpenRequest!.Id" asp-route-unit="@firstMissing.Id"
+                                   aria-label="@ui["admin.wanted.manualSearch"]: @seasonName"><partial name="_AdminIcon" model='"search"' /><span class="admin-icon-label">@ui["admin.wanted.manualSearch"]</span></a>
+                            }
+                            @if (acquisition.CanAcquire)
+                            {
+                                <form method="post" asp-page-handler="SeasonMonitor">
+                                    <input type="hidden" name="season" value="@season.Number" />
+                                    <input type="hidden" name="monitored" value="@(seasonTurnOn ? "true" : "false")" />
+                                    <button class="admmd-toggle admmd-toggle-icon @(seasonMonitoring == AdminMediaMonitoring.On ? "is-on" : seasonMonitoring == AdminMediaMonitoring.Partial ? "is-partial" : "")"
+                                            type="submit" role="switch"
+                                            aria-checked="@(seasonMonitoring == AdminMediaMonitoring.On ? "true" : seasonMonitoring == AdminMediaMonitoring.Partial ? "mixed" : "false")"
+                                            aria-label="@ui.Format(seasonTurnOn ? "admin.media.monitorItem" : "admin.media.unmonitorItem", ("name", seasonName))">
+                                        <span class="admmd-switch" aria-hidden="true"></span>
+                                    </button>
+                                </form>
+                            }
+                        </span>
+                    </summary>
+                    <ul class="admmd-episodes">
+                        @foreach (var episode in season.Episodes)
+                        {
+                            var stateName = AdminMediaDetailView.StateName(episode.State);
+                            var episodeName = string.IsNullOrWhiteSpace(episode.Title)
+                                ? ui.Format("admin.media.episodeNumber", ("number", episode.Number))
+                                : episode.Title;
+                            var quality = episode.Files.Select(file => file.Quality).Aggregate((string?)null, AdminMediaDetailView.BestQuality);
+                            <li>
+                                <details class="admmd-ep" id="e@(episode.Season)x@(episode.Number)">
+                                    <summary class="admmd-ep-row">
+                                        <span class="admmd-ep-number">
+                                            <span class="admmd-chevron"><partial name="_AdminMediaIcon" model='"chevron"' /></span>
+                                            <span>@episode.Number</span>
+                                        </span>
+                                        <span class="admmd-ep-title">
+                                            <strong>@episodeName</strong>
+                                            @if (episode.AiredAt is { } airs)
                                             {
-                                                <p class="admmd-none">@ui["admin.media.noFiles"]</p>
-                                                @if (acquisition.CanManualSearch && !episode.IsUpcoming)
-                                                {
-                                                    <a class="button" asp-page="/Admin/ManualSearch" asp-route-id="@acquisition.OpenRequest!.Id" asp-route-unit="@episode.Id">@ui["admin.wanted.manualSearch"]</a>
-                                                }
+                                                <small>@(episode.IsUpcoming ? upcoming + " · " : "")<time datetime="@airs.ToString("yyyy-MM-dd")">@airs.ToString("yyyy-MM-dd")</time></small>
+                                            }
+                                        </span>
+                                        <span class="admmd-ep-status" data-col="status">
+                                            @if (episode.IsUpcoming && episode.State == AdminMediaState.Missing)
+                                            {
+                                                <span class="admmd-none">@upcoming</span>
                                             }
                                             else
                                             {
-                                                <ul class="admmd-files">
-                                                    @foreach (var file in episode.Files)
-                                                    {
-                                                        <li class="admmd-file">
-                                                            <div class="admmd-file-head">
-                                                                <strong class="admmd-file-name">@file.Name</strong>
-                                                                <span class="admmd-file-tags">
-                                                                    @if (file.Quality is not null)
-                                                                    {
-                                                                        <span class="admmd-tag">@file.Quality</span>
-                                                                    }
-                                                                    <span class="admmd-tag">@Bytes(file.SizeBytes)</span>
-                                                                </span>
-                                                            </div>
-                                                        </li>
-                                                    }
-                                                </ul>
+                                                <span class="admin-tag admin-tag-@AdminStatusTone.Of(episode.State)"><partial name="_AdminMediaIcon" model="stateName" />@StateLabel(episode.State)</span>
                                             }
-                                        </div>
-                                    </details>
-                                </li>
-                            }
-                        </ul>
-                    </details>
-                }
-            </div>
-            @if (acquisition.CanAcquire)
-            {
-                <div class="admmd-actions">
-                    <label class="admmd-check">
-                        <input type="checkbox" name="future" value="true" checked="@monitoring.MonitorFuture" />
-                        <span>@ui["admin.media.video.scope.future"]</span>
-                    </label>
-                    <button class="button button-primary" type="submit">@ui["admin.media.video.scope.save"]</button>
-                </div>
+                                        </span>
+                                        <span class="admmd-ep-quality" data-col="quality">@(quality ?? "—")</span>
+                                        <span class="admmd-ep-langs" data-col="audio" title="@ui["admin.media.col.audio"]">
+                                            @foreach (var language in episode.Files.SelectMany(file => file.Audio).Distinct(StringComparer.OrdinalIgnoreCase))
+                                            {
+                                                <span class="admmd-lang">@language.ToUpperInvariant()</span>
+                                            }
+                                        </span>
+                                        <span class="admmd-ep-langs" data-col="subtitles" title="@ui["admin.media.col.subtitles"]">
+                                            @foreach (var language in episode.Files.SelectMany(file => file.Subtitles).Distinct(StringComparer.OrdinalIgnoreCase))
+                                            {
+                                                <span class="admmd-lang admmd-lang-quiet">@language.ToUpperInvariant()</span>
+                                            }
+                                        </span>
+                                        <span class="admmd-ep-files" data-col="files">@episode.Files.Count</span>
+                                        <span class="admmd-ep-size" data-col="size">@(episode.Files.Count > 0 ? Bytes(episode.SizeBytes) : "—")</span>
+                                        <span class="admmd-ep-monitor">
+                                            @if (manualHref is not null && !episode.IsUpcoming && episode.State != AdminMediaState.Available)
+                                            {
+                                                <a class="admin-icon-button" asp-page="/Admin/ManualSearch" asp-route-id="@acquisition.OpenRequest!.Id" asp-route-unit="@episode.Id"
+                                                   aria-label="@ui["admin.wanted.manualSearch"]: @episodeName"><partial name="_AdminIcon" model='"search"' /><span class="admin-icon-label">@ui["admin.wanted.manualSearch"]</span></a>
+                                            }
+                                            @if (acquisition.CanAcquire)
+                                            {
+                                                <form method="post" asp-page-handler="EpisodeMonitor">
+                                                    <input type="hidden" name="episodeId" value="@episode.Id" />
+                                                    <input type="hidden" name="monitored" value="@(episode.Monitored ? "false" : "true")" />
+                                                    <input type="hidden" name="open" value="e@(episode.Season)x@(episode.Number)" />
+                                                    <button class="admmd-toggle admmd-toggle-icon @(episode.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(episode.Monitored ? "true" : "false")"
+                                                            aria-label="@ui.Format(episode.Monitored ? "admin.media.unmonitorItem" : "admin.media.monitorItem", ("name", episodeName))">
+                                                        <span class="admmd-switch" aria-hidden="true"></span>
+                                                    </button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <span class="admin-tag @(episode.Monitored ? "admin-tag-success" : "")">@ui["admin.media.monitoring." + (episode.Monitored ? "on" : "off")]</span>
+                                            }
+                                        </span>
+                                    </summary>
+                                    <div class="admmd-ep-body">
+                                        @if (episode.Files.Count == 0)
+                                        {
+                                            <p class="admmd-none">@ui["admin.media.noFiles"]</p>
+                                        }
+                                        else
+                                        {
+                                            <partial name="_AdminVideoFiles" model="(episode.Files, ui)" />
+                                        }
+                                    </div>
+                                </details>
+                            </li>
+                        }
+                    </ul>
+                </details>
             }
-        </form>
+        </div>
     }
 }
 
@@ -361,4 +414,21 @@ else
             </form>
         </section>
     </div>
+}
+
+@if (acquisition.CanSearchNow || manualHref is not null)
+{
+    <nav class="admmd-bar" aria-label="@ui["admin.media.acquisition.heading"]">
+        @if (acquisition.CanSearchNow)
+        {
+            <form method="post" asp-page-handler="Search">
+                <button class="button button-primary" type="submit">@ui["admin.media.action.automatic"]</button>
+            </form>
+        }
+        @if (manualHref is not null)
+        {
+            <a class="button" href="@manualHref">@ui["admin.wanted.manualSearch"]</a>
+        }
+        <a class="button" href="@detailHref">@ui["admin.media.openLibrary"]</a>
+    </nav>
 }
