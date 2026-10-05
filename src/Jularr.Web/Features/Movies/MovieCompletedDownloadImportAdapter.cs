@@ -19,6 +19,7 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
     MovieLibraryService movies,
     MediaAcquisitionRegistry registry,
     LibraryRootRoutingService routing,
+    LibraryRootAvailabilityService availability,
     IHardLinkCreator hardLinks,
     ILogger<MovieCompletedDownloadImportAdapter> logger,
     CanonicalMediaStorageService? canonicalStorage = null)
@@ -53,7 +54,7 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
             return CompletedDownloadImportResult.RetryLater(LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Movie));
         }
 
-        if (!Directory.Exists(route.Path))
+        if (!await availability.IsReadyForImportAsync(route.LibraryRootId, cancellationToken))
         {
             return CompletedDownloadImportResult.RetryLater($"The Movie library root '{route.Name}' is not available.");
         }
@@ -68,6 +69,10 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (DestinationMismatchException exception)
+        {
+            return CompletedDownloadImportResult.NeedsReview(exception.Message);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or CrossDeviceLinkException)
         {
@@ -90,12 +95,13 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
             return new MediaInboxImportResult(0, LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Movie));
         }
 
-        if (!Directory.Exists(route.Path))
+        if (!await availability.IsReadyForImportAsync(route.LibraryRootId, cancellationToken))
         {
             return new MediaInboxImportResult(0, $"The Movie library root '{route.Name}' is not available.");
         }
 
         var imported = 0;
+        var skipped = new List<string>();
         foreach (var file in files)
         {
             if (!CompletedDownloadFiles.IsVideo(file.Path) || IsExcluded(file.Path, excludedFolders))
@@ -103,11 +109,19 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
                 continue;
             }
 
-            await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken);
-            imported++;
+            try
+            {
+                await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken);
+                imported++;
+            }
+            catch (DestinationMismatchException exception)
+            {
+                skipped.Add(exception.Message);
+            }
         }
 
-        return new MediaInboxImportResult(imported, imported == 0 ? "No new movies in the inbox." : $"Imported {imported} movie(s) from the inbox.");
+        var message = imported == 0 ? "No new movies in the inbox." : $"Imported {imported} movie(s) from the inbox.";
+        return new MediaInboxImportResult(imported, skipped.Count == 0 ? message : $"{message} Skipped: {string.Join(" ", skipped)}");
     }
 
     /// <summary>
@@ -119,7 +133,7 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
         var (action, allowFallback) = ImportFileTransfer.Resolve(ImportFileTransfer.ModeFor(route.PlacementPolicy));
         var folder = Path.Combine(route.Path, MovieNaming.FolderName(metadata.Title, metadata.Year));
         var destination = Path.Combine(folder, MovieNaming.FileName(metadata.Title, metadata.Year, Path.GetExtension(videoPath)));
-        if (!MediaInboxImportService.IsBelow(destination, route.Path))
+        if (!StoragePaths.IsBelow(destination, route.Path))
         {
             throw new InvalidOperationException("The movie destination would leave its library root.");
         }
@@ -128,6 +142,10 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
         {
             var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
             new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
+        }
+        else if (!LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
+        {
+            throw new DestinationMismatchException(destination);
         }
 
         var entry = await movies.EnsureAsync(metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, folder, cancellationToken);

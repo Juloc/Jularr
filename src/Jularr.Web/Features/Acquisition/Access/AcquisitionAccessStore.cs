@@ -359,6 +359,38 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             return true;
         }, cancellationToken);
 
+    /// <summary>
+    /// Moves a request to <paramref name="status"/> only while it is still in one of <paramref name="expected"/>, in one statement. Returns
+    /// false when it changed meanwhile (rejected, grabbed by the scheduler, cancelled), so the caller can stop instead of acting on a stale read.
+    /// </summary>
+    public Task<bool> TryUpdateStatusAsync(
+        Guid id,
+        IReadOnlyCollection<AcquisitionRequestStatus> expected,
+        AcquisitionRequestStatus status,
+        string? message,
+        CancellationToken cancellationToken) =>
+        WithConnectionAsync(async connection =>
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                UPDATE "AcquisitionRequests"
+                SET "Status" = @status,
+                    "StatusMessage" = @message,
+                    "UpdatedAt" = @now
+                WHERE "Id" = @id AND "Status" = ANY(@expected);
+                """;
+            Add(command, "@id", id.ToString());
+            Add(command, "@status", AcquisitionAccessNames.Status(status));
+            Add(command, "@message", message);
+            Add(command, "@now", DateTime.UtcNow);
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@expected";
+            parameter.Value = expected.Select(AcquisitionAccessNames.Status).ToArray();
+            command.Parameters.Add(parameter);
+            return await command.ExecuteNonQueryAsync(cancellationToken) == 1;
+        }, cancellationToken);
+
     private async Task<AcquisitionRequest?> QuerySingleAsync(
         string sql,
         Action<DbCommand> bind,

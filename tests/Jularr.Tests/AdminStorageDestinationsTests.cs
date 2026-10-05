@@ -92,6 +92,21 @@ public sealed class AdminStorageDestinationsTests
     }
 
     [TestMethod]
+    public async Task AnAnimeRootIsRefusedWithAnExplainingMessage()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var anime = await fixture.AddRootAsync("Anime");
+        await fixture.Routing.SetSupportedAsync(anime.Id, LibraryContentType.Anime, true);
+        var page = fixture.Page();
+
+        await page.OnPostDestinationAsync(LibraryContentType.Movie, anime.Id, LibraryPlacementPolicy.Copy, CancellationToken.None);
+
+        Assert.AreEqual(page.Ui["admin.storage.destinations.conflict"], page.TempData["StorageError"]);
+        Assert.IsNull(await fixture.Routing.ResolveDefaultAsync(LibraryContentType.Movie));
+        Assert.IsTrue(await fixture.Routing.ServesAnimeAsync(anime.Id), "The Anime root still serves Anime.");
+    }
+
+    [TestMethod]
     public async Task ThePageListsMovieAndTvWithTheirRootsAndHidesAModuleThatIsDisabled()
     {
         await using var fixture = await Fixture.CreateAsync();

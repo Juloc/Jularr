@@ -88,6 +88,44 @@ public sealed class MovieTvInboxImportTests
     }
 
     [TestMethod]
+    public async Task AMovieInboxInsideTheTvRootOrTheOtherWayRoundIsRejected()
+    {
+        await using var host = await Host.CreateAsync();
+        var tvRoot = host.Folder("tv");
+        var movieRoot = host.Folder("movies");
+        await host.SetDefaultRootAsync(LibraryContentType.Tv, tvRoot);
+        await host.SetDefaultRootAsync(LibraryContentType.Movie, movieRoot);
+
+        await host.SetInboxAsync(MediaAcquisitionKind.Movie, Directory.CreateDirectory(Path.Combine(tvRoot, "incoming")).FullName);
+        var movieInTv = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.Inboxes.RunAsync(MediaAcquisitionKind.Movie, "owner", CancellationToken.None));
+        StringAssert.Contains(movieInTv.Message, "overlaps");
+
+        await host.SetInboxAsync(MediaAcquisitionKind.Tv, Directory.CreateDirectory(Path.Combine(movieRoot, "incoming")).FullName);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.Inboxes.RunAsync(MediaAcquisitionKind.Tv, "owner", CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task OnlyOneScanPerMediaTypeRunsAtATime()
+    {
+        await using var host = await Host.CreateAsync();
+        var inbox = host.Folder("inbox-movies");
+        await host.SetInboxAsync(MediaAcquisitionKind.Movie, inbox);
+        await host.SetDefaultRootAsync(LibraryContentType.Movie, host.Folder("movies"));
+        var adapter = new BlockingAdapter();
+        var service = host.InboxesWith(adapter);
+
+        var first = service.RunAsync(MediaAcquisitionKind.Movie, "owner", CancellationToken.None);
+        await adapter.Started.Task;
+        var second = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.RunAsync(MediaAcquisitionKind.Movie, "owner", CancellationToken.None));
+        StringAssert.Contains(second.Message, "already running");
+
+        adapter.Release.SetResult();
+        await first;
+        await service.RunAsync(MediaAcquisitionKind.Movie, "owner", CancellationToken.None);
+        Assert.AreEqual(2, adapter.Scans, "The next scan starts normally once the first finished.");
+    }
+
+    [TestMethod]
     public async Task InboxScanNeedsAConfiguredAvailableFolderAndHonoursDisabledModules()
     {
         await using var host = await Host.CreateAsync();
@@ -147,9 +185,10 @@ public sealed class MovieTvInboxImportTests
             var routing = new LibraryRootRoutingService(db);
             var storage = new CanonicalMediaStorageService(db);
             var hardLinks = new FileSystemHardLinkCreator();
-            var movieAdapter = new MovieCompletedDownloadImportAdapter(new MovieLibraryService(db, bridge), registry, routing, hardLinks, NullLogger<MovieCompletedDownloadImportAdapter>.Instance, storage);
+            var availability = new LibraryRootAvailabilityService(db, new StorageAvailabilityCoordinator());
+            var movieAdapter = new MovieCompletedDownloadImportAdapter(new MovieLibraryService(db, bridge), registry, routing, availability, hardLinks, NullLogger<MovieCompletedDownloadImportAdapter>.Instance, storage);
             var tvLibrary = new TvLibraryService(db, bridge, new WorkStructureService(db));
-            var tvAdapter = new TvCompletedDownloadImportAdapter(tvLibrary, registry, routing, hardLinks, NullLogger<TvCompletedDownloadImportAdapter>.Instance, storage);
+            var tvAdapter = new TvCompletedDownloadImportAdapter(tvLibrary, registry, routing, availability, hardLinks, NullLogger<TvCompletedDownloadImportAdapter>.Instance, storage);
             var provider = new ServiceCollection()
                 .AddSingleton(db)
                 .AddSingleton(routing)
@@ -185,6 +224,13 @@ public sealed class MovieTvInboxImportTests
             await routing.SetDefaultAsync(contentType, root.Id);
         }
 
+        public MediaInboxImportService InboxesWith(IMediaInboxImportAdapter adapter) =>
+            new(
+                services.GetRequiredService<AnimeImportSettingsStore>(),
+                [adapter],
+                services.GetRequiredService<OperationRunner>(),
+                services.GetRequiredService<LibraryRootRoutingService>());
+
         public MediaInboxImportService InboxesWithModules(InstanceModuleSettings settings) =>
             new(
                 services.GetRequiredService<AnimeImportSettingsStore>(),
@@ -203,6 +249,22 @@ public sealed class MovieTvInboxImportTests
             catch (IOException)
             {
             }
+        }
+    }
+
+    private sealed class BlockingAdapter : IMediaInboxImportAdapter
+    {
+        public MediaAcquisitionKind Kind => MediaAcquisitionKind.Movie;
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Scans { get; private set; }
+
+        public async Task<MediaInboxImportResult> ImportInboxAsync(string inboxRoot, IReadOnlyCollection<string> excludedFolders, CancellationToken cancellationToken)
+        {
+            Scans++;
+            Started.TrySetResult();
+            await Release.Task;
+            return new MediaInboxImportResult(0, "done");
         }
     }
 

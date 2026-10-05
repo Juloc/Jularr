@@ -98,12 +98,8 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        ManualGrabOutcome outcome;
-        try
-        {
-            outcome = await manualSearch.GrabAsync(id, unit, releaseIdentity.Trim(), cancellationToken);
-        }
-        catch (InvalidOperationException)
+        var outcome = await manualSearch.GrabAsync(id, unit, releaseIdentity.Trim(), cancellationToken);
+        if (outcome.Status == ManualGrabStatus.NotFound)
         {
             return NotFound();
         }
@@ -118,9 +114,11 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
         {
             ManualGrabStatus.NotSearchable => Ui["admin.manualSearch.grabNotSearchable"],
             ManualGrabStatus.ClientRejected => Ui["admin.manualSearch.grabClientRejected"],
+            ManualGrabStatus.TargetChanged => Ui["admin.manualSearch.grabTargetChanged"],
+            ManualGrabStatus.Unrecorded => Ui["admin.manualSearch.grabUnrecorded"],
             _ => Ui["admin.manualSearch.grabNotAvailable"]
         };
-        return RedirectToPage(new { id, unit, tab = "search" });
+        return RedirectToPage(new { id, unit = outcome.Status == ManualGrabStatus.TargetChanged ? null : unit, tab = "search" });
     }
 
     public static ManualSearchTab ParseTab(string? value) =>
@@ -147,6 +145,16 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
             >= 1024L * 1024 => $"{bytes.Value / (1024d * 1024):0.0} MB",
             _ => $"{bytes.Value / 1024d:0} KB"
         };
+
+    public static string TypeIcon(ManualSearchReleaseType type) =>
+        type switch
+        {
+            ManualSearchReleaseType.SeasonPack => "seasonPack",
+            ManualSearchReleaseType.Movie => "movie",
+            _ => "file"
+        };
+
+    public static string AgeText(UiTextBundle ui, int? days) => days is { } value ? ui.Format("admin.manualSearch.ageDays", ("days", value)) : "—";
 
     public static string VerdictName(ManualSearchVerdict verdict) => verdict.ToString().ToLowerInvariant();
 

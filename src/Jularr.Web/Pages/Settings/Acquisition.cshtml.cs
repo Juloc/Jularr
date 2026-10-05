@@ -50,7 +50,7 @@ public sealed class AcquisitionModel(
     /// <summary>The Storage-owned default destination of each importer-routed media type; a missing entry means imports of that type wait.</summary>
     public IReadOnlyDictionary<MediaAcquisitionKind, LibraryRootRoute> Destinations { get; private set; } = new Dictionary<MediaAcquisitionKind, LibraryRootRoute>();
 
-    /// <summary>Roots that serve a content type: their placement policy belongs to Storage, not to the import mode table of this page.</summary>
+    /// <summary>Roots that serve Movie or TV: their placement policy belongs to Storage. Anime roots keep their import mode override here.</summary>
     public IReadOnlySet<Guid> RoutedRootIds { get; private set; } = new HashSet<Guid>();
     public IReadOnlyList<IndexerEntry> IndexerEntries { get; private set; } = [];
     public bool AniListAutoMonitorEnabled { get; private set; }
@@ -172,11 +172,10 @@ public sealed class AcquisitionModel(
             return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "media-folders");
         }
 
-        // An inbox that is, contains or sits inside the destination root would import library files onto themselves.
+        // An inbox that is, contains or sits inside any library root would import library files onto themselves.
         if (inbox is not null &&
-            MediaInboxImportService.RoutedContentType(kind) is { } contentType &&
-            await routing.ResolveDefaultAsync(contentType, cancellationToken) is { } route &&
-            MediaInboxImportService.Overlaps(inbox, route.Path))
+            MediaInboxImportService.RoutedContentType(kind) is not null &&
+            await routing.FindOverlappingRootAsync(inbox, cancellationToken) is not null)
         {
             TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.inboxOverlapsDestination"];
             return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "media-folders");
@@ -630,7 +629,7 @@ public sealed class AcquisitionModel(
         ImportSettings = await importSettings.LoadAsync(cancellationToken);
         Policy = await policyStore.LoadAsync(cancellationToken);
         Roots = await db.LibraryRoots.AsNoTracking().OrderBy(root => root.Name).ToArrayAsync(cancellationToken);
-        RoutedRootIds = (await db.LibraryRootContentAssignments.AsNoTracking().Select(assignment => assignment.LibraryRootId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+        RoutedRootIds = (await db.LibraryRootContentAssignments.AsNoTracking().Where(assignment => assignment.ContentType != LibraryContentType.Anime).Select(assignment => assignment.LibraryRootId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
         var destinations = new Dictionary<MediaAcquisitionKind, LibraryRootRoute>();
         foreach (var kind in MediaInboxImportService.InboxKinds)
         {

@@ -19,6 +19,7 @@ public sealed partial class VideoManualSearchService(
     AcquisitionAccessStore requests,
     AcquisitionRequestService requestService,
     TimeProvider clock,
+    ILogger<VideoManualSearchService> logger,
     IInstanceModuleService? instanceModules = null)
 {
     private static readonly TimeSpan SearchCacheLifetime = TimeSpan.FromMinutes(2);
@@ -54,7 +55,7 @@ public sealed partial class VideoManualSearchService(
         var shown = ToTarget(request, target);
         if (!shown.CanSearch || request.Kind == MediaAcquisitionKind.Tv && target.Unit is null)
         {
-            return new ManualSearchResult(shown, [], [], VideoAcquisitionSetupProblem.None, Searched: false);
+            return new ManualSearchResult(shown, [], [], VideoAcquisitionSetupProblem.None, Searched: false, TargetChanged: target.UnitChanged);
         }
 
         var setupProblem = await engine.FindSetupProblemAsync(cancellationToken);
@@ -92,10 +93,11 @@ public sealed partial class VideoManualSearchService(
     }
 
     /// <summary>
-    /// Sends the selected release to the download client through the shared grab path. Idempotent: the release is claimed on the request
-    /// (tried) before it is submitted and the request leaves the searchable states with the grab, so a double submit, a second tab or a
-    /// concurrent request never creates a second download. Cancelling the resulting download keeps the usual meaning: the request fails
-    /// and nothing replaces the release automatically.
+    /// Sends the selected release to the download client through the shared grab path. Idempotent and race-safe: after the (slow) search
+    /// the request is claimed with one conditional status write that only succeeds while it still waits for a release, so a request
+    /// that was rejected, cancelled or grabbed by the scheduler meanwhile is never grabbed; a double submit, a second tab or a concurrent
+    /// request never creates a second download. Cancelling the resulting download keeps the usual meaning: the request fails and
+    /// nothing replaces the release automatically.
     /// </summary>
     public async Task<ManualGrabOutcome> GrabAsync(Guid requestId, Guid? unitId, string releaseIdentity, CancellationToken cancellationToken)
     {
@@ -105,9 +107,17 @@ public sealed partial class VideoManualSearchService(
         await gate.WaitAsync(cancellationToken);
         try
         {
-            var request = await FindSupportedRequestAsync(requestId, cancellationToken) ?? throw new InvalidOperationException("The request no longer exists.");
-            var target = await engine.ResolveManualTargetAsync(request, unitId, cancellationToken) ?? throw new InvalidOperationException("The canonical Work of this request no longer exists.");
+            var request = await FindSupportedRequestAsync(requestId, cancellationToken);
+            if (request is null || await engine.ResolveManualTargetAsync(request, unitId, cancellationToken) is not { } target)
+            {
+                return new ManualGrabOutcome(ManualGrabStatus.NotFound, null, request);
+            }
+
             var shown = ToTarget(request, target);
+            if (target.UnitChanged)
+            {
+                return new ManualGrabOutcome(ManualGrabStatus.TargetChanged, null, request);
+            }
 
             // The first submit already moved the request to Downloading, so a repeated selection of the same release lands here.
             if (shown.TriedReleases.Contains(releaseIdentity, StringComparer.OrdinalIgnoreCase))
@@ -128,11 +138,46 @@ public sealed partial class VideoManualSearchService(
                 return new ManualGrabOutcome(ManualGrabStatus.NotAvailable, null, request);
             }
 
-            var execution = await engine.GrabManualAsync(request, target, selected, cancellationToken);
-            var updated = await requestService.ApplyManualExecutionAsync(requestId, execution, cancellationToken);
-            return execution.Status == AcquisitionRequestStatus.Downloading
-                ? new ManualGrabOutcome(ManualGrabStatus.Submitted, execution.Message, updated)
-                : new ManualGrabOutcome(ManualGrabStatus.ClientRejected, execution.Message, updated);
+            // The search took seconds: claim the request only if it still waits for a release, then read it again so the grab works on
+            // what the claim froze, not on what was read before the search.
+            var waiting = new[] { AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed };
+            if (!await requests.TryUpdateStatusAsync(requestId, waiting, AcquisitionRequestStatus.Searching, null, cancellationToken))
+            {
+                return new ManualGrabOutcome(ManualGrabStatus.NotSearchable, null, await requests.GetAsync(requestId, cancellationToken) ?? request);
+            }
+
+            AcquisitionExecution execution;
+            try
+            {
+                var claimed = await requests.GetAsync(requestId, cancellationToken) ?? request;
+                var fresh = await engine.ResolveManualTargetAsync(claimed, unitId, cancellationToken) ?? target;
+                if ((fresh.Payload.TriedReleases ?? []).Contains(releaseIdentity, StringComparer.OrdinalIgnoreCase))
+                {
+                    await requests.TryUpdateStatusAsync(requestId, [AcquisitionRequestStatus.Searching], request.Status, request.StatusMessage, CancellationToken.None);
+                    return new ManualGrabOutcome(ManualGrabStatus.AlreadySubmitted, null, request);
+                }
+
+                execution = await engine.GrabManualAsync(claimed, fresh, selected, cancellationToken);
+            }
+            catch
+            {
+                // Nothing was recorded: give the request back so it is not stuck in Searching.
+                await requests.TryUpdateStatusAsync(requestId, [AcquisitionRequestStatus.Searching], request.Status, request.StatusMessage, CancellationToken.None);
+                throw;
+            }
+
+            try
+            {
+                var updated = await requestService.ApplyManualExecutionAsync(requestId, execution, cancellationToken);
+                return execution.Status == AcquisitionRequestStatus.Downloading
+                    ? new ManualGrabOutcome(ManualGrabStatus.Submitted, execution.Message, updated)
+                    : new ManualGrabOutcome(ManualGrabStatus.ClientRejected, execution.Message, updated);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogError(exception, "Manual grab for request {RequestId} was submitted but the request could not be updated.", requestId);
+                return new ManualGrabOutcome(ManualGrabStatus.Unrecorded, execution.Message, request);
+            }
         }
         finally
         {

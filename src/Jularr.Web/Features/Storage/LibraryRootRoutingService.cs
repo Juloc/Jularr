@@ -128,6 +128,11 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             throw new InvalidOperationException("A disabled LibraryRoot cannot be the default destination.");
         }
 
+        if (contentType != LibraryContentType.Anime)
+        {
+            await EnsureNoAnimeConflictAsync(root, cancellationToken);
+        }
+
         await SetSupportedAsync(libraryRootId, contentType, true, cancellationToken);
         await SetDefaultAsync(contentType, libraryRootId, cancellationToken);
 
@@ -137,6 +142,50 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             await db.SaveChangesAsync(cancellationToken);
         }
     }
+
+    /// <summary>The first LibraryRoot whose folder is, contains or lies inside <paramref name="path"/>.</summary>
+    public async Task<LibraryRoot?> FindOverlappingRootAsync(string path, CancellationToken cancellationToken = default) =>
+        (await db.LibraryRoots.AsNoTracking().ToListAsync(cancellationToken)).FirstOrDefault(root => StoragePaths.Overlaps(path, root.Path));
+
+    /// <summary>
+    /// Whether the Anime scanner reads this root: it has an explicit Anime assignment, or it has no assignment at all and already holds
+    /// Anime media (a pre-routing Anime root that was never assigned).
+    /// </summary>
+    public async Task<bool> ServesAnimeAsync(Guid libraryRootId, CancellationToken cancellationToken = default)
+    {
+        var assigned = await db.LibraryRootContentAssignments.AsNoTracking().Where(row => row.LibraryRootId == libraryRootId).Select(row => row.ContentType).ToListAsync(cancellationToken);
+        if (assigned.Count > 0)
+        {
+            return assigned.Contains(LibraryContentType.Anime);
+        }
+
+        return await db.StoredFiles.AsNoTracking().AnyAsync(file => file.LibraryRootId == libraryRootId && file.EpisodeId != null, cancellationToken)
+            || await (
+                from asset in db.MediaAssets.AsNoTracking()
+                join file in db.StoredFiles.AsNoTracking() on asset.Id equals file.MediaAssetId
+                join work in db.Works.AsNoTracking() on asset.WorkId equals work.Id
+                where file.LibraryRootId == libraryRootId && work.MediaType == Jularr.Web.Features.MediaCore.WorkMediaType.Anime
+                select asset.Id).AnyAsync(cancellationToken);
+    }
+
+    // A Movie or TV destination must never take over a root the Anime scanner reads, nor sit inside or around one: its folders would be
+    // scanned as Anime libraries or its files placed into an Anime tree.
+    private async Task EnsureNoAnimeConflictAsync(LibraryRoot root, CancellationToken cancellationToken)
+    {
+        if (await ServesAnimeAsync(root.Id, cancellationToken))
+        {
+            throw new LibraryRootConflictException($"LibraryRoot '{root.Name}' serves Anime and cannot also be a Movie or TV destination.");
+        }
+
+        var animeRoots = await db.LibraryRoots.AsNoTracking().Where(other => other.IsEnabled && other.Id != root.Id).ServingAnime(db).ToListAsync(cancellationToken);
+        if (animeRoots.FirstOrDefault(other => StoragePaths.Overlaps(root.Path, other.Path)) is { } overlapping)
+        {
+            throw new LibraryRootConflictException($"LibraryRoot '{root.Name}' overlaps the Anime root '{overlapping.Name}'.");
+        }
+    }
 }
+
+/// <summary>A LibraryRoot cannot take a content type because it conflicts with a root that serves another one.</summary>
+public sealed class LibraryRootConflictException(string message) : InvalidOperationException(message);
 
 public sealed record LibraryRootRoute(Guid LibraryRootId, string Name, string Path, LibraryPlacementPolicy PlacementPolicy, bool IsDefault, bool IsEnabled);

@@ -88,6 +88,10 @@ public sealed class IndexModel(
 
             TempData["Status"] = Ui["admin.storage.destinations.saved"];
         }
+        catch (LibraryRootConflictException)
+        {
+            TempData["StorageError"] = Ui["admin.storage.destinations.conflict"];
+        }
         catch (InvalidOperationException)
         {
             TempData["StorageError"] = Ui["admin.storage.destinations.failed"];

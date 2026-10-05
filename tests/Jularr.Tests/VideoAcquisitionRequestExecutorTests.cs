@@ -301,6 +301,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
             SabnzbdTestEnvironment environment,
             ServiceProvider services,
             IServiceCollection descriptors,
+            FixedIndexer indexer,
             RecordingVideoImporter importer,
             MediaAcquisitionKind kind,
             Work work,
@@ -310,6 +311,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
             Environment = environment;
             this.services = services;
             this.descriptors = descriptors;
+            Indexer = indexer;
             Importer = importer;
             Kind = kind;
             Work = work;
@@ -318,6 +320,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
         }
 
         public SabnzbdTestEnvironment Environment { get; }
+        public FixedIndexer Indexer { get; }
 
         /// <summary>The registrations behind <see cref="Get{T}"/>, for hosts that serve the same services over HTTP.</summary>
         public IServiceCollection Descriptors => descriptors;
@@ -405,10 +408,11 @@ public sealed class VideoAcquisitionRequestExecutorTests
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Select(x => Candidate(x!))
                 .ToArray();
+            var indexer = new FixedIndexer(candidates);
             var coordinator = new IndexerSearchCoordinator(
                 new Dictionary<IndexerType, IIndexer>
                 {
-                    [IndexerType.Newznab] = new FixedIndexer(candidates)
+                    [IndexerType.Newznab] = indexer
                 },
                 indexerStore,
                 new AcquisitionHealthStore(directory),
@@ -459,7 +463,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
                     .AddSingleton<IWantedRequestHandler, TvWantedRequestHandler>();
             }
 
-            return new Host(environment, services.BuildServiceProvider(), services, importer, kind, work, episode?.Id, secondEpisode?.Id);
+            return new Host(environment, services.BuildServiceProvider(), services, indexer, importer, kind, work, episode?.Id, secondEpisode?.Id);
         }
 
         /// <summary>An approved request that no scheduler pass has searched yet, as Manual Search finds it.</summary>
@@ -529,8 +533,11 @@ public sealed class VideoAcquisitionRequestExecutorTests
         }
     }
 
-    private sealed class FixedIndexer(IReadOnlyList<ProwlarrReleaseCandidate> releases) : IIndexer
+    internal sealed class FixedIndexer(IReadOnlyList<ProwlarrReleaseCandidate> releases) : IIndexer
     {
+        /// <summary>Runs while a search is in flight, to change the world under a slow search.</summary>
+        public Func<Task>? OnSearch { get; set; }
+
         public IndexerType Type => IndexerType.Newznab;
 
         public Task<IndexerConnectionTestResult> TestAsync(
@@ -538,11 +545,18 @@ public sealed class VideoAcquisitionRequestExecutorTests
             CancellationToken cancellationToken) =>
             Task.FromResult(new IndexerConnectionTestResult(true));
 
-        public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+        public async Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
             IndexerEntry entry,
             IndexerSearchQuery query,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(releases);
+            CancellationToken cancellationToken)
+        {
+            if (OnSearch is not null)
+            {
+                await OnSearch();
+            }
+
+            return releases;
+        }
     }
 
     internal sealed class RecordingVideoImporter(

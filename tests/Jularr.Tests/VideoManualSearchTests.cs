@@ -229,6 +229,62 @@ public sealed class VideoManualSearchTests
     }
 
     [TestMethod]
+    public async Task ARequestThatIsRejectedOrGrabbedDuringTheSearchIsNeverGrabbed()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var service = host.Get<VideoManualSearchService>();
+        var identity = Candidate((await service.SearchAsync(request.Id, null, refresh: true, CancellationToken.None))!, Dune).Identity;
+        var store = host.Get<AcquisitionAccessStore>();
+
+        host.Indexer.OnSearch = () => store.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Rejected, "Rejected meanwhile.", null, null, "owner", CancellationToken.None);
+        var rejected = await service.GrabAsync(request.Id, null, identity, CancellationToken.None);
+
+        Assert.AreEqual(ManualGrabStatus.NotSearchable, rejected.Status);
+        Assert.AreEqual(AcquisitionRequestStatus.Rejected, (await host.GetAsync(request.Id)).Status, "A rejected request is not forced to Downloading.");
+        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
+
+        await store.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Approved, null, null, null, "owner", CancellationToken.None);
+        host.Indexer.OnSearch = () => store.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Downloading, "Grabbed by the scheduler.", null, null, null, CancellationToken.None);
+        var grabbed = await service.GrabAsync(request.Id, null, identity, CancellationToken.None);
+
+        Assert.AreEqual(ManualGrabStatus.NotSearchable, grabbed.Status, "A request the scheduler already grabbed for is not grabbed twice.");
+        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
+    }
+
+    [TestMethod]
+    public async Task TheStatusClaimIsConditionalOnThePriorStatus()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var store = host.Get<AcquisitionAccessStore>();
+
+        Assert.IsFalse(await store.TryUpdateStatusAsync(request.Id, [AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending], AcquisitionRequestStatus.Searching, null, CancellationToken.None));
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, (await host.GetAsync(request.Id)).Status);
+        Assert.IsTrue(await store.TryUpdateStatusAsync(request.Id, [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed], AcquisitionRequestStatus.Searching, "Claimed.", CancellationToken.None));
+        Assert.IsFalse(await store.TryUpdateStatusAsync(request.Id, [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed], AcquisitionRequestStatus.Searching, null, CancellationToken.None), "Only one claimant wins.");
+    }
+
+    [TestMethod]
+    public async Task AStaleEpisodeIsRefusedInsteadOfSearchingAnotherOne()
+    {
+        await using var host = await TvHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var service = host.Get<VideoManualSearchService>();
+        var gone = Guid.NewGuid();
+
+        var result = await service.SearchAsync(request.Id, gone, refresh: true, CancellationToken.None);
+
+        Assert.IsFalse(result!.Searched);
+        Assert.IsTrue(result.TargetChanged);
+        Assert.IsNull(result.Target.Unit, "No other episode is silently substituted.");
+        Assert.AreEqual(2, result.Target.MissingUnits.Count);
+        var outcome = await service.GrabAsync(request.Id, gone, "release:1:whatever", CancellationToken.None);
+        Assert.AreEqual(ManualGrabStatus.TargetChanged, outcome.Status);
+        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
+    }
+
+    [TestMethod]
     public async Task ARequestThatIsNotWaitingForAReleaseIsNotSearchedOrGrabbed()
     {
         await using var host = await MovieHostAsync();
@@ -255,17 +311,19 @@ public sealed class VideoManualSearchTests
             host.Get<AcquisitionAccessStore>(),
             host.Get<AcquisitionRequestService>(),
             TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<VideoManualSearchService>.Instance,
             new FixedModules(InstanceModuleSettings.Default.With(InstanceModule.Movie, false)));
 
         Assert.IsNull(await disabled.LoadAsync(request.Id, null, CancellationToken.None));
         Assert.IsNull(await disabled.SearchAsync(request.Id, null, refresh: true, CancellationToken.None));
-        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => disabled.GrabAsync(request.Id, null, "release:1:x", CancellationToken.None));
+        Assert.AreEqual(ManualGrabStatus.NotFound, (await disabled.GrabAsync(request.Id, null, "release:1:x", CancellationToken.None)).Status);
 
         var enabled = new VideoManualSearchService(
             host.Get<VideoAcquisitionEngine>(),
             host.Get<AcquisitionAccessStore>(),
             host.Get<AcquisitionRequestService>(),
             TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<VideoManualSearchService>.Instance,
             new FixedModules(InstanceModuleSettings.Default.With(InstanceModule.Tv, false)));
         Assert.IsNotNull(await enabled.LoadAsync(request.Id, null, CancellationToken.None), "Disabling TV does not hide Movie.");
     }

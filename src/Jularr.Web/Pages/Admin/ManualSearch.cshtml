@@ -76,7 +76,7 @@
             }
         </div>
 
-        @if (target.Unit is not null && target.MissingUnits.Count > 1)
+        @if (target.MissingUnits.Count > 1 || result.TargetChanged && target.MissingUnits.Count > 0)
         {
             <form method="get" class="bms-unit-form">
                 <input type="hidden" name="id" value="@request.Id" />
@@ -86,7 +86,7 @@
                     <select name="unit">
                         @foreach (var option in target.MissingUnits)
                         {
-                            <option value="@option.Id" selected="@(option.Id == target.Unit.Id)">@option.Label</option>
+                            <option value="@option.Id" selected="@(option.Id == target.Unit?.Id)">@option.Label</option>
                         }
                     </select>
                 </label>
@@ -97,6 +97,10 @@
         @if (!target.CanSearch)
         {
             <p class="muted bms-empty">@ui["admin.manualSearch.notSearchable"]</p>
+        }
+        else if (result.TargetChanged)
+        {
+            <p class="metadata-error" role="alert">@ui["admin.manualSearch.unitChanged"]</p>
         }
         else if (result.SetupProblem == VideoAcquisitionSetupProblem.NoIndexer)
         {
@@ -255,9 +259,9 @@
                                                 <small>@candidate.ReleaseGroup</small>
                                             }
                                         </td>
-                                        <td><span class="bms-tag"><partial name="_ManualSearchIcon" model="@(candidate.ReleaseType == ManualSearchReleaseType.SeasonPack ? "seasonPack" : candidate.ReleaseType == ManualSearchReleaseType.Movie ? "movie" : "file")" />@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)]</span></td>
+                                        <td><span class="bms-tag"><partial name="_ManualSearchIcon" model="@ManualSearchModel.TypeIcon(candidate.ReleaseType)" />@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)]</span></td>
                                         <td>@(candidate.Indexer ?? "—")</td>
-                                        <td>@(candidate.AgeDays is { } age ? ui.Format("admin.manualSearch.ageDays", ("days", age)) : "—")</td>
+                                        <td>@ManualSearchModel.AgeText(ui, candidate.AgeDays)</td>
                                         <td>@ManualSearchModel.Size(candidate.SizeBytes)</td>
                                         <td>@(candidate.Quality ?? "—")</td>
                                         <td>@(candidate.AudioLanguages.Count > 0 ? string.Join(" / ", candidate.AudioLanguages) : "—")</td>
@@ -291,7 +295,7 @@
                                         <span class="bms-score bms-score-@verdict">@(candidate.Score?.ToString() ?? "–")</span>
                                     </div>
                                     <div class="bms-card-tags">
-                                        <span class="bms-tag"><partial name="_ManualSearchIcon" model="@(candidate.ReleaseType == ManualSearchReleaseType.SeasonPack ? "seasonPack" : candidate.ReleaseType == ManualSearchReleaseType.Movie ? "movie" : "file")" />@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)]</span>
+                                        <span class="bms-tag"><partial name="_ManualSearchIcon" model="@ManualSearchModel.TypeIcon(candidate.ReleaseType)" />@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)]</span>
                                         @if (candidate.Quality is not null)
                                         {
                                             <span class="bms-tag">@candidate.Quality</span>
@@ -302,7 +306,7 @@
                                         }
                                         <span class="bms-tag bms-tag-@verdict"><partial name="_ManualSearchIcon" model="verdict" />@ui[ManualSearchModel.ReasonKey(headline.Code)]</span>
                                     </div>
-                                    <small>@(candidate.Indexer ?? "—") · @ManualSearchModel.Size(candidate.SizeBytes) · @(candidate.AgeDays is { } mobileAge ? ui.Format("admin.manualSearch.ageDays", ("days", mobileAge)) : "—")@(candidate.ParsedUnit is null ? "" : " · " + candidate.ParsedUnit)</small>
+                                    <small>@(candidate.Indexer ?? "—") · @ManualSearchModel.Size(candidate.SizeBytes) · @ManualSearchModel.AgeText(ui, candidate.AgeDays)@(candidate.ParsedUnit is null ? "" : " · " + candidate.ParsedUnit)</small>
                                     <a class="button" asp-page="/Admin/ManualSearch" asp-route-id="@request.Id" asp-route-unit="@unitId" asp-route-tab="search"
                                        asp-route-q="@Model.Query" asp-route-state="@Model.State" asp-route-sort="@Model.Sort" asp-route-indexer="@Model.Indexer" asp-route-type="@Model.ReleaseType" asp-route-quality="@Model.Quality"
                                        asp-route-release="@candidate.Identity" aria-label="@ui["admin.manualSearch.inspect"]: @candidate.Title">@ui["admin.manualSearch.inspect"]</a>
@@ -328,7 +332,7 @@
                             <dl class="bms-facts">
                                 <div><dt>@ui["admin.manualSearch.col.score"]</dt><dd>@(chosen.Score?.ToString() ?? "–")</dd></div>
                                 <div><dt>@ui["admin.manualSearch.col.size"]</dt><dd>@ManualSearchModel.Size(chosen.SizeBytes)</dd></div>
-                                <div><dt>@ui["admin.manualSearch.col.age"]</dt><dd>@(chosen.AgeDays is { } selectedAge ? ui.Format("admin.manualSearch.ageDays", ("days", selectedAge)) : "—")</dd></div>
+                                <div><dt>@ui["admin.manualSearch.col.age"]</dt><dd>@ManualSearchModel.AgeText(ui, chosen.AgeDays)</dd></div>
                                 <div><dt>@ui["admin.manualSearch.filter.quality"]</dt><dd>@(chosen.Quality ?? "—")</dd></div>
                                 <div><dt>@ui["admin.manualSearch.col.language"]</dt><dd>@(chosen.AudioLanguages.Count > 0 ? string.Join(" / ", chosen.AudioLanguages) : "—")</dd></div>
                                 <div><dt>@ui["admin.manualSearch.subtitles"]</dt><dd>@(chosen.SubtitleLanguages.Count > 0 ? string.Join(" / ", chosen.SubtitleLanguages) : "—")</dd></div>

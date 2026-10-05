@@ -21,6 +21,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
     TvLibraryService series,
     MediaAcquisitionRegistry registry,
     LibraryRootRoutingService routing,
+    LibraryRootAvailabilityService availability,
     IHardLinkCreator hardLinks,
     ILogger<TvCompletedDownloadImportAdapter> logger,
     CanonicalMediaStorageService? canonicalStorage = null)
@@ -54,22 +55,25 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             return CompletedDownloadImportResult.RetryLater(LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Tv));
         }
 
-        if (!Directory.Exists(route.Path))
+        if (!await availability.IsReadyForImportAsync(route.LibraryRootId, cancellationToken))
         {
             return CompletedDownloadImportResult.RetryLater($"The TV library root '{route.Name}' is not available.");
         }
 
+        var placed = new List<PlacedEpisode>();
         try
         {
-            var placed = new List<PlacedEpisode>();
-            foreach (var video in videos)
+            // Episodes moved out of the source before a later one failed must still be attached: a retry only sees what is left in the source.
+            try
             {
-                placed.Add(await PlaceAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken));
+                foreach (var video in videos)
+                {
+                    placed.Add(await PlaceAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken));
+                }
             }
-
-            if (canonicalStorage is not null)
+            finally
             {
-                await canonicalStorage.AttachVideosAsync(placed.Select(episode => episode.Attachment).ToList(), cancellationToken);
+                await AttachPlacedAsync(placed);
             }
 
             await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, $"Imported {placed.Count} episode(s).");
@@ -81,6 +85,10 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (DestinationMismatchException exception)
+        {
+            return CompletedDownloadImportResult.NeedsReview(exception.Message);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or CrossDeviceLinkException)
         {
@@ -103,28 +111,39 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             return new MediaInboxImportResult(0, LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Tv));
         }
 
-        if (!Directory.Exists(route.Path))
+        if (!await availability.IsReadyForImportAsync(route.LibraryRootId, cancellationToken))
         {
             return new MediaInboxImportResult(0, $"The TV library root '{route.Name}' is not available.");
         }
 
         var placed = new List<PlacedEpisode>();
-        foreach (var file in files)
+        var skipped = new List<string>();
+        try
         {
-            if (!CompletedDownloadFiles.IsVideo(file.Path) || IsExcluded(file.Path, excludedFolders))
+            foreach (var file in files)
             {
-                continue;
+                if (!CompletedDownloadFiles.IsVideo(file.Path) || IsExcluded(file.Path, excludedFolders))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    placed.Add(await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken));
+                }
+                catch (DestinationMismatchException exception)
+                {
+                    skipped.Add(exception.Message);
+                }
             }
-
-            placed.Add(await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken));
         }
-
-        if (canonicalStorage is not null)
+        finally
         {
-            await canonicalStorage.AttachVideosAsync(placed.Select(episode => episode.Attachment).ToList(), cancellationToken);
+            await AttachPlacedAsync(placed);
         }
 
-        return new MediaInboxImportResult(placed.Count, placed.Count == 0 ? "No new episodes in the inbox." : $"Imported {placed.Count} episode(s) from the inbox.");
+        var message = placed.Count == 0 ? "No new episodes in the inbox." : $"Imported {placed.Count} episode(s) from the inbox.";
+        return new MediaInboxImportResult(placed.Count, skipped.Count == 0 ? message : $"{message} Skipped: {string.Join(" ", skipped)}");
     }
 
     /// <summary>
@@ -136,7 +155,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         var (action, allowFallback) = ImportFileTransfer.Resolve(ImportFileTransfer.ModeFor(route.PlacementPolicy));
         var seriesFolder = Path.Combine(route.Path, TvNaming.SeriesFolderName(meta.Series, meta.Year));
         var destination = Path.Combine(seriesFolder, TvNaming.SeasonFolderName(meta.Season), TvNaming.EpisodeFileName(meta.Series, meta.Season, meta.Episode, meta.EpisodeTitle, Path.GetExtension(videoPath)));
-        if (!MediaInboxImportService.IsBelow(destination, route.Path))
+        if (!StoragePaths.IsBelow(destination, route.Path))
         {
             throw new InvalidOperationException("The episode destination would leave its library root.");
         }
@@ -148,8 +167,21 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
             new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
         }
+        else if (!LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
+        {
+            throw new DestinationMismatchException(destination);
+        }
 
         return new PlacedEpisode(new CanonicalVideoAttachment(entry.WorkId, workEpisode.Id, Path.GetFullPath(destination), Path.GetFullPath(route.Path)), seriesFolder);
+    }
+
+    // Attaching is data safety, not part of the request: it runs to completion even when the import is being cancelled.
+    private async Task AttachPlacedAsync(List<PlacedEpisode> placed)
+    {
+        if (canonicalStorage is not null && placed.Count > 0)
+        {
+            await canonicalStorage.AttachVideosAsync(placed.Select(episode => episode.Attachment).ToList(), CancellationToken.None);
+        }
     }
 
     private EpisodeMetadata ResolveMetadata(CompletedDownloadImportRequest? request, string videoPath)

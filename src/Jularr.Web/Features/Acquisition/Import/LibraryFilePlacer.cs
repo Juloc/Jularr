@@ -43,6 +43,13 @@ public sealed class LibraryFilePlacer(ImportFileTransfer transfer)
             : null;
 
     /// <summary>
+    /// Whether an existing destination is the complete placement of the source: the sizes match, or the source is gone because a move
+    /// already finished. A crash mid-copy leaves a smaller destination that must never be taken for the placed file.
+    /// </summary>
+    public static bool IsCompletePlacement(string sourcePath, string destinationPath) =>
+        !File.Exists(sourcePath) || new FileInfo(sourcePath).Length == new FileInfo(destinationPath).Length;
+
+    /// <summary>
     /// Places the file. Returns the notes of the steps that did not block the import (a sidecar
     /// that stayed in the download folder, a replaced file that could not be deleted).
     /// </summary>
@@ -123,3 +130,7 @@ public sealed class LibraryFilePlacer(ImportFileTransfer transfer)
             Path.GetFullPath(path.Trim()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 }
+
+/// <summary>The destination of a placement already exists but is not a complete copy of the source (an interrupted copy, or another file of the same name).</summary>
+public sealed class DestinationMismatchException(string destinationPath)
+    : InvalidOperationException($"The library already has a different file at '{Path.GetFileName(destinationPath)}'. Remove it or import the release by hand.");

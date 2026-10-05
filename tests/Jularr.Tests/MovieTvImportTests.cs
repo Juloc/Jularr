@@ -49,6 +49,7 @@ public sealed class MovieTvImportTests
             new MovieLibraryService(db, Bridge(db)),
             Registry(),
             routing,
+            new LibraryRootAvailabilityService(db, new StorageAvailabilityCoordinator()),
             new FileSystemHardLinkCreator(),
             NullLogger<MovieCompletedDownloadImportAdapter>.Instance,
             new CanonicalMediaStorageService(db));
@@ -89,6 +90,7 @@ public sealed class MovieTvImportTests
             new TvLibraryService(db, Bridge(db), new WorkStructureService(db)),
             Registry(),
             routing,
+            new LibraryRootAvailabilityService(db, new StorageAvailabilityCoordinator()),
             new FileSystemHardLinkCreator(),
             NullLogger<TvCompletedDownloadImportAdapter>.Instance,
             new CanonicalMediaStorageService(db));
@@ -184,6 +186,7 @@ public sealed class MovieTvImportTests
             new MovieLibraryService(db, Bridge(db)),
             Registry(),
             routing,
+            new LibraryRootAvailabilityService(db, new StorageAvailabilityCoordinator()),
             new FileSystemHardLinkCreator(),
             NullLogger<MovieCompletedDownloadImportAdapter>.Instance,
             new CanonicalMediaStorageService(db));

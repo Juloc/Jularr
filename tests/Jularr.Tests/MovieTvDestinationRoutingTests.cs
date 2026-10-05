@@ -28,13 +28,16 @@ public sealed class MovieTvDestinationRoutingTests
 
     private static LegacyWorkBridge Bridge(AppDbContext db) => new(db, new WorkService(db), new WorkStructureService(db));
 
-    private static MovieCompletedDownloadImportAdapter MovieAdapter(AppDbContext db) =>
-        new(new MovieLibraryService(db, Bridge(db)), Registry(), new LibraryRootRoutingService(db), new FileSystemHardLinkCreator(), NullLogger<MovieCompletedDownloadImportAdapter>.Instance, new CanonicalMediaStorageService(db));
+    private static MovieCompletedDownloadImportAdapter MovieAdapter(AppDbContext db)
+    {
+        var availability = new LibraryRootAvailabilityService(db, new StorageAvailabilityCoordinator());
+        return new(new MovieLibraryService(db, Bridge(db)), Registry(), new LibraryRootRoutingService(db), availability, new FileSystemHardLinkCreator(), NullLogger<MovieCompletedDownloadImportAdapter>.Instance, new CanonicalMediaStorageService(db));
+    }
 
     private static TvCompletedDownloadImportAdapter TvAdapter(AppDbContext db)
     {
         var series = new TvLibraryService(db, Bridge(db), new WorkStructureService(db));
-        return new(series, Registry(), new LibraryRootRoutingService(db), new FileSystemHardLinkCreator(), NullLogger<TvCompletedDownloadImportAdapter>.Instance, new CanonicalMediaStorageService(db));
+        return new(series, Registry(), new LibraryRootRoutingService(db), new LibraryRootAvailabilityService(db, new StorageAvailabilityCoordinator()), new FileSystemHardLinkCreator(), NullLogger<TvCompletedDownloadImportAdapter>.Instance, new CanonicalMediaStorageService(db));
     }
 
     private static CompletedDownloadImportRequest Download(string path, MediaAcquisitionKind kind) => new(null, null, path, kind);
@@ -232,6 +235,210 @@ public sealed class MovieTvDestinationRoutingTests
     }
 
     [TestMethod]
+    public async Task AMovieFolderThatIsTheAnimeRootKeepsAnimeScannedAndGetsNoDefault()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var temp = new TempFolders();
+        var shared = temp.Dir("media");
+        var anime = new LibraryRoot { Name = "Anime", Path = shared };
+        db.LibraryRoots.Add(anime);
+        await db.SaveChangesAsync();
+        var routing = new LibraryRootRoutingService(db);
+        var store = new AnimeImportSettingsStore(temp.Root);
+        await store.UpdateAsync(state => state with
+        {
+            Version = MediaFolderSettingsMigration.MediaFoldersVersion,
+            MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget> { [MediaAcquisitionKind.Movie] = new(LibraryRoot: shared) }
+        });
+        var log = new List<string>();
+
+        var migrated = await VideoLibraryRootMigration.MigrateAsync(store, db, routing, log.Add);
+
+        Assert.AreEqual(0, migrated);
+        Assert.IsNull(await routing.ResolveDefaultAsync(LibraryContentType.Movie), "The Movie folder was an Anime root: the import waits for an explicit choice.");
+        Assert.IsTrue(await routing.ServesAnimeAsync(anime.Id));
+        CollectionAssert.AreEqual(new[] { LibraryContentType.Anime }, (await db.LibraryRootContentAssignments.Where(row => row.LibraryRootId == anime.Id).Select(row => row.ContentType).ToListAsync()).ToArray());
+        Assert.AreEqual(1, await db.LibraryRoots.ServingAnime(db).CountAsync(), "The Anime root is still scanned.");
+        StringAssert.Contains(log.Single(), "Admin → Storage");
+        Assert.AreEqual(VideoLibraryRootMigration.CanonicalVideoRootsVersion, (await store.LoadAsync()).Version);
+        Assert.AreEqual(1, await db.LibraryRoots.CountAsync(), "No extra root is created for a refused folder.");
+    }
+
+    [TestMethod]
+    public async Task StorageRefusesAnimeNestedAndParentRootsAsMovieOrTvDestination()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var temp = new TempFolders();
+        var animePath = temp.Dir("anime");
+        var anime = new LibraryRoot { Name = "Anime", Path = animePath };
+        var nested = new LibraryRoot { Name = "Nested", Path = Directory.CreateDirectory(Path.Combine(animePath, "movies")).FullName };
+        var parent = new LibraryRoot { Name = "Parent", Path = temp.Root };
+        var holdsAnime = new LibraryRoot { Name = "Legacy", Path = temp.Dir("legacy") };
+        using var elsewhere = new TempFolders();
+        var clean = new LibraryRoot { Name = "Clean", Path = elsewhere.Dir("clean") };
+        db.LibraryRoots.AddRange(anime, nested, parent, holdsAnime, clean);
+        await db.SaveChangesAsync();
+        var routing = new LibraryRootRoutingService(db);
+        await routing.SetSupportedAsync(anime.Id, LibraryContentType.Anime, true);
+        var show = new Anime { Key = "frieren", Title = "Frieren" };
+        var episode = new Episode { AnimeId = show.Id, Number = 1 };
+        db.AddRange(show, episode);
+        await db.SaveChangesAsync();
+        db.StoredFiles.Add(new StoredFile { LibraryRootId = holdsAnime.Id, EpisodeId = episode.Id, Path = Path.Combine(holdsAnime.Path, "x.mkv") });
+        await db.SaveChangesAsync();
+
+        foreach (var root in new[] { anime, nested, parent, holdsAnime })
+        {
+            await Assert.ThrowsExactlyAsync<LibraryRootConflictException>(() => routing.AssignDefaultAsync(LibraryContentType.Movie, root.Id, LibraryPlacementPolicy.Copy), root.Name);
+        }
+
+        Assert.IsNull(await routing.ResolveDefaultAsync(LibraryContentType.Movie));
+        await routing.AssignDefaultAsync(LibraryContentType.Movie, clean.Id, LibraryPlacementPolicy.Copy);
+        Assert.AreEqual(clean.Id, (await routing.ResolveDefaultAsync(LibraryContentType.Movie))!.LibraryRootId);
+    }
+
+    [TestMethod]
+    public async Task AnUnmountedLibraryRootWaitsInsteadOfWritingOntoTheLocalMountPoint()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var temp = new TempFolders();
+        var download = temp.Dir("download");
+        var source = Path.Combine(download, Inception);
+        File.WriteAllText(source, "video");
+        var mountPoint = temp.Dir("nas");
+        await MovieTvImportTests.RoutingWithDefaultAsync(db, LibraryContentType.Movie, mountPoint, LibraryPlacementPolicy.Move);
+        var root = await db.LibraryRoots.SingleAsync();
+        db.StoredFiles.Add(new StoredFile { LibraryRootId = root.Id, Path = Path.Combine(mountPoint, "Known (2000)", "Known (2000).mkv") });
+        await db.SaveChangesAsync();
+
+        var result = await MovieAdapter(db).ImportAsync(Download(download, MediaAcquisitionKind.Movie), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.RetryLater, result.Disposition, "A mount point that is empty although the root holds known media is an unmounted NAS.");
+        Assert.IsTrue(File.Exists(source), "Nothing is moved towards an offline mount.");
+        Assert.AreEqual(0, Directory.GetFileSystemEntries(mountPoint).Length);
+    }
+
+    [TestMethod]
+    public async Task AFailedLaterEpisodeStillAttachesTheEpisodesAlreadyMovedOutOfTheSource()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var temp = new TempFolders();
+        var download = temp.Dir("download");
+        File.WriteAllText(Path.Combine(download, "Breaking.Bad.S01E01.1080p.BluRay.x264-GROUP.mkv"), "one");
+        File.WriteAllText(Path.Combine(download, "Breaking.Bad.S01E02.1080p.BluRay.x264-GROUP.mkv"), "two");
+        var library = temp.Dir("library");
+        await MovieTvImportTests.RoutingWithDefaultAsync(db, LibraryContentType.Tv, library, LibraryPlacementPolicy.Move);
+
+        // A directory where the second episode must go makes its move fail after the first one already left the source.
+        Directory.CreateDirectory(Path.Combine(library, "Breaking Bad", "Season 01", "Breaking Bad - S01E02.mkv"));
+
+        var result = await TvAdapter(db).ImportAsync(Download(download, MediaAcquisitionKind.Tv), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.RetryLater, result.Disposition);
+        Assert.IsFalse(File.Exists(Path.Combine(download, "Breaking.Bad.S01E01.1080p.BluRay.x264-GROUP.mkv")), "The first episode was moved.");
+        var attached = await db.StoredFiles.Select(file => file.Path).ToListAsync();
+        Assert.AreEqual(1, attached.Count, "The moved episode is attached even though the import is retried later.");
+        StringAssert.EndsWith(attached[0], "Breaking Bad - S01E01.mkv");
+    }
+
+    [TestMethod]
+    public async Task AnInterruptedCopyIsNeverTakenForThePlacedFile()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var temp = new TempFolders();
+        var download = temp.Dir("download");
+        var movieSource = Path.Combine(download, Inception);
+        File.WriteAllText(movieSource, "the complete movie file");
+        var library = temp.Dir("library");
+        await MovieTvImportTests.RoutingWithDefaultAsync(db, LibraryContentType.Movie, library, LibraryPlacementPolicy.Copy);
+        var partial = Path.Combine(library, "Inception (2010)", "Inception (2010).mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(partial)!);
+        File.WriteAllText(partial, "the compl");
+
+        var movie = await MovieAdapter(db).ImportAsync(Download(download, MediaAcquisitionKind.Movie), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.NeedsReview, movie.Disposition);
+        StringAssert.Contains(movie.Message, "different file");
+        Assert.AreEqual("the compl", File.ReadAllText(partial), "The existing file is left alone, never deleted or attached.");
+        Assert.IsTrue(File.Exists(movieSource), "The source stays so nothing is lost.");
+        Assert.AreEqual(0, await db.StoredFiles.CountAsync());
+
+        var tvDownload = temp.Dir("download-tv");
+        File.WriteAllText(Path.Combine(tvDownload, BreakingBad), "the complete episode");
+        var tvLibrary = temp.Dir("tv");
+        await MovieTvImportTests.RoutingWithDefaultAsync(db, LibraryContentType.Tv, tvLibrary, LibraryPlacementPolicy.Copy);
+        var tvPartial = Path.Combine(tvLibrary, "Breaking Bad", "Season 01", "Breaking Bad - S01E02.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(tvPartial)!);
+        File.WriteAllText(tvPartial, "the");
+
+        var tv = await TvAdapter(db).ImportAsync(Download(tvDownload, MediaAcquisitionKind.Tv), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.NeedsReview, tv.Disposition);
+        Assert.AreEqual(0, await db.StoredFiles.CountAsync());
+    }
+
+    [TestMethod]
+    public async Task AMigrationThatCannotRouteAFolderStillCompletesAndTellsTheOwner()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var temp = new TempFolders();
+        var disabled = new LibraryRoot { Name = "Disabled", Path = temp.Dir("old-movies"), IsEnabled = false };
+        db.LibraryRoots.Add(disabled);
+        await db.SaveChangesAsync();
+        var routing = new LibraryRootRoutingService(db);
+        await routing.SetSupportedAsync(disabled.Id, LibraryContentType.Tv, true);
+        var store = new AnimeImportSettingsStore(temp.Root);
+        await store.UpdateAsync(state => state with
+        {
+            Version = MediaFolderSettingsMigration.MediaFoldersVersion,
+            MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>
+            {
+                [MediaAcquisitionKind.Movie] = new(LibraryRoot: disabled.Path, InboxRoot: "/inbox"),
+                [MediaAcquisitionKind.Tv] = new(LibraryRoot: "bad\0path")
+            }
+        });
+        var log = new List<string>();
+
+        var migrated = await VideoLibraryRootMigration.MigrateAsync(store, db, routing, log.Add);
+
+        Assert.AreEqual(0, migrated);
+        Assert.AreEqual(2, log.Count);
+        Assert.IsTrue(log.All(line => line.Contains("Admin → Storage", StringComparison.Ordinal)));
+        var state = await store.LoadAsync();
+        Assert.AreEqual(VideoLibraryRootMigration.CanonicalVideoRootsVersion, state.Version, "A bad legacy value never makes startup fail on every boot.");
+        Assert.IsNull(state.LibraryFor(MediaAcquisitionKind.Movie));
+        Assert.AreEqual("/inbox", state.InboxFor(MediaAcquisitionKind.Movie));
+        Assert.IsFalse((await db.LibraryRoots.AsNoTracking().SingleAsync()).IsEnabled);
+        Assert.AreEqual(0, await VideoLibraryRootMigration.MigrateAsync(store, db, routing, log.Add));
+    }
+
+    [TestMethod]
+    public async Task MovieAndTvOnOneRootLogThatTheSecondImportModeIsDropped()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var temp = new TempFolders();
+        var shared = temp.Dir("video");
+        var store = new AnimeImportSettingsStore(temp.Root);
+        await store.UpdateAsync(state => state with
+        {
+            Version = MediaFolderSettingsMigration.MediaFoldersVersion,
+            MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>
+            {
+                [MediaAcquisitionKind.Movie] = new(LibraryRoot: shared, ImportMode: ImportMode.Move),
+                [MediaAcquisitionKind.Tv] = new(LibraryRoot: shared, ImportMode: ImportMode.Copy)
+            }
+        });
+        var log = new List<string>();
+        var routing = new LibraryRootRoutingService(db);
+
+        Assert.AreEqual(2, await VideoLibraryRootMigration.MigrateAsync(store, db, routing, log.Add));
+
+        Assert.AreEqual(1, await db.LibraryRoots.CountAsync());
+        Assert.AreEqual(LibraryPlacementPolicy.Move, (await routing.ResolveDefaultAsync(LibraryContentType.Tv))!.PlacementPolicy);
+        StringAssert.Contains(log.Single(), "dropped");
+    }
+
+    [TestMethod]
     public async Task OneTimeMigrationMovesTheLegacyFolderAndImportModeIntoStorageWithoutMovingMedia()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
@@ -301,11 +508,11 @@ public sealed class MovieTvDestinationRoutingTests
         await VideoLibraryRootMigration.MigrateAsync(store, db, routing);
 
         Assert.AreEqual(chosen.Id, (await routing.ResolveDefaultAsync(LibraryContentType.Movie))!.LibraryRootId, "A default the owner chose in Storage is never replaced.");
-        Assert.AreEqual(2, (await routing.ListAsync(LibraryContentType.Movie)).Count, "The old folder is still offered as a supporting root.");
+        Assert.AreEqual(1, (await routing.ListAsync(LibraryContentType.Movie)).Count, "A legacy folder never adds a root once Storage has a default.");
         var tv = await routing.ResolveDefaultAsync(LibraryContentType.Tv);
         Assert.AreEqual(implicitRoot.Id, tv!.LibraryRootId, "A disabled root created by an older in-place import is adopted instead of duplicated.");
         Assert.AreEqual(LibraryPlacementPolicy.Move, tv.PlacementPolicy);
-        Assert.AreEqual(3, await db.LibraryRoots.CountAsync());
+        Assert.AreEqual(2, await db.LibraryRoots.CountAsync());
     }
 
     [TestMethod]

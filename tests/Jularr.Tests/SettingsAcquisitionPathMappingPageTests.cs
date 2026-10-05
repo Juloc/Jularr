@@ -362,6 +362,25 @@ public sealed class SettingsAcquisitionPathMappingPageTests
     }
 
     [TestMethod]
+    public async Task AnAnimeRootKeepsItsEditableImportModeWhileMovieRootsPointToStorage()
+    {
+        await using var host = await ManageSheetPageTestHost.CreateAsync();
+        var anime = new LibraryRoot { Name = "Anime Library", Path = "/srv/anime" };
+        var cinema = new LibraryRoot { Name = "Cinema", Path = "/srv/cinema" };
+        host.Db.LibraryRoots.AddRange(anime, cinema);
+        await host.Db.SaveChangesAsync();
+        var routing = new LibraryRootRoutingService(host.Db);
+        await routing.SetSupportedAsync(anime.Id, LibraryContentType.Anime, true);
+        await routing.SetSupportedAsync(cinema.Id, LibraryContentType.Movie, true);
+
+        var html = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: true);
+
+        Assert.AreEqual(1, Occurrences(html, "name=\"rootImportMode\""), "Only the Anime root has an import mode override form.");
+        Assert.AreEqual(1, Occurrences(html, "Set in Storage"));
+        StringAssert.Contains(html, $"name=\"rootId\" value=\"{anime.Id}\"");
+    }
+
+    [TestMethod]
     public async Task EveryStoragePathFieldOpensTheOneFolderBrowserForTheOwnerOnly()
     {
         await using var host = await ManageSheetPageTestHost.CreateAsync();

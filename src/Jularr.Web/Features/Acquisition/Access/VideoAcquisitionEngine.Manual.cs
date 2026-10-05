@@ -11,7 +11,8 @@ public sealed record VideoManualTarget(
     VideoUnit? Unit,
     IReadOnlyList<VideoUnit> MissingUnits,
     QualityProfile Profile,
-    bool HasLocalFile);
+    bool HasLocalFile,
+    bool UnitChanged = false);
 
 // Manual Search entry points of the shared Movie/TV engine. They reuse the search, scoring and grab code of automatic acquisition
 // so the owner sees exactly what the scheduler would see and a manual grab is submitted through the same download path.
@@ -38,8 +39,9 @@ public sealed partial class VideoAcquisitionEngine
     }
 
     /// <summary>
-    /// Resolves what Manual Search looks for: the canonical Work of the request and, for TV, one missing aired episode. The requested
-    /// episode wins when it is still missing; otherwise the episode the request is working on, then the next missing one.
+    /// Resolves what Manual Search looks for: the canonical Work of the request and, for TV, one missing aired episode. A requested
+    /// episode that is no longer missing is reported as <see cref="VideoManualTarget.UnitChanged"/> with no episode, so a stale link
+    /// never silently searches or grabs another one; without a request the episode the request is working on, then the next missing one.
     /// Returns null when the canonical Work behind the request no longer exists.
     /// </summary>
     public async Task<VideoManualTarget?> ResolveManualTargetAsync(AcquisitionRequest request, Guid? requestedUnitId, CancellationToken cancellationToken)
@@ -55,7 +57,7 @@ public sealed partial class VideoAcquisitionEngine
             return null;
         }
 
-        var payload = (ReadPayload(request) ?? DefaultPayload(request, target)) with { WorkId = target.WorkId, Title = target.Title, Year = target.Year };
+        var payload = VideoRequestPayload.Of(request, target.WorkId, target.Title, target.Year);
         var profile = await profiles.ResolveAsync(request.Kind, target.WorkId, cancellationToken);
         if (request.Kind == MediaAcquisitionKind.Movie)
         {
@@ -64,8 +66,13 @@ public sealed partial class VideoAcquisitionEngine
 
         var now = clock.GetUtcNow().UtcDateTime;
         var missing = (await LoadTvUnitsAsync(target.WorkId, cancellationToken)).Where(x => !x.HasFile && (x.AiredAt is null || x.AiredAt <= now)).ToArray();
-        var unit = missing.FirstOrDefault(x => x.Id == requestedUnitId)
-                   ?? missing.FirstOrDefault(x => x.Id == payload.ActiveWorkEpisodeId)
+        if (requestedUnitId is not null)
+        {
+            var requested = missing.FirstOrDefault(x => x.Id == requestedUnitId);
+            return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, requested, missing, profile, HasLocalFile: false, UnitChanged: requested is null);
+        }
+
+        var unit = missing.FirstOrDefault(x => x.Id == payload.ActiveWorkEpisodeId)
                    ?? await FindNextTvUnitAsync(request, payload, cancellationToken)
                    ?? missing.FirstOrDefault();
         return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, unit, missing, profile, HasLocalFile: false);

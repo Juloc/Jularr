@@ -92,7 +92,8 @@ public sealed record ManualSearchResult(
     IReadOnlyList<ManualSearchCandidate> Candidates,
     IReadOnlyList<ManualSearchIndexerWarning> Warnings,
     VideoAcquisitionSetupProblem SetupProblem,
-    bool Searched);
+    bool Searched,
+    bool TargetChanged = false);
 
 public enum ManualGrabStatus
 {
@@ -105,6 +106,15 @@ public enum ManualGrabStatus
     /// <summary>The request is not waiting for a release any more.</summary>
     NotSearchable,
 
+    /// <summary>The request or its canonical Work does not exist (any more) or its module is disabled.</summary>
+    NotFound,
+
+    /// <summary>The requested episode is no longer missing; the owner must choose the target again.</summary>
+    TargetChanged,
+
+    /// <summary>The release was sent to the download client but the request could not be updated; the download is visible under Operations.</summary>
+    Unrecorded,
+
     /// <summary>The candidate is rejected, tried or no longer returned by the indexers.</summary>
     NotAvailable,
 
@@ -112,4 +122,4 @@ public enum ManualGrabStatus
     ClientRejected
 }
 
-public sealed record ManualGrabOutcome(ManualGrabStatus Status, string? Message, AcquisitionRequest Request);
+public sealed record ManualGrabOutcome(ManualGrabStatus Status, string? Message, AcquisitionRequest? Request);

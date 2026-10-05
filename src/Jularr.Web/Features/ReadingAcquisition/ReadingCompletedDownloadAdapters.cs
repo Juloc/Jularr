@@ -9,6 +9,7 @@ using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Naming;
 using Jularr.Web.Features.Novels;
+using Jularr.Web.Features.Storage;
 
 namespace Jularr.Web.Features.ReadingAcquisition;
 
@@ -239,7 +240,7 @@ public sealed class MangaCompletedDownloadImportAdapter(
             .Where(entry => Directory.Exists(entry) || MangaImportService.IsImportableFile(entry))
             .Where(entry => !excludedFolders.Any(folder =>
                 MangaLibraryPlacement.SamePath(entry, folder) ||
-                MediaInboxImportService.IsBelow(folder, entry)))
+                StoragePaths.IsBelow(folder, entry)))
             .Order(StringComparer.Ordinal)
             .ToArray();
 

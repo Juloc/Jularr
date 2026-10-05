@@ -152,6 +152,28 @@ public sealed class ManualSearchPageTests
     }
 
     [TestMethod]
+    public async Task AStaleEpisodeLinkShowsTheChangedTargetInsteadOfSearching()
+    {
+        await using var video = await VideoAcquisitionRequestExecutorTests.Host.CreateAsync(
+            MediaAcquisitionKind.Tv,
+            "Severance",
+            2022,
+            "95396",
+            "Severance.S01E02.1080p.WEB-DL.x264-GROUP",
+            addEpisode: true,
+            addSecondEpisode: true);
+        var request = await video.CreateApprovedAsync();
+        await using var page = await PageHost.CreateAsync(video);
+
+        var html = await page.GetHtmlAsync($"/Admin/ManualSearch?id={request.Id}&unit={Guid.NewGuid()}");
+
+        StringAssert.Contains(html, "no longer missing");
+        StringAssert.Contains(html, "name=\"unit\"");
+        Assert.IsFalse(html.Contains("bms-table", StringComparison.Ordinal));
+        Assert.AreEqual(0, video.Environment.Client.Grabs.Count);
+    }
+
+    [TestMethod]
     public async Task SelectingTwiceSendsOneDownloadAndAnUnavailableReleaseLeavesAnExplanation()
     {
         await using var video = await MovieHostAsync();

@@ -433,6 +433,11 @@ public sealed class LibraryRootAvailabilityService(
         return snapshot;
     }
 
+    // An import needs its destination storage now: a sleeping Wake-on-LAN NAS is started and the import waits for the bounded start
+    // attempt. False when the root is gone or still not readable, so no file is written or moved onto an unmounted mount point.
+    public async Task<bool> IsReadyForImportAsync(Guid rootId, CancellationToken cancellationToken) =>
+        await RequireAsync(rootId, waitForStart: true, cancellationToken) is { IsAvailable: true };
+
     // Returns the root's state for a media-dependent operation. A readable root is returned as
     // is; a Wake-on-LAN root that is not readable is woken through the shared start attempt of
     // StorageWakeCoordinator (concurrent callers join one attempt). With waitForStart the call
