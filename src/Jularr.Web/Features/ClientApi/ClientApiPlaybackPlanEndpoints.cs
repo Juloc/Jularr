@@ -539,6 +539,33 @@ public static class ClientApiPlaybackPlanEndpoints
         })
         .RequireRateLimiting(RateLimitPolicy);
 
+        // Ephemeral runtime telemetry of a playing client (buffer, throughput, stalls). Never written to the database; a repeated or
+        // older report is ignored and answers like a new one, so a retried request changes nothing.
+        group.MapPut("/stream-sessions/{sessionId:guid}/telemetry", async (
+            Guid sessionId,
+            HttpRequest request,
+            PlaybackStreamSessionStore sessions,
+            TimeProvider time,
+            CurrentAccountContext currentAccount,
+            CancellationToken cancellationToken) =>
+        {
+            var (update, tooLarge) = await ReadTelemetryAsync(request, cancellationToken);
+            if (tooLarge)
+            {
+                return Results.Json(new ClientErrorResponse("telemetry_too_large", $"A telemetry report is at most {PlaybackTelemetryRules.MaxBodyBytes} bytes."), statusCode: StatusCodes.Status413PayloadTooLarge);
+            }
+
+            if (update is null || !PlaybackTelemetryRules.TryValidate(update, time.GetUtcNow(), out var report))
+            {
+                return Results.BadRequest(new ClientErrorResponse(
+                    "invalid_telemetry",
+                    "sequence, state, bufferAheadSeconds, stallCount, stallTotalMs and positionSeconds are required and must be non-negative, finite values a player can observe."));
+            }
+
+            return sessions.ReportTelemetry(sessionId, currentAccount.ProfileId, report) ? Results.NoContent() : SessionNotFound();
+        })
+        .RequireRateLimiting(PlaybackDecisionRegistration.TelemetryRateLimitPolicy);
+
         group.MapDelete("/stream-sessions/{sessionId:guid}", async (
             Guid sessionId,
             PlaybackStreamSessionStore sessions,
@@ -825,6 +852,42 @@ public static class ClientApiPlaybackPlanEndpoints
             : requested.Value;
         return true;
     }
+
+    /// <summary>
+    /// Reads the report body, never more than <see cref="PlaybackTelemetryRules.MaxBodyBytes"/>, whatever the host's own request limit is:
+    /// a larger body is reported as too large and a body that is not a report as null.
+    /// </summary>
+    private static async Task<(PlaybackTelemetryUpdate? Update, bool TooLarge)> ReadTelemetryAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[PlaybackTelemetryRules.MaxBodyBytes + 1];
+        var length = 0;
+        while (length < buffer.Length)
+        {
+            var read = await request.Body.ReadAsync(buffer.AsMemory(length), cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            length += read;
+        }
+
+        if (length > PlaybackTelemetryRules.MaxBodyBytes)
+        {
+            return (null, true);
+        }
+
+        try
+        {
+            return (JsonSerializer.Deserialize<PlaybackTelemetryUpdate>(buffer.AsSpan(0, length), s_telemetryJson), false);
+        }
+        catch (JsonException)
+        {
+            return (null, false);
+        }
+    }
+
+    private static readonly JsonSerializerOptions s_telemetryJson = new(JsonSerializerDefaults.Web);
 
     private static IResult SessionNotFound() =>
         Results.NotFound(new ClientErrorResponse(

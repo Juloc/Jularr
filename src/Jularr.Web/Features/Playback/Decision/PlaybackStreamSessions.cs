@@ -132,6 +132,9 @@ public sealed class PlaybackStreamSession(
     public Guid? HlsSessionId { get; private set; }
     public double? HlsStartSeconds { get; private set; }
 
+    /// <summary>What the player reported about this session's playback; ephemeral, never persisted.</summary>
+    public PlaybackSessionTelemetry Telemetry { get; } = new();
+
     public void Touch(DateTimeOffset now)
     {
         lock (gate)
@@ -330,6 +333,31 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         time.GetUtcNow() - session.LastSeenUtc <= IdleLifetime
             ? session
             : null;
+
+    /// <summary>
+    /// Stores a telemetry report of the profile's session; false when the session is not the profile's or expired. A player that
+    /// plays on or keeps waiting for media is using the session, so a report showing that counts as activity like a stream request does.
+    /// A paused player, a repeated or older report and a report that shows no progress (see <see cref="PlaybackSessionTelemetry.Apply"/>) do not:
+    /// telemetry never keeps an abandoned session, its slot and its process alive.
+    /// </summary>
+    public bool ReportTelemetry(Guid sessionId, string profileId, PlaybackTelemetry report)
+    {
+        var session = Peek(sessionId, profileId);
+        if (session is null)
+        {
+            return false;
+        }
+
+        if (session.Telemetry.Apply(report) == PlaybackTelemetryOutcome.ShowsProgress)
+        {
+            session.Touch(time.GetUtcNow());
+        }
+
+        return true;
+    }
+
+    /// <summary>The runtime evidence the session's player reported, as of now; null when it never reported.</summary>
+    public PlaybackTelemetryEvidence? TelemetryEvidence(PlaybackStreamSession session) => session.Telemetry.Evidence(time.GetUtcNow());
 
     /// <summary>Returns the session only to the profile that created it.</summary>
     public PlaybackStreamSession? Get(Guid sessionId, string profileId)

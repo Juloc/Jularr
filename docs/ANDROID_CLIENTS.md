@@ -304,6 +304,7 @@ Advertised by `playbackPlan`. Every client — web, installed PWA, phone, TV —
 POST   /api/client/v1/episodes/{episodeId}/playback-plan
 GET    /api/client/v1/stream-sessions/{sessionId}/stream?startSeconds={seconds}   (progressive fMP4)
 GET    /api/client/v1/stream-sessions/{sessionId}/hls?startSeconds={seconds}      (redirects to the fMP4 HLS playlist)
+PUT    /api/client/v1/stream-sessions/{sessionId}/telemetry                       (ephemeral runtime telemetry, advertised by `playbackTelemetry`)
 DELETE /api/client/v1/stream-sessions/{sessionId}
 ```
 
@@ -313,6 +314,22 @@ Request body (every field optional):
 - `audioTrackId`, `subtitleTrackId` (canonical `stream:N`; a bitmap subtitle the client cannot draw is burned in), `quality` (`auto`, `original`, `20mbps` … `1mbps`; legacy `1080p/720p/low` are accepted), `mode` (`auto`, `direct_only`, `always_transcode`), `network` (`throughputKbps`, `bufferSeconds`, `recentStalls`, `saveData`, `connectionType`), `failedModes` (modes that just failed on this device), `replacesSessionId`, `wake` (default `true`: the request is a play intent and wakes sleeping Wake-on-LAN storage; send `false` to only decide, e.g. when a screen opens).
 
 The response carries `sessionId`, `plan` and `delivery`. `plan.mode` is `direct_play` (untouched file, no server processing), `direct_stream` (video copied into fMP4, audio copied or converted), `transcode` (H.264) or `unavailable`. `plan.reasons[]` is machine-readable (`code`, `severity`, `rulesOut`, `values`) and explains every mode that was ruled out — clients show them as "Why not Direct Play?". `delivery.url` is the stream to open; live transports restart at a position with `delivery.startParameter`. When playback fails, send the failed mode in `failedModes` and play the new plan; never pick a fallback locally. Server-side quality decisions (Automatic, home/remote defaults) are part of the plan.
+
+`plan.buffer` (absent when the plan is `unavailable`) is the runtime buffer policy: `preset` (`low`, `normal`, `high`, `max` = 15, 30, 60, 120 s of media ahead of the playhead, set by the Admin), `startupSeconds` (3 s; 6 s when the server transcodes video), `targetAheadSeconds` and `lowWaterSeconds` (40 % of the target). All of it is advisory: a player decides by itself how far ahead it fetches, and a client must not pause playback to wait for a reserve (a paused element loads only a couple of seconds, so such a wait delays the start without loading more). A client shows the policy next to the buffer it actually observes, never as a measured value.
+
+#### Playback telemetry (`playbackTelemetry`)
+
+A playing client reports what it observes about the session every ~5 s with `PUT /stream-sessions/{sessionId}/telemetry` (answer `204`; `404` `stream_session_not_found` for a session that is not the caller's or expired; `400` `invalid_telemetry` for a missing or impossible value; `429` over the separate per-account limit of 90 reports a minute; body at most 1 KiB):
+
+```json
+{ "sequence": 12, "state": "playing", "bufferAheadSeconds": 12.4, "throughputKbps": 24000, "stallCount": 1, "stallTotalMs": 1840, "positionSeconds": 612.5 }
+```
+
+- `sequence` is a per-session counter that only grows. The highest sequence wins; a repeated or older report is ignored and answered like a new one, so retries are safe.
+- `state` is `playing`, `buffering` or `paused`. A report extends the session's idle lifetime like a stream request only when it shows progress: the state is `playing` or `buffering` and `positionSeconds` advanced at a believable playback speed (at most twice the fastest offered speed) beyond the progress mark, or, while `buffering`, `stallTotalMs` grew no faster than the clock for at most 2 minutes in total since the position last advanced. A larger step is a seek and only moves the mark; a backward seek re-anchors it at most three times per 10 minutes, so a viewer can rewind but alternating positions keep nothing alive. A player that fails reports `paused`. `paused` reports, repeats, older reports and a loop of reports whose position stands still do not, so telemetry never keeps an abandoned session, its slot and its process alive. A client sends one `paused` report when it pauses and then stops reporting until it plays again.
+- `bufferAheadSeconds` (0..3600) is the media buffered ahead of the playhead; `positionSeconds` (0..604800) is the absolute playback position. `throughputKbps` (0..10 000 000, optional) is the smoothed rate at which the client received media, over about 15 s; it is a delivery rate, not link capacity, and it is left out when the client could not measure it. `stallCount` and `stallTotalMs` are cumulative for the session. A stall is playback waiting for media after it had started; the initial start and a user seek are not stalls.
+- The server keeps the report in memory on the session only. Nothing is written to the database and the report disappears with the session.
+- When a client re-plans (`replacesSessionId`) the same title, and the replaced session's last report is not older than 2 minutes, the buffer and the stalls of the last 60 s it reported feed the next plan's Automatic quality (two stalls step it down) and win over the request's `network.bufferSeconds` and `network.recentStalls` hints. `network.throughputKbps` stays the request's own hint.
 
 ### 5.1 Native algorithm
 
@@ -817,6 +834,8 @@ Contract versions (the number in `GET /capabilities`; the route prefix stays `/a
 
 - `2` (current, minimum supported `2`): playback checkpoints carry a client-declared `completed` flag and the server no longer infers completion from a position (`PUT /episodes/{id}/progress`, `PUT /video/progress`, `POST /offline/progress`). Clients set `completed` only when playback itself reached 95% of the duration (continuous forward playback from below the threshold) or ended, or when the user marks the item watched. A seek, scrub or resume that lands at or beyond 95% is only a resume point, and after such a seek only `ended` or an explicit watched action completes it. A version 1 client never declared threshold completion, so the server reports minimum supported version 2 and the app shows its existing "update required" state; there is deliberately no server-side position-inference fallback.
 - `1`: initial contract.
+
+Additive extensions that keep version `2`: `PUT /stream-sessions/{id}/telemetry`, the `playbackTelemetry` feature flag and the optional `plan.buffer` object (see 5.0). A client that ignores them keeps working unchanged.
 
 The Git tag version is used in:
 

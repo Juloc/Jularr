@@ -71,7 +71,8 @@ public static class ClientApiContract
                 PlaybackPlan: true,
                 Watchlist: true,
                 DevicePairing: true,
-                OfflinePackages: true));
+                OfflinePackages: true,
+                PlaybackTelemetry: true));
     }
 }
 
@@ -195,6 +196,9 @@ public static class ClientApiRoutes
     public static string StreamSessionStream(Guid sessionId) =>
         $"{StreamSession(sessionId)}/stream";
 
+    public static string StreamSessionTelemetry(Guid sessionId) =>
+        $"{StreamSession(sessionId)}/telemetry";
+
     public static string StreamSessionHls(Guid sessionId) =>
         $"{StreamSession(sessionId)}/hls";
 
@@ -266,7 +270,9 @@ public sealed record ClientFeatureFlags(
     bool Watchlist = false,
     // TV device-code pairing, "/api/client/v1/pairing/*" (#489).
     bool DevicePairing = false,
-    bool OfflinePackages = false);
+    bool OfflinePackages = false,
+    // PUT "/stream-sessions/{id}/telemetry": ephemeral buffer, throughput and stall reports of a playing client (#403).
+    bool PlaybackTelemetry = false);
 
 public sealed record ClientErrorResponse(
     string Code,
