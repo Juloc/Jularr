@@ -2,6 +2,8 @@
 
 Status: **approved UX direction**.
 
+Binding missing-media playback intent: `docs/mockups/instant-play/SPEC.md`.
+
 ## Purpose
 
 Movie Detail is the canonical user-facing page for a single movie.
@@ -118,7 +120,7 @@ The detailed view can show:
 
 Do not expose release-group/import/file internals on the normal user page.
 
-There is no consumer `Add to Library` acquisition action on Movie Detail. Acquisition uses the shared Request flow; Watchlist/Favorite/Collection are separate personal-state actions.
+There is no consumer `Add to Library` acquisition action on Movie Detail. Explicit acquisition uses the shared Request flow; Watchlist/Favorite/Collection are separate personal-state actions. When Playback is enabled and instant acquisition is permitted, a missing Movie may expose `Watch now` as a playback intent: it transparently creates/reuses the canonical Request and progresses through Looking for media -> Getting movie -> Preparing -> Starting playback. On manager-only instances the missing Movie shows Request and successful acquisition ends at Available.
 
 ## 4. Cast & Crew
 
