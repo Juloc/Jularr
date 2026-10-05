@@ -1085,6 +1085,9 @@ Diagnostics may show:
 - transcode encoder/backend, speed and FPS when applicable;
 - active / throttled / queued transcode state where applicable;
 - attributable CPU/GPU pressure only when the server can measure it reliably;
+- first-frame / first-segment latency when available;
+- repeated segment/producer failure count and current recovery/fallback state;
+- timestamp discontinuity or growing A/V-drift recovery reason when detected;
 - dropped frames where available.
 
 Diagnostics must clearly distinguish observed client values from policy targets/estimates. It must never expose raw filesystem paths, secrets or arbitrary FFmpeg command strings.
@@ -1164,6 +1167,8 @@ If the server cannot sustain the requested live transcode, the canonical Playbac
 
 ### Buffering
 Keep the current frame when possible, show a center spinner after a short delay, keep controls available, and continue to show the buffered range in the timeline. For prolonged stalls add a concise `Buffering…` label. Do not show unreliable percentages.
+
+Repeated startup/segment/media failures must not become an endless spinner/retry loop. The Player follows bounded canonical recovery and preserves the same ActiveSession/absolute position when a valid fallback exists. When recovery is exhausted, show a concise stable error with Retry/Back and Diagnostics where appropriate; technical failure classification remains inside Diagnostics.
 
 ### Storage waking/offline
 Explain that media storage is unavailable/waking and expose Retry/Back. Do not classify it as codec failure.
@@ -1415,6 +1420,9 @@ A Player mockup is acceptable only when:
 - seek/restart buffering preserves ActiveSession, track selections and absolute position;
 - remux/transcode startup is incremental and may use bounded seek/startup fill bursts plus high/low-water throttling;
 - prolonged buffering is counted/diagnosable without showing a fake percentage;
+- first-frame/first-segment latency and repeated segment/producer failures are diagnosable when the delivery stack exposes them;
+- repeated plan/backend/media failures use bounded recovery and never leave the Player in an infinite retry/spinner loop;
+- timestamp/sync recovery preserves ActiveSession and logical position where a valid fallback exists;
 - chapters and segment markers are visible without making the timeline noisy;
 - manual Skip actions are direct contextual buttons;
 - Auto-Skip has explicit settings, defaults Off and provides temporary Undo feedback;
