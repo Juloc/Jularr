@@ -132,6 +132,9 @@ internal sealed class FakeSabnzbdClient : ISabnzbdClient
     public SabnzbdQueueSnapshot Queue { get; set; } = new(false, null, null, []);
     public SabnzbdHistorySnapshot History { get; set; } = new([]);
     public List<SabnzbdGrabRequest> Grabs { get; } = [];
+
+    /// <summary>Thrown by <see cref="GrabAsync"/> after the attempt is recorded, as an interrupted submission.</summary>
+    public Exception? GrabException { get; set; }
     public List<string> Cancelled { get; } = [];
     public List<SabnzbdConnection> CancelConnections { get; } = [];
     public List<string> Retried { get; } = [];
@@ -149,6 +152,11 @@ internal sealed class FakeSabnzbdClient : ISabnzbdClient
         CancellationToken cancellationToken)
     {
         Grabs.Add(grab);
+        if (GrabException is not null)
+        {
+            throw GrabException;
+        }
+
         return Task.FromResult(
             GrabResults.Count > 0
                 ? GrabResults.Dequeue()

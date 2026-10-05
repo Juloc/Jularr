@@ -519,6 +519,7 @@ public sealed class AnimeNamingRenameTests
             var root = new LibraryRoot { Name = "Anime", Path = libraryPath };
             var anime = new Anime { Key = "frieren", Title = "Frieren" };
             db.LibraryRoots.Add(root);
+            db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             db.Anime.Add(anime);
             await db.SaveChangesAsync();
 

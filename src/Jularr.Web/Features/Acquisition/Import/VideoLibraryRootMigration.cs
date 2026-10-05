@@ -44,9 +44,20 @@ public static class VideoLibraryRootMigration
             .Where(root => root.IsEnabled && !db.LibraryRootContentAssignments.Any(assignment => assignment.LibraryRootId == root.Id))
             .Select(root => root.Id)
             .ToListAsync(cancellationToken);
+        // A database failure leaves the version un-bumped so the next start retries; it never aborts startup.
+        var incomplete = false;
         foreach (var rootId in unassigned)
         {
-            await routing.SetSupportedAsync(rootId, LibraryContentType.Anime, true, cancellationToken);
+            try
+            {
+                await routing.SetSupportedAsync(rootId, LibraryContentType.Anime, true, cancellationToken);
+            }
+            catch (Exception exception) when (exception is DbUpdateException or InvalidOperationException)
+            {
+                db.ChangeTracker.Clear();
+                incomplete = true;
+                log?.Invoke($"A library root could not be marked as an Anime root ({exception.Message}); the move of the Movie/TV folders is retried at the next start.");
+            }
         }
 
         var migrated = 0;
@@ -80,11 +91,20 @@ public static class VideoLibraryRootMigration
                 firstRoutedPath.TryAdd(path, (kind, mode));
                 migrated++;
             }
-            catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException or PathTooLongException or IOException)
+            catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException or PathTooLongException or IOException or DbUpdateException)
             {
+                // Whatever the failed save left tracked must not be saved again by the undo.
+                db.ChangeTracker.Clear();
+                incomplete |= exception is DbUpdateException;
                 await UndoAsync(db, resolved, cancellationToken);
                 log?.Invoke($"The {kind} library folder '{target.LibraryRoot}' could not be moved into Storage ({exception.Message}). {kind} imports wait until a default root is chosen under Admin → Storage.");
             }
+        }
+
+        if (incomplete)
+        {
+            log?.Invoke("The Movie/TV library folder move is incomplete and is retried at the next start.");
+            return migrated;
         }
 
         // Cleared only after Storage holds the destination (or the log named why it does not), so an interrupted run repeats safely.
@@ -119,15 +139,23 @@ public static class VideoLibraryRootMigration
     public static async Task RunAtStartupAsync(IServiceProvider services, Action<string> log, CancellationToken cancellationToken = default)
     {
         await using var scope = services.CreateAsyncScope();
-        var moved = await MigrateAsync(
-            scope.ServiceProvider.GetRequiredService<AnimeImportSettingsStore>(),
-            scope.ServiceProvider.GetRequiredService<AppDbContext>(),
-            scope.ServiceProvider.GetRequiredService<LibraryRootRoutingService>(),
-            log,
-            cancellationToken);
-        if (moved > 0)
+        try
         {
-            log($"Moved the Movie/TV library folder into Storage default destinations ({moved} media type(s)).");
+            var moved = await MigrateAsync(
+                scope.ServiceProvider.GetRequiredService<AnimeImportSettingsStore>(),
+                scope.ServiceProvider.GetRequiredService<AppDbContext>(),
+                scope.ServiceProvider.GetRequiredService<LibraryRootRoutingService>(),
+                log,
+                cancellationToken);
+            if (moved > 0)
+            {
+                log($"Moved the Movie/TV library folder into Storage default destinations ({moved} media type(s)).");
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Startup must not depend on this one-time move: the version stays un-bumped and the next start retries it.
+            log($"The Movie/TV library folder move failed and is retried at the next start: {exception.Message}");
         }
     }
 
@@ -136,7 +164,7 @@ public static class VideoLibraryRootMigration
     private static async Task<ResolvedRoot> ResolveRootAsync(AppDbContext db, string path, string rootName, LibraryPlacementPolicy policy, CancellationToken cancellationToken)
     {
         var roots = await db.LibraryRoots.ToListAsync(cancellationToken);
-        var root = roots.FirstOrDefault(candidate => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate.Path)), path, StringComparison.Ordinal));
+        var root = roots.FirstOrDefault(candidate => StoragePaths.AreSame(candidate.Path, path));
         ResolvedRoot resolved;
         if (root is null)
         {
@@ -163,19 +191,25 @@ public static class VideoLibraryRootMigration
     // root: the Anime scanner would read it.
     private static async Task UndoAsync(AppDbContext db, ResolvedRoot? resolved, CancellationToken cancellationToken)
     {
-        if (resolved is null)
+        if (resolved is null || !resolved.Created && !resolved.Adopted)
+        {
+            return;
+        }
+
+        var root = await db.LibraryRoots.SingleOrDefaultAsync(candidate => candidate.Id == resolved.Root.Id, cancellationToken);
+        if (root is null)
         {
             return;
         }
 
         if (resolved.Created)
         {
-            db.LibraryRoots.Remove(resolved.Root);
+            db.LibraryRoots.Remove(root);
         }
-        else if (resolved.Adopted)
+        else
         {
-            resolved.Root.IsEnabled = false;
-            resolved.Root.PlacementPolicy = resolved.PreviousPolicy;
+            root.IsEnabled = false;
+            root.PlacementPolicy = resolved.PreviousPolicy;
         }
 
         await db.SaveChangesAsync(cancellationToken);

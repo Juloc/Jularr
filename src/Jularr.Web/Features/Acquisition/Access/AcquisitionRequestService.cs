@@ -282,7 +282,13 @@ public sealed class AcquisitionRequestService(
             return await RequireAsync(request.Id, cancellationToken);
         }
 
-        await store.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Searching, null, null, null, null, cancellationToken);
+        // Claim the request with one conditional write: a Manual Search grab (or another pass) that took it meanwhile keeps it.
+        var claimable = new[] { AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Importing };
+        if (await store.TryTransitionStatusAsync(request.Id, claimable, AcquisitionRequestStatus.Searching, null, null, cancellationToken) is null)
+        {
+            return await RequireAsync(request.Id, cancellationToken);
+        }
+
         AcquisitionExecution result;
         try
         {

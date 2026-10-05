@@ -143,12 +143,38 @@ public sealed class MovieTvDestinationRoutingTests
         File.WriteAllText(Path.Combine(download, Inception), "video");
         var unmounted = Path.Combine(temp.Root, "not-mounted");
         await MovieTvImportTests.RoutingWithDefaultAsync(db, LibraryContentType.Movie, unmounted);
+        var root = await db.LibraryRoots.SingleAsync();
+        db.StoredFiles.Add(new StoredFile { LibraryRootId = root.Id, Path = Path.Combine(unmounted, "Known (2000)", "Known (2000).mkv") });
+        await db.SaveChangesAsync();
 
         var result = await MovieAdapter(db).ImportAsync(Download(download, MediaAcquisitionKind.Movie), CancellationToken.None);
 
-        Assert.AreEqual(CompletedDownloadImportDisposition.RetryLater, result.Disposition);
+        Assert.AreEqual(CompletedDownloadImportDisposition.RetryLater, result.Disposition, "A missing folder of a root that holds known media is an unmounted share.");
         StringAssert.Contains(result.Message, "not available");
         Assert.IsFalse(Directory.Exists(unmounted));
+    }
+
+    [TestMethod]
+    public async Task ANewRootWhoseFolderDoesNotExistYetIsCreatedForTheImport()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        using var temp = new TempFolders();
+        var download = temp.Dir("download");
+        File.WriteAllText(Path.Combine(download, Inception), "video");
+        var fresh = Path.Combine(temp.Root, "movies-new");
+        await MovieTvImportTests.RoutingWithDefaultAsync(db, LibraryContentType.Movie, fresh, LibraryPlacementPolicy.Copy);
+
+        var result = await MovieAdapter(db).ImportAsync(Download(download, MediaAcquisitionKind.Movie), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, result.Disposition, result.Message);
+        Assert.IsTrue(File.Exists(Path.Combine(fresh, "Inception (2010)", "Inception (2010).mkv")));
+
+        var orphan = Path.Combine(temp.Root, "no-parent", "deeper", "movies");
+        var second = new LibraryRoot { Name = "Orphan", Path = orphan };
+        db.LibraryRoots.Add(second);
+        await db.SaveChangesAsync();
+        Assert.IsFalse(await new LibraryRootAvailabilityService(db, new StorageAvailabilityCoordinator()).IsReadyForImportAsync(second.Id, CancellationToken.None), "A folder whose parent is missing is not created.");
+        Assert.IsFalse(Directory.Exists(orphan));
     }
 
     [TestMethod]
@@ -197,18 +223,20 @@ public sealed class MovieTvDestinationRoutingTests
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         using var temp = new TempFolders();
         var legacyAnime = new LibraryRoot { Name = "Anime", Path = temp.Dir("anime") };
+        var unassigned = new LibraryRoot { Name = "Unassigned", Path = temp.Dir("unassigned") };
         var movieOnly = new LibraryRoot { Name = "Movies", Path = temp.Dir("movies") };
         var shared = new LibraryRoot { Name = "Shared", Path = temp.Dir("shared") };
-        db.LibraryRoots.AddRange(legacyAnime, movieOnly, shared);
+        db.LibraryRoots.AddRange(legacyAnime, unassigned, movieOnly, shared);
         await db.SaveChangesAsync();
         var routing = new LibraryRootRoutingService(db);
+        await routing.SetSupportedAsync(legacyAnime.Id, LibraryContentType.Anime, true);
         await routing.SetSupportedAsync(movieOnly.Id, LibraryContentType.Movie, true);
-        await routing.SetSupportedAsync(shared.Id, LibraryContentType.Movie, true);
         await routing.SetSupportedAsync(shared.Id, LibraryContentType.Anime, true);
+        await Assert.ThrowsExactlyAsync<LibraryRootConflictException>(() => routing.SetSupportedAsync(shared.Id, LibraryContentType.Movie, true), "A root serves Anime or Movie/TV, never both.");
 
         var scannable = await db.LibraryRoots.ServingAnime(db).Select(root => root.Name).OrderBy(name => name).ToListAsync();
 
-        CollectionAssert.AreEqual(new[] { "Anime", "Shared" }, scannable, "Roots without assignments stay Anime libraries; a Movie-only root is not one.");
+        CollectionAssert.AreEqual(new[] { "Anime", "Shared" }, scannable, "The explicit Anime assignment is the only source of what the Anime scanner reads.");
     }
 
     [TestMethod]
@@ -223,7 +251,9 @@ public sealed class MovieTvDestinationRoutingTests
         host.WriteMedia(Path.Combine("Frieren", "Season 01", "Frieren - S01E01.mkv"));
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await new LibraryRootRoutingService(db).SetSupportedAsync(movieRoot.Id, LibraryContentType.Movie, true);
+        var routing = new LibraryRootRoutingService(db);
+        await routing.SetSupportedAsync(movieRoot.Id, LibraryContentType.Anime, false);
+        await routing.SetSupportedAsync(movieRoot.Id, LibraryContentType.Movie, true);
         var scanner = scope.ServiceProvider.GetRequiredService<LibraryScanner>();
 
         var movieScan = await scanner.ScanAsync(movieRoot.Id, CancellationToken.None);
@@ -231,7 +261,7 @@ public sealed class MovieTvDestinationRoutingTests
         Assert.AreEqual(0, await db.Anime.CountAsync(), "Movie folders do not become anime.");
 
         var animeScan = await scanner.ScanAsync(animeRoot.Id, CancellationToken.None);
-        Assert.AreEqual(1, animeScan.Discovered, "A root without assignments is still an Anime library.");
+        Assert.AreEqual(1, animeScan.Discovered, "A root with an Anime assignment is read by the Anime scanner.");
     }
 
     [TestMethod]
@@ -273,21 +303,16 @@ public sealed class MovieTvDestinationRoutingTests
         var anime = new LibraryRoot { Name = "Anime", Path = animePath };
         var nested = new LibraryRoot { Name = "Nested", Path = Directory.CreateDirectory(Path.Combine(animePath, "movies")).FullName };
         var parent = new LibraryRoot { Name = "Parent", Path = temp.Root };
-        var holdsAnime = new LibraryRoot { Name = "Legacy", Path = temp.Dir("legacy") };
+        var other = new LibraryRoot { Name = "OtherAnime", Path = temp.Dir("other-anime") };
         using var elsewhere = new TempFolders();
         var clean = new LibraryRoot { Name = "Clean", Path = elsewhere.Dir("clean") };
-        db.LibraryRoots.AddRange(anime, nested, parent, holdsAnime, clean);
+        db.LibraryRoots.AddRange(anime, nested, parent, other, clean);
         await db.SaveChangesAsync();
         var routing = new LibraryRootRoutingService(db);
         await routing.SetSupportedAsync(anime.Id, LibraryContentType.Anime, true);
-        var show = new Anime { Key = "frieren", Title = "Frieren" };
-        var episode = new Episode { AnimeId = show.Id, Number = 1 };
-        db.AddRange(show, episode);
-        await db.SaveChangesAsync();
-        db.StoredFiles.Add(new StoredFile { LibraryRootId = holdsAnime.Id, EpisodeId = episode.Id, Path = Path.Combine(holdsAnime.Path, "x.mkv") });
-        await db.SaveChangesAsync();
+        await routing.SetSupportedAsync(other.Id, LibraryContentType.Anime, true);
 
-        foreach (var root in new[] { anime, nested, parent, holdsAnime })
+        foreach (var root in new[] { anime, nested, parent })
         {
             await Assert.ThrowsExactlyAsync<LibraryRootConflictException>(() => routing.AssignDefaultAsync(LibraryContentType.Movie, root.Id, LibraryPlacementPolicy.Copy), root.Name);
         }
@@ -295,6 +320,7 @@ public sealed class MovieTvDestinationRoutingTests
         Assert.IsNull(await routing.ResolveDefaultAsync(LibraryContentType.Movie));
         await routing.AssignDefaultAsync(LibraryContentType.Movie, clean.Id, LibraryPlacementPolicy.Copy);
         Assert.AreEqual(clean.Id, (await routing.ResolveDefaultAsync(LibraryContentType.Movie))!.LibraryRootId);
+        await Assert.ThrowsExactlyAsync<LibraryRootConflictException>(() => routing.SetSupportedAsync(clean.Id, LibraryContentType.Anime, true), "A Movie root cannot also become an Anime root.");
     }
 
     [TestMethod]
@@ -358,6 +384,7 @@ public sealed class MovieTvDestinationRoutingTests
         var movie = await MovieAdapter(db).ImportAsync(Download(download, MediaAcquisitionKind.Movie), CancellationToken.None);
 
         Assert.AreEqual(CompletedDownloadImportDisposition.NeedsReview, movie.Disposition);
+        Assert.AreEqual(0, await db.Movies.CountAsync(), "The check comes before any record is created.");
         StringAssert.Contains(movie.Message, "different file");
         Assert.AreEqual("the compl", File.ReadAllText(partial), "The existing file is left alone, never deleted or attached.");
         Assert.IsTrue(File.Exists(movieSource), "The source stays so nothing is lost.");
@@ -374,6 +401,8 @@ public sealed class MovieTvDestinationRoutingTests
         var tv = await TvAdapter(db).ImportAsync(Download(tvDownload, MediaAcquisitionKind.Tv), CancellationToken.None);
 
         Assert.AreEqual(CompletedDownloadImportDisposition.NeedsReview, tv.Disposition);
+        Assert.AreEqual(0, await db.TvSeries.CountAsync());
+        Assert.AreEqual(0, await db.WorkEpisodes.CountAsync());
         Assert.AreEqual(0, await db.StoredFiles.CountAsync());
     }
 
@@ -410,6 +439,24 @@ public sealed class MovieTvDestinationRoutingTests
         Assert.AreEqual("/inbox", state.InboxFor(MediaAcquisitionKind.Movie));
         Assert.IsFalse((await db.LibraryRoots.AsNoTracking().SingleAsync()).IsEnabled);
         Assert.AreEqual(0, await VideoLibraryRootMigration.MigrateAsync(store, db, routing, log.Add));
+    }
+
+    [TestMethod]
+    public async Task TheStartupRunNeverThrowsAndLeavesTheVersionForARetry()
+    {
+        var log = new List<string>();
+
+        await VideoLibraryRootMigration.RunAtStartupAsync(new ServiceCollection().BuildServiceProvider(), log.Add);
+
+        StringAssert.Contains(log.Single(), "retried at the next start");
+    }
+
+    [TestMethod]
+    public void PathOverlapFollowsThePlatformCaseRules()
+    {
+        Assert.AreEqual(OperatingSystem.IsWindows(), StoragePaths.Overlaps(Path.Combine(Path.GetTempPath(), "Media", "Anime"), Path.Combine(Path.GetTempPath(), "media", "anime", "Movies")));
+        Assert.IsTrue(StoragePaths.Overlaps(Path.Combine(Path.GetTempPath(), "media"), Path.Combine(Path.GetTempPath(), "media", "anime")));
+        Assert.IsFalse(StoragePaths.Overlaps(Path.Combine(Path.GetTempPath(), "media"), Path.Combine(Path.GetTempPath(), "media-two")));
     }
 
     [TestMethod]

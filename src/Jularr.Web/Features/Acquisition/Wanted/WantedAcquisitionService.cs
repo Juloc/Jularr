@@ -54,6 +54,11 @@ public sealed class WantedAcquisitionService(
     /// </summary>
     public static readonly TimeSpan CompletedImportTimeout = CompletedDownloadImportService.CompletedImportTimeout;
 
+    /// <summary>How long a request may stay Searching without a download operation before the Wanted pass takes it back.</summary>
+    public static readonly TimeSpan StaleSearchingAfter = TimeSpan.FromMinutes(30);
+
+    public const string InterruptedSearchMessage = "The previous search was interrupted. Searching again.";
+
     public const string CancelledMessage =
         "The download was cancelled, so no other release was grabbed. Approve the request again to search.";
 
@@ -129,6 +134,11 @@ public sealed class WantedAcquisitionService(
             }
 
             advanced += await RecoverInFlightAsync(
+                services,
+                handler,
+                nowUtc,
+                cancellationToken);
+            advanced += await RecoverStaleSearchingAsync(
                 services,
                 handler,
                 nowUtc,
@@ -376,6 +386,28 @@ public sealed class WantedAcquisitionService(
             decidedByProfileId: null,
             cancellationToken);
         return timedOut ? 1 : 0;
+    }
+
+    // A request is Searching only while a search or a Manual Search grab runs, which takes seconds. One that stays Searching without a
+    // download operation lost its worker (a crash between claiming and finishing) and would otherwise wait forever: it searches again.
+    private static async Task<int> RecoverStaleSearchingAsync(
+        IServiceProvider services,
+        IWantedRequestHandler handler,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var store = services.GetRequiredService<AcquisitionAccessStore>();
+        var recovered = 0;
+        foreach (var request in await store.ListByStatusAsync(handler.Kind, AcquisitionRequestStatus.Searching, cancellationToken))
+        {
+            if (request.OperationId is null && nowUtc - request.UpdatedAt >= StaleSearchingAfter
+                && await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], AcquisitionRequestStatus.Approved, InterruptedSearchMessage, null, cancellationToken) is not null)
+            {
+                recovered++;
+            }
+        }
+
+        return recovered;
     }
 
     private static async Task<int> SearchDueAsync(

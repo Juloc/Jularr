@@ -496,6 +496,7 @@ public sealed class AnimeRepairServiceTests
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var root = new LibraryRoot { Name = name, Path = LibraryPath };
             db.LibraryRoots.Add(root);
+            db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             await db.SaveChangesAsync();
             return root;
         }

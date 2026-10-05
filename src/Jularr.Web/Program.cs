@@ -856,10 +856,12 @@ static async Task InitializeDatabaseAsync(
 
     log($"Creating bootstrap library root {media.BootstrapRoot}.");
 
-    db.LibraryRoots.Add(new LibraryRoot
+    var bootstrapRoot = new LibraryRoot
     {
         Name = "Anime",
         Path = Path.GetFullPath(media.BootstrapRoot)
-    });
+    };
+    db.LibraryRoots.Add(bootstrapRoot);
+    db.LibraryRootContentAssignments.Add(new Jularr.Web.Features.Library.LibraryRootContentAssignment { LibraryRootId = bootstrapRoot.Id, ContentType = Jularr.Web.Features.Library.LibraryContentType.Anime });
     await db.SaveChangesAsync();
 }

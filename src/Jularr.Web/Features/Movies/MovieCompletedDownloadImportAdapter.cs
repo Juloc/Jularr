@@ -138,20 +138,34 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
             throw new InvalidOperationException("The movie destination would leave its library root.");
         }
 
-        if (LibraryFilePlacer.FindDestinationConflict(destination, []) is null)
-        {
-            var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
-            new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
-        }
-        else if (!LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
+        var alreadyPlaced = LibraryFilePlacer.FindDestinationConflict(destination, []) is not null;
+        if (alreadyPlaced && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
         {
             throw new DestinationMismatchException(destination);
         }
 
+        // The records come first so a database failure cannot happen after the file already left the source.
         var entry = await movies.EnsureAsync(metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, folder, cancellationToken);
+        var moved = false;
+        if (!alreadyPlaced)
+        {
+            var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
+            new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
+            moved = action == ImportFileAction.Move;
+        }
+
         if (canonicalStorage is not null)
         {
-            await canonicalStorage.AttachVideoAsync(entry.WorkId, workEpisodeId: null, Path.GetFullPath(destination), Path.GetFullPath(route.Path), cancellationToken);
+            try
+            {
+                await canonicalStorage.AttachVideoAsync(entry.WorkId, workEpisodeId: null, Path.GetFullPath(destination), Path.GetFullPath(route.Path), cancellationToken);
+            }
+            catch when (moved)
+            {
+                // The import is retried from the source, so the moved file must be there again.
+                LibraryFilePlacer.RestoreMovedSource(videoPath, destination);
+                throw;
+            }
         }
 
         return (entry.Movie, folder);

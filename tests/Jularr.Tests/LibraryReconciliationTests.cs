@@ -221,6 +221,7 @@ public sealed class LibraryReconciliationTests
                 Path = libraryPath
             };
             db.LibraryRoots.Add(root);
+            db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             await db.SaveChangesAsync();
 
             var vocabulary = new VocabularyService(

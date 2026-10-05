@@ -259,10 +259,11 @@ public sealed class VideoManualSearchTests
         var request = await host.CreateApprovedAsync();
         var store = host.Get<AcquisitionAccessStore>();
 
-        Assert.IsFalse(await store.TryUpdateStatusAsync(request.Id, [AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending], AcquisitionRequestStatus.Searching, null, CancellationToken.None));
+        Assert.IsNull(await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None));
         Assert.AreEqual(AcquisitionRequestStatus.Approved, (await host.GetAsync(request.Id)).Status);
-        Assert.IsTrue(await store.TryUpdateStatusAsync(request.Id, [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed], AcquisitionRequestStatus.Searching, "Claimed.", CancellationToken.None));
-        Assert.IsFalse(await store.TryUpdateStatusAsync(request.Id, [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed], AcquisitionRequestStatus.Searching, null, CancellationToken.None), "Only one claimant wins.");
+        var claim = await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed], AcquisitionRequestStatus.Searching, "Claimed.", null, CancellationToken.None);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, claim!.PreviousStatus, "The claim reports what the request was before.");
+        Assert.IsNull(await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None), "Only one claimant wins.");
     }
 
     [TestMethod]
@@ -282,6 +283,110 @@ public sealed class VideoManualSearchTests
         var outcome = await service.GrabAsync(request.Id, gone, "release:1:whatever", CancellationToken.None);
         Assert.AreEqual(ManualGrabStatus.TargetChanged, outcome.Status);
         Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
+    }
+
+    [TestMethod]
+    public async Task AGrabWhoseStatusUpdateFailsAfterSubmissionEndsInDownloadingNeverInSearching()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var identity = Candidate((await host.Get<VideoManualSearchService>().SearchAsync(request.Id, null, refresh: true, CancellationToken.None))!, Dune).Identity;
+        var plainUser = new AcquisitionRequestService(
+            host.Get<AcquisitionAccessStore>(),
+            [],
+            new CurrentAccountContext(new HttpContextAccessor { HttpContext = new DefaultHttpContext() }),
+            host.Get<IMediaCapabilityService>(),
+            host.Get<AcquisitionRequestSettingsStore>(),
+            host.Get<Jularr.Web.Features.Events.IJularrEventPublisher>(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AcquisitionRequestService>.Instance);
+        var service = new VideoManualSearchService(
+            host.Get<VideoAcquisitionEngine>(),
+            host.Get<AcquisitionAccessStore>(),
+            plainUser,
+            TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<VideoManualSearchService>.Instance);
+
+        var outcome = await service.GrabAsync(request.Id, null, identity, CancellationToken.None);
+
+        Assert.AreEqual(ManualGrabStatus.Unrecorded, outcome.Status);
+        var stored = await host.GetAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, stored.Status, "The request follows the download that exists, never stays Searching.");
+        Assert.IsNotNull(stored.OperationId);
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
+        await host.ProcessAsync(DateTime.UtcNow.AddHours(3));
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "The scheduler follows the linked download instead of grabbing again.");
+    }
+
+    [TestMethod]
+    public async Task ASubmissionThatBlowsUpIsNeverHandedBackToTheScheduler()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var service = host.Get<VideoManualSearchService>();
+        var identity = Candidate((await service.SearchAsync(request.Id, null, refresh: true, CancellationToken.None))!, Dune).Identity;
+        host.Environment.Client.GrabException = new InvalidOperationException("connection reset");
+
+        var outcome = await service.GrabAsync(request.Id, null, identity, CancellationToken.None);
+
+        Assert.AreEqual(ManualGrabStatus.Unrecorded, outcome.Status);
+        Assert.AreEqual(AcquisitionRequestStatus.Failed, (await host.GetAsync(request.Id)).Status, "The release may have reached the client, so the request waits for the owner.");
+        await host.ProcessAsync(DateTime.UtcNow.AddHours(3));
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "Nothing grabs again automatically.");
+    }
+
+    [TestMethod]
+    public async Task ARequestLeftSearchingWithoutADownloadIsRecoveredByTheWantedPass()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var store = host.Get<AcquisitionAccessStore>();
+        await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
+
+        await host.ProcessAsync(DateTime.UtcNow);
+        Assert.AreEqual(AcquisitionRequestStatus.Searching, (await host.GetAsync(request.Id)).Status, "A fresh claim is a running search and is left alone.");
+        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
+
+        await host.ProcessAsync(DateTime.UtcNow + Jularr.Web.Features.Acquisition.Wanted.WantedAcquisitionService.StaleSearchingAfter + TimeSpan.FromMinutes(1));
+
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, (await host.GetAsync(request.Id)).Status, "The lost search is taken back and finds a release.");
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
+    }
+
+    [TestMethod]
+    public async Task ASchedulerPassThatReadApprovedCannotOverwriteAManualClaim()
+    {
+        await using var host = await MovieHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var store = host.Get<AcquisitionAccessStore>();
+        var scheduler = new AcquisitionRequestService(
+            store,
+            host.Get<IEnumerable<IAcquisitionRequestExecutor>>(),
+            host.Get<CurrentAccountContext>(),
+            host.Get<IMediaCapabilityService>(),
+            host.Get<AcquisitionRequestSettingsStore>(),
+            host.Get<Jularr.Web.Features.Events.IJularrEventPublisher>(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AcquisitionRequestService>.Instance,
+            new ClaimingModules(() => store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, "Manual claim.", null, CancellationToken.None)));
+
+        var result = await scheduler.ContinueAsync(request.Id, CancellationToken.None);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Searching, result.Status, "The manual claim stays; the scheduler does not run the executor on top of it.");
+        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
+    }
+
+    private sealed class ClaimingModules(Func<Task> claim) : IInstanceModuleService
+    {
+        public async Task<InstanceModuleSettings> GetAsync(CancellationToken cancellationToken = default)
+        {
+            await claim();
+            return InstanceModuleSettings.Default;
+        }
+
+        public Task<bool> IsEnabledAsync(InstanceModule module, CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+        public Task<InstanceModuleSettings> SetAsync(InstanceModule module, bool enabled, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<InstanceModuleSettings> SaveAsync(InstanceModuleSettings settings, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     [TestMethod]

@@ -86,7 +86,7 @@ public sealed partial class VideoAcquisitionEngine
     /// Submits the one release the owner selected through the shared grab path. The caller has already verified that it is grabbable
     /// and not yet tried; the tracker records it as tried so neither automatic acquisition nor a second selection submits it again.
     /// </summary>
-    public Task<AcquisitionExecution> GrabManualAsync(AcquisitionRequest request, VideoManualTarget target, VideoReleaseEvaluation selected, CancellationToken cancellationToken)
+    public Task<AcquisitionExecution> GrabManualAsync(AcquisitionRequest request, VideoManualTarget target, VideoReleaseEvaluation selected, VideoGrabProgress progress, CancellationToken cancellationToken)
     {
         if (!selected.IsGrabbable)
         {
@@ -94,6 +94,6 @@ public sealed partial class VideoAcquisitionEngine
         }
 
         var payload = target.Unit is null ? target.Payload : WithActiveUnit(target.Payload, target.Unit);
-        return GrabAsync(request, payload, target.Unit, [selected], "The selected release is no longer available.", cancellationToken);
+        return GrabAsync(request, payload, target.Unit, [selected], "The selected release is no longer available.", cancellationToken, progress);
     }
 }

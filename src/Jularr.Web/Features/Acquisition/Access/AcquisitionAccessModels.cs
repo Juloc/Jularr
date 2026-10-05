@@ -163,6 +163,9 @@ public sealed record AcquisitionRequestDraft(
 /// <summary>The request a submit ended with, and whether it was an open request for the title already.</summary>
 public sealed record AcquisitionSubmission(AcquisitionRequest Request, bool AlreadyRequested);
 
+/// <summary>The status and message a request had just before a conditional status change took it over.</summary>
+public sealed record AcquisitionStatusTransition(AcquisitionRequestStatus PreviousStatus, string? PreviousMessage);
+
 public sealed record AcquisitionExecution(
     AcquisitionRequestStatus Status,
     string? Message,

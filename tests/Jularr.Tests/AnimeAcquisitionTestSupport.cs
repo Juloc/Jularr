@@ -179,6 +179,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         await DatabaseMigrationBridge.UpgradeAsync(db);
         var root = new LibraryRoot { Name = "Anime", Path = library };
         db.LibraryRoots.Add(root);
+        db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
         await db.SaveChangesAsync();
 
         var environment = new AnimeAcquisitionEnvironment(tempRoot, options, db, root, hardLinkCreator);

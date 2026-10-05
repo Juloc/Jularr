@@ -109,6 +109,25 @@ public sealed class LibraryFilePlacer(ImportFileTransfer transfer)
         return notes;
     }
 
+    /// <summary>
+    /// Puts a file that was just moved into the library back where it came from, when recording it failed: a retry reads the download
+    /// folder, so a moved but unrecorded file would otherwise be lost to it. Best effort; never throws.
+    /// </summary>
+    public static void RestoreMovedSource(string sourcePath, string destinationPath)
+    {
+        try
+        {
+            if (File.Exists(destinationPath) && !File.Exists(sourcePath))
+            {
+                File.Move(destinationPath, sourcePath);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The file stays in the library; the owner can rescan it.
+        }
+    }
+
     /// <summary>Two paths name the same file: same full path, ignoring case and a trailing separator.</summary>
     public static bool SamePath(string? left, string? right)
     {

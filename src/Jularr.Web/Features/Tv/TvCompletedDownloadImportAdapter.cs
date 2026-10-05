@@ -64,16 +64,19 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         try
         {
             // Episodes moved out of the source before a later one failed must still be attached: a retry only sees what is left in the source.
+            var failed = true;
             try
             {
                 foreach (var video in videos)
                 {
                     placed.Add(await PlaceAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken));
                 }
+
+                failed = false;
             }
             finally
             {
-                await AttachPlacedAsync(placed);
+                await AttachPlacedAsync(placed, afterFailure: failed);
             }
 
             await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, $"Imported {placed.Count} episode(s).");
@@ -118,6 +121,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 
         var placed = new List<PlacedEpisode>();
         var skipped = new List<string>();
+        var failed = true;
         try
         {
             foreach (var file in files)
@@ -136,10 +140,12 @@ public sealed partial class TvCompletedDownloadImportAdapter(
                     skipped.Add(exception.Message);
                 }
             }
+
+            failed = false;
         }
         finally
         {
-            await AttachPlacedAsync(placed);
+            await AttachPlacedAsync(placed, afterFailure: failed);
         }
 
         var message = placed.Count == 0 ? "No new episodes in the inbox." : $"Imported {placed.Count} episode(s) from the inbox.";
@@ -160,27 +166,54 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             throw new InvalidOperationException("The episode destination would leave its library root.");
         }
 
-        var entry = await series.EnsureSeriesAsync(meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, seriesFolder, cancellationToken);
-        var workEpisode = await series.EnsureEpisodeAsync(entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
-        if (LibraryFilePlacer.FindDestinationConflict(destination, []) is null)
-        {
-            var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
-            new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
-        }
-        else if (!LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
+        var alreadyPlaced = LibraryFilePlacer.FindDestinationConflict(destination, []) is not null;
+        if (alreadyPlaced && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
         {
             throw new DestinationMismatchException(destination);
         }
 
-        return new PlacedEpisode(new CanonicalVideoAttachment(entry.WorkId, workEpisode.Id, Path.GetFullPath(destination), Path.GetFullPath(route.Path)), seriesFolder);
+        // The records come first so a database failure cannot happen after the file already left the source.
+        var entry = await series.EnsureSeriesAsync(meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, seriesFolder, cancellationToken);
+        var workEpisode = await series.EnsureEpisodeAsync(entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
+        var moved = false;
+        if (!alreadyPlaced)
+        {
+            var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
+            new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
+            moved = action == ImportFileAction.Move;
+        }
+
+        var attachment = new CanonicalVideoAttachment(entry.WorkId, workEpisode.Id, Path.GetFullPath(destination), Path.GetFullPath(route.Path));
+        return new PlacedEpisode(attachment, seriesFolder, moved ? videoPath : null);
     }
 
-    // Attaching is data safety, not part of the request: it runs to completion even when the import is being cancelled.
-    private async Task AttachPlacedAsync(List<PlacedEpisode> placed)
+    // Attaching is data safety, not part of the request: it runs to completion even when the import is being cancelled. When it fails, the
+    // episodes that were moved out of the source go back so a retry still finds them. A failure here never hides the failure that made the
+    // import stop (<paramref name="afterFailure"/>): it is logged and the first one propagates.
+    private async Task AttachPlacedAsync(List<PlacedEpisode> placed, bool afterFailure)
     {
-        if (canonicalStorage is not null && placed.Count > 0)
+        if (canonicalStorage is null || placed.Count == 0)
+        {
+            return;
+        }
+
+        try
         {
             await canonicalStorage.AttachVideosAsync(placed.Select(episode => episode.Attachment).ToList(), CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            foreach (var episode in placed.Where(episode => episode.MovedFrom is not null))
+            {
+                LibraryFilePlacer.RestoreMovedSource(episode.MovedFrom!, episode.Attachment.Path);
+            }
+
+            if (!afterFailure)
+            {
+                throw;
+            }
+
+            logger.LogError(exception, "Attaching the episodes placed before the failure also failed.");
         }
     }
 
@@ -279,5 +312,6 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         string? TmdbId,
         string? TvdbId);
 
-    private readonly record struct PlacedEpisode(CanonicalVideoAttachment Attachment, string SeriesFolder);
+    /// <summary><paramref name="MovedFrom"/> is the source path when the file was moved (not copied or linked) into the library.</summary>
+    private readonly record struct PlacedEpisode(CanonicalVideoAttachment Attachment, string SeriesFolder, string? MovedFrom);
 }

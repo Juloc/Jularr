@@ -36,10 +36,8 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
 
     public async Task SetSupportedAsync(Guid libraryRootId, LibraryContentType contentType, bool supported, CancellationToken cancellationToken = default)
     {
-        if (!await db.LibraryRoots.AsNoTracking().AnyAsync(root => root.Id == libraryRootId, cancellationToken))
-        {
-            throw new InvalidOperationException("The LibraryRoot no longer exists.");
-        }
+        var libraryRoot = await db.LibraryRoots.AsNoTracking().SingleOrDefaultAsync(root => root.Id == libraryRootId, cancellationToken)
+            ?? throw new InvalidOperationException("The LibraryRoot no longer exists.");
 
         var assignment = await db.LibraryRootContentAssignments.SingleOrDefaultAsync(
             row => row.LibraryRootId == libraryRootId && row.ContentType == contentType,
@@ -49,6 +47,7 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
         {
             if (assignment is null)
             {
+                await EnsureCompatibleAsync(libraryRoot, contentType, cancellationToken);
                 db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = libraryRootId, ContentType = contentType });
                 await db.SaveChangesAsync(cancellationToken);
             }
@@ -128,7 +127,7 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             throw new InvalidOperationException("A disabled LibraryRoot cannot be the default destination.");
         }
 
-        if (contentType != LibraryContentType.Anime)
+        if (ImporterRoutedTypes.Contains(contentType))
         {
             await EnsureNoAnimeConflictAsync(root, cancellationToken);
         }
@@ -147,29 +146,30 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
     public async Task<LibraryRoot?> FindOverlappingRootAsync(string path, CancellationToken cancellationToken = default) =>
         (await db.LibraryRoots.AsNoTracking().ToListAsync(cancellationToken)).FirstOrDefault(root => StoragePaths.Overlaps(path, root.Path));
 
-    /// <summary>
-    /// Whether the Anime scanner reads this root: it has an explicit Anime assignment, or it has no assignment at all and already holds
-    /// Anime media (a pre-routing Anime root that was never assigned).
-    /// </summary>
-    public async Task<bool> ServesAnimeAsync(Guid libraryRootId, CancellationToken cancellationToken = default)
+    /// <summary>Whether the Anime scanner reads this root: it has an explicit Anime assignment. The assignment is the only source.</summary>
+    public async Task<bool> ServesAnimeAsync(Guid libraryRootId, CancellationToken cancellationToken = default) =>
+        await db.LibraryRootContentAssignments.AsNoTracking().AnyAsync(row => row.LibraryRootId == libraryRootId && row.ContentType == LibraryContentType.Anime, cancellationToken);
+
+    // A root serves Anime or Movie/TV, never both: the Anime scanner would read its movie folders as anime, and Movie/TV placement
+    // would write into an Anime tree. A Movie or TV root also must not sit inside or around an Anime root.
+    private async Task EnsureCompatibleAsync(LibraryRoot root, LibraryContentType contentType, CancellationToken cancellationToken)
     {
-        var assigned = await db.LibraryRootContentAssignments.AsNoTracking().Where(row => row.LibraryRootId == libraryRootId).Select(row => row.ContentType).ToListAsync(cancellationToken);
-        if (assigned.Count > 0)
+        if (contentType == LibraryContentType.Anime)
         {
-            return assigned.Contains(LibraryContentType.Anime);
+            if (await db.LibraryRootContentAssignments.AsNoTracking().AnyAsync(row => row.LibraryRootId == root.Id && ImporterRoutedTypes.Contains(row.ContentType), cancellationToken))
+            {
+                throw new LibraryRootConflictException($"LibraryRoot '{root.Name}' is a Movie or TV destination and cannot also serve Anime.");
+            }
+
+            return;
         }
 
-        return await db.StoredFiles.AsNoTracking().AnyAsync(file => file.LibraryRootId == libraryRootId && file.EpisodeId != null, cancellationToken)
-            || await (
-                from asset in db.MediaAssets.AsNoTracking()
-                join file in db.StoredFiles.AsNoTracking() on asset.Id equals file.MediaAssetId
-                join work in db.Works.AsNoTracking() on asset.WorkId equals work.Id
-                where file.LibraryRootId == libraryRootId && work.MediaType == Jularr.Web.Features.MediaCore.WorkMediaType.Anime
-                select asset.Id).AnyAsync(cancellationToken);
+        if (ImporterRoutedTypes.Contains(contentType))
+        {
+            await EnsureNoAnimeConflictAsync(root, cancellationToken);
+        }
     }
 
-    // A Movie or TV destination must never take over a root the Anime scanner reads, nor sit inside or around one: its folders would be
-    // scanned as Anime libraries or its files placed into an Anime tree.
     private async Task EnsureNoAnimeConflictAsync(LibraryRoot root, CancellationToken cancellationToken)
     {
         if (await ServesAnimeAsync(root.Id, cancellationToken))

@@ -68,6 +68,7 @@ public sealed class LibraryScannerIdempotencyTests
                 Path = Path.Combine(tempRoot, "anime")
             };
             db.LibraryRoots.Add(root);
+            db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             await db.SaveChangesAsync();
 
             var extractor = new JapaneseTermExtractor(

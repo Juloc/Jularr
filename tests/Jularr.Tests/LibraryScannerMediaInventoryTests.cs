@@ -41,6 +41,7 @@ public sealed class LibraryScannerMediaInventoryTests
             await DatabaseMigrationBridge.UpgradeAsync(db);
             var root = new LibraryRoot { Name = "Anime", Path = Path.Combine(tempRoot, "anime") };
             db.LibraryRoots.Add(root);
+            db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             await db.SaveChangesAsync();
 
             var runner = new FakeMediaProbeRunner();

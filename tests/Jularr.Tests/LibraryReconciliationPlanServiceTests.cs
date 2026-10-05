@@ -967,6 +967,7 @@ public sealed class LibraryReconciliationPlanServiceTests
 
             var root = new LibraryRoot { Name = name, Path = path, IsEnabled = enabled };
             Db.LibraryRoots.Add(root);
+            Db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             return root;
         }
 

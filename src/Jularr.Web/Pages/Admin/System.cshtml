@@ -230,6 +230,15 @@
                 <span>@ui["admin.system.containerPathLabel"]</span>
                 <input asp-for="Path" />
             </label>
+            <label>
+                <span>@ui["admin.system.rootContentLabel"]</span>
+                <select asp-for="ContentType">
+                    @foreach (var type in SystemModel.RootContentTypes)
+                    {
+                        <option value="@type" selected="@(Model.ContentType == type)">@ui["admin.system.rootContent." + type]</option>
+                    }
+                </select>
+            </label>
             <button class="button button-primary" type="submit">@ui["admin.system.addLibraryRoot"]</button>
         </form>
     </section>

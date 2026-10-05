@@ -214,7 +214,8 @@ public sealed partial class VideoAcquisitionEngine(
         VideoUnit? unit,
         IReadOnlyList<VideoReleaseEvaluation> releases,
         string noReleaseReason,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        VideoGrabProgress? progress = null)
     {
         var releaseKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var release in releases)
@@ -229,6 +230,7 @@ public sealed partial class VideoAcquisitionEngine(
             noReleaseReason,
             async release =>
             {
+                progress?.SubmitStarted = true;
                 var outcome = await downloads.SubmitAsync(
                     new DownloadSubmissionSpec(
                         OperationKind,
@@ -240,6 +242,12 @@ public sealed partial class VideoAcquisitionEngine(
                         request.Kind,
                         MediaTargetKey: unit is null ? $"work:{payload.WorkId:D}" : $"work-episode:{unit.Id:D}"),
                     cancellationToken);
+
+                if (outcome.Accepted && progress is not null)
+                {
+                    progress.Accepted = true;
+                    progress.OperationId = outcome.OperationId;
+                }
 
                 if (outcome.Accepted && releaseKeys.TryGetValue(release.Identity, out var releaseKey))
                 {
