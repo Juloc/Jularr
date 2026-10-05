@@ -169,6 +169,22 @@ A supported existing installation upgrades once, then never reads SQLite again.
   migration" section and its "SQLite" references are updated when the swap lands
   (not before — docs must reflect the running system).
 
+## Derived statistics / aggregate read projections (#858)
+
+Expensive reusable statistics are not recomputed from large source tables on every UI/API read.
+
+When a count/distribution/trend is materially expensive and can tolerate a defined freshness window, use a purpose-built relational statistics projection owned by one service. The projection is derived/rebuildable state, never a competing source of the underlying business truth.
+
+Choose among:
+
+- incremental affected-bucket update when the application already knows the canonical change;
+- coalesced durable projection refresh for more expensive aggregation;
+- periodic refresh for historical/system trends where bounded staleness is acceptable.
+
+Normal reads should then use one/few indexed bounded projection queries. Projection refresh uses set-based SQL/upsert/batching, is idempotent/rebuildable where practical and obeys the resource limits in #857.
+
+Do not create projection tables for already-cheap indexed counts. A statistics table must remove meaningful repeated work, not merely move a simple query elsewhere.
+
 ## Full-text + fuzzy search (PostgreSQL FTS + pg_trgm)
 
 A single shared search backend (`Features/Search`, e.g. `MediaSearchService`) used
