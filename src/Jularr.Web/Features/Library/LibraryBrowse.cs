@@ -11,7 +11,7 @@ namespace Jularr.Web.Features.Library;
 /// <param name="PlayableUnits">Episodes (or specials, for a title that only has those) with a file.</param>
 /// <param name="MissingUnits">Known episodes without a file, plus the ones a finished title's provider lists beyond the library.</param>
 /// <param name="LastWatchedAt">The last meaningful watch progress of the profile; null when never watched.</param>
-/// <param name="WorkId">The canonical identity of the title; the Card href of an Anime is still keyed by its legacy record, and empty for titles without a detail page yet.</param>
+/// <param name="WorkId">The canonical identity of the title; the Card href of an Anime is still keyed by its legacy record.</param>
 /// <param name="RuntimeMinutes">The runtime of a Movie from its analysed file; null for episodic titles and when unknown.</param>
 /// <param name="RemainingMinutes">What is left of a Movie that is in progress; null otherwise.</param>
 public sealed record LibraryCardEntry(
@@ -96,9 +96,12 @@ public sealed record LibraryLanguagePreference(string? Audio, string? Subtitle)
     }
 
     /// <summary>Whether the title has the preferred audio or the preferred subtitle language.</summary>
-    public bool IsAvailableIn(LibraryCardEntry entry) =>
-        (Audio is not null && LibraryBrowse.Has(entry.Card.AudioLanguages, Audio))
-        || (Subtitle is not null && LibraryBrowse.Has(entry.Card.SubtitleLanguages, Subtitle));
+    public bool IsAvailableIn(LibraryCardEntry entry) => IsAvailableIn(entry.Card.AudioLanguages, entry.Card.SubtitleLanguages);
+
+    /// <summary>Whether the given audio or subtitle languages include the preferred audio or the preferred subtitle language.</summary>
+    public bool IsAvailableIn(IEnumerable<string>? audio, IEnumerable<string>? subtitles) =>
+        (Audio is not null && LibraryBrowse.Has(audio, Audio))
+        || (Subtitle is not null && LibraryBrowse.Has(subtitles, Subtitle));
 }
 
 /// <summary>What the Library grid is narrowed and ordered by; every member round-trips through the address.</summary>
@@ -182,7 +185,7 @@ public sealed record LibraryScopeTab(string LabelKey, string Href, bool IsActive
 /// <summary>Everything one Library card renders, resolved and localised; build it with <see cref="Create"/>.</summary>
 public sealed record LibraryCardView(
     string Title,
-    string? Href,
+    string Href,
     string? PosterUrl,
     string Initial,
     string? StatusText,
@@ -266,7 +269,7 @@ public sealed record LibraryCardView(
 
         return new LibraryCardView(
             card.Title,
-            string.IsNullOrEmpty(card.Href) ? null : card.Href,
+            card.Href,
             entry.PosterUrl,
             InitialOf(card.Title),
             statusText,
@@ -334,14 +337,14 @@ public static class LibraryBrowse
     public const string BasePath = "/Library";
 
     /// <summary>
-    /// The detail address of a title; an Anime is keyed by its legacy record id until its detail page moves to the
-    /// Work. Movies and Series have no detail page yet, so their cards are not links (null) until a later slice
-    /// builds /Library/Movie/{workId} and /Library/Series/{workId}.
+    /// The detail address of a title. Movies and Series are keyed by their Work; an Anime is still keyed by its legacy
+    /// record id until its detail page moves to the Work.
     /// </summary>
-    public static string? DetailHref(WorkMediaType mediaType, Guid id) => mediaType switch
+    public static string DetailHref(WorkMediaType mediaType, Guid id) => mediaType switch
     {
         WorkMediaType.Anime => $"/Library/Anime/{id}",
-        WorkMediaType.Series or WorkMediaType.Movie => null,
+        WorkMediaType.Series => $"/Library/Series/{id}",
+        WorkMediaType.Movie => $"/Library/Movie/{id}",
         _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
     };
 
@@ -705,7 +708,7 @@ public static class LibraryBrowse
     }
 
     /// <summary>Case-insensitive membership of a language code in a card's language list.</summary>
-    public static bool Has(IReadOnlyList<string>? languages, string code) =>
+    public static bool Has(IEnumerable<string>? languages, string code) =>
         languages is not null && languages.Any(x => string.Equals(x, code, StringComparison.OrdinalIgnoreCase));
 
     private static string? FormatOf(LibraryCardEntry entry) =>

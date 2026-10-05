@@ -44,8 +44,8 @@ public sealed class LibraryCanonicalReadTests
             new[] { WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie },
             read.Entries.Select(x => x.MediaType).ToArray());
         Assert.AreEqual($"/Library/Anime/{anime.Anime.Id}", Entry(read, anime.Work.Id).Card.Href, "Anime keeps its legacy-keyed detail route.");
-        Assert.AreEqual(string.Empty, Entry(read, series.Id).Card.Href, "Series have no detail page yet.");
-        Assert.AreEqual(string.Empty, Entry(read, movie.Id).Card.Href, "Movies have no detail page yet.");
+        Assert.AreEqual($"/Library/Series/{series.Id}", Entry(read, series.Id).Card.Href, "A Series is keyed by its Work.");
+        Assert.AreEqual($"/Library/Movie/{movie.Id}", Entry(read, movie.Id).Card.Href, "A Movie is keyed by its Work.");
         Assert.AreEqual(MediaBannerKind.Series, Entry(read, series.Id).Card.Kind);
         Assert.AreEqual(2021, Entry(read, series.Id).Card.Year);
         Assert.AreEqual(124, Entry(read, movie.Id).RuntimeMinutes, "Runtime comes from the analysed file.");
@@ -187,7 +187,7 @@ public sealed class LibraryCanonicalReadTests
         Assert.AreEqual(2, aliceSeries.Card.Progress?.NextNumber, "Alice resumes episode 2.");
         Assert.AreEqual(25, aliceSeries.Card.Progress?.Percent, "One of four episodes is watched.");
         Assert.AreEqual(BaseTime.AddMinutes(1), aliceSeries.LastWatchedAt);
-        Assert.AreEqual(string.Empty, aliceSeries.Card.Progress?.NextUrl);
+        Assert.AreEqual($"/Library/Series/{series.Id}", aliceSeries.Card.Progress?.NextUrl, "A Series card opens its detail page, which plays the next episode.");
 
         var bobSeries = Entry(bob, series.Id);
         Assert.AreEqual(4, bobSeries.Card.Progress?.NextNumber, "Bob continues after his own episode 3, whatever Alice watched.");

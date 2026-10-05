@@ -1,0 +1,53 @@
+/* Movie and Series detail (docs/mockups/movie-detail, anime-series-detail): the hero, season rail, episode cards and related
+   panel are the shared anime-detail.css pieces; this file only adds what the Movie page and the canonical frame need.
+   Surfaces use the shared theme tokens, so light, dark and every accent work unchanged. State is shown with tints, weight
+   and full borders only, never a coloured left edge (CssAccentStripeTests). */
+
+/* A hero state that is only information, such as "Not available": same pill as the actions, but not a control. */
+.ad-secondary.ad-static { cursor: default; }
+.ad-secondary.ad-static:hover { background: rgb(255 255 255 / .14); }
+
+/* A related Work without a consumer page is listed without a link. */
+.ad-related li > a:not([href]) { cursor: default; }
+.ad-related li > a:not([href]):hover { background: var(--surface-2); }
+
+/* Movie body: compact cards under the hero, side by side when there is room. ---------------------------------------- */
+.vd-body { display: grid; gap: 20px; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.vd-body > .ad-related { margin: 0; }
+
+.vd-card {
+    display: grid; gap: 12px; min-width: 0; padding: 16px;
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: var(--surface); box-shadow: var(--shadow-card);
+}
+.vd-card h2 { margin: 0; font-size: 18px; }
+
+.vd-langs { display: grid; gap: 8px; margin: 0; }
+.vd-langs > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.vd-langs dt { min-width: 76px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.vd-langs dd { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+
+.vd-language-state {
+    margin: 0; padding: 6px 10px; border-radius: 10px; width: fit-content;
+    background: color-mix(in srgb, var(--success-text) 13%, transparent); color: var(--success-text);
+    font-size: 12px; font-weight: 700;
+}
+.vd-language-state.is-other { background: color-mix(in srgb, var(--warning-text) 15%, transparent); color: var(--warning-text); }
+
+.vd-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.vd-badges li {
+    padding: 3px 9px; border: 1px solid var(--border-strong); border-radius: 8px;
+    color: var(--text-secondary); font-size: 12px; font-weight: 800; letter-spacing: .03em;
+}
+
+.vd-versions summary { width: fit-content; color: var(--accent-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.vd-versions summary:hover { text-decoration: underline; }
+.vd-versions ol { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.vd-versions li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 13px; }
+.vd-versions li span { color: var(--muted); font-size: 12px; }
+
+.vd-facts { display: grid; gap: 10px; margin: 0; }
+.vd-facts dt { color: var(--muted); font-size: 12px; font-weight: 700; }
+.vd-facts dd { margin: 2px 0 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+
+.vd-page :is(a, button, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

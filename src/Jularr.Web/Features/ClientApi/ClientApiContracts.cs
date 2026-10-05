@@ -3,6 +3,7 @@ using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Playback;
+using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Speech;
 using Jularr.Web.Features.Storage;
@@ -182,6 +183,11 @@ public static class ClientApiRoutes
 
     public static string VideoProgress =>
         $"{ClientApiContract.BasePath}/video/progress";
+
+    /// <summary>The cues of an embedded text subtitle stream of a canonical video target, addressed by the target, not by a legacy episode.</summary>
+    public static string VideoSubtitleTrackCues(PlaybackVideoTarget target, string trackId) =>
+        $"{ClientApiContract.BasePath}/video/subtitle-tracks/{Uri.EscapeDataString(trackId)}/cues?workId={target.WorkId:D}"
+        + (target.WorkEpisodeId is { } episodeId ? $"&workEpisodeId={episodeId:D}" : "");
 
     public static string StreamSession(Guid sessionId) =>
         $"{ClientApiContract.BasePath}/stream-sessions/{sessionId:D}";

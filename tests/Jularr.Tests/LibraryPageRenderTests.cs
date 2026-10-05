@@ -252,15 +252,14 @@ public sealed class LibraryPageRenderTests
         StringAssert.Contains(movies, "1 item");
         var movieCard = Between(movies, "<article class=\"lib-card", "</article>");
         StringAssert.Contains(movieCard, "Moon Empire");
-        Assert.IsFalse(movieCard.Contains("<a ", StringComparison.Ordinal), "Movies have no detail page yet, so the card is not a link.");
-        Assert.IsFalse(movies.Contains("/Library/Movie/", StringComparison.Ordinal));
+        StringAssert.Contains(movieCard, $"href=\"/Library/Movie/{movie.Id}\"");
         StringAssert.Contains(movies, "2024 · 2h 04m");
         StringAssert.Contains(movies, "name=\"type\" value=\"movie\"");
         Assert.IsFalse(movies.Contains("Starfall Chronicle", StringComparison.Ordinal));
 
         var seriesPage = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library?type=series", asOwner: false));
         StringAssert.Contains(seriesPage, "Dark Harbor");
-        Assert.IsFalse(seriesPage.Contains("/Library/Series/", StringComparison.Ordinal));
+        StringAssert.Contains(seriesPage, $"href=\"/Library/Series/{series.Id}\"");
         StringAssert.Contains(seriesPage, "Partly available");
         Assert.IsFalse(seriesPage.Contains("Moon Empire", StringComparison.Ordinal));
     }

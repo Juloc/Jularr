@@ -337,7 +337,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
                     : null)
             .Max();
 
-        var href = LibraryBrowse.DetailHref(work.MediaType, anime?.AnimeId ?? work.Id) ?? string.Empty;
+        var href = LibraryBrowse.DetailHref(work.MediaType, anime?.AnimeId ?? work.Id);
         var poster = anime is null ? null : AnimeArtworkStore.ResolvePosterUrl(anime.AnimeId, anime.CoverImageUrl);
         var fanart = anime is null ? null : AnimeArtworkStore.ResolveFanartUrl(anime.AnimeId, anime.BannerImageUrl);
         var card = new MediaBannerCardData(
@@ -362,7 +362,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
         var files = context.MovieFiles[work.Id].ToArray();
         context.MovieProgress.TryGetValue(work.Id, out var row);
         var meaningful = row is not null && (row.IsCompleted || row.PositionMs >= VideoProgressService.MinimumResumeMs);
-        var href = LibraryBrowse.DetailHref(work.MediaType, work.Id) ?? string.Empty;
+        var href = LibraryBrowse.DetailHref(work.MediaType, work.Id);
 
         var state = row is { IsCompleted: true }
             ? MediaBannerProgressState.Completed

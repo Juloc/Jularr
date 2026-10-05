@@ -1,0 +1,94 @@
+@model (SeriesDetailModel Page, Jularr.Web.Features.Library.VideoDetailEpisode Episode)
+@using Jularr.Web.Features.Library
+@using Jularr.Web.Features.Acquisition.Access
+@* One episode of the Series detail page (docs/mockups/anime-series-detail/SPEC.md): thumbnail with runtime and progress,
+   code and title, compact audio/subtitle languages, availability and an overflow menu. Release and file details never
+   appear here. An episode without a file has no player link; it can be requested through the shared Request flow
+   when nothing is requested yet. The same markup is a card in the grid and a row in the list layout. *@
+@{
+    var page = Model.Page;
+    var ui = page.Ui;
+    var episode = Model.Episode;
+    var code = AnimeDetailView.EpisodeCode(episode.SeasonNumber, episode.Number);
+    var title = string.IsNullOrWhiteSpace(episode.Title) ? ui.Format("library.browse.card.episode", ("number", episode.Number)) : episode.Title;
+    var stateName = AnimeDetailView.AvailabilityName(episode.Availability);
+    var stateIcon = episode.Availability == AnimeEpisodeAvailability.OtherLanguageOnly ? "language" : stateName;
+    var href = episode.HasFile ? VideoDetailView.WatchHref(page.Detail.WorkId, episode.Id) : null;
+    var openLabel = href is null ? null : ui.Format("library.anime.openEpisodeAria", ("code", code), ("title", title));
+    var offersRequest = page.OffersRequest && episode.Availability == AnimeEpisodeAvailability.Unavailable;
+    var audio = AnimeDetailView.Chips(episode.Audio, page.Detail.Preference.Audio);
+    var subtitles = AnimeDetailView.Chips(episode.Subtitles, page.Detail.Preference.Subtitle);
+}
+<article class="ad-ep ad-ep-@stateName@(episode.IsWatched ? " is-watched" : "")">
+    <a class="ad-ep-thumb" href="@href" aria-label="@openLabel" tabindex="@(href is null ? -1 : null)" aria-hidden="@(href is null ? "true" : null)">
+        @if (href is not null)
+        {
+            <span class="ad-ep-play" aria-hidden="true"><partial name="_AnimeDetailIcon" model='"play"' /></span>
+        }
+        @if (episode.RuntimeMinutes is int minutes)
+        {
+            <span class="ad-ep-runtime">@ui.Format("library.anime.durationMinutes", ("minutes", minutes))</span>
+        }
+        @if (episode.IsWatched)
+        {
+            <span class="ad-ep-watched" title="@ui["library.episode.watched"]">
+                <partial name="_AnimeDetailIcon" model='"check"' />
+                <span class="sr-only">@ui["library.episode.watched"]</span>
+            </span>
+        }
+        else if (episode.ResumePercent is int resume)
+        {
+            <span class="ad-ep-resume progress-track" role="progressbar"
+                  aria-label="@ui.Format("library.mediaCard.progressWatched", ("percent", resume))"
+                  aria-valuemin="0" aria-valuemax="100" aria-valuenow="@resume"><span style="width:@resume%"></span></span>
+            <span class="ad-ep-resume-text" aria-hidden="true">@ui.Format("library.mediaCard.percent", ("percent", resume))</span>
+        }
+    </a>
+
+    <div class="ad-ep-body">
+        <div class="ad-ep-head">
+            <div class="ad-ep-title">
+                <p class="ad-ep-code">@code</p>
+                <h3><a href="@href">@title</a></h3>
+            </div>
+            @if (offersRequest)
+            {
+                <details class="ad-menu" data-ad-menu>
+                    <summary class="ad-menu-button" aria-label="@ui["library.anime.episodeActions"]">
+                        <partial name="_AnimeDetailIcon" model='"more"' />
+                    </summary>
+                    <div class="ad-menu-panel">
+                        <button type="button" data-dc-card-request data-dc-preselect="@episode.Id">@ui["library.video.requestEpisode"]</button>
+                    </div>
+                </details>
+            }
+        </div>
+
+        <div class="ad-ep-foot">
+            <div class="ad-langs">
+                @foreach (var (label, icon, chips) in new[] { (ui["library.mediaCard.audioLanguages"], "audio", audio), (ui["library.mediaCard.subtitleLanguages"], "subtitles", subtitles) })
+                {
+                    if (chips.Any)
+                    {
+                        <span class="ad-lang-group" role="group" aria-label="@label">
+                            <span class="ad-lang-icon" title="@label"><partial name="_AnimeDetailIcon" model="icon" /></span>
+                            @foreach (var chip in chips.Shown)
+                            {
+                                <span class="ad-lang@(chip.IsPreferred ? " is-preferred" : "")"
+                                      title="@(chip.IsPreferred ? ui["library.anime.preferredLanguage"] : null)">@chip.Code</span>
+                            }
+                            @if (chips.More > 0)
+                            {
+                                <span class="ad-lang ad-lang-more" title="@ui.Format("library.anime.moreLanguages", ("count", chips.More))">+@chips.More</span>
+                            }
+                        </span>
+                    }
+                }
+            </div>
+            <span class="ad-state ad-state-@stateName">
+                <partial name="_AnimeDetailIcon" model="stateIcon" />
+                @ui[AnimeDetailView.AvailabilityKey(episode.Availability)]
+            </span>
+        </div>
+    </div>
+</article>

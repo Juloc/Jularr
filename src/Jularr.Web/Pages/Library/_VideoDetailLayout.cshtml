@@ -1,0 +1,59 @@
+@using Jularr.Web.Features.Library
+@using Jularr.Web.Ui
+@* The frame of the Movie and Series detail pages (docs/mockups/movie-detail, anime-series-detail): back link, the host
+   of the shared Request dialog and the stylesheets and scripts both pages need. The Request dialog is the one of
+   Discover (Pages/Discover); the host only names the title it is about, and the dialog posts to the Discover handlers,
+   so there is no second request path. It exists only when the profile may request and no request is open yet. *@
+@{
+    Layout = "_Layout";
+    var page = (VideoDetailPageModel)ViewContext.ViewData.Model!;
+    var ui = page.Ui;
+    var detail = page.Detail;
+    var request = detail.Request;
+    var offersRequest = page.OffersRequest;
+    var backLink = new ContextBackLinkModel("/Library", $"← {ui["nav.library"]}", "back-link");
+    var meta = string.Join(" · ", new[] { detail.Year?.ToString(System.Globalization.CultureInfo.InvariantCulture), ui[VideoDetailView.KindKey(detail.MediaType)] }.Where(x => !string.IsNullOrEmpty(x)));
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/anime-detail.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/video-detail.css" asp-append-version="true" />
+    @if (offersRequest)
+    {
+        <link rel="stylesheet" href="~/css/discover-browse.css" asp-append-version="true" />
+        <link rel="stylesheet" href="~/css/discover-request.css" asp-append-version="true" />
+    }
+}
+@section Scripts {
+    <script src="~/js/context-back-link.js" asp-append-version="true"></script>
+    <script src="~/js/anime-detail.js" asp-append-version="true" defer></script>
+    @if (offersRequest)
+    {
+        <script src="~/js/discover-request.js" asp-append-version="true" defer></script>
+        <script src="~/js/video-detail.js" asp-append-version="true" defer></script>
+    }
+}
+
+@if (offersRequest)
+{
+    <div class="ad-page vd-page"
+         data-request-host
+         data-resolve-url="@Url.Page("/Discover/Index", "Resolve")"
+         data-request-url="@Url.Page("/Discover/Index", "Request")"
+         data-dc-category="@request!.Category"
+         data-dc-provider="@request.Provider"
+         data-dc-external-id="@request.ExternalId"
+         data-dc-title="@detail.Title"
+         data-dc-meta="@meta">
+        @Html.AntiForgeryToken()
+        <partial name="_ContextBackLink" model="backLink" />
+        @RenderBody()
+        <partial name="~/Pages/Discover/_DiscoverRequestDialog.cshtml" model="ui" />
+    </div>
+}
+else
+{
+    <div class="ad-page vd-page">
+        <partial name="_ContextBackLink" model="backLink" />
+        @RenderBody()
+    </div>
+}

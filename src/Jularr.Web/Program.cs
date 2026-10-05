@@ -408,6 +408,7 @@ builder.Services.AddSingleton<SeasonSegmentDetectionQueue>();
 builder.Services.AddScoped<MediaSegmentService>();
 builder.Services.AddScoped<MediaSegmentSidecarImporter>();
 builder.Services.AddScoped<VideoProgressService>();
+builder.Services.AddScoped<VideoDetailQuery>();
 builder.Services.AddScoped<CanonicalVideoTargetResolver>();
 builder.Services.AddScoped<CanonicalVideoProgressBackfillService>();
 builder.Services.AddScoped<ActiveSessionService>();

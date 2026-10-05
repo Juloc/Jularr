@@ -39,6 +39,28 @@ public sealed record VideoRequestPayload(
     int? ActiveEpisodeNumber = null,
     Guid[]? SelectedSeasonIds = null) : ReleaseRequestPayload;
 
+/// <summary>
+/// The one owner of which TV episodes a request covers: the executor uses it to decide what to search and the
+/// detail page to show each episode's request state, so the two can never disagree about the scope.
+/// </summary>
+public sealed class VideoRequestSelection(VideoRequestPayload payload, DateTime requestCreatedAt)
+{
+    private readonly HashSet<Guid> selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
+    private readonly HashSet<Guid> selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
+
+    public bool Includes(Guid episodeId, Guid? seasonId, DateTime? airedAt) =>
+        payload.Scope switch
+        {
+            VideoRequestScope.AllCurrentAndFuture => true,
+            VideoRequestScope.FutureOnly => airedAt is not null && airedAt > requestCreatedAt,
+            VideoRequestScope.Custom =>
+                selectedEpisodes.Contains(episodeId)
+                || seasonId is { } season && selectedSeasons.Contains(season)
+                || (payload.MonitorFuture && airedAt is not null && airedAt > requestCreatedAt),
+            _ => false
+        };
+}
+
 /// <summary>Owns the per-kind generic monitoring stores without registering two ambiguous MonitoringStore instances.</summary>
 public sealed class VideoAcquisitionMonitoringStores
 {
@@ -433,12 +455,11 @@ public sealed class VideoAcquisitionEngine(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
-        var selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
-        var selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
+        var selection = new VideoRequestSelection(payload, request.CreatedAt);
 
         return episodes
             .Where(x => !x.HasFile)
-            .Where(x => IsIncludedTvUnit(request, payload, selectedEpisodes, selectedSeasons, x))
+            .Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt))
             .Where(x => x.AiredAt is null || x.AiredAt <= now)
             .OrderBy(x => x.SeasonNumber)
             .ThenBy(x => x.EpisodeNumber)
@@ -452,11 +473,10 @@ public sealed class VideoAcquisitionEngine(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
-        var selectedEpisodes = payload.SelectedEpisodeIds.ToHashSet();
-        var selectedSeasons = (payload.SelectedSeasonIds ?? []).ToHashSet();
+        var selection = new VideoRequestSelection(payload, request.CreatedAt);
         var missingIncluded = episodes
             .Where(x => !x.HasFile)
-            .Where(x => IsIncludedTvUnit(request, payload, selectedEpisodes, selectedSeasons, x))
+            .Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt))
             .ToArray();
         var hasMissingDue = missingIncluded.Any(x => x.AiredAt is null || x.AiredAt <= now);
 
@@ -516,26 +536,6 @@ public sealed class VideoAcquisitionEngine(
                 playable.Contains(x.Id)))
             .ToArray();
     }
-
-    private static bool IsIncludedTvUnit(
-        AcquisitionRequest request,
-        VideoRequestPayload payload,
-        HashSet<Guid> selectedEpisodes,
-        HashSet<Guid> selectedSeasons,
-        VideoUnit unit) =>
-        payload.Scope switch
-        {
-            VideoRequestScope.AllCurrentAndFuture => true,
-            VideoRequestScope.FutureOnly =>
-                unit.AiredAt is not null && unit.AiredAt > request.CreatedAt,
-            VideoRequestScope.Custom =>
-                selectedEpisodes.Contains(unit.Id)
-                || unit.SeasonId is { } seasonId && selectedSeasons.Contains(seasonId)
-                || (payload.MonitorFuture
-                    && unit.AiredAt is not null
-                    && unit.AiredAt > request.CreatedAt),
-            _ => false
-        };
 
     private async Task<IndexerAnimeSearchResult> SearchMovieAsync(
         VideoRequestPayload payload,

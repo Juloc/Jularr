@@ -5,8 +5,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class WatchPageMarkupTests
 {
-    private static readonly string Page = File.ReadAllText(Path.Combine(
-        FindRepositoryRoot(), "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+    private static readonly string Page = EpisodePlayerSource.Read(FindRepositoryRoot());
 
     [TestMethod]
     public void PlayerHasOwnChromeWithExactlyOneTimelineAndNoNativeControls()

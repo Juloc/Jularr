@@ -76,7 +76,7 @@ public sealed class OfflineLibraryReaderIntegrationTests
     public void GlobalLayoutAndEpisodePlayerExposeTheBinaryOfflinePackageFlow()
     {
         var layout = ReadPage("Shared", "_Layout.cshtml");
-        var episode = ReadPage("Library", "Episode.cshtml");
+        var episode = EpisodePlayerSource.Read(RepositoryRoot());
         StringAssert.Contains(layout, "js/offline-media-manager.js");
         StringAssert.Contains(layout, "js/offline-media-ui.js");
         StringAssert.Contains(episode, "data-offline-episode-save");

@@ -17,6 +17,12 @@
     const progressUrl = root.dataset.progressUrl || "";
     let offlineMediaUrl = "";
     const planUrl = root.dataset.playbackPlanUrl || "";
+    // A Movie or Series page plays a canonical target (a Work, or a WorkEpisode within it): the plan, progress and
+    // bootstrap routes then take that target in the request body instead of a legacy episode id in the address.
+    const videoTarget = root.dataset.videoTargetWork
+        ? { workId: root.dataset.videoTargetWork, workEpisodeId: root.dataset.videoTargetEpisode || null }
+        : null;
+    const targetBody = videoTarget ? { target: videoTarget } : {};
     const persistedResumeSeconds = Number(root.dataset.resumeSeconds);
     const completionThreshold = Number(root.dataset.completionThreshold);
     const video = root.querySelector("[data-playback-video]");
@@ -318,6 +324,7 @@
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+                ...targetBody,
                 positionMs,
                 durationMs,
                 completed
@@ -818,10 +825,17 @@
         }
 
         try {
-            const response = await fetch(url, {
-                credentials: "same-origin",
-                headers: { "Accept": "application/json" }
-            });
+            const response = await fetch(url, videoTarget
+                ? {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+                    body: JSON.stringify(targetBody)
+                }
+                : {
+                    credentials: "same-origin",
+                    headers: { "Accept": "application/json" }
+                });
             if (!response.ok) {
                 return false;
             }
@@ -955,6 +969,7 @@
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
+                ...targetBody,
                 capabilities,
                 audioTrackId: selectedAudioTrackId,
                 subtitleTrackId: burnInSubtitleTrackId(),

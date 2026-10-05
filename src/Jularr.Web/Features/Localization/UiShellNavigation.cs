@@ -73,9 +73,10 @@ public static class UiNavigationCatalog
 
     /// <summary>
     /// Media types inside Library. The Library destination is active on all of them. The video tab is one
-    /// destination: Anime, Series and Movies are scopes of the same page, not separate routes. The Anime
-    /// pages under /Library are narrower roots of their own, so a profile that cannot browse Anime does not
-    /// reach them through the shared Library hub.
+    /// destination: Anime, Series and Movies are scopes of the same page, not separate routes. The Anime,
+    /// Movie and Series pages under /Library are narrower roots of their own, so a profile that cannot browse the type
+    /// does not reach them through the shared Library hub. The Watch player serves Movies and Series; it also checks
+    /// the media type of the Work it opens.
     /// </summary>
     public static readonly UiNavigationEntry[] LibraryTabs =
     [
@@ -86,6 +87,9 @@ public static class UiNavigationCatalog
                 new("/Library/Anime", [WorkMediaType.Anime]),
                 new("/Library/AnimeRepair", [WorkMediaType.Anime]),
                 new("/Library/Episode", [WorkMediaType.Anime]),
+                new("/Library/Movie", [WorkMediaType.Movie]),
+                new("/Library/Series", [WorkMediaType.Series]),
+                new("/Library/Watch", [WorkMediaType.Movie, WorkMediaType.Series]),
                 new("/Library/PresentationGroups", [WorkMediaType.Anime]),
                 new("/Library/Rename", [WorkMediaType.Anime])
             ]),

@@ -1,11 +1,13 @@
 // The one Request dialog of Discover (docs/mockups/add-request-flow/SPEC.md). A card or preview button opens it with
 // the identity of the picked title; the server resolves that identity and returns only the settings groups its media
 // kind has (Scope + Included content for series, language for anime). Submitting shows the success state in place and
-// tells discover.js (dc:request-created) so the card behind the dialog shows the persisted request.
+// tells the host (dc:request-created) so the card or page behind the dialog shows the persisted request. The host is the
+// Discover page or a media detail page ([data-request-host]); a detail page names its one title with data-dc-* attributes
+// on the host and can preselect episodes of a series with data-dc-preselect on the Request trigger.
 (() => {
     "use strict";
 
-    const root = document.querySelector("[data-discover]");
+    const root = document.querySelector("[data-discover], [data-request-host]");
     const dialog = root?.querySelector("[data-dc-rq]");
     if (!dialog) return;
 
@@ -47,7 +49,7 @@
             };
         }
 
-        const card = trigger.closest("[data-dc-card]");
+        const card = trigger.closest("[data-dc-card]") ?? root;
         const data = card.dataset;
         return {
             category: data.dcCategory,
@@ -57,7 +59,8 @@
             subtitle: data.dcSubtitle,
             author: data.dcAuthor,
             cover: data.dcCover,
-            meta: card.querySelector(".dc-card-meta")?.textContent.trim()
+            meta: data.dcMeta ?? card.querySelector(".dc-card-meta")?.textContent.trim(),
+            preselect: trigger.dataset.dcPreselect?.split(",") ?? null
         };
     }
 
@@ -146,6 +149,7 @@
             // Same-origin, server-rendered and HTML-encoded by Razor; the settings of the dialog.
             body.innerHTML = await response.text();
             prepare();
+            if (identity.preselect && scopeSelect()) preselectEpisodes(identity.preselect);
         } catch (error) {
             if (error?.name === "AbortError") return;
             showMessage(text("loadFailed"), true);
@@ -189,6 +193,25 @@
         }
 
         body.querySelector("[data-dc-rq-scope-hint]").textContent = text(`scope${value.charAt(0).toUpperCase()}${value.slice(1)}`);
+        refreshCount();
+        refreshSubmit();
+    }
+
+    // A detail page asks for exactly the episodes it shows as missing: a custom selection of those episodes.
+    function preselectEpisodes(ids) {
+        const wanted = new Set(ids);
+        for (const row of seasonRows()) {
+            const boxes = episodeBoxes(row);
+            for (const box of boxes) box.checked = wanted.has(box.value);
+            const check = row.querySelector("[data-dc-rq-season-check]");
+            const checked = boxes.filter(box => box.checked).length;
+            check.checked = boxes.length > 0 && checked === boxes.length;
+            check.indeterminate = checked > 0 && checked < boxes.length;
+        }
+
+        futureBox().checked = false;
+        scopeSelect().value = "custom";
+        body.querySelector("[data-dc-rq-scope-hint]").textContent = text("scopeCustom");
         refreshCount();
         refreshSubmit();
     }

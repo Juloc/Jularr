@@ -1,0 +1,160 @@
+@using System.Globalization
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Library
+@using Jularr.Web.Features.MediaCore
+@model VideoDetailPageModel
+@* The hero of the Movie and Series detail pages (docs/mockups/movie-detail and anime-series-detail): one backdrop-less
+   gradient (the home hero fallback, until Work artwork exists), the title, a compact meta line, the one state-derived
+   primary action and the facts strip inside the hero. Nothing is rendered for data that does not exist. *@
+@{
+    var ui = Model.Ui;
+    var detail = Model.Detail;
+    var hero = Model.Hero;
+    var isMovie = detail.MediaType == WorkMediaType.Movie;
+    var culture = CultureInfo.InvariantCulture;
+    var knownEpisodes = detail.Episodes.Count;
+    var availableEpisodes = detail.Episodes.Count(x => x.HasFile);
+    var regularSeasons = detail.Episodes.Where(x => x.SeasonNumber > 0).Select(x => x.SeasonNumber).Distinct().Count();
+    var hasSpecials = detail.Episodes.Any(x => x.SeasonNumber == 0);
+    var structure = string.Join(" + ", new[]
+    {
+        regularSeasons > 1 ? ui.Format("mediaFacts.seasonCount", ("count", regularSeasons)) : null,
+        hasSpecials ? ui["library.anime.specials"] : null
+    }.Where(x => x is not null));
+    var runtime = detail.MovieRuntimeMinutes;
+    var audio = AnimeDetailView.Chips(detail.Audio, detail.Preference.Audio);
+    var subtitles = AnimeDetailView.Chips(detail.Subtitles, detail.Preference.Subtitle);
+    var offersRequest = Model.OffersRequest;
+    var missing = VideoDetailView.RequestableEpisodes(detail.Episodes);
+    var episodesText = availableEpisodes == knownEpisodes
+        ? ui.Format("mediaFacts.episodeCount", ("count", knownEpisodes))
+        : ui.Format("library.video.episodesAvailable", ("available", availableEpisodes), ("total", knownEpisodes));
+    var openStatus = detail.Request?.Open?.Status;
+    var watched = detail.Episodes.Count(x => x.IsWatched);
+    var watchedPercent = knownEpisodes == 0 ? 0 : watched * 100 / knownEpisodes;
+    var hasStrip = runtime is not null || knownEpisodes > 0 || audio.Any || subtitles.Any || watched > 0;
+    string RequestStateKey(AcquisitionRequestStatus status) =>
+        AnimeDetailView.AvailabilityKey(AnimeDetailView.Availability(AnimeEpisodeMediaFacts.None, status, null, null));
+    string RequestStateIcon(AcquisitionRequestStatus status) =>
+        AnimeDetailView.AvailabilityName(AnimeDetailView.Availability(AnimeEpisodeMediaFacts.None, status, null, null));
+}
+<section class="ad-hero ad-hero-derived" aria-labelledby="ad-title">
+    <div class="ad-hero-bg" aria-hidden="true"></div>
+    <div class="ad-hero-copy">
+        <h1 id="ad-title">@detail.Title</h1>
+        @if (detail.NativeTitle is { Length: > 0 } nativeTitle)
+        {
+            <p class="ad-hero-alt"><span>@nativeTitle</span></p>
+        }
+
+        <ul class="ad-hero-meta">
+            @if (detail.Year is int year)
+            {
+                <li>@year.ToString(culture)</li>
+            }
+            <li>@ui[VideoDetailView.KindKey(detail.MediaType)]</li>
+            @if (structure.Length > 0)
+            {
+                <li>@structure</li>
+            }
+        </ul>
+
+        <div class="ad-hero-actions">
+            @switch (hero.Kind)
+            {
+                case VideoHeroKind.Play:
+                case VideoHeroKind.Continue:
+                case VideoHeroKind.WatchAgain:
+                    <a class="ad-primary" href="@hero.Href">
+                        <partial name="_AnimeDetailIcon" model='"play"' />
+                        <span>@ui[VideoDetailView.PlayKey(hero.Kind)]</span>
+                        @if (hero.Episode is { } episode)
+                        {
+                            <small>@AnimeDetailView.EpisodeCode(episode.SeasonNumber, episode.Number)</small>
+                        }
+                    </a>
+                    break;
+                case VideoHeroKind.Request:
+                    <button type="button" class="ad-primary" data-dc-card-request>
+                        <partial name="_AnimeDetailIcon" model='"plus"' />
+                        <span>@ui["discover.card.request"]</span>
+                    </button>
+                    break;
+                case VideoHeroKind.None:
+                    <span class="ad-secondary ad-static">
+                        <partial name="_AnimeDetailIcon" model='"unavailable"' />
+                        <span>@ui["library.anime.availability.unavailable"]</span>
+                    </span>
+                    break;
+            }
+
+            @if (openStatus is { } status)
+            {
+                <a class="ad-secondary" href="@AcquisitionRequestService.HistoryPath" title="@ui["discover.request.viewStatus"]">
+                    <partial name="_AnimeDetailIcon" model="RequestStateIcon(status)" />
+                    <span>@ui[RequestStateKey(status)]</span>
+                </a>
+            }
+
+            @if (offersRequest && !isMovie && missing.Count > 0 && hero.Kind != VideoHeroKind.Request)
+            {
+                <details class="ad-menu" data-ad-menu>
+                    <summary class="ad-secondary ad-icon-button" aria-label="@ui["library.anime.moreActions"]">
+                        <partial name="_AnimeDetailIcon" model='"more"' />
+                    </summary>
+                    <div class="ad-menu-panel">
+                        <button type="button" data-dc-card-request data-dc-preselect="@string.Join(',', missing.Select(x => x.Id))">@ui["library.video.requestMissingAll"]</button>
+                    </div>
+                </details>
+            }
+        </div>
+    </div>
+
+    @if (hasStrip)
+    {
+        <ul class="ad-hero-strip">
+            @if (knownEpisodes > 0)
+            {
+                <li>
+                    <partial name="_AnimeDetailIcon" model='"episodes"' />
+                    <span>@episodesText</span>
+                </li>
+            }
+            @if (runtime is int minutes)
+            {
+                <li>
+                    <partial name="_AnimeDetailIcon" model='"clock"' />
+                    <span>@ui.Format("library.anime.durationMinutes", ("minutes", minutes))</span>
+                </li>
+            }
+            @foreach (var (label, icon, chips) in new[] { (ui["library.mediaCard.audioLanguages"], "audio", audio), (ui["library.mediaCard.subtitleLanguages"], "subtitles", subtitles) })
+            {
+                if (chips.Any)
+                {
+                    <li role="group" aria-label="@label" title="@label">
+                        <partial name="_AnimeDetailIcon" model="icon" />
+                        <span>
+                            @foreach (var chip in chips.Shown)
+                            {
+                                <span class="ad-strip-lang">@chip.Code</span>
+                            }
+                            @if (chips.More > 0)
+                            {
+                                <span class="ad-strip-lang is-partial" title="@ui.Format("library.anime.moreLanguages", ("count", chips.More))">+@chips.More</span>
+                            }
+                        </span>
+                    </li>
+                }
+            }
+            @if (watched > 0)
+            {
+                <li class="ad-strip-progress">
+                    <span>@ui.Format("library.video.watchedOf", ("watched", watched), ("total", knownEpisodes))</span>
+                    <span class="progress-track" role="progressbar"
+                          aria-label="@ui.Format("library.mediaCard.progressWatched", ("percent", watchedPercent))"
+                          aria-valuemin="0" aria-valuemax="100" aria-valuenow="@watchedPercent"><span style="width:@watchedPercent%"></span></span>
+                </li>
+            }
+        </ul>
+    }
+</section>

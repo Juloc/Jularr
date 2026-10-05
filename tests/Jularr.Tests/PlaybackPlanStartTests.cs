@@ -152,7 +152,7 @@ public sealed partial class PlaybackPlanStartTests
     {
         var root = PlayerControlsTests.RepositoryRoot();
         var player = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
-        var page = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+        var page = EpisodePlayerSource.Read(root);
 
         foreach (Match match in StaticTextKey().Matches(player))
         {

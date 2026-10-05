@@ -81,7 +81,7 @@ public sealed class PlayerGesturesTests
         StringAssert.Contains(chrome, "stage.addEventListener(\"pointerup\"");
         StringAssert.Contains(chrome, "\"seekBack10\" : \"seekForward10\"");
 
-        var page = Read("src", "Jularr.Web", "Pages", "Library", "Episode.cshtml");
+        var page = EpisodePlayerSource.Read(PlayerControlsTests.RepositoryRoot());
         var gestures = page.IndexOf("~/js/player-gestures.js", StringComparison.Ordinal);
         Assert.IsTrue(gestures > 0 && gestures < page.IndexOf("~/js/player-chrome.js", StringComparison.Ordinal));
         StringAssert.Contains(page, "data-seek-feedback=\"back\"");

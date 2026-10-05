@@ -3,8 +3,7 @@
 @model (LibraryCardView Card, UiTextBundle Ui)
 @* One title of the Library (docs/mockups/library): dominant poster, title, one status line, a thin progress bar,
    the audio and subtitle languages with the preferred ones first, and a single availability marker only when
-   the title is not complete. A title without a detail page yet is a plain card, not a link. The same markup is a poster
-   card in the grid and a row in the list layout.
+   the title is not complete. The same markup is a poster card in the grid and a row in the list layout.
    Styles: wwwroot/css/library.css. *@
 @{
     var card = Model.Card;
@@ -12,18 +11,9 @@
 }
 <article class="lib-card@(card.Availability is { } marker ? " lib-card-" + marker.CssModifier : "")">
     @* The whole card opens the title through the stretched title link; the poster link is only for pointers. *@
-    @if (card.Href is { } artHref)
-    {
-        <a class="lib-card-art" href="@artHref" tabindex="-1" aria-hidden="true">
-            <partial name="_LibraryCardArt" model="card" />
-        </a>
-    }
-    else
-    {
-        <span class="lib-card-art" aria-hidden="true">
-            <partial name="_LibraryCardArt" model="card" />
-        </span>
-    }
+    <a class="lib-card-art" href="@card.Href" tabindex="-1" aria-hidden="true">
+        <partial name="_LibraryCardArt" model="card" />
+    </a>
 
     @if (card.Availability is { } availability)
     {
@@ -35,16 +25,7 @@
 
     <div class="lib-card-body">
         <div class="lib-card-head">
-            <h3 class="lib-card-title">
-                @if (card.Href is { } titleHref)
-                {
-                    <a href="@titleHref">@card.Title</a>
-                }
-                else
-                {
-                    @card.Title
-                }
-            </h3>
+            <h3 class="lib-card-title"><a href="@card.Href">@card.Title</a></h3>
             @if (card.Action is { } action)
             {
                 <details class="lib-menu" data-lib-menu>

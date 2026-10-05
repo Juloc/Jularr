@@ -42,7 +42,7 @@ public sealed class LibraryBrowseTests
             new MediaBannerCardData(
                 mediaType == WorkMediaType.Movie ? MediaBannerKind.Movie : mediaType == WorkMediaType.Series ? MediaBannerKind.Series : MediaBannerKind.Anime,
                 title,
-                LibraryBrowse.DetailHref(mediaType, TitleId(title)) ?? string.Empty,
+                LibraryBrowse.DetailHref(mediaType, TitleId(title)),
                 ProviderStatus: status,
                 Year: year,
                 AverageScore: score,
@@ -119,18 +119,18 @@ public sealed class LibraryBrowseTests
     }
 
     [TestMethod]
-    public void OnlyAnimeHasADetailPageYetSoMoviesAndSeriesCardsAreNotLinks()
+    public void EveryVideoTypeHasADetailPageSoItsCardIsALink()
     {
         var id = Guid.NewGuid();
 
         Assert.AreEqual($"/Library/Anime/{id}", LibraryBrowse.DetailHref(WorkMediaType.Anime, id));
-        Assert.IsNull(LibraryBrowse.DetailHref(WorkMediaType.Series, id));
-        Assert.IsNull(LibraryBrowse.DetailHref(WorkMediaType.Movie, id));
+        Assert.AreEqual($"/Library/Series/{id}", LibraryBrowse.DetailHref(WorkMediaType.Series, id));
+        Assert.AreEqual($"/Library/Movie/{id}", LibraryBrowse.DetailHref(WorkMediaType.Movie, id));
 
         var movie = LibraryCardView.Create(Entry("Moon", mediaType: WorkMediaType.Movie), LibraryLanguagePreference.None, Ui);
-        Assert.IsNull(movie.Href);
-        Assert.IsNull(movie.Action);
-        Assert.IsNotNull(LibraryCardView.Create(Entry("Akatsuki"), LibraryLanguagePreference.None, Ui).Href);
+        Assert.AreEqual(LibraryBrowse.DetailHref(WorkMediaType.Movie, TitleId("Moon")), movie.Href);
+        Assert.IsNull(movie.Action, "Movies and Series play from their detail page, not from the card.");
+        Assert.AreEqual(LibraryBrowse.DetailHref(WorkMediaType.Anime, TitleId("Akatsuki")), LibraryCardView.Create(Entry("Akatsuki"), LibraryLanguagePreference.None, Ui).Href);
     }
 
     [TestMethod]

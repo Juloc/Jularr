@@ -44,8 +44,7 @@ public sealed class PlayerDesignTests
         // colours in player-tokens.json remain the defaults for native clients.
         StringAssert.Contains(css, "--player-accent: var(--accent);");
 
-        var page = File.ReadAllText(
-            Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+        var page = EpisodePlayerSource.Read(root);
         StringAssert.Contains(page, "~/css/player.css");
         StringAssert.Contains(page, "~/js/player-design.js");
         StringAssert.Contains(page, "data-word-inspector");
@@ -121,8 +120,7 @@ public sealed class PlayerDesignTests
             Path.Combine(root, "design", "player", "player-actions.json")));
 
         var iconIds = icons.RootElement.GetProperty("icons").EnumerateObject().Select(x => x.Name).ToArray();
-        var page = File.ReadAllText(
-            Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+        var page = EpisodePlayerSource.Read(root);
         var usedIcons = System.Text.RegularExpressions.Regex
             .Matches(page, "_PlayerIcon\" model=\"@\\(\"(?<id>[A-Za-z0-9]+)\"\\)")
             .Select(x => x.Groups["id"].Value)

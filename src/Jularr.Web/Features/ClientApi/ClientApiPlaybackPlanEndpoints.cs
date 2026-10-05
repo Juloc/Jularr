@@ -5,6 +5,8 @@ using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Features.Storage;
+using Jularr.Web.Features.Subtitles;
 
 namespace Jularr.Web.Features.ClientApi;
 
@@ -245,6 +247,40 @@ public static class ClientApiPlaybackPlanEndpoints
                 snapshot.UpdatedAt,
                 snapshot.ResumePositionMs));
         });
+
+        group.MapGet("/video/subtitle-tracks/{trackId}/cues", async (
+            string trackId,
+            Guid workId,
+            Guid? workEpisodeId,
+            CanonicalMediaStorageService storage,
+            MediaAvailabilityService mediaAvailability,
+            MediaInventoryService inventory,
+            EmbeddedSubtitleExtractor extractor,
+            CancellationToken cancellationToken) =>
+        {
+            if (!PlaybackTrackIds.TryParse(trackId, out var streamIndex))
+            {
+                return Results.BadRequest(new ClientErrorResponse("invalid_track_id", "trackId must be a canonical stream:{index} track id."));
+            }
+
+            var file = await storage.ResolveVideoAsync(workId, workEpisodeId, cancellationToken);
+            if (file is null || await mediaAvailability.CheckMediaAsync(file.StoredFileId, force: false, cancellationToken) is not { IsAvailable: true } || !File.Exists(file.Path))
+            {
+                return Results.NotFound(new ClientErrorResponse("video_target_not_found", "The canonical video target is not locally playable."));
+            }
+
+            var extracted = await extractor.ExtractTextStreamAsync(file.Path, streamIndex, cancellationToken);
+            if (extracted is null)
+            {
+                return Results.NotFound(new ClientErrorResponse("subtitle_track_not_found", "The requested embedded text subtitle stream is unavailable."));
+            }
+
+            var technical = (await inventory.GetAsync(file.StoredFileId, cancellationToken))?.Technical;
+            var language = technical?.SubtitleStreams.FirstOrDefault(x => x.Index == streamIndex)?.Language;
+            var cues = new PlaybackEmbeddedSubtitleCues(PlaybackTrackIds.Format(streamIndex), language, SubtitleParser.ParseFormat(extracted.Format, extracted.Content));
+            return Results.Ok(ClientApiMappings.ToClientEmbeddedSubtitleCues(cues));
+        })
+        .RequireRateLimiting(RateLimitPolicy);
 
         group.MapGet("/media/{mediaFileId:guid}/trickplay", async (
             Guid mediaFileId,

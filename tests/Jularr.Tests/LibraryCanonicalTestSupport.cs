@@ -40,7 +40,10 @@ internal sealed class LibraryCanonicalSeed(AppDbContext db)
         WorkEpisode? episode,
         string[]? audio = null,
         string[]? subtitles = null,
-        double? durationSeconds = null)
+        double? durationSeconds = null,
+        int? width = null,
+        int? height = null,
+        string? dynamicRange = null)
     {
         if (root is null)
         {
@@ -70,6 +73,9 @@ internal sealed class LibraryCanonicalSeed(AppDbContext db)
             StoredFileId = file.Id,
             Status = MediaAnalysisStatus.Succeeded,
             DurationSeconds = durationSeconds,
+            Width = width,
+            Height = height,
+            DynamicRange = dynamicRange,
             SourceLastWriteTimeUtc = DateTime.UtcNow
         });
 
