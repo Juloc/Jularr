@@ -112,18 +112,39 @@ whose quality cannot be parsed is never offered for upgrade.
 
 A Discover request for an anime (`AnimeAcquisitionRequestExecutor`) only creates or finds the series, puts it under
 monitoring with the requested scope and queues a search; it never grabs or imports itself. The request then follows the
-shared request lifecycle, read back from this pipeline by the shared Wanted pass (`IMonitoredAcquisitionExecutor.ObserveAsync`,
-applied through `AcquisitionRequestService.FollowMonitoredAsync`), which never starts a search:
+shared request lifecycle, read back from this pipeline by the shared Wanted pass (`IMonitoredAcquisitionExecutor`,
+`AnimeRequestObservation`, applied through `AcquisitionRequestService.FollowMonitoredAsync` with the conditional status
+transition), which never starts a search:
 
-- **Approved** (consumer: looking for media): nothing is downloading yet, or the series is Sonarr-managed read-only.
+- **Approved** (consumer: looking for media): nothing is downloading yet, or the series is Sonarr-managed read-only. The request is not
+  linked to any download in this state.
 - **Downloading**: an acquisition covering a missing requested episode has an active download Operation (linked to the request).
 - **Importing**: that download finished and its import is running or waiting.
-- **Failed**: the importer ended with a decision only the owner can make (the importer's reason is shown); the owner retries after fixing it.
-- **Completed**: every monitored episode the request covers has a file, and at least one does.
+- **Failed**: the importer ended with a decision only the owner can make (the importer's reason is shown). The request keeps that download
+  linked and the pass keeps reading it: when the owner resolves the import (manual import, dismiss) the next pass completes it, or puts it
+  back to Approved when episodes are still missing. A request that failed for another reason (no library root, unknown AniList entry) is not
+  read back; the owner retries it.
+- **Completed**: every requested episode that has aired has a file, and at least one does.
+
+**What is requested.** The request covers the episodes of its scope (whole series, seasons or episodes) that are monitored and have
+aired. An episode has aired when it has a file, when the release calendar (the cached AniList airing schedule, no provider call) lists its
+release as past, or when its AniList entry is finished. An episode whose release is not known is not part of the request yet rather than
+blocking it. Episodes that air later are picked up by the series' monitoring and never keep the request open, also for a request of the
+whole series; this matches the status surface, where monitoring future releases is separate from the request being available. A matched
+entry without an episode count only has the episodes it already has (see the diagnostic on the anime page); the episodes the calendar
+says have aired are added to what the request covers, so the same rule applies. Specials are only ever requested through the files they
+have: a missing special is not expected and so never blocks a request.
+
+**Cost and bounds.** Per pass the monitoring state, ownership, acquisition relations and import records are loaded once and shared by all
+requests, and the observation reads the episode slots without titles, so it makes no provider call. Open requests are read in batches of
+`WantedAcquisitionService.FollowBatchSize` by id, so every request is reached however many there are. A request whose observation throws
+is logged once with its request id and cause and left as it is; it never stops the other requests or the manual-download import after it.
+
+**Notifications.** The requester gets one "release available" notice per download, when the request enters Downloading from Approved;
+following the same download again, a retry while it runs, or the move between its stages does not repeat it.
 
 Completed is never reported earlier, so a requested title is not shown as available before its media exists. Requests that were
 completed under the earlier behavior (on start) are left as they are.
-
 ## Search, scoring and grab
 
 For each wanted episode the pipeline creates an `anime-search` operation, queries every enabled,

@@ -128,35 +128,43 @@ public sealed class AcquisitionRequestService(
     }
 
     /// <summary>
-    /// Brings a request of a monitored media type (<see cref="IMonitoredAcquisitionExecutor"/>) to the state its pipeline is in. It only
-    /// reads that state and never searches or grabs, so repeating it changes nothing; a request that somebody else moved on meanwhile
-    /// keeps its new state because the change is conditional on the status it was read with.
+    /// Brings a request of a monitored media type (<see cref="IMonitoredAcquisitionExecutor"/>) to the state its pipeline is in, as read by
+    /// <paramref name="observation"/>. It only reads that state and never searches or grabs, so repeating it changes nothing. The change is
+    /// conditional on the status the request was read with, so a request somebody else moved on meanwhile (an owner marking it done) keeps its
+    /// new state. Returns whether the request changed.
     /// </summary>
-    public async Task<AcquisitionRequest> FollowMonitoredAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<bool> FollowMonitoredAsync(AcquisitionRequest request, IRequestObservation observation, CancellationToken cancellationToken)
     {
-        var request = await RequireAsync(id, cancellationToken);
-        if (!AcquisitionAccessNames.UnderwayStatuses.Contains(request.Status) || executors.OfType<IMonitoredAcquisitionExecutor>().FirstOrDefault(candidate => candidate.Kind == request.Kind) is not { } executor)
+        if (!request.IsObservedFromMonitoring)
         {
-            return request;
+            return false;
         }
 
-        var observed = await executor.ObserveAsync(request, cancellationToken);
+        var observed = await observation.ObserveAsync(request, cancellationToken);
+        var clearOperation = observed.Status == AcquisitionRequestStatus.Approved;
         var unchanged = observed.Status == request.Status
             && observed.Message == request.StatusMessage
             && (observed.OperationId is null || observed.OperationId == request.OperationId)
-            && (observed.ResultUrl is null || observed.ResultUrl == request.ResultUrl);
+            && (observed.ResultUrl is null || observed.ResultUrl == request.ResultUrl)
+            && !(clearOperation && request.OperationId is not null);
         if (unchanged)
         {
-            return request;
+            return false;
         }
 
-        if (await store.TryTransitionStatusAsync(id, [request.Status], observed.Status, observed.Message, observed.OperationId, observed.ResultUrl, cancellationToken) is not null
-            && observed.Status == AcquisitionRequestStatus.Downloading)
+        var moved = await store.TryTransitionStatusAsync(request.Id, [request.Status], observed.Status, observed.Message, observed.OperationId, observed.ResultUrl, clearOperation, cancellationToken);
+        if (moved is null)
+        {
+            return false;
+        }
+
+        // The requester hears once per download: not when the same download is only seen again, and not on a flap between its stages.
+        if (observed.Status == AcquisitionRequestStatus.Downloading && request.Status == AcquisitionRequestStatus.Approved && observed.OperationId != request.OperationId)
         {
             await PublishReleaseAvailableAsync(request, observed, cancellationToken);
         }
 
-        return await RequireAsync(id, cancellationToken);
+        return true;
     }
 
     public async Task RejectAsync(Guid id, string? note, CancellationToken cancellationToken)
@@ -366,8 +374,9 @@ public sealed class AcquisitionRequestService(
 
         // Every media kind's executor reports Downloading the moment it finds and grabs an
         // accepted release, so this one spot covers #579's "ReleaseAvailable when a wanted
-        // release is found" for Anime, Manga, Light Novels and Books alike.
-        if (result.Status == AcquisitionRequestStatus.Downloading)
+        // release is found" for Anime, Manga, Light Novels and Books alike. Seeing the download the request
+        // already has again (an owner's approval or retry while it runs) is not a new release.
+        if (result.Status == AcquisitionRequestStatus.Downloading && (result.OperationId is null || result.OperationId != request.OperationId))
         {
             await PublishReleaseAvailableAsync(request, result, cancellationToken);
         }

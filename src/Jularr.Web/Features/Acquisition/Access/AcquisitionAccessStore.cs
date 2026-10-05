@@ -248,6 +248,37 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             },
             cancellationToken);
 
+    /// <summary>
+    /// One batch of the requests of a media type that a pass reads back from its monitoring pipeline (see
+    /// <see cref="AcquisitionRequest.IsObservedFromMonitoring"/>), in id order after <paramref name="afterId"/>. Walking the batches by the
+    /// last id reaches every request however many there are, and a request that is not written meanwhile keeps its place.
+    /// </summary>
+    public Task<IReadOnlyList<AcquisitionRequest>> ListObservedFromMonitoringAsync(
+        MediaAcquisitionKind kind,
+        Guid? afterId,
+        int limit,
+        CancellationToken cancellationToken) =>
+        QueryAsync(
+            $"""
+            SELECT {Columns} FROM "AcquisitionRequests"
+            WHERE "Kind" = @kind
+              AND ("Status" = ANY(@underway) OR ("Status" = 'failed' AND "OperationId" IS NOT NULL))
+              AND (@after::text IS NULL OR "Id" > @after)
+            ORDER BY "Id"
+            LIMIT @limit;
+            """,
+            command =>
+            {
+                Add(command, "@kind", AcquisitionAccessNames.Kind(kind));
+                Add(command, "@after", afterId?.ToString());
+                Add(command, "@limit", limit);
+                var underway = command.CreateParameter();
+                underway.ParameterName = "@underway";
+                underway.Value = AcquisitionAccessNames.UnderwayStatuses.Select(AcquisitionAccessNames.Status).ToArray();
+                command.Parameters.Add(underway);
+            },
+            cancellationToken);
+
     /// <summary>Replaces the media-specific payload (for example which releases were already tried).</summary>
     public Task UpdatePayloadAsync(Guid id, string? payloadJson, CancellationToken cancellationToken) =>
         WithConnectionAsync(async connection =>
@@ -489,6 +520,21 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
         Guid? operationId,
         string? resultUrl,
         CancellationToken cancellationToken) =>
+        TryTransitionStatusAsync(id, expected, status, message, operationId, resultUrl, clearOperation: false, cancellationToken);
+
+    /// <summary>
+    /// The same transition that, when <paramref name="clearOperation"/> is set, also unlinks the download the request had: a request that
+    /// is back to waiting for a release must not point at a download that is no longer its own.
+    /// </summary>
+    public Task<AcquisitionStatusTransition?> TryTransitionStatusAsync(
+        Guid id,
+        IReadOnlyCollection<AcquisitionRequestStatus> expected,
+        AcquisitionRequestStatus status,
+        string? message,
+        Guid? operationId,
+        string? resultUrl,
+        bool clearOperation,
+        CancellationToken cancellationToken) =>
         WithConnectionAsync(async connection =>
         {
             await using var command = connection.CreateCommand();
@@ -497,7 +543,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                 UPDATE "AcquisitionRequests" AS current
                 SET "Status" = @status,
                     "StatusMessage" = @message,
-                    "OperationId" = COALESCE(@operationId, current."OperationId"),
+                    "OperationId" = CASE WHEN @clearOperation THEN NULL ELSE COALESCE(@operationId, current."OperationId") END,
                     "ResultUrl" = COALESCE(@resultUrl, current."ResultUrl"),
                     "UpdatedAt" = @now
                 FROM (SELECT "Status" AS "PreviousStatus", "StatusMessage" AS "PreviousMessage" FROM "AcquisitionRequests" WHERE "Id" = @id) AS previous
@@ -509,6 +555,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             Add(command, "@message", message);
             Add(command, "@operationId", operationId?.ToString());
             Add(command, "@resultUrl", resultUrl);
+            Add(command, "@clearOperation", clearOperation);
             Add(command, "@now", DateTime.UtcNow);
             var parameter = command.CreateParameter();
             parameter.ParameterName = "@expected";

@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Operations;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
 
@@ -48,11 +49,8 @@ public sealed class WantedAcquisitionService(
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(2);
     public const int MaxRequestsPerKindPerPass = 25;
 
-    /// <summary>
-    /// The most open requests of a monitored media type one pass reads back from its pipeline. A request that is already where its
-    /// pipeline is keeps its update time, so unlike the shared download lifecycle this is a safety bound, not a rotation.
-    /// </summary>
-    public const int MaxFollowedRequestsPerKind = 200;
+    /// <summary>How many open requests of a monitored media type are read from the store at a time; a pass walks every batch.</summary>
+    public const int FollowBatchSize = 50;
 
     /// <summary>
     /// How long a finished download may wait for its files before the request stops waiting and
@@ -135,8 +133,7 @@ public sealed class WantedAcquisitionService(
         var advanced = 0;
         foreach (var handler in handlers.Values)
         {
-            if (instance is not null
-                && !instance.IsEnabled(AcquisitionInstanceModules.For(handler.Kind)))
+            if (instance is not null && !instance.IsEnabled(AcquisitionInstanceModules.For(handler.Kind)))
             {
                 continue;
             }
@@ -146,11 +143,7 @@ public sealed class WantedAcquisitionService(
                 handler,
                 nowUtc,
                 cancellationToken);
-            advanced += await RecoverStaleSearchingAsync(
-                services,
-                handler.Kind,
-                nowUtc,
-                cancellationToken);
+            advanced += await RecoverStaleSearchingAsync(services, handler.Kind, nowUtc, cancellationToken);
             advanced += await SearchDueAsync(
                 services,
                 handler,
@@ -160,25 +153,16 @@ public sealed class WantedAcquisitionService(
 
         // Media types whose own monitoring pipeline searches, grabs and imports (Anime) have no download lifecycle of their own to
         // follow here: their requests are brought to the state of that pipeline.
-        foreach (var executor in services.GetServices<IAcquisitionRequestExecutor>().OfType<IMonitoredAcquisitionExecutor>())
+        foreach (var executor in services.GetServices<IMonitoredAcquisitionExecutor>())
         {
-            if (instance is not null
-                && !instance.IsEnabled(AcquisitionInstanceModules.For(executor.Kind)))
+            if (instance is not null && !instance.IsEnabled(AcquisitionInstanceModules.For(executor.Kind)))
             {
                 continue;
             }
 
-            advanced += await RecoverStaleSearchingAsync(
-                services,
-                executor.Kind,
-                nowUtc,
-                cancellationToken);
-            advanced += await FollowMonitoredAsync(
-                services,
-                executor.Kind,
-                cancellationToken);
+            advanced += await RecoverStaleSearchingAsync(services, executor.Kind, nowUtc, cancellationToken);
+            advanced += await FollowMonitoredAsync(services, executor, nowUtc, cancellationToken);
         }
-
         // Manual downloads (no request) go through the same importer.
         advanced += await services
             .GetRequiredService<CompletedDownloadImportService>()
@@ -444,36 +428,52 @@ public sealed class WantedAcquisitionService(
     }
 
     /// <summary>
-    /// Brings every open request of a monitored media type to the state of its pipeline. Returns how many requests changed; a request
-    /// that is already where its pipeline is stays untouched.
+    /// Brings every open request of a monitored media type to the state of its pipeline, batch by batch by id so none is left out however
+    /// many there are. The pipeline's state is loaded once for the whole pass. A request whose observation fails is logged with its cause and
+    /// left as it is, so one broken request neither stops the others nor the rest of the pass. Returns how many requests changed.
     /// </summary>
-    private static async Task<int> FollowMonitoredAsync(
-        IServiceProvider services,
-        MediaAcquisitionKind kind,
-        CancellationToken cancellationToken)
+    private static async Task<int> FollowMonitoredAsync(IServiceProvider services, IMonitoredAcquisitionExecutor executor, DateTime nowUtc, CancellationToken cancellationToken)
     {
+        var logger = services.GetService<ILogger<WantedAcquisitionService>>() ?? NullLogger<WantedAcquisitionService>.Instance;
+        IRequestObservation observation;
+        try
+        {
+            observation = await executor.BeginObservationAsync(nowUtc, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(exception, "Could not read the state of the {Kind} pipeline; its requests are not followed in this pass.", executor.Kind);
+            return 0;
+        }
+
         var store = services.GetRequiredService<AcquisitionAccessStore>();
         var requestService = services.GetRequiredService<AcquisitionRequestService>();
-        var requests = new List<AcquisitionRequest>();
-        foreach (var status in AcquisitionAccessNames.UnderwayStatuses)
-        {
-            requests.AddRange(await store.ListByStatusAsync(kind, status, cancellationToken));
-        }
-
         var followed = 0;
-        foreach (var request in requests.OrderBy(item => item.UpdatedAt).Take(MaxFollowedRequestsPerKind))
+        Guid? after = null;
+        while (true)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var current = await requestService.FollowMonitoredAsync(request.Id, cancellationToken);
-            if (current.Status != request.Status || current.StatusMessage != request.StatusMessage)
+            var batch = await store.ListObservedFromMonitoringAsync(executor.Kind, after, FollowBatchSize, cancellationToken);
+            foreach (var request in batch)
             {
-                followed++;
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    followed += await requestService.FollowMonitoredAsync(request, observation, cancellationToken) ? 1 : 0;
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                    logger.LogWarning(exception, "Could not follow {Kind} request {RequestId}; it stays as it is.", request.Kind, request.Id);
+                }
             }
+
+            if (batch.Count < FollowBatchSize)
+            {
+                return followed;
+            }
+
+            after = batch[^1].Id;
         }
-
-        return followed;
     }
-
     private static async Task<int> SearchDueAsync(
         IServiceProvider services,
         IWantedRequestHandler handler,

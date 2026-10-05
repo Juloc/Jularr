@@ -46,6 +46,25 @@ public sealed record AnimeAcquisitionTarget(
             .ToArray();
 }
 
+// One episode slot without titles. SourceExternalId is the AniList entry the slot is expected from and Key.AbsoluteEpisodeNumber
+// its episode number there; both are null for a local episode nothing expected.
+public sealed record AnimeEpisodeSlot(
+    AnimeEpisodeKey Key,
+    bool HasFile,
+    string? SourceExternalId);
+
+// A matched AniList entry without an episode count: only its existing episodes are tracked, in this one local season.
+public sealed record AnimeOpenEndedSource(
+    string ExternalId,
+    int Season);
+
+public sealed record AnimeEpisodeSlots(
+    AnimeAcquisitionAnime Anime,
+    string? MatchedExternalId,
+    string? MatchedStatus,
+    IReadOnlyList<AnimeEpisodeSlot> Slots,
+    AnimeOpenEndedSource? OpenEnded);
+
 // Where imported files of an anime go: the library root and series folder its existing files
 // live in. AnimeDirectory is null when the anime has no folder in any library root yet.
 public sealed record AnimeLibraryLocation(
@@ -74,103 +93,28 @@ public sealed class AnimeAcquisitionInventory(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(animeKey);
 
-        var anime = await db.Anime
-            .AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Key == animeKey, cancellationToken);
-        if (anime is null)
+        var layout = await ReadLayoutAsync(animeKey, cancellationToken);
+        if (layout is null)
         {
             return null;
         }
 
+        var anime = layout.Anime;
         var profile = await profiles.ResolveAsync(anime.Id, cancellationToken);
-        var local = await db.Episodes
-            .AsNoTracking()
-            .Where(episode => episode.AnimeId == anime.Id)
-            .Select(episode => new LocalEpisode(
-                episode.SeasonNumber,
-                episode.Number,
-                db.MediaFiles
-                    .Where(file => file.EpisodeId == episode.Id)
-                    .OrderBy(file => file.Path)
-                    .Select(file => file.Path)
-                    .FirstOrDefault(),
-                db.MediaFiles
-                    .Where(file => file.EpisodeId == episode.Id)
-                    .OrderBy(file => file.Path)
-                    .Select(file => (long?)file.SizeBytes)
-                    .FirstOrDefault()))
-            .ToListAsync(cancellationToken);
-
-        var match = await metadata.GetAsync(anime.Id, cancellationToken);
-        var mappings = await metadata.GetEpisodeMappingsAsync(anime.Id, cancellationToken);
-        var primaryTitles = PrimaryTitles(anime, match);
-
-        var expected = new Dictionary<(int Season, int Episode), (int? Absolute, string Title, IReadOnlyList<string> Aliases)>();
-        string? diagnostic = null;
-
-        if (mappings.Count > 0)
-        {
-            // Explicit ranges first, then ranges extended to the AniList episode count, so an
-            // explicit mapping always wins over the extension of a neighbouring one.
-            foreach (var mapping in mappings)
-            {
-                var titles = await TitlesForAsync(mapping.Provider, mapping.ExternalId, mapping.PreferredTitle, match, primaryTitles, cancellationToken);
-                for (var number = mapping.LocalEpisodeStart; number <= mapping.LocalEpisodeEnd; number++)
-                {
-                    expected[(mapping.SeasonNumber, number)] = (mapping.ResolveRemoteEpisode(number), titles[0], titles);
-                }
-            }
-
-            foreach (var mapping in mappings)
-            {
-                if (mapping.EpisodeCount is not > 0)
-                {
-                    continue;
-                }
-
-                var titles = await TitlesForAsync(mapping.Provider, mapping.ExternalId, mapping.PreferredTitle, match, primaryTitles, cancellationToken);
-                var end = mapping.LocalEpisodeStart + (mapping.EpisodeCount.Value - mapping.RemoteEpisodeStart);
-                for (var number = mapping.LocalEpisodeEnd + 1; number <= end; number++)
-                {
-                    expected.TryAdd((mapping.SeasonNumber, number), (mapping.ResolveRemoteEpisode(number), titles[0], titles));
-                }
-            }
-        }
-        else if (match is not null)
-        {
-            var seasons = local.Select(episode => episode.SeasonNumber).Distinct().ToArray();
-            if (match.EpisodeCount is > 0 && seasons.Length <= 1)
-            {
-                var season = seasons.Length == 1 ? seasons[0] : 1;
-                for (var number = 1; number <= match.EpisodeCount.Value; number++)
-                {
-                    expected[(season, number)] = (number, primaryTitles[0], primaryTitles);
-                }
-            }
-            else
-            {
-                diagnostic = seasons.Length > 1
-                    ? "Several local seasons without AniList episode mappings; map each season on the anime page before monitoring."
-                    : "The AniList entry has no episode count yet, so only existing episodes are tracked.";
-            }
-        }
-        else
-        {
-            diagnostic = "No AniList match; nothing is expected until the anime is matched.";
-        }
-
+        var primaryTitles = PrimaryTitles(anime, layout.Match);
         var episodes = new Dictionary<(int Season, int Episode), AnimeAcquisitionEpisode>();
-        foreach (var (slot, info) in expected)
+        foreach (var (slot, source) in layout.Expected)
         {
+            var titles = await TitlesForAsync(source.Provider, source.ExternalId, source.PreferredTitle, layout.Match, primaryTitles, cancellationToken);
             episodes[slot] = new AnimeAcquisitionEpisode(
-                new AnimeEpisodeKey(anime.Key, slot.Season, slot.Episode, info.Absolute),
+                new AnimeEpisodeKey(anime.Key, slot.Season, slot.Episode, source.Absolute),
                 null,
                 null,
-                info.Title,
-                info.Aliases);
+                titles[0],
+                titles);
         }
 
-        foreach (var episode in local)
+        foreach (var episode in layout.Local)
         {
             var slot = (episode.SeasonNumber, episode.Number);
             var known = episodes.TryGetValue(slot, out var planned)
@@ -196,7 +140,140 @@ public sealed class AnimeAcquisitionInventory(
                 .OrderBy(episode => episode.Key.SeasonNumber)
                 .ThenBy(episode => episode.Key.EpisodeNumber)
                 .ToArray(),
-            diagnostic);
+            layout.Diagnostic);
+    }
+
+    /// <summary>
+    /// The same episode slots as <see cref="LoadAsync"/> (one rule for what a series is expected to have), without the titles:
+    /// reading them needs no provider call, so it is cheap enough to repeat for every open request.
+    /// </summary>
+    public async Task<AnimeEpisodeSlots?> LoadSlotsAsync(string animeKey, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(animeKey);
+
+        var layout = await ReadLayoutAsync(animeKey, cancellationToken);
+        if (layout is null)
+        {
+            return null;
+        }
+
+        var key = layout.Anime.Key;
+        var slots = new Dictionary<(int Season, int Episode), AnimeEpisodeSlot>();
+        foreach (var (slot, source) in layout.Expected)
+        {
+            slots[slot] = new AnimeEpisodeSlot(new AnimeEpisodeKey(key, slot.Season, slot.Episode, source.Absolute), false, source.ExternalId);
+        }
+
+        foreach (var episode in layout.Local)
+        {
+            var slot = (episode.SeasonNumber, episode.Number);
+            var hasFile = episode.FilePath is not null;
+            slots[slot] = slots.TryGetValue(slot, out var planned)
+                ? planned with { HasFile = hasFile }
+                : new AnimeEpisodeSlot(new AnimeEpisodeKey(key, episode.SeasonNumber, episode.Number), hasFile, null);
+        }
+
+        return new AnimeEpisodeSlots(
+            new AnimeAcquisitionAnime(layout.Anime.Id, key, layout.Anime.Title),
+            layout.Match?.ExternalId,
+            layout.Match?.Status,
+            slots.Values.OrderBy(slot => slot.Key.SeasonNumber).ThenBy(slot => slot.Key.EpisodeNumber).ToArray(),
+            layout.OpenEnded);
+    }
+
+    /// <summary>
+    /// The one reading of what an anime has and is expected to have: its local episodes (with files), its AniList match and
+    /// episode-range mappings, and for each expected slot the AniList entry and episode number it comes from.
+    /// </summary>
+    private async Task<InventoryLayout?> ReadLayoutAsync(string animeKey, CancellationToken cancellationToken)
+    {
+        var anime = await db.Anime
+            .AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Key == animeKey, cancellationToken);
+        if (anime is null)
+        {
+            return null;
+        }
+
+        var local = await db.Episodes
+            .AsNoTracking()
+            .Where(episode => episode.AnimeId == anime.Id)
+            .Select(episode => new LocalEpisode(
+                episode.SeasonNumber,
+                episode.Number,
+                db.MediaFiles
+                    .Where(file => file.EpisodeId == episode.Id)
+                    .OrderBy(file => file.Path)
+                    .Select(file => file.Path)
+                    .FirstOrDefault(),
+                db.MediaFiles
+                    .Where(file => file.EpisodeId == episode.Id)
+                    .OrderBy(file => file.Path)
+                    .Select(file => (long?)file.SizeBytes)
+                    .FirstOrDefault()))
+            .ToListAsync(cancellationToken);
+
+        var match = await metadata.GetAsync(anime.Id, cancellationToken);
+        var mappings = await metadata.GetEpisodeMappingsAsync(anime.Id, cancellationToken);
+
+        var expected = new Dictionary<(int Season, int Episode), ExpectedSlot>();
+        string? diagnostic = null;
+        AnimeOpenEndedSource? openEnded = null;
+
+        if (mappings.Count > 0)
+        {
+            // Explicit ranges first, then ranges extended to the AniList episode count, so an
+            // explicit mapping always wins over the extension of a neighbouring one.
+            foreach (var mapping in mappings)
+            {
+                for (var number = mapping.LocalEpisodeStart; number <= mapping.LocalEpisodeEnd; number++)
+                {
+                    expected[(mapping.SeasonNumber, number)] = new ExpectedSlot(mapping.ResolveRemoteEpisode(number), mapping.Provider, mapping.ExternalId, mapping.PreferredTitle);
+                }
+            }
+
+            foreach (var mapping in mappings)
+            {
+                if (mapping.EpisodeCount is not > 0)
+                {
+                    continue;
+                }
+
+                var end = mapping.LocalEpisodeStart + (mapping.EpisodeCount.Value - mapping.RemoteEpisodeStart);
+                for (var number = mapping.LocalEpisodeEnd + 1; number <= end; number++)
+                {
+                    expected.TryAdd((mapping.SeasonNumber, number), new ExpectedSlot(mapping.ResolveRemoteEpisode(number), mapping.Provider, mapping.ExternalId, mapping.PreferredTitle));
+                }
+            }
+        }
+        else if (match is not null)
+        {
+            var seasons = local.Select(episode => episode.SeasonNumber).Distinct().ToArray();
+            if (match.EpisodeCount is > 0 && seasons.Length <= 1)
+            {
+                var season = seasons.Length == 1 ? seasons[0] : 1;
+                for (var number = 1; number <= match.EpisodeCount.Value; number++)
+                {
+                    expected[(season, number)] = new ExpectedSlot(number, match.Provider, match.ExternalId, match.PreferredTitle);
+                }
+            }
+            else
+            {
+                diagnostic = seasons.Length > 1
+                    ? "Several local seasons without AniList episode mappings; map each season on the anime page before monitoring."
+                    : "The AniList entry has no episode count yet, so only existing episodes are tracked.";
+                if (seasons.Length <= 1)
+                {
+                    openEnded = new AnimeOpenEndedSource(match.ExternalId, seasons.Length == 1 ? seasons[0] : 1);
+                }
+            }
+        }
+        else
+        {
+            diagnostic = "No AniList match; nothing is expected until the anime is matched.";
+        }
+
+        return new InventoryLayout(anime, match, local, expected, diagnostic, openEnded);
     }
 
     // preferredRootId (the anime's assigned target root, item 3 of the P1 backlog) is used only
@@ -371,4 +448,18 @@ public sealed class AnimeAcquisitionInventory(
         int Number,
         string? FilePath,
         long? SizeBytes);
+
+    private sealed record ExpectedSlot(
+        int? Absolute,
+        string Provider,
+        string ExternalId,
+        string PreferredTitle);
+
+    private sealed record InventoryLayout(
+        Anime Anime,
+        AnimeMetadata? Match,
+        IReadOnlyList<LocalEpisode> Local,
+        IReadOnlyDictionary<(int Season, int Episode), ExpectedSlot> Expected,
+        string? Diagnostic,
+        AnimeOpenEndedSource? OpenEnded);
 }

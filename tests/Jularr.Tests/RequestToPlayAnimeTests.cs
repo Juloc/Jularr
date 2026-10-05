@@ -63,7 +63,7 @@ public sealed class RequestToPlayAnimeTests
             var h264 = new MediaProbeRun(MediaProbeRunStatus.Completed, MediaProbeFixtures.H264Stereo);
             pages.Probe.DefaultResult = h264;
             environment.Probe.DefaultResult = h264;
-            environment.AniListMetadata.Add(FrierenAniList, "Frieren", episodeCount: 2);
+            environment.AniListMetadata.Add(FrierenAniList, "Frieren", episodeCount: 2, status: "FINISHED");
             environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Episode1, "e1"));
             return new AnimeWorld(environment, pages, animePages);
         }

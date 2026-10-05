@@ -1,7 +1,9 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
+using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Operations;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,10 +21,11 @@ public sealed class AnimeRequestLifecycleTests
     private const string Episode1 = "Frieren.S01E01.1080p.WEB-DL.AAC.H.264-GRP";
     private const string Episode2 = "Frieren.S01E02.1080p.WEB-DL.AAC.H.264-GRP";
 
+    /// <summary>A finished series: every one of its episodes has aired, so every one is part of the request.</summary>
     private static async Task<AnimeAcquisitionEnvironment> CreateAsync(int episodeCount = 2)
     {
         var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        environment.AniListMetadata.Add(FrierenId, "Frieren", episodeCount);
+        environment.AniListMetadata.Add(FrierenId, "Frieren", episodeCount, status: "FINISHED");
         environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Episode1, "e1"));
         return environment;
     }
@@ -153,10 +156,10 @@ public sealed class AnimeRequestLifecycleTests
     }
 
     [TestMethod]
-    public async Task ADownloadTheImporterCannotPlaceFailsTheRequestWithItsReasonAndTheOwnerRetryCompletesIt()
+    public async Task ADownloadTheImporterCannotPlaceFailsTheRequestWithItsReasonAndResolvingItCompletesTheRequest()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync(seasonFolders: false);
+        await environment.SeedFrierenAsync(seasonFolders: false, status: "FINISHED");
         environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Episode2, "e2"));
         var request = await environment.SubmitRequestAsync(FrierenId);
         Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status, request.StatusMessage);
@@ -175,10 +178,12 @@ public sealed class AnimeRequestLifecycleTests
         Assert.AreEqual(record.Message, request.StatusMessage, "The importer's own reason is the request's reason.");
         Assert.AreEqual(0, await environment.RequestPassAsync(), "A failed request waits for the owner.");
 
+        // The owner resolves the import (here as the Imports page does): the next pass completes the request without a retry.
         File.Delete(blocker);
         var manual = await environment.ImportManuallyAsync(record.Id, record.Files.Single(file => file.SourcePath.EndsWith(".mkv", StringComparison.Ordinal)).SourcePath, 1, 2);
         Assert.IsTrue(manual.Success, manual.Message);
-        request = await environment.RunRequestAsync(request.Id);
+        Assert.AreEqual(1, await environment.RequestPassAsync());
+        request = await environment.GetRequestAsync(request.Id);
         Assert.AreEqual(AcquisitionRequestStatus.Completed, request.Status, request.StatusMessage);
     }
 
@@ -186,7 +191,7 @@ public sealed class AnimeRequestLifecycleTests
     public async Task ARequestWhoseSearchWasInterruptedIsFollowedAgainAfterTheStaleSearchTimeout()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync();
+        await environment.SeedFrierenAsync(status: "FINISHED");
         var store = new AcquisitionAccessStore(environment.Db);
         var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", FrierenId, "Frieren", null, null);
         var stuck = await store.CreateAsync(draft, "owner", AcquisitionRequestStatus.Searching, "owner", CancellationToken.None);
@@ -197,4 +202,61 @@ public sealed class AnimeRequestLifecycleTests
 
         Assert.AreEqual(AcquisitionRequestStatus.Approved, (await environment.GetRequestAsync(stuck.Id)).Status);
     }
-}
+
+    private static int ReleaseNotices(AnimeAcquisitionEnvironment environment) =>
+        environment.PublishedEvents.Count(published => published.Category == JularrEventCategory.ReleaseAvailable);
+
+    [TestMethod]
+    public async Task TheRequesterIsToldOncePerDownloadAndTheFinishedDownloadIsUnlinkedWhenTheRequestGoesBackToLooking()
+    {
+        await using var environment = await CreateAsync();
+        var request = await environment.SubmitRequestAsync(FrierenId);
+        var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
+        Assert.AreEqual(0, ReleaseNotices(environment));
+
+        // The first download starts: one notice, however often the request is followed, retried or continued while it runs.
+        await environment.Scheduler.RunNowAsync(anime.Key, AnimeSearchTrigger.SearchOnAdd, CancellationToken.None);
+        await environment.RequestPassAsync();
+        await environment.RequestPassAsync();
+        await environment.RunRequestAsync(request.Id, continued: true);
+        await environment.RequestPassAsync();
+        Assert.AreEqual(1, ReleaseNotices(environment));
+
+        // Its stages (downloading, importing) are not new releases.
+        var (download, folder) = await FinishDownloadAsync(environment, Episode1);
+        await environment.RequestPassAsync();
+        Assert.AreEqual(AcquisitionRequestStatus.Importing, (await environment.GetRequestAsync(request.Id)).Status);
+        await environment.ImportCompletedAsync(download, folder);
+        await environment.RequestPassAsync();
+        request = await environment.GetRequestAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status);
+        Assert.IsNull(request.OperationId, "The imported download is no longer the request's.");
+        Assert.AreEqual(1, ReleaseNotices(environment));
+
+        // The next episode's download is a new release.
+        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Episode2, "e2"));
+        await environment.Scheduler.RunNowAsync(anime.Key, AnimeSearchTrigger.Manual, CancellationToken.None);
+        await environment.RequestPassAsync();
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, (await environment.GetRequestAsync(request.Id)).Status);
+        Assert.AreEqual(2, ReleaseNotices(environment));
+    }
+
+    [TestMethod]
+    public async Task ASeriesThatSonarrManagesStaysApprovedWithoutASearchAndCompletesWhenItsFilesAreInTheLibrary()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync(mode: AnimeManagementMode.ReadOnlyCoexistence, status: "FINISHED");
+
+        var request = await environment.SubmitRequestAsync(FrierenId);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status);
+        StringAssert.Contains(request.StatusMessage, "Sonarr manages this series");
+        Assert.AreEqual(0, environment.Scheduler.QueuedRequests, "A read-only series is never searched.");
+        Assert.AreEqual(0, await environment.RequestPassAsync());
+
+        environment.AddLibraryFile("Frieren", "Season 01", "Frieren - S01E02 - Episode 2.mkv");
+        await environment.ScanAsync();
+        await environment.RequestPassAsync();
+
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, (await environment.GetRequestAsync(request.Id)).Status);
+    }}

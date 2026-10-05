@@ -85,14 +85,14 @@ public sealed class AnimeAcquisitionRequestExecutorTests
     public async Task AnimeInTheLibraryIsMonitoredAndSearchedInsteadOfDuplicated()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync();
+        await environment.SeedFrierenAsync(status: "FINISHED");
         await environment.Scheduler.RunExclusiveAsync(
             (pipeline, token) => pipeline.UpdateAnimeSettingsAsync(environment.AnimeId, false, false, null, [], token),
             CancellationToken.None);
 
         var execution = await environment.ExecuteAnimeRequestAsync(FrierenId);
 
-        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "S01E02 is still missing, so the request is not completed.");
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "S01E02 has aired (the series is finished) and is missing, so the request is not completed.");
         Assert.AreEqual(1, await environment.Db.Anime.CountAsync());
         Assert.IsTrue((await environment.MonitoringStateAsync()).Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored);
         Assert.AreEqual(1, environment.Scheduler.QueuedRequests);

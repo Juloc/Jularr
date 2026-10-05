@@ -51,6 +51,10 @@ public enum AnimeOpenAcquisitionStage
     NeedsOwner
 }
 
+public sealed record AnimeAcquisitionSnapshot(
+    SabnzbdAcquisitionStoreState Relations,
+    AnimeImportStoreState Imports);
+
 /// <summary>An acquisition that blocks a new grab for its episodes, with the latest attempt, the download Operation and (for <see cref="AnimeOpenAcquisitionStage.NeedsOwner"/>) the importer's reason.</summary>
 public sealed record AnimeOpenAcquisition(
     SabnzbdAcquisition Acquisition,
@@ -79,7 +83,8 @@ public sealed class AnimeAcquisitionPipeline(
     AnimeAcquisitionInventory inventory,
     AcquisitionPolicyStore policyStore,
     AcquisitionHistoryService history,
-    ILogger<AnimeAcquisitionPipeline> logger)
+    ILogger<AnimeAcquisitionPipeline> logger,
+    TimeProvider? clock = null)
 {
     public const string SearchOperationKind = "anime-search";
     public const string GrabOperationKind = "anime-grab";
@@ -519,7 +524,8 @@ public sealed class AnimeAcquisitionPipeline(
         IReadOnlyList<AnimeEpisodeKey> episodes,
         CancellationToken cancellationToken)
     {
-        var open = (await ListOpenAcquisitionsAsync(animeKey, episodes, cancellationToken)).FirstOrDefault();
+        var snapshot = await LoadAcquisitionSnapshotAsync(cancellationToken);
+        var open = (await ListOpenAcquisitionsAsync(snapshot, animeKey, episodes, (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime, cancellationToken)).FirstOrDefault();
         return open is null
             ? null
             : open.Stage == AnimeOpenAcquisitionStage.Downloading
@@ -527,18 +533,19 @@ public sealed class AnimeAcquisitionPipeline(
                 : $"'{open.Attempt.ReleaseTitle}' finished downloading and waits for import.";
     }
 
+    /// <summary>The acquisition relations and import records, read once so many questions can be answered from one consistent view.</summary>
+    public async Task<AnimeAcquisitionSnapshot> LoadAcquisitionSnapshotAsync(CancellationToken cancellationToken) =>
+        new(await acquisitions.LoadAsync(cancellationToken), await imports.LoadAsync(cancellationToken));
+
     /// <summary>
     /// The acquisitions of this anime that cover one of the episodes and are not finished: still downloading, or downloaded
     /// and waiting for the import (which includes an import the owner has to resolve), newest first. The acquisition relation,
-    /// Operations and import records are the source of truth, so the answer also holds after a restart.
+    /// Operations and import records are the source of truth, so the answer also holds after a restart. A download that finished
+    /// within <see cref="AnimeImportExecutor.RecoveryWindow"/> of <paramref name="nowUtc"/> without an import record still waits for it.
     /// </summary>
-    public async Task<IReadOnlyList<AnimeOpenAcquisition>> ListOpenAcquisitionsAsync(
-        string animeKey,
-        IReadOnlyList<AnimeEpisodeKey> episodes,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AnimeOpenAcquisition>> ListOpenAcquisitionsAsync(AnimeAcquisitionSnapshot snapshot, string animeKey, IReadOnlyList<AnimeEpisodeKey> episodes, DateTime nowUtc, CancellationToken cancellationToken)
     {
-        var relations = await acquisitions.LoadAsync(cancellationToken);
-        var candidates = relations.Acquisitions
+        var candidates = snapshot.Relations.Acquisitions
             .Where(item =>
                 item.LatestAttempt is not null &&
                 item.AnimeKey.Equals(animeKey, StringComparison.OrdinalIgnoreCase) &&
@@ -550,7 +557,6 @@ public sealed class AnimeAcquisitionPipeline(
             return [];
         }
 
-        var importState = await imports.LoadAsync(cancellationToken);
         var operations = new OperationStore(db);
         var open = new List<AnimeOpenAcquisition>();
         foreach (var acquisition in candidates)
@@ -568,10 +574,10 @@ public sealed class AnimeAcquisitionPipeline(
             }
             else if (operation.Status == OperationStatus.Succeeded)
             {
-                var import = importState.Imports.FirstOrDefault(record => record.DownloadOperationId == operation.Id);
+                var import = snapshot.Imports.Imports.FirstOrDefault(record => record.DownloadOperationId == operation.Id);
                 var awaitingRecovery = import is null &&
                                        operation.FinishedAtUtc is { } finished &&
-                                       finished >= DateTime.UtcNow - AnimeImportExecutor.RecoveryWindow;
+                                       finished >= nowUtc - AnimeImportExecutor.RecoveryWindow;
                 if (import?.Status == AnimeImportStatus.ManualRequired)
                 {
                     open.Add(new AnimeOpenAcquisition(acquisition, attempt, operation, AnimeOpenAcquisitionStage.NeedsOwner, import.Message));

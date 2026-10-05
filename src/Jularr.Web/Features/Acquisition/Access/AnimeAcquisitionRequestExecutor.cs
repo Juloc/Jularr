@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Naming;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
+using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -20,9 +21,9 @@ namespace Jularr.Web.Features.Acquisition.Access;
 /// the key of that folder.
 /// <para>
 /// The request follows the shared lifecycle (Approved, Downloading, Importing, Completed, Failed) but owns none of it:
-/// the monitoring pipeline searches, grabs and imports, and <see cref="ObserveAsync"/> reads the requested episodes,
+/// the monitoring pipeline searches, grabs and imports, and <see cref="AnimeRequestObservation"/> reads the requested episodes,
 /// the open acquisitions and the library back. A request is Completed only when every monitored episode it asks for
-/// has a file; the shared Wanted pass keeps asking until then.
+/// that has aired has a file; the shared Wanted pass keeps asking until then.
 /// </para>
 /// <para>
 /// The requester's <see cref="AcquisitionRequestOptions"/> are applied when monitoring starts: the
@@ -41,10 +42,10 @@ public sealed class AnimeAcquisitionRequestExecutor(
     AnimeAcquisitionPipeline pipeline,
     AnimeAcquisitionInventory inventory,
     AnimeAcquisitionScheduler scheduler,
-    LegacyWorkBridge workBridge) : IMonitoredAcquisitionExecutor
+    LegacyWorkBridge workBridge,
+    ReleaseCalendarCacheStore calendar,
+    TimeProvider clock) : IMonitoredAcquisitionExecutor
 {
-    private const string LookingMessage = "Looking for the requested episodes.";
-
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Anime;
 
     public async Task<AcquisitionExecution> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken)
@@ -125,56 +126,23 @@ public sealed class AnimeAcquisitionRequestExecutor(
     }
 
     /// <summary>
-    /// Where the requested episodes stand, read from the library (files), the monitoring state and the open acquisitions of the
-    /// series. Completed only when the series has a file for every monitored episode the request covers; otherwise the furthest
-    /// stage of the download in flight: downloading, importing, or failed when the importer waits for the owner. Nothing in flight
-    /// means Approved while monitoring keeps searching. It never changes any state.
+    /// Loads the monitoring state, ownership, acquisition relations and release calendar once, so one pass can read where the monitoring
+    /// pipeline stands for every open request without loading them again for each (<see cref="AnimeRequestObservation"/>).
     /// </summary>
-    public async Task<AcquisitionExecution> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken)
-    {
-        var anime = await FindSeriesAsync(request.ExternalId, cancellationToken);
-        if (anime is null)
-        {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Failed, "The series is no longer in the library.");
-        }
+    public async Task<IRequestObservation> BeginObservationAsync(DateTime nowUtc, CancellationToken cancellationToken) =>
+        new AnimeRequestObservation(
+            db,
+            inventory,
+            pipeline,
+            calendar,
+            await monitoringStore.LoadAsync(cancellationToken),
+            await ownershipStore.LoadAsync(cancellationToken),
+            await pipeline.LoadAcquisitionSnapshotAsync(cancellationToken),
+            await calendar.GetSourcesAsync(AniListReleaseNormalizer.Provider, cancellationToken),
+            nowUtc);
 
-        var resultUrl = $"/Library/Anime/{anime.Id}";
-        var target = await inventory.LoadAsync(anime.Key, cancellationToken);
-        var monitoring = await monitoringStore.LoadAsync(cancellationToken);
-        var options = request.Options;
-        var requested = target?.Episodes
-            .Where(episode => options.Includes(episode.Key.SeasonNumber, episode.Key.EpisodeNumber) && AnimeMonitoringEngine.IsMonitored(monitoring, episode.Key))
-            .ToArray() ?? [];
-        var missing = requested.Where(episode => !episode.HasFile).Select(episode => episode.Key).ToArray();
-        if (missing.Length == 0 && requested.Length > 0)
-        {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "The requested episodes are in the library.", ResultUrl: resultUrl);
-        }
-
-        if (SonarrParallelSafety.GetMode(await ownershipStore.LoadAsync(cancellationToken), anime.Key) == AnimeManagementMode.ReadOnlyCoexistence)
-        {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Approved, "Sonarr manages this series — the owner decides in Sonarr migration.", ResultUrl: resultUrl);
-        }
-
-        var open = await pipeline.ListOpenAcquisitionsAsync(anime.Key, missing, cancellationToken);
-        if (open.FirstOrDefault(item => item.Stage == AnimeOpenAcquisitionStage.Downloading) is { } downloading)
-        {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Downloading, "Download is in progress.", downloading.Download.Id, resultUrl);
-        }
-
-        if (open.FirstOrDefault(item => item.Stage == AnimeOpenAcquisitionStage.Importing) is { } importing)
-        {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Importing, "Download complete. Importing into the library.", importing.Download.Id, resultUrl);
-        }
-
-        if (open.FirstOrDefault(item => item.Stage == AnimeOpenAcquisitionStage.NeedsOwner) is { } needsOwner)
-        {
-            var reason = string.IsNullOrWhiteSpace(needsOwner.ImportMessage) ? "The completed download needs a decision from the owner." : needsOwner.ImportMessage;
-            return new AcquisitionExecution(AcquisitionRequestStatus.Failed, reason, needsOwner.Download.Id, resultUrl);
-        }
-
-        return new AcquisitionExecution(AcquisitionRequestStatus.Approved, LookingMessage, ResultUrl: resultUrl);
-    }
+    private async Task<AcquisitionExecution> ObserveNowAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
+        await (await BeginObservationAsync(clock.GetUtcNow().UtcDateTime, cancellationToken)).ObserveAsync(request, cancellationToken);
 
     private async Task<SeriesIdentity?> FindSeriesAsync(string aniListId, CancellationToken cancellationToken) =>
         await (
@@ -209,18 +177,13 @@ public sealed class AnimeAcquisitionRequestExecutor(
     /// request stands. Running it again (an approval, a retry) only repeats the same settings and queues another run, which the
     /// pipeline answers without grabbing an episode that is already downloading or imported.
     /// </summary>
-    private async Task<AcquisitionExecution> MonitorAsync(
-        AcquisitionRequest request,
-        Guid animeId,
-        string animeKey,
-        Guid? targetRootId,
-        CancellationToken cancellationToken)
+    private async Task<AcquisitionExecution> MonitorAsync(AcquisitionRequest request, Guid animeId, string animeKey, Guid? targetRootId, CancellationToken cancellationToken)
     {
         var options = request.Options;
         var ownership = await ownershipStore.LoadAsync(cancellationToken);
         if (SonarrParallelSafety.GetMode(ownership, animeKey) == AnimeManagementMode.ReadOnlyCoexistence)
         {
-            return await ObserveAsync(request, cancellationToken);
+            return await ObserveNowAsync(request, cancellationToken);
         }
 
         var monitoring = await monitoringStore.LoadAsync(cancellationToken);
@@ -241,7 +204,7 @@ public sealed class AnimeAcquisitionRequestExecutor(
 
         // The scope is in place before any search runs, so a search only looks for what was requested.
         await ApplyScopeAsync(animeKey, options, startsMonitoring, cancellationToken);
-        var observed = await ObserveAsync(request, cancellationToken);
+        var observed = await ObserveNowAsync(request, cancellationToken);
         if (observed.Status != AcquisitionRequestStatus.Completed)
         {
             scheduler.RequestRun(animeKey, startsMonitoring ? AnimeSearchTrigger.SearchOnAdd : AnimeSearchTrigger.Manual);
