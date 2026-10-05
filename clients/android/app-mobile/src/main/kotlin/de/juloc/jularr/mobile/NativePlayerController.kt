@@ -109,11 +109,13 @@ class NativePlayerController(
     private var lastProgressSentAt = 0L
     private var lastProgressPositionMs = -1L
 
-    // The server never infers completion from a position, so a seek or scrub past the threshold stays a resume
-    // point. naturalPositionMs follows the position only while it advances in small playback steps; a seek leaves
-    // it behind until playback continues from the new position.
+    // The server never infers completion from a position, so a seek or scrub that lands at or beyond the threshold
+    // stays a resume point and only `ended` completes it. Threshold completion is declared only after playback
+    // itself crossed the threshold: naturalPositionMs follows the position while it advances in small playback
+    // steps, a jump (seek) clears it and the crossing, so the threshold must be crossed by continuous playback.
     private var lastClockPositionMs = -1L
     private var naturalPositionMs = -1L
+    private var crossedThresholdByPlayback = false
     private var started = false
     private var offlineMode = false
 
@@ -836,13 +838,30 @@ class NativePlayerController(
         val position = absolutePositionMs()
         val step = position - lastClockPositionMs
         lastClockPositionMs = position
-        if (player.isPlaying && step in 0..NATURAL_STEP_MS) {
-            naturalPositionMs = position
+        if (step < 0 || step > NATURAL_STEP_MS) {
+            naturalPositionMs = -1
+            crossedThresholdByPlayback = false
+            return
         }
+
+        if (!player.isPlaying) {
+            return
+        }
+
+        val durationMs = _state.value.durationMs.takeIf { it > 0 }
+        if (durationMs != null && naturalPositionMs >= 0) {
+            val thresholdMs = durationMs.toDouble() * COMPLETION_THRESHOLD
+            if (naturalPositionMs < thresholdMs && position >= thresholdMs) {
+                crossedThresholdByPlayback = true
+            }
+        }
+
+        naturalPositionMs = position
     }
 
     private fun reachedCompletionNaturally(position: Long, durationMs: Long?): Boolean =
         durationMs != null &&
+            crossedThresholdByPlayback &&
             naturalPositionMs >= 0 &&
             abs(position - naturalPositionMs) <= NATURAL_STEP_MS &&
             position.toDouble() / durationMs.toDouble() >= COMPLETION_THRESHOLD

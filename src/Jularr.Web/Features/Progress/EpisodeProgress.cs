@@ -270,7 +270,9 @@ public sealed class EpisodeProgressService(
         CancellationToken cancellationToken = default)
     {
         var rows = await videoProgress.GetLegacyEpisodeProgressAsync(currentAccount.ProfileId, animeIds, cancellationToken);
-        return rows.ToDictionary(x => x.EpisodeId, ToSnapshot);
+        return rows
+            .GroupBy(x => x.EpisodeId)
+            .ToDictionary(group => group.Key, group => ToSnapshot(group.OrderByDescending(x => x.UpdatedAt).First()));
     }
 
     /// <summary>

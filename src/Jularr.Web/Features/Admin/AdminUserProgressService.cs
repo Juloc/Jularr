@@ -54,7 +54,7 @@ public sealed record AdminUserProgressSummary(
     AdminLearningProgressSummary Learning,
     DateTime? LastActivityAt);
 
-public sealed class AdminUserProgressService(AppDbContext db)
+public sealed class AdminUserProgressService(AppDbContext db, VideoProgressService videoProgress)
 {
     public async Task<IReadOnlyList<AdminUserProgressSummary>> GetAsync(
         CancellationToken cancellationToken = default)
@@ -71,7 +71,7 @@ public sealed class AdminUserProgressService(AppDbContext db)
                 x.CreatedAt))
             .ToListAsync(cancellationToken);
 
-        var episodeRows = (await new VideoProgressService(db).GetLegacyEpisodeProgressAsync(null, null, cancellationToken))
+        var episodeRows = (await videoProgress.GetLegacyEpisodeProgressAsync(null, null, cancellationToken))
             .Select(row => new
             {
                 row.ProfileId,

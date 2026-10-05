@@ -205,8 +205,8 @@ class TvAppControllerTest {
         private val advertiseWatchlist: Boolean = true,
     ) : JularrClientApi {
         override suspend fun getCapabilities() = ClientCapabilities(
-            apiVersion = 1,
-            minimumSupportedApiVersion = 1,
+            apiVersion = 2,
+            minimumSupportedApiVersion = 2,
             serverVersion = "test",
             features = ClientFeatureFlags(
                 library = true,

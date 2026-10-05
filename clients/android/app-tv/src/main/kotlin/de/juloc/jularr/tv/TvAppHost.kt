@@ -877,6 +877,13 @@ fun TvAppHost(
                         refreshCueWindowIfNeeded(position)
                         pushCompanionState()
                     },
+                    onPlaybackEnded = { position, duration ->
+                        persist(
+                            TvProgressEvent.ENDED,
+                            position,
+                            duration,
+                        )
+                    },
                     onSeeked = { position, duration, isPlaying ->
                         currentPositionMs = position
                         currentDurationMs = duration

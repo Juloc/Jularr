@@ -3,6 +3,7 @@ package de.juloc.jularr.tv
 import de.juloc.jularr.core.api.JularrClientApi
 import de.juloc.jularr.core.api.ApiCompatibility
 import de.juloc.jularr.core.api.ClientApiCompatibility
+import de.juloc.jularr.core.api.ClientApiRoutes
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientAccount
 import de.juloc.jularr.core.model.ClientCapabilities
@@ -41,7 +42,7 @@ class TvClientFlow(
                 "This Jularr server requires client API ${compatibility.minimumSupportedApiVersion}. Update the TV app.",
             )
             is ApiCompatibility.ServerTooOld -> throw TvClientCompatibilityException(
-                "This TV app requires client API 1, but the server provides ${compatibility.serverApiVersion}. Update Jularr.",
+                "This TV app requires client API ${ClientApiRoutes.ApiVersion}, but the server provides ${compatibility.serverApiVersion}. Update Jularr.",
             )
         }
 

@@ -82,6 +82,7 @@ fun TvPlayerScreen(
     onSelectSubtitleTrack: (String?) -> Unit = {},
     onPositionChanged: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onSeeked: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
+    onPlaybackEnded: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
     onPlaybackFailure: (positionMs: Long) -> Unit = {},
     canOpenOnPhone: Boolean = false,
     remoteCommand: PlaybackCommand? = null,
@@ -116,6 +117,9 @@ fun TvPlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 positionMs = player.player.currentPosition.coerceAtLeast(0)
                 durationMs = player.player.duration.takeIf { it > 0 } ?: durationMs
+                if (playbackState == Player.STATE_ENDED) {
+                    onPlaybackEnded(positionMs, durationMs)
+                }
             }
 
             override fun onPositionDiscontinuity(

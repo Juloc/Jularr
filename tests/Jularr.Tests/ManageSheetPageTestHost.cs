@@ -19,6 +19,7 @@ using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Collections;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Operations;
@@ -104,6 +105,11 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                         services.AddScoped<IAppShellService, AppShellService>();
                         services.AddScoped<OperationRunner>();
                         services.AddScoped<EpisodeProgressService>();
+                        services.AddScoped<VideoProgressService>();
+                        services.AddScoped<CanonicalVideoTargetResolver>();
+                        services.AddScoped<LegacyWorkBridge>();
+                        services.AddScoped<WorkService>();
+                        services.AddScoped<WorkStructureService>();
                         services.AddScoped<FranchiseStore>();
                         services.AddScoped<MediaRelationStore>();
                         // The Library page's Collections view lists the profile's collections.

@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
@@ -302,6 +303,35 @@ public sealed class EpisodeProgressTests
         Assert.AreEqual(1, await CountAsync(fixture.Db, "MediaPlaybackHistory", "reader"));
         Assert.IsTrue((await service.GetAsync(first.Id))!.IsCompleted);
         Assert.IsTrue((await service.GetAsync(second.Id))!.IsCompleted);
+    }
+
+    [TestMethod]
+    public async Task BackfillKeepsALegacyCompletionWhenTheCanonicalRowIsNewer()
+    {
+        await using var fixture = await EpisodeFlowFixture.CreateAsync();
+        var anime = await fixture.AddAnimeAsync("backfill-completion");
+        var episode = await fixture.AddEpisodeAsync(anime, 1, 1);
+        var service = fixture.Service("reader");
+        await service.UpdateAsync(episode.Id, new EpisodeProgressUpdate(300_000, 1_400_000, false));
+        fixture.Db.EpisodeProgress.Add(new EpisodeProgress
+        {
+            ProfileId = "reader",
+            EpisodeId = episode.Id,
+            DurationMs = 1_400_000,
+            IsCompleted = true,
+            UpdatedAt = DateTime.UtcNow.AddDays(-2)
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var resolver = new CanonicalVideoTargetResolver(fixture.Db, new LegacyWorkBridge(fixture.Db, new WorkService(fixture.Db), new WorkStructureService(fixture.Db)));
+        var backfill = new CanonicalVideoProgressBackfillService(fixture.Db, resolver, new VideoProgressService(fixture.Db));
+
+        Assert.AreEqual(1, await backfill.BackfillLegacyAnimeAsync());
+
+        var stored = await service.GetAsync(episode.Id);
+        Assert.IsTrue(stored!.IsCompleted, "An older legacy completion must not be lost behind a newer canonical resume row.");
+        Assert.AreEqual(300_000, stored.ResumePositionMs, "The newer canonical resume position stays.");
+        Assert.AreEqual(0, await fixture.Db.EpisodeProgress.CountAsync(), "The legacy row is consumed only after its facts are covered.");
     }
 
     [TestMethod]

@@ -67,8 +67,8 @@ class PlaybackSelectorTest {
         hls: Boolean,
         liveMp4: Boolean,
     ) = ClientCapabilities(
-        apiVersion = 1,
-        minimumSupportedApiVersion = 1,
+        apiVersion = 2,
+        minimumSupportedApiVersion = 2,
         serverVersion = "test",
         features = ClientFeatureFlags(
             library = true,
@@ -93,7 +93,7 @@ class PlaybackSelectorTest {
         storageState: String = "available",
         fallbackKind: String = "live-fragmented-mp4",
     ) = PlayerBootstrap(
-        apiVersion = 1,
+        apiVersion = 2,
         episode = PlayerEpisode(
             id = "episode",
             animeId = "anime",

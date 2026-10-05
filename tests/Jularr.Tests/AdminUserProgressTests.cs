@@ -104,7 +104,7 @@ public sealed class AdminUserProgressTests
             await db.SaveChangesAsync();
             await CanonicalProgressSeed.SetAsync(db, "reader", episode.Id, 45_000, 90_000, false, now.AddMinutes(-2));
 
-            var service = new AdminUserProgressService(db);
+            var service = new AdminUserProgressService(db, new VideoProgressService(db));
             var users = await service.GetAsync();
 
             Assert.AreEqual(2, users.Count);

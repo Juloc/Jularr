@@ -16,8 +16,8 @@ public sealed class ClientApiTests
     {
         var capabilities = ClientApiContract.Capabilities();
 
-        Assert.AreEqual(1, capabilities.ApiVersion);
-        Assert.AreEqual(1, capabilities.MinimumSupportedApiVersion);
+        Assert.AreEqual(2, capabilities.ApiVersion);
+        Assert.AreEqual(2, capabilities.MinimumSupportedApiVersion, "Version 1 clients cannot declare completion and must update.");
         Assert.IsTrue(capabilities.Features.Library);
         Assert.IsTrue(capabilities.Features.NativeSessionAuth);
         Assert.IsTrue(capabilities.Features.DirectPlayback);

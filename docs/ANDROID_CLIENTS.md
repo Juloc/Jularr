@@ -810,6 +810,11 @@ Rules:
 - no HTML scraping fallback
 - no hidden legacy API compatibility path outside the repository upgrade policy
 
+Contract versions (the number in `GET /capabilities`; the route prefix stays `/api/client/v1`):
+
+- `2` (current, minimum supported `2`): playback checkpoints carry a client-declared `completed` flag and the server no longer infers completion from a position (`PUT /episodes/{id}/progress`, `PUT /video/progress`, `POST /offline/progress`). Clients set `completed` only when playback itself reached 95% of the duration (continuous forward playback from below the threshold) or ended, or when the user marks the item watched. A seek, scrub or resume that lands at or beyond 95% is only a resume point, and after such a seek only `ended` or an explicit watched action completes it. A version 1 client never declared threshold completion, so the server reports minimum supported version 2 and the app shows its existing "update required" state; there is deliberately no server-side position-inference fallback.
+- `1`: initial contract.
+
 The Git tag version is used in:
 
 - server package

@@ -1,12 +1,20 @@
+using System.Text.RegularExpressions;
+
 namespace Jularr.Tests;
 
 [TestClass]
 public sealed class VideoProgressArchitectureGuardTests
 {
-    private static readonly string[] LegacyProgressMembers = ["db.EpisodeProgress", "db.EpisodePlaybackHistory", "EpisodeProgress>", "EpisodePlaybackHistoryEntry>"];
+    // Whole-word match: ClientEpisodeProgress, EpisodeProgressService and EpisodeProgressSnapshot are other types.
+    private static readonly Regex LegacyProgressTables = new(@"\b(EpisodeProgress|EpisodePlaybackHistoryEntry)\b|\bEpisodePlaybackHistory\b", RegexOptions.Compiled);
 
-    // The legacy tables are only a one-time migration source: the EF mapping and the canonical backfill may name them.
-    private static readonly string[] AllowedFiles = ["AppDbContext.cs", "VideoProgress.cs", "EpisodeProgress.cs"];
+    // The legacy tables are only a one-time migration source: the EF mapping, the entity classes and the canonical backfill may name them.
+    private static readonly string[] AllowedFiles =
+    [
+        "Data/AppDbContext.cs",
+        "Features/Progress/EpisodeProgress.cs",
+        "Features/Progress/VideoProgress.cs"
+    ];
 
     [TestMethod]
     public void LegacyEpisodeProgressTablesHaveNoRuntimeReadersOrWriters()
@@ -15,11 +23,11 @@ public sealed class VideoProgressArchitectureGuardTests
         var offenders = Directory
             .EnumerateFiles(sourceRoot, "*.*", SearchOption.AllDirectories)
             .Where(path => path.EndsWith(".cs", StringComparison.Ordinal) || path.EndsWith(".cshtml", StringComparison.Ordinal))
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}Migrations{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(path => !AllowedFiles.Contains(Path.GetFileName(path)))
-            .Where(path => LegacyProgressMembers.Any(member => File.ReadAllText(path).Contains(member, StringComparison.Ordinal)))
-            .Select(path => Path.GetRelativePath(sourceRoot, path))
+            .Select(path => Path.GetRelativePath(sourceRoot, path).Replace('\\', '/'))
+            .Where(relative => !relative.StartsWith("Data/Migrations/", StringComparison.Ordinal))
+            .Where(relative => !relative.StartsWith("obj/", StringComparison.Ordinal) && !relative.StartsWith("bin/", StringComparison.Ordinal))
+            .Where(relative => !AllowedFiles.Contains(relative))
+            .Where(relative => LegacyProgressTables.IsMatch(File.ReadAllText(Path.Combine(sourceRoot, relative))))
             .ToArray();
 
         CollectionAssert.AreEqual(Array.Empty<string>(), offenders, "Canonical video state is MediaProgress/MediaPlaybackHistory; only the one-time backfill may touch the legacy tables.");
@@ -31,7 +39,9 @@ public sealed class VideoProgressArchitectureGuardTests
         var script = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
 
         StringAssert.Contains(script, "reachedCompletionNaturally(positionMs)");
-        StringAssert.Contains(script, "naturalPositionMs");
+        StringAssert.Contains(script, "crossedThresholdByPlayback = true");
+        StringAssert.Contains(script, "naturalPositionMs < thresholdMs && positionMs >= thresholdMs", "The threshold must be crossed by continuous playback from below it.");
+        StringAssert.Contains(script, "crossedThresholdByPlayback = false", "A seek clears the crossing, so a seek at or beyond the threshold completes only through ended.");
         Assert.IsFalse(script.Contains("completed: positionMs", StringComparison.Ordinal));
     }
 

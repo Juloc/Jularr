@@ -72,19 +72,26 @@ class TvProgressPolicyTest {
             positionMs = 94_000,
             durationMs = 100_000,
         )
+        val crossed = policy.evaluate(
+            TvProgressEvent.HEARTBEAT,
+            nowMs = 6_100,
+            positionMs = 95_000,
+            durationMs = 100_000,
+        )
         val complete = policy.evaluate(
             TvProgressEvent.CLOSE,
-            nowMs = 1_100,
-            positionMs = 95_000,
+            nowMs = 6_200,
+            positionMs = 95_500,
             durationMs = 100_000,
         )
 
         assertFalse(incomplete!!.completed)
+        assertTrue(crossed!!.completed)
         assertTrue(complete!!.completed)
     }
 
     @Test
-    fun seekPastThresholdIsOnlyAResumePointUntilPlaybackContinues() {
+    fun seekPastThresholdIsOnlyAResumePointAndOnlyEndedCompletesIt() {
         val policy = TvProgressPolicy()
         policy.evaluate(
             TvProgressEvent.HEARTBEAT,
@@ -105,16 +112,57 @@ class TvProgressPolicyTest {
             positionMs = 96_000,
             durationMs = 100_000,
         )
-        val resumed = policy.evaluate(
+        val firstHeartbeat = policy.evaluate(
             TvProgressEvent.HEARTBEAT,
             nowMs = 7_000,
             positionMs = 97_000,
             durationMs = 100_000,
         )
+        val secondHeartbeat = policy.evaluate(
+            TvProgressEvent.HEARTBEAT,
+            nowMs = 12_000,
+            positionMs = 97_500,
+            durationMs = 100_000,
+        )
+        val ended = policy.evaluate(
+            TvProgressEvent.ENDED,
+            nowMs = 13_000,
+            positionMs = 100_000,
+            durationMs = 100_000,
+        )
 
         assertFalse(seek!!.completed)
         assertFalse(close!!.completed)
-        assertTrue(resumed!!.completed)
+        assertFalse("Playing on after a seek past the threshold does not complete.", firstHeartbeat!!.completed)
+        assertFalse(secondHeartbeat!!.completed)
+        assertTrue(ended!!.completed)
+    }
+
+    @Test
+    fun seekBelowTheThresholdThenPlayingThroughItCompletes() {
+        val policy = TvProgressPolicy()
+        policy.evaluate(TvProgressEvent.SEEK, nowMs = 1_000, positionMs = 90_000, durationMs = 100_000)
+        policy.evaluate(TvProgressEvent.HEARTBEAT, nowMs = 1_500, positionMs = 94_500, durationMs = 100_000)
+
+        val crossed = policy.evaluate(
+            TvProgressEvent.HEARTBEAT,
+            nowMs = 7_000,
+            positionMs = 95_100,
+            durationMs = 100_000,
+        )
+
+        assertTrue(crossed!!.completed)
+    }
+
+    @Test
+    fun seekAfterCrossingResetsTheCompletion() {
+        val policy = TvProgressPolicy()
+        policy.evaluate(TvProgressEvent.HEARTBEAT, nowMs = 1_000, positionMs = 94_900, durationMs = 100_000)
+        policy.evaluate(TvProgressEvent.HEARTBEAT, nowMs = 1_500, positionMs = 95_100, durationMs = 100_000)
+
+        val seek = policy.evaluate(TvProgressEvent.SEEK, nowMs = 1_600, positionMs = 50_000, durationMs = 100_000)
+
+        assertFalse(seek!!.completed)
     }
 
     @Test
@@ -129,5 +177,15 @@ class TvProgressPolicyTest {
         )
 
         assertFalse(close!!.completed)
+    }
+
+    @Test
+    fun resumingPastTheThresholdAndPlayingOnDoesNotComplete() {
+        val policy = TvProgressPolicy()
+        policy.evaluate(TvProgressEvent.HEARTBEAT, nowMs = 1_000, positionMs = 96_000, durationMs = 100_000)
+
+        val next = policy.evaluate(TvProgressEvent.HEARTBEAT, nowMs = 7_000, positionMs = 96_500, durationMs = 100_000)
+
+        assertFalse(next!!.completed)
     }
 }

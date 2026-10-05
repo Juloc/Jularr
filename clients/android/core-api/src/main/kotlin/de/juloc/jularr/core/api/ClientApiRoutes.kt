@@ -1,7 +1,7 @@
 package de.juloc.jularr.core.api
 
 object ClientApiRoutes {
-    const val ApiVersion = 1
+    const val ApiVersion = 2
     const val Base = "/api/client/v1"
     const val Capabilities = "$Base/capabilities"
     const val Login = "$Base/session/login"

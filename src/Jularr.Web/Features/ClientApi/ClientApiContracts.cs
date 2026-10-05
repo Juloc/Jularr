@@ -12,8 +12,14 @@ namespace Jularr.Web.Features.ClientApi;
 
 public static class ClientApiContract
 {
-    public const int ApiVersion = 1;
-    public const int MinimumSupportedApiVersion = 1;
+    /// <summary>
+    /// Version 2: playback checkpoints (<c>PUT episodes/{id}/progress</c>, <c>PUT video/progress</c>, offline progress
+    /// replay) carry a client-declared <c>completed</c> flag and the server no longer infers completion from a
+    /// position. A version 1 client never declares threshold completion, so it must update.
+    /// </summary>
+    public const int ApiVersion = 2;
+
+    public const int MinimumSupportedApiVersion = 2;
     public const string BasePath = "/api/client/v1";
 
     public static ClientCapabilitiesResponse Capabilities(

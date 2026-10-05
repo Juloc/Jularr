@@ -328,6 +328,26 @@ public sealed class VideoProgressTests
     }
 
     [TestMethod]
+    public async Task UntouchedEpisodeBetweenTwoCompletedOnesStopsCompletedThrough()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var series = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Open Episode Anime" };
+        var episodes = Enumerable.Range(1, 3)
+            .Select(number => new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = number })
+            .ToArray();
+        db.Add(series);
+        db.AddRange(episodes);
+        await db.SaveChangesAsync();
+
+        var service = new VideoProgressService(db);
+        await service.SetCompletedAsync("reader", MediaProgressTarget.Episode(series.Id, episodes[0].Id), true);
+        await service.SetCompletedAsync("reader", MediaProgressTarget.Episode(series.Id, episodes[2].Id), true);
+
+        var through = (await service.GetCompletedThroughAsync("reader", series.Id)).Single().CompletedThrough;
+        Assert.AreEqual(1, through?.EpisodeNumber, "E1 and E3 completed with an untouched E2 row present gives 1.");
+    }
+
+    [TestMethod]
     public async Task RewatchKeepsCompletedStateAndOffersResumeInContinueWatching()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();

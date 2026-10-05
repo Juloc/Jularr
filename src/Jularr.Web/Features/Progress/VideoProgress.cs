@@ -521,6 +521,11 @@ public sealed class VideoProgressService(AppDbContext db)
     /// The one definition of <see cref="VideoWorkCompletion.CompletedThrough"/>: the contiguous completed prefix of a
     /// work's regular canonical episodes. Returns one entry per work in which the profile has regular-episode progress;
     /// <paramref name="workId"/> narrows the projection to a single work.
+    /// <para>
+    /// Invariant: contiguity is evaluated over the canonical <c>WorkEpisode</c> rows, which the canonical backfill
+    /// creates for every known episode of a work. An episode without a row is not a gap, so the projection is only as
+    /// strict as that backfill is complete.
+    /// </para>
     /// </summary>
     public async Task<IReadOnlyList<VideoWorkCompletion>> GetCompletedThroughAsync(
         string profileId,
@@ -664,8 +669,19 @@ public sealed class VideoProgressService(AppDbContext db)
             cancellationToken);
 
         var existing = await LoadProgressRowAsync(profileId, target, cancellationToken);
-        if (existing is null || existing.UpdatedAt > updatedAt)
+        if (existing is null)
         {
+            return;
+        }
+
+        if (existing.UpdatedAt > updatedAt)
+        {
+            // The newer canonical position wins, but an imported completion is a fact that must not be lost.
+            if (completed && !existing.IsCompleted)
+            {
+                await MarkCompletedKeepingPositionAsync(profileId, target, cancellationToken);
+            }
+
             return;
         }
 
@@ -932,6 +948,26 @@ public sealed class VideoProgressService(AppDbContext db)
                 [positionMs, completed, updatedAt, profileId, target.WorkId],
                 cancellationToken);
         }
+    }
+
+    private async Task MarkCompletedKeepingPositionAsync(
+        string profileId,
+        MediaProgressTarget target,
+        CancellationToken cancellationToken)
+    {
+        if (target.WorkEpisodeId is { } episodeId)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """UPDATE "MediaProgress" SET "IsCompleted" = TRUE WHERE "ProfileId" = {0} AND "WorkEpisodeId" = {1}""",
+                [profileId, episodeId],
+                cancellationToken);
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """UPDATE "MediaProgress" SET "IsCompleted" = TRUE WHERE "ProfileId" = {0} AND "WorkId" = {1} AND "WorkEpisodeId" IS NULL""",
+            [profileId, target.WorkId],
+            cancellationToken);
     }
 
     private async Task SetCompletedRowAsync(

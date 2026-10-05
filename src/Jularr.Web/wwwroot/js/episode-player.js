@@ -246,28 +246,43 @@
     let lastProgressSentAt = Date.now();
     let lastProgressPositionMs = -1;
 
-    // The server never infers completion from a position, so a seek or scrub past the threshold stays a resume
-    // point. Completion is declared only when playback runs through to the threshold: naturalPositionMs follows
-    // the position only while it advances in small playback steps, a seek leaves it behind.
+    // The server never infers completion from a position, so a seek or scrub that lands at or beyond the threshold
+    // stays a resume point and only `ended` (or Mark watched) completes it. Threshold completion is declared only
+    // after playback itself crossed the threshold: naturalPositionMs follows the position while it advances in
+    // small playback steps, a jump (seek) clears it together with the crossing.
     const naturalStepMs = 2500;
     let naturalPositionMs = -1;
     let lastClockPositionMs = -1;
+    let crossedThresholdByPlayback = false;
 
     const trackNaturalPlayback = () => {
         const positionMs = Math.round(absoluteCurrentTime() * 1000);
         const stepMs = positionMs - lastClockPositionMs;
         lastClockPositionMs = positionMs;
-        if (!video.seeking && !video.paused && stepMs >= 0 && stepMs <= naturalStepMs * playbackSpeed) {
-            naturalPositionMs = positionMs;
+        if (video.seeking || stepMs < 0 || stepMs > naturalStepMs * playbackSpeed) {
+            naturalPositionMs = -1;
+            crossedThresholdByPlayback = false;
+            return;
         }
+
+        if (video.paused) {
+            return;
+        }
+
+        const thresholdMs = hasKnownDuration && Number.isFinite(completionThreshold)
+            ? durationSeconds * 1000 * completionThreshold
+            : Infinity;
+        if (naturalPositionMs >= 0 && naturalPositionMs < thresholdMs && positionMs >= thresholdMs) {
+            crossedThresholdByPlayback = true;
+        }
+
+        naturalPositionMs = positionMs;
     };
 
     const reachedCompletionNaturally = (positionMs) =>
-        hasKnownDuration &&
-        Number.isFinite(completionThreshold) &&
+        crossedThresholdByPlayback &&
         naturalPositionMs >= 0 &&
-        Math.abs(positionMs - naturalPositionMs) <= naturalStepMs * playbackSpeed &&
-        positionMs >= durationSeconds * 1000 * completionThreshold;
+        Math.abs(positionMs - naturalPositionMs) <= naturalStepMs * playbackSpeed;
 
     // Bounded checkpoints: at most one regular write per 15 seconds while
     // playing; pause, end, restart and page close flush immediately.
