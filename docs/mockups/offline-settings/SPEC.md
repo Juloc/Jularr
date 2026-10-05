@@ -357,6 +357,19 @@ The reserve protects the device, not the Jularr quota.
 
 PWA/browser clients hide this when physical free-space semantics are not reliable.
 
+## 14.1 Multi-profile device capacity
+
+The physical device/browser capacity check must account for all Jularr-managed Offline bytes that still exist on this device, including retained-but-locked packages belonging to another profile.
+
+Privacy rule:
+- the active profile sees itemized details only for its own accessible content;
+- when other-profile retained bytes affect admission, show only an aggregate reserved/other-profile amount where needed;
+- never reveal another profile's titles, artwork, progress, filenames or package identity.
+
+This prevents two profiles from independently overcommitting one browser quota/device disk while preserving profile isolation.
+
+The shared device limit applies to Jularr-managed local bytes. Per-profile item visibility remains isolated.
+
 ## 15. Storage location
 
 Visible only on clients that support safe user-selectable managed storage.
@@ -393,8 +406,11 @@ Expose a concise read-only breakdown when measurable:
 - Video;
 - Reading;
 - Audio;
+- Games, when Jularr-managed Game packages are supported on this client;
 - Smart Offline;
 - Other managed offline assets.
+
+Only Jularr-managed Game package/install bytes count toward the Games breakdown. External launcher installations must not be guessed or counted unless that integration authoritatively exposes and manages those bytes.
 
 Do not require the user to configure hard per-category quotas in V1 of the target design unless a concrete need appears. One device limit plus a Smart Offline budget is easier to reason about.
 
@@ -431,6 +447,8 @@ Independent toggles:
 - **Audiobook next chapters** only if the audiobook package model supports bounded chapter-level prefetch.
 
 Movies are not automatically prefetched merely because Smart Offline is On.
+
+Games are also **not** part of predictive Smart Offline by default (#851). Managed Games may participate in the shared device Offline limit/storage-location accounting, but speculative Game installs require a future explicit Games-specific opt-in policy rather than silently extending #415.
 
 For each enabled sequential category, allow a bounded amount:
 
