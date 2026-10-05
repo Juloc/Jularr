@@ -19,7 +19,13 @@ public enum InstanceModule
     Audiobook = 7,
     Learning = 8,
     Acquisition = 9,
-    Tracking = 10
+    Tracking = 10,
+
+    /// <summary>
+    /// Whether this instance plays media itself. Off is the manager-only mode (discovery, requests, monitoring and
+    /// acquisition without a Jularr player): no Watch page, no player/plan/progress/stream API and no play action.
+    /// </summary>
+    Playback = 11
 }
 
 public sealed record InstanceModuleSettings(
@@ -325,6 +331,16 @@ public static class InstanceModuleRoutes
             [InstanceModule.Tracking] =
             [
                 "/Settings/AniList"
+            ],
+            [InstanceModule.Playback] =
+            [
+                "/Library/Watch",
+                "/api/client/v1/video/player",
+                "/api/client/v1/video/playback-plan",
+                "/api/client/v1/video/playback-intents",
+                "/api/client/v1/video/progress",
+                "/api/client/v1/video/subtitle-tracks",
+                "/api/client/v1/stream-sessions"
             ]
         };
 
@@ -350,4 +366,29 @@ public static class InstanceModuleRoutes
         module = default;
         return false;
     }
+}
+
+public static class InstanceModuleGateExtensions
+{
+    /// <summary>
+    /// Instance module switches are stronger than profile settings: a route of a disabled module answers 404 immediately, like a
+    /// hidden media type. Background and service gates use the same <see cref="IInstanceModuleService"/>.
+    /// </summary>
+    public static IApplicationBuilder UseInstanceModuleGates(this IApplicationBuilder app) =>
+        app.Use(async (context, next) =>
+        {
+            var requiredModules = InstanceModuleRoutes.Resolve(context.Request.Path);
+            if (requiredModules.Count > 0)
+            {
+                var modules = context.RequestServices.GetRequiredService<IInstanceModuleService>();
+                var settings = await modules.GetAsync(context.RequestAborted);
+                if (requiredModules.Any(module => !settings.IsEnabled(module)))
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
+                }
+            }
+
+            await next();
+        });
 }

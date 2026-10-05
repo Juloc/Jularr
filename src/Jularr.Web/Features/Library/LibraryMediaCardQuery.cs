@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Artwork;
+using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Progress;
@@ -19,13 +20,13 @@ namespace Jularr.Web.Features.Library;
 /// <item>Availability and languages come from canonical <c>MediaAsset -> StoredFile -> MediaTrack</c>; known units come from
 /// <see cref="WorkEpisode"/> (Movies are a single unit). Embedded streams and imported sidecar subtitles are unioned, most
 /// common first; sidecar subtitles have no canonical track yet and reach the Work through their legacy episode link.</item>
-/// <item>Progress and the next episode come from the profile's canonical <c>MediaProgress</c>; see <see cref="ResolveNext"/>.</item>
+/// <item>Progress and the next episode come from the profile's canonical <c>MediaProgress</c>; see <see cref="NextRequiredEpisode"/>.</item>
 /// <item>Requested and partial states are projections of the shared acquisition requests and of the files, never Library state.</item>
 /// <item>Anime keeps its legacy-keyed detail and player routes plus its provider metadata and artwork until those move to the
 /// Work (#820); they are reached through the Anime <see cref="WorkSourceLink"/>, which the canonical backfill guarantees.</item>
 /// </list>
 /// </summary>
-public sealed class LibraryMediaCardQuery(AppDbContext db)
+public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock = null)
 {
     private static readonly MediaAcquisitionKind[] RequestKinds = [MediaAcquisitionKind.Anime, MediaAcquisitionKind.Movie, MediaAcquisitionKind.Tv];
 
@@ -153,7 +154,8 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
                         episode.EpisodeNumber,
                         db.MediaAssets.Any(asset => asset.WorkEpisodeId == episode.Id
                             && asset.Kind == MediaAssetKind.Video
-                            && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))))
+                            && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id)),
+                        episode.AiredAt))
                     .ToListAsync(cancellationToken))
                 .ToLookup(x => x.WorkId);
 
@@ -192,7 +194,8 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
             movieFiles,
             embeddedTracks.Concat(sidecarSubtitles).ToLookup(x => (x.WorkId, x.Kind)),
             animeRows,
-            requestByWork);
+            requestByWork,
+            (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime);
 
         var entries = new List<LibraryCardEntry>(works.Count);
         foreach (var work in works)
@@ -213,67 +216,6 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
         }
 
         return new LibraryEntries(entries, degraded);
-    }
-
-    /// <summary>
-    /// Picks the episode the card's play button opens. The anchor is the most recently updated
-    /// meaningful progress row (watched, or resumable past <see cref="EpisodeProgressService.MinimumResumeMs"/>),
-    /// the same anchor Continue Watching uses. An unfinished anchor is resumed. After a watched
-    /// anchor the canonical <see cref="EpisodeSequence"/> neighbour is used when it is unwatched,
-    /// otherwise the first unwatched regular episode after the anchor, then the first unwatched
-    /// regular episode overall. With no anchor the first episode starts; with everything watched
-    /// the first episode is offered again.
-    /// </summary>
-    public static (MediaBannerProgressState State, EpisodeOrderKey Next)? ResolveNext(
-        IReadOnlyCollection<EpisodeOrderKey> playableEpisodes,
-        IReadOnlyDictionary<Guid, EpisodeProgressState> progress)
-    {
-        if (playableEpisodes.Count == 0)
-        {
-            return null;
-        }
-
-        var ordered = playableEpisodes
-            .OrderBy(x => x.SeasonNumber <= 0 ? 1 : 0)
-            .ThenBy(x => x.SeasonNumber)
-            .ThenBy(x => x.Number)
-            .ThenBy(x => x.Id)
-            .ToArray();
-        var regular = ordered.Where(x => x.SeasonNumber > 0).ToArray();
-        var candidates = regular.Length > 0 ? regular : ordered;
-
-        bool IsWatched(Guid id) => progress.TryGetValue(id, out var row) && row.IsCompleted;
-
-        var anchor = ordered
-            .Where(episode =>
-                progress.TryGetValue(episode.Id, out var row) &&
-                (row.IsCompleted || row.PositionMs >= EpisodeProgressService.MinimumResumeMs))
-            .OrderByDescending(episode => progress[episode.Id].UpdatedAt)
-            .ThenBy(episode => episode.Id)
-            .FirstOrDefault();
-
-        if (anchor is null)
-        {
-            return (MediaBannerProgressState.NotStarted, candidates[0]);
-        }
-
-        if (!IsWatched(anchor.Id))
-        {
-            return (MediaBannerProgressState.InProgress, anchor);
-        }
-
-        var sequenceNext = EpisodeSequence.Resolve(playableEpisodes, anchor.Id).NextEpisodeId;
-        var next = sequenceNext is { } nextId && !IsWatched(nextId)
-            ? ordered.First(x => x.Id == nextId)
-            : candidates
-                  .SkipWhile(x => x.Id != anchor.Id)
-                  .Skip(1)
-                  .FirstOrDefault(x => !IsWatched(x.Id))
-              ?? candidates.FirstOrDefault(x => !IsWatched(x.Id));
-
-        return next is null
-            ? (MediaBannerProgressState.Completed, candidates[0])
-            : (MediaBannerProgressState.InProgress, next);
     }
 
     private async Task<Dictionary<(WorkMediaType MediaType, string ExternalId), AcquisitionRequestStatus>> LoadOpenRequestsAsync(
@@ -391,7 +333,8 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
 
     private static MediaBannerProgress? BuildProgress(WorkRow work, AnimeRow? anime, string href, IReadOnlyList<UnitRow> episodes, IReadOnlyList<EpisodeOrderKey> playable, IReadOnlyList<int> localSeasons, ReadContext context)
     {
-        if (ResolveNext(playable, context.EpisodeProgress) is not { } resolved)
+        var units = episodes.Select(x => new SeriesUnit(x.Id, x.SeasonNumber, x.Number, x.HasMedia, x.AiredAt is null || x.AiredAt <= context.NowUtc)).ToArray();
+        if (playable.Count == 0 || NextRequiredEpisode.Resolve(units, context.EpisodeProgress) is not { } resolved)
         {
             return null;
         }
@@ -421,9 +364,9 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
             ? Math.Clamp((int)Math.Round(watched * 100d / unitCount), 0, 100)
             : null;
 
-        var next = resolved.Next;
+        var next = resolved.Unit;
         var special = next.SeasonNumber <= 0;
-        var nextUrl = context.LegacyEpisodeIds.TryGetValue((work.Id, next.SeasonNumber, next.Number), out var legacyEpisodeId)
+        var nextUrl = next.HasMedia && context.LegacyEpisodeIds.TryGetValue((work.Id, next.SeasonNumber, next.Number), out var legacyEpisodeId)
             ? $"/Library/Episode/{legacyEpisodeId}"
             : href;
         return new MediaBannerProgress(resolved.State, MediaBannerUnit.Episode, next.Number, nextUrl, special ? null : total, multiSeason && !special ? next.SeasonNumber : null, percent);
@@ -459,7 +402,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
         string? Format,
         DateTime CreatedAt);
 
-    private sealed record UnitRow(Guid Id, Guid WorkId, int SeasonNumber, int Number, bool HasMedia);
+    private sealed record UnitRow(Guid Id, Guid WorkId, int SeasonNumber, int Number, bool HasMedia, DateTime? AiredAt);
 
     private sealed record MovieFileRow(Guid WorkId, double? DurationSeconds);
 
@@ -473,7 +416,8 @@ public sealed class LibraryMediaCardQuery(AppDbContext db)
         ILookup<Guid, MovieFileRow> MovieFiles,
         ILookup<(Guid WorkId, MediaTrackKind Kind), LanguageRow> Languages,
         IReadOnlyDictionary<Guid, AnimeRow> Anime,
-        IReadOnlyDictionary<Guid, AcquisitionRequestStatus> RequestByWork);
+        IReadOnlyDictionary<Guid, AcquisitionRequestStatus> RequestByWork,
+        DateTime NowUtc);
 }
 
 /// <summary>The canonical progress facts one media card needs for a single episode.</summary>

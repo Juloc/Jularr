@@ -1,6 +1,6 @@
 using System.Globalization;
 using Jularr.Web.Data;
-using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -14,7 +14,7 @@ public sealed class SeriesDetailModel(
     CurrentAccountContext account,
     IAppShellService appShell,
     VideoDetailQuery query,
-    AcquisitionRequestService requests) : VideoDetailPageModel(db, account, appShell, query, requests)
+    InstantPlayPolicyService policies) : VideoDetailPageModel(db, account, appShell, query, policies)
 {
     protected override WorkMediaType MediaType => WorkMediaType.Series;
 
@@ -43,7 +43,7 @@ public sealed class SeriesDetailModel(
         Sort = AnimeDetailView.ParseSort(sort);
         Layout = AnimeDetailView.ParseLayout(view);
         Seasons = AnimeDetailView.SeasonEntries(Detail.Episodes.Select(x => x.SeasonNumber));
-        var nextSeason = Detail.Next is { } next ? Detail.Episodes.First(x => x.Id == next.EpisodeId).SeasonNumber : (int?)null;
+        var nextSeason = ActionEpisode?.SeasonNumber;
         Selected = AnimeDetailView.SelectEntry(Seasons, SeasonKey(season), SeasonKey(nextSeason));
         var inSeason = Detail.Episodes.Where(x => Selected is not null && x.SeasonNumber == Selected.SeasonNumber).ToArray();
         SelectedEpisodes = AnimeDetailView.Sort(inSeason, Sort, x => x.Number, x => x.IsWatched);

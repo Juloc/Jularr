@@ -370,7 +370,7 @@ public sealed class VideoDetailPageTests
 
         var withFile = await host.GetOkAsync($"/Library/Series/{work.Id}");
         StringAssert.Contains(Between(withFile, "S01 E01", "</article>"), "ad-state-other-language");
-        StringAssert.Contains(withFile, ">Play<");
+        StringAssert.Contains(withFile, ">Start watching<", "A Series with no history and a local first episode starts watching it (Instant Play matrix).");
     }
 
     [TestMethod]

@@ -31,6 +31,7 @@ public sealed class InstanceModel(
     [
         InstanceModule.Learning,
         InstanceModule.Acquisition,
+        InstanceModule.Playback,
         InstanceModule.Tracking
     ];
 

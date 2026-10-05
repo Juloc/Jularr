@@ -1,5 +1,6 @@
 @using System.Globalization
 @using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.InstantPlay
 @using Jularr.Web.Features.Library
 @using Jularr.Web.Features.MediaCore
 @model VideoDetailPageModel
@@ -9,7 +10,7 @@
 @{
     var ui = Model.Ui;
     var detail = Model.Detail;
-    var hero = Model.Hero;
+    var action = Model.PrimaryAction;
     var isMovie = detail.MediaType == WorkMediaType.Movie;
     var culture = CultureInfo.InvariantCulture;
     var knownEpisodes = detail.Episodes.Count;
@@ -60,27 +61,36 @@
         </ul>
 
         <div class="ad-hero-actions">
-            @switch (hero.Kind)
+            @switch (action.Kind)
             {
-                case VideoHeroKind.Play:
-                case VideoHeroKind.Continue:
-                case VideoHeroKind.WatchAgain:
-                    <a class="ad-primary" href="@hero.Href">
+                case PrimaryActionKind.Play:
+                case PrimaryActionKind.Continue:
+                case PrimaryActionKind.StartWatching when Model.PlayHref is not null:
+                    <a class="ad-primary" href="@Model.PlayHref">
                         <partial name="_AnimeDetailIcon" model='"play"' />
-                        <span>@ui[VideoDetailView.PlayKey(hero.Kind)]</span>
-                        @if (hero.Episode is { } episode)
+                        <span>@ui[VideoDetailView.PlayKey(action)]</span>
+                        @if (Model.ActionEpisode is { } episode)
                         {
                             <small>@AnimeDetailView.EpisodeCode(episode.SeasonNumber, episode.Number)</small>
                         }
                     </a>
                     break;
-                case VideoHeroKind.Request:
+                case PrimaryActionKind.Request:
+                case PrimaryActionKind.StartWatching:
+                case PrimaryActionKind.WatchNow:
+                    @* Missing media starts through the Request dialog until the in-place Start watching control sends the playback intent. *@
                     <button type="button" class="ad-primary" data-dc-card-request>
                         <partial name="_AnimeDetailIcon" model='"plus"' />
                         <span>@ui["discover.card.request"]</span>
                     </button>
                     break;
-                case VideoHeroKind.None:
+                case PrimaryActionKind.Available:
+                    <span class="ad-secondary ad-static">
+                        <partial name="_AnimeDetailIcon" model='"episodes"' />
+                        <span>@ui["library.mediaCard.availability.available"]</span>
+                    </span>
+                    break;
+                case PrimaryActionKind.None:
                     <span class="ad-secondary ad-static">
                         <partial name="_AnimeDetailIcon" model='"unavailable"' />
                         <span>@ui["library.anime.availability.unavailable"]</span>
@@ -96,7 +106,7 @@
                 </a>
             }
 
-            @if (offersRequest && !isMovie && missing.Count > 0 && hero.Kind != VideoHeroKind.Request)
+            @if (offersRequest && !isMovie && missing.Count > 0 && action.Kind != PrimaryActionKind.Request)
             {
                 <details class="ad-menu" data-ad-menu>
                     <summary class="ad-secondary ad-icon-button" aria-label="@ui["library.anime.moreActions"]">

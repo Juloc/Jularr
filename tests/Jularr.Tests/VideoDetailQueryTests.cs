@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Progress;
@@ -18,7 +19,9 @@ public sealed class VideoDetailQueryTests
     private const string Bob = "bob";
     private static readonly WorkMediaType[] AllVideo = [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie];
 
-    private static VideoDetailQuery Query(AppDbContext db) => new(db, new AcquisitionAccessStore(db), new VideoProgressService(db));
+    private static VideoDetailQuery Query(AppDbContext db) => new(db, new AcquisitionAccessStore(db), new VideoProgressService(db), TimeProvider.System);
+
+    private static readonly InstantPlayPolicy Playing = new(MediaTypeEnabled: true, AcquisitionEnabled: true, PlaybackEnabled: true, CanRequest: true, AutoApproves: false, AcquisitionReady: true);
 
     [TestMethod]
     public async Task LanguagesComeFromTheCanonicalTracksOfEachEpisodeAndAreNormalised()
@@ -57,9 +60,11 @@ public sealed class VideoDetailQueryTests
         var bob = (await Query(fixture.Db).GetAsync(Bob, series.Id, WorkMediaType.Series, AllVideo, CancellationToken.None))!;
 
         Assert.IsTrue(alice.Episodes.Single(x => x.Id == first.Id).IsWatched);
-        Assert.AreEqual(new VideoNext(second.Id, MediaBannerProgressState.InProgress), alice.Next, "Alice continues with the next unfinished episode.");
+        var aliceAction = PrimaryActionResolver.Resolve(alice.Playback, Playing);
+        Assert.AreEqual((PrimaryActionKind.Continue, second.Id), (aliceAction.Kind, aliceAction.WorkEpisodeId), "Alice continues with the next unfinished episode.");
         Assert.IsFalse(bob.Episodes.Any(x => x.IsWatched));
-        Assert.AreEqual(new VideoNext(first.Id, MediaBannerProgressState.NotStarted), bob.Next, "Bob starts at the beginning.");
+        var bobAction = PrimaryActionResolver.Resolve(bob.Playback, Playing);
+        Assert.AreEqual((PrimaryActionKind.StartWatching, first.Id), (bobAction.Kind, bobAction.WorkEpisodeId), "Bob starts at the beginning.");
     }
 
     [TestMethod]
@@ -106,58 +111,6 @@ public sealed class VideoDetailQueryTests
         Assert.IsNotNull(await Query(fixture.Db).GetAsync(Alice, movie.Id, WorkMediaType.Movie, AllVideo, CancellationToken.None));
         Assert.IsNull(await Query(fixture.Db).GetAsync(Alice, movie.Id, WorkMediaType.Series, AllVideo, CancellationToken.None));
         Assert.IsNull(await Query(fixture.Db).GetAsync(Alice, Guid.NewGuid(), WorkMediaType.Movie, AllVideo, CancellationToken.None));
-    }
-
-    // ---- The hero decision ---------------------------------------------------------------------------------------------
-
-    private static VideoDetail Movie(bool playable, MediaProgressSnapshot? progress = null, AcquisitionRequestStatus? open = null, bool identity = true)
-    {
-        var workId = Guid.NewGuid();
-        var now = DateTime.UtcNow;
-        var openRequest = open is null ? null : new AcquisitionRequest(Guid.NewGuid(), MediaAcquisitionKind.Movie, "tmdb", "603", "Moon", null, null, null, "bob", open.Value, null, null, null, now, now, null, null);
-        var request = identity ? new VideoDetailRequest(MediaAcquisitionKind.Movie, "movie", "tmdb", "603", openRequest) : null;
-        IReadOnlyList<VideoDetailVersion> versions = playable ? [new VideoDetailVersion(1920, 1080, "SDR", 100, new HashSet<string>(), new HashSet<string>())] : [];
-        return new VideoDetail(workId, WorkMediaType.Movie, "Moon", null, [], 2024, LibraryLanguagePreference.None, versions, progress, [], null, [], request);
-    }
-
-    private static MediaProgressSnapshot Progress(long positionMs, bool completed) => new(Guid.NewGuid(), null, positionMs, 6_000_000, completed, DateTime.UtcNow);
-
-    [TestMethod]
-    public void AMoviePlaysContinuesOrPlaysAgainFromItsCanonicalProgress()
-    {
-        Assert.AreEqual(VideoHeroKind.Play, VideoDetailView.Hero(Movie(true), canRequest: true).Kind);
-        Assert.AreEqual(VideoHeroKind.Play, VideoDetailView.Hero(Movie(true, Progress(5_000, false)), true).Kind, "A few seconds is not worth resuming.");
-        Assert.AreEqual(VideoHeroKind.Continue, VideoDetailView.Hero(Movie(true, Progress(900_000, false)), true).Kind);
-        Assert.AreEqual(VideoHeroKind.WatchAgain, VideoDetailView.Hero(Movie(true, Progress(0, true)), true).Kind);
-
-        var movie = Movie(true);
-        Assert.AreEqual(VideoDetailView.WatchHref(movie.WorkId, null), VideoDetailView.Hero(movie, true).Href);
-    }
-
-    [TestMethod]
-    public void WithoutAFileTheHeroRequestsShowsTheOpenRequestOrHasNoAction()
-    {
-        Assert.AreEqual(VideoHeroKind.Request, VideoDetailView.Hero(Movie(false), canRequest: true).Kind);
-        Assert.AreEqual(VideoHeroKind.None, VideoDetailView.Hero(Movie(false), canRequest: false).Kind, "Without the capability there is nothing to offer.");
-        Assert.AreEqual(VideoHeroKind.None, VideoDetailView.Hero(Movie(false, identity: false), canRequest: true).Kind, "A title the provider does not identify cannot be requested.");
-
-        var requested = VideoDetailView.Hero(Movie(false, open: AcquisitionRequestStatus.Searching), canRequest: true);
-        Assert.AreEqual(VideoHeroKind.RequestState, requested.Kind);
-        Assert.AreEqual(VideoHeroKind.Play, VideoDetailView.Hero(Movie(true, open: AcquisitionRequestStatus.Downloading), true).Kind, "Playable content wins over an open request.");
-    }
-
-    [TestMethod]
-    public void ASeriesHeroOpensTheEpisodeTheSharedNextRuleChose()
-    {
-        var episode = new VideoDetailEpisode(Guid.NewGuid(), 1, 4, "Four", true, 24, new HashSet<string>(), new HashSet<string>(), AnimeEpisodeAvailability.Available, false, null);
-        var detail = Movie(false) with { MediaType = WorkMediaType.Series, Episodes = [episode], Next = new VideoNext(episode.Id, MediaBannerProgressState.InProgress) };
-
-        var hero = VideoDetailView.Hero(detail, canRequest: true);
-
-        Assert.AreEqual(VideoHeroKind.Continue, hero.Kind);
-        Assert.AreEqual(VideoDetailView.WatchHref(detail.WorkId, episode.Id), hero.Href);
-        Assert.AreEqual(VideoHeroKind.WatchAgain, VideoDetailView.Hero(detail with { Next = new VideoNext(episode.Id, MediaBannerProgressState.Completed) }, true).Kind);
-        Assert.AreEqual(VideoHeroKind.Play, VideoDetailView.Hero(detail with { Next = new VideoNext(episode.Id, MediaBannerProgressState.NotStarted) }, true).Kind);
     }
 
     [TestMethod]

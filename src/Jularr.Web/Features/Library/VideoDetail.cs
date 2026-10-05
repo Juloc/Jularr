@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Franchises;
+using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Progress;
@@ -40,10 +41,10 @@ public sealed record VideoDetailRelated(Guid WorkId, WorkMediaType MediaType, st
 /// <summary>What the shared Request flow needs to ask for this Work: the provider identity the dialog posts, and the open request if one exists.</summary>
 public sealed record VideoDetailRequest(MediaAcquisitionKind Kind, string Category, string Provider, string ExternalId, AcquisitionRequest? Open);
 
-/// <summary>The episode the primary action opens and what it does, resolved by the same rule as the Library card.</summary>
-public sealed record VideoNext(Guid EpisodeId, MediaBannerProgressState State);
-
-/// <summary>The profile-scoped read model of one Movie or Series Work, built from canonical Work, Asset, File, Track and progress rows.</summary>
+/// <summary>
+/// The profile-scoped read model of one Movie or Series Work, built from canonical Work, Asset, File, Track and progress rows.
+/// <see cref="Playback"/> carries what <see cref="PrimaryActionResolver"/> needs to resolve the primary action under the capability policy.
+/// </summary>
 public sealed record VideoDetail(
     Guid WorkId,
     WorkMediaType MediaType,
@@ -55,7 +56,7 @@ public sealed record VideoDetail(
     IReadOnlyList<VideoDetailVersion> Versions,
     MediaProgressSnapshot? MovieProgress,
     IReadOnlyList<VideoDetailEpisode> Episodes,
-    VideoNext? Next,
+    PlaybackFacts Playback,
     IReadOnlyList<VideoDetailRelated> Related,
     VideoDetailRequest? Request)
 {
@@ -73,7 +74,7 @@ public sealed record VideoDetail(
 /// Request state per episode comes from the shared request payload through <see cref="VideoRequestSelection"/>, so
 /// the page and the acquisition executor agree on what a request covers.
 /// </summary>
-public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore requests, VideoProgressService progress)
+public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore requests, VideoProgressService progress, TimeProvider clock)
 {
     private static readonly List<string> GroupOrder = [.. FranchiseLabels.RelationGroupOrder];
 
@@ -118,15 +119,17 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         IReadOnlyList<VideoDetailVersion> versions = [];
         MediaProgressSnapshot? movieProgress = null;
         IReadOnlyList<VideoDetailEpisode> episodes = [];
+        PlaybackFacts playback;
         if (mediaType == WorkMediaType.Movie)
         {
             var movieFiles = files.Where(x => x.WorkEpisodeId is null).OrderByDescending(x => x.Height ?? 0).ThenBy(x => x.FileId);
             versions = [.. movieFiles.Select(file => ToVersion(file, tracks.Where(x => x.FileId == file.FileId)))];
             movieProgress = snapshots.FirstOrDefault(x => x.WorkEpisodeId is null);
+            playback = new MoviePlaybackFacts(workId, tmdbId is not null, open is null ? null : OpenRequestFacts.ForMovie(open), versions.Count > 0, movieProgress);
         }
         else
         {
-            episodes = await LoadEpisodesAsync(workId, files, tracks, snapshots, open, preference, cancellationToken);
+            (episodes, playback) = await LoadEpisodesAsync(workId, tmdbId is not null, files, tracks, snapshots, open, preference, cancellationToken);
         }
 
         var nativeTitle = titles.FirstOrDefault(x => x.TitleType == WorkTitleType.Native)?.Value;
@@ -150,18 +153,9 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             versions,
             movieProgress,
             episodes,
-            ResolveNext(episodes, snapshots),
+            playback,
             related,
             tmdbId is null ? null : new VideoDetailRequest(VideoWorkLinks.AcquisitionKind(mediaType), mediaType == WorkMediaType.Movie ? "movie" : "tv", TmdbDiscoveryProvider.ProviderKey, tmdbId, open));
-    }
-
-    private static VideoNext? ResolveNext(IReadOnlyList<VideoDetailEpisode> episodes, IReadOnlyList<MediaProgressSnapshot> snapshots)
-    {
-        var states = snapshots
-            .Where(x => x.WorkEpisodeId is not null && x.UpdatedAt is not null)
-            .ToDictionary(x => x.WorkEpisodeId!.Value, x => new EpisodeProgressState(x.WorkEpisodeId!.Value, x.PositionMs, x.IsCompleted, x.UpdatedAt!.Value));
-        var playable = episodes.Where(x => x.HasFile).Select(x => new EpisodeOrderKey(x.Id, x.SeasonNumber, x.Number)).ToArray();
-        return LibraryMediaCardQuery.ResolveNext(playable, states) is { } next ? new VideoNext(next.Next.Id, next.State) : null;
     }
 
     private async Task<LibraryLanguagePreference> LoadPreferenceAsync(string profileId, CancellationToken cancellationToken)
@@ -219,8 +213,9 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
     private static IReadOnlySet<string> Languages(IEnumerable<TrackRow> tracks, MediaTrackKind kind) =>
         tracks.Where(x => x.Kind == kind).Select(x => PlaybackLanguages.Normalize(x.Language)).Where(x => x is not null && x != PlaybackLanguages.SubtitlesOff).Select(x => x!).ToHashSet(StringComparer.Ordinal);
 
-    private async Task<IReadOnlyList<VideoDetailEpisode>> LoadEpisodesAsync(
+    private async Task<(IReadOnlyList<VideoDetailEpisode> Episodes, SeriesPlaybackFacts Playback)> LoadEpisodesAsync(
         Guid workId,
+        bool hasRequestIdentity,
         IReadOnlyList<FileRow> files,
         IReadOnlyList<TrackRow> tracks,
         IReadOnlyList<MediaProgressSnapshot> snapshots,
@@ -240,10 +235,10 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var tracksByEpisode = tracks.Where(x => x.WorkEpisodeId is not null).ToLookup(x => x.WorkEpisodeId!.Value);
         var progressByEpisode = snapshots.Where(x => x.WorkEpisodeId is not null).ToDictionary(x => x.WorkEpisodeId!.Value);
         var selection = open is null ? null : VideoRequestSelection.For(open, workId);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var units = new List<SeriesUnit>(rows.Count);
 
-        return
-        [
-            .. rows.Select(row =>
+        var episodes = rows.Select(row =>
             {
                 var episodeFiles = filesByEpisode[row.Id].ToArray();
                 var episodeTracks = tracksByEpisode[row.Id].ToArray();
@@ -259,6 +254,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
                     requestStatus = AcquisitionRequestStatus.Approved;
                 }
 
+                units.Add(new SeriesUnit(row.Id, row.SeasonNumber, row.Number, facts.HasFile, row.AiredAt is null || row.AiredAt <= now));
                 progressByEpisode.TryGetValue(row.Id, out var episodeProgress);
                 return new VideoDetailEpisode(
                     row.Id,
@@ -273,7 +269,13 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
                     episodeProgress is { IsCompleted: true },
                     episodeProgress is { IsCompleted: false, PositionMs: >= VideoProgressService.MinimumResumeMs } ? episodeProgress.Percent : null);
             })
-        ];
+            .ToList();
+
+        var progress = snapshots
+            .Where(x => x.WorkEpisodeId is not null && x.UpdatedAt is not null)
+            .ToDictionary(x => x.WorkEpisodeId!.Value, x => new EpisodeProgressState(x.WorkEpisodeId!.Value, x.PositionMs, x.IsCompleted, x.UpdatedAt!.Value));
+        var openFacts = open is null ? null : OpenRequestFacts.ForSeries(open, selection!, rows.Select(x => (x.Id, x.SeasonId, x.AiredAt)));
+        return (episodes, new SeriesPlaybackFacts(workId, hasRequestIdentity, openFacts, units, progress));
     }
 
     private sealed record FileRow(Guid? WorkEpisodeId, Guid FileId, double? DurationSeconds, int? Width, int? Height, string? DynamicRange);

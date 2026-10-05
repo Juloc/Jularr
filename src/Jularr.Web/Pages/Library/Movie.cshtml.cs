@@ -1,5 +1,5 @@
 using Jularr.Web.Data;
-using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -13,7 +13,7 @@ public sealed class MovieDetailModel(
     CurrentAccountContext account,
     IAppShellService appShell,
     VideoDetailQuery query,
-    AcquisitionRequestService requests) : VideoDetailPageModel(db, account, appShell, query, requests)
+    InstantPlayPolicyService policies) : VideoDetailPageModel(db, account, appShell, query, policies)
 {
     protected override WorkMediaType MediaType => WorkMediaType.Movie;
 

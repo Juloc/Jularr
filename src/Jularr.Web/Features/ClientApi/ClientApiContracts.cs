@@ -28,6 +28,8 @@ public static class ClientApiContract
     {
         var learningEnabled =
             instanceSettings?.IsEnabled(InstanceModule.Learning) ?? true;
+        var playbackEnabled =
+            instanceSettings?.IsEnabled(InstanceModule.Playback) ?? true;
 
         var assembly = typeof(ClientApiContract).Assembly;
         var informational = assembly
@@ -72,7 +74,9 @@ public static class ClientApiContract
                 Watchlist: true,
                 DevicePairing: true,
                 OfflinePackages: true,
-                PlaybackTelemetry: true));
+                PlaybackTelemetry: true,
+                PlaybackEnabled: playbackEnabled,
+                PlaybackIntents: playbackEnabled && (instanceSettings?.IsEnabled(InstanceModule.Acquisition) ?? true)));
     }
 }
 
@@ -272,7 +276,11 @@ public sealed record ClientFeatureFlags(
     bool DevicePairing = false,
     bool OfflinePackages = false,
     // PUT "/stream-sessions/{id}/telemetry": ephemeral buffer, throughput and stall reports of a playing client (#403).
-    bool PlaybackTelemetry = false);
+    bool PlaybackTelemetry = false,
+    // False on a manager-only instance: every player, plan, progress, stream and media-content route answers 404 and clients show no play action.
+    bool PlaybackEnabled = false,
+    // Explicit playback intents (POST video/playback-intents): playback enabled and acquisition on.
+    bool PlaybackIntents = false);
 
 public sealed record ClientErrorResponse(
     string Code,

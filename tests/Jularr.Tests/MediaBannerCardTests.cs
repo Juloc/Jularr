@@ -195,41 +195,6 @@ public sealed class MediaBannerCardTests
     }
 
     [TestMethod]
-    public void NextEpisodeResolutionFollowsCanonicalProgress()
-    {
-        var episodes = Enumerable.Range(1, 4)
-            .Select(number => new EpisodeOrderKey(Guid.NewGuid(), 1, number))
-            .Append(new EpisodeOrderKey(Guid.NewGuid(), 0, 1))
-            .ToArray();
-        var progress = new Dictionary<Guid, EpisodeProgressState>();
-
-        var start = LibraryMediaCardQuery.ResolveNext(episodes, progress);
-        Assert.AreEqual((MediaBannerProgressState.NotStarted, episodes[0]), start);
-
-        progress[episodes[0].Id] = Watched(episodes[0], BaseTime);
-        progress[episodes[1].Id] = new EpisodeProgressState(episodes[1].Id, 600_000, false, BaseTime.AddMinutes(1));
-        Assert.AreEqual(
-            (MediaBannerProgressState.InProgress, episodes[1]),
-            LibraryMediaCardQuery.ResolveNext(episodes, progress),
-            "An unfinished latest episode is resumed.");
-
-        progress[episodes[1].Id] = Watched(episodes[1], BaseTime.AddMinutes(2));
-        progress[episodes[2].Id] = Watched(episodes[2], BaseTime.AddMinutes(-5));
-        Assert.AreEqual(
-            (MediaBannerProgressState.InProgress, episodes[3]),
-            LibraryMediaCardQuery.ResolveNext(episodes, progress),
-            "An already watched neighbour is skipped.");
-
-        progress[episodes[3].Id] = Watched(episodes[3], BaseTime.AddMinutes(3));
-        Assert.AreEqual(
-            (MediaBannerProgressState.Completed, episodes[0]),
-            LibraryMediaCardQuery.ResolveNext(episodes, progress),
-            "Specials never block completion; a finished series starts over at episode 1.");
-
-        Assert.IsNull(LibraryMediaCardQuery.ResolveNext([], progress));
-    }
-
-    [TestMethod]
     public async Task LibraryCardsCombineMetadataInventoryAndProgressAsync()
     {
         await using var fixture = await EpisodeFlowFixture.CreateAsync();
@@ -321,7 +286,4 @@ public sealed class MediaBannerCardTests
         int? season = null,
         int? percent = null) =>
         new(state, unit, number, "/next", total, season, percent);
-
-    private static EpisodeProgressState Watched(EpisodeOrderKey episode, DateTime updatedAt) =>
-        new(episode.Id, 0, true, updatedAt);
 }

@@ -13,7 +13,7 @@
     var title = string.IsNullOrWhiteSpace(episode.Title) ? ui.Format("library.browse.card.episode", ("number", episode.Number)) : episode.Title;
     var stateName = AnimeDetailView.AvailabilityName(episode.Availability);
     var stateIcon = episode.Availability == AnimeEpisodeAvailability.OtherLanguageOnly ? "language" : stateName;
-    var href = episode.HasFile ? VideoDetailView.WatchHref(page.Detail.WorkId, episode.Id) : null;
+    var href = episode.HasFile && page.PlaybackEnabled ? VideoDetailView.WatchHref(page.Detail.WorkId, episode.Id) : null;
     var openLabel = href is null ? null : ui.Format("library.anime.openEpisodeAria", ("code", code), ("title", title));
     var offersRequest = page.OffersRequest && episode.Availability == AnimeEpisodeAvailability.Unavailable;
     var audio = AnimeDetailView.Chips(episode.Audio, page.Detail.Preference.Audio);

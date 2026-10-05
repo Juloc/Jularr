@@ -1974,6 +1974,7 @@ public static class UiTranslationResources
         M("admin.instance.module.learning", "Learning", "Admin", "Option", "Server-wide Learning module switch.", "short option label", 24, null, null),
         M("admin.instance.module.acquisition", "Acquisition / Downloader", "Admin", "Option", "Server-wide acquisition and downloader module switch.", "short option label", 32, null, null),
         M("admin.instance.module.tracking", "Tracking", "Admin", "Option", "Server-wide tracking and sync module switch.", "short option label", 24, null, null),
+        M("admin.instance.module.playback", "Playback", "Admin", "Option", "Server-wide switch for playing media in Jularr. Off is the manager-only mode: requests, monitoring and acquisition stay, no Jularr player.", "short option label", 24, null, null),
         M("admin.nav.users", "Users", "Admin", "Navigation", "Admin sub-navigation entry that opens the Users administration page.", "short navigation label", 14, null, null),
         M("admin.appearance.title", "Instance appearance", "Admin", "Heading", "Heading of the instance-wide appearance policy page.", "short page heading", 32),
         M("admin.appearance.description", "Set the default visual theme and decide whether profiles may make their own appearance choices.", "Admin", "Body", "Explains the scope of the instance appearance policy.", "clear concise copy", 120),
@@ -3621,6 +3622,7 @@ public static class UiTranslationResources
         M("library.video.noMediaBody", "No video file has been found for this title yet.", "Library", "Body", "Explains why no player is shown for a movie or series episode without a file.", "neutral empty-state copy", 60),
         M("library.video.requestMissingAll", "Request all missing episodes", "Library", "Button", "Opens the request dialog with every episode of the series that has no file and no request yet already selected.", "concise action", 36),
         M("library.video.watchedOf", "{watched} of {total} episodes watched", "Library", "Value", "Progress fact in the series hero: how many of the known episodes the profile has watched.", "compact metadata", 48, new Dictionary<string, string> { ["watched"] = "Watched episodes.", ["total"] = "Known episodes." }),
+        M("library.video.watchNow", "Watch now", "Library", "Button", "Primary action of a movie or a chosen episode that is not on the server yet: Jularr gets it and starts playing as soon as it is ready.", "concise action", 18),
         M("library.anime.relatedMore", "{count} more in the franchise", "Library", "Link", "Link below the related works panel to the franchise page when more related works exist than are listed.", "compact link", 40, new Dictionary<string, string> { ["count"] = "Number of related works not listed." }),
 
         M("library.animeRepair.pageTitle", "Repair · {anime}", "Library", "Heading", "Browser title and heading prefix of the per-anime repair page.", "clear heading", 40, new Dictionary<string, string> { ["anime"] = "Anime title." }),

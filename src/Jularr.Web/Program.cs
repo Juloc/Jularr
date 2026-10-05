@@ -412,6 +412,7 @@ builder.Services.AddScoped<MediaSegmentService>();
 builder.Services.AddScoped<MediaSegmentSidecarImporter>();
 builder.Services.AddScoped<VideoProgressService>();
 builder.Services.AddScoped<VideoDetailQuery>();
+builder.Services.AddScoped<Jularr.Web.Features.InstantPlay.InstantPlayPolicyService>();
 builder.Services.AddScoped<CanonicalVideoTargetResolver>();
 builder.Services.AddScoped<CanonicalVideoProgressBackfillService>();
 builder.Services.AddScoped<ActiveSessionService>();
@@ -740,24 +741,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
-// Instance module switches are stronger than profile settings. Gated routes disappear immediately
-// when an owner disables a module; background/service gates use the same canonical service.
-app.Use(async (context, next) =>
-{
-    var requiredModules = InstanceModuleRoutes.Resolve(context.Request.Path);
-    if (requiredModules.Count > 0)
-    {
-        var modules = context.RequestServices.GetRequiredService<IInstanceModuleService>();
-        var settings = await modules.GetAsync(context.RequestAborted);
-        if (requiredModules.Any(module => !settings.IsEnabled(module)))
-        {
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
-            return;
-        }
-    }
-
-    await next();
-});
+app.UseInstanceModuleGates();
 // Operations created while a signed-in account's request runs record that account as their actor
 // (Admin → History); work started by the server itself has none.
 app.Use(async (context, next) =>

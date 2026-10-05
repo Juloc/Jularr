@@ -3,6 +3,17 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.DownloadClients;
+using Jularr.Web.Features.Acquisition.Health;
+using Jularr.Web.Features.Acquisition.Indexers;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Sabnzbd;
+using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.InstantPlay;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Events;
@@ -42,13 +53,16 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
     private readonly IHost host;
     private readonly TestServer server;
 
-    private VideoDetailPageTestHost(string root, AppDbContext db, IHost host, FakeMediaProbeRunner probe, MediaCapabilityStore capabilities)
+    private VideoDetailPageTestHost(string root, AppDbContext db, IHost host, FakeMediaProbeRunner probe, MediaCapabilityStore capabilities, InstanceModuleStore modules, IndexerStore indexerStore, DownloadClientStore clientStore)
     {
         this.root = root;
         Db = db;
         this.host = host;
         Probe = probe;
         Capabilities = capabilities;
+        Modules = modules;
+        IndexerStore = indexerStore;
+        ClientStore = clientStore;
         server = host.GetTestServer();
     }
 
@@ -60,6 +74,13 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
     public FakeMediaProbeRunner Probe { get; }
 
     public MediaCapabilityStore Capabilities { get; }
+
+    /// <summary>The instance module switches the pages and API read; flip Playback to test a manager-only instance.</summary>
+    public InstanceModuleStore Modules { get; }
+
+    public IndexerStore IndexerStore { get; }
+
+    public DownloadClientStore ClientStore { get; }
 
     /// <summary>A directory for real media files of the Watch tests; it is the storage root those files are attached to.</summary>
     public string MediaDirectory => Path.Combine(root, "media");
@@ -73,6 +94,13 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
         var connectionString = $"Data Source={sharedDatabasePath ?? Path.Combine(root, "jularr.db")};Foreign Keys=True";
         var capabilities = new MediaCapabilityStore(data.FullName);
         var probe = new FakeMediaProbeRunner();
+        var acquisitionDirectory = Directory.CreateDirectory(Path.Combine(root, "acquisition"));
+        var protection = new EphemeralDataProtectionProvider();
+        var indexerStore = new IndexerStore(protection, acquisitionDirectory);
+        var clientStore = new DownloadClientStore(protection, acquisitionDirectory);
+        var health = new AcquisitionHealthStore(acquisitionDirectory);
+        var registry = new MediaAcquisitionRegistry([new MovieAcquisitionRegistration(), new TvAcquisitionRegistration()]);
+        var modules = new InstanceModuleStore(data.FullName);
 
         var host = await new HostBuilder()
             .ConfigureWebHost(webBuilder => webBuilder
@@ -97,6 +125,19 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                     services.AddScoped<VideoProgressService>();
                     services.AddScoped<VideoDetailQuery>();
+                    services.AddSingleton<IInstanceModuleService>(modules);
+                    services.AddSingleton(indexerStore);
+                    services.AddSingleton(clientStore);
+                    services.AddSingleton(new IndexerSearchCoordinator(new Dictionary<IndexerType, IIndexer>(), indexerStore, health, NullLogger<IndexerSearchCoordinator>.Instance));
+                    services.AddSingleton(registry);
+                    services.AddSingleton(new QualityProfileStore(new DirectoryInfo(Path.Combine(root, "quality-profiles")), registry));
+                    services.AddSingleton<IDownloadClient>(new SabnzbdDownloadClient(new FakeSabnzbdClient()));
+                    services.AddSingleton(new DownloadClientSelector(clientStore, health));
+                    services.AddScoped<DownloadClientSubmissionService>();
+                    services.AddScoped<ReleaseRequestTracker>();
+                    services.AddScoped<VideoRequestWorkResolver>();
+                    services.AddScoped<VideoAcquisitionEngine>();
+                    services.AddScoped<InstantPlayPolicyService>();
                     services.AddSingleton<IMediaProbeRunner>(probe);
                     services.AddSingleton<MediaInventoryService>();
                     services.AddScoped<CanonicalMediaStorageService>();
@@ -135,6 +176,7 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                         await next();
                     });
                     app.UseRouting();
+                    app.UseInstanceModuleGates();
                     app.UseAuthorization();
                     app.UseEndpoints(endpoints =>
                     {
@@ -146,7 +188,7 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
 
         var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connectionString).Options);
         await DatabaseMigrationBridge.UpgradeAsync(db);
-        return new VideoDetailPageTestHost(root, db, host, probe, capabilities);
+        return new VideoDetailPageTestHost(root, db, host, probe, capabilities, modules, indexerStore, clientStore);
     }
 
     public async Task<(HttpStatusCode Status, string Html)> GetAsync(string path, bool asOwner = false, string? profile = null)
@@ -211,6 +253,13 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
         var (status, html) = await GetAsync(path, asOwner, profile);
         Assert.AreEqual(HttpStatusCode.OK, status, $"GET {path} failed:\n{html}");
         return html;
+    }
+
+    /// <summary>Configures one indexer and one download client, so acquisition is ready and a playback intent may acquire missing media.</summary>
+    public async Task MakeAcquisitionReadyAsync()
+    {
+        await IndexerStore.SaveAsync(new IndexerEntry(Guid.NewGuid(), "Video test indexer", IndexerType.Newznab, Enabled: true, Priority: 1, new IndexerSettings("https://indexer.invalid", [2000, 5000], [], 100), "indexer-key"));
+        await ClientStore.SaveAsync(new DownloadClientEntry(Guid.NewGuid(), "SABnzbd", DownloadClientType.Sabnzbd, Enabled: true, Priority: 1, new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?>()), "secret-key"));
     }
 
     public async ValueTask DisposeAsync()
