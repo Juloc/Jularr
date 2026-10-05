@@ -568,6 +568,16 @@ AI provider/model configuration stays in the dedicated **AI** Admin area rather 
 - Appearance
 
 
+### Cross-cutting Admin ownership notes
+
+The following concerns intentionally do **not** get additional permanent top-level sidebar entries:
+
+- **Naming / organization** — configured from the relevant LibraryRoot/Storage or canonical library-management context. Naming templates/policies belong to the content importer/library layer; Storage owns the target root/path/placement policy. Legacy `/Settings/Naming` and `/Settings/ReadingNaming` become compatibility/contextual routes after parity.
+- **Identity / mapping correction** — opened contextually from Admin Media Detail, To-Do, Reconciliation or another owning workflow. Legacy Mapping Review/Segments routes do not become a permanent "Mapping" Admin area.
+- **UI translations** — contextual child of General Settings → Language & Localization. Personal language remains User Settings; Translation providers remain Providers.
+- **API keys / automation** — until a broader API/Webhook/Automation contract is approved, API Keys remains a transitional technical sub-surface. A future **API & Automation** owner may absorb API keys, webhooks and automation credentials; do not create a new main destination merely for the existing API-key page.
+- **Administrative audit** — durable typed audit evidence is surfaced through System & Diagnostics/contextual links, not as another top-level Admin destination.
+
 ### Storage ownership and lifecycle
 
 Binding specification:
