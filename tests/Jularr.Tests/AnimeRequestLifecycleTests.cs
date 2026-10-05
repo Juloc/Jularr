@@ -259,4 +259,41 @@ public sealed class AnimeRequestLifecycleTests
         await environment.RequestPassAsync();
 
         Assert.AreEqual(AcquisitionRequestStatus.Completed, (await environment.GetRequestAsync(request.Id)).Status);
+    }
+
+    [TestMethod]
+    public async Task AnApprovedRequestWhoseSeriesDoesNotExistYetIsLeftToTheExecutorWhenThePassRunsFirst()
+    {
+        await using var environment = await CreateAsync();
+        var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", FrierenId, "Frieren", null, null);
+        var approved = await new AcquisitionAccessStore(environment.Db).CreateAsync(draft, "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
+
+        // The pass runs between the approval and the executor claiming the request.
+        Assert.AreEqual(0, await environment.RequestPassAsync());
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, (await environment.GetRequestAsync(approved.Id)).Status);
+        Assert.AreEqual(0, await environment.Db.Anime.CountAsync());
+
+        var executed = await environment.RunRequestAsync(approved.Id);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, executed.Status, executed.StatusMessage);
+        Assert.AreEqual(1, await environment.Db.Anime.CountAsync(), "The approval was executed: the series exists and is searched.");
+        Assert.AreEqual(1, environment.Scheduler.QueuedRequests);
+    }
+
+    [TestMethod]
+    public async Task ARequestTheExecutorFailsForNoLongerCarriesTheDownloadItHadAndIsNotReadBackFromThePipeline()
+    {
+        await using var environment = await CreateAsync();
+        await environment.Db.LibraryRoots.ExecuteUpdateAsync(setters => setters.SetProperty(root => root.IsEnabled, false));
+        var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", FrierenId, "Frieren", null, null);
+        var store = new AcquisitionAccessStore(environment.Db);
+        var request = await store.CreateAsync(draft, "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
+        await store.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Approved, null, Guid.NewGuid(), null, null, CancellationToken.None);
+
+        var failed = await environment.RunRequestAsync(request.Id);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Failed, failed.Status);
+        Assert.IsNull(failed.OperationId);
+        Assert.AreEqual(0, await environment.RequestPassAsync(), "The reason the executor gave is not overwritten by a read-back.");
+        StringAssert.Contains((await environment.GetRequestAsync(request.Id)).StatusMessage, "Admin → System");
     }}

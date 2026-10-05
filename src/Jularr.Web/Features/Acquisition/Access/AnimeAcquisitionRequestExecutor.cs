@@ -142,7 +142,8 @@ public sealed class AnimeAcquisitionRequestExecutor(
             nowUtc);
 
     private async Task<AcquisitionExecution> ObserveNowAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
-        await (await BeginObservationAsync(clock.GetUtcNow().UtcDateTime, cancellationToken)).ObserveAsync(request, cancellationToken);
+        await (await BeginObservationAsync(clock.GetUtcNow().UtcDateTime, cancellationToken)).ObserveAsync(request, cancellationToken)
+        ?? throw new InvalidOperationException("The series of the request does not exist after it was added.");
 
     private async Task<SeriesIdentity?> FindSeriesAsync(string aniListId, CancellationToken cancellationToken) =>
         await (

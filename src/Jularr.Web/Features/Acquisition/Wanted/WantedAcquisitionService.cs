@@ -163,6 +163,7 @@ public sealed class WantedAcquisitionService(
             advanced += await RecoverStaleSearchingAsync(services, executor.Kind, nowUtc, cancellationToken);
             advanced += await FollowMonitoredAsync(services, executor, nowUtc, cancellationToken);
         }
+
         // Manual downloads (no request) go through the same importer.
         advanced += await services
             .GetRequiredService<CompletedDownloadImportService>()
@@ -474,6 +475,7 @@ public sealed class WantedAcquisitionService(
             after = batch[^1].Id;
         }
     }
+
     private static async Task<int> SearchDueAsync(
         IServiceProvider services,
         IWantedRequestHandler handler,

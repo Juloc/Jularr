@@ -1,6 +1,7 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Pipeline;
+using Jularr.Web.Features.Metadata;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Tests;
@@ -46,14 +47,63 @@ public sealed class AnimeRequestAiredScopeTests
     }
 
     [TestMethod]
-    public async Task ASeriesWithoutAnEpisodeCountFollowsTheSameRuleFromTheReleaseCalendar()
+    public async Task ARequestMadeLateInALongRunCoversTheOlderEpisodesTheCalendarNoLongerListsAsWell()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync(episodeCount: null, status: "RELEASING");
-        await environment.SeedReleaseCalendarAsync(FrierenId, "RELEASING", Schedule(aired: 3, total: 6));
+        await environment.SeedFrierenAsync(episodeCount: 24, status: "RELEASING");
+        // The cached calendar only reaches back about a month: episodes 10 to 14 have aired, 15 on are upcoming, 1 to 9 are not listed any more.
+        await environment.SeedReleaseCalendarAsync(FrierenId, "RELEASING", [.. Enumerable.Range(10, 15).Select(episode => (episode, DateTimeOffset.UtcNow.AddDays((episode - 14) * 7 - 1)))]);
 
         var request = await environment.SubmitRequestAsync(FrierenId);
-        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status, "The calendar says episodes 2 and 3 have aired.");
+        for (var episode = 10; episode <= 14; episode++)
+        {
+            AddEpisodeFile(environment, episode);
+        }
+
+        await environment.ScanAsync();
+        await environment.RequestPassAsync();
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, (await environment.GetRequestAsync(request.Id)).Status, "Episodes 2 to 9 have aired too, they are only older than the calendar's window.");
+
+        for (var episode = 2; episode <= 9; episode++)
+        {
+            AddEpisodeFile(environment, episode);
+        }
+
+        await environment.ScanAsync();
+        await environment.RequestPassAsync();
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, (await environment.GetRequestAsync(request.Id)).Status);
+    }
+
+    [TestMethod]
+    public async Task AFinishedMultiCourSeriesNeedsEveryEpisodeOfBothEntriesEvenWhenOnlyTheCalendarKnowsTheSecondOneIsFinished()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync(episodeCount: 2, status: "FINISHED");
+        await environment.AniListAccounts.TryAddEpisodeMappingAsync(new AnimeEpisodeMetadataMapping(Guid.NewGuid(), environment.AnimeId, 1, 1, 2, 1, "anilist", FrierenId, "Frieren", 2, DateTimeOffset.UtcNow), CancellationToken.None);
+        await environment.AniListAccounts.TryAddEpisodeMappingAsync(new AnimeEpisodeMetadataMapping(Guid.NewGuid(), environment.AnimeId, 1, 3, 4, 1, "anilist", "9002", "Frieren Part Two", 2, DateTimeOffset.UtcNow), CancellationToken.None);
+        await environment.SeedReleaseCalendarAsync("9002", "FINISHED");
+
+        var request = await environment.SubmitRequestAsync(FrierenId);
+        AddEpisodeFile(environment, 2);
+        await environment.ScanAsync();
+        await environment.RequestPassAsync();
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, (await environment.GetRequestAsync(request.Id)).Status, "Episodes 3 and 4 belong to a finished entry: they have aired.");
+
+        AddEpisodeFile(environment, 3);
+        AddEpisodeFile(environment, 4);
+        await environment.ScanAsync();
+        await environment.RequestPassAsync();
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, (await environment.GetRequestAsync(request.Id)).Status);
+    }
+
+    [TestMethod]
+    public async Task AReleasingSeriesNothingIsKnownAboutIsNotCompletedBeforeEveryTrackedEpisodeHasAFile()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync(episodeCount: 3, status: "RELEASING");
+
+        var request = await environment.SubmitRequestAsync(FrierenId);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status, "Episodes 2 and 3 may or may not have aired: the request is not available yet.");
 
         AddEpisodeFile(environment, 2);
         AddEpisodeFile(environment, 3);
@@ -64,16 +114,30 @@ public sealed class AnimeRequestAiredScopeTests
     }
 
     [TestMethod]
-    public async Task ASeriesWithoutAnEpisodeCountAndWithoutAReleaseCalendarCompletesWithTheEpisodesItHas()
+    public async Task ASeriesWithoutAnEpisodeCountCompletesWithTheEpisodesThePipelineTracksEvenIfTheCalendarListsMore()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync(episodeCount: null, status: "RELEASING");
+        await environment.SeedReleaseCalendarAsync(FrierenId, "RELEASING", Schedule(aired: 3, total: 6));
 
         var request = await environment.SubmitRequestAsync(FrierenId);
 
-        Assert.AreEqual(AcquisitionRequestStatus.Completed, request.Status, "Nothing else is known to have aired, so nothing else is part of the request.");
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, request.Status, "The pipeline only tracks episode 1; nothing is expected that it will never search.");
     }
 
+    [TestMethod]
+    public async Task ASeriesWithoutAnEpisodeCountAndNoEpisodesStaysOpenAsLookingForMedia()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        environment.AniListMetadata.Add(FrierenId, "Frieren", episodeCount: null);
+
+        var request = await environment.SubmitRequestAsync(FrierenId);
+        await environment.RequestPassAsync();
+
+        request = await environment.GetRequestAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status, "Nothing is tracked and nothing is available.");
+        Assert.AreEqual("Looking for the requested episodes.", request.StatusMessage);
+    }
     [TestMethod]
     public async Task EpisodesThatHaveNotAiredYetAreNotPartOfTheRequest()
     {

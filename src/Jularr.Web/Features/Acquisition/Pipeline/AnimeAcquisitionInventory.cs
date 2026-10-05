@@ -53,17 +53,11 @@ public sealed record AnimeEpisodeSlot(
     bool HasFile,
     string? SourceExternalId);
 
-// A matched AniList entry without an episode count: only its existing episodes are tracked, in this one local season.
-public sealed record AnimeOpenEndedSource(
-    string ExternalId,
-    int Season);
-
 public sealed record AnimeEpisodeSlots(
     AnimeAcquisitionAnime Anime,
     string? MatchedExternalId,
     string? MatchedStatus,
-    IReadOnlyList<AnimeEpisodeSlot> Slots,
-    AnimeOpenEndedSource? OpenEnded);
+    IReadOnlyList<AnimeEpisodeSlot> Slots);
 
 // Where imported files of an anime go: the library root and series folder its existing files
 // live in. AnimeDirectory is null when the anime has no folder in any library root yet.
@@ -177,8 +171,7 @@ public sealed class AnimeAcquisitionInventory(
             new AnimeAcquisitionAnime(layout.Anime.Id, key, layout.Anime.Title),
             layout.Match?.ExternalId,
             layout.Match?.Status,
-            slots.Values.OrderBy(slot => slot.Key.SeasonNumber).ThenBy(slot => slot.Key.EpisodeNumber).ToArray(),
-            layout.OpenEnded);
+            slots.Values.OrderBy(slot => slot.Key.SeasonNumber).ThenBy(slot => slot.Key.EpisodeNumber).ToArray());
     }
 
     /// <summary>
@@ -218,7 +211,6 @@ public sealed class AnimeAcquisitionInventory(
 
         var expected = new Dictionary<(int Season, int Episode), ExpectedSlot>();
         string? diagnostic = null;
-        AnimeOpenEndedSource? openEnded = null;
 
         if (mappings.Count > 0)
         {
@@ -262,10 +254,6 @@ public sealed class AnimeAcquisitionInventory(
                 diagnostic = seasons.Length > 1
                     ? "Several local seasons without AniList episode mappings; map each season on the anime page before monitoring."
                     : "The AniList entry has no episode count yet, so only existing episodes are tracked.";
-                if (seasons.Length <= 1)
-                {
-                    openEnded = new AnimeOpenEndedSource(match.ExternalId, seasons.Length == 1 ? seasons[0] : 1);
-                }
             }
         }
         else
@@ -273,7 +261,7 @@ public sealed class AnimeAcquisitionInventory(
             diagnostic = "No AniList match; nothing is expected until the anime is matched.";
         }
 
-        return new InventoryLayout(anime, match, local, expected, diagnostic, openEnded);
+        return new InventoryLayout(anime, match, local, expected, diagnostic);
     }
 
     // preferredRootId (the anime's assigned target root, item 3 of the P1 backlog) is used only
@@ -460,6 +448,5 @@ public sealed class AnimeAcquisitionInventory(
         AnimeMetadata? Match,
         IReadOnlyList<LocalEpisode> Local,
         IReadOnlyDictionary<(int Season, int Episode), ExpectedSlot> Expected,
-        string? Diagnostic,
-        AnimeOpenEndedSource? OpenEnded);
+        string? Diagnostic);
 }

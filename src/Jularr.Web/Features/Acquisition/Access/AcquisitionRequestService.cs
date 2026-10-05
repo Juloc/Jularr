@@ -140,7 +140,11 @@ public sealed class AcquisitionRequestService(
             return false;
         }
 
-        var observed = await observation.ObserveAsync(request, cancellationToken);
+        if (await observation.ObserveAsync(request, cancellationToken) is not { } observed)
+        {
+            return false;
+        }
+
         var clearOperation = observed.Status == AcquisitionRequestStatus.Approved;
         var unchanged = observed.Status == request.Status
             && observed.Message == request.StatusMessage
@@ -364,9 +368,14 @@ public sealed class AcquisitionRequestService(
     {
         // Searching is what the run (or the Manual Search claim) set before. If somebody moved the request on meanwhile (an Admin ending it), that
         // is not overwritten, except that a download which was already handed over is always recorded: it exists and its import must complete.
+        // A request of a monitored media type that goes back to waiting or fails without a download of its own no longer has the download it
+        // had; for the other media types the last download stays linked so the owner can retry it.
+        var clearOperation = result.OperationId is null
+            && result.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed
+            && executors.OfType<IMonitoredAcquisitionExecutor>().Any(candidate => candidate.Kind == request.Kind);
         var applied = result.StillApplies is { } stillApplies
             ? await store.PatchPayloadAsync(request.Id, stored => stored, AcquisitionRequestStatus.Searching, stored => StatusOf(result, stillApplies(stored)), cancellationToken)
-            : await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], result.Status, result.Message, result.OperationId, result.ResultUrl, cancellationToken) is not null;
+            : await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], result.Status, result.Message, result.OperationId, result.ResultUrl, clearOperation, cancellationToken) is not null;
         if (!applied && result.Status == AcquisitionRequestStatus.Downloading)
         {
             await store.UpdateStatusAsync(request.Id, result.Status, result.Message, result.OperationId, result.ResultUrl, null, cancellationToken);

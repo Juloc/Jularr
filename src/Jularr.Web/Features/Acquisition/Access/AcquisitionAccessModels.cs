@@ -212,13 +212,18 @@ public interface IMonitoredAcquisitionExecutor : IAcquisitionRequestExecutor
 /// <summary>Where the monitoring pipeline stands for one request, read against the state loaded when the observation began.</summary>
 public interface IRequestObservation
 {
-    Task<AcquisitionExecution> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken);
+    /// <summary>The state to bring the request to, or null when the pipeline has nothing to say about it yet and the request stays as it is.</summary>
+    Task<AcquisitionExecution?> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken);
 }
 
 public sealed class AcquisitionAccessDeniedException(string message) : Exception(message);
 
 public static class AcquisitionAccessNames
 {
+    /// <summary>The statuses of an approved request whose acquisition is underway: the ones a worker may take over, or bring to the state of its download.</summary>
+    public static readonly IReadOnlyList<AcquisitionRequestStatus> UnderwayStatuses =
+        [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Importing];
+
     public static string Kind(MediaAcquisitionKind kind) => kind switch
     {
         MediaAcquisitionKind.Anime => "anime",
@@ -258,9 +263,6 @@ public static class AcquisitionAccessNames
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
-    /// <summary>The statuses of an approved request whose acquisition is underway: the ones a worker may take over, or bring to the state of its download.</summary>
-    public static readonly IReadOnlyList<AcquisitionRequestStatus> UnderwayStatuses =
-        [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Importing];
 
     /// <summary>Whether a request in this status still waits for a decision or for its title to arrive.</summary>
     public static bool IsOpen(AcquisitionRequestStatus status) => status is AcquisitionRequestStatus.Pending

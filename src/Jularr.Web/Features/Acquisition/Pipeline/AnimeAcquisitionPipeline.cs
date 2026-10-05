@@ -84,7 +84,7 @@ public sealed class AnimeAcquisitionPipeline(
     AcquisitionPolicyStore policyStore,
     AcquisitionHistoryService history,
     ILogger<AnimeAcquisitionPipeline> logger,
-    TimeProvider? clock = null)
+    TimeProvider clock)
 {
     public const string SearchOperationKind = "anime-search";
     public const string GrabOperationKind = "anime-grab";
@@ -525,7 +525,7 @@ public sealed class AnimeAcquisitionPipeline(
         CancellationToken cancellationToken)
     {
         var snapshot = await LoadAcquisitionSnapshotAsync(cancellationToken);
-        var open = (await ListOpenAcquisitionsAsync(snapshot, animeKey, episodes, (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime, cancellationToken)).FirstOrDefault();
+        var open = (await ListOpenAcquisitionsAsync(snapshot, animeKey, episodes, clock.GetUtcNow().UtcDateTime, cancellationToken)).FirstOrDefault();
         return open is null
             ? null
             : open.Stage == AnimeOpenAcquisitionStage.Downloading
@@ -543,9 +543,9 @@ public sealed class AnimeAcquisitionPipeline(
     /// Operations and import records are the source of truth, so the answer also holds after a restart. A download that finished
     /// within <see cref="AnimeImportExecutor.RecoveryWindow"/> of <paramref name="nowUtc"/> without an import record still waits for it.
     /// </summary>
-    public async Task<IReadOnlyList<AnimeOpenAcquisition>> ListOpenAcquisitionsAsync(AnimeAcquisitionSnapshot snapshot, string animeKey, IReadOnlyList<AnimeEpisodeKey> episodes, DateTime nowUtc, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AnimeOpenAcquisition>> ListOpenAcquisitionsAsync(AnimeAcquisitionSnapshot state, string animeKey, IReadOnlyList<AnimeEpisodeKey> episodes, DateTime nowUtc, CancellationToken cancellationToken)
     {
-        var candidates = snapshot.Relations.Acquisitions
+        var candidates = state.Relations.Acquisitions
             .Where(item =>
                 item.LatestAttempt is not null &&
                 item.AnimeKey.Equals(animeKey, StringComparison.OrdinalIgnoreCase) &&
@@ -574,7 +574,7 @@ public sealed class AnimeAcquisitionPipeline(
             }
             else if (operation.Status == OperationStatus.Succeeded)
             {
-                var import = snapshot.Imports.Imports.FirstOrDefault(record => record.DownloadOperationId == operation.Id);
+                var import = state.Imports.Imports.FirstOrDefault(record => record.DownloadOperationId == operation.Id);
                 var awaitingRecovery = import is null &&
                                        operation.FinishedAtUtc is { } finished &&
                                        finished >= nowUtc - AnimeImportExecutor.RecoveryWindow;
