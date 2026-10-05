@@ -227,7 +227,7 @@ Phase A contracts must be able to represent all target media without promising u
 | Manga | chapter / volume / selected chapters | image | image quality |
 | PDF/scan/comic/magazine | document; page/chapter only if modeled | document/image | Edition/derived translation if available |
 | Audiobook | whole book; chapter/track only when canonical structure exists | audio | selected audio package |
-| Games | excluded | n/a | Games owns its own install/runtime model |
+| Games | separate Games-owned install/package contract (#851) | game/release capability | projects into the shared OfflineLocalCatalog; never forced into MediaCore Work/MediaProgress |
 
 A capability not supported by the canonical source is omitted. The UI must not render a disabled fake feature just for parity.
 
@@ -491,7 +491,7 @@ At minimum:
 - structural unit id(s);
 - title;
 - unit label/title;
-- media category: Video / Reading / Audio;
+- consumer category: Video / Reading / Audio / Games; Games uses a typed Games-owned target reference rather than a MediaCore Work target;
 - media type/content type;
 - selected Edition/language;
 - duration or chapter/page counts where useful;
@@ -712,6 +712,18 @@ Until then, Phase A code must not add more shared settings into either media-spe
 
 The catalog is a **read-only projection**, not a store.
 
+### Games adapter boundary (#851)
+
+Games is first-class in the consumer Offline projection but remains a separate canonical domain.
+
+- media items use canonical Work/structure targets;
+- Games items use canonical Game/GameRelease targets;
+- the Games module owns local install/package bytes, runtime capability and save state;
+- the shared catalog only projects Games state into Home, Downloads & Offline and Quick View where appropriate;
+- Games never uses MediaProgress merely to fit the shared catalog;
+- predictive Smart Offline does not include Games by default.
+
+
 Required consumers:
 - disconnected Home;
 - Downloads & Offline;
@@ -752,6 +764,7 @@ Category:
 - `video`
 - `reading`
 - `audio`
+- `games`
 
 Origin:
 - `explicit`
