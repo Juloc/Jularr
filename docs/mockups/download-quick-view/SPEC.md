@@ -97,7 +97,7 @@ the indicator may disappear entirely.
 
 ## 5. Badge count
 
-The badge shows the number of **unfinished logical download units requiring current queue attention**.
+The badge shows the number of **unfinished logical local Offline/install units requiring current queue attention**.
 
 Examples:
 - 3 episodes in progress/queue -> `3`;
@@ -341,6 +341,34 @@ Rules:
 - promotion reuses valid local bytes and does not create a duplicate download.
 
 Ready Smart Offline items do not keep the global indicator visible by themselves.
+
+## 17.1 Games
+
+Games may participate in the same Quick View through the Games-owned install/package adapter.
+
+A row may show:
+- Downloading;
+- Installing;
+- Verifying;
+- Waiting/Paused;
+- Failed;
+- Update available;
+- recently completed/Ready transition.
+
+Actions delegate to the Games owner:
+- Pause / Resume;
+- Retry;
+- Show in Downloads & Offline;
+- open Game Detail;
+- Play/Continue after Ready where useful.
+
+The Quick View must not:
+- own Game install state;
+- expose ROM paths, BIOS paths or runtime internals;
+- count an external launcher installation as a Jularr download;
+- reuse MediaProgress for Games.
+
+Games operations follow normal explicit-work priority. Predictive Smart Offline does not schedule Games by default.
 
 ## 18. Waiting for Wi-Fi / unmetered network
 
@@ -667,6 +695,7 @@ Do not place in Quick View:
 - [ ] Destructive Cancel/Remove stays secondary/overflow.
 - [ ] Multiple units from one Work may group without creating a new domain owner.
 - [ ] Smart Offline uses the same Quick View and can be promoted to explicit/Keep offline.
+- [ ] Games-owned managed install/update operations can project into the same Quick View without creating a Games queue inside the component.
 - [ ] Waiting for Wi-Fi/connection is not presented as an error.
 - [ ] Verifying is distinct from Ready.
 - [ ] Recent completions are temporary in Quick View and remain in the full offline inventory.
