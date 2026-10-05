@@ -50,7 +50,10 @@ Progress remains owned by the canonical progress model and existing offline reco
 Offline content remains owned by:
 - Offline Library contracts for structured reading packages;
 - Offline Media contracts for portable playable media;
+- the Games domain for managed Game/GameRelease installs/packages, runtime prerequisites and save-safe install lifecycle;
 - platform-local storage/download adapters for the actual bytes and local queue state.
+
+The shared page may project all of these owners, but it never becomes their persistence/queue owner.
 
 The page may group local items visually by Work, season, volume or media type. Those groups are presentation only and must not create durable `SeriesDownload`, `BookDownload`, `MovieDownload` or similar parallel domain roots.
 
@@ -120,11 +123,12 @@ Counts may appear when useful:
 Do not include completed items indefinitely in the active Downloads count.
 
 ### Filters
-Shared media filter:
+Shared category filter:
 - All;
 - Video;
 - Reading;
-- Audio.
+- Audio;
+- Games, only when the current client exposes a Games Offline/install adapter or relevant local Game content.
 
 Only show a category when it is supported or currently has relevant content.
 
@@ -149,7 +153,7 @@ Canonical user-facing state families:
 | Paused | User intentionally stopped the transfer | Resume |
 | Waiting for connection | Transfer cannot currently use the network | Cancel |
 | Waiting for Wi-Fi | Wi-Fi-only policy blocks transfer | Cancel |
-| Verifying / Preparing | Transfer finished but local copy is not yet safe to expose | none |
+| Installing / Verifying / Preparing | Transfer/preparation finished or is finishing, but the local package/install is not yet safe to expose | none, or Pause only when the owning adapter genuinely supports it |
 | Failed | Action is required or automatic retry is exhausted | Retry |
 | Update available | Existing verified copy remains usable but a newer package/version exists | Update |
 | Needs attention | Local copy is missing/corrupt/stale and cannot be treated as ready | Repair/Retry or Remove |
@@ -261,7 +265,24 @@ Represent:
 Do not create a separate audiobook download manager.
 
 ### Games
-Games remain outside this media-offline contract unless the Games domain defines a concrete managed offline package. Do not expose an empty Games filter or reinterpret installed/local ROM ownership as a normal media download.
+
+Games are first-class in this **consumer Offline manager**, but their bytes/install state remain owned by the Games domain (#851).
+
+When the current client has a managed Games Offline/install adapter:
+- show a **Games** category;
+- project canonical `Game -> GameRelease` local state into the same Downloads / Offline available surfaces;
+- allow truthful states such as Downloading, Installing, Verifying, Paused/Waiting, Ready offline, Update available, Failed and Storage unavailable;
+- route Play/Continue to the Games application/runtime owner;
+- route install/update/remove actions back to the Games owner;
+- preserve Games saves/profile state independently from package removal/update.
+
+Do not:
+- convert Game/GameRelease into MediaCore Work/MediaProgress;
+- store Game bytes in the media Offline package owner merely to share UI;
+- treat an external launcher installation as Jularr-owned bytes;
+- show an empty Games filter on clients with no managed/local Games capability.
+
+Externally managed launcher installs may appear only with truthful capabilities such as **Installed**, **Offline playable**, **Launcher required**, **Online sign-in required** or **Offline capability unknown**. They do not count as Jularr-managed storage unless the integration can authoritatively expose/manage those bytes.
 
 
 ## 8.1 Smart Offline items
