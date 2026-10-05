@@ -68,6 +68,26 @@ public sealed class DiscoverRequestTests
     }
 
     [TestMethod]
+    public async Task AMovieOrSeriesRequestIsAboutTheCanonicalTmdbWorkNeverAProviderCandidate()
+    {
+        await using var host = await RequestHost.CreateAsync();
+        var page = host.Page(Alice);
+
+        var movie = ResultOf(await page.OnPostRequestAsync(Form("movie", "00550"), CancellationToken.None));
+        var series = ResultOf(await page.OnPostRequestAsync(Form("tv", BreakingBad, scope: "all"), CancellationToken.None));
+
+        Assert.AreEqual(Movie, movie.Request.ExternalId, "The provider id is normalized before it is stored.");
+        foreach (var (type, externalId) in new[] { (WorkMediaType.Movie, Movie), (WorkMediaType.Series, BreakingBad) })
+        {
+            Assert.IsTrue(
+                await host.Fixture.Db.WorkExternalIdentities.AnyAsync(identity => identity.Provider == "tmdb" && identity.MediaType == type && identity.ExternalId == externalId),
+                $"{type} {externalId} must be a canonical Work before its request exists.");
+        }
+
+        Assert.AreEqual(BreakingBad, series.Request.ExternalId);
+    }
+
+    [TestMethod]
     public async Task AProfileWithoutTheCapabilityIsRefusedByEveryRequestHandler()
     {
         await using var host = await RequestHost.CreateAsync();
@@ -396,7 +416,7 @@ public sealed class DiscoverRequestTests
             var httpContext = new DefaultHttpContext
             {
                 User = AcquisitionAccessFixture.Principal(profileId, AccountRole.User),
-                RequestServices = new ServiceCollection().BuildServiceProvider()
+                RequestServices = new ServiceCollection().AddSingleton<IModelMetadataProvider, EmptyModelMetadataProvider>().BuildServiceProvider()
             };
             page.PageContext = new PageContext
             {
