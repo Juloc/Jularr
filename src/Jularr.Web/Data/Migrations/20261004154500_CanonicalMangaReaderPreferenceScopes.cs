@@ -17,7 +17,7 @@ public partial class CanonicalMangaReaderPreferenceScopes : Migration
             INSERT INTO "Works" (
                 "Id", "MediaType", "CanonicalTitle", "Year", "CreatedAt", "UpdatedAt")
             SELECT
-                Series."Id",
+                Series."Id"::uuid,
                 4,
                 COALESCE(NULLIF(Series."MetadataTitle", ''), Series."Title"),
                 NULL,
@@ -34,12 +34,12 @@ public partial class CanonicalMangaReaderPreferenceScopes : Migration
                 SELECT 1
                 FROM "WorkSourceLinks" AS SourceLink
                 WHERE SourceLink."SourceKind" = 3
-                  AND SourceLink."SourceId" = Series."Id"
+                  AND SourceLink."SourceId" = Series."Id"::uuid
             )
               AND NOT EXISTS (
                 SELECT 1
                 FROM "Works" AS ExistingWork
-                WHERE ExistingWork."Id" = Series."Id"
+                WHERE ExistingWork."Id" = Series."Id"::uuid
             );
             """);
 
@@ -49,13 +49,13 @@ public partial class CanonicalMangaReaderPreferenceScopes : Migration
                 "Id", "WorkId", "SourceKind", "SourceId", "CreatedAt")
             SELECT
                 gen_random_uuid(),
-                Series."Id",
+                Series."Id"::uuid,
                 3,
-                Series."Id",
+                Series."Id"::uuid,
                 CURRENT_TIMESTAMP
             FROM "MangaSeries" AS Series
             JOIN "Works" AS Work
-              ON Work."Id" = Series."Id"
+              ON Work."Id" = Series."Id"::uuid
              AND Work."MediaType" = 4
             WHERE EXISTS (
                 SELECT 1
@@ -67,7 +67,7 @@ public partial class CanonicalMangaReaderPreferenceScopes : Migration
                 SELECT 1
                 FROM "WorkSourceLinks" AS SourceLink
                 WHERE SourceLink."SourceKind" = 3
-                  AND SourceLink."SourceId" = Series."Id"
+                  AND SourceLink."SourceId" = Series."Id"::uuid
             );
             """);
 
@@ -129,7 +129,7 @@ public partial class CanonicalMangaReaderPreferenceScopes : Migration
                  'media:manga:series:' || replace(Series."Id"::text, '-', '')
             JOIN "WorkSourceLinks" AS SourceLink
               ON SourceLink."SourceKind" = 3
-             AND SourceLink."SourceId" = Series."Id"
+             AND SourceLink."SourceId" = Series."Id"::uuid
             WHERE Target."ProfileId" = Legacy."ProfileId"
               AND Target."ScopeKey" =
                   'work:' || replace(SourceLink."WorkId"::text, '-', '');
@@ -141,7 +141,7 @@ public partial class CanonicalMangaReaderPreferenceScopes : Migration
             WHERE Legacy."ScopeKey" =
                   'media:manga:series:' || replace(Series."Id"::text, '-', '')
               AND SourceLink."SourceKind" = 3
-              AND SourceLink."SourceId" = Series."Id"
+              AND SourceLink."SourceId" = Series."Id"::uuid
               AND Target."ProfileId" = Legacy."ProfileId"
               AND Target."ScopeKey" =
                   'work:' || replace(SourceLink."WorkId"::text, '-', '');
@@ -154,7 +154,7 @@ public partial class CanonicalMangaReaderPreferenceScopes : Migration
             FROM "MangaSeries" AS Series
             JOIN "WorkSourceLinks" AS SourceLink
               ON SourceLink."SourceKind" = 3
-             AND SourceLink."SourceId" = Series."Id"
+             AND SourceLink."SourceId" = Series."Id"::uuid
             WHERE Preference."ScopeKey" =
                   'media:manga:series:' || replace(Series."Id"::text, '-', '')
               AND NOT EXISTS (
