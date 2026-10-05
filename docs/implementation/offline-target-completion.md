@@ -33,6 +33,7 @@ Binding UX:
 - `docs/mockups/home/SPEC.md` — disconnected cold-start state;
 - `docs/mockups/player/SPEC.md` — Offline playback;
 - `docs/mockups/reader/SPEC.md` — Offline reading;
+- `docs/mockups/game-detail/SPEC.md` — Games-owned current-device Offline/install action and state;
 - `docs/OFFLINE_UX_CROSS_SPEC_AUDIT.md`.
 
 ---
@@ -41,7 +42,7 @@ Binding UX:
 
 Finish one coherent **device-local Offline product** across Web/PWA, Android and future native Desktop without creating a second media model, second progress model, second notification system or separate per-media download managers.
 
-The finished flow is:
+The finished media flow is:
 
 ```text
 Detail / Player / Reader
@@ -53,6 +54,19 @@ Detail / Player / Reader
     -> normal Player / Reader
     -> local-first progress / annotations
     -> canonical sync when connectivity returns
+```
+
+Games use the same consumer Offline surfaces but keep Games ownership:
+
+```text
+Game Detail
+    -> Games-owned install/package action
+    -> Games local install owner
+    -> OfflineLocalCatalog adapter
+    -> Download Indicator / Downloads & Offline -> Games
+    -> verified local GameRelease + runtime prerequisites
+    -> normal Game Player / runtime
+    -> Games-owned saves/play history
 ```
 
 Cold-start requirement:
