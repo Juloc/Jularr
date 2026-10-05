@@ -423,3 +423,16 @@ Issue #858 defines the canonical pattern for expensive statistics.
 - Dashboards combine cheap persisted aggregates with genuinely live values instead of recalculating historical summaries on every page load.
 - Profile/user statistics remain correctly scoped and must not justify collecting unnecessary raw sensitive telemetry.
 
+
+
+### Admission control and overload behavior
+
+Weak-server stability includes controlling incoming work, not only background concurrency.
+
+- Expensive/abuse-sensitive endpoints use endpoint-appropriate rate/concurrency limits when needed.
+- Do not use one crude global limiter for every request type.
+- Reject excess work early with clear retry semantics instead of queuing unbounded work.
+- Keep large-upload limits explicit per endpoint; do not globally disable request-body limits.
+- Stream large uploads/media where practical.
+- Long-lived streams/upgraded connections must still count against the relevant resource policy.
+- Performance validation includes at least one constrained CPU/RAM load profile representative of a weak self-hosted server and verifies interactive latency under concurrent background work.
