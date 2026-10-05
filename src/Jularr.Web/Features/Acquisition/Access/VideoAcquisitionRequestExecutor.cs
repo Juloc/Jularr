@@ -57,6 +57,11 @@ public sealed record VideoRequestPayload(
     /// <summary>Whether the payload stored now still has the Admin scope revision a run read; the guard of a result that ends a request.</summary>
     public static Func<string?, bool> StillAtRevision(int revision) => stored => (Parse(stored)?.ScopeRevision ?? 0) == revision;
 
+    /// <summary>
+    /// The one place stored payload JSON becomes a payload. Older or hand-edited rows may omit or null the collections the constructor
+    /// declares non-null; they read as empty here, so no consumer ever meets a null and one such row cannot take a page down. JSON that
+    /// is not a payload at all reads as null and the caller falls back to <see cref="Default"/>.
+    /// </summary>
     public static VideoRequestPayload? Parse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -66,7 +71,9 @@ public sealed record VideoRequestPayload(
 
         try
         {
-            return JsonSerializer.Deserialize<VideoRequestPayload>(json, JsonSerializerOptions.Web);
+            return JsonSerializer.Deserialize<VideoRequestPayload>(json, JsonSerializerOptions.Web) is { } payload
+                ? payload with { Title = payload.Title ?? string.Empty, SelectedEpisodeIds = payload.SelectedEpisodeIds ?? [] }
+                : null;
         }
         catch (JsonException)
         {
@@ -107,7 +114,9 @@ public sealed record VideoRequestPayload(
     /// episodes. The executor and the detail pages both read a request through this, so they agree on its scope.
     /// </summary>
     public static VideoRequestPayload Of(AcquisitionRequest request, Guid workId, string title, int? year) =>
-        Parse(request.PayloadJson) ?? Default(request.Kind, workId, title, year);
+        Parse(request.PayloadJson) is { } stored
+            ? stored.Title.Length == 0 ? stored with { Title = title } : stored
+            : Default(request.Kind, workId, title, year);
 
     /// <summary>The scope of a title requested without a choice: the whole Movie, or every episode of a Series and every future one.</summary>
     public static VideoRequestPayload Default(MediaAcquisitionKind kind, Guid workId, string title, int? year) =>
