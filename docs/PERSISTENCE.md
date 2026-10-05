@@ -370,3 +370,35 @@ Retention is explicit:
 This diagnostics history is operational observability and is separate from #858 product/user statistics. Both use normal typed relational tables and bounded background refresh rather than expensive aggregation on every Admin read.
 
 PostgreSQL index maintenance is evidence-driven. Normal diagnostics show size/use/vacuum evidence; optional deeper `pgstattuple`/`pgstatindex` inspection is on-demand only. Do not implement a SQL Server-style blind fragmentation/rebuild schedule.
+
+
+## Npgsql hot-path execution guidance
+
+Parameterization is mandatory first; preparation and batching are targeted optimizations for measured hot paths.
+
+### Prepared statements
+
+Repeated stable parameterized SQL may use explicit Npgsql preparation, or carefully configured automatic preparation, when measurement shows meaningful planning/CPU savings.
+
+Rules:
+- do not prepare every dynamically generated statement;
+- avoid creating an unbounded server-side prepared-statement set;
+- prefer explicit preparation when a small known hot statement set justifies it;
+- treat automatic preparation as a bounded configuration choice with measured benefit, not a universal default;
+- observe prepared-statement/pool metrics through #860.
+
+### Batching / round trips
+
+When multiple SQL operations are intentionally part of one nearby persistence flow and can be sent safely together, Npgsql batching may reduce database round trips.
+
+Do not combine unrelated business actions merely to reduce round trips. Transaction semantics and error handling remain explicit.
+
+### Connection pool
+
+Npgsql pooling is the standard connection model.
+
+- open/use/dispose logical connections promptly;
+- do not hold a DB connection/transaction while waiting on long provider/AI/filesystem work;
+- pool size is a protection boundary, not a throughput target;
+- background DB concurrency must stay below the level that starves interactive requests;
+- monitor used/idle/saturated pool state through #860 before tuning pool size.
