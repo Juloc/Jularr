@@ -1,3 +1,4 @@
+using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Playback.Transcoding;
 using static Jularr.Tests.PlaybackTestPlans;
@@ -227,8 +228,8 @@ public sealed class PlaybackAdaptationTests
     {
         var directive = new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.None, null, null, 2_000, [PlaybackHardwareBackend.Nvenc], s_start);
 
-        Assert.AreEqual(2_000, directive.Current(s_start + PlaybackAdaptation.CapacityMemory).CeilingKbps, "Still remembered at the limit.");
-        var expired = directive.Current(s_start + PlaybackAdaptation.CapacityMemory + TimeSpan.FromSeconds(1));
+        Assert.AreEqual(2_000, directive.Current(s_start + PlaybackAdaptationPolicy.Default.CapacityMemory, PlaybackAdaptationPolicy.Default).CeilingKbps, "Still remembered at the limit.");
+        var expired = directive.Current(s_start + PlaybackAdaptationPolicy.Default.CapacityMemory + TimeSpan.FromSeconds(1), PlaybackAdaptationPolicy.Default);
         Assert.IsNull(expired.CeilingKbps);
         Assert.AreEqual(0, expired.SlowBackends.Count);
     }
@@ -249,7 +250,7 @@ public sealed class PlaybackAdaptationTests
         var gone = new Harness();
         gone.PlayUntil(20);
         gone.Report(buffer: 1, throughput: 100, newStalls: 4);
-        gone.Clock.Advance(PlaybackAdaptation.FreshFor + TimeSpan.FromSeconds(1));
+        gone.Clock.Advance(PlaybackSessionTelemetry.FreshFor + TimeSpan.FromSeconds(1));
         Assert.AreEqual(PlaybackAdaptationAdvice.None, gone.Advice.Decision.Advice, "A report that old describes nobody.");
     }
 
@@ -402,6 +403,46 @@ public sealed class PlaybackAdaptationTests
     }
 
     [TestMethod]
+    public void AStepUpIsNotAdvisedWhileTheServerAlreadyStrugglesWithAnotherConversion()
+    {
+        var harness = new Harness(AutoPlan(delivered: 3_900, source: 30_000, limit: 4_000));
+        var other = harness.Store.Create(Viewer, Guid.NewGuid(), Guid.NewGuid(), "/media/other.mkv", 1400, AutoPlan(), harness.Session.Selections);
+        harness.PlayUntil(125, throughput: 60_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, harness.Advice.Decision.Advice, "Without a struggling neighbour this plan gains from the next tier.");
+
+        var progress = other.BeginTranscodeRun(PlaybackHardwareBackend.Software)!;
+        progress(new PlaybackTranscodeSample(0.5, 10, 30));
+        harness.Clock.Advance(PlaybackTranscodeMeter.SustainedFor);
+        progress(new PlaybackTranscodeSample(0.5, 10, 40));
+        Assert.IsNotNull(harness.Store.Get(other.Id, Viewer));
+
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, harness.Advice.Decision.Advice, "Raising quality adds load, so it waits until the server keeps up.");
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, harness.Store.NextDirective(harness.Session, PlaybackAdaptationAdvice.StepUp).Advice, "And no re-plan can inherit it either.");
+    }
+
+    [TestMethod]
+    public void TheFollowedAdviceOfARePlanRequestUsesTheWireNamesOfTheEnum()
+    {
+        foreach (var (text, expected) in new (string? Text, PlaybackAdaptationAdvice Advice)[]
+                 {
+                     (null, PlaybackAdaptationAdvice.None),
+                     ("", PlaybackAdaptationAdvice.None),
+                     ("none", PlaybackAdaptationAdvice.None),
+                     ("step_down", PlaybackAdaptationAdvice.StepDown),
+                     (" step_up ", PlaybackAdaptationAdvice.StepUp)
+                 })
+        {
+            Assert.IsTrue(ClientApiPlaybackPlanEndpoints.TryParseFollowedAdvice(text, out var advice), $"'{text}'");
+            Assert.AreEqual(expected, advice, $"'{text}'");
+        }
+
+        foreach (var invalid in new[] { "sideways", "1", "-1", "StepDown2", "{}", "\"", "step down" })
+        {
+            Assert.IsFalse(ClientApiPlaybackPlanEndpoints.TryParseFollowedAdvice(invalid, out _), invalid);
+        }
+    }
+
+    [TestMethod]
     public void TheTelemetryHistoryIsBoundedAndPureReadsNeverChangeIt()
     {
         var harness = new Harness();
@@ -466,18 +507,19 @@ public sealed class PlaybackAdaptationTests
     {
         var slow = new PlaybackAdaptationDecision(PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.TranscodeTooSlow);
 
-        var lowered = PlaybackAdaptation.NextDirective(slow, PlaybackAdaptationDirective.None, 3_800, PlaybackHardwareBackend.Nvenc, s_start);
+        var lowered = PlaybackAdaptation.NextDirective(slow, PlaybackAdaptationDirective.None, 3_800, PlaybackHardwareBackend.Nvenc, s_start, PlaybackAdaptationPolicy.Default);
         Assert.AreEqual(2_000, lowered.CeilingKbps);
         Assert.AreEqual(0, lowered.SlowBackends.Count, "Lower quality comes first; the encoder is not blamed yet.");
 
-        var floor = PlaybackAdaptation.NextDirective(slow, lowered, 1_000, PlaybackHardwareBackend.Nvenc, s_start);
+        var floor = PlaybackAdaptation.NextDirective(slow, lowered, 1_000, PlaybackHardwareBackend.Nvenc, s_start, PlaybackAdaptationPolicy.Default);
         CollectionAssert.AreEqual(new[] { PlaybackHardwareBackend.Nvenc }, floor.SlowBackends.ToArray());
         Assert.IsNull(floor.CeilingKbps, "Another encoder starts from the requested tier again.");
 
-        var again = PlaybackAdaptation.NextDirective(slow, floor, 1_000, PlaybackHardwareBackend.Nvenc, s_start);
+        var again = PlaybackAdaptation.NextDirective(slow, floor, 1_000, PlaybackHardwareBackend.Nvenc, s_start, PlaybackAdaptationPolicy.Default);
         Assert.AreEqual(1, again.SlowBackends.Count, "The same encoder is recorded once.");
 
-        var kept = PlaybackAdaptation.NextDirective(new PlaybackAdaptationDecision(PlaybackAdaptationAdvice.StepUp, PlaybackAdaptationReason.ThroughputHeadroom), floor, 3_800, PlaybackHardwareBackend.Software, s_start);
+        var raise = new PlaybackAdaptationDecision(PlaybackAdaptationAdvice.StepUp, PlaybackAdaptationReason.ThroughputHeadroom);
+        var kept = PlaybackAdaptation.NextDirective(raise, floor, 3_800, PlaybackHardwareBackend.Software, s_start, PlaybackAdaptationPolicy.Default);
         CollectionAssert.AreEqual(floor.SlowBackends.ToArray(), kept.SlowBackends.ToArray(), "What the server learned about its capacity outlives a quality change.");
     }
 }

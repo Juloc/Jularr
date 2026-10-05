@@ -33,25 +33,25 @@
 
     // The server advises step_down / step_up in the answer of a telemetry report (#403). The server already paces its advice (a step up
     // needs a stable minute and comes at most every two minutes), so this only bounds a misbehaving or very noisy answer: never while
-    // paused or while a plan is being replaced, at least adviceMinIntervalMs between two switches and at most maxAdviceSwitches in the
-    // adviceWindowMs. Following an advice never touches the recovery budget or the failed modes: a stall is not a verdict on a mode.
-    const adviceMinIntervalMs = 30000;
-    const maxAdviceSwitches = 6;
-    const adviceWindowMs = 600000;
-    // After a plan that failed or was not playable, advice is left alone for this long: the stream that still plays is better than a retry loop.
-    const adviceBackoffMs = 300000;
-
-    const createAdviceGate = () => {
+    // paused or while a plan is being replaced, at least minIntervalMs between two switches and at most maxSwitches in the windowMs; after
+    // a plan that failed or was not playable the advice is left alone for backoffMs (the stream that still plays beats a retry loop).
+    // The numbers come from the server's one adaptation policy (page data); the client keeps no copy. Following an advice never touches
+    // the recovery budget or the failed modes: a stall is not a verdict on a mode.
+    const createAdviceGate = ({ minIntervalMs, maxSwitches, windowMs, backoffMs }) => {
         let switches = [];
         let blockedUntil = 0;
         return {
+            minIntervalMs,
+            maxSwitches,
+            windowMs,
+            backoffMs,
             blocked: nowMs => nowMs < blockedUntil,
             backOff(nowMs) {
-                blockedUntil = nowMs + adviceBackoffMs;
+                blockedUntil = nowMs + backoffMs;
             },
             // The switch times still inside the window, oldest first.
             recent(nowMs) {
-                switches = switches.filter(at => nowMs - at < adviceWindowMs);
+                switches = switches.filter(at => nowMs - at < windowMs);
                 return switches;
             },
             record(nowMs) {
@@ -64,12 +64,13 @@
     // handedOver: the system player or picture-in-picture owns the picture; whether that survives a source swap is not known, so the stream
     // that plays is left alone.
     const followAdvice = (gate, advice, { paused, busy, handedOver }, nowMs) => {
-        if ((advice !== "step_down" && advice !== "step_up") || paused || busy || handedOver === true || gate.blocked(nowMs)) {
+        // A gate without its numbers (the page did not provide them) follows nothing.
+        if ((advice !== "step_down" && advice !== "step_up") || paused || busy || handedOver === true || !Number.isFinite(gate.maxSwitches) || gate.blocked(nowMs)) {
             return false;
         }
 
         const recent = gate.recent(nowMs);
-        if (recent.length >= maxAdviceSwitches || (recent.length > 0 && nowMs - recent[recent.length - 1] < adviceMinIntervalMs)) {
+        if (recent.length >= gate.maxSwitches || (recent.length > 0 && nowMs - recent[recent.length - 1] < gate.minIntervalMs)) {
             return false;
         }
 
@@ -80,12 +81,19 @@
     // Asks for the advised plan while the current stream keeps playing and only installs it once it is confirmed playable. Resolves to
     // "swapped", "stale" (another plan took over meanwhile; the orphan session is discarded), "unplayable" (unavailable or without a
     // delivery) or "failed" (the request threw); the last two pause following advice and leave the playing stream untouched.
-    const followAdvisedPlan = async ({ advice, requestPlan, isStale, discardOrphan, backOff, warn, install }) => {
+    // "blocked": the presentation was handed over to the system player or picture-in-picture while the plan was requested; the plan is
+    // dropped without a backoff because the situation is temporary.
+    const followAdvisedPlan = async ({ advice, requestPlan, isStale, isBlocked, discardOrphan, backOff, warn, install }) => {
         try {
             const response = await requestPlan(advice);
             if (isStale()) {
                 discardOrphan(response.sessionId);
                 return "stale";
+            }
+
+            if (isBlocked()) {
+                discardOrphan(response.sessionId);
+                return "blocked";
             }
 
             if (!response.plan || response.plan.mode === "unavailable" || !response.delivery) {
@@ -103,17 +111,21 @@
         }
     };
 
+    // A fixed tier the server's encoder could not sustain: the selector keeps the viewer's choice and this says what plays instead (the plan's
+    // limit), or null when the plan is not limited that way. The caller formats the registered reason text.
+    const speedLimitedHint = quality =>
+        quality && quality.limitSource === "transcode_speed" && quality.requested !== "auto" && quality.limitKbps > 0
+            ? { reason: "transcode_too_slow", limitKbps: quality.limitKbps }
+            : null;
+
     window.JularrStreamRecovery = Object.freeze({
         maxRecoveries,
         stableSeconds,
         shouldReplanSameMode,
         recoveriesAfterProgress,
         accumulatePlayed,
-        adviceMinIntervalMs,
-        maxAdviceSwitches,
-        adviceWindowMs,
-        adviceBackoffMs,
         createAdviceGate,
+        speedLimitedHint,
         followAdvice,
         followAdvisedPlan
     });

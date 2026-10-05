@@ -163,7 +163,7 @@
     const stalls = buffering.createStallTracker();
     const throughput = buffering.createThroughputEstimator();
     // How often the player may follow the server's quality advice (player-recovery.js); the server paces its advice, this bounds a bad one.
-    const adviceGate = streamRecovery.createAdviceGate();
+    const adviceGate = streamRecovery.createAdviceGate(JSON.parse(root.dataset.adviceGate || "{}"));
     // What the server measured while converting this session's video, from the telemetry answers; shown in the diagnostics only.
     let transcodeReading = null;
     let sessionRecoveries = 0;
@@ -660,8 +660,9 @@
             return;
         }
 
-        if (plan?.quality?.limitSource === "transcode_speed" && plan.quality.requested !== "auto") {
-            qualityHint.textContent = format("playback.reason.transcode_too_slow", { limit: mbps(plan.quality.limitKbps) });
+        const hint = streamRecovery.speedLimitedHint(plan?.quality);
+        if (hint) {
+            qualityHint.textContent = format(`playback.reason.${hint.reason}`, { limit: mbps(hint.limitKbps) });
             qualityHintFromPlan = true;
         } else if (qualityHintFromPlan) {
             qualityHint.textContent = "";
@@ -1091,6 +1092,8 @@
                 requestPlan: followed => requestPlan({ followedAdvice: followed }),
                 // Another plan took over meanwhile (the viewer changed a selection).
                 isStale: () => generation !== planGeneration,
+                // Re-checked right before the swap: picture-in-picture may have started while the plan was requested.
+                isBlocked: () => presentationHandedOver,
                 discardOrphan: discardOrphanSession,
                 backOff: () => adviceGate.backOff(performance.now()),
                 warn: (message, detail) => console.warn(message, detail),

@@ -57,18 +57,25 @@ public sealed class PlayerRecoveryTests
         Assert.AreEqual(3.0, RunNumber(script));
     }
 
+    // The gate runs on the numbers of the server's one adaptation policy, exactly as the page hands them to the player.
+    private const string GateSetup = "const g = window.JularrStreamRecovery.createAdviceGate(gateOptions); " +
+                                     "const follow = (advice, state, nowMs = 1000) => window.JularrStreamRecovery.followAdvice(g, advice, state, nowMs); ";
+
     [TestMethod]
-    public void OnlyAStepAdviceOfTheServerIsFollowedAndNeverWhilePausedOrReplanning()
+    public void OnlyAStepAdviceOfTheServerIsFollowedAndNeverWhilePausedReplanningOrHandedOver()
     {
-        Assert.IsTrue(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_down', { paused: false, busy: false }, 1000);"));
-        Assert.IsTrue(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_up', { paused: false, busy: false }, 1000);"));
+        Assert.IsTrue(Run(GateSetup + "return follow('step_down', { paused: false, busy: false });"));
+        Assert.IsTrue(Run(GateSetup + "return follow('step_up', { paused: false, busy: false });"));
         foreach (var advice in new[] { "'none'", "undefined", "null", "''", "'STEP_DOWN'", "'step_sideways'", "1" })
         {
-            Assert.IsFalse(Run($"const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, {advice}, {{ paused: false, busy: false }}, 1000);"), advice);
+            Assert.IsFalse(Run(GateSetup + $"return follow({advice}, {{ paused: false, busy: false }});"), advice);
         }
 
-        Assert.IsFalse(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_down', { paused: true, busy: false }, 1000);"), "A paused player is not re-planned.");
-        Assert.IsFalse(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_down', { paused: false, busy: true }, 1000);"), "A plan is already being replaced.");
+        Assert.IsFalse(Run(GateSetup + "return follow('step_down', { paused: true, busy: false });"), "A paused player is not re-planned.");
+        Assert.IsFalse(Run(GateSetup + "return follow('step_down', { paused: false, busy: true });"), "A plan is already being replaced.");
+        Assert.IsFalse(Run(GateSetup + "return follow('step_down', { paused: false, busy: false, handedOver: true });"), "Native fullscreen or picture-in-picture keeps its source.");
+        const string numberless = "const g = window.JularrStreamRecovery.createAdviceGate({}); ";
+        Assert.IsFalse(Run(numberless + "return window.JularrStreamRecovery.followAdvice(g, 'step_down', { paused: false, busy: false }, 1000);"), "A gate without the server's numbers follows nothing.");
     }
 
     [TestMethod]
@@ -76,24 +83,24 @@ public sealed class PlayerRecoveryTests
     {
         const string spacing = """
             const recovery = window.JularrStreamRecovery;
-            const gate = recovery.createAdviceGate();
+            const gate = recovery.createAdviceGate(gateOptions);
             const idle = { paused: false, busy: false };
             const results = [];
             results.push(recovery.followAdvice(gate, 'step_down', idle, 0));
-            results.push(recovery.followAdvice(gate, 'step_down', idle, recovery.adviceMinIntervalMs - 1));
-            results.push(recovery.followAdvice(gate, 'step_down', idle, recovery.adviceMinIntervalMs - 1));
-            results.push(recovery.followAdvice(gate, 'step_up', idle, recovery.adviceMinIntervalMs));
+            results.push(recovery.followAdvice(gate, 'step_down', idle, gateOptions.minIntervalMs - 1));
+            results.push(recovery.followAdvice(gate, 'step_down', idle, gateOptions.minIntervalMs - 1));
+            results.push(recovery.followAdvice(gate, 'step_up', idle, gateOptions.minIntervalMs));
             return results.join(',');
             """;
         Assert.AreEqual("true,false,false,true", Evaluate(spacing).AsString(), "The interval counts from the last followed advice; a refused answer does not extend it.");
 
         const string flood = """
             const recovery = window.JularrStreamRecovery;
-            const gate = recovery.createAdviceGate();
+            const gate = recovery.createAdviceGate(gateOptions);
             const idle = { paused: false, busy: false };
             let followed = 0;
             for (let step = 0; step < 100; step++) {
-                if (recovery.followAdvice(gate, 'step_down', idle, step * recovery.adviceMinIntervalMs)) {
+                if (recovery.followAdvice(gate, 'step_down', idle, step * gateOptions.minIntervalMs)) {
                     followed += 1;
                 }
             }
@@ -103,33 +110,62 @@ public sealed class PlayerRecoveryTests
 
         const string reopening = """
             const recovery = window.JularrStreamRecovery;
-            const gate = recovery.createAdviceGate();
+            const gate = recovery.createAdviceGate(gateOptions);
             const idle = { paused: false, busy: false };
-            for (let step = 0; step < recovery.maxAdviceSwitches; step++) {
-                recovery.followAdvice(gate, 'step_up', idle, step * recovery.adviceMinIntervalMs);
+            for (let step = 0; step < gateOptions.maxSwitches; step++) {
+                recovery.followAdvice(gate, 'step_up', idle, step * gateOptions.minIntervalMs);
             }
-            const denied = recovery.followAdvice(gate, 'step_up', idle, recovery.maxAdviceSwitches * recovery.adviceMinIntervalMs);
-            const later = recovery.followAdvice(gate, 'step_up', idle, recovery.adviceWindowMs + 1);
+            const denied = recovery.followAdvice(gate, 'step_up', idle, gateOptions.maxSwitches * gateOptions.minIntervalMs);
+            const later = recovery.followAdvice(gate, 'step_up', idle, gateOptions.windowMs + 1);
             return `${denied},${later}`;
             """;
         Assert.AreEqual("false,true", Evaluate(reopening).AsString(), "The sixth switch inside 10 minutes is the last; the window then opens again.");
     }
 
     [TestMethod]
-    public void AHandedOverPresentationAndABackoffAfterAFailedPlanLeaveTheStreamAlone()
+    public void ABackoffAfterAFailedPlanLeavesAdviceAloneForAWhile()
     {
-        Assert.IsFalse(Run("const g = window.JularrStreamRecovery.createAdviceGate(); return window.JularrStreamRecovery.followAdvice(g, 'step_down', { paused: false, busy: false, handedOver: true }, 1000);"), "Native fullscreen or picture-in-picture keeps its source.");
-
         const string script = """
             const recovery = window.JularrStreamRecovery;
-            const gate = recovery.createAdviceGate();
+            const gate = recovery.createAdviceGate(gateOptions);
             const idle = { paused: false, busy: false, handedOver: false };
             gate.backOff(1000);
-            const during = recovery.followAdvice(gate, 'step_down', idle, 1000 + recovery.adviceBackoffMs - 1);
-            const after = recovery.followAdvice(gate, 'step_down', idle, 1000 + recovery.adviceBackoffMs);
+            const during = recovery.followAdvice(gate, 'step_down', idle, 1000 + gateOptions.backoffMs - 1);
+            const after = recovery.followAdvice(gate, 'step_down', idle, 1000 + gateOptions.backoffMs);
             return `${during},${after}`;
             """;
         Assert.AreEqual("false,true", Evaluate(script).AsString(), "After a plan that failed or was not playable advice is left alone for a while.");
+    }
+
+    [TestMethod]
+    public void ThePageGivesThePlayerTheServersGateNumbersAndNothingElse()
+    {
+        using var gate = System.Text.Json.JsonDocument.Parse(Jularr.Web.Features.Playback.Decision.PlaybackAdaptationPolicy.Default.ClientGateJson());
+
+        Assert.AreEqual(30_000, gate.RootElement.GetProperty("minIntervalMs").GetDouble());
+        Assert.AreEqual(6, gate.RootElement.GetProperty("maxSwitches").GetInt32());
+        Assert.AreEqual(600_000, gate.RootElement.GetProperty("windowMs").GetDouble());
+        Assert.AreEqual(300_000, gate.RootElement.GetProperty("backoffMs").GetDouble());
+        var page = File.ReadAllText(Path.Combine(PlayerControlsTests.RepositoryRoot(), "src", "Jularr.Web", "Pages", "Library", "_VideoPlayerStage.cshtml"));
+        StringAssert.Contains(page, "data-advice-gate=\"@PlaybackAdaptationPolicy.Default.ClientGateJson()\"");
+    }
+
+    [TestMethod]
+    public void AFixedTierTheServersEncoderCouldNotSustainShowsAHintWhileAutomaticDoesNot()
+    {
+        const string script = """
+            const hint = window.JularrStreamRecovery.speedLimitedHint;
+            return JSON.stringify([
+                hint({ requested: 'mbps8', limitSource: 'transcode_speed', limitKbps: 4000 }),
+                hint({ requested: 'auto', limitSource: 'transcode_speed', limitKbps: 4000 }),
+                hint({ requested: 'mbps8', limitSource: 'preset', limitKbps: 8000 }),
+                hint({ requested: 'original', limitSource: 'transcode_speed', limitKbps: 0 }),
+                hint(null),
+                hint(undefined)
+            ]);
+            """;
+
+        Assert.AreEqual("""[{"reason":"transcode_too_slow","limitKbps":4000},null,null,null,null,null]""", Evaluate(script).AsString());
     }
 
     [TestMethod]
@@ -141,6 +177,7 @@ public sealed class PlayerRecoveryTests
                 advice: 'step_up',
                 requestPlan: async advice => { log.push('request:' + advice); return { sessionId: 'new', plan: { mode: 'transcode' }, delivery: { url: '/s' } }; },
                 isStale: () => false,
+                isBlocked: () => false,
                 discardOrphan: id => log.push('discard:' + id),
                 backOff: () => log.push('backoff'),
                 warn: () => log.push('warn'),
@@ -156,6 +193,7 @@ public sealed class PlayerRecoveryTests
                 advice: 'step_down',
                 requestPlan: async () => plan,
                 isStale: () => false,
+                isBlocked: () => false,
                 discardOrphan: () => log.push('discard'),
                 backOff: () => log.push('backoff'),
                 warn: () => log.push('warn'),
@@ -174,6 +212,7 @@ public sealed class PlayerRecoveryTests
                 advice: 'step_down',
                 requestPlan: async () => { throw new Error('network'); },
                 isStale: () => false,
+                isBlocked: () => false,
                 discardOrphan: () => log.push('discard'),
                 backOff: () => log.push('backoff'),
                 warn: (message, detail) => log.push('warn:' + detail.message),
@@ -183,12 +222,29 @@ public sealed class PlayerRecoveryTests
             """;
         Assert.AreEqual("failed|backoff,warn:network", RunAsync(failed), "A failed request is logged, never swallowed, and never takes the player over.");
 
+        const string blocked = """
+            const log = [];
+            const outcome = await window.JularrStreamRecovery.followAdvisedPlan({
+                advice: 'step_up',
+                requestPlan: async () => ({ sessionId: 'late', plan: { mode: 'transcode' }, delivery: { url: '/s' } }),
+                isStale: () => false,
+                isBlocked: () => true,
+                discardOrphan: id => log.push('discard:' + id),
+                backOff: () => log.push('backoff'),
+                warn: () => log.push('warn'),
+                install: () => log.push('install')
+            });
+            return outcome + '|' + log.join(',');
+            """;
+        Assert.AreEqual("blocked|discard:late", RunAsync(blocked), "Picture-in-picture started while the plan was requested: nothing is swapped, and no backoff for a passing situation.");
+
         const string stale = """
             const log = [];
             const outcome = await window.JularrStreamRecovery.followAdvisedPlan({
                 advice: 'step_up',
                 requestPlan: async () => ({ sessionId: 'orphan', plan: { mode: 'transcode' }, delivery: { url: '/s' } }),
                 isStale: () => true,
+                isBlocked: () => false,
                 discardOrphan: id => log.push('discard:' + id),
                 backOff: () => log.push('backoff'),
                 warn: () => log.push('warn'),
@@ -238,6 +294,7 @@ public sealed class PlayerRecoveryTests
     {
         var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(10)));
         engine.Execute("var window = globalThis;");
+        engine.Execute($"var gateOptions = {Jularr.Web.Features.Playback.Decision.PlaybackAdaptationPolicy.Default.ClientGateJson()};");
         engine.Execute(File.ReadAllText(Path.Combine(PlayerControlsTests.RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "player-recovery.js")));
         engine.Execute($"var result = null; (async () => {{ {script} }})().then(value => {{ result = value; }}, error => {{ result = 'rejected:' + error; }});");
         engine.Advanced.ProcessTasks();
@@ -252,6 +309,7 @@ public sealed class PlayerRecoveryTests
     {
         var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(10)));
         engine.Execute("var window = globalThis;");
+        engine.Execute($"var gateOptions = {Jularr.Web.Features.Playback.Decision.PlaybackAdaptationPolicy.Default.ClientGateJson()};");
         engine.Execute(File.ReadAllText(Path.Combine(PlayerControlsTests.RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "player-recovery.js")));
         return engine.Evaluate($"(() => {{ {script} }})()");
     }

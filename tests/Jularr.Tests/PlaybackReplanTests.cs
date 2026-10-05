@@ -30,7 +30,7 @@ public sealed class PlaybackReplanTests
             Kit = kit;
             Media = media;
             Store = new PlaybackStreamSessionStore(clock);
-            Service = new PlaybackPlanService(fixture.Db, fixture.Inventory, Store, kit.Capabilities);
+            Service = new PlaybackPlanService(fixture.Db, fixture.Inventory, Store, kit.Capabilities, admission: new PlaybackAdmissionService(kit.Settings, kit.Slots, kit.Hardware, Store));
         }
 
         public ManualTimeProvider Clock { get; }
@@ -96,6 +96,10 @@ public sealed class PlaybackReplanTests
             progress(new PlaybackTranscodeSample(0.6, 12, 40));
         }
 
+        /// <summary>The session's encode runs fast and its progress is fresh: a conversion that is really running.</summary>
+        public void RunHealthy(PlaybackStreamSession session) =>
+            session.BeginTranscodeRun(PlaybackHardwareBackends.FromEncoder(session.Plan.Video!.Encoder))!(new PlaybackTranscodeSample(2.0, 50, 30));
+
         public ValueTask DisposeAsync() => _fixture.DisposeAsync();
     }
 
@@ -134,12 +138,76 @@ public sealed class PlaybackReplanTests
         Assert.AreEqual(PlaybackDeliveryMode.Unavailable, outcome.Plan.Mode);
         Assert.IsNull(outcome.Session);
         Assert.IsTrue(outcome.Plan.Reasons.Any(x => x.Code == PlaybackReasonCodes.TranscodeUnsustainable && x.Severity == PlaybackReasonSeverity.Blocker), "The refusal says why, with a stable code.");
-        Assert.AreEqual(0, rig.Store.Count, "The slow transcode behind the replaced session is stopped, not left running unused.");
+        Assert.AreEqual(1, rig.Store.Count, "The session the player still watches is not ended server-side; the client decides when to stop.");
         foreach (var backend in Enum.GetValues<PlaybackHardwareBackend>())
         {
             Assert.AreEqual(0, rig.Kit.Breaker.State(backend).ConsecutiveFailures, $"Slowness is the server's capacity and never a failure of {backend}.");
             Assert.IsFalse(rig.Kit.Breaker.State(backend).IsOpen);
         }
+    }
+
+    [TestMethod]
+    public async Task AnAdvisedReplanLeavesThePlayingSessionAloneUntilTheNewOneDelivered()
+    {
+        await using var rig = await Rig.CreateAsync(withHardware: false);
+        var removed = new List<Guid>();
+        rig.Store.Removed += session => removed.Add(session.Id);
+        var playing = await rig.PlanAsync();
+        rig.RunTooSlow(playing.Session!);
+
+        var advised = await rig.PlanAsync(replaces: playing.Session!.Id, followed: PlaybackAdaptationAdvice.StepDown);
+
+        Assert.AreEqual("libx264@4000/TranscodeSpeed", Describe(advised));
+        Assert.IsNotNull(rig.Store.Get(playing.Session.Id, Viewer), "The stream the viewer is watching is still there while the player decides to swap.");
+        Assert.AreSame(playing.Session, advised.Session!.Replacing);
+        Assert.AreEqual(0, removed.Count, "Nothing was stopped at plan time.");
+
+        Assert.AreEqual(playing.Session.Id, rig.Store.CompleteReplacement(advised.Session), "The first output of the new session retires the old one.");
+        CollectionAssert.AreEqual(new[] { playing.Session.Id }, removed);
+        Assert.IsNull(rig.Store.Get(playing.Session.Id, Viewer));
+        Assert.IsNull(rig.Store.CompleteReplacement(advised.Session), "A replacement completes once.");
+    }
+
+    [TestMethod]
+    public async Task AnAdvisedReplanThatAdmissionWouldRefuseIsAnsweredInThePlanAndTouchesNothing()
+    {
+        await using var rig = await Rig.CreateAsync(withHardware: false);
+        var playing = await rig.PlanAsync(quality: PlaybackQualityPreset.Mbps4);
+        rig.RunHealthy(playing.Session!);
+        var other = rig.Store.Create("other", Guid.NewGuid(), Guid.NewGuid(), "/media/other.mkv", 1400, PlaybackTestPlans.Transcode(PlaybackTestPlans.Video()), playing.Session!.Selections);
+        rig.RunTooSlow(other);
+
+        var higher = await rig.PlanAsync(replaces: playing.Session.Id, followed: PlaybackAdaptationAdvice.StepUp, quality: PlaybackQualityPreset.Auto);
+
+        Assert.AreEqual(PlaybackDeliveryMode.Unavailable, higher.Plan.Mode, "The refusal reaches the player in the plan answer, before it swaps its source.");
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, higher.Plan.Reasons.Single().Code);
+        Assert.IsNull(higher.Session);
+        Assert.IsNotNull(rig.Store.Get(playing.Session.Id, Viewer), "The playing session is untouched.");
+        Assert.AreEqual(2, rig.Store.Count, "No half-created session is left behind.");
+
+        var lower = await rig.PlanAsync(replaces: playing.Session.Id, followed: PlaybackAdaptationAdvice.StepDown, quality: PlaybackQualityPreset.Mbps2);
+        Assert.AreEqual(PlaybackDeliveryMode.Transcode, lower.Plan.Mode, "A step down lowers the cost and is never refused for overload.");
+        Assert.AreSame(playing.Session, lower.Session!.Replacing);
+    }
+
+    [TestMethod]
+    public async Task WhenNoEncoderKeepsUpThePlayingSessionIsLeftToTheClient()
+    {
+        await using var rig = await Rig.CreateAsync(withHardware: false, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
+        var outcome = await rig.PlanAsync();
+        for (var guard = 0; guard < 3; guard++)
+        {
+            rig.RunTooSlow(outcome.Session!);
+            outcome = await rig.PlanAsync(replaces: outcome.Session!.Id);
+        }
+
+        var floor = outcome.Session!;
+        rig.RunTooSlow(floor);
+        var unavailable = await rig.PlanAsync(replaces: floor.Id, followed: PlaybackAdaptationAdvice.StepDown);
+
+        Assert.AreEqual(PlaybackDeliveryMode.Unavailable, unavailable.Plan.Mode);
+        Assert.IsNotNull(rig.Store.Get(floor.Id, Viewer), "The server does not end what the player is still watching; the client stops or switches.");
+        Assert.AreEqual(1, rig.Store.Count);
     }
 
     [TestMethod]
@@ -209,7 +277,7 @@ public sealed class PlaybackReplanTests
         var lowered = await rig.PlanAsync(replaces: first.Session!.Id);
         Assert.AreEqual(4_000, lowered.Plan.Quality.LimitKbps);
 
-        rig.Clock.Advance(PlaybackAdaptation.CapacityMemory + TimeSpan.FromSeconds(1));
+        rig.Clock.Advance(PlaybackAdaptationPolicy.Default.CapacityMemory + TimeSpan.FromSeconds(1));
         var later = await rig.PlanAsync(replaces: lowered.Session!.Id);
 
         Assert.AreEqual("libx264@8000/NetworkDefault", Describe(later), "A busy moment does not cap the title for the rest of the evening.");

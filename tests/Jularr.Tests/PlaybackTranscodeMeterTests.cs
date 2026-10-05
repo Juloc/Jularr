@@ -254,6 +254,10 @@ public sealed class PlaybackTranscodeMeterTests
             reader.Feed(line);
         }
 
+        // Statistics lines of an audio-only encode (no video progress) are not diagnostics either.
+        reader.Feed("size=     256kB time=00:00:05.00 bitrate= 419.4kbits/s speed=1.00x");
+        reader.Feed("frame=  120 fps= 48 q=28.0 size=N/A time=00:00:05.00 bitrate=N/A speed=1.9x");
+
         Assert.AreEqual(1, samples.Count);
         Assert.AreEqual("Error while opening encoder for output stream #0:0 - maybe incorrect parameters", reader.LastLine, "The progress block that followed did not replace the cause.");
 

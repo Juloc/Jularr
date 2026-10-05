@@ -444,7 +444,7 @@ public sealed class PlaybackServerResourceTests
         using var manager = kit.Hls(_ => new FakeHlsProcess());
         var saved = await new PlaybackTranscodingSettingsStore(kit.DataRoot).SaveAsync(PlaybackTranscodingSettings.Default with { SoftwareVideoSessions = 1, HlsCachePath = Path.Combine(kit.DataRoot, "hls") });
         Assert.IsTrue(saved.Succeeded);
-        var service = new PlaybackServerResourceService(kit.Settings, hardware, manager, time, NullLogger<PlaybackServerResourceService>.Instance);
+        var service = new PlaybackServerResourceService(kit.Settings, hardware, manager, new PlaybackStreamSessionStore(time), time, NullLogger<PlaybackServerResourceService>.Instance);
         try
         {
             await service.StartAsync(CancellationToken.None);
@@ -470,7 +470,7 @@ public sealed class PlaybackServerResourceTests
         var stale = await cache.StartAsync("profile-0", segmentBytes: 10);
         cache.Time.Advance(HlsPlaybackSessionManager.IdleLifetime + TimeSpan.FromMinutes(1));
         var hardware = new PlaybackHardwareService(new PlaybackHardwareProbe(new BlockingRunner(new TaskCompletionSource().Task), cache.Time, () => []), cache.Kit.Breaker, cache.Time, NullLogger<PlaybackHardwareService>.Instance);
-        var service = new PlaybackServerResourceService(cache.Kit.Settings, hardware, cache.Manager, cache.Time, NullLogger<PlaybackServerResourceService>.Instance);
+        var service = new PlaybackServerResourceService(cache.Kit.Settings, hardware, cache.Manager, cache.Kit.Sessions, cache.Time, NullLogger<PlaybackServerResourceService>.Instance);
         try
         {
             await service.StartAsync(CancellationToken.None);
@@ -491,7 +491,7 @@ public sealed class PlaybackServerResourceTests
         Directory.CreateDirectory(Path.Combine(kit.DataRoot, "playback"));
         await File.WriteAllTextAsync(Path.Combine(kit.DataRoot, "playback", PlaybackTranscodingSettingsStore.FileName), "{ broken");
         using var manager = kit.Hls(_ => new FakeHlsProcess());
-        var service = new PlaybackServerResourceService(kit.Settings, kit.Hardware, manager, kit.Time, NullLogger<PlaybackServerResourceService>.Instance);
+        var service = new PlaybackServerResourceService(kit.Settings, kit.Hardware, manager, kit.Sessions, kit.Time, NullLogger<PlaybackServerResourceService>.Instance);
         try
         {
             await service.StartAsync(CancellationToken.None);

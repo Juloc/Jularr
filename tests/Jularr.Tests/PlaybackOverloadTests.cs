@@ -28,12 +28,13 @@ public sealed class PlaybackOverloadTests
             plan ?? Transcode(Video()),
             new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
 
-    private static void RunTooSlow(PlaybackServerTestKit kit, PlaybackStreamSession session, PlaybackHardwareBackend backend)
+    private static Action<PlaybackTranscodeSample> RunTooSlow(PlaybackServerTestKit kit, PlaybackStreamSession session, PlaybackHardwareBackend backend)
     {
         var progress = session.BeginTranscodeRun(backend)!;
         progress(new PlaybackTranscodeSample(0.7, 15, 30));
         ((ManualTimeProvider)kit.Time).Advance(PlaybackTranscodeMeter.SustainedFor);
         progress(new PlaybackTranscodeSample(0.7, 15, 40));
+        return progress;
     }
 
     [TestMethod]
@@ -163,34 +164,149 @@ public sealed class PlaybackOverloadTests
         Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(slow.Plan, "viewer").RefusalCode, "The same start without the session it belongs to is a new conversion.");
     }
 
+    private static void RunHealthy(PlaybackStreamSession session) => session.BeginTranscodeRun(PlaybackHardwareBackend.Software)!(new PlaybackTranscodeSample(2.0, 50, 30));
+
+    private static PlaybackPlan Delivering(int kbps) =>
+        Transcode(Video()) with { Quality = new PlaybackQualityResolution(PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote, null, PlaybackLimitSource.None, null, kbps) };
+
+    private static PlaybackStreamSession Start(PlaybackServerTestKit kit, string profile, PlaybackPlan plan, Guid? replaces = null) =>
+        kit.Sessions.Create(
+            profile,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "/media/b.mkv",
+            1400,
+            plan,
+            new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"),
+            replaces);
+
     [TestMethod]
-    public void AReplanAtTheSameOrALowerBitrateIsNeverRefusedForOverloadButAHigherOneIs()
+    public void AReplanThatReplacesARunningConversionAtTheSameOrALowerBitrateIsNeverRefusedButAHigherOneIs()
     {
-        var clock = new ManualTimeProvider(s_start);
-        var kit = PlaybackServerTestKit.Create(clock);
+        var kit = PlaybackServerTestKit.Create(new ManualTimeProvider(s_start));
         RunTooSlow(kit, StartTranscode(kit), PlaybackHardwareBackend.Software);
-        var selections = new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web");
 
-        PlaybackStreamSession Start(string profile, PlaybackPlan plan, Guid? replaces) =>
-            kit.Sessions.Create(profile, Guid.NewGuid(), Guid.NewGuid(), "/media/b.mkv", 1400, plan, selections, replaces);
-
-        static PlaybackPlan Delivering(int kbps) =>
-            Transcode(Video()) with { Quality = new PlaybackQualityResolution(PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote, null, PlaybackLimitSource.None, null, kbps) };
-
-        var running = Start("viewer-2", Delivering(8_000), null);
-        var lower = Start("viewer-2", Delivering(4_000), running.Id);
-        var same = Start("viewer-2", Delivering(4_000), lower.Id);
-        var higher = Start("viewer-2", Delivering(8_000), same.Id);
-        var fromRemux = Start("viewer-3", Remux(), null);
-        var nowConverting = Start("viewer-3", Delivering(2_000), fromRemux.Id);
+        var running = Start(kit, "viewer-2", Delivering(8_000));
+        RunHealthy(running);
+        var lower = Start(kit, "viewer-2", Delivering(4_000), running.Id);
+        RunHealthy(lower);
+        var same = Start(kit, "viewer-2", Delivering(4_000), lower.Id);
+        RunHealthy(same);
+        var higher = Start(kit, "viewer-2", Delivering(8_000), same.Id);
+        var fromRemux = Start(kit, "viewer-3", Remux());
+        var nowConverting = Start(kit, "viewer-3", Delivering(2_000), fromRemux.Id);
 
         Assert.IsTrue(kit.Admission.Admit(lower.Plan, "viewer-2", lower).Admitted, "A step-down re-plan lowers the cost: it is never the one to refuse.");
         Assert.IsTrue(kit.Admission.Admit(same.Plan, "viewer-2", same).Admitted);
         Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(higher.Plan, "viewer-2", higher).RefusalCode, "A higher bitrate is more load than the one it replaces.");
         Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(nowConverting.Plan, "viewer-3", nowConverting).RefusalCode, "Replacing a remux with a conversion adds load.");
-        Assert.IsTrue(lower.Replaced && !running.Replaced);
         Assert.AreEqual(8_000, lower.ReplacedTranscodeKbps);
         Assert.IsNull(nowConverting.ReplacedTranscodeKbps);
+    }
+
+    [TestMethod]
+    public void ReplacingASessionWhoseEncodeNeverRanIsNoWayAroundTheRefusal()
+    {
+        var kit = PlaybackServerTestKit.Create(new ManualTimeProvider(s_start));
+        RunTooSlow(kit, StartTranscode(kit), PlaybackHardwareBackend.Software);
+
+        var refused = Start(kit, "viewer-2", Delivering(4_000));
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(refused.Plan, "viewer-2", refused).RefusalCode);
+        // The stock client's retry plans again and names the refused session; a client can also do this on purpose.
+        var retry = Start(kit, "viewer-2", Delivering(4_000), refused.Id);
+        var again = Start(kit, "viewer-2", Delivering(2_000), retry.Id);
+
+        Assert.IsNull(retry.ReplacedTranscodeKbps, "The replaced session never converted anything.");
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(retry.Plan, "viewer-2", retry).RefusalCode);
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(again.Plan, "viewer-2", again).RefusalCode, "A chain of re-plans of a session that never ran never earns the exemption.");
+
+        var stale = Start(kit, "viewer-3", Delivering(4_000));
+        RunHealthy(stale);
+        ((ManualTimeProvider)kit.Time).Advance(PlaybackTranscodeMeter.StaleAfter + TimeSpan.FromSeconds(1));
+        var afterSilence = Start(kit, "viewer-3", Delivering(4_000), stale.Id);
+        Assert.IsNull(afterSilence.ReplacedTranscodeKbps, "An encode whose progress went silent is not a running conversion either.");
+    }
+
+    [TestMethod]
+    public void ASlowSessionNobodyUsesAnymoreStopsCountingAndTheSweeperEndsItsEncode()
+    {
+        var clock = new ManualTimeProvider(s_start);
+        var kit = PlaybackServerTestKit.Create(clock);
+        var abandoned = StartTranscode(kit);
+        var encode = RunTooSlow(kit, abandoned, PlaybackHardwareBackend.Software);
+        var removed = new List<Guid>();
+        kit.Sessions.Removed += session => removed.Add(session.Id);
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(Transcode(Video()), "viewer-2").RefusalCode, "While its player is active it is load.");
+
+        clock.Advance(PlaybackAdaptationPolicy.Default.OverloadActivityWindow + TimeSpan.FromSeconds(1));
+        encode(new PlaybackTranscodeSample(0.7, 15, 60));
+
+        Assert.IsTrue(kit.Admission.Admit(Transcode(Video()), "viewer-2").Admitted, "A paused or abandoned session does not lock the server for the idle lifetime.");
+        // Its encode ran on unthrottled: the sweeper ends the session and with it the output.
+        Assert.AreEqual(1, kit.Sessions.ReleaseAbandonedSlowEncodes());
+        CollectionAssert.AreEqual(new[] { abandoned.Id }, removed);
+        Assert.AreEqual(0, kit.Sessions.ReleaseAbandonedSlowEncodes(), "Nothing is released twice.");
+
+        var active = StartTranscode(kit);
+        var activeEncode = RunTooSlow(kit, active, PlaybackHardwareBackend.Software);
+        clock.Advance(TimeSpan.FromSeconds(60));
+        Assert.IsNotNull(kit.Sessions.Get(active.Id, "viewer"), "A player that keeps using the session keeps it.");
+        clock.Advance(TimeSpan.FromSeconds(60));
+        activeEncode(new PlaybackTranscodeSample(0.7, 15, 90));
+        Assert.AreEqual(PlaybackTranscodeSpeedState.TooSlow, active.Transcode.Read().State);
+        Assert.AreEqual(0, kit.Sessions.ReleaseAbandonedSlowEncodes());
+    }
+
+    [TestMethod]
+    public async Task ARetryOnSoftwareAfterAFailedHardwareStartIsANewStartAndFacesTheOverloadCheck()
+    {
+        var clock = new ManualTimeProvider(s_start);
+        var runner = PlaybackServerTestKit.Ffmpeg(["libx264", "h264_nvenc"], ["cuda"]);
+        var kit = PlaybackServerTestKit.Create(clock, runner);
+        await kit.Hardware.DetectAsync(CancellationToken.None);
+        RunTooSlow(kit, StartTranscode(kit), PlaybackHardwareBackend.Software);
+        var plan = Transcode(Video(encoder: "h264_nvenc"));
+        var session = Start(kit, "viewer-2", plan);
+        var attempts = new List<PlaybackHardwareBackend>();
+
+        var refusal = await Assert.ThrowsAsync<PlaybackAdmissionRefusedException>(() => kit.Admission.StartAsync<int>(
+            plan,
+            "viewer-2",
+            admitted =>
+            {
+                attempts.Add(admitted.Encoder.Backend);
+                // The endpoint begins the measurement before ffmpeg starts, so the first attempt marks the session as converting.
+                session.BeginTranscodeRun(admitted.Encoder.Backend)!(new PlaybackTranscodeSample(2.0, 50, 30));
+                admitted.Lease?.Dispose();
+                throw new InvalidOperationException("Device creation failed");
+            },
+            session));
+
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, refusal.Code, "The software retry is a new conversion on an overloaded server.");
+        Assert.IsTrue(attempts.Count >= 2 && attempts.All(x => x == PlaybackHardwareBackend.Nvenc), "The hardware attempts ran; the software one was refused before it started.");
+        Assert.AreEqual(0, kit.Slots.Active(PlaybackCostClass.SoftwareVideo));
+        Assert.AreEqual(0, kit.Slots.Active(PlaybackCostClass.HardwareVideo), "Every failed attempt gave its slot back.");
+    }
+
+    [TestMethod]
+    public void AReplacementTakesOverTheSlotOfTheConversionItReplacesSoAFullClassCanStillSwap()
+    {
+        var kit = PlaybackServerTestKit.Create(new ManualTimeProvider(s_start));
+        var oldSession = Start(kit, "viewer", Delivering(8_000));
+        RunHealthy(oldSession);
+        using var oldLease = kit.Admission.Admit(oldSession.Plan, "viewer", oldSession).Lease;
+        using var otherLease = kit.Admission.Admit(Transcode(Video()), "other").Lease;
+        Assert.AreEqual(0, kit.Slots.Available(PlaybackCostClass.SoftwareVideo), "Both software slots are in use.");
+
+        var target = new PlaybackVideoTarget(Guid.NewGuid(), Guid.NewGuid());
+        var replacement = kit.Sessions.Create("viewer", target, Guid.NewGuid(), "/media/b.mkv", 1400, Delivering(4_000), oldSession.Selections, oldSession.Id, deferRetirement: true);
+        Assert.AreSame(oldSession, replacement.Replacing, "The playing session stays until the new one delivered.");
+        Assert.IsNull(kit.Admission.Preflight(replacement.Plan, "viewer", replacement), "The advised swap is possible although the class is full.");
+        using var lease = kit.Admission.Admit(replacement.Plan, "viewer", replacement).Lease;
+        Assert.IsNotNull(lease, "It takes over the slot of the conversion it replaces for the moment both exist.");
+
+        var stranger = Start(kit, "viewer-9", Delivering(4_000));
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderBusy, kit.Admission.Preflight(stranger.Plan, "viewer-9", stranger), "Nobody else may use the extra slot.");
     }
 
     private static bool UiTranslationResourcesHas(string key) => Jularr.Web.Features.Localization.UiTranslationResources.TryGet(key, out _);

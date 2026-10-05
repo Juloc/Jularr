@@ -23,6 +23,7 @@
          data-app-version="@Jularr.Web.Features.Appearance.AppBuildInfo.Version"
          data-stream-session-url-template="@ClientApiRoutes.StreamSession(Guid.Empty).Replace(Guid.Empty.ToString("D"), "__session__")"
          data-stream-session-telemetry-url-template="@ClientApiRoutes.StreamSessionTelemetry(Guid.Empty).Replace(Guid.Empty.ToString("D"), "__session__")"
+         data-advice-gate="@PlaybackAdaptationPolicy.Default.ClientGateJson()"
          data-storage-state="@Model.StorageState"
          data-storage-availability-url="@Model.StorageAvailabilityUrl"
          data-player-bootstrap-url="@Model.PlayerBootstrapUrl"

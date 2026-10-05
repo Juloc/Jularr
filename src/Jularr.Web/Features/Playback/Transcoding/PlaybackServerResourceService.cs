@@ -1,3 +1,5 @@
+using Jularr.Web.Features.Playback.Decision;
+
 namespace Jularr.Web.Features.Playback.Transcoding;
 
 /// <summary>
@@ -11,6 +13,7 @@ public sealed class PlaybackServerResourceService(
     PlaybackTranscodingSettingsStore settings,
     PlaybackHardwareService hardware,
     HlsPlaybackSessionManager hls,
+    PlaybackStreamSessionStore sessions,
     TimeProvider time,
     ILogger<PlaybackServerResourceService> logger) : BackgroundService
 {
@@ -70,6 +73,14 @@ public sealed class PlaybackServerResourceService(
     {
         try
         {
+            // A too-slow conversion whose player paused or left would run on unthrottled for nothing; ending its session ends its encode.
+            var released = sessions.ReleaseAbandonedSlowEncodes();
+            if (released > 0)
+            {
+                logger.LogInformation("Released {Count} too-slow conversions whose player stopped using them.", released);
+            }
+
+            sessions.CleanupExpired();
             var result = hls.Sweep();
             if (result.ExpiredSessions + result.PrunedForPolicy + result.OrphanDirectories + result.CrashedSessions > 0)
             {

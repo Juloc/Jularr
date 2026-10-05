@@ -22,7 +22,7 @@ public sealed partial class FfmpegProgressParser
 {
     private static readonly FrozenSet<string> s_keys = new[]
     {
-        "frame", "fps", "bitrate", "total_size", "out_time_us", "out_time_ms", "out_time", "dup_frames", "drop_frames", "speed", "progress"
+        "frame", "fps", "bitrate", "size", "total_size", "out_time_us", "out_time_ms", "out_time", "dup_frames", "drop_frames", "speed", "progress"
     }.ToFrozenSet(StringComparer.Ordinal);
 
     private const double MaxFps = 100_000;
@@ -154,18 +154,6 @@ public sealed class PlaybackTranscodeMeter(TimeProvider time)
         {
             _current = new Run(this, backend, judgesSpeed);
             return _current;
-        }
-    }
-
-    /// <summary>Whether an encode was ever started for this session; a later start is a restart (seek, fallback) of what already runs.</summary>
-    public bool HasStarted
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _current is not null;
-            }
         }
     }
 

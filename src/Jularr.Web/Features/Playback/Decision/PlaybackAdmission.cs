@@ -87,7 +87,28 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
     {
         ArgumentNullException.ThrowIfNull(plan);
         var encoder = plan.TranscodesVideo ? hardware.Resolve(plan.Video!.Encoder) : PlaybackEncoderTarget.Software;
-        return AdmitAttempt(plan, profileId, encoder, session);
+        return AdmitAttempt(plan, profileId, encoder, session, isRetry: false);
+    }
+
+    /// <summary>
+    /// What would refuse starting <paramref name="session"/>'s delivery for <paramref name="plan"/> right now, without taking anything; null
+    /// when it would be admitted. A re-plan the player asked for while the old stream keeps playing asks this first, so a refusal reaches the
+    /// player in the plan answer, before it swaps its source (the check is advisory: a slot may still go in between).
+    /// </summary>
+    public string? Preflight(PlaybackPlan plan, string profileId, PlaybackStreamSession session)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(session);
+        var encoder = plan.TranscodesVideo ? hardware.Resolve(plan.Video!.Encoder) : PlaybackEncoderTarget.Software;
+        var costClass = PlaybackCostClasses.For(plan, encoder);
+        var transcodes = plan.TranscodesVideo;
+        if (Refusal(costClass, transcodes, session, isRetry: false) is { } refusal)
+        {
+            return refusal;
+        }
+
+        var takesOver = session.TakesOverSlotOf(costClass);
+        return slots.CanAcquire(costClass, profileId, takesOver) ? null : SlotRefusal(profileId);
     }
 
     /// <summary>An admission for a legacy delivery that has no plan: a software transcode or a remux.</summary>
@@ -148,36 +169,41 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
                     next = PlaybackEncoderTarget.Software;
                 }
 
-                // The failed attempt released its slot; the next one needs its own.
-                admitted = AdmitAttempt(plan, profileId, next, session);
+                // The failed attempt released its slot; the next one needs its own, and it is a new start of its kind: the first attempt
+                // already began this session's encode, which must not exempt the retry from the overload check.
+                admitted = AdmitAttempt(plan, profileId, next, session, isRetry: true);
             }
         }
     }
 
-    private PlaybackAdmission AdmitAttempt(PlaybackPlan plan, string profileId, PlaybackEncoderTarget encoder, PlaybackStreamSession? session) =>
-        Acquire(PlaybackCostClasses.For(plan, encoder), encoder, profileId, plan.TranscodesVideo, session);
+    private PlaybackAdmission AdmitAttempt(PlaybackPlan plan, string profileId, PlaybackEncoderTarget encoder, PlaybackStreamSession? session, bool isRetry) =>
+        Acquire(PlaybackCostClasses.For(plan, encoder), encoder, profileId, plan.TranscodesVideo, session, isRetry);
 
-    private PlaybackAdmission Acquire(PlaybackCostClass costClass, PlaybackEncoderTarget encoder, string profileId, bool transcodes, PlaybackStreamSession? session)
+    private PlaybackAdmission Acquire(PlaybackCostClass costClass, PlaybackEncoderTarget encoder, string profileId, bool transcodes, PlaybackStreamSession? session, bool isRetry = false)
+    {
+        if (Refusal(costClass, transcodes, session, isRetry) is { } policyRefusal)
+        {
+            return new PlaybackAdmission(costClass, encoder, null, policyRefusal);
+        }
+
+        var lease = slots.TryAcquire(costClass, profileId, takesOverSlot: !isRetry && session?.TakesOverSlotOf(costClass) == true);
+        return new PlaybackAdmission(costClass, encoder, lease, lease is null ? SlotRefusal(profileId) : null);
+    }
+
+    // The Admin switch and the overload rule. A retry on another encoder after a failed start is a new start of its kind.
+    private string? Refusal(PlaybackCostClass costClass, bool transcodes, PlaybackStreamSession? session, bool isRetry)
     {
         if (transcodes && !settings.Current.TranscodingEnabled)
         {
-            return new PlaybackAdmission(costClass, encoder, null, PlaybackAdmissionCodes.TranscodingDisabled);
+            return PlaybackAdmissionCodes.TranscodingDisabled;
         }
 
-        if (transcodes && (session?.AddsTranscodeLoad ?? true) && sessions.IsTranscodeOverloaded(costClass == PlaybackCostClass.HardwareVideo, session?.Id))
-        {
-            return new PlaybackAdmission(costClass, encoder, null, PlaybackAdmissionCodes.TranscoderOverloaded);
-        }
-
-        var lease = slots.TryAcquire(costClass, profileId);
-        string? refusal = null;
-        if (lease is null)
-        {
-            refusal = slots.ActiveFor(profileId) >= PlaybackTranscodeSlots.MaxPerProfile ? PlaybackAdmissionCodes.ProfileSessionLimit : PlaybackAdmissionCodes.TranscoderBusy;
-        }
-
-        return new PlaybackAdmission(costClass, encoder, lease, refusal);
+        var addsLoad = isRetry || (session?.AddsTranscodeLoad ?? true);
+        return transcodes && addsLoad && sessions.IsTranscodeOverloaded(costClass == PlaybackCostClass.HardwareVideo, session) ? PlaybackAdmissionCodes.TranscoderOverloaded : null;
     }
+
+    private string SlotRefusal(string profileId) =>
+        slots.ActiveFor(profileId) >= PlaybackTranscodeSlots.MaxPerProfile ? PlaybackAdmissionCodes.ProfileSessionLimit : PlaybackAdmissionCodes.TranscoderBusy;
 
     // What a successful start proves about the backends involved.
     private void Settle(PlaybackAdmission succeeded, bool decodeSuspected, PlaybackHardwareBackend failedBackend, string? hardwareFailure)

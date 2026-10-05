@@ -38,12 +38,28 @@ public sealed class PlaybackTranscodeSlots(PlaybackTranscodingSettingsStore sett
         }
     }
 
-    /// <summary>Takes a slot of the class, and one of the profile's <see cref="MaxPerProfile"/>; null when either is exhausted.</summary>
-    public IDisposable? TryAcquire(PlaybackCostClass costClass, string? profileId = null)
+    /// <summary>
+    /// Whether <see cref="TryAcquire"/> would succeed right now; advisory, because the slot may be gone by the time it is taken.
+    /// <paramref name="takesOverSlot"/> is explained there.
+    /// </summary>
+    public bool CanAcquire(PlaybackCostClass costClass, string? profileId = null, bool takesOverSlot = false)
     {
         lock (_gate)
         {
-            if (_active[(int)costClass] >= Capacity(costClass) || (profileId is not null && _perProfile.GetValueOrDefault(profileId) >= MaxPerProfile))
+            return takesOverSlot || (_active[(int)costClass] < Capacity(costClass) && (profileId is null || _perProfile.GetValueOrDefault(profileId) < MaxPerProfile));
+        }
+    }
+
+    /// <summary>
+    /// Takes a slot of the class, and one of the profile's <see cref="MaxPerProfile"/>; null when either is exhausted. A start that takes
+    /// over the slot of the conversion it replaces (which is retired right after) may exceed both limits for that moment, so a full class can
+    /// still swap one conversion for another.
+    /// </summary>
+    public IDisposable? TryAcquire(PlaybackCostClass costClass, string? profileId = null, bool takesOverSlot = false)
+    {
+        lock (_gate)
+        {
+            if (!takesOverSlot && (_active[(int)costClass] >= Capacity(costClass) || (profileId is not null && _perProfile.GetValueOrDefault(profileId) >= MaxPerProfile)))
             {
                 return null;
             }
@@ -107,8 +123,11 @@ public sealed class PlaybackStreamSession(
     DateTimeOffset createdAtUtc,
     TimeProvider time,
     PlaybackAdaptationDirective adaptation,
-    PlaybackStreamSession? replaced)
+    PlaybackStreamSession? replaced,
+    bool deferRetirement)
 {
+    private PlaybackStreamSession? _replacing = deferRetirement ? replaced : null;
+
     private readonly object gate = new();
 
     public Guid Id { get; } = id;
@@ -152,17 +171,42 @@ public sealed class PlaybackStreamSession(
     public Action<PlaybackTranscodeSample>? BeginTranscodeRun(PlaybackHardwareBackend backend) =>
         Plan.TranscodesVideo ? Transcode.BeginRun(backend, judgesSpeed: Plan.Transport == PlaybackTransport.Hls).Record : null;
 
-    /// <summary>Whether the session replaced another one (a re-plan), and the video bitrate that one converted; null when it did not convert video.</summary>
-    public bool Replaced { get; } = replaced is not null;
+    /// <summary>
+    /// The video bitrate and cost class of the conversion this session replaced, only when that conversion was really running (it showed
+    /// fresh progress when this session was planned): a session that never converted anything is no reason to wave a start through.
+    /// </summary>
+    public int? ReplacedTranscodeKbps { get; } = replaced is { Plan.TranscodesVideo: true } && replaced.Transcode.Read() is { State: not PlaybackTranscodeSpeedState.Unknown }
+        ? replaced.Plan.Quality.DeliveredBitrateKbps
+        : null;
 
-    public int? ReplacedTranscodeKbps { get; } = replaced is { Plan.TranscodesVideo: true } ? replaced.Plan.Quality.DeliveredBitrateKbps : null;
+    public PlaybackCostClass? ReplacedCostClass { get; } = replaced is { Plan.TranscodesVideo: true } && replaced.Transcode.Read() is { State: not PlaybackTranscodeSpeedState.Unknown, Backend: { } backend }
+        ? backend == PlaybackHardwareBackend.Software ? PlaybackCostClass.SoftwareVideo : PlaybackCostClass.HardwareVideo
+        : null;
 
     /// <summary>
-    /// Whether starting this session's delivery adds conversion load to the server. A seek or restart in a session that already converts, and a
-    /// re-plan that takes the place of a conversion of at least the same bitrate, only replace what runs; only a new conversion, or one that
-    /// costs more than the one it replaces, adds to it.
+    /// The session this one will replace once its own delivery has started, for a re-plan the player requested while the old stream keeps
+    /// playing; null otherwise. The old session is retired by <see cref="TakeReplacing"/> after the first output of this one succeeded.
     /// </summary>
-    public bool AddsTranscodeLoad => !Transcode.HasStarted && (!Replaced || ReplacedTranscodeKbps is not { } before || Plan.Quality.DeliveredBitrateKbps is not { } now || now > before);
+    public PlaybackStreamSession? Replacing => Volatile.Read(ref _replacing);
+
+    /// <summary>Hands the session being replaced to whoever retires it (once); null when there is none or it was already taken.</summary>
+    public PlaybackStreamSession? TakeReplacing() => Interlocked.Exchange(ref _replacing, null);
+
+    /// <summary>
+    /// Whether starting this session's delivery adds conversion load to the server. A seek or restart in a session whose encode is running,
+    /// and a re-plan that takes the place of a running conversion of at least the same bitrate, only replace what runs; a new conversion,
+    /// one that costs more than the one it replaces, and a replacement of an encode that never ran add to it.
+    /// </summary>
+    public bool AddsTranscodeLoad =>
+        Transcode.Read().State == PlaybackTranscodeSpeedState.Unknown &&
+        (ReplacedTranscodeKbps is not { } before || Plan.Quality.DeliveredBitrateKbps is not { } now || now > before);
+
+    /// <summary>
+    /// Whether this session's start may use the slot of the conversion it is about to replace: a re-plan of a running conversion of the same
+    /// cost class that adds no load. The old session holds its slot until this one's first output succeeded, so without this a full class
+    /// could never swap one conversion for another.
+    /// </summary>
+    public bool TakesOverSlotOf(PlaybackCostClass costClass) => Replacing is not null && !AddsTranscodeLoad && ReplacedCostClass == costClass;
 
     public void Touch(DateTimeOffset now)
     {
@@ -305,7 +349,8 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         PlaybackStreamSelections selections,
         Guid? replaces = null,
         Guid? legacyEpisodeId = null,
-        PlaybackAdaptationDirective? adaptation = null)
+        PlaybackAdaptationDirective? adaptation = null,
+        bool deferRetirement = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
         ArgumentNullException.ThrowIfNull(target);
@@ -317,10 +362,14 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         {
             if (replaces is { } previousId &&
                 sessions.TryGetValue(previousId, out var previous) &&
-                previous.ProfileId == profileId &&
-                sessions.TryRemove(previousId, out _))
+                previous.ProfileId == profileId)
             {
-                removed.Add(previous);
+                // A re-plan the player asked for keeps playing the old stream until the new one delivered: the old session stays for now.
+                if (!deferRetirement && sessions.TryRemove(previousId, out _))
+                {
+                    removed.Add(previous);
+                }
+
                 replaced = previous;
             }
 
@@ -349,7 +398,8 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
                 now,
                 time,
                 adaptation ?? PlaybackAdaptationDirective.None,
-                replaced);
+                replaced,
+                deferRetirement);
             sessions[session.Id] = session;
         }
 
@@ -427,28 +477,84 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
             decision = PlaybackAdaptationDecision.None;
         }
 
-        return PlaybackAdaptation.NextDirective(decision, session.Adaptation, session.Plan.Quality.DeliveredBitrateKbps, reading.Backend, time.GetUtcNow());
+        return PlaybackAdaptation.NextDirective(decision, session.Adaptation, session.Plan.Quality.DeliveredBitrateKbps, reading.Backend, time.GetUtcNow(), PlaybackAdaptationPolicy.Default);
+    }
+
+    /// <summary>
+    /// Retires the session <paramref name="session"/> replaces, after the first output of <paramref name="session"/> succeeded; the old
+    /// session's delivery stops with it. Returns the id of the session this call took over from (also when it had already expired), and
+    /// null when nothing was pending, so only one caller completes a replacement.
+    /// </summary>
+    public Guid? CompleteReplacement(PlaybackStreamSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (session.TakeReplacing() is not { } old)
+        {
+            return null;
+        }
+
+        if (sessions.TryRemove(old.Id, out _))
+        {
+            Removed?.Invoke(old);
+        }
+
+        return old.Id;
     }
 
     /// <summary>
     /// Whether a running transcode on the same kind of encoder (hardware or software) is measured to stay under real time: the machine
-    /// cannot take another one, and admission refuses it instead of making every viewer worse. The session that asks is never part of the
-    /// load it asks about.
+    /// cannot take another one, and admission refuses it instead of making every viewer worse. Only a session that was active recently
+    /// counts (an abandoned or paused one is not load a viewer waits on); the session that asks and the one it replaces are never part of
+    /// the load it asks about.
     /// </summary>
-    public bool IsTranscodeOverloaded(bool hardwareEncoder, Guid? exceptSessionId = null) =>
-        sessions.Values.Any(x => x.Id != exceptSessionId && x.Transcode.Read() is { State: PlaybackTranscodeSpeedState.TooSlow, Backend: { } backend } && (backend != PlaybackHardwareBackend.Software) == hardwareEncoder);
+    public bool IsTranscodeOverloaded(bool hardwareEncoder, PlaybackStreamSession? requester = null)
+    {
+        var activeSince = time.GetUtcNow() - PlaybackAdaptationPolicy.Default.OverloadActivityWindow;
+        return sessions.Values.Any(x =>
+            x.Id != requester?.Id &&
+            x.Id != requester?.Replacing?.Id &&
+            x.LastSeenUtc >= activeSince &&
+            x.Transcode.Read() is { State: PlaybackTranscodeSpeedState.TooSlow, Backend: { } backend } &&
+            (backend != PlaybackHardwareBackend.Software) == hardwareEncoder);
+    }
+
+    /// <summary>
+    /// Ends the sessions whose conversion is too slow and whose player stopped using them (paused or gone): their encode ran on unthrottled
+    /// for nothing. Called by the playback sweeper; the ended session takes its HLS output with it.
+    /// </summary>
+    public int ReleaseAbandonedSlowEncodes()
+    {
+        var idleBefore = time.GetUtcNow() - PlaybackAdaptationPolicy.Default.OverloadActivityWindow;
+        var released = 0;
+        foreach (var session in sessions.Values)
+        {
+            if (session.LastSeenUtc < idleBefore && session.Transcode.Read().State == PlaybackTranscodeSpeedState.TooSlow && RemoveAny(session.Id))
+            {
+                released++;
+            }
+        }
+
+        return released;
+    }
 
     private PlaybackAdaptationDecision Decide(PlaybackStreamSession session, PlaybackTranscodeReading reading)
     {
         var now = time.GetUtcNow();
-        return PlaybackAdaptation.Decide(new PlaybackAdaptationInput(
+        var policy = PlaybackAdaptationPolicy.Default;
+        var decision = PlaybackAdaptation.Decide(new PlaybackAdaptationInput(
             now,
             session.CreatedAtUtc,
             session.Plan,
-            session.Adaptation.Current(now).CeilingKbps,
+            session.Adaptation.Current(now, policy).CeilingKbps,
             session.Telemetry.Recent(),
             session.Telemetry.Evidence(now)?.RecentStalls ?? 0,
-            reading.State));
+            reading.State,
+            policy));
+
+        // Raising the quality adds load; a server that already struggles with a conversion of this kind is not asked for more.
+        return decision.Advice == PlaybackAdaptationAdvice.StepUp && IsTranscodeOverloaded(reading.Backend is { } backend && backend != PlaybackHardwareBackend.Software, session)
+            ? PlaybackAdaptationDecision.None
+            : decision;
     }
 
     /// <summary>Returns the session only to the profile that created it.</summary>

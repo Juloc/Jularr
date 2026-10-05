@@ -329,6 +329,7 @@ public static class ClientApiPlaybackPlanEndpoints
             double? startSeconds,
             PlaybackStreamSessionStore sessions,
             PlaybackAdmissionService admission,
+            ActiveSessionService activeSessions,
             ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
@@ -381,6 +382,7 @@ public static class ClientApiPlaybackPlanEndpoints
                         }
                     },
                     session);
+                await RetireReplacedSessionAsync(session, sessions, activeSessions, cancellationToken);
                 return Results.File(live, "video/mp4", enableRangeProcessing: false);
             }
             catch (PlaybackAdmissionRefusedException refusal)
@@ -402,6 +404,7 @@ public static class ClientApiPlaybackPlanEndpoints
             PlaybackStreamSessionStore sessions,
             PlaybackAdmissionService admission,
             HlsPlaybackSessionManager manager,
+            ActiveSessionService activeSessions,
             ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
@@ -456,6 +459,8 @@ public static class ClientApiPlaybackPlanEndpoints
                 {
                     return StartFailed();
                 }
+
+                await RetireReplacedSessionAsync(session, sessions, activeSessions, cancellationToken);
 
                 return Results.Redirect(
                     ClientApiRoutes.StreamSessionHlsAsset(session.Id, started, "index.m3u8"),
@@ -844,16 +849,34 @@ public static class ClientApiPlaybackPlanEndpoints
         return true;
     }
 
-    private static bool TryParseFollowedAdvice(string? value, out PlaybackAdaptationAdvice advice)
+    /// <summary>Parses the advice a re-plan names through the enum's own wire names (<c>none</c>, <c>step_down</c>, <c>step_up</c>); absent means none.</summary>
+    public static bool TryParseFollowedAdvice(string? value, out PlaybackAdaptationAdvice advice)
     {
-        advice = value?.Trim() switch
+        advice = PlaybackAdaptationAdvice.None;
+        if (string.IsNullOrWhiteSpace(value))
         {
-            null or "" or "none" => PlaybackAdaptationAdvice.None,
-            "step_down" => PlaybackAdaptationAdvice.StepDown,
-            "step_up" => PlaybackAdaptationAdvice.StepUp,
-            _ => (PlaybackAdaptationAdvice)(-1)
-        };
-        return advice >= PlaybackAdaptationAdvice.None;
+            return true;
+        }
+
+        try
+        {
+            advice = JsonSerializer.Deserialize<PlaybackAdaptationAdvice>(JsonSerializer.Serialize(value.Trim()));
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    // The first output of a re-plan the player asked for (while the old stream kept playing) succeeded: the old session ends now and the
+    // ActiveSession moves to the new one.
+    private static async Task RetireReplacedSessionAsync(PlaybackStreamSession session, PlaybackStreamSessionStore sessions, ActiveSessionService activeSessions, CancellationToken cancellationToken)
+    {
+        if (sessions.CompleteReplacement(session) is { } replacedId)
+        {
+            await activeSessions.OpenAsync(session.Id, session.ProfileId, session.MediaFileId, session.Plan.Mode.ToString(), session.Selections.ClientKind, replacedId, cancellationToken);
+        }
     }
 
     public static bool TryParseMode(string? value, out PlaybackModePreference mode)

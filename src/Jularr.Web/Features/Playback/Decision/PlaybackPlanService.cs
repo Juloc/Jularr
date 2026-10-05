@@ -146,7 +146,8 @@ public sealed class PlaybackPlanService(
     KnownDeviceRegistry? deviceRegistry = null,
     ActiveSessionService? activeSessions = null,
     CanonicalMediaStorageService? canonicalStorage = null,
-    VideoProgressService? videoProgress = null)
+    VideoProgressService? videoProgress = null,
+    PlaybackAdmissionService? admission = null)
 {
     /// <summary>
     /// Legacy Anime compatibility adapter. New callers use
@@ -313,16 +314,13 @@ public sealed class PlaybackPlanService(
             previous?.Plan.Quality.DeliveredBitrateKbps,
             directive));
 
-        // No encoder is left that keeps up: the slow transcode behind the replaced session must stop now instead of running on unused.
-        var unsustainable = plan.Mode == PlaybackDeliveryMode.Unavailable && plan.Reasons.Any(x => x.Code == PlaybackReasonCodes.TranscodeUnsustainable);
-        if (previous is not null && unsustainable && sessions.Remove(previous.Id, profileId) && activeSessions is not null)
-        {
-            await activeSessions.EndAsync(previous.Id, profileId, cancellationToken);
-        }
-
         PlaybackStreamSession? session = null;
         if (plan.Mode != PlaybackDeliveryMode.Unavailable)
         {
+            // A re-plan that follows the server's advice is requested while the old stream keeps playing: the old session is only retired
+            // after this one's first output succeeded (see the stream endpoints), and an admission refusal is answered here, before the
+            // player swaps anything.
+            var followsAdvice = previous is not null && previous.Target == target && input.FollowedAdvice != PlaybackAdaptationAdvice.None;
             session = sessions.Create(
                 profileId,
                 target,
@@ -339,9 +337,24 @@ public sealed class PlaybackPlanService(
                     capabilities.Client.Kind),
                 previous?.Id,
                 legacyEpisodeId,
-                directive);
+                directive,
+                deferRetirement: followsAdvice);
 
-            if (activeSessions is not null)
+            if (followsAdvice && admission?.Preflight(plan, profileId, session) is { } refusal)
+            {
+                sessions.Remove(session.Id, profileId);
+                return new PlaybackPlanOutcome(
+                    UnavailablePlan(refusal, quality, networkClass),
+                    null,
+                    row.Id,
+                    availability,
+                    capabilities.Inferred,
+                    target,
+                    resumePositionMs);
+            }
+
+            // The ActiveSession of a deferred re-plan changes hands when the old session is retired.
+            if (activeSessions is not null && !followsAdvice)
             {
                 await activeSessions.OpenAsync(
                     session.Id,
