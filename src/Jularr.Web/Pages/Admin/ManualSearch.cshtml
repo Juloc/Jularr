@@ -2,6 +2,7 @@
 @model Jularr.Web.Pages.Admin.ManualSearchModel
 @using Jularr.Web.Features.Acquisition.Access
 @using Jularr.Web.Features.Acquisition.ManualSearch
+@using Microsoft.AspNetCore.Mvc.ViewFeatures
 @{
     var ui = Model.Ui;
     var target = Model.Target;
@@ -9,43 +10,68 @@
     var statusName = AcquisitionAccessNames.Status(request.Status);
     var unitId = Model.UnitId ?? target.Unit?.Id;
     ViewData["Title"] = ui["admin.wanted.manualSearch"];
+
+    // The current filters travel with every selection and removal link; `drop` removes one of them, `release` selects a candidate.
+    string Href(string? release = null, string? drop = null, string? fragment = null) =>
+        Url.Page("/Admin/ManualSearch", null, new
+        {
+            id = request.Id,
+            unit = unitId,
+            tab = "search",
+            q = drop == "q" ? null : Model.Query,
+            state = drop == "state" ? null : Model.State,
+            indexer = drop == "indexer" ? null : Model.Indexer,
+            type = drop == "type" ? null : Model.ReleaseType,
+            quality = drop == "quality" ? null : Model.Quality,
+            sort = Model.Sort,
+            release
+        }, null, null, fragment)!;
 }
 @section Head {
     <link rel="stylesheet" href="~/css/acquisition.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/manual-search.css" asp-append-version="true" />
 }
+@section Scripts {
+    <script src="~/js/manual-search.js" asp-append-version="true" defer></script>
+}
 
-<header class="page-header bms-header">
-    <div class="bms-target">
-        <span class="bms-cover">
-            @if (!string.IsNullOrWhiteSpace(request.CoverImageUrl))
-            {
-                <img src="@request.CoverImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
-            }
-        </span>
-        <span>
-            <h1>@ui["admin.wanted.manualSearch"]</h1>
-            <strong>@target.Title@(target.Year is { } year ? $" ({year})" : "")</strong>
-            <span class="bms-chips">
-                @if (target.Unit is { } unit)
-                {
-                    <span class="bms-tag">@unit.Label</span>
-                }
-                <span class="bms-tag">@ui["requests.status." + statusName]</span>
-                <span class="bms-tag">@ui["admin.manualSearch.profile"]: @target.ProfileName</span>
-            </span>
-        </span>
+<header class="page-header">
+    <div>
+        <h1>@ui["admin.wanted.manualSearch"]</h1>
     </div>
     <div class="inline-actions">
-        @if (Model.ActiveTab == ManualSearchTab.Search && target.CanSearch)
-        {
-            <a class="button button-primary" asp-page="/Admin/ManualSearch" asp-route-id="@request.Id" asp-route-unit="@unitId" asp-route-tab="search" asp-route-refresh="true">@ui["common.search"]</a>
-        }
         <a class="button" asp-page="/Admin/Wanted">@ui["admin.requests.wanted"]</a>
     </div>
 </header>
 
 <partial name="_AdminNavigation" model="Model.Ui" />
+
+<section class="bms-target-card" aria-label="@target.Title">
+    <span class="bms-cover">
+        @if (!string.IsNullOrWhiteSpace(request.CoverImageUrl))
+        {
+            <img src="@request.CoverImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
+        }
+    </span>
+    <div class="bms-target-copy">
+        <strong class="bms-target-title">@target.Title@(target.Year is { } year ? $" ({year})" : "")</strong>
+        <div class="bms-chips">
+            @if (target.Unit is { } unit)
+            {
+                <span class="admin-tag admin-tag-text">@unit.Label</span>
+            }
+            <span class="admin-tag admin-tag-@AdminStatusTone.Of(request.Status)" data-status="@statusName">@ui["requests.status." + statusName]</span>
+            <span class="admin-tag admin-tag-text">@ui["admin.manualSearch.profile"]: @target.ProfileName</span>
+        </div>
+    </div>
+    @if (Model.ActiveTab == ManualSearchTab.Search && target.CanSearch)
+    {
+        <a class="button button-primary bms-start" data-bms-busy href="@Url.Page("/Admin/ManualSearch", null, new { id = request.Id, unit = unitId, tab = "search", refresh = true })">
+            <partial name="_AdminIcon" model='"search"' />@ui["admin.manualSearch.start"]
+        </a>
+    }
+</section>
 
 <nav class="library-type-tabs bms-tabs" aria-label="@ui["admin.manualSearch.tabsAria"]">
     @foreach (var tab in Enum.GetValues<ManualSearchTab>())
@@ -75,13 +101,14 @@
                 <span>@ui.Format("admin.manualSearch.resultCount", ("count", result.Candidates.Count))</span>
             }
         </div>
+        <p class="bms-busy" role="status" hidden>@ui["admin.manualSearch.searching"]</p>
 
         @if (target.MissingUnits.Count > 1 || result.TargetChanged && target.MissingUnits.Count > 0)
         {
-            <form method="get" class="bms-unit-form">
+            <form method="get" class="bms-unit-form" data-bms-autosubmit>
                 <input type="hidden" name="id" value="@request.Id" />
                 <input type="hidden" name="tab" value="search" />
-                <label>
+                <label class="bms-select">
                     <span>@ui["admin.manualSearch.unit"]</span>
                     <select name="unit">
                         @foreach (var option in target.MissingUnits)
@@ -90,7 +117,7 @@
                         }
                     </select>
                 </label>
-                <button class="button" type="submit">@ui["admin.filter.apply"]</button>
+                <noscript><button class="button" type="submit">@ui["admin.filter.apply"]</button></noscript>
             </form>
         }
 
@@ -116,17 +143,24 @@
         }
         else
         {
-            @foreach (var warning in result.Warnings)
+            @foreach (var failed in result.Warnings.Select(warning => warning.IndexerName).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                <p class="usenet-card-error" role="status">@warning.IndexerName: @warning.Message</p>
+                <p class="bms-warning" role="status">
+                    <partial name="_ManualSearchIcon" model='"warning"' />
+                    <span>@ui.Format("admin.manualSearch.indexerFailed", ("indexer", failed))</span>
+                </p>
             }
 
-            <form method="get" class="bms-toolbar">
+            <form method="get" class="bms-toolbar" data-bms-autosubmit>
                 <input type="hidden" name="id" value="@request.Id" />
                 <input type="hidden" name="unit" value="@unitId" />
                 <input type="hidden" name="tab" value="search" />
-                <input type="search" name="q" value="@Model.Query" placeholder="@ui["admin.manualSearch.searchPlaceholder"]" aria-label="@ui["admin.manualSearch.searchPlaceholder"]" />
-                <label>
+                <input type="hidden" name="release" value="@Model.Selected?.Identity" />
+                <label class="bms-search-field">
+                    <partial name="_AdminIcon" model='"search"' />
+                    <input type="search" name="q" value="@Model.Query" placeholder="@ui["admin.manualSearch.searchPlaceholder"]" aria-label="@ui["admin.manualSearch.searchPlaceholder"]" />
+                </label>
+                <label class="bms-select">
                     <span>@ui["admin.manualSearch.filter.state"]</span>
                     <select name="state">
                         <option value="">@ui["admin.wanted.filter.any"]</option>
@@ -136,7 +170,7 @@
                         }
                     </select>
                 </label>
-                <label>
+                <label class="bms-select">
                     <span>@ui["admin.manualSearch.filter.indexer"]</span>
                     <select name="indexer">
                         <option value="">@ui["admin.wanted.filter.any"]</option>
@@ -146,7 +180,7 @@
                         }
                     </select>
                 </label>
-                <label>
+                <label class="bms-select">
                     <span>@ui["admin.manualSearch.filter.type"]</span>
                     <select name="type">
                         <option value="">@ui["admin.wanted.filter.any"]</option>
@@ -156,7 +190,7 @@
                         }
                     </select>
                 </label>
-                <label>
+                <label class="bms-select">
                     <span>@ui["admin.manualSearch.filter.quality"]</span>
                     <select name="quality">
                         <option value="">@ui["admin.wanted.filter.any"]</option>
@@ -166,7 +200,7 @@
                         }
                     </select>
                 </label>
-                <label>
+                <label class="bms-select">
                     <span>@ui["admin.manualSearch.filter.sort"]</span>
                     <select name="sort">
                         <option value="">@ui["admin.manualSearch.sort.score"]</option>
@@ -176,7 +210,7 @@
                         }
                     </select>
                 </label>
-                <button class="button" type="submit">@ui["admin.filter.apply"]</button>
+                <noscript><button class="button" type="submit">@ui["admin.filter.apply"]</button></noscript>
             </form>
 
             @if (Model.Query is not null || Model.State is not null || Model.Indexer is not null || Model.ReleaseType is not null || Model.Quality is not null)
@@ -192,21 +226,11 @@
                     }.Where(filter => filter.Label is not null))
                     {
                         <li>
-                            <a asp-page="/Admin/ManualSearch"
-                               asp-route-id="@request.Id"
-                               asp-route-unit="@unitId"
-                               asp-route-tab="search"
-                               asp-route-q="@(name == "q" ? null : Model.Query)"
-                               asp-route-state="@(name == "state" ? null : Model.State)"
-                               asp-route-indexer="@(name == "indexer" ? null : Model.Indexer)"
-                               asp-route-type="@(name == "type" ? null : Model.ReleaseType)"
-                               asp-route-quality="@(name == "quality" ? null : Model.Quality)"
-                               asp-route-sort="@Model.Sort"
-                               aria-label="@ui.Format("admin.manualSearch.filters.remove", ("filter", label!))">@label &times;</a>
+                            <a class="admin-tag admin-tag-text" href="@Href(drop: name)" aria-label="@ui.Format("admin.manualSearch.filters.remove", ("filter", label!))">@label &times;</a>
                         </li>
                     }
                     <li>
-                        <a asp-page="/Admin/ManualSearch" asp-route-id="@request.Id" asp-route-unit="@unitId" asp-route-tab="search">@ui["admin.manualSearch.filters.reset"]</a>
+                        <a class="text-link" asp-page="/Admin/ManualSearch" asp-route-id="@request.Id" asp-route-unit="@unitId" asp-route-tab="search">@ui["admin.manualSearch.filters.reset"]</a>
                     </li>
                 </ul>
             }
@@ -234,12 +258,12 @@
                                     <th scope="col">@ui["admin.manualSearch.col.score"]</th>
                                     <th scope="col">@ui["admin.manualSearch.col.release"]</th>
                                     <th scope="col">@ui["admin.manualSearch.col.type"]</th>
-                                    <th scope="col">@ui["admin.manualSearch.filter.indexer"]</th>
-                                    <th scope="col">@ui["admin.manualSearch.col.age"]</th>
-                                    <th scope="col">@ui["admin.manualSearch.col.size"]</th>
+                                    <th scope="col" class="bms-col-source">@ui["admin.manualSearch.filter.indexer"]</th>
+                                    <th scope="col" class="bms-col-source">@ui["admin.manualSearch.col.age"]</th>
+                                    <th scope="col" class="bms-col-more">@ui["admin.manualSearch.col.size"]</th>
                                     <th scope="col">@ui["admin.manualSearch.filter.quality"]</th>
-                                    <th scope="col">@ui["admin.manualSearch.col.language"]</th>
-                                    <th scope="col">@ui["admin.manualSearch.col.parsed"]</th>
+                                    <th scope="col" class="bms-col-more">@ui["admin.manualSearch.col.language"]</th>
+                                    <th scope="col" class="bms-col-source">@ui["admin.manualSearch.col.parsed"]</th>
                                     <th scope="col">@ui["admin.manualSearch.col.match"]</th>
                                     <th scope="col"><span class="bms-sr">@ui["admin.wanted.col.actions"]</span></th>
                                 </tr>
@@ -250,33 +274,36 @@
                                     var verdict = ManualSearchModel.VerdictName(candidate.Verdict);
                                     var isSelected = Model.Selected?.Identity == candidate.Identity;
                                     var headline = ManualSearchModel.Headline(candidate);
-                                    <tr class="@(isSelected ? "is-selected" : "")">
+                                    var languages = candidate.AudioLanguages.Count > 0 ? string.Join(" / ", candidate.AudioLanguages) : "—";
+                                    <tr class="@(isSelected ? "is-selected" : "")" data-verdict="@verdict">
                                         <td class="bms-score bms-score-@verdict">@(candidate.Score?.ToString() ?? "–")</td>
                                         <td class="bms-release">
-                                            <strong>@candidate.Title</strong>
-                                            @if (candidate.ReleaseGroup is not null)
-                                            {
-                                                <small>@candidate.ReleaseGroup</small>
-                                            }
+                                            <a class="bms-release-title" href="@Href(candidate.Identity, fragment: "bms-selected")" aria-current="@(isSelected ? "true" : null)">@candidate.Title</a>
+                                            <small>
+                                                @if (candidate.ReleaseGroup is not null)
+                                                {
+                                                    <span>@candidate.ReleaseGroup</span>
+                                                }
+                                                <span class="bms-meta-source">@(candidate.Indexer ?? "—") · @ManualSearchModel.AgeText(ui, candidate.AgeDays)@(candidate.ParsedUnit is null ? "" : " · " + candidate.ParsedUnit)</span>
+                                                <span class="bms-meta-more">@ManualSearchModel.Size(candidate.SizeBytes)@(candidate.AudioLanguages.Count > 0 ? " · " + languages : "")</span>
+                                            </small>
                                         </td>
-                                        <td><span class="bms-tag"><partial name="_ManualSearchIcon" model="@ManualSearchModel.TypeIcon(candidate.ReleaseType)" />@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)]</span></td>
-                                        <td>@(candidate.Indexer ?? "—")</td>
-                                        <td>@ManualSearchModel.AgeText(ui, candidate.AgeDays)</td>
-                                        <td>@ManualSearchModel.Size(candidate.SizeBytes)</td>
+                                        <td><span class="admin-tag admin-tag-text"><partial name="_ManualSearchIcon" model="@ManualSearchModel.TypeIcon(candidate.ReleaseType)" />@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)]</span></td>
+                                        <td class="bms-col-source">@(candidate.Indexer ?? "—")</td>
+                                        <td class="bms-col-source">@ManualSearchModel.AgeText(ui, candidate.AgeDays)</td>
+                                        <td class="bms-col-more">@ManualSearchModel.Size(candidate.SizeBytes)</td>
                                         <td>@(candidate.Quality ?? "—")</td>
-                                        <td>@(candidate.AudioLanguages.Count > 0 ? string.Join(" / ", candidate.AudioLanguages) : "—")</td>
-                                        <td>@(candidate.ParsedUnit ?? "—")</td>
+                                        <td class="bms-col-more">@languages</td>
+                                        <td class="bms-col-source">@(candidate.ParsedUnit ?? "—")</td>
                                         <td>
-                                            <span class="bms-tag bms-tag-@verdict"><partial name="_ManualSearchIcon" model="verdict" />@ui[ManualSearchModel.ReasonKey(headline.Code)]</span>
+                                            <span class="admin-tag admin-tag-@ManualSearchModel.VerdictTone(candidate.Verdict)" data-verdict="@verdict"><partial name="_ManualSearchIcon" model="verdict" />@ui[ManualSearchModel.ReasonKey(headline.Code)]</span>
                                             @if (candidate.IsTried)
                                             {
                                                 <small>@ui["admin.manualSearch.state.tried"]</small>
                                             }
                                         </td>
-                                        <td>
-                                            <a class="button button-small" asp-page="/Admin/ManualSearch" asp-route-id="@request.Id" asp-route-unit="@unitId" asp-route-tab="search"
-                                               asp-route-q="@Model.Query" asp-route-state="@Model.State" asp-route-sort="@Model.Sort" asp-route-indexer="@Model.Indexer" asp-route-type="@Model.ReleaseType" asp-route-quality="@Model.Quality"
-                                               asp-route-release="@candidate.Identity" aria-current="@(isSelected ? "true" : null)" aria-label="@ui["admin.manualSearch.inspect"]: @candidate.Title">@ui["admin.manualSearch.inspect"]</a>
+                                        <td class="bms-col-action">
+                                            <a class="button button-small" href="@Href(candidate.Identity, fragment: "bms-selected")" aria-label="@ui["admin.manualSearch.select"]: @candidate.Title">@ui["admin.manualSearch.select"]</a>
                                         </td>
                                     </tr>
                                 }
@@ -289,108 +316,51 @@
                                 var verdict = ManualSearchModel.VerdictName(candidate.Verdict);
                                 var isSelected = Model.Selected?.Identity == candidate.Identity;
                                 var headline = ManualSearchModel.Headline(candidate);
-                                <article class="bms-card @(isSelected ? "is-selected" : "")">
-                                    <div class="bms-card-head">
-                                        <strong>@candidate.Title</strong>
+                                <article class="bms-card @(isSelected ? "is-selected" : "")" id="@(isSelected ? "bms-selected-card" : null)" data-verdict="@verdict">
+                                    <a class="bms-card-link" href="@Href(isSelected ? null : candidate.Identity, fragment: isSelected ? null : "bms-selected-card")" aria-label="@ui["admin.manualSearch.select"]: @candidate.Title" aria-current="@(isSelected ? "true" : null)">
+                                        <span class="bms-card-check" aria-hidden="true">@if (isSelected) { <partial name="_AdminIcon" model='"check"' /> }</span>
                                         <span class="bms-score bms-score-@verdict">@(candidate.Score?.ToString() ?? "–")</span>
-                                    </div>
+                                        <strong>@candidate.Title</strong>
+                                    </a>
+                                    <small>@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)] · @(candidate.Indexer ?? "—") · @ManualSearchModel.AgeText(ui, candidate.AgeDays) · @ManualSearchModel.Size(candidate.SizeBytes)</small>
                                     <div class="bms-card-tags">
-                                        <span class="bms-tag"><partial name="_ManualSearchIcon" model="@ManualSearchModel.TypeIcon(candidate.ReleaseType)" />@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)]</span>
                                         @if (candidate.Quality is not null)
                                         {
-                                            <span class="bms-tag">@candidate.Quality</span>
+                                            <span class="admin-tag admin-tag-text">@candidate.Quality</span>
                                         }
                                         @foreach (var language in candidate.AudioLanguages)
                                         {
-                                            <span class="bms-tag">@language</span>
+                                            <span class="admin-tag admin-tag-text">@language</span>
                                         }
-                                        <span class="bms-tag bms-tag-@verdict"><partial name="_ManualSearchIcon" model="verdict" />@ui[ManualSearchModel.ReasonKey(headline.Code)]</span>
                                     </div>
-                                    <small>@(candidate.Indexer ?? "—") · @ManualSearchModel.Size(candidate.SizeBytes) · @ManualSearchModel.AgeText(ui, candidate.AgeDays)@(candidate.ParsedUnit is null ? "" : " · " + candidate.ParsedUnit)</small>
-                                    <a class="button" asp-page="/Admin/ManualSearch" asp-route-id="@request.Id" asp-route-unit="@unitId" asp-route-tab="search"
-                                       asp-route-q="@Model.Query" asp-route-state="@Model.State" asp-route-sort="@Model.Sort" asp-route-indexer="@Model.Indexer" asp-route-type="@Model.ReleaseType" asp-route-quality="@Model.Quality"
-                                       asp-route-release="@candidate.Identity" aria-label="@ui["admin.manualSearch.inspect"]: @candidate.Title">@ui["admin.manualSearch.inspect"]</a>
+                                    @if (candidate.ParsedUnit is not null)
+                                    {
+                                        <small>@(candidate.ParsedTitle is null ? "" : candidate.ParsedTitle + " · ")@candidate.ParsedUnit</small>
+                                    }
+                                    <div class="bms-card-tags">
+                                        <span class="admin-tag admin-tag-@ManualSearchModel.VerdictTone(candidate.Verdict)" data-verdict="@verdict"><partial name="_ManualSearchIcon" model="verdict" />@ui[ManualSearchModel.ReasonKey(headline.Code)]</span>
+                                    </div>
+                                    @if (isSelected)
+                                    {
+                                        <div class="bms-card-detail">
+                                            <partial name="_ManualSearchDetail" model="Model" view-data='new ViewDataDictionary(ViewData) { ["ShowAction"] = false }' />
+                                        </div>
+                                    }
                                 </article>
                             }
                         </div>
                     </div>
 
-                    <aside class="bms-detail" aria-label="@ui["admin.manualSearch.selected"]">
-                        @if (Model.Selected is { } chosen)
-                        {
-                            var chosenVerdict = ManualSearchModel.VerdictName(chosen.Verdict);
-                            <h3>@ui["admin.manualSearch.selected"]</h3>
-                            <strong>@chosen.Title</strong>
-                            <div class="bms-detail-tags">
-                                <span class="bms-tag">@ui[ManualSearchModel.TypeKey(chosen.ReleaseType)]</span>
-                                @if (chosen.Indexer is not null)
-                                {
-                                    <span class="bms-tag">@chosen.Indexer</span>
-                                }
-                                <span class="bms-tag bms-tag-@chosenVerdict"><partial name="_ManualSearchIcon" model="chosenVerdict" />@ui["admin.manualSearch.state." + chosenVerdict]</span>
+                    @if (Model.Selected is { } chosen)
+                    {
+                        <aside class="bms-detail bms-detail-drawer" id="bms-selected" aria-label="@ui["admin.manualSearch.selected"]">
+                            <div class="bms-detail-head">
+                                <strong>@chosen.Title</strong>
+                                <a class="admin-icon-button" href="@Href()" aria-label="@ui["admin.manualSearch.closeDetails"]" title="@ui["admin.manualSearch.closeDetails"]">&times;</a>
                             </div>
-                            <dl class="bms-facts">
-                                <div><dt>@ui["admin.manualSearch.col.score"]</dt><dd>@(chosen.Score?.ToString() ?? "–")</dd></div>
-                                <div><dt>@ui["admin.manualSearch.col.size"]</dt><dd>@ManualSearchModel.Size(chosen.SizeBytes)</dd></div>
-                                <div><dt>@ui["admin.manualSearch.col.age"]</dt><dd>@ManualSearchModel.AgeText(ui, chosen.AgeDays)</dd></div>
-                                <div><dt>@ui["admin.manualSearch.filter.quality"]</dt><dd>@(chosen.Quality ?? "—")</dd></div>
-                                <div><dt>@ui["admin.manualSearch.col.language"]</dt><dd>@(chosen.AudioLanguages.Count > 0 ? string.Join(" / ", chosen.AudioLanguages) : "—")</dd></div>
-                                <div><dt>@ui["admin.manualSearch.subtitles"]</dt><dd>@(chosen.SubtitleLanguages.Count > 0 ? string.Join(" / ", chosen.SubtitleLanguages) : "—")</dd></div>
-                                <div><dt>@ui["admin.manualSearch.group"]</dt><dd>@(chosen.ReleaseGroup ?? "—")</dd></div>
-                                <div><dt>@ui["admin.manualSearch.parsedIdentity"]</dt><dd>@(chosen.ParsedTitle is null ? "—" : chosen.ParsedTitle + (chosen.ParsedUnit is null ? "" : " · " + chosen.ParsedUnit))</dd></div>
-                                @if (target.Unit is { } requestedUnit)
-                                {
-                                    <div><dt>@ui["admin.manualSearch.requestedIdentity"]</dt><dd>@target.Title · @requestedUnit.Label</dd></div>
-                                }
-                            </dl>
-
-                            <div>
-                                <strong>@ui["admin.manualSearch.whyThisResult"]</strong>
-                                <ul class="bms-reasons">
-                                    @foreach (var reason in chosen.Reasons)
-                                    {
-                                        var reasonTone = reason.Code switch
-                                        {
-                                            ManualSearchReasonCode.MatchesTarget or ManualSearchReasonCode.ContainsTarget => "eligible",
-                                            ManualSearchReasonCode.LowerQuality or ManualSearchReasonCode.AlreadyTried => "warning",
-                                            _ => "rejected"
-                                        };
-                                        <li class="bms-reason-@reasonTone">
-                                            <partial name="_ManualSearchIcon" model="reasonTone" />
-                                            <span>@ui[ManualSearchModel.ReasonKey(reason.Code)]@(reason.Detail is null ? "" : ": " + reason.Detail)</span>
-                                        </li>
-                                    }
-                                </ul>
-                            </div>
-
-                            @if (chosen.ScoreBreakdown.Count > 0)
-                            {
-                                <div class="bms-breakdown">
-                                    <strong>@ui["admin.manualSearch.scoreBreakdown"]</strong>
-                                    <ul>
-                                        @foreach (var line in chosen.ScoreBreakdown)
-                                        {
-                                            <li>@line</li>
-                                        }
-                                    </ul>
-                                </div>
-                            }
-
-                            @if (chosen.CanGrab)
-                            {
-                                <form method="post" asp-page-handler="Grab">
-                                    <input type="hidden" name="id" value="@request.Id" />
-                                    <input type="hidden" name="unit" value="@unitId" />
-                                    <input type="hidden" name="releaseIdentity" value="@chosen.Identity" />
-                                    <button class="button button-primary" type="submit">@ui["admin.manualSearch.selectAndDownload"]</button>
-                                </form>
-                            }
-                        }
-                        else
-                        {
-                            <p class="muted">@ui["admin.manualSearch.chooseCandidate"]</p>
-                        }
-                    </aside>
+                            <partial name="_ManualSearchDetail" model="Model" />
+                        </aside>
+                    }
                 </div>
 
                 @if (Model.Selected is { CanGrab: true } sticky)
@@ -407,6 +377,10 @@
                             <button class="button button-primary" type="submit">@ui["admin.manualSearch.selectAndDownload"]</button>
                         </form>
                     </div>
+                }
+                else if (Model.Selected is null)
+                {
+                    <p class="muted bms-hint">@ui["admin.manualSearch.chooseCandidate"]</p>
                 }
             }
         }
@@ -462,7 +436,7 @@ else
             @foreach (var tried in target.TriedReleases)
             {
                 <li>
-                    <span class="bms-tag bms-tag-tried">@ui["admin.manualSearch.state.tried"]</span>
+                    <span class="admin-tag admin-tag-warning">@ui["admin.manualSearch.state.tried"]</span>
                     <span>@tried</span>
                 </li>
             }

@@ -163,12 +163,12 @@ public sealed class RequestPagesRenderTests
 
         StringAssert.Contains(all, "Pending Show");
         StringAssert.Contains(all, "Deutsch");
-        StringAssert.Contains(all, "admreq-state-pending");
-        StringAssert.Contains(all, "admreq-state-downloading");
+        StringAssert.Contains(all, "data-status=\"pending\"");
+        StringAssert.Contains(all, "data-status=\"downloading\"");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "button-primary\" type=\"submit\">\\s*Approve\\s*</button>").Count, "Only the pending request can be approved.");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "type=\"submit\">Reject</button>").Count);
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "type=\"submit\">Reopen</button>").Count);
-        StringAssert.Contains(all, "class=\"button\" href=\"/Admin/Wanted\"");
+        StringAssert.Contains(all, "class=\"admin-menu-item\" href=\"/Admin/Wanted\"");
         Assert.IsFalse(all.Contains("/Acquisition#wanted", StringComparison.Ordinal));
 
         var rejected = await host.GetHtmlAsync("/Admin/Requests?tab=rejected", asOwner: true);

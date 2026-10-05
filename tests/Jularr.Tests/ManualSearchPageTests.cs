@@ -65,9 +65,9 @@ public sealed class ManualSearchPageTests
         StringAssert.Contains(html, "Lower quality");
         StringAssert.Contains(html, "Rejected by profile");
         StringAssert.Contains(html, "Wrong title");
-        StringAssert.Contains(html, "bms-tag-eligible");
-        StringAssert.Contains(html, "bms-tag-warning");
-        StringAssert.Contains(html, "bms-tag-rejected");
+        StringAssert.Contains(html, "data-verdict=\"eligible\"");
+        StringAssert.Contains(html, "data-verdict=\"warning\"");
+        StringAssert.Contains(html, "data-verdict=\"rejected\"");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(html, "<h1[ >]").Count, "One page heading.");
         Assert.IsFalse(html.Contains("indexer.invalid", StringComparison.Ordinal), "Provider download URLs never reach the browser.");
         Assert.IsFalse(html.Contains("Select and download", StringComparison.Ordinal), "Nothing is selected yet, so nothing can be downloaded.");
@@ -92,6 +92,26 @@ public sealed class ManualSearchPageTests
         StringAssert.Contains(chosen, "Why this result");
         Assert.IsFalse(refused.Contains("Select and download", StringComparison.Ordinal), "A rejected identity has no download action.");
         StringAssert.Contains(refused, "Wrong title");
+    }
+
+    [TestMethod]
+    public async Task ASelectedCandidateOpensOneDrawerAndOneExpandedCardThatCloseWithoutDownloading()
+    {
+        await using var video = await MovieHostAsync();
+        var request = await video.CreateApprovedAsync();
+        await using var page = await PageHost.CreateAsync(video);
+        var eligible = await IdentityOfAsync(video, request.Id, "Dune.2021.1080p.WEB-DL.x264-GROUP");
+
+        var none = await page.GetHtmlAsync($"/Admin/ManualSearch?id={request.Id}");
+        var chosen = await page.GetHtmlAsync($"/Admin/ManualSearch?id={request.Id}&release={Uri.EscapeDataString(eligible)}");
+
+        Assert.IsFalse(none.Contains("bms-detail-drawer", StringComparison.Ordinal), "Nothing is selected, so the table has the whole width.");
+        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(chosen, "<aside class=\"bms-detail bms-detail-drawer\"").Count);
+        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(chosen, "class=\"bms-card-detail\"").Count);
+        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(chosen, "class=\"bms-detail-action\"").Count, "The phone card leaves the download action to the sticky bar.");
+        StringAssert.Contains(chosen, "aria-label=\"Close details\"");
+        StringAssert.Contains(chosen, "data-verdict=\"eligible\"");
+        Assert.AreEqual(0, video.Environment.Client.Grabs.Count, "Selecting never downloads.");
     }
 
     [TestMethod]

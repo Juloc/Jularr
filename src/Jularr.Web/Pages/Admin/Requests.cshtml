@@ -10,7 +10,11 @@
 @section Head {
     <link rel="stylesheet" href="~/css/acquisition.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/requests.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-requests.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
 }
 
 <header class="page-header">
@@ -159,7 +163,7 @@
                                     {
                                         <strong class="admreq-title">@request.Title</strong>
                                     }
-                                    <span class="admreq-kind">@ui["admin.requests.kind." + AcquisitionAccessNames.Kind(request.Kind)]</span>
+                                    <span class="admin-tag admin-tag-text" data-kind="@AcquisitionAccessNames.Kind(request.Kind)">@ui["admin.requests.kind." + AcquisitionAccessNames.Kind(request.Kind)]</span>
                                     @if (!string.IsNullOrWhiteSpace(request.Subtitle))
                                     {
                                         <small>@request.Subtitle</small>
@@ -188,7 +192,7 @@
                                 }
                                 else
                                 {
-                                    <span aria-hidden="true">&mdash;</span>
+                                    <span class="admreq-none" aria-hidden="true">&mdash;</span>
                                 }
                                 @if (options.Count > 0)
                                 {
@@ -203,20 +207,34 @@
                                 </time>
                             </td>
                             <td class="admreq-cell-state">
-                                <span class="admreq-state admreq-state-@status">
+                                <span class="admin-tag admin-tag-@AdminStatusTone.Of(request.Status)" data-status="@status">
                                     <partial name="_RequestStatusIcon" model="status" />
                                     @ui["requests.status." + status]
                                 </span>
                             </td>
                             <td class="admreq-cell-actions">
+                                @{
+                                    var waiting = request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed;
+                                    var viewUrl = request.Status != AcquisitionRequestStatus.Pending ? Model.ViewUrl(request) : null;
+                                    var manualUrl = waiting && isVideo ? Url.Page("/Admin/ManualSearch", new { id = request.Id })
+                                        : waiting && request.Kind == MediaAcquisitionKind.Book ? Url.Page("/Admin/BookManualSearch", new { id = request.Id })
+                                        : null;
+                                    var manageUrl = Model.VideoWorks.TryGetValue(request.Id, out var work) && request.Status != AcquisitionRequestStatus.Pending
+                                        ? VideoWorkLinks.AdminPath(request.Kind, work.WorkId)
+                                        : null;
+                                    var inWanted = request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Searching
+                                        or AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing
+                                        && (request.Kind == MediaAcquisitionKind.Anime || isVideo);
+                                    var searchNow = request.Status == AcquisitionRequestStatus.Approved && (isBookLike || isVideo);
+                                    var viewIsPrimary = viewUrl is not null && !waiting && request.Status != AcquisitionRequestStatus.Rejected;
+                                    var hasMenu = inWanted || manageUrl is not null || waiting || (viewUrl is not null && !viewIsPrimary);
+                                }
                                 <div class="admreq-actions">
                                     @if (request.Status is AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Failed)
                                     {
                                         <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button button-primary" type="submit">
-                                                @(request.Status == AcquisitionRequestStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.approve"])
-                                            </button>
+                                            <button class="button button-primary" type="submit">@(request.Status == AcquisitionRequestStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.approve"])</button>
                                         </form>
                                     }
                                     @if (request.Status == AcquisitionRequestStatus.Pending)
@@ -226,41 +244,6 @@
                                             <button class="button button-danger" type="submit">@ui["admin.requests.reject"]</button>
                                         </form>
                                     }
-                                    @if (request.Status == AcquisitionRequestStatus.Approved && (isBookLike || isVideo))
-                                    {
-                                        <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
-                                            <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button" type="submit">@ui["admin.requests.searchNow"]</button>
-                                        </form>
-                                    }
-                                    @if (isVideo && request.Status is (AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed))
-                                    {
-                                        <a class="button" asp-page="/Admin/ManualSearch" asp-route-id="@request.Id">@ui["admin.wanted.manualSearch"]</a>
-                                    }
-                                    @if (request.Kind == MediaAcquisitionKind.Book
-                                        && request.Status is (AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed))
-                                    {
-                                        <a class="button"
-                                           asp-page="/Admin/BookManualSearch"
-                                           asp-route-id="@request.Id">@ui["admin.wanted.manualSearch"]</a>
-                                    }
-                                    @if (request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Searching
-                                        or AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing
-                                        && (request.Kind == MediaAcquisitionKind.Anime || isVideo))
-                                    {
-                                        <a class="button" asp-page="/Admin/Wanted">@ui["admin.requests.wanted"]</a>
-                                    }
-                                    @if (Model.VideoWorks.TryGetValue(request.Id, out var work) && request.Status != AcquisitionRequestStatus.Pending)
-                                    {
-                                        <a class="button" href="@VideoWorkLinks.AdminPath(request.Kind, work.WorkId)">@ui["admin.media.manage"]</a>
-                                    }
-                                    @if (request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed)
-                                    {
-                                        <form method="post" asp-page-handler="Complete" asp-route-id="@request.Id">
-                                            <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button" type="submit">@ui["admin.requests.markDone"]</button>
-                                        </form>
-                                    }
                                     @if (request.Status == AcquisitionRequestStatus.Rejected)
                                     {
                                         <form method="post" asp-page-handler="Reopen" asp-route-id="@request.Id">
@@ -268,9 +251,47 @@
                                             <button class="button" type="submit">@ui["admin.requests.reopen"]</button>
                                         </form>
                                     }
-                                    @if (Model.ViewUrl(request) is { } viewUrl && request.Status != AcquisitionRequestStatus.Pending)
+                                    @if (viewIsPrimary)
                                     {
-                                        <a class="button" href="@viewUrl">@ui["admin.requests.viewMedia"]</a>
+                                        <a class="admin-icon-button admin-icon-button-labelled" href="@viewUrl"><partial name="_AdminIcon" model='"eye"' /><span class="admin-icon-label">@ui["admin.requests.viewMedia"]</span></a>
+                                    }
+                                    @if (searchNow)
+                                    {
+                                        <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
+                                            <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                            <button class="admin-icon-button" type="submit" title="@ui["admin.requests.searchNow"]"><partial name="_AdminIcon" model='"refresh"' /><span class="admin-icon-label">@ui["admin.requests.searchNow"]</span></button>
+                                        </form>
+                                    }
+                                    @if (manualUrl is not null)
+                                    {
+                                        <a class="admin-icon-button" href="@manualUrl" title="@ui["admin.wanted.manualSearch"]"><partial name="_AdminIcon" model='"search"' /><span class="admin-icon-label">@ui["admin.wanted.manualSearch"]</span></a>
+                                    }
+                                    @if (hasMenu)
+                                    {
+                                        <details class="admin-menu">
+                                            <summary class="admin-icon-button" aria-label="@ui["admin.menu.more"]" title="@ui["admin.menu.more"]"><partial name="_AdminIcon" model='"more"' /></summary>
+                                            <div class="admin-menu-list">
+                                                @if (viewUrl is not null && !viewIsPrimary)
+                                                {
+                                                    <a class="admin-menu-item" href="@viewUrl">@ui["admin.requests.viewMedia"]</a>
+                                                }
+                                                @if (inWanted)
+                                                {
+                                                    <a class="admin-menu-item" asp-page="/Admin/Wanted">@ui["admin.requests.wanted"]</a>
+                                                }
+                                                @if (manageUrl is not null)
+                                                {
+                                                    <a class="admin-menu-item" href="@manageUrl">@ui["admin.media.manage"]</a>
+                                                }
+                                                @if (waiting)
+                                                {
+                                                    <form method="post" asp-page-handler="Complete" asp-route-id="@request.Id">
+                                                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                                        <button class="admin-menu-item" type="submit">@ui["admin.requests.markDone"]</button>
+                                                    </form>
+                                                }
+                                            </div>
+                                        </details>
                                     }
                                 </div>
                             </td>

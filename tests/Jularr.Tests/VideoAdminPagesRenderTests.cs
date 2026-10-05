@@ -24,12 +24,12 @@ public sealed class VideoAdminPagesRenderTests
         StringAssert.Contains(html, $"href=\"/Admin/ManualSearch?id={movieRequest.Id:D}\"");
 
         StringAssert.Contains(html, "Dune");
-        StringAssert.Contains(html, "admwant-tag-movie");
-        StringAssert.Contains(html, "admwant-state-requested");
+        StringAssert.Contains(html, "data-kind=\"movie\"");
+        StringAssert.Contains(html, "data-status=\"requested\"");
         StringAssert.Contains(html, $"href=\"/Library/Movie/{movie.Work.Id:D}\"");
         StringAssert.Contains(html, $"href=\"/Admin/Media/movie/{movie.Work.Id:D}\"");
-        Assert.AreEqual(1, Regex.Matches(html, @">\s*Search now\s*</button>").Count);
-        Assert.AreEqual(0, Regex.Matches(html, @">\s*Retry\s*</button>").Count);
+        Assert.AreEqual(1, Regex.Matches(html, @"admin-icon-label"">Search now</span>").Count);
+        Assert.AreEqual(0, Regex.Matches(html, @"admin-icon-label"">Retry</span>").Count);
         Assert.IsFalse(html.Contains("handler=SearchAnime", StringComparison.Ordinal), "A Movie has no anime search.");
         Assert.IsFalse(html.Contains("BookManualSearch", StringComparison.Ordinal), "Manual search is offered only where it exists.");
 
@@ -63,7 +63,7 @@ public sealed class VideoAdminPagesRenderTests
 
         StringAssert.Contains(html, $"href=\"/Library/Movie/{movie.Work.Id:D}\"");
         StringAssert.Contains(html, $"href=\"/Admin/Media/movie/{movie.Work.Id:D}\"");
-        Assert.AreEqual(1, Regex.Matches(html, @">\s*Search now\s*</button>").Count);
+        Assert.AreEqual(1, Regex.Matches(html, @"admin-icon-label"">Search now</span>").Count);
         StringAssert.Contains(html, $"href=\"/Admin/ManualSearch?id={request.Id:D}\"");
         Assert.IsFalse(html.Contains("/Search?q=", StringComparison.Ordinal), "View media never goes to a search.");
         StringAssert.Contains(html, "href=\"/Admin/Wanted\"");

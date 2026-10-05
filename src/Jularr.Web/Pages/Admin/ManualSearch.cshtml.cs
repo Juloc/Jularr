@@ -158,6 +158,24 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
 
     public static string VerdictName(ManualSearchVerdict verdict) => verdict.ToString().ToLowerInvariant();
 
+    /// <summary>The Admin tag tone (admin-controls.css) of a verdict; the verdict label always sits next to it.</summary>
+    public static string VerdictTone(ManualSearchVerdict verdict) =>
+        verdict switch
+        {
+            ManualSearchVerdict.Eligible => "success",
+            ManualSearchVerdict.Warning => "warning",
+            _ => "danger"
+        };
+
+    /// <summary>The verdict a single reason supports: a match is eligible, a lower quality or earlier try warns, everything else rejects.</summary>
+    public static string ReasonTone(ManualSearchReasonCode code) =>
+        code switch
+        {
+            ManualSearchReasonCode.MatchesTarget or ManualSearchReasonCode.ContainsTarget => "eligible",
+            ManualSearchReasonCode.LowerQuality or ManualSearchReasonCode.AlreadyTried => "warning",
+            _ => "rejected"
+        };
+
     public static string ReasonKey(ManualSearchReasonCode code) => $"admin.manualSearch.reason.{char.ToLowerInvariant(code.ToString()[0])}{code.ToString()[1..]}";
 
     public static string TypeKey(ManualSearchReleaseType type) => $"admin.manualSearch.type.{char.ToLowerInvariant(type.ToString()[0])}{type.ToString()[1..]}";

@@ -16,9 +16,34 @@
         (AdminWantedTab.Searching, ui["admin.wanted.status.searching"]),
         (AdminWantedTab.Failed, ui["admin.wanted.status.failed"])
     };
+    string? ManualSearchUrl(WantedItem item)
+    {
+        if (!item.CanSearch)
+        {
+            return null;
+        }
+
+        if (item.Source == WantedSource.Request && item.Kind == MediaAcquisitionKind.Book)
+        {
+            return Url.Page("/Admin/BookManualSearch", new { id = item.RequestId });
+        }
+
+        if (item.Source == WantedSource.Request && item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv)
+        {
+            return Url.Page("/Admin/ManualSearch", new { id = item.RequestId, unit = item.UnitId });
+        }
+
+        return item.Source == WantedSource.Monitored && item.Season is not null && item.Episode is not null
+            ? Url.Page("/Acquisition/Index", null, new { search = item.AnimeKey, season = item.Season, episode = item.Episode, mode = "Episode" }, null, null, "search-results")
+            : null;
+    }
 }
 @section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-wanted.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
 }
 
 <header class="page-header">
@@ -131,7 +156,6 @@
                 <tbody>
                     @foreach (var item in list.Items)
                     {
-                        var kindName = AcquisitionAccessNames.Kind(item.Kind);
                         var statusName = AdminWantedQuery.StatusName(item.Status);
                         var unit = Model.UnitLabel(item);
                         var result = Model.ResultLabel(item);
@@ -159,7 +183,7 @@
                                 </div>
                             </td>
                             <td class="admwant-cell-type">
-                                <span class="admwant-tag admwant-tag-@kindName">@ui[MediaKindLabelKeys.Operation(item.Kind)]</span>
+                                <span class="admin-tag admin-tag-text" data-kind="@AcquisitionAccessNames.Kind(item.Kind)">@ui[MediaKindLabelKeys.Operation(item.Kind)]</span>
                             </td>
                             <td class="admwant-cell-desired">
                                 @if (languages.Length == 0 && item.ProfileName is null)
@@ -168,20 +192,20 @@
                                 }
                                 else
                                 {
-                                    <div class="admwant-stack">
-                                        @if (languages.Length > 0)
+                                    <div class="admwant-tags">
+                                        @foreach (var language in languages)
                                         {
-                                            <span>@string.Join(", ", languages)</span>
+                                            <span class="admin-tag admin-tag-text">@language</span>
                                         }
                                         @if (item.ProfileName is not null)
                                         {
-                                            <small>@item.ProfileName</small>
+                                            <span class="admin-tag admin-tag-text">@item.ProfileName</span>
                                         }
                                     </div>
                                 }
                             </td>
                             <td class="admwant-cell-status">
-                                <span class="admwant-state admwant-state-@statusName">
+                                <span class="admin-tag admin-tag-@AdminStatusTone.Of(item.Status)" data-status="@statusName">
                                     <partial name="_WantedIcon" model="@statusName" />
                                     @ui["admin.wanted.status." + statusName]
                                 </span>
@@ -207,56 +231,48 @@
                                 </div>
                             </td>
                             <td class="admwant-cell-actions">
+                                @{
+                                    var searchLabel = item.Status == WantedStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.searchNow"];
+                                    var manualUrl = ManualSearchUrl(item);
+                                    var manageUrl = item.Source == WantedSource.Monitored && item.AnimeId is { } managedId
+                                        ? "/Admin/Media/" + managedId
+                                        : item.WorkId is { } workId ? VideoWorkLinks.AdminPath(item.Kind, workId) : null;
+                                }
                                 <div class="admwant-actions">
                                     @if (item.CanSearch && item.Source == WantedSource.Request)
                                     {
                                         <form method="post" asp-page-handler="SearchRequest" asp-route-id="@item.RequestId">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button button-primary" type="submit">@(item.Status == WantedStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.searchNow"])</button>
+                                            <button class="admin-icon-button" type="submit" title="@searchLabel"><partial name="_AdminIcon" model='"refresh"' /><span class="admin-icon-label">@searchLabel</span></button>
                                         </form>
-                                    }
-                                    @if (item.CanSearch && item.Source == WantedSource.Request && item.Kind == MediaAcquisitionKind.Book)
-                                    {
-                                        <a class="button"
-                                           asp-page="/Admin/BookManualSearch"
-                                           asp-route-id="@item.RequestId">@ui["admin.wanted.manualSearch"]</a>
                                     }
                                     @if (item.CanSearch && item.Source == WantedSource.Monitored)
                                     {
                                         <form method="post" asp-page-handler="SearchAnime">
                                             <input type="hidden" name="animeKey" value="@item.AnimeKey" />
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button button-primary" type="submit">@ui["admin.requests.searchNow"]</button>
+                                            <button class="admin-icon-button" type="submit" title="@ui["admin.requests.searchNow"]"><partial name="_AdminIcon" model='"refresh"' /><span class="admin-icon-label">@ui["admin.requests.searchNow"]</span></button>
                                         </form>
                                     }
-                                    @if (item.CanSearch && item.Source == WantedSource.Request && item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv)
+                                    @if (manualUrl is not null)
                                     {
-                                        <a class="button"
-                                           asp-page="/Admin/ManualSearch"
-                                           asp-route-id="@item.RequestId"
-                                           asp-route-unit="@item.UnitId">@ui["admin.wanted.manualSearch"]</a>
+                                        <a class="admin-icon-button" href="@manualUrl" title="@ui["admin.wanted.manualSearch"]"><partial name="_AdminIcon" model='"search"' /><span class="admin-icon-label">@ui["admin.wanted.manualSearch"]</span></a>
                                     }
-                                    @if (item.Source == WantedSource.Monitored && item.CanSearch && item.Season is not null && item.Episode is not null)
+                                    @if (manageUrl is not null || item.DetailUrl is not null)
                                     {
-                                        <a class="button"
-                                           asp-page="/Acquisition/Index"
-                                           asp-route-search="@item.AnimeKey"
-                                           asp-route-season="@item.Season"
-                                           asp-route-episode="@item.Episode"
-                                           asp-route-mode="Episode"
-                                           asp-fragment="search-results">@ui["admin.wanted.manualSearch"]</a>
-                                    }
-                                    @if (item.Source == WantedSource.Monitored && item.AnimeId is { } managedId)
-                                    {
-                                        <a class="button" href="/Admin/Media/@managedId">@ui["admin.media.manage"]</a>
-                                    }
-                                    @if (item.WorkId is { } workId)
-                                    {
-                                        <a class="button" href="@VideoWorkLinks.AdminPath(item.Kind, workId)">@ui["admin.media.manage"]</a>
-                                    }
-                                    @if (item.DetailUrl is { } detailUrl)
-                                    {
-                                        <a class="button" href="@detailUrl">@ui["admin.requests.viewMedia"]</a>
+                                        <details class="admin-menu">
+                                            <summary class="admin-icon-button" aria-label="@ui["admin.menu.more"]" title="@ui["admin.menu.more"]"><partial name="_AdminIcon" model='"more"' /></summary>
+                                            <div class="admin-menu-list">
+                                                @if (manageUrl is not null)
+                                                {
+                                                    <a class="admin-menu-item" href="@manageUrl">@ui["admin.media.manage"]</a>
+                                                }
+                                                @if (item.DetailUrl is { } detailUrl)
+                                                {
+                                                    <a class="admin-menu-item" href="@detailUrl">@ui["admin.requests.viewMedia"]</a>
+                                                }
+                                            </div>
+                                        </details>
                                     }
                                 </div>
                             </td>
