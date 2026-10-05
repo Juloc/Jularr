@@ -15,10 +15,10 @@ public sealed class PlaybackAdaptationTests
     private static readonly DateTimeOffset s_start = new(2026, 10, 6, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>A transcode delivering 3.8 Mbps (the 4 Mbps rung) of a 12 Mbps source: the next tier is 8 Mbps, which needs 12 Mbps of delivery.</summary>
-    private static PlaybackPlan AutoPlan(PlaybackQualityPreset requested = PlaybackQualityPreset.Auto, int delivered = 3_800, int? source = 12_000) =>
-        Transcode(Video()) with
+    private static PlaybackPlan AutoPlan(PlaybackQualityPreset requested = PlaybackQualityPreset.Auto, int delivered = 3_800, int? source = 12_000, int? limit = 4_000, int maxHeight = 1080) =>
+        Transcode(Video(maxHeight: maxHeight)) with
         {
-            Quality = new PlaybackQualityResolution(requested, PlaybackNetworkClass.Remote, delivered, PlaybackLimitSource.Network, source, delivered),
+            Quality = new PlaybackQualityResolution(requested, PlaybackNetworkClass.Remote, limit, PlaybackLimitSource.Network, source, delivered),
             Buffer = PlaybackBufferPolicy.For(PlaybackBufferPreset.Normal, PlaybackDeliveryMode.Transcode)
         };
 
@@ -125,33 +125,112 @@ public sealed class PlaybackAdaptationTests
     }
 
     [TestMethod]
-    public void ALowBufferStepsDownOnlyWhileTheRateIsFalling()
+    public void ALowBufferStepsDownOnlyAfterItStayedLowWhilePlayingAndTheRateIsFalling()
     {
-        var stable = new Harness();
-        stable.PlayUntil(20);
-        stable.Report(buffer: PlaybackAutoQuality.LowBufferSeconds - 0.1, throughput: 13_000);
-        Assert.AreEqual(PlaybackAdaptationAdvice.None, stable.Advice.Decision.Advice, "A short buffer with plenty of delivery rate recovers by itself.");
+        var low = PlaybackAutoQuality.LowBufferSeconds - 0.1;
 
         var starving = new Harness();
         starving.PlayUntil(20);
-        starving.Report(buffer: PlaybackAutoQuality.LowBufferSeconds - 0.1, throughput: 3_000);
-        Assert.AreEqual(PlaybackAdaptationAdvice.StepDown, starving.Advice.Decision.Advice, "Delivery below the delivered bitrate cannot sustain it.");
-        Assert.AreEqual(PlaybackAdaptationReason.LowBuffer, starving.Advice.Decision.Reason);
+        starving.Report(buffer: low, throughput: 3_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, starving.Advice.Decision.Advice, "One short buffer is what every seek leaves behind.");
+        starving.Report(buffer: low, throughput: 3_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, starving.Advice.Decision.Advice, "5 s of it is still not a pattern.");
+        starving.Report(buffer: low, throughput: 3_000);
+        var decision = starving.Advice.Decision;
+        Assert.AreEqual(PlaybackAdaptationAdvice.StepDown, decision.Advice, "10 s of continuous playing with a short buffer and a rate below the tier's bitrate.");
+        Assert.AreEqual(PlaybackAdaptationReason.LowBuffer, decision.Reason);
+
+        var stable = new Harness();
+        stable.PlayUntil(20);
+        for (var index = 0; index < 4; index++)
+        {
+            stable.Report(buffer: low, throughput: 13_000);
+        }
+
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, stable.Advice.Decision.Advice, "A short buffer with plenty of delivery rate recovers by itself.");
 
         var falling = new Harness();
         falling.PlayUntil(20, throughput: 16_000);
-        falling.Report(buffer: 3, throughput: 12_000);
+        for (var index = 0; index < 3; index++)
+        {
+            falling.Report(buffer: 3, throughput: 12_000);
+        }
+
         Assert.AreEqual(PlaybackAdaptationAdvice.StepDown, falling.Advice.Decision.Advice, "A rate that fell to 75 % within 30 s is falling.");
 
         var unknown = new Harness();
         unknown.PlayUntil(20);
-        unknown.Report(buffer: 1, throughput: null);
+        for (var index = 0; index < 4; index++)
+        {
+            unknown.Report(buffer: 1, throughput: null);
+        }
+
         Assert.AreEqual(PlaybackAdaptationAdvice.None, unknown.Advice.Decision.Advice, "Without a measured rate the low buffer alone says nothing.");
 
         var boundary = new Harness();
         boundary.PlayUntil(20);
-        boundary.Report(buffer: PlaybackAutoQuality.LowBufferSeconds, throughput: 100);
+        for (var index = 0; index < 4; index++)
+        {
+            boundary.Report(buffer: PlaybackAutoQuality.LowBufferSeconds, throughput: 100);
+        }
+
         Assert.AreEqual(PlaybackAdaptationAdvice.None, boundary.Advice.Decision.Advice, "Exactly at the low-buffer threshold is not below it.");
+    }
+
+    [TestMethod]
+    public void ASeekOrAStallInTheMiddleRestartsTheLowBufferWindow()
+    {
+        var low = PlaybackAutoQuality.LowBufferSeconds - 0.1;
+        var harness = new Harness();
+        harness.PlayUntil(20);
+        harness.Report(buffer: low, throughput: 3_000);
+        harness.Report(state: PlaybackClientState.Buffering, buffer: low, throughput: 3_000);
+        harness.Report(buffer: low, throughput: 3_000);
+        harness.Report(buffer: low, throughput: 3_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, harness.Advice.Decision.Advice, "The player was seeking or waiting 10 s ago: only 5 s of continuous playing.");
+
+        harness.Report(buffer: low, throughput: 3_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.StepDown, harness.Advice.Decision.Advice);
+
+        var gap = new Harness();
+        gap.PlayUntil(20);
+        gap.Report(buffer: low, throughput: 3_000);
+        gap.Report(afterSeconds: 20, buffer: low, throughput: 3_000);
+        gap.Report(buffer: low, throughput: 3_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, gap.Advice.Decision.Advice, "A hole of 20 s in the reports breaks the window.");
+    }
+
+    [TestMethod]
+    public void ARaiseThatWouldDeliverTheSamePictureIsNeverAdvised()
+    {
+        // 10.2 Mbps delivered under a 12 Mbps limit: the 1080p default bitrate, not the limit, holds the plan back.
+        var capped = new Harness(AutoPlan(delivered: 10_200, source: 25_000, limit: 12_000));
+        capped.PlayUntil(125, throughput: 60_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, capped.Advice.Decision.Advice, "The next tier would deliver about the same.");
+
+        var heightCapped = new Harness(AutoPlan(delivered: 3_900, source: 30_000, limit: 4_000, maxHeight: 480));
+        heightCapped.PlayUntil(125, throughput: 60_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, heightCapped.Advice.Decision.Advice, "A 480p cap of the device or server stays under the next tier.");
+
+        var unlimited = new Harness(AutoPlan(delivered: 3_900, source: 30_000, limit: null));
+        unlimited.PlayUntil(125, throughput: 60_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, unlimited.Advice.Decision.Advice, "A plan no limit held back has nothing to gain.");
+
+        var held = new Harness(AutoPlan(delivered: 3_900, source: 30_000, limit: 4_000));
+        held.PlayUntil(125, throughput: 60_000);
+        Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, held.Advice.Decision.Advice, "A plan its 4 Mbps limit held back does gain from 8 Mbps.");
+        Assert.AreEqual(8_000, held.Advice.Decision.TierKbps, "The decision carries the tier the next plan must use.");
+    }
+
+    [TestMethod]
+    public void CapacityFactsExpireAfterTheirMemory()
+    {
+        var directive = new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.None, null, null, 2_000, [PlaybackHardwareBackend.Nvenc], s_start);
+
+        Assert.AreEqual(2_000, directive.Current(s_start + PlaybackAdaptation.CapacityMemory).CeilingKbps, "Still remembered at the limit.");
+        var expired = directive.Current(s_start + PlaybackAdaptation.CapacityMemory + TimeSpan.FromSeconds(1));
+        Assert.IsNull(expired.CeilingKbps);
+        Assert.AreEqual(0, expired.SlowBackends.Count);
     }
 
     [TestMethod]
@@ -263,11 +342,11 @@ public sealed class PlaybackAdaptationTests
     [TestMethod]
     public void AStepUpNeverExceedsTheSourceTheCeilingOrAnEncoderWithoutMargin()
     {
-        var atSource = new Harness(AutoPlan(delivered: 11_900, source: 12_000));
+        var atSource = new Harness(AutoPlan(delivered: 11_900, source: 12_000, limit: 12_000));
         atSource.PlayUntil(125, throughput: 60_000);
         Assert.AreEqual(PlaybackAdaptationAdvice.None, atSource.Advice.Decision.Advice, "Already at the source: no tier above.");
 
-        var ceiling = new Harness(AutoPlan(), new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.None, null, 4_000, []));
+        var ceiling = new Harness(AutoPlan(), new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.None, null, null, 4_000, []));
         ceiling.PlayUntil(125);
         Assert.AreEqual(PlaybackAdaptationAdvice.None, ceiling.Advice.Decision.Advice, "The encoder already failed to sustain 8 Mbps for this title.");
 
@@ -290,9 +369,10 @@ public sealed class PlaybackAdaptationTests
         Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, first.Advice.Decision.Advice);
 
         // The player follows the advice: a new session replaces the old one, planned at the higher tier.
-        var directive = first.Store.NextDirective(first.Session);
+        var directive = first.Store.NextDirective(first.Session, PlaybackAdaptationAdvice.StepUp);
         Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, directive.Advice, "The next plan is made under the advice the session ended with.");
-        var next = first.Store.Create(Viewer, first.Session.Target, first.Session.MediaFileId, first.Session.SourcePath, 1400, AutoPlan(delivered: 7_800), first.Session.Selections, first.Session.Id, adaptation: directive);
+        var old = first.Session;
+        var next = first.Store.Create(Viewer, old.Target, old.MediaFileId, old.SourcePath, 1400, AutoPlan(delivered: 7_800, limit: 8_000), old.Selections, old.Id, adaptation: directive);
 
         var seq = 100L;
         for (var elapsed = 5; elapsed < 120; elapsed += 5)
@@ -362,23 +442,23 @@ public sealed class PlaybackAdaptationTests
     public void TheNextPlansLimitFollowsTheDirective()
     {
         var network = new PlaybackNetworkConditions(PlaybackNetworkClass.Remote, EstimatedThroughputKbps: 6_000);
-        var up = new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.StepUp, PlaybackAdaptationReason.ThroughputHeadroom, null, []);
+        var up = new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.StepUp, PlaybackAdaptationReason.ThroughputHeadroom, 8_000, null, []);
 
-        var raised = PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Auto, network, 3_800, up, 12_000);
+        var raised = PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Auto, network, 3_800, up);
 
         Assert.AreEqual(8_000, raised.MaxKbps, "The live evidence outranks the startup hint of 4.2 Mbps.");
         Assert.AreEqual(PlaybackLimitSource.Headroom, raised.Source);
         Assert.AreEqual(4_200, PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Auto, network, 3_800).MaxKbps, "Without the advice nothing is raised.");
 
-        var down = new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.LowBuffer, null, []);
-        var lowered = PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Auto, network, 3_800, down, 12_000);
+        var down = new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.LowBuffer, null, null, []);
+        var lowered = PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Auto, network, 3_800, down);
         Assert.AreEqual(2_000, lowered.MaxKbps);
         Assert.AreEqual(PlaybackLimitSource.Stalls, lowered.Source);
 
-        var capped = new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.TranscodeTooSlow, 4_000, []);
-        Assert.AreEqual(4_000, PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Original, network, 8_000, capped, 12_000).MaxKbps, "A capacity ceiling caps even Original.");
-        Assert.AreEqual(PlaybackLimitSource.TranscodeSpeed, PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Mbps8, network, 8_000, capped, 12_000).Source);
-        Assert.AreEqual(2_000, PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Mbps2, network, 2_000, capped, 12_000).MaxKbps, "A lower selection stays.");
+        var capped = new PlaybackAdaptationDirective(PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.TranscodeTooSlow, null, 4_000, []);
+        Assert.AreEqual(4_000, PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Original, network, 8_000, capped).MaxKbps, "A capacity ceiling caps even Original.");
+        Assert.AreEqual(PlaybackLimitSource.TranscodeSpeed, PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Mbps8, network, 8_000, capped).Source);
+        Assert.AreEqual(2_000, PlaybackAutoQuality.Resolve(PlaybackQualityPreset.Mbps2, network, 2_000, capped).MaxKbps, "A lower selection stays.");
     }
 
     [TestMethod]
@@ -386,18 +466,18 @@ public sealed class PlaybackAdaptationTests
     {
         var slow = new PlaybackAdaptationDecision(PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.TranscodeTooSlow);
 
-        var lowered = PlaybackAdaptation.NextDirective(slow, PlaybackAdaptationDirective.None, 3_800, PlaybackHardwareBackend.Nvenc);
+        var lowered = PlaybackAdaptation.NextDirective(slow, PlaybackAdaptationDirective.None, 3_800, PlaybackHardwareBackend.Nvenc, s_start);
         Assert.AreEqual(2_000, lowered.CeilingKbps);
         Assert.AreEqual(0, lowered.SlowBackends.Count, "Lower quality comes first; the encoder is not blamed yet.");
 
-        var floor = PlaybackAdaptation.NextDirective(slow, lowered, 1_000, PlaybackHardwareBackend.Nvenc);
+        var floor = PlaybackAdaptation.NextDirective(slow, lowered, 1_000, PlaybackHardwareBackend.Nvenc, s_start);
         CollectionAssert.AreEqual(new[] { PlaybackHardwareBackend.Nvenc }, floor.SlowBackends.ToArray());
         Assert.IsNull(floor.CeilingKbps, "Another encoder starts from the requested tier again.");
 
-        var again = PlaybackAdaptation.NextDirective(slow, floor, 1_000, PlaybackHardwareBackend.Nvenc);
+        var again = PlaybackAdaptation.NextDirective(slow, floor, 1_000, PlaybackHardwareBackend.Nvenc, s_start);
         Assert.AreEqual(1, again.SlowBackends.Count, "The same encoder is recorded once.");
 
-        var kept = PlaybackAdaptation.NextDirective(new PlaybackAdaptationDecision(PlaybackAdaptationAdvice.StepUp, PlaybackAdaptationReason.ThroughputHeadroom), floor, 3_800, PlaybackHardwareBackend.Software);
+        var kept = PlaybackAdaptation.NextDirective(new PlaybackAdaptationDecision(PlaybackAdaptationAdvice.StepUp, PlaybackAdaptationReason.ThroughputHeadroom), floor, 3_800, PlaybackHardwareBackend.Software, s_start);
         CollectionAssert.AreEqual(floor.SlowBackends.ToArray(), kept.SlowBackends.ToArray(), "What the server learned about its capacity outlives a quality change.");
     }
 }

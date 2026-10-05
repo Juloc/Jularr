@@ -87,7 +87,7 @@ public static class PlaybackDecisionEngine
         var network = request.Network ?? new PlaybackNetworkConditions();
         var failed = request.FailedModes ?? new HashSet<PlaybackDeliveryMode>();
         var sourceKbps = media.OverallBitrateKbps;
-        var limit = PlaybackAutoQuality.Resolve(request.Quality, network, request.CurrentTargetKbps, request.Adaptation, sourceKbps);
+        var limit = PlaybackAutoQuality.Resolve(request.Quality, network, request.CurrentTargetKbps, request.Adaptation);
         var quality = new PlaybackQualityResolution(
             request.Quality,
             network.Class,
@@ -535,6 +535,7 @@ public static class PlaybackDecisionEngine
             PlaybackLimitSource.NetworkDefault => PlaybackReasonCodes.RemoteStartLimit,
             PlaybackLimitSource.Stalls => PlaybackReasonCodes.StallLimit,
             PlaybackLimitSource.TranscodeSpeed => PlaybackReasonCodes.TranscodeTooSlow,
+            PlaybackLimitSource.Headroom => PlaybackReasonCodes.QualityRaised,
             _ => PlaybackReasonCodes.BandwidthLimit
         };
 
@@ -628,19 +629,7 @@ public static class PlaybackDecisionEngine
                     ("output", maxHeight.ToString(CultureInfo.InvariantCulture)))));
         }
 
-        var targetKbps = DefaultVideoKbps(maxHeight);
-        if (limit.MaxKbps is { } max)
-        {
-            targetKbps = Math.Min(targetKbps, max - audioKbps);
-        }
-
-        if (media.OverallBitrateKbps is { } source)
-        {
-            // Never spend more than the source: a transcode cannot add quality.
-            targetKbps = Math.Min(targetKbps, source);
-        }
-
-        targetKbps = Math.Max(MinimumVideoKbps, targetKbps);
+        var targetKbps = TranscodeVideoKbps(maxHeight, limit.MaxKbps, audioKbps, media.OverallBitrateKbps);
 
         var toneMap = video.IsHdr && server.CanToneMap;
         if (video.IsHdr)
@@ -693,6 +682,26 @@ public static class PlaybackDecisionEngine
             quality with { DeliveredBitrateKbps = targetKbps + audioKbps },
             reasons,
             confidence);
+    }
+
+    /// <summary>
+    /// The video bitrate a transcode targets: the height's default, within the limit once the audio took its share, and never more than the
+    /// source (a transcode cannot add quality). The runtime adaptation asks the same function whether a higher tier would deliver more.
+    /// </summary>
+    public static int TranscodeVideoKbps(int outputHeight, int? limitKbps, int audioKbps, int? sourceKbps)
+    {
+        var target = DefaultVideoKbps(outputHeight);
+        if (limitKbps is { } max)
+        {
+            target = Math.Min(target, max - audioKbps);
+        }
+
+        if (sourceKbps is { } source)
+        {
+            target = Math.Min(target, source);
+        }
+
+        return Math.Max(MinimumVideoKbps, target);
     }
 
     public static int DefaultVideoKbps(int height) =>

@@ -38,10 +38,17 @@
     const adviceMinIntervalMs = 30000;
     const maxAdviceSwitches = 6;
     const adviceWindowMs = 600000;
+    // After a plan that failed or was not playable, advice is left alone for this long: the stream that still plays is better than a retry loop.
+    const adviceBackoffMs = 300000;
 
     const createAdviceGate = () => {
         let switches = [];
+        let blockedUntil = 0;
         return {
+            blocked: nowMs => nowMs < blockedUntil,
+            backOff(nowMs) {
+                blockedUntil = nowMs + adviceBackoffMs;
+            },
             // The switch times still inside the window, oldest first.
             recent(nowMs) {
                 switches = switches.filter(at => nowMs - at < adviceWindowMs);
@@ -54,8 +61,10 @@
     };
 
     // True (and the switch recorded) when the advice may be followed now.
-    const followAdvice = (gate, advice, { paused, busy }, nowMs) => {
-        if ((advice !== "step_down" && advice !== "step_up") || paused || busy) {
+    // handedOver: the system player or picture-in-picture owns the picture; whether that survives a source swap is not known, so the stream
+    // that plays is left alone.
+    const followAdvice = (gate, advice, { paused, busy, handedOver }, nowMs) => {
+        if ((advice !== "step_down" && advice !== "step_up") || paused || busy || handedOver === true || gate.blocked(nowMs)) {
             return false;
         }
 
@@ -68,6 +77,32 @@
         return true;
     };
 
+    // Asks for the advised plan while the current stream keeps playing and only installs it once it is confirmed playable. Resolves to
+    // "swapped", "stale" (another plan took over meanwhile; the orphan session is discarded), "unplayable" (unavailable or without a
+    // delivery) or "failed" (the request threw); the last two pause following advice and leave the playing stream untouched.
+    const followAdvisedPlan = async ({ advice, requestPlan, isStale, discardOrphan, backOff, warn, install }) => {
+        try {
+            const response = await requestPlan(advice);
+            if (isStale()) {
+                discardOrphan(response.sessionId);
+                return "stale";
+            }
+
+            if (!response.plan || response.plan.mode === "unavailable" || !response.delivery) {
+                backOff();
+                warn("The advised playback plan is not playable; the current stream keeps playing.", response.plan?.mode);
+                return "unplayable";
+            }
+
+            install(response);
+            return "swapped";
+        } catch (error) {
+            backOff();
+            warn("The advised playback plan could not be requested; the current stream keeps playing.", error);
+            return "failed";
+        }
+    };
+
     window.JularrStreamRecovery = Object.freeze({
         maxRecoveries,
         stableSeconds,
@@ -77,7 +112,9 @@
         adviceMinIntervalMs,
         maxAdviceSwitches,
         adviceWindowMs,
+        adviceBackoffMs,
         createAdviceGate,
-        followAdvice
+        followAdvice,
+        followAdvisedPlan
     });
 })();

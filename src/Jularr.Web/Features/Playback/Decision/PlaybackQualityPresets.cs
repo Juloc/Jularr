@@ -203,14 +203,13 @@ public static class PlaybackAutoQuality
         PlaybackQualityPreset preset,
         PlaybackNetworkConditions network,
         int? currentTargetKbps = null,
-        PlaybackAdaptationDirective? adaptation = null,
-        int? sourceKbps = null)
+        PlaybackAdaptationDirective? adaptation = null)
     {
         var limit = preset == PlaybackQualityPreset.Original
             ? PlaybackBitrateLimit.None
             : PlaybackQualityPresets.Step(preset) is { } step
                 ? new PlaybackBitrateLimit(step.BitrateKbps, PlaybackLimitSource.Preset, step.MaxHeight)
-                : ResolveAutomatic(network, currentTargetKbps, adaptation, sourceKbps);
+                : ResolveAutomatic(network, currentTargetKbps, adaptation);
 
         // What the server's encoder sustained is a capacity fact, not a preference: it caps every selection, a fixed tier included.
         return adaptation?.CeilingKbps is { } ceiling && (limit.MaxKbps is null || ceiling < limit.MaxKbps)
@@ -218,7 +217,7 @@ public static class PlaybackAutoQuality
             : limit;
     }
 
-    private static PlaybackBitrateLimit ResolveAutomatic(PlaybackNetworkConditions network, int? currentTargetKbps, PlaybackAdaptationDirective? adaptation, int? sourceKbps)
+    private static PlaybackBitrateLimit ResolveAutomatic(PlaybackNetworkConditions network, int? currentTargetKbps, PlaybackAdaptationDirective? adaptation)
     {
         PlaybackBitrateLimit limit;
         if (network.EstimatedThroughputKbps is > 0 and var throughput)
@@ -245,7 +244,7 @@ public static class PlaybackAutoQuality
         // A too-slow transcode is handled by the ceiling (and a backend change keeps the tier), so only evidence of the player's own struggle steps down here.
         var struggling = IsStruggling(network.RecentStalls, network.BufferSeconds) ||
                          adaptation is { Advice: PlaybackAdaptationAdvice.StepDown, Reason: not PlaybackAdaptationReason.TranscodeTooSlow };
-        if (adaptation is { Advice: PlaybackAdaptationAdvice.StepUp } && currentTargetKbps is > 0 and var delivered && PlaybackQualityPresets.TierAbove(delivered, sourceKbps) is { } up)
+        if (adaptation is { Advice: PlaybackAdaptationAdvice.StepUp, TierKbps: { } up })
         {
             // The advice rests on live evidence of the delivery rate, which outranks the startup hint the limit above came from.
             limit = new PlaybackBitrateLimit(up, PlaybackLimitSource.Headroom);

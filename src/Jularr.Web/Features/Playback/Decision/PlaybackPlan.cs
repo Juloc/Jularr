@@ -95,6 +95,7 @@ public static class PlaybackReasonCodes
     public const string TranscodingDisabled = "transcoding_disabled";
     public const string TranscoderBusy = "transcoder_busy";
     public const string TranscodeTooSlow = "transcode_too_slow";
+    public const string QualityRaised = "quality_raised";
     public const string TranscodeUnsustainable = "transcode_unsustainable";
     public const string TranscodeTargetUnsupported = "transcode_target_unsupported";
     public const string NoDeliveryTransport = "no_delivery_transport";

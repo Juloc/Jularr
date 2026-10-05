@@ -101,7 +101,13 @@ public enum PlaybackTranscodeSpeedState
     BelowTarget,
 
     /// <summary>The encode has stayed under real time: playback cannot keep up however long it buffers.</summary>
-    TooSlow
+    TooSlow,
+
+    /// <summary>
+    /// The speed is reported for diagnostics only. A progressive encode writes to the response, so a player that stops reading (pause, full
+    /// buffer, slow link) blocks ffmpeg and drags its cumulative speed down without any shortage of encoder capacity; it is never judged.
+    /// </summary>
+    Observed
 }
 
 /// <summary>The latest measured state of one session's transcode, as diagnostics and the adaptation read it.</summary>
@@ -138,13 +144,28 @@ public sealed class PlaybackTranscodeMeter(TimeProvider time)
     private readonly Lock _gate = new();
     private Run? _current;
 
-    /// <summary>Starts measuring a new encode on <paramref name="backend"/>; everything measured before is dropped.</summary>
-    public Run BeginRun(PlaybackHardwareBackend backend)
+    /// <summary>
+    /// Starts measuring a new encode on <paramref name="backend"/>; everything measured before is dropped. <paramref name="judgesSpeed"/> is
+    /// false for an encode whose speed also depends on how fast the client reads its output.
+    /// </summary>
+    public Run BeginRun(PlaybackHardwareBackend backend, bool judgesSpeed)
     {
         lock (_gate)
         {
-            _current = new Run(this, backend);
+            _current = new Run(this, backend, judgesSpeed);
             return _current;
+        }
+    }
+
+    /// <summary>Whether an encode was ever started for this session; a later start is a restart (seek, fallback) of what already runs.</summary>
+    public bool HasStarted
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _current is not null;
+            }
         }
     }
 
@@ -161,6 +182,7 @@ public sealed class PlaybackTranscodeMeter(TimeProvider time)
     {
         private readonly PlaybackTranscodeMeter _owner;
         private readonly PlaybackHardwareBackend _backend;
+        private readonly bool _judgesSpeed;
         private double? _speed;
         private double? _fps;
         private bool _warm;
@@ -168,10 +190,11 @@ public sealed class PlaybackTranscodeMeter(TimeProvider time)
         private DateTimeOffset? _belowRealTimeSince;
         private DateTimeOffset? _belowTargetSince;
 
-        internal Run(PlaybackTranscodeMeter owner, PlaybackHardwareBackend backend)
+        internal Run(PlaybackTranscodeMeter owner, PlaybackHardwareBackend backend, bool judgesSpeed)
         {
             _owner = owner;
             _backend = backend;
+            _judgesSpeed = judgesSpeed;
         }
 
         public void Record(PlaybackTranscodeSample sample)
@@ -207,6 +230,11 @@ public sealed class PlaybackTranscodeMeter(TimeProvider time)
             if (_lastAt is not { } lastAt || now - lastAt > StaleAfter)
             {
                 return new PlaybackTranscodeReading(PlaybackTranscodeSpeedState.Unknown, null, null, _backend);
+            }
+
+            if (!_judgesSpeed)
+            {
+                return new PlaybackTranscodeReading(PlaybackTranscodeSpeedState.Observed, _speed, _fps, _backend);
             }
 
             var state = !_warm

@@ -24,7 +24,8 @@ public sealed record PlaybackPlanInput(
     PlaybackNetworkReport? Network = null,
     IReadOnlySet<PlaybackDeliveryMode>? FailedModes = null,
     Guid? ReplacesSessionId = null,
-    bool Wake = true);
+    bool Wake = true,
+    PlaybackAdaptationAdvice FollowedAdvice = PlaybackAdaptationAdvice.None);
 
 /// <summary>
 /// The client's own view of its connection. Only measured values count as throughput;
@@ -253,7 +254,7 @@ public sealed class PlaybackPlanService(
 
         // The replaced session's advice and what the server learned about its own capacity for this title (a tier ceiling, encoders that could
         // not keep up) travel with the chain of re-plans of the title and nowhere else.
-        var directive = previous is not null && previous.Target == target ? sessions.NextDirective(previous) : PlaybackAdaptationDirective.None;
+        var directive = previous is not null && previous.Target == target ? sessions.NextDirective(previous, input.FollowedAdvice) : PlaybackAdaptationDirective.None;
         var resumePositionMs = videoProgress is null
             ? 0
             : (await videoProgress.GetAsync(

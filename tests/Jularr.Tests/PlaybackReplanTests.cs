@@ -1,6 +1,7 @@
 using System.Net;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Media.Compatibility;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Playback.Transcoding;
 
@@ -65,16 +66,23 @@ public sealed class PlaybackReplanTests
             return new Rig(fixture, clock, kit, media);
         }
 
-        public async Task<PlaybackPlanOutcome> PlanAsync(Guid? replaces = null, PlaybackQualityPreset? quality = null, MediaFile? media = null)
+        public async Task<PlaybackPlanOutcome> PlanAsync(
+            Guid? replaces = null,
+            PlaybackQualityPreset? quality = null,
+            MediaFile? media = null,
+            PlaybackAdaptationAdvice followed = PlaybackAdaptationAdvice.None,
+            bool hls = true)
         {
+            // Chromium with HLS: the transport whose encode speed is judged (a progressive encode is only observed).
             var input = new PlaybackPlanInput(
-                null,
+                ClientPlaybackCapabilities.FromProfile(PlaybackClientProfiles.Chromium, ClientKinds.Web, hls),
                 "web",
                 ChromeAgent,
                 IPAddress.Parse("203.0.113.9"),
                 Quality: quality,
                 ModePreference: PlaybackModePreference.AlwaysTranscode,
-                ReplacesSessionId: replaces);
+                ReplacesSessionId: replaces,
+                FollowedAdvice: followed);
             return (await Service.PlanAsync((media ?? Media).EpisodeId!.Value, Viewer, input, CancellationToken.None))!;
         }
 
@@ -173,6 +181,59 @@ public sealed class PlaybackReplanTests
     }
 
     [TestMethod]
+    public async Task AReplanForAnotherReasonNeverInheritsAnAdviceItDidNotName()
+    {
+        await using var rig = await Rig.CreateAsync(withHardware: false);
+        var first = await rig.PlanAsync();
+        var sequence = 0L;
+        for (var elapsed = 5; elapsed <= 125; elapsed += 5)
+        {
+            rig.Clock.Advance(TimeSpan.FromSeconds(5));
+            Assert.IsTrue(PlaybackTelemetryRules.TryValidate(new PlaybackTelemetryUpdate(++sequence, PlaybackClientState.Playing, 25, 19_000, 0, 0, elapsed), rig.Clock.GetUtcNow(), out var report));
+            rig.Store.ReportTelemetry(first.Session!.Id, Viewer, report);
+        }
+
+        Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, rig.Store.Advise(first.Session!.Id, Viewer)!.Decision.Advice);
+        var audioChange = await rig.PlanAsync(replaces: first.Session.Id);
+
+        Assert.AreEqual(Describe(first), Describe(audioChange), "The server advised a step up, but this re-plan did not follow it, so the tier stays.");
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, audioChange.Session!.Adaptation.Advice);
+    }
+
+    [TestMethod]
+    public async Task WhatWasLearnedAboutTheServersCapacityIsForgottenAfterTenMinutes()
+    {
+        await using var rig = await Rig.CreateAsync(withHardware: false);
+        var first = await rig.PlanAsync();
+        rig.RunTooSlow(first.Session!);
+        var lowered = await rig.PlanAsync(replaces: first.Session!.Id);
+        Assert.AreEqual(4_000, lowered.Plan.Quality.LimitKbps);
+
+        rig.Clock.Advance(PlaybackAdaptation.CapacityMemory + TimeSpan.FromSeconds(1));
+        var later = await rig.PlanAsync(replaces: lowered.Session!.Id);
+
+        Assert.AreEqual("libx264@8000/NetworkDefault", Describe(later), "A busy moment does not cap the title for the rest of the evening.");
+    }
+
+    [TestMethod]
+    public async Task AProgressiveEncodeIsObservedButNeverJudgedBecauseAStalledReaderSlowsIt()
+    {
+        await using var rig = await Rig.CreateAsync(withHardware: false);
+        var first = await rig.PlanAsync(hls: false);
+        Assert.AreEqual(PlaybackTransport.ProgressiveMp4, first.Plan.Transport);
+
+        rig.RunTooSlow(first.Session!);
+        var reading = rig.Store.Advise(first.Session!.Id, Viewer)!;
+
+        Assert.AreEqual(PlaybackTranscodeSpeedState.Observed, reading.Transcode.State);
+        Assert.AreEqual(0.6, reading.Transcode.Speed, "The speed still reaches the diagnostics.");
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, reading.Decision.Advice, "A browser that stops reading blocks ffmpeg; that is not a lack of encoder capacity.");
+        Assert.IsFalse(rig.Store.IsTranscodeOverloaded(hardwareEncoder: false), "One viewer's slow link never refuses the others.");
+        var again = await rig.PlanAsync(replaces: first.Session.Id, hls: false);
+        Assert.AreEqual(Describe(first), Describe(again));
+    }
+
+    [TestMethod]
     public async Task AFixedQualityTierIsLoweredToo()
     {
         await using var rig = await Rig.CreateAsync(withHardware: false);
@@ -228,9 +289,20 @@ public sealed class PlaybackReplanTests
         }
 
         Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, rig.Store.Advise(session.Id, Viewer)!.Decision.Advice);
-        var raised = await rig.PlanAsync(replaces: session.Id);
+        var raised = await rig.PlanAsync(replaces: session.Id, followed: PlaybackAdaptationAdvice.StepUp);
 
         Assert.AreEqual("libx264@12000/Headroom", Describe(raised));
         Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, raised.Session!.Adaptation.Advice, "The new session records what it was planned under.");
+        Assert.IsTrue(raised.Plan.Reasons.Any(x => x.Code == PlaybackReasonCodes.QualityRaised), "The raise has its own reason text, not a bandwidth claim.");
+
+        // The 1080p picture is capped by the height's default bitrate (10 Mbps), so 12 Mbps delivers about the same: no further advice.
+        for (var elapsed = 5; elapsed <= 125; elapsed += 5)
+        {
+            rig.Clock.Advance(TimeSpan.FromSeconds(5));
+            Assert.IsTrue(PlaybackTelemetryRules.TryValidate(new PlaybackTelemetryUpdate(++sequence, PlaybackClientState.Playing, 25, 40_000, 0, 0, elapsed), rig.Clock.GetUtcNow(), out var report));
+            Assert.IsTrue(rig.Store.ReportTelemetry(raised.Session.Id, Viewer, report));
+        }
+
+        Assert.AreEqual(PlaybackAdaptationAdvice.None, rig.Store.Advise(raised.Session.Id, Viewer)!.Decision.Advice, "Advice that would reload the source for the same picture is never given.");
     }
 }

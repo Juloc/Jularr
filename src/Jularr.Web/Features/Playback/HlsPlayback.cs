@@ -856,12 +856,8 @@ internal sealed class CacheUsage
 /// <summary>The real ffmpeg of an HLS session. Arguments are passed as a list, never through a shell.</summary>
 public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
 {
-    private const int MaxSummaryLength = 200;
-
     private readonly Process _process;
-    private readonly Lock _gate = new();
-    private readonly FfmpegProgressParser _progress = new();
-    private string _lastLine = "";
+    private readonly FfmpegStderrReader _stderr = new();
 
     private FfmpegHlsProcess(Process process)
     {
@@ -899,18 +895,13 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
         }
     }
 
-    public string ErrorSummary
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _lastLine;
-            }
-        }
-    }
+    public string ErrorSummary => _stderr.LastLine;
 
-    public event Action<PlaybackTranscodeSample>? ProgressReported;
+    public event Action<PlaybackTranscodeSample>? ProgressReported
+    {
+        add => _stderr.ProgressReported += value;
+        remove => _stderr.ProgressReported -= value;
+    }
 
     public static FfmpegHlsProcess Start(IReadOnlyList<string> arguments)
     {
@@ -939,7 +930,8 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
         }
 
         var wrapper = new FfmpegHlsProcess(process);
-        process.ErrorDataReceived += wrapper.OnErrorLine;
+        // ffmpeg prints the failing step last, and stderr must be drained anyway or a full pipe stalls the encoder.
+        process.ErrorDataReceived += (_, e) => wrapper._stderr.Feed(e.Data);
         process.BeginErrorReadLine();
         return wrapper;
     }
@@ -947,30 +939,4 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
     public void Kill() => _process.Kill(entireProcessTree: true);
 
     public void Dispose() => _process.Dispose();
-
-    // ffmpeg prints the failing step last, and stderr must be drained anyway or a full pipe stalls the encoder. Progress blocks share the pipe
-    // and must never replace the failing step as the summary.
-    private void OnErrorLine(object sender, DataReceivedEventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(e.Data))
-        {
-            return;
-        }
-
-        var line = e.Data.Trim();
-        if (_progress.TryFeed(line, out var sample))
-        {
-            if (sample is not null)
-            {
-                ProgressReported?.Invoke(sample);
-            }
-
-            return;
-        }
-
-        lock (_gate)
-        {
-            _lastLine = line.Length <= MaxSummaryLength ? line : line[..MaxSummaryLength];
-        }
-    }
 }

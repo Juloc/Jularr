@@ -112,7 +112,7 @@ public sealed class PlaybackTranscodeMeterTests
     {
         var clock = new ManualTimeProvider(s_start);
         var meter = new PlaybackTranscodeMeter(clock);
-        var run = meter.BeginRun(PlaybackHardwareBackend.Software);
+        var run = meter.BeginRun(PlaybackHardwareBackend.Software, judgesSpeed: true);
 
         run.Record(Sample(0.2, seconds: PlaybackTranscodeMeter.WarmUpOutputSeconds - 0.1));
         clock.Advance(PlaybackTranscodeMeter.SustainedFor * 3);
@@ -126,7 +126,7 @@ public sealed class PlaybackTranscodeMeterTests
     {
         var clock = new ManualTimeProvider(s_start);
         var meter = new PlaybackTranscodeMeter(clock);
-        var run = meter.BeginRun(PlaybackHardwareBackend.Software);
+        var run = meter.BeginRun(PlaybackHardwareBackend.Software, judgesSpeed: true);
 
         run.Record(Sample(0.99));
         Assert.AreEqual(PlaybackTranscodeSpeedState.Measuring, meter.Read().State, "One slow report proves nothing.");
@@ -148,7 +148,7 @@ public sealed class PlaybackTranscodeMeterTests
     {
         var clock = new ManualTimeProvider(s_start);
         var meter = new PlaybackTranscodeMeter(clock);
-        var run = meter.BeginRun(PlaybackHardwareBackend.Qsv);
+        var run = meter.BeginRun(PlaybackHardwareBackend.Qsv, judgesSpeed: true);
 
         void Hold(double speed)
         {
@@ -170,7 +170,7 @@ public sealed class PlaybackTranscodeMeterTests
     {
         var clock = new ManualTimeProvider(s_start);
         var meter = new PlaybackTranscodeMeter(clock);
-        var run = meter.BeginRun(PlaybackHardwareBackend.Software);
+        var run = meter.BeginRun(PlaybackHardwareBackend.Software, judgesSpeed: true);
 
         run.Record(Sample(0.6));
         clock.Advance(TimeSpan.FromSeconds(9));
@@ -191,13 +191,13 @@ public sealed class PlaybackTranscodeMeterTests
     {
         var clock = new ManualTimeProvider(s_start);
         var meter = new PlaybackTranscodeMeter(clock);
-        var first = meter.BeginRun(PlaybackHardwareBackend.Nvenc);
+        var first = meter.BeginRun(PlaybackHardwareBackend.Nvenc, judgesSpeed: true);
         first.Record(Sample(0.5));
         clock.Advance(PlaybackTranscodeMeter.SustainedFor);
         first.Record(Sample(0.5));
         Assert.AreEqual(PlaybackTranscodeSpeedState.TooSlow, meter.Read().State);
 
-        var second = meter.BeginRun(PlaybackHardwareBackend.Software);
+        var second = meter.BeginRun(PlaybackHardwareBackend.Software, judgesSpeed: true);
         Assert.AreEqual(PlaybackTranscodeSpeedState.Unknown, meter.Read().State, "A restart (seek, fallback, new plan) starts over.");
         first.Record(Sample(0.5));
         Assert.AreEqual(PlaybackTranscodeSpeedState.Unknown, meter.Read().State);
@@ -222,6 +222,52 @@ public sealed class PlaybackTranscodeMeterTests
         Assert.IsNull(remuxing.BeginTranscodeRun(PlaybackHardwareBackend.Software), "A stream copy has no speed worth measuring.");
         Assert.AreEqual(2.0, transcoding.Transcode.Read().Speed);
         Assert.AreEqual(PlaybackTranscodeSpeedState.Unknown, remuxing.Transcode.Read().State);
+    }
+
+    [TestMethod]
+    public void AnEncodeWhoseSpeedAlsoDependsOnTheReaderIsObservedButNeverJudged()
+    {
+        var clock = new ManualTimeProvider(s_start);
+        var meter = new PlaybackTranscodeMeter(clock);
+        var run = meter.BeginRun(PlaybackHardwareBackend.Software, judgesSpeed: false);
+
+        run.Record(Sample(0.3));
+        clock.Advance(PlaybackTranscodeMeter.SustainedFor * 6);
+        run.Record(Sample(0.3));
+        var reading = meter.Read();
+
+        Assert.AreEqual(PlaybackTranscodeSpeedState.Observed, reading.State, "A client that stopped reading blocks ffmpeg: that is no verdict on the encoder.");
+        Assert.AreEqual(0.3, reading.Speed, "The value still reaches the diagnostics.");
+        Assert.AreEqual(PlaybackHardwareBackend.Software, reading.Backend);
+    }
+
+    [TestMethod]
+    public void ProgressNeverReplacesTheFailingStepAsTheErrorSummaryAndTheTailStaysBounded()
+    {
+        var reader = new FfmpegStderrReader();
+        var samples = new List<PlaybackTranscodeSample>();
+        reader.ProgressReported += samples.Add;
+
+        reader.Feed("Error while opening encoder for output stream #0:0 - maybe incorrect parameters");
+        foreach (var line in CannedBlock.Split('\n'))
+        {
+            reader.Feed(line);
+        }
+
+        Assert.AreEqual(1, samples.Count);
+        Assert.AreEqual("Error while opening encoder for output stream #0:0 - maybe incorrect parameters", reader.LastLine, "The progress block that followed did not replace the cause.");
+
+        for (var index = 0; index < 100; index++)
+        {
+            reader.Feed($"warning {index} " + new string('x', 500));
+            reader.Feed(null);
+            reader.Feed("   ");
+        }
+
+        var tail = reader.Tail.Split('\n');
+        Assert.AreEqual(FfmpegStderrReader.MaxTailLines, tail.Length);
+        Assert.IsTrue(tail.All(x => x.Length <= FfmpegStderrReader.MaxLineLength));
+        StringAssert.StartsWith(tail[^1], "warning 99 ", "The newest lines are kept.");
     }
 
     [TestMethod]

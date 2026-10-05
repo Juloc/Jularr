@@ -106,7 +106,8 @@ public sealed class PlaybackStreamSession(
     PlaybackStreamSelections selections,
     DateTimeOffset createdAtUtc,
     TimeProvider time,
-    PlaybackAdaptationDirective adaptation)
+    PlaybackAdaptationDirective adaptation,
+    PlaybackStreamSession? replaced)
 {
     private readonly object gate = new();
 
@@ -145,9 +146,23 @@ public sealed class PlaybackStreamSession(
 
     /// <summary>
     /// Starts measuring one encode attempt of this session; the returned callback receives its progress. Null when the plan copies the
-    /// video, which has no speed worth measuring.
+    /// video, which has no speed worth measuring. Only an HLS encode (unthrottled, written to disk) is judged: a progressive encode blocks
+    /// whenever the player stops reading, so its speed is shown but never taken for a lack of encoder capacity.
     /// </summary>
-    public Action<PlaybackTranscodeSample>? BeginTranscodeRun(PlaybackHardwareBackend backend) => Plan.TranscodesVideo ? Transcode.BeginRun(backend).Record : null;
+    public Action<PlaybackTranscodeSample>? BeginTranscodeRun(PlaybackHardwareBackend backend) =>
+        Plan.TranscodesVideo ? Transcode.BeginRun(backend, judgesSpeed: Plan.Transport == PlaybackTransport.Hls).Record : null;
+
+    /// <summary>Whether the session replaced another one (a re-plan), and the video bitrate that one converted; null when it did not convert video.</summary>
+    public bool Replaced { get; } = replaced is not null;
+
+    public int? ReplacedTranscodeKbps { get; } = replaced is { Plan.TranscodesVideo: true } ? replaced.Plan.Quality.DeliveredBitrateKbps : null;
+
+    /// <summary>
+    /// Whether starting this session's delivery adds conversion load to the server. A seek or restart in a session that already converts, and a
+    /// re-plan that takes the place of a conversion of at least the same bitrate, only replace what runs; only a new conversion, or one that
+    /// costs more than the one it replaces, adds to it.
+    /// </summary>
+    public bool AddsTranscodeLoad => !Transcode.HasStarted && (!Replaced || ReplacedTranscodeKbps is not { } before || Plan.Quality.DeliveredBitrateKbps is not { } now || now > before);
 
     public void Touch(DateTimeOffset now)
     {
@@ -297,6 +312,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         var now = time.GetUtcNow();
         var removed = new List<PlaybackStreamSession>();
         PlaybackStreamSession session;
+        PlaybackStreamSession? replaced = null;
         lock (gate)
         {
             if (replaces is { } previousId &&
@@ -305,6 +321,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
                 sessions.TryRemove(previousId, out _))
             {
                 removed.Add(previous);
+                replaced = previous;
             }
 
             removed.AddRange(RemoveExpired(now));
@@ -331,7 +348,8 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
                 selections,
                 now,
                 time,
-                adaptation ?? PlaybackAdaptationDirective.None);
+                adaptation ?? PlaybackAdaptationDirective.None,
+                replaced);
             sessions[session.Id] = session;
         }
 
@@ -395,32 +413,39 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         return new PlaybackSessionAdvice(Decide(session, reading), reading);
     }
 
-    /// <summary>What the plan that replaces <paramref name="session"/> is made under; see <see cref="PlaybackAdaptation.NextDirective"/>.</summary>
-    public PlaybackAdaptationDirective NextDirective(PlaybackStreamSession session)
+    /// <summary>
+    /// What the plan that replaces <paramref name="session"/> is made under; see <see cref="PlaybackAdaptation.NextDirective"/>. The server's own
+    /// capacity verdict (a too-slow transcode) always applies; any other advice only when the re-plan names it in <paramref name="followedAdvice"/>,
+    /// so a re-plan for another reason (an audio change, a recovery) never inherits a quality change the player did not ask for.
+    /// </summary>
+    public PlaybackAdaptationDirective NextDirective(PlaybackStreamSession session, PlaybackAdaptationAdvice followedAdvice)
     {
         var reading = session.Transcode.Read();
-        return PlaybackAdaptation.NextDirective(Decide(session, reading), session.Adaptation, session.Plan.Quality.DeliveredBitrateKbps, reading.Backend);
+        var decision = Decide(session, reading);
+        if (decision.Reason != PlaybackAdaptationReason.TranscodeTooSlow && decision.Advice != followedAdvice)
+        {
+            decision = PlaybackAdaptationDecision.None;
+        }
+
+        return PlaybackAdaptation.NextDirective(decision, session.Adaptation, session.Plan.Quality.DeliveredBitrateKbps, reading.Backend, time.GetUtcNow());
     }
 
     /// <summary>
     /// Whether a running transcode on the same kind of encoder (hardware or software) is measured to stay under real time: the machine
-    /// cannot take another one, and admission refuses it instead of making every viewer worse.
+    /// cannot take another one, and admission refuses it instead of making every viewer worse. The session that asks is never part of the
+    /// load it asks about.
     /// </summary>
-    public bool IsTranscodeOverloaded(bool hardwareEncoder) =>
-        sessions.Values.Any(x => x.Transcode.Read() is { State: PlaybackTranscodeSpeedState.TooSlow, Backend: { } backend } && (backend != PlaybackHardwareBackend.Software) == hardwareEncoder);
+    public bool IsTranscodeOverloaded(bool hardwareEncoder, Guid? exceptSessionId = null) =>
+        sessions.Values.Any(x => x.Id != exceptSessionId && x.Transcode.Read() is { State: PlaybackTranscodeSpeedState.TooSlow, Backend: { } backend } && (backend != PlaybackHardwareBackend.Software) == hardwareEncoder);
 
     private PlaybackAdaptationDecision Decide(PlaybackStreamSession session, PlaybackTranscodeReading reading)
     {
         var now = time.GetUtcNow();
-        var quality = session.Plan.Quality;
         return PlaybackAdaptation.Decide(new PlaybackAdaptationInput(
             now,
             session.CreatedAtUtc,
-            quality.Requested,
-            quality.DeliveredBitrateKbps,
-            quality.SourceBitrateKbps,
-            session.Plan.Buffer?.LowWaterSeconds ?? 0,
-            session.Adaptation.CeilingKbps,
+            session.Plan,
+            session.Adaptation.Current(now).CeilingKbps,
             session.Telemetry.Recent(),
             session.Telemetry.Evidence(now)?.RecentStalls ?? 0,
             reading.State));

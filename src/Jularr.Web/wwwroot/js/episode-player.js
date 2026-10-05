@@ -648,8 +648,25 @@
         renderReasons();
         renderDiagnostics();
         renderSubtitleHint();
+        renderQualityHint();
         // Not "playbackMode": data-playback-mode is the mode selector inside this root.
         root.dataset.playbackDelivery = plan?.mode || "";
+    };
+
+    // A fixed tier the server's encoder could not sustain: the selector keeps the viewer's choice, this note says what plays instead and why.
+    let qualityHintFromPlan = false;
+    const renderQualityHint = () => {
+        if (!qualityHint) {
+            return;
+        }
+
+        if (plan?.quality?.limitSource === "transcode_speed" && plan.quality.requested !== "auto") {
+            qualityHint.textContent = format("playback.reason.transcode_too_slow", { limit: mbps(plan.quality.limitKbps) });
+            qualityHintFromPlan = true;
+        } else if (qualityHintFromPlan) {
+            qualityHint.textContent = "";
+            qualityHintFromPlan = false;
+        }
     };
 
     const hideVideo = () => {
@@ -1060,13 +1077,41 @@
         });
     };
 
-    // The server asked for another quality: plan again at the same position with the same selections. Unlike a choice of the viewer this
-    // keeps failedModes (a stall is no verdict on a mode), resets no recovery budget and shows no error; the new plan's reasons and the
-    // compact status already say what changed.
-    const followQualityAdvice = () => {
-        pendingResumeTime = absoluteCurrentTime();
-        resumeShouldPlay = !video.paused && !video.ended;
-        void applyPlayback();
+    // The server asked for another quality. The replacement plan is requested in the background while the current stream keeps playing; the
+    // source is only swapped once the new plan is confirmed playable, at the position of that moment and with the same selections. A failed or
+    // unavailable plan changes nothing and pauses following advice for a while. Unlike a choice of the viewer this keeps failedModes (a stall
+    // is no verdict on a mode), resets no recovery budget and shows no error; the new plan's reasons and the compact status say what changed.
+    let adviceInFlight = false;
+    const followQualityAdvice = async advice => {
+        const generation = planGeneration;
+        adviceInFlight = true;
+        try {
+            await streamRecovery.followAdvisedPlan({
+                advice,
+                requestPlan: followed => requestPlan({ followedAdvice: followed }),
+                // Another plan took over meanwhile (the viewer changed a selection).
+                isStale: () => generation !== planGeneration,
+                discardOrphan: discardOrphanSession,
+                backOff: () => adviceGate.backOff(performance.now()),
+                warn: (message, detail) => console.warn(message, detail),
+                install: response => {
+                    planGeneration += 1;
+                    pendingResumeTime = absoluteCurrentTime();
+                    resumeShouldPlay = !video.paused && !video.ended;
+                    installPlan(response);
+                    showVideo();
+                }
+            });
+        } finally {
+            adviceInFlight = false;
+        }
+    };
+
+    const discardOrphanSession = sessionId => {
+        const template = root.dataset.streamSessionUrlTemplate;
+        if (sessionId && template) {
+            void fetch(template.replace("__session__", sessionId), { method: "DELETE", credentials: "same-origin", keepalive: true }).catch(() => {});
+        }
     };
 
     // The answer of a report: the server's conversion speed for the diagnostics and its advice, which is followed at most as often as the
@@ -1079,9 +1124,10 @@
         transcodeReading = Number.isFinite(answer.transcodeSpeed)
             ? { speed: answer.transcodeSpeed, fps: Number.isFinite(answer.transcodeFps) ? answer.transcodeFps : null }
             : null;
-        const busy = !plan || video.hidden || storageRecoveryActive;
-        if (streamRecovery.followAdvice(adviceGate, answer.advice, { paused: video.paused || video.ended, busy }, performance.now())) {
-            followQualityAdvice();
+        const busy = !plan || video.hidden || storageRecoveryActive || adviceInFlight;
+        const state = { paused: video.paused || video.ended, busy, handedOver: presentationHandedOver };
+        if (streamRecovery.followAdvice(adviceGate, answer.advice, state, performance.now())) {
+            void followQualityAdvice(answer.advice);
         }
     };
 
@@ -1124,7 +1170,14 @@
                 console.warn("The playback telemetry was refused.", response.status);
             } else if (!force) {
                 // The flush before a re-plan only delivers evidence; its answer must not start another re-plan.
-                applyTelemetryAnswer(await response.json().catch(() => null), sessionAtSend);
+                let answer = null;
+                try {
+                    answer = await response.json();
+                } catch (error) {
+                    console.warn("The playback telemetry answer could not be read.", error);
+                }
+
+                applyTelemetryAnswer(answer, sessionAtSend);
             }
         } catch (error) {
             console.warn("The playback telemetry could not be sent.", error);
@@ -1134,7 +1187,7 @@
     window.setInterval(sampleThroughput, 1000);
     window.setInterval(() => void sendTelemetry(), buffering.reportIntervalMs);
 
-    const requestPlan = async () => {
+    const requestPlan = async (options = {}) => {
         // The replaced session's last evidence (buffer, stalls) must be on the server before it plans the replacement.
         await sendTelemetry(true);
 
@@ -1162,6 +1215,7 @@
                 network: capabilityProbe?.networkReport() || null,
                 failedModes: [...failedModes],
                 replacesSessionId: streamSessionId,
+                followedAdvice: options.followedAdvice,
                 // Opening the page never wakes sleeping storage; pressing Play does.
                 wake: storageWakeRequested || playbackWasRequested
             })
@@ -1179,6 +1233,15 @@
             error.hidden = !message;
             error.textContent = message || "";
         }
+    };
+
+    const installPlan = response => {
+        plan = response.plan;
+        planCapabilitiesInferred = response.capabilitiesInferred === true;
+        streamSessionId = response.sessionId || null;
+        delivery = response.delivery || null;
+        beginTelemetrySession();
+        renderPlan();
     };
 
     const applyPlayback = async () => {
@@ -1208,12 +1271,7 @@
             return;
         }
 
-        plan = response.plan;
-        planCapabilitiesInferred = response.capabilitiesInferred === true;
-        streamSessionId = response.sessionId || null;
-        delivery = response.delivery || null;
-        beginTelemetrySession();
-        renderPlan();
+        installPlan(response);
 
         if (plan.mode === "unavailable" || !delivery) {
             // Storage is not readable: the canonical storage flow (#411) takes over — asleep

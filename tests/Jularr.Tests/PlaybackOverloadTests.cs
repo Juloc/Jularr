@@ -148,6 +148,51 @@ public sealed class PlaybackOverloadTests
         Assert.AreEqual("transcoding_disabled", disabled.Code);
     }
 
+    [TestMethod]
+    public void ASeekInTheSlowSessionItselfIsNeverRefusedForItsOwnSlowness()
+    {
+        var clock = new ManualTimeProvider(s_start);
+        var kit = PlaybackServerTestKit.Create(clock);
+        var slow = StartTranscode(kit);
+        RunTooSlow(kit, slow, PlaybackHardwareBackend.Software);
+
+        var seek = kit.Admission.Admit(slow.Plan, "viewer", slow);
+
+        Assert.IsTrue(seek.Admitted, "A seek restarts the encode the session already runs; it adds nothing.");
+        seek.Lease!.Dispose();
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(slow.Plan, "viewer").RefusalCode, "The same start without the session it belongs to is a new conversion.");
+    }
+
+    [TestMethod]
+    public void AReplanAtTheSameOrALowerBitrateIsNeverRefusedForOverloadButAHigherOneIs()
+    {
+        var clock = new ManualTimeProvider(s_start);
+        var kit = PlaybackServerTestKit.Create(clock);
+        RunTooSlow(kit, StartTranscode(kit), PlaybackHardwareBackend.Software);
+        var selections = new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web");
+
+        PlaybackStreamSession Start(string profile, PlaybackPlan plan, Guid? replaces) =>
+            kit.Sessions.Create(profile, Guid.NewGuid(), Guid.NewGuid(), "/media/b.mkv", 1400, plan, selections, replaces);
+
+        static PlaybackPlan Delivering(int kbps) =>
+            Transcode(Video()) with { Quality = new PlaybackQualityResolution(PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote, null, PlaybackLimitSource.None, null, kbps) };
+
+        var running = Start("viewer-2", Delivering(8_000), null);
+        var lower = Start("viewer-2", Delivering(4_000), running.Id);
+        var same = Start("viewer-2", Delivering(4_000), lower.Id);
+        var higher = Start("viewer-2", Delivering(8_000), same.Id);
+        var fromRemux = Start("viewer-3", Remux(), null);
+        var nowConverting = Start("viewer-3", Delivering(2_000), fromRemux.Id);
+
+        Assert.IsTrue(kit.Admission.Admit(lower.Plan, "viewer-2", lower).Admitted, "A step-down re-plan lowers the cost: it is never the one to refuse.");
+        Assert.IsTrue(kit.Admission.Admit(same.Plan, "viewer-2", same).Admitted);
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(higher.Plan, "viewer-2", higher).RefusalCode, "A higher bitrate is more load than the one it replaces.");
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderOverloaded, kit.Admission.Admit(nowConverting.Plan, "viewer-3", nowConverting).RefusalCode, "Replacing a remux with a conversion adds load.");
+        Assert.IsTrue(lower.Replaced && !running.Replaced);
+        Assert.AreEqual(8_000, lower.ReplacedTranscodeKbps);
+        Assert.IsNull(nowConverting.ReplacedTranscodeKbps);
+    }
+
     private static bool UiTranslationResourcesHas(string key) => Jularr.Web.Features.Localization.UiTranslationResources.TryGet(key, out _);
 
     private static async Task<(int Status, string? RetryAfter, string? Code)> ExecuteAsync(IResult result)

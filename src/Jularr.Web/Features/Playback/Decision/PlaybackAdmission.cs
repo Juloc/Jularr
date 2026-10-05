@@ -81,18 +81,20 @@ public static class PlaybackCostClasses
 /// </summary>
 public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore settings, PlaybackTranscodeSlots slots, PlaybackHardwareService hardware, PlaybackStreamSessionStore sessions)
 {
-    public PlaybackAdmission Admit(PlaybackPlan plan, string profileId)
+    /// <param name="session">The session the delivery belongs to, when it has one: its own measurement is never a reason to refuse it, and a
+    /// start that only replaces running work (a seek, a re-plan at the same or a lower bitrate) is never refused for overload.</param>
+    public PlaybackAdmission Admit(PlaybackPlan plan, string profileId, PlaybackStreamSession? session = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         var encoder = plan.TranscodesVideo ? hardware.Resolve(plan.Video!.Encoder) : PlaybackEncoderTarget.Software;
-        return AdmitAttempt(plan, profileId, encoder);
+        return AdmitAttempt(plan, profileId, encoder, session);
     }
 
     /// <summary>An admission for a legacy delivery that has no plan: a software transcode or a remux.</summary>
     public PlaybackAdmission AdmitLegacy(PlaybackCostClass costClass, string profileId)
     {
         var transcodes = costClass is PlaybackCostClass.SoftwareVideo or PlaybackCostClass.HardwareVideo;
-        return Acquire(costClass, PlaybackEncoderTarget.Software, profileId, transcodes);
+        return Acquire(costClass, PlaybackEncoderTarget.Software, profileId, transcodes, session: null);
     }
 
     /// <summary>
@@ -105,11 +107,11 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
     /// and charges nothing; a timeout of the software attempt, a refusal or an invalid argument set is never retried or counted. <paramref name="start"/>
     /// owns the admission's lease and must release it when the attempt fails.
     /// </summary>
-    public async Task<TResult> StartAsync<TResult>(PlaybackPlan plan, string profileId, Func<PlaybackAdmission, Task<TResult>> start)
+    public async Task<TResult> StartAsync<TResult>(PlaybackPlan plan, string profileId, Func<PlaybackAdmission, Task<TResult>> start, PlaybackStreamSession? session = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(start);
-        var admitted = Admit(plan, profileId);
+        var admitted = Admit(plan, profileId, session);
         PlaybackHardwareBackend failedBackend = PlaybackHardwareBackend.Software;
         string? hardwareFailure = null;
         var decodeSuspected = false;
@@ -147,22 +149,22 @@ public sealed class PlaybackAdmissionService(PlaybackTranscodingSettingsStore se
                 }
 
                 // The failed attempt released its slot; the next one needs its own.
-                admitted = AdmitAttempt(plan, profileId, next);
+                admitted = AdmitAttempt(plan, profileId, next, session);
             }
         }
     }
 
-    private PlaybackAdmission AdmitAttempt(PlaybackPlan plan, string profileId, PlaybackEncoderTarget encoder) =>
-        Acquire(PlaybackCostClasses.For(plan, encoder), encoder, profileId, plan.TranscodesVideo);
+    private PlaybackAdmission AdmitAttempt(PlaybackPlan plan, string profileId, PlaybackEncoderTarget encoder, PlaybackStreamSession? session) =>
+        Acquire(PlaybackCostClasses.For(plan, encoder), encoder, profileId, plan.TranscodesVideo, session);
 
-    private PlaybackAdmission Acquire(PlaybackCostClass costClass, PlaybackEncoderTarget encoder, string profileId, bool transcodes)
+    private PlaybackAdmission Acquire(PlaybackCostClass costClass, PlaybackEncoderTarget encoder, string profileId, bool transcodes, PlaybackStreamSession? session)
     {
         if (transcodes && !settings.Current.TranscodingEnabled)
         {
             return new PlaybackAdmission(costClass, encoder, null, PlaybackAdmissionCodes.TranscodingDisabled);
         }
 
-        if (transcodes && sessions.IsTranscodeOverloaded(costClass == PlaybackCostClass.HardwareVideo))
+        if (transcodes && (session?.AddsTranscodeLoad ?? true) && sessions.IsTranscodeOverloaded(costClass == PlaybackCostClass.HardwareVideo, session?.Id))
         {
             return new PlaybackAdmission(costClass, encoder, null, PlaybackAdmissionCodes.TranscoderOverloaded);
         }

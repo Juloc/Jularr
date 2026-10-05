@@ -37,7 +37,8 @@ public sealed record ClientPlaybackPlanRequest(
     IReadOnlyList<PlaybackDeliveryMode>? FailedModes = null,
     Guid? ReplacesSessionId = null,
     bool Wake = true,
-    ClientVideoTarget? Target = null);
+    ClientVideoTarget? Target = null,
+    string? FollowedAdvice = null);
 
 /// <summary>
 /// Where and how to fetch the plan's stream. Live transports restart at a position by adding
@@ -378,7 +379,8 @@ public static class ClientApiPlaybackPlanEndpoints
                             admitted.Lease?.Dispose();
                             throw;
                         }
-                    });
+                    },
+                    session);
                 return Results.File(live, "video/mp4", enableRangeProcessing: false);
             }
             catch (PlaybackAdmissionRefusedException refusal)
@@ -446,7 +448,8 @@ public static class ClientApiPlaybackPlanEndpoints
                             directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory, admitted.Encoder),
                             admitted.Lease,
                             token,
-                            session.BeginTranscodeRun(admitted.Encoder.Backend))).SessionId),
+                            session.BeginTranscodeRun(admitted.Encoder.Backend))).SessionId,
+                        session),
                     previous => manager.Stop(previous, session.ProfileId),
                     cancellationToken);
                 if (hlsSessionId is not { } started)
@@ -808,6 +811,12 @@ public static class ClientApiPlaybackPlanEndpoints
             quality = preset;
         }
 
+        if (!TryParseFollowedAdvice(request.FollowedAdvice, out var followedAdvice))
+        {
+            error = Results.BadRequest(new ClientErrorResponse("invalid_followed_advice", "followedAdvice must be none, step_down or step_up."));
+            return false;
+        }
+
         if (!TryParseMode(request.Mode, out var mode))
         {
             error = Results.BadRequest(new ClientErrorResponse(
@@ -830,8 +839,21 @@ public static class ClientApiPlaybackPlanEndpoints
             request.Network,
             request.FailedModes is { Count: > 0 } failed ? failed.Take(4).ToHashSet() : null,
             request.ReplacesSessionId,
-            request.Wake);
+            request.Wake,
+            followedAdvice);
         return true;
+    }
+
+    private static bool TryParseFollowedAdvice(string? value, out PlaybackAdaptationAdvice advice)
+    {
+        advice = value?.Trim() switch
+        {
+            null or "" or "none" => PlaybackAdaptationAdvice.None,
+            "step_down" => PlaybackAdaptationAdvice.StepDown,
+            "step_up" => PlaybackAdaptationAdvice.StepUp,
+            _ => (PlaybackAdaptationAdvice)(-1)
+        };
+        return advice >= PlaybackAdaptationAdvice.None;
     }
 
     public static bool TryParseMode(string? value, out PlaybackModePreference mode)

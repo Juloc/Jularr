@@ -112,8 +112,6 @@ public static class LivePlaybackCommand
 public sealed class LivePlaybackStream : Stream
 {
     private const int PrefixBufferSize = 16 * 1024;
-    private const int MaxDiagnosticLines = 20;
-    private const int MaxDiagnosticLineLength = 200;
 
     private readonly Stream _output;
     private readonly Task<string> _errors;
@@ -193,34 +191,21 @@ public sealed class LivePlaybackStream : Stream
 
     /// <summary>
     /// Drains stderr for the life of the process (a full pipe would stall the encoder). Progress blocks go to <paramref name="onProgress"/>;
-    /// only the last few diagnostic lines are kept, so a stream that runs for hours holds a bounded amount of text.
+    /// the result is the bounded tail of the diagnostic lines (see <see cref="FfmpegStderrReader"/>).
     /// </summary>
     public static async Task<string> ReadDiagnosticsAsync(TextReader reader, Action<PlaybackTranscodeSample>? onProgress)
     {
-        var parser = new FfmpegProgressParser();
-        var tail = new Queue<string>();
+        var stderr = new FfmpegStderrReader();
+        if (onProgress is not null)
+        {
+            stderr.ProgressReported += onProgress;
+        }
+
         try
         {
             while (await reader.ReadLineAsync() is { } line)
             {
-                if (parser.TryFeed(line, out var sample))
-                {
-                    if (sample is not null)
-                    {
-                        onProgress?.Invoke(sample);
-                    }
-
-                    continue;
-                }
-
-                if (!string.IsNullOrWhiteSpace(line))
-                {
-                    tail.Enqueue(line.Length <= MaxDiagnosticLineLength ? line : line[..MaxDiagnosticLineLength]);
-                    if (tail.Count > MaxDiagnosticLines)
-                    {
-                        tail.Dequeue();
-                    }
-                }
+                stderr.Feed(line);
             }
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
@@ -228,7 +213,7 @@ public sealed class LivePlaybackStream : Stream
             // Ending the stream disposes the process and its pipes; what was read until then is the diagnostic.
         }
 
-        return string.Join('\n', tail);
+        return stderr.Tail;
     }
 
     /// <summary>
