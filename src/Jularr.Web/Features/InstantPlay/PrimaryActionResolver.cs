@@ -48,6 +48,8 @@ public enum PrimaryActionReason
     MediaTypeDisabled,
     NoProviderIdentity,
     NotReleased,
+    MonitoringStopped,
+    ExcludedFromRequest,
     NothingToWatch,
     UnknownTarget
 }
@@ -72,25 +74,52 @@ public sealed record InstantPlayPolicy(bool MediaTypeEnabled, bool AcquisitionEn
     public bool AllowsInstantAcquisition => AllowsRequest && PlaybackEnabled && AutoApproves && AcquisitionReady;
 }
 
-/// <summary>The open request of a title and which of its episodes it covers; a title has at most one open request.</summary>
-public sealed record OpenRequestFacts(AcquisitionRequestStatus Status, bool CoversWork, IReadOnlySet<Guid> CoveredEpisodeIds)
+/// <summary>
+/// The open request of a title (a title has at most one) as far as a playback intent depends on it: which episodes its scope covers, which
+/// an Admin excluded, whether monitoring is on and which units a profile already asked to watch. An Admin exclusion beats a playback intent.
+/// </summary>
+public sealed record OpenRequestFacts(
+    AcquisitionRequestStatus Status,
+    bool Monitored,
+    bool CoversWork,
+    IReadOnlySet<Guid> CoveredEpisodeIds,
+    IReadOnlySet<Guid> ExcludedEpisodeIds,
+    bool WorkPrioritized,
+    IReadOnlySet<Guid> PrioritizedEpisodeIds)
 {
     public bool AwaitsApproval => Status == AcquisitionRequestStatus.Pending;
 
     public bool Covers(Guid? workEpisodeId) => workEpisodeId is { } id ? CoveredEpisodeIds.Contains(id) : CoversWork;
 
-    public static OpenRequestFacts ForMovie(AcquisitionRequest request) => new(request.Status, true, new HashSet<Guid>());
+    public bool IsExcluded(Guid? workEpisodeId) => workEpisodeId is { } id && ExcludedEpisodeIds.Contains(id);
+
+    /// <summary>Whether a profile already asked to watch the unit, so it is searched and downloaded ahead of the rest.</summary>
+    public bool IsPrioritized(Guid? workEpisodeId) => workEpisodeId is { } id ? PrioritizedEpisodeIds.Contains(id) : WorkPrioritized;
+
+    public static OpenRequestFacts ForMovie(AcquisitionRequest request)
+    {
+        var payload = VideoRequestPayload.Parse(request.PayloadJson);
+        return new OpenRequestFacts(request.Status, payload?.Monitored ?? true, true, new HashSet<Guid>(), new HashSet<Guid>(), payload?.PlaybackWork == true, new HashSet<Guid>());
+    }
 
     /// <summary>The episodes the request's scope includes, by the same <see cref="VideoRequestSelection"/> the executor uses.</summary>
     public static OpenRequestFacts ForSeries(AcquisitionRequest request, VideoRequestSelection selection, IEnumerable<(Guid Id, Guid? SeasonId, DateTime? AiredAt)> episodes) =>
-        new(request.Status, false, episodes.Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt)).Select(x => x.Id).ToHashSet());
+        new(
+            request.Status,
+            selection.Payload.Monitored,
+            false,
+            episodes.Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt)).Select(x => x.Id).ToHashSet(),
+            (selection.Payload.ExcludedEpisodeIds ?? []).ToHashSet(),
+            false,
+            (selection.Payload.PlaybackEpisodeIds ?? []).ToHashSet());
 }
 
 /// <summary>The canonical facts about one Movie or Series Work and one profile that the primary action depends on.</summary>
 /// <param name="HasRequestIdentity">The provider identifies the title, so it can be requested.</param>
 public abstract record PlaybackFacts(Guid WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest);
 
-public sealed record MoviePlaybackFacts(Guid WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest, bool HasMedia, MediaProgressSnapshot? Progress)
+/// <param name="IsReleased">Not announced for a later year: the only release knowledge a Work has is its year, so a movie of the current year counts as released.</param>
+public sealed record MoviePlaybackFacts(Guid WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest, bool HasMedia, MediaProgressSnapshot? Progress, bool IsReleased = true)
     : PlaybackFacts(WorkId, HasRequestIdentity, OpenRequest);
 
 public sealed record SeriesPlaybackFacts(
@@ -140,7 +169,7 @@ public static class PrimaryActionResolver
             return Local(movie, null, kind, rewatch, policy);
         }
 
-        return Missing(movie, null, hasTarget: true, PrimaryActionKind.WatchNow, released: true, policy);
+        return Missing(movie, null, hasTarget: true, PrimaryActionKind.WatchNow, movie.IsReleased, policy);
     }
 
     private static PrimaryAction ResolveSeries(SeriesPlaybackFacts series, InstantPlayPolicy policy, Guid? explicitEpisodeId)
@@ -192,14 +221,27 @@ public static class PrimaryActionResolver
 
     /// <summary>
     /// The target has no local media (<paramref name="hasTarget"/> is false when no episode needs playing now). An open request is
-    /// never duplicated and never bypassed; a playback intent may only add the target to one that is already approved.
+    /// never duplicated and never bypassed; a playback intent may only add the target to one that is already approved, is monitored and has not excluded it.
     /// </summary>
     private static PrimaryAction Missing(PlaybackFacts facts, Guid? episodeId, bool hasTarget, PrimaryActionKind instantKind, bool released, InstantPlayPolicy policy)
     {
         if (facts.OpenRequest is { } open)
         {
-            var attachable = policy.AllowsInstantAcquisition && hasTarget && released && !open.AwaitsApproval && !open.Covers(episodeId);
-            if (attachable)
+            // Admin curation beats a playback intent: monitoring that was turned off or an episode that was unchecked is not searched.
+            if (hasTarget && !open.Monitored)
+            {
+                return None(facts, PrimaryActionReason.MonitoringStopped, episodeId);
+            }
+
+            if (hasTarget && open.IsExcluded(episodeId))
+            {
+                return None(facts, PrimaryActionReason.ExcludedFromRequest, episodeId);
+            }
+
+            // A unit the request does not cover yet, or covers without a profile waiting for it, takes the playback intent; it is never
+            // taken while the request waits for approval.
+            var takesIntent = policy.AllowsInstantAcquisition && hasTarget && released && !open.AwaitsApproval && (!open.Covers(episodeId) || !open.IsPrioritized(episodeId));
+            if (takesIntent)
             {
                 return new PrimaryAction(instantKind, PrimaryActionReason.InstantAcquisition, facts.WorkId, episodeId);
             }

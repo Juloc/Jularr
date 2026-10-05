@@ -5,6 +5,7 @@ using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Tests;
@@ -128,5 +129,23 @@ public sealed class InstantPlayManagerOnlyTests
         await host.Modules.SetAsync(InstanceModule.Playback, true);
 
         Assert.AreEqual(HttpStatusCode.OK, (await host.GetAsync($"/Library/Watch/{movie.Id}")).Status, "Re-enabling Playback restores the player.");
+    }
+
+    [TestMethod]
+    public async Task AnOfflineVideoPackageIsRefusedBeforeAnyLookupWhileOtherKindsKeepTheirOwnSwitches()
+    {
+        var modules = new InstanceModuleStore(Path.Combine(Path.GetTempPath(), $"jularr-offline-{Guid.NewGuid():N}"));
+        await modules.SetAsync(InstanceModule.Playback, false);
+        var db = new Jularr.Web.Data.AppDbContext(new DbContextOptionsBuilder<Jularr.Web.Data.AppDbContext>().UseNpgsql("Host=localhost;Database=unused").Options);
+        await db.DisposeAsync();
+        var service = new ClientApiOfflineMediaPackageService(db, null!, modules);
+
+        foreach (var kind in new[] { "episode", "movie", "tv", "series" })
+        {
+            Assert.IsNull(await service.GetManifestAsync(kind, Guid.NewGuid(), CancellationToken.None), $"{kind} is video playback.");
+        }
+
+        // A kind that is not video reaches the database, which this test made unreachable: its own module switch applies, not Playback.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => service.GetManifestAsync("audiobook", Guid.NewGuid(), CancellationToken.None));
     }
 }

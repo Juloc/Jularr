@@ -75,13 +75,25 @@
                     </a>
                     break;
                 case PrimaryActionKind.Request:
-                case PrimaryActionKind.StartWatching:
-                case PrimaryActionKind.WatchNow:
-                    @* Missing media starts through the Request dialog until the in-place Start watching control sends the playback intent. *@
                     <button type="button" class="ad-primary" data-dc-card-request>
                         <partial name="_AnimeDetailIcon" model='"plus"' />
                         <span>@ui["discover.card.request"]</span>
                     </button>
+                    break;
+                case PrimaryActionKind.StartWatching:
+                case PrimaryActionKind.WatchNow:
+                    @* A missing target is started by the explicit playback intent; the in-place morph control replaces this form later. *@
+                    <form method="post" asp-page-handler="Start" asp-route-workId="@detail.WorkId" class="ad-inline-form">
+                        <input type="hidden" name="episodeId" value="@action.WorkEpisodeId" />
+                        <button type="submit" class="ad-primary">
+                            <partial name="_AnimeDetailIcon" model='"play"' />
+                            <span>@ui[VideoDetailView.PlayKey(action)]</span>
+                            @if (Model.ActionEpisode is { } startEpisode)
+                            {
+                                <small>@AnimeDetailView.EpisodeCode(startEpisode.SeasonNumber, startEpisode.Number)</small>
+                            }
+                        </button>
+                    </form>
                     break;
                 case PrimaryActionKind.Available:
                     <span class="ad-secondary ad-static">

@@ -113,7 +113,7 @@ public sealed class VideoMonitoringService(
             work,
             MediaAcquisitionKind.Tv,
             on: true,
-            (payload, _) => payload with
+            (payload, _) => payload.WithoutPlaybackIntent() with
             {
                 Monitored = true,
                 Scope = parsed,
@@ -231,6 +231,12 @@ public sealed class VideoMonitoringService(
             }
 
             var next = edited with { ScopeRevision = current.ScopeRevision + 1, Searches = 0, NextSearchUtc = null, LastProblem = null };
+
+            // An Admin decision beats a playback intent: nobody keeps waiting through monitoring being turned off or on again, and an
+            // episode that is now excluded is not searched on for a profile that asked for it earlier.
+            next = !current.Monitored || !next.Monitored
+                ? next.WithoutPlaybackIntent()
+                : next with { PlaybackEpisodeIds = next.PlaybackEpisodeIds?.Except(next.ExcludedEpisodeIds ?? []).ToArray() };
             return !current.Monitored && next.Monitored
                 ? next with { TriedReleases = null, ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null }
                 : next;

@@ -45,7 +45,8 @@ public sealed class VideoPlaybackFactsQuery(AppDbContext db, AcquisitionAccessSt
             var hasMedia = await db.MediaAssets.AsNoTracking().AnyAsync(
                 asset => asset.WorkId == workId && asset.WorkEpisodeId == null && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id),
                 cancellationToken);
-            var movieFacts = new MoviePlaybackFacts(workId, tmdbId is not null, open is null ? null : OpenRequestFacts.ForMovie(open), hasMedia, snapshots.FirstOrDefault(x => x.WorkEpisodeId is null));
+            var released = work.Year is null || work.Year <= clock.GetUtcNow().Year;
+            var movieFacts = new MoviePlaybackFacts(workId, tmdbId is not null, open is null ? null : OpenRequestFacts.ForMovie(open), hasMedia, snapshots.FirstOrDefault(x => x.WorkEpisodeId is null), released);
             return new VideoPlaybackState(work.MediaType, work.CanonicalTitle, work.Year, tmdbId, open, movieFacts);
         }
 

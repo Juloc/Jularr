@@ -18,6 +18,7 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Collections;
 using Jularr.Web.Features.Franchises;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaMapping;
@@ -59,15 +60,19 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
     private readonly IHost host;
     private readonly TestServer server;
 
-    private ManageSheetPageTestHost(string root, AppDbContext db, IHost host, TestServer server)
+    private ManageSheetPageTestHost(string root, AppDbContext db, IHost host, TestServer server, InstanceModuleStore modules)
     {
         this.root = root;
         Db = db;
         this.host = host;
         this.server = server;
+        Modules = modules;
     }
 
     public AppDbContext Db { get; }
+
+    /// <summary>The instance module switches the pages read.</summary>
+    public InstanceModuleStore Modules { get; }
 
     /// <summary>The host's services, to seed the stores a page reads.</summary>
     public IServiceProvider Services => host.Services;
@@ -79,6 +84,7 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
         Directory.CreateDirectory(root);
         var dataDirectory = new DirectoryInfo(Path.Combine(root, "data"));
         dataDirectory.Create();
+        var modules = new InstanceModuleStore(dataDirectory.FullName);
         var databasePath = sharedDatabasePath ?? Path.Combine(root, "jularr.db");
         var connectionString = $"Data Source={databasePath};Foreign Keys=True";
 
@@ -102,6 +108,7 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                         // The shell sidebar derives its media-type destinations from the profile's
                         // capabilities (#598); the policy defaults to "everything visible".
                         services.AddSingleton(new MediaCapabilityStore(dataDirectory.FullName));
+                        services.AddSingleton<IInstanceModuleService>(modules);
                         services.AddScoped<IMediaCapabilityService, MediaCapabilityService>();
                         services.AddScoped<IAppShellService, AppShellService>();
                         services.AddScoped<OperationRunner>();
@@ -267,7 +274,7 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
             .Options);
         await DatabaseMigrationBridge.UpgradeAsync(db);
 
-        return new ManageSheetPageTestHost(root, db, host, server);
+        return new ManageSheetPageTestHost(root, db, host, server, modules);
     }
 
     /// <param name="asOwner">Adds the owner role claim to the simulated signed-in account.</param>

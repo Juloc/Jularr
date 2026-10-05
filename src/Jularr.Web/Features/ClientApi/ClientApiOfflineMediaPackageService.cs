@@ -106,6 +106,14 @@ public sealed class ClientApiOfflineMediaPackageService(
             return null;
         }
 
+        // A video package is the media itself for playing, so a manager-only instance serves none; books, manga and audiobooks keep their own module switch.
+        if (instanceModules is not null
+            && normalized is "episode" or "movie" or "tv" or "series"
+            && !await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken))
+        {
+            return null;
+        }
+
         return normalized switch
         {
             "episode" => await EpisodeSourcesAsync(id, cancellationToken),

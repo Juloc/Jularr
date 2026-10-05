@@ -739,8 +739,10 @@ if (app.Environment.IsDevelopment())
 app.UseForwardedHeaders();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseRateLimiter();
+// Authentication runs first so the per-account rate-limit policies ("wake", "playbackStart", "playbackIntent", ...) see the signed-in
+// account; behind it they would all fall back to the shared client IP. The anonymous policies partition by IP either way.
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseInstanceModuleGates();
 // Operations created while a signed-in account's request runs record that account as their actor
 // (Admin → History); work started by the server itself has none.

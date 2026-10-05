@@ -448,4 +448,28 @@ public sealed class VideoDetailPageTests
         StringAssert.Contains(html, ">Play<");
         Assert.IsFalse(html.Contains("Continue watching", StringComparison.Ordinal), "Another profile's progress is not mine.");
     }
+
+    // ---- Instant Play hero action --------------------------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task AMissingTitleWithAnApprovedRequestThatDoesNotCoverItStartsThroughTheIntentFormNotADeadButton()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        await host.MakeAcquisitionReadyAsync();
+        var work = await AddTitleAsync(host, WorkMediaType.Series, "Dark Harbor", 2021, "1399");
+        var seed = new LibraryCanonicalSeed(host.Db);
+        var first = await seed.AddEpisodeAsync(work, 1, 1);
+        var second = await seed.AddEpisodeAsync(work, 1, 2);
+        var scope = new VideoRequestPayload(work.Id, "Dark Harbor", 2021, VideoRequestScope.Custom, [second.Id], MonitorFuture: false);
+        await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "1399", "Dark Harbor", AcquisitionRequestStatus.Approved, scope.Serialize());
+
+        var html = await host.GetOkAsync($"/Library/Series/{work.Id}", asOwner: true);
+
+        var hero = Between(html, "<section class=\"ad-hero", "</section>");
+        StringAssert.Contains(hero, "method=\"post\"");
+        StringAssert.Contains(hero, "handler=Start");
+        StringAssert.Contains(hero, $"name=\"episodeId\" value=\"{first.Id}\"");
+        StringAssert.Contains(hero, ">Start watching<");
+        Assert.IsFalse(hero.Contains("data-dc-card-request", StringComparison.Ordinal), "No button may depend on a dialog the page does not render.");
+    }
 }

@@ -23,8 +23,9 @@ public sealed class InstantPlayProjectionTests
     private static VideoRequestPayload Payload(DateTime? nextSearch = null, int searches = 0, bool monitorFuture = false) =>
         new(Guid.NewGuid(), "Severance", 2022, VideoRequestScope.AllCurrentAndFuture, [], monitorFuture) { NextSearchUtc = nextSearch, Searches = searches };
 
-    private static ConsumerAcquisitionView Project(AcquisitionRequest request, VideoRequestPayload? payload = null, OperationSnapshot? download = null, bool local = false, bool episode = true, bool playback = true) =>
-        ConsumerAcquisitionProjector.Project(request, payload, download, local, episode, playback, Now);
+    private static ConsumerAcquisitionView Project(
+        AcquisitionRequest request, VideoRequestPayload? payload = null, OperationSnapshot? download = null, bool local = false, bool episode = true, bool playback = true, Guid? target = null) =>
+        ConsumerAcquisitionProjector.Project(request, payload, download, local, target ?? (episode ? Guid.NewGuid() : null), playback, Now);
 
     [TestMethod]
     public void EveryCanonicalStatusProjectsToTheConsumerVocabulary()
@@ -36,7 +37,7 @@ public sealed class InstantPlayProjectionTests
         Assert.AreEqual(ConsumerAcquisitionState.Preparing, Project(Request(AcquisitionRequestStatus.Importing)).State);
         Assert.AreEqual(ConsumerAcquisitionState.NeedsAttention, Project(Request(AcquisitionRequestStatus.Failed)).State);
         Assert.AreEqual(ConsumerAcquisitionState.Rejected, Project(Request(AcquisitionRequestStatus.Rejected)).State);
-        Assert.AreEqual(ConsumerAcquisitionState.NotAvailableYet, Project(Request(AcquisitionRequestStatus.Completed)).State, "A completed request whose target is not local has nothing to offer yet.");
+        Assert.AreEqual(ConsumerAcquisitionState.NotAvailable, Project(Request(AcquisitionRequestStatus.Completed)).State, "A completed request whose target is not local has nothing to offer and keeps no search going.");
     }
 
     [TestMethod]
@@ -119,7 +120,7 @@ public sealed class InstantPlayProjectionTests
         var consumer = Enum.GetValues<ConsumerAcquisitionState>()
             .SelectMany(state => Enum.GetValues<ConsumerMediaUnit>().Select(unit => ConsumerAcquisitionLabels.StateKey(new ConsumerAcquisitionView(state, unit, null, false))))
             .Concat(Enum.GetValues<AcquisitionRequestStatus>().Select(ConsumerAcquisitionLabels.StatusKey))
-            .Concat(["acquisition.state.notAvailableYetHint", "acquisition.playback.starting"])
+            .Concat(["acquisition.state.notAvailableYetHint", "acquisition.playback.starting", "acquisition.playback.limitReached"])
             .Distinct()
             .ToArray();
 
@@ -169,5 +170,23 @@ public sealed class InstantPlayProjectionTests
             Assert.AreEqual("episode", acquisition.GetProperty("mediaUnit").GetString());
             Assert.AreEqual(25, acquisition.GetProperty("progressPercent").GetInt32());
         }
+    }
+
+    [TestMethod]
+    public void AnotherEpisodesTransferIsNeverShownForTheEpisodeAProfileWaitsFor()
+    {
+        var active = Guid.NewGuid();
+        var waiting = Guid.NewGuid();
+        var payload = Payload() with { ActiveWorkEpisodeId = active };
+        var transfer = Download(OperationStatus.Running, 1_000, 400);
+
+        var other = Project(Request(AcquisitionRequestStatus.Downloading), payload, transfer, target: waiting);
+        var same = Project(Request(AcquisitionRequestStatus.Downloading), payload, transfer, target: active);
+        var preparing = Project(Request(AcquisitionRequestStatus.Importing), payload, target: waiting);
+
+        Assert.AreEqual((ConsumerAcquisitionState.LookingForMedia, null), (other.State, other.ProgressPercent), "Episode 1 downloading is not episode 2 getting.");
+        Assert.AreEqual((ConsumerAcquisitionState.GettingMedia, 40), (same.State, same.ProgressPercent));
+        Assert.AreEqual(ConsumerAcquisitionState.LookingForMedia, preparing.State);
+        Assert.AreEqual(ConsumerAcquisitionState.GettingMedia, Project(Request(AcquisitionRequestStatus.Downloading), payload, transfer, episode: false).State, "A request-level view has no waiting episode to mismatch.");
     }
 }

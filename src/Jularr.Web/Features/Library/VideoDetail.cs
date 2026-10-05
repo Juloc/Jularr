@@ -125,7 +125,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             var movieFiles = files.Where(x => x.WorkEpisodeId is null).OrderByDescending(x => x.Height ?? 0).ThenBy(x => x.FileId);
             versions = [.. movieFiles.Select(file => ToVersion(file, tracks.Where(x => x.FileId == file.FileId)))];
             movieProgress = snapshots.FirstOrDefault(x => x.WorkEpisodeId is null);
-            playback = new MoviePlaybackFacts(workId, tmdbId is not null, open is null ? null : OpenRequestFacts.ForMovie(open), versions.Count > 0, movieProgress);
+            playback = new MoviePlaybackFacts(workId, tmdbId is not null, open is null ? null : OpenRequestFacts.ForMovie(open), versions.Count > 0, movieProgress, work.Year is null || work.Year <= clock.GetUtcNow().Year);
         }
         else
         {

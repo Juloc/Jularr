@@ -82,6 +82,21 @@ public sealed class AnimeDetailPageRenderTests
     }
 
     [TestMethod]
+    public async Task ManagerOnlyAnimeDetailLinksNowhereIntoThePlayer()
+    {
+        var (host, anime, _) = await SeedAsync();
+        await using var _host = host;
+        var playing = WebUtility.HtmlDecode(await host.GetHtmlAsync($"/Library/Anime/{anime.Id}", asOwner: false));
+        StringAssert.Contains(playing, "/Library/Episode/");
+
+        await host.Modules.SetAsync(Jularr.Web.Features.Instance.InstanceModule.Playback, false);
+        var html = WebUtility.HtmlDecode(await host.GetHtmlAsync($"/Library/Anime/{anime.Id}", asOwner: false));
+
+        Assert.IsFalse(html.Contains("/Library/Episode/", StringComparison.Ordinal), "Episode cards and the hero must not link into the player.");
+        Assert.IsFalse(Between(html, "<section class=\"ad-hero", "</section>").Contains("Start watching", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public async Task WithoutABackdropTheCoverBecomesABlurredBackgroundNotAPoster()
     {
         var (host, anime, _) = await SeedAsync(withBanner: false);

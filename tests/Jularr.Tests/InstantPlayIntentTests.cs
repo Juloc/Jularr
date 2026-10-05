@@ -61,7 +61,7 @@ public sealed class InstantPlayIntentTests
         var requests = new AcquisitionRequestService(store, executors, account, capabilities, settings, new RecordingEventPublisher(), NullLogger<AcquisitionRequestService>.Instance, modules);
         var policies = new InstantPlayPolicyService(modules, requests, host.Get<VideoAcquisitionEngine>());
         var facts = new VideoPlaybackFactsQuery(db, store, new VideoProgressService(db), TimeProvider.System);
-        return new PlaybackIntentService(facts, policies, requests, store, new ConsumerAcquisitionQuery(db, host.Get<VideoRequestWorkResolver>(), TimeProvider.System), account);
+        return new PlaybackIntentService(facts, policies, requests, store, new ConsumerAcquisitionQuery(db, store, host.Get<VideoRequestWorkResolver>(), TimeProvider.System), account);
     }
 
     private static async Task<IReadOnlyList<AcquisitionRequest>> AllRequestsAsync(VideoAcquisitionTestHost host) =>
@@ -321,21 +321,6 @@ public sealed class InstantPlayIntentTests
     }
 
     [TestMethod]
-    public async Task StopWaitingHasNoServerCounterpartAndSharedAcquisitionKeepsRunning()
-    {
-        await using var host = await MovieHostAsync();
-        var result = await Intents(host).StartAsync(host.Work.Id, null, CancellationToken.None);
-
-        var methods = typeof(PlaybackIntentService).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly).Select(x => x.Name).ToArray();
-        CollectionAssert.AreEqual(new[] { nameof(PlaybackIntentService.StartAsync) }, methods, "The only server action is starting an intent; waiting is a client-side intent.");
-
-        // The client simply stops polling: the request and its download are untouched.
-        var request = await host.GetAsync(result.RequestId!.Value);
-        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
-        Assert.AreNotEqual(OperationStatus.Cancelled, (await host.Operations.GetAsync(request.OperationId!.Value))!.Status);
-    }
-
-    [TestMethod]
     public async Task ACoveredButUnprioritizedEpisodeIsPrioritizedWithoutTouchingTheRequest()
     {
         await using var host = await SeriesHostAsync();
@@ -387,14 +372,27 @@ public sealed class InstantPlayIntentTests
         await using var host = await SeriesHostAsync();
         var request = await host.CreateApprovedAsync();
         await host.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Completed, null, null, null, null, CancellationToken.None);
-        var projection = new ConsumerAcquisitionQuery(host.Environment.Db, host.Get<VideoRequestWorkResolver>(), TimeProvider.System);
+        var projection = new ConsumerAcquisitionQuery(host.Environment.Db, host.Requests, host.Get<VideoRequestWorkResolver>(), TimeProvider.System);
 
         var empty = await projection.ProjectAsync(await host.GetAsync(request.Id), null, playbackEnabled: true, CancellationToken.None);
         await host.AttachFileAsync(host.EpisodeId);
         var withMedia = await projection.ProjectAsync(await host.GetAsync(request.Id), null, playbackEnabled: true, CancellationToken.None);
 
-        Assert.AreEqual(ConsumerAcquisitionState.NotAvailableYet, empty.State);
+        Assert.AreEqual(ConsumerAcquisitionState.NotAvailable, empty.State, "Nothing is playable and nothing keeps looking.");
         Assert.AreEqual(ConsumerAcquisitionState.ReadyToWatch, withMedia.State);
+    }
+
+    [TestMethod]
+    public async Task WaitingIsClientSideSoTheSharedRequestAndItsDownloadKeepRunning()
+    {
+        await using var host = await MovieHostAsync();
+        var result = await Intents(host).StartAsync(host.Work.Id, null, CancellationToken.None);
+
+        // The client simply stops polling and asks for nothing more: nothing on the server changes.
+        var request = await host.GetAsync(result.RequestId!.Value);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
+        Assert.AreNotEqual(OperationStatus.Cancelled, (await host.Operations.GetAsync(request.OperationId!.Value))!.Status);
     }
 
     // ---- Wanted order and housekeeping --------------------------------------------------------------------------------
@@ -434,6 +432,122 @@ public sealed class InstantPlayIntentTests
         Assert.IsTrue(await host.HasPlayableAsync(host.SecondEpisodeId));
         var after = PayloadOf(await host.GetAsync(request.Id));
         Assert.IsFalse(after.HasPlaybackIntent, "Once playable, the episode is no longer waited for.");
+    }
+
+    // ---- Admin curation, completion races, limits ---------------------------------------------------------------------
+
+    [TestMethod]
+    public async Task AnAdminExcludedEpisodeIsNotAcquiredForAProfile()
+    {
+        await using var host = await SeriesHostAsync();
+        var all = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true) { ExcludedEpisodeIds = [host.EpisodeId!.Value] };
+        var request = await host.CreateApprovedAsync(all with { NextSearchUtc = DateTime.UtcNow.AddHours(6), Searches = 1 });
+
+        var result = await Intents(host).StartAsync(host.Work.Id, host.EpisodeId, CancellationToken.None);
+
+        Assert.AreEqual(PlaybackIntentOutcome.NotAvailable, result.Outcome);
+        Assert.IsFalse(PayloadOf(await host.GetAsync(request.Id)).HasPlaybackIntent, "No marker for an episode the Admin curated out.");
+        Assert.IsEmpty(host.Environment.Client.Grabs);
+    }
+
+    [TestMethod]
+    public async Task AdminSavingTheChecklistOrSwitchingMonitoringResetsWhatProfilesWaitFor()
+    {
+        await using var host = await SeriesHostAsync();
+        var monitoring = host.Get<Jularr.Web.Features.Acquisition.Monitoring.VideoMonitoringService>();
+        var marked = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true)
+        {
+            PlaybackEpisodeIds = [host.SecondEpisodeId!.Value],
+            NextSearchUtc = DateTime.UtcNow.AddHours(6),
+            Searches = 1
+        };
+        var request = await host.CreateApprovedAsync(marked);
+
+        await monitoring.SetSeriesAsync(host.Work.Id, "custom", [], [host.EpisodeId!.Value], monitorFuture: false, CancellationToken.None);
+        Assert.IsFalse(PayloadOf(await host.GetAsync(request.Id)).HasPlaybackIntent, "The saved checklist replaces what was asked for earlier.");
+
+        await Intents(host).StartAsync(host.Work.Id, host.SecondEpisodeId, CancellationToken.None);
+        Assert.IsTrue(PayloadOf(await host.GetAsync(request.Id)).HasPlaybackIntent);
+        await monitoring.SetSeriesAsync(host.Work.Id, "off", [], [], monitorFuture: false, CancellationToken.None);
+        await monitoring.SetSeriesAsync(host.Work.Id, "all", [], [], monitorFuture: true, CancellationToken.None);
+        var reopened = (await AllRequestsAsync(host)).Single(x => x.IsOpen);
+        Assert.IsFalse(PayloadOf(reopened).HasPlaybackIntent, "Monitoring off and on again does not bring a marker back.");
+    }
+
+    [TestMethod]
+    public async Task AnIntentThatAttachesWhileASearchDecidesCompletionKeepsTheRequestOpen()
+    {
+        await using var host = await SeriesHostAsync();
+        await host.AttachFileAsync(host.EpisodeId);
+        var scope = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.EpisodeId!.Value], MonitorFuture: false);
+        var request = await host.CreateApprovedAsync(scope);
+
+        // The search has read "episode 1 is available, nothing else requested" when the intent for episode 2 attaches.
+        var inner = host.Services.GetServices<IAcquisitionRequestExecutor>().Single();
+        var decorated = new AttachAfterExecutor(inner, async () => await Intents(host).StartAsync(host.Work.Id, host.SecondEpisodeId, CancellationToken.None));
+        var store = host.Get<AcquisitionAccessStore>();
+        var capabilities = new MediaCapabilityService(new MediaCapabilityStore(Directory(host)));
+        var settings = new AcquisitionRequestSettingsStore(Directory(host));
+        var account = AcquisitionAccessFixture.Account("owner", AccountRole.Owner);
+        var service = new AcquisitionRequestService(store, [decorated], account, capabilities, settings, new RecordingEventPublisher(), NullLogger<AcquisitionRequestService>.Instance);
+
+        await service.ContinueAsync(request.Id, CancellationToken.None);
+
+        var after = await host.GetAsync(request.Id);
+        Assert.IsTrue(after.IsOpen, "The stale 'all available' result must not complete the request over the new playback unit.");
+        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, PayloadOf(after).PlaybackEpisodeIds);
+        Assert.AreEqual(1, PayloadOf(after).ScopeRevision, "Attaching is an edit of the request.");
+    }
+
+    [TestMethod]
+    public async Task AProfileCanHaveOnlyAFewPlaybackRequestsOpenAtOnce()
+    {
+        await using var host = await SeriesHostAsync();
+        var store = host.Get<AcquisitionAccessStore>();
+        for (var index = 0; index < PlaybackIntentService.MaxOutstandingPlaybackRequests; index++)
+        {
+            var other = await host.AddWorkAsync($"Other {index}", $"90{index}");
+            var marked = new VideoRequestPayload(other.Id, other.CanonicalTitle, 2020, VideoRequestScope.WholeWork, [], MonitorFuture: false) { PlaybackWork = true };
+            var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", $"90{index}", other.CanonicalTitle, null, null, marked.Serialize());
+            await store.CreateAsync(draft, "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
+        }
+
+        var result = await Intents(host).StartAsync(host.Work.Id, null, CancellationToken.None);
+
+        Assert.AreEqual(PlaybackIntentOutcome.LimitReached, result.Outcome);
+        Assert.AreEqual(PlaybackIntentService.MaxOutstandingPlaybackRequests, (await AllRequestsAsync(host)).Count, "No further request, marker or priority.");
+        Assert.IsEmpty(host.Environment.Client.Grabs);
+        var other2 = await Intents(host, "bob", AccountRole.User).StartAsync(host.Work.Id, null, CancellationToken.None);
+        Assert.AreNotEqual(PlaybackIntentOutcome.LimitReached, other2.Outcome, "The limit is per profile.");
+    }
+
+    [TestMethod]
+    public async Task AnImportedMovieDoesNotKeepItsPlaybackMarker()
+    {
+        await using var host = await MovieHostAsync();
+        var result = await Intents(host).StartAsync(host.Work.Id, null, CancellationToken.None);
+        var request = await host.GetAsync(result.RequestId!.Value);
+        Assert.IsTrue(PayloadOf(request).PlaybackWork);
+
+        host.CompleteInSabnzbd(request, "/downloads/movies/Dune.2021");
+        await host.Operations.MarkSucceededAsync(request.OperationId!.Value, "Downloaded.");
+        await host.ProcessAsync(DateTime.UtcNow);
+
+        var after = await host.GetAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, after.Status);
+        Assert.IsFalse(PayloadOf(after).HasPlaybackIntent);
+    }
+
+    private sealed class AttachAfterExecutor(IAcquisitionRequestExecutor inner, Func<Task> afterDecision) : IAcquisitionRequestExecutor
+    {
+        public MediaAcquisitionKind Kind => inner.Kind;
+
+        public async Task<AcquisitionExecution> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+        {
+            var result = await inner.ExecuteAsync(request, cancellationToken);
+            await afterDecision();
+            return result;
+        }
     }
 
     private sealed class HookedCapabilityService(IMediaCapabilityService inner, Func<int, Task> afterRead) : IMediaCapabilityService

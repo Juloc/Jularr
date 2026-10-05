@@ -25,6 +25,9 @@ public enum PlaybackIntentOutcome
     /// <summary>Nothing valid to start: playback is off, the title cannot be requested or no episode needs watching.</summary>
     NotAvailable,
 
+    /// <summary>The profile already waits for several titles; finish or wait for one before starting another.</summary>
+    LimitReached,
+
     /// <summary>No such Movie or Series, or the episode is not one of it.</summary>
     TargetNotFound
 }
@@ -50,17 +53,28 @@ public sealed class PlaybackIntentService(
     ConsumerAcquisitionQuery projection,
     CurrentAccountContext account)
 {
+    /// <summary>
+    /// Playback-marked requests a profile may have open at once. The marker orders the executor, Wanted and the download client ahead of
+    /// other work, so one profile cannot hold them all.
+    /// </summary>
+    public const int MaxOutstandingPlaybackRequests = 3;
+
     /// <param name="workEpisodeId">A Series episode to watch; null means the next required episode of a Series, or the Movie itself.</param>
     public async Task<PlaybackIntentResult> StartAsync(Guid workId, Guid? workEpisodeId, CancellationToken cancellationToken)
     {
         var state = await facts.GetAsync(account.ProfileId, workId, cancellationToken);
-        if (state is null || !BelongsToWork(state.Facts, workEpisodeId))
+        if (state is null || state.Facts is MoviePlaybackFacts && workEpisodeId is not null)
         {
             return new PlaybackIntentResult(PlaybackIntentOutcome.TargetNotFound, null, null, null);
         }
 
         var policy = await policies.ResolveAsync(state.MediaType, cancellationToken);
         var action = PrimaryActionResolver.Resolve(state.Facts, policy, workEpisodeId);
+        if (action.Reason == PrimaryActionReason.UnknownTarget)
+        {
+            return new PlaybackIntentResult(PlaybackIntentOutcome.TargetNotFound, null, null, null);
+        }
+
         if (action.TargetIsLocal && action.Kind != PrimaryActionKind.Available)
         {
             return new PlaybackIntentResult(PlaybackIntentOutcome.PlayNow, action, null, null);
@@ -69,9 +83,14 @@ public sealed class PlaybackIntentService(
         switch (action.Kind)
         {
             case PrimaryActionKind.ShowRequestState:
-                return await ShowOrPrioritizeAsync(state, action, policy, cancellationToken);
+                // Someone who may not request this media type and did not make the request is told nothing about it.
+                return !policy.AllowsRequest && state.OpenRequest!.RequestedByProfileId != account.ProfileId && !account.Can(JularrPolicies.AdminMedia)
+                    ? new PlaybackIntentResult(PlaybackIntentOutcome.NotAvailable, action, null, null)
+                    : await ReportAsync(state.OpenRequest!, action, policy, cancellationToken);
             case PrimaryActionKind.StartWatching or PrimaryActionKind.WatchNow:
-                return await AcquireAsync(state, action, policy, cancellationToken);
+                return await AtOutstandingLimitAsync(cancellationToken)
+                    ? new PlaybackIntentResult(PlaybackIntentOutcome.LimitReached, action, null, null)
+                    : await AcquireAsync(state, action, policy, cancellationToken);
             case PrimaryActionKind.Request:
                 return new PlaybackIntentResult(PlaybackIntentOutcome.RequestRequired, action, null, null);
             default:
@@ -79,32 +98,10 @@ public sealed class PlaybackIntentService(
         }
     }
 
-    private static bool BelongsToWork(PlaybackFacts facts, Guid? workEpisodeId) => facts switch
+    private async Task<bool> AtOutstandingLimitAsync(CancellationToken cancellationToken)
     {
-        MoviePlaybackFacts => workEpisodeId is null,
-        SeriesPlaybackFacts series => workEpisodeId is null || series.Units.Any(x => x.Id == workEpisodeId),
-        _ => false
-    };
-
-    /// <summary>
-    /// An equivalent request covers the target. Its state is shown, but a profile waiting for a unit that is missing and not yet
-    /// prioritized still gets it prioritized: the request itself is untouched. Someone who may not request this media type and did not
-    /// make the request is told nothing about it.
-    /// </summary>
-    private async Task<PlaybackIntentResult> ShowOrPrioritizeAsync(VideoPlaybackState state, PrimaryAction action, InstantPlayPolicy policy, CancellationToken cancellationToken)
-    {
-        var open = state.OpenRequest!;
-        if (!policy.AllowsRequest && open.RequestedByProfileId != account.ProfileId && !account.Can(JularrPolicies.AdminMedia))
-        {
-            return new PlaybackIntentResult(PlaybackIntentOutcome.NotAvailable, action, null, null);
-        }
-
-        var payload = VideoRequestPayload.Parse(open.PayloadJson);
-        var prioritized = action.WorkEpisodeId is { } episodeId ? payload?.PlaybackEpisodeIds?.Contains(episodeId) == true : payload?.PlaybackWork == true;
-        var hasTarget = state.MediaType == WorkMediaType.Movie || action.WorkEpisodeId is not null;
-        return policy.AllowsInstantAcquisition && hasTarget && !prioritized && open.Status != AcquisitionRequestStatus.Pending
-            ? await AttachAsync(state, open, action, policy, cancellationToken)
-            : await ReportAsync(open, action, policy, cancellationToken);
+        var open = await requestStore.ListAsync(null, account.ProfileId, openOnly: true, limit: 100, cancellationToken);
+        return open.Count(x => x.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv && VideoRequestPayload.Parse(x.PayloadJson)?.HasPlaybackIntent == true) >= MaxOutstandingPlaybackRequests;
     }
 
     private async Task<PlaybackIntentResult> ReportAsync(AcquisitionRequest request, PrimaryAction action, InstantPlayPolicy policy, CancellationToken cancellationToken)
@@ -163,8 +160,10 @@ public sealed class PlaybackIntentService(
             return new PlaybackIntentResult(PlaybackIntentOutcome.NotAvailable, action, null, null);
         }
 
+        // A newly attached unit is an edit of the request like an Admin scope change: the new revision keeps a search that already decided
+        // "everything requested is available" from completing the request over it, and the reset back-off wakes the next pass.
         var fallback = VideoRequestPayload.Default(request.Kind, action.WorkId, state.Title, state.Year);
-        if (!await requestStore.PatchPayloadAsync(request.Id, stored => WithPlaybackUnit(VideoRequestPayload.Parse(stored) ?? fallback, action.WorkEpisodeId).Serialize(), cancellationToken))
+        if (!await requestStore.PatchPayloadAsync(request.Id, stored => WithAttachedUnit(VideoRequestPayload.Parse(stored) ?? fallback, action.WorkEpisodeId).Serialize(), cancellationToken))
         {
             return new PlaybackIntentResult(PlaybackIntentOutcome.NotAvailable, action, null, null);
         }
@@ -185,12 +184,18 @@ public sealed class PlaybackIntentService(
             ? WithPlaybackUnit(new VideoRequestPayload(action.WorkId, state.Title, state.Year, VideoRequestScope.Custom, [episodeId], MonitorFuture: false, SelectedSeasonIds: []), episodeId)
             : WithPlaybackUnit(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, action.WorkId, state.Title, state.Year), null);
 
+    private static VideoRequestPayload WithAttachedUnit(VideoRequestPayload payload, Guid? workEpisodeId)
+    {
+        var marked = WithPlaybackUnit(payload, workEpisodeId);
+        return marked == payload ? payload : marked with { ScopeRevision = payload.ScopeRevision + 1, Searches = 0, NextSearchUtc = null };
+    }
+
     /// <summary>Adds the playback unit without touching the scope; adding the same unit again changes nothing.</summary>
     private static VideoRequestPayload WithPlaybackUnit(VideoRequestPayload payload, Guid? workEpisodeId)
     {
         if (workEpisodeId is not { } episodeId)
         {
-            return payload with { PlaybackWork = true };
+            return payload.PlaybackWork ? payload : payload with { PlaybackWork = true };
         }
 
         var current = payload.PlaybackEpisodeIds ?? [];

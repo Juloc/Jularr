@@ -6,6 +6,7 @@ using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Ui;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Jularr.Web.Pages.Library;
@@ -20,7 +21,8 @@ public abstract class VideoDetailPageModel(
     CurrentAccountContext account,
     IAppShellService appShell,
     VideoDetailQuery query,
-    InstantPlayPolicyService policies) : PageModel
+    InstantPlayPolicyService policies,
+    PlaybackIntentService intents) : PageModel
 {
     protected abstract WorkMediaType MediaType { get; }
 
@@ -46,6 +48,31 @@ public abstract class VideoDetailPageModel(
     /// <summary>False on a manager-only instance: no page element links into the player.</summary>
     public bool PlaybackEnabled { get; private set; }
 
+    /// <summary>
+    /// The explicit playback intent of the hero action (Start watching, Watch now) until the in-place control sends it: a local target
+    /// opens the player, a missing one is acquired or attached to its request, and the page shows the request's state again.
+    /// </summary>
+    public async Task<IActionResult> OnPostStartAsync(Guid workId, Guid? episodeId, CancellationToken cancellationToken)
+    {
+        var result = await intents.StartAsync(workId, episodeId, cancellationToken);
+        if (result.Outcome == PlaybackIntentOutcome.TargetNotFound)
+        {
+            return NotFound();
+        }
+
+        if (result.Outcome == PlaybackIntentOutcome.PlayNow && result.Action is { } action)
+        {
+            return Redirect(VideoDetailView.WatchHref(action.WorkId, action.WorkEpisodeId));
+        }
+
+        if (result.Outcome == PlaybackIntentOutcome.LimitReached)
+        {
+            TempData["Status"] = (await UiRequestLocalization.GetBundleAsync(HttpContext, db))["acquisition.playback.limitReached"];
+        }
+
+        return RedirectToPage(new { workId });
+    }
+
     /// <returns>False when there is no such Work of this page's media type.</returns>
     protected async Task<bool> LoadAsync(Guid workId, CancellationToken cancellationToken)
     {
@@ -63,8 +90,7 @@ public abstract class VideoDetailPageModel(
         PrimaryAction = PrimaryActionResolver.Resolve(detail.Playback, policy);
         ActionEpisode = PrimaryAction.WorkEpisodeId is { } episodeId ? detail.Episodes.FirstOrDefault(x => x.Id == episodeId) : null;
         PlayHref = PrimaryAction.TargetIsLocal && PrimaryAction.Kind is not (PrimaryActionKind.Available or PrimaryActionKind.None) ? VideoDetailView.WatchHref(PrimaryAction.WorkId, PrimaryAction.WorkEpisodeId) : null;
-        var acquires = PrimaryAction.Kind == PrimaryActionKind.Request || PrimaryAction.Kind is PrimaryActionKind.StartWatching or PrimaryActionKind.WatchNow && !PrimaryAction.TargetIsLocal;
-        OffersRequest = policy.AllowsRequest && detail.Request is { Open: null } && (acquires || VideoDetailView.RequestableEpisodes(detail.Episodes).Count > 0);
+        OffersRequest = policy.AllowsRequest && detail.Request is { Open: null } && (PrimaryAction.Kind == PrimaryActionKind.Request || VideoDetailView.RequestableEpisodes(detail.Episodes).Count > 0);
         return true;
     }
 }

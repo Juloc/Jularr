@@ -5,7 +5,7 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.MediaCore;
-using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.RateLimiting;
@@ -142,7 +142,18 @@ public sealed class InstantPlayApiTests
     }
 
     [TestMethod]
-    public async Task BothRoutesAreAuthenticatedRateLimitedAndTheIntentBodyIsBounded()
+    public async Task AnOversizedIntentBodyIsRefusedBeforeItIsRead()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var big = new { target = new { workId = Guid.NewGuid(), workEpisodeId = (Guid?)null }, padding = new string('x', 100_000) };
+
+        var (status, _) = await host.SendAsync(HttpMethod.Post, Intents, big, asOwner: true);
+
+        Assert.AreEqual(HttpStatusCode.RequestEntityTooLarge, status);
+    }
+
+    [TestMethod]
+    public async Task BothRoutesAreAuthenticatedAndRateLimitedAndNeitherOffersACancelOrStopWaitingRoute()
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var endpoints = host.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().ToArray();
@@ -155,6 +166,11 @@ public sealed class InstantPlayApiTests
             Assert.AreEqual(policy, endpoint.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName);
         }
 
-        Assert.IsTrue(intent.Metadata.GetMetadata<IRequestSizeLimitMetadata>()?.MaxRequestBodySize is <= 4096, "The intent body is a target id pair, not an open upload.");
+        // Stop waiting is a client-side wait: the only server actions around an intent are starting one and reading a request.
+        Assert.AreEqual("POST", string.Join(",", intent.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods));
+        Assert.AreEqual("GET", string.Join(",", status.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods));
+        var related = endpoints.Select(x => x.RoutePattern.RawText!).Where(x => x.Contains("playback-intent", StringComparison.Ordinal) || x.Contains("/requests", StringComparison.Ordinal)).ToArray();
+        CollectionAssert.AreEquivalent(new[] { intent.RoutePattern.RawText, status.RoutePattern.RawText }, related);
+        Assert.IsFalse(endpoints.Any(x => x.RoutePattern.RawText!.Contains("cancel", StringComparison.OrdinalIgnoreCase) || x.RoutePattern.RawText.Contains("stop", StringComparison.OrdinalIgnoreCase)));
     }
 }

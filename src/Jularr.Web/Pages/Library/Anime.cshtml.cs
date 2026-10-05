@@ -39,6 +39,8 @@ public sealed class AnimeModel(
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public Guid AnimeId { get; private set; }
+    /// <summary>False on a manager-only instance: the page links nowhere into the player.</summary>
+    public bool PlaybackEnabled { get; private set; }
     public string AnimeTitle { get; private set; } = "";
     public string LocalAnimeTitle { get; private set; } = "";
     public AnimeMetadata? Metadata { get; private set; }
@@ -162,6 +164,7 @@ public sealed class AnimeModel(
             id,
             Metadata?.BannerImageUrl);
         SearchQuery = string.IsNullOrWhiteSpace(q) ? anime.Title : q.Trim();
+        PlaybackEnabled = instanceModules is null || await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken);
 
         var learning = await new LearningConfigurationStore(db, instanceModules).ResolveAsync(
             currentAccount.ProfileId,

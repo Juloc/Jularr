@@ -32,9 +32,12 @@ public sealed class InstantPlayResolverTests
 
     private static MediaProgressSnapshot MovieProgress(long positionMs, bool completed) => new(WorkId, null, positionMs, 6_000_000, completed, Base);
 
-    private static OpenRequestFacts Open(AcquisitionRequestStatus status, params Guid[] covers) => new(status, CoversWork: true, covers.ToHashSet());
+    /// <param name="prioritized">A profile already waits for the Movie, so the intent has nothing left to add.</param>
+    private static OpenRequestFacts Open(AcquisitionRequestStatus status, bool prioritized = true, bool monitored = true) =>
+        new(status, monitored, CoversWork: true, new HashSet<Guid>(), new HashSet<Guid>(), prioritized, new HashSet<Guid>());
 
-    private static OpenRequestFacts OpenSeries(AcquisitionRequestStatus status, params Guid[] covers) => new(status, CoversWork: false, covers.ToHashSet());
+    private static OpenRequestFacts OpenSeries(AcquisitionRequestStatus status, Guid[] covers, Guid[]? prioritized = null, Guid[]? excluded = null, bool monitored = true) =>
+        new(status, monitored, CoversWork: false, covers.ToHashSet(), (excluded ?? []).ToHashSet(), false, (prioritized ?? []).ToHashSet());
 
     private static OpenRequestFacts Pending() => Open(AcquisitionRequestStatus.Pending);
 
@@ -190,7 +193,7 @@ public sealed class InstantPlayResolverTests
         AssertAction(available, PrimaryActionKind.Available, PrimaryActionReason.PlaybackDisabled);
         AssertAction(PrimaryActionResolver.Resolve(Series(units), ManagerOnly), PrimaryActionKind.Available, PrimaryActionReason.PlaybackDisabled, units[0].Id);
 
-        foreach (var facts in new PlaybackFacts[] { Movie(true), Movie(false), Series(units), Series([Unit(1, 1, local: false)]), Movie(false, open: Open(AcquisitionRequestStatus.Searching)) })
+        foreach (var facts in new PlaybackFacts[] { Movie(true), Movie(false), Series(units), Series([Unit(1, 1, local: false)]), Movie(false, open: Open(AcquisitionRequestStatus.Searching, prioritized: false)) })
         {
             var kind = PrimaryActionResolver.Resolve(facts, ManagerOnly).Kind;
             CollectionAssert.DoesNotContain(new[] { PrimaryActionKind.Play, PrimaryActionKind.Continue, PrimaryActionKind.StartWatching, PrimaryActionKind.WatchNow }, kind);
@@ -229,7 +232,8 @@ public sealed class InstantPlayResolverTests
         var units = new[] { Unit(1, 1, local: false) };
 
         AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Downloading)), Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive);
-        AssertAction(PrimaryActionResolver.Resolve(Series(units, open: OpenSeries(AcquisitionRequestStatus.Searching, units[0].Id)), Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive, units[0].Id);
+        var searching = Series(units, open: OpenSeries(AcquisitionRequestStatus.Searching, [units[0].Id], [units[0].Id]));
+        AssertAction(PrimaryActionResolver.Resolve(searching, Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive, units[0].Id);
         AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Pending()), Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.AwaitingApproval, message: "Approval is never bypassed.");
         AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Searching)), ManagerOnly), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive);
         Assert.AreEqual(PrimaryActionKind.Play, PrimaryActionResolver.Resolve(Movie(true, open: Open(AcquisitionRequestStatus.Downloading)), Everything).Kind, "Playable content wins over an open request.");
@@ -240,11 +244,49 @@ public sealed class InstantPlayResolverTests
     {
         var units = new[] { Unit(1, 1, local: false), Unit(1, 2, local: false) };
 
-        var approved = Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, units[1].Id));
+        var approved = Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, [units[1].Id]));
         AssertAction(PrimaryActionResolver.Resolve(approved, Everything), PrimaryActionKind.StartWatching, PrimaryActionReason.InstantAcquisition, units[0].Id);
         AssertAction(PrimaryActionResolver.Resolve(approved, ApprovalNeeded), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive, units[0].Id);
 
         var pending = Series(units, open: PendingSeries(units[1].Id));
         AssertAction(PrimaryActionResolver.Resolve(pending, Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.AwaitingApproval, units[0].Id);
+    }
+
+    [TestMethod]
+    public void ACoveredUnitNobodyWaitsForYetIsPrioritizedByTheIntentAndThenOnlyShown()
+    {
+        var units = new[] { Unit(1, 1, local: false), Unit(1, 2, local: false) };
+        var covered = Series(units, open: OpenSeries(AcquisitionRequestStatus.Downloading, [units[0].Id, units[1].Id]));
+        var waited = Series(units, open: OpenSeries(AcquisitionRequestStatus.Downloading, [units[0].Id, units[1].Id], prioritized: [units[0].Id]));
+
+        AssertAction(PrimaryActionResolver.Resolve(covered, Everything), PrimaryActionKind.StartWatching, PrimaryActionReason.InstantAcquisition, units[0].Id);
+        AssertAction(PrimaryActionResolver.Resolve(waited, Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive, units[0].Id);
+        AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Approved, prioritized: false)), Everything), PrimaryActionKind.WatchNow, PrimaryActionReason.InstantAcquisition);
+        AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Approved, prioritized: false)), ApprovalNeeded), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive);
+    }
+
+    [TestMethod]
+    public void AdminCurationBeatsAPlaybackIntent()
+    {
+        var units = new[] { Unit(1, 1, local: false), Unit(1, 2, local: false) };
+        var excluded = Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, [units[1].Id], excluded: [units[0].Id]));
+        var stopped = Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, [units[0].Id, units[1].Id], monitored: false));
+
+        AssertAction(PrimaryActionResolver.Resolve(excluded, Everything), PrimaryActionKind.None, PrimaryActionReason.ExcludedFromRequest, units[0].Id);
+        AssertAction(PrimaryActionResolver.Resolve(excluded, Everything, units[0].Id), PrimaryActionKind.None, PrimaryActionReason.ExcludedFromRequest, units[0].Id);
+        AssertAction(PrimaryActionResolver.Resolve(stopped, Everything), PrimaryActionKind.None, PrimaryActionReason.MonitoringStopped, units[0].Id);
+        AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Approved, monitored: false)), Everything), PrimaryActionKind.None, PrimaryActionReason.MonitoringStopped);
+    }
+
+    [TestMethod]
+    public void AnUnairedEpisodeOrUnannouncedMovieIsNeverMarkedOrAcquired()
+    {
+        var units = new[] { Unit(1, 1, local: false, released: false) };
+        var open = Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, [units[0].Id]));
+
+        AssertAction(PrimaryActionResolver.Resolve(open, Everything, units[0].Id), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive, units[0].Id);
+        var movie = Movie(false) with { IsReleased = false };
+        AssertAction(PrimaryActionResolver.Resolve(movie, Everything), PrimaryActionKind.Request, PrimaryActionReason.NotReleased);
+        AssertAction(PrimaryActionResolver.Resolve(movie with { OpenRequest = Open(AcquisitionRequestStatus.Approved, prioritized: false) }, Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive);
     }
 }

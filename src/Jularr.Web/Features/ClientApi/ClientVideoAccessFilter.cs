@@ -36,10 +36,10 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
                 ClientVideoPlayerRequest request => request.Target,
                 ClientPlaybackPlanRequest request => request.Target,
                 ClientVideoProgressUpdate update => update.Target,
-                ClientPlaybackIntentRequest request => request.Target,
                 _ => null
             })
-            .FirstOrDefault(target => target is not null);
+            .FirstOrDefault(target => target is not null)
+            ?? (http.Items[ClientPlaybackIntentBodyFilter.ItemKey] as ClientPlaybackIntentRequest)?.Target;
         var queryWorkId = Guid.TryParse(http.Request.Query["workId"], out var parsed) ? parsed : (Guid?)null;
         if (bodyTarget is not null || queryWorkId is not null)
         {

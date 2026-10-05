@@ -335,12 +335,18 @@ public static class InstanceModuleRoutes
             [InstanceModule.Playback] =
             [
                 "/Library/Watch",
+                "/Library/Episode",
                 "/api/client/v1/video/player",
                 "/api/client/v1/video/playback-plan",
                 "/api/client/v1/video/playback-intents",
                 "/api/client/v1/video/progress",
                 "/api/client/v1/video/subtitle-tracks",
-                "/api/client/v1/stream-sessions"
+                "/api/client/v1/stream-sessions",
+                "/api/client/v1/media",
+                "/api/client/v1/episodes",
+                "/api/client/v1/offline/media",
+                "/api/client/v1/offline/prefetch",
+                "/api/client/v1/offline/progress"
             ]
         };
 

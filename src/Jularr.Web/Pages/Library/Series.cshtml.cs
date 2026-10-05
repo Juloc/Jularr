@@ -14,7 +14,8 @@ public sealed class SeriesDetailModel(
     CurrentAccountContext account,
     IAppShellService appShell,
     VideoDetailQuery query,
-    InstantPlayPolicyService policies) : VideoDetailPageModel(db, account, appShell, query, policies)
+    InstantPlayPolicyService policies,
+    PlaybackIntentService intents) : VideoDetailPageModel(db, account, appShell, query, policies, intents)
 {
     protected override WorkMediaType MediaType => WorkMediaType.Series;
 

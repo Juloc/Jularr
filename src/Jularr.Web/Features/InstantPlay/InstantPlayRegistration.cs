@@ -27,9 +27,13 @@ public static class InstantPlayRegistration
         return services;
     }
 
+    /// <summary>The signed-in account, else the client address: one household behind one address must not share a limit.</summary>
+    public static string AccountPartitionKey(HttpContext httpContext) =>
+        httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
     private static RateLimitPartition<string> PerAccount(HttpContext httpContext, int permits) =>
         RateLimitPartition.GetFixedWindowLimiter(
-            httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            AccountPartitionKey(httpContext),
             _ => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,

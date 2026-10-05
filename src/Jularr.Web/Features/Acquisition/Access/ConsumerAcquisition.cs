@@ -39,6 +39,9 @@ public enum ConsumerAcquisitionState
     /// <summary>No acceptable release exists yet and the request keeps looking.</summary>
     NotAvailableYet,
 
+    /// <summary>The request ended and nothing of the target is playable or on its way; nothing keeps looking.</summary>
+    NotAvailable,
+
     NeedsAttention,
 
     Rejected
@@ -62,9 +65,10 @@ public static class ConsumerAcquisitionProjector
 {
     /// <param name="targetIsLocal">The unit the consumer waits for can be played (or, on a manager-only instance, is imported) now.</param>
     /// <param name="download">The operation of the request's current download, or null when there is none.</param>
-    public static ConsumerAcquisitionView Project(AcquisitionRequest request, VideoRequestPayload? payload, OperationSnapshot? download, bool targetIsLocal, bool targetIsEpisode, bool playbackEnabled, DateTime nowUtc)
+    /// <param name="targetEpisodeId">The episode of a Series the consumer waits for; null for a Movie or the request as a whole.</param>
+    public static ConsumerAcquisitionView Project(AcquisitionRequest request, VideoRequestPayload? payload, OperationSnapshot? download, bool targetIsLocal, Guid? targetEpisodeId, bool playbackEnabled, DateTime nowUtc)
     {
-        var unit = request.Kind == MediaAcquisitionKind.Movie ? ConsumerMediaUnit.Movie : targetIsEpisode ? ConsumerMediaUnit.Episode : ConsumerMediaUnit.Media;
+        var unit = request.Kind == MediaAcquisitionKind.Movie ? ConsumerMediaUnit.Movie : targetEpisodeId is not null ? ConsumerMediaUnit.Episode : ConsumerMediaUnit.Media;
         var monitoring = request.IsOpen && payload is { Monitored: true, MonitorFuture: true };
         if (targetIsLocal)
         {
@@ -78,10 +82,19 @@ public static class ConsumerAcquisitionProjector
             AcquisitionRequestStatus.Searching => ConsumerAcquisitionState.LookingForMedia,
             AcquisitionRequestStatus.Downloading => DownloadingState(download),
             AcquisitionRequestStatus.Importing => ConsumerAcquisitionState.Preparing,
-            AcquisitionRequestStatus.Completed => ConsumerAcquisitionState.NotAvailableYet,
+            AcquisitionRequestStatus.Completed => ConsumerAcquisitionState.NotAvailable,
             AcquisitionRequestStatus.Rejected => ConsumerAcquisitionState.Rejected,
             _ => ConsumerAcquisitionState.NeedsAttention
         };
+
+        // The request works on one episode at a time: what it transfers or prepares is not the episode a consumer waits for, whose
+        // own turn is still ahead, so neither its state nor its percentage may be shown for it.
+        if (targetEpisodeId is { } target && payload?.ActiveWorkEpisodeId is { } active && active != target
+            && state is ConsumerAcquisitionState.GettingMedia or ConsumerAcquisitionState.Preparing)
+        {
+            state = ConsumerAcquisitionState.LookingForMedia;
+        }
+
         return new ConsumerAcquisitionView(state, unit, state == ConsumerAcquisitionState.GettingMedia ? ReliableProgress(download) : null, monitoring);
     }
 
@@ -114,12 +127,36 @@ public static class ConsumerAcquisitionProjector
             : null;
 }
 
+/// <summary>A request of a Movie or Series and the Work it names, for a consumer read.</summary>
+public sealed record ConsumerRequestRead(AcquisitionRequest Request, Guid WorkId);
+
 /// <summary>
 /// Reads the consumer projection of a request. A pure read: it never advances a request, and a failing operation lookup is not hidden
-/// as a made-up state.
+/// as a made-up state. Who may read a request is decided by the caller (the authorization boundary).
 /// </summary>
-public sealed class ConsumerAcquisitionQuery(AppDbContext db, VideoRequestWorkResolver works, TimeProvider clock)
+public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessStore requests, VideoRequestWorkResolver works, TimeProvider clock)
 {
+    /// <summary>
+    /// The Movie or Series request with its canonical Work, or null when it does not exist, has no Work yet, or <paramref name="workEpisodeId"/>
+    /// is not an episode of that Work (a Movie has none).
+    /// </summary>
+    public async Task<ConsumerRequestRead?> FindAsync(Guid requestId, Guid? workEpisodeId, CancellationToken cancellationToken)
+    {
+        var request = await requests.GetAsync(requestId, cancellationToken);
+        if (request is null || request.Kind is not (MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv))
+        {
+            return null;
+        }
+
+        var work = (await works.ResolveAsync([request], cancellationToken)).GetValueOrDefault(request.Id);
+        if (work is null || workEpisodeId is { } episodeId && (request.Kind == MediaAcquisitionKind.Movie || !await db.WorkEpisodes.AsNoTracking().AnyAsync(x => x.Id == episodeId && x.WorkId == work.WorkId, cancellationToken)))
+        {
+            return null;
+        }
+
+        return new ConsumerRequestRead(request, work.WorkId);
+    }
+
     /// <param name="workEpisodeId">The episode of a Series the consumer waits for; null for a Movie or when the request as a whole is meant.</param>
     public async Task<ConsumerAcquisitionView> ProjectAsync(AcquisitionRequest request, Guid? workEpisodeId, bool playbackEnabled, CancellationToken cancellationToken)
     {
@@ -130,7 +167,7 @@ public sealed class ConsumerAcquisitionQuery(AppDbContext db, VideoRequestWorkRe
             : workEpisodeId is { } episodeId
                 ? work is not null && await HasFileAsync(work.WorkId, episodeId, cancellationToken)
                 : request.Status == AcquisitionRequestStatus.Completed && work is not null && await HasAnyEpisodeFileAsync(work.WorkId, cancellationToken);
-        return ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), operation, local, workEpisodeId is not null, playbackEnabled, clock.GetUtcNow().UtcDateTime);
+        return ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), operation, local, workEpisodeId, playbackEnabled, clock.GetUtcNow().UtcDateTime);
     }
 
     private Task<bool> HasFileAsync(Guid workId, Guid? workEpisodeId, CancellationToken cancellationToken) =>
@@ -170,6 +207,7 @@ public static class ConsumerAcquisitionLabels
         ConsumerAcquisitionState.Available => "acquisition.state.available",
         ConsumerAcquisitionState.MonitoringFutureReleases => "acquisition.state.monitoringFutureReleases",
         ConsumerAcquisitionState.NotAvailableYet => "acquisition.state.notAvailableYet",
+        ConsumerAcquisitionState.NotAvailable => "acquisition.state.notAvailable",
         ConsumerAcquisitionState.NeedsAttention => "acquisition.state.needsAttention",
         _ => "acquisition.state.rejected"
     };

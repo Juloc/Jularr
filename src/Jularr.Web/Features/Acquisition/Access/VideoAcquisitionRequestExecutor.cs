@@ -75,6 +75,9 @@ public sealed record VideoRequestPayload(
 
     public bool HasPlaybackIntent => PlaybackWork || PlaybackEpisodeIds is { Length: > 0 };
 
+    /// <summary>The payload once nobody is waiting for a unit any more.</summary>
+    public VideoRequestPayload WithoutPlaybackIntent() => this with { PlaybackWork = false, PlaybackEpisodeIds = null };
+
     /// <summary>Whether the payload stored now still has the Admin scope revision a run read; the guard of a result that ends a request.</summary>
     public static Func<string?, bool> StillAtRevision(int revision) => stored => (Parse(stored)?.ScopeRevision ?? 0) == revision;
 
@@ -253,6 +256,7 @@ public sealed partial class VideoAcquisitionEngine(
         {
             if (await HasMovieFileAsync(target.WorkId, cancellationToken))
             {
+                await DropSatisfiedPlaybackIntentAsync(request, payload, cancellationToken);
                 return new AcquisitionExecution(
                     AcquisitionRequestStatus.Completed,
                     "Movie is already available in the library.",
@@ -267,6 +271,7 @@ public sealed partial class VideoAcquisitionEngine(
                 var continuation = await TvContinuationAsync(request, payload, cancellationToken);
                 if (!continuation.KeepOpen)
                 {
+                    await DropSatisfiedPlaybackIntentAsync(request, payload, cancellationToken);
                     return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "All requested TV episodes are available.", ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId))
                     {
                         StillApplies = VideoRequestPayload.StillAtRevision(payload.ScopeRevision)
@@ -449,12 +454,12 @@ public sealed partial class VideoAcquisitionEngine(
             return false;
         }
 
+        await DropSatisfiedPlaybackIntentAsync(request, payload, cancellationToken);
+
         if (request.Kind == MediaAcquisitionKind.Movie)
         {
             return false;
         }
-
-        await DropPlaybackEpisodesWithMediaAsync(request, payload, cancellationToken);
 
         var reset = payload with
         {
@@ -490,27 +495,33 @@ public sealed partial class VideoAcquisitionEngine(
     }
 
     /// <summary>
-    /// A playback intent is about episodes that are not playable yet: once an import gave one a file, it leaves the request's list, so
-    /// the request stops being searched ahead of others for it. This is a separate compare-and-set write because a search save keeps
-    /// the stored playback list (see <see cref="VideoRequestPayload.Reconcile"/>).
+    /// A playback intent is about units that are not playable yet: once one has a file it leaves the request, so the request stops being
+    /// searched ahead of others for it. Only satisfied units go; a unit another profile attached meanwhile stays. This is a separate
+    /// compare-and-set write because a search save keeps the stored playback markers (see <see cref="VideoRequestPayload.Reconcile"/>).
     /// </summary>
-    private async Task DropPlaybackEpisodesWithMediaAsync(AcquisitionRequest request, VideoRequestPayload payload, CancellationToken cancellationToken)
+    private async Task DropSatisfiedPlaybackIntentAsync(AcquisitionRequest request, VideoRequestPayload payload, CancellationToken cancellationToken)
     {
-        if (payload.PlaybackEpisodeIds is not { Length: > 0 } episodeIds)
+        if (!payload.HasPlaybackIntent)
         {
             return;
         }
 
-        var withMedia = await db.MediaAssets.AsNoTracking()
-            .Where(x => x.WorkEpisodeId != null && episodeIds.Contains(x.WorkEpisodeId.Value) && x.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == x.Id))
-            .Select(x => x.WorkEpisodeId!.Value)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-        if (withMedia.Count > 0)
+        var satisfiedWork = payload.PlaybackWork && request.Kind == MediaAcquisitionKind.Movie && await HasMovieFileAsync(payload.WorkId, cancellationToken);
+        var episodeIds = payload.PlaybackEpisodeIds ?? [];
+        var withMedia = episodeIds.Length == 0
+            ? []
+            : await db.MediaAssets.AsNoTracking()
+                .Where(x => x.WorkEpisodeId != null && episodeIds.Contains(x.WorkEpisodeId.Value) && x.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == x.Id))
+                .Select(x => x.WorkEpisodeId!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+        if (satisfiedWork || withMedia.Count > 0)
         {
             await requestStore.PatchPayloadAsync(
                 request.Id,
-                stored => VideoRequestPayload.Parse(stored) is { } current ? (current with { PlaybackEpisodeIds = [.. (current.PlaybackEpisodeIds ?? []).Except(withMedia)] }).Serialize() : stored,
+                stored => VideoRequestPayload.Parse(stored) is { } current
+                    ? (current with { PlaybackWork = current.PlaybackWork && !satisfiedWork, PlaybackEpisodeIds = [.. (current.PlaybackEpisodeIds ?? []).Except(withMedia)] }).Serialize()
+                    : stored,
                 cancellationToken);
         }
     }
