@@ -302,15 +302,6 @@ public sealed class AdminVideoMediaService(
 
     private sealed record TrackRow(Guid FileId, MediaTrackKind Kind, string Language);
 
-    /// <summary>Whether <paramref name="fileId"/> is a local video file of the Work, so an action on it cannot reach another title's file.</summary>
-    public Task<bool> OwnsFileAsync(Guid workId, Guid fileId, CancellationToken cancellationToken) =>
-        (
-            from asset in db.MediaAssets.AsNoTracking()
-            join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
-            where asset.WorkId == workId && asset.Kind == MediaAssetKind.Video && file.Id == fileId
-            select file.Id
-        ).AnyAsync(cancellationToken);
-
     /// <summary>Whether the Work can be acquired at all: its modules are on, an executor exists for the kind and a provider identity names it.</summary>
     public async Task<bool> CanAcquireAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
     {

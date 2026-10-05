@@ -85,6 +85,7 @@
             <div class="admmd-hero-actions">
                 @if (acquisition.CanAcquire)
                 {
+                    @* A Partial or On Series posts Off; Off posts all episodes. The posted value is always the explicit target state. *@
                     var turnOn = medium == AdminMediaMonitoring.Off;
                     <form method="post" asp-page-handler="@(isMovie ? "MovieMonitor" : "SeriesScope")" class="admmd-monitor-form">
                         @if (isMovie)
@@ -296,7 +297,7 @@ else
                                     <button class="admmd-toggle admmd-toggle-icon @(seasonMonitoring == AdminMediaMonitoring.On ? "is-on" : seasonMonitoring == AdminMediaMonitoring.Partial ? "is-partial" : "")"
                                             type="submit" role="checkbox"
                                             aria-checked="@(seasonMonitoring == AdminMediaMonitoring.On ? "true" : seasonMonitoring == AdminMediaMonitoring.Partial ? "mixed" : "false")"
-                                            aria-label="@ui.Format(seasonTurnOn ? "admin.media.monitorItem" : "admin.media.unmonitorItem", ("name", seasonName))">
+                                            aria-label="@ui.Format("admin.media.monitorItem", ("name", seasonName))">
                                         <span class="admin-switch" aria-hidden="true"></span>
                                     </button>
                                 </form>
@@ -363,7 +364,7 @@ else
                                                     <input type="hidden" name="monitored" value="@(episode.Monitored ? "false" : "true")" />
                                                     <input type="hidden" name="open" value="e@(episode.Season)x@(episode.Number)" />
                                                     <button class="admmd-toggle admmd-toggle-icon @(episode.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(episode.Monitored ? "true" : "false")"
-                                                            aria-label="@ui.Format(episode.Monitored ? "admin.media.unmonitorItem" : "admin.media.monitorItem", ("name", episodeName))">
+                                                            aria-label="@ui.Format("admin.media.monitorItem", ("name", episodeName))">
                                                         <span class="admin-switch" aria-hidden="true"></span>
                                                     </button>
                                                 </form>

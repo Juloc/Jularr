@@ -75,7 +75,7 @@ public sealed record VideoRequestPayload(
         try
         {
             return JsonSerializer.Deserialize<VideoRequestPayload>(json, JsonSerializerOptions.Web) is { } payload
-                ? payload with { Title = payload.Title ?? string.Empty, SelectedEpisodeIds = payload.SelectedEpisodeIds ?? [] }
+                ? payload with { Title = payload.Title ?? string.Empty, SelectedEpisodeIds = payload.SelectedEpisodeIds ?? [], ExcludedSeasonIds = payload.ExcludedSeasonIds ?? [] }
                 : null;
         }
         catch (JsonException)

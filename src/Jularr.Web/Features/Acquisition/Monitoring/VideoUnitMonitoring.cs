@@ -17,15 +17,10 @@ public static class VideoUnitMonitoring
     /// <paramref name="targets"/> are the episodes of the switched unit; <paramref name="wholeSeasonId"/> is set when the unit is a season
     /// that has its own id (the season is then switched as a whole and so are episodes that appear later). A Series that monitored nothing
     /// starts from an empty custom selection, never from what an earlier, stopped selection left behind. A custom selection that ends up
-    /// selecting nothing is unmonitored.
+    /// selecting nothing is unmonitored. Returns <paramref name="payload"/> itself when the switch changes nothing. Throws
+    /// <see cref="ArgumentException"/> when the result would need more explicit episodes than a request may hold.
     /// </summary>
-    public static VideoRequestPayload Switch(
-        VideoRequestPayload payload,
-        DateTime requestCreatedAt,
-        DateTime nowUtc,
-        IReadOnlyList<VideoEpisodeRef> targets,
-        Guid? wholeSeasonId,
-        bool monitored)
+    public static VideoRequestPayload Switch(VideoRequestPayload payload, DateTime requestCreatedAt, DateTime nowUtc, IReadOnlyList<VideoEpisodeRef> targets, Guid? wholeSeasonId, bool monitored)
     {
         if (!payload.Monitored && !monitored)
         {
@@ -49,10 +44,10 @@ public static class VideoUnitMonitoring
         var selectedSeasons = (current.SelectedSeasonIds ?? []).ToHashSet();
         var excludedEpisodes = (current.ExcludedEpisodeIds ?? []).ToHashSet();
         var excludedSeasons = (current.ExcludedSeasonIds ?? []).ToHashSet();
-        var targetIds = targets.Select(target => target.Id).ToHashSet();
 
         if (wholeSeasonId is { } season)
         {
+            var targetIds = targets.Select(target => target.Id).ToHashSet();
             excludedEpisodes.ExceptWith(targetIds);
             selectedEpisodes.ExceptWith(targetIds);
             if (monitored)
@@ -68,67 +63,50 @@ public static class VideoUnitMonitoring
                 selectedSeasons.Remove(season);
                 excludedSeasons.Add(season);
             }
-
-            return Finished(current, selectedEpisodes, selectedSeasons, excludedEpisodes, excludedSeasons);
         }
-
-        foreach (var target in targets)
+        else
         {
-            if (monitored)
+            // What the scope and the season exclusions alone say, without any explicit choice about the target itself.
+            var byScope = new VideoRequestSelection(current with { SelectedEpisodeIds = [], ExcludedEpisodeIds = [] }, requestCreatedAt);
+            foreach (var target in targets)
             {
+                selectedEpisodes.Remove(target.Id);
                 excludedEpisodes.Remove(target.Id);
-                if (!IncludedBy(current, requestCreatedAt, target, selectedEpisodes, selectedSeasons, excludedEpisodes, excludedSeasons))
+                var included = byScope.Includes(target.Id, target.SeasonId, target.AiredAt);
+                if (monitored && !included)
                 {
                     selectedEpisodes.Add(target.Id);
                 }
-            }
-            else
-            {
-                selectedEpisodes.Remove(target.Id);
-                if (IncludedBy(current, requestCreatedAt, target, selectedEpisodes, selectedSeasons, excludedEpisodes, excludedSeasons))
+                else if (!monitored && included)
                 {
                     excludedEpisodes.Add(target.Id);
                 }
             }
         }
 
-        return Finished(current, selectedEpisodes, selectedSeasons, excludedEpisodes, excludedSeasons);
-    }
+        if (selectedEpisodes.Count > VideoRequestScopeResolver.MaxSelectedEpisodes || excludedEpisodes.Count > VideoRequestScopeResolver.MaxSelectedEpisodes)
+        {
+            throw new ArgumentException("The selection is too large.", nameof(targets));
+        }
 
-    private static bool IncludedBy(
-        VideoRequestPayload payload,
-        DateTime requestCreatedAt,
-        VideoEpisodeRef episode,
-        HashSet<Guid> selectedEpisodes,
-        HashSet<Guid> selectedSeasons,
-        HashSet<Guid> excludedEpisodes,
-        HashSet<Guid> excludedSeasons) =>
-        new VideoRequestSelection(WithSets(payload, selectedEpisodes, selectedSeasons, excludedEpisodes, excludedSeasons), requestCreatedAt)
-            .Includes(episode.Id, episode.SeasonId, episode.AiredAt);
+        var unchanged = payload.Monitored
+            && selectedEpisodes.SetEquals(current.SelectedEpisodeIds)
+            && selectedSeasons.SetEquals(current.SelectedSeasonIds ?? [])
+            && excludedEpisodes.SetEquals(current.ExcludedEpisodeIds ?? [])
+            && excludedSeasons.SetEquals(current.ExcludedSeasonIds ?? []);
+        if (unchanged)
+        {
+            return payload;
+        }
 
-    private static VideoRequestPayload Finished(
-        VideoRequestPayload payload,
-        HashSet<Guid> selectedEpisodes,
-        HashSet<Guid> selectedSeasons,
-        HashSet<Guid> excludedEpisodes,
-        HashSet<Guid> excludedSeasons)
-    {
-        var next = WithSets(payload, selectedEpisodes, selectedSeasons, excludedEpisodes, excludedSeasons);
+        var next = current with
+        {
+            SelectedEpisodeIds = [.. selectedEpisodes.Order()],
+            SelectedSeasonIds = [.. selectedSeasons.Order()],
+            ExcludedEpisodeIds = [.. excludedEpisodes.Order()],
+            ExcludedSeasonIds = [.. excludedSeasons.Order()]
+        };
         var selectsNothing = next.Scope == VideoRequestScope.Custom && !next.MonitorFuture && selectedEpisodes.Count == 0 && selectedSeasons.Count == 0;
         return selectsNothing ? next with { Monitored = false } : next;
     }
-
-    private static VideoRequestPayload WithSets(
-        VideoRequestPayload payload,
-        HashSet<Guid> selectedEpisodes,
-        HashSet<Guid> selectedSeasons,
-        HashSet<Guid> excludedEpisodes,
-        HashSet<Guid> excludedSeasons) =>
-        payload with
-        {
-            SelectedEpisodeIds = [.. selectedEpisodes],
-            SelectedSeasonIds = [.. selectedSeasons],
-            ExcludedEpisodeIds = [.. excludedEpisodes],
-            ExcludedSeasonIds = [.. excludedSeasons]
-        };
 }

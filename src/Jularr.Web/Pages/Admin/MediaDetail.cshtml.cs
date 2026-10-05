@@ -218,24 +218,18 @@ public sealed class MediaDetailModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        var owned = await (
-                from media in db.MediaFiles.AsNoTracking()
-                join episode in db.Episodes.AsNoTracking() on media.EpisodeId equals episode.Id
-                where media.Id == fileId && episode.AnimeId == id
-                select media.Id)
-            .AnyAsync(cancellationToken);
-        if (!owned)
-        {
-            TempData["Error"] = Ui["admin.media.fileGone"];
-            return Redirect(Href(id, AdminMediaDetailView.IsAniList(view), open, ep));
-        }
-
         try
         {
-            var status = await reanalysis.ReanalyzeAsync(fileId, new OperationDescriptor(ReanalyzeOperationKind, "Anime", "Re-analyse anime media", ProfileId: currentAccount.ProfileId), cancellationToken);
-            TempData["AcquisitionNotice"] = status == MediaAnalysisStatus.Succeeded
-                ? Ui["admin.media.reanalyzed"]
-                : Ui["admin.media.reanalyzeIncomplete"];
+            var descriptor = new OperationDescriptor(ReanalyzeOperationKind, "Anime", "Re-analyse anime media", ProfileId: currentAccount.ProfileId);
+            var result = await reanalysis.ReanalyzeAnimeFileAsync(id, fileId, descriptor, cancellationToken);
+            if (!result.Found)
+            {
+                TempData["Error"] = Ui["admin.media.fileGone"];
+            }
+            else
+            {
+                TempData["AcquisitionNotice"] = result.Status == MediaAnalysisStatus.Succeeded ? Ui["admin.media.reanalyzed"] : Ui["admin.media.reanalyzeIncomplete"];
+            }
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or DbException)
         {

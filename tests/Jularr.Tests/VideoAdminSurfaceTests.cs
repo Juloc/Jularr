@@ -294,8 +294,147 @@ public sealed class VideoAdminSurfaceTests
         Assert.AreEqual("Video test", detail.Versions[0].Files[0].Location);
         Assert.AreEqual(5120, detail.SizeBytes);
         Assert.AreEqual(1, detail.Available, "A Movie is available once any version is.");
-        Assert.IsTrue(await host.Get<AdminVideoMediaService>().OwnsFileAsync(host.Work.Id, detail.Versions[0].Files[0].Id, CancellationToken.None));
-        Assert.IsFalse(await host.Get<AdminVideoMediaService>().OwnsFileAsync(Guid.NewGuid(), detail.Versions[0].Files[0].Id, CancellationToken.None), "A file of another title is never reachable.");
+    }
+
+    [TestMethod]
+    public async Task AnEpisodeSwitchedOnWhileAnotherIsSwitchedOffKeepsTheRequestOpenBecauseTheStatusFollowsTheWrittenPayload()
+    {
+        await using var host = await SeriesHostAsync(episodes: true);
+        var request = await host.CreateApprovedAsync();
+        await host.SetCustomScopeAsync([], [host.EpisodeId!.Value], false);
+        var paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var slow = new VideoMonitoringService(
+            host.Environment.Db,
+            host.Requests,
+            host.Get<AcquisitionRequestService>(),
+            host.Get<VideoAcquisitionEngine>(),
+            host.Get<QualityProfileStore>(),
+            new PausingClock(paused, resume.Task));
+
+        // The first admin read "the last selected episode goes off" and stops right after that read.
+        var lastOff = Task.Run(() => slow.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, false, CancellationToken.None));
+        await paused.Task;
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await host.Get<VideoMonitoringService>().SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, true, CancellationToken.None));
+        resume.SetResult();
+
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await lastOff);
+        var stored = await host.GetAsync(request.Id);
+        var payload = VideoRequestPayload.Parse(stored.PayloadJson)!;
+        Assert.IsTrue(payload.Monitored);
+        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, payload.SelectedEpisodeIds, "Both switches landed.");
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, stored.Status, "A request is only closed together with a payload that is unmonitored.");
+    }
+
+    [TestMethod]
+    public async Task ASwitchThatChangesNothingIsNotSavedAndKeepsTheRevisionAndTheSearchState()
+    {
+        await using var host = await SeriesHostAsync();
+        var request = await host.CreateApprovedAsync();
+        var monitoring = host.Get<VideoMonitoringService>();
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, false, CancellationToken.None));
+        await host.Requests.PatchPayloadAsync(request.Id, stored => (VideoRequestPayload.Parse(stored)! with { Searches = 2, LastProblem = "No release matched." }).Serialize(), CancellationToken.None);
+        var before = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
+
+        Assert.AreEqual(VideoMonitoringOutcome.Unchanged, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, false, CancellationToken.None), "A double click.");
+
+        var after = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
+        Assert.AreEqual(before.ScopeRevision, after.ScopeRevision);
+        Assert.AreEqual(2, after.Searches);
+        Assert.AreEqual("No release matched.", after.LastProblem);
+    }
+
+    [TestMethod]
+    public async Task ASeasonSwitchedOffIsStillExcludedAfterTheEngineWroteItsOwnState()
+    {
+        await using var host = await SeriesHostAsync();
+        var first = new WorkSeason { WorkId = host.Work.Id, SeasonNumber = 1, Title = "Season 1" };
+        var second = new WorkSeason { WorkId = host.Work.Id, SeasonNumber = 2, Title = "Season 2" };
+        host.Environment.Db.WorkSeasons.AddRange(first, second);
+        foreach (var existing in host.Environment.Db.WorkEpisodes.Where(episode => episode.WorkId == host.Work.Id))
+        {
+            existing.SeasonId = first.Id;
+        }
+
+        await host.Environment.Db.SaveChangesAsync();
+        await host.AddEpisodeAsync(2, 1, seasonId: second.Id);
+        var request = await host.CreateApprovedAsync();
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await host.Get<VideoMonitoringService>().SetSeasonMonitoredAsync(host.Work.Id, 1, false, CancellationToken.None));
+
+        await host.ProcessAsync(DateTime.UtcNow);
+
+        var payload = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
+        Assert.IsTrue(payload.Searches > 0 || payload.ActiveWorkEpisodeId is not null, "The engine searched and wrote its own fields.");
+        CollectionAssert.AreEqual(new[] { first.Id }, payload.ExcludedSeasonIds, "The season exclusion is Admin-owned and survives an engine write.");
+    }
+
+    [TestMethod]
+    public void TheSeasonExclusionIsAdminOwnedAndOlderPayloadsWithoutItStillRead()
+    {
+        var season = Guid.NewGuid();
+        var engine = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.AllCurrentAndFuture, [], true) { Searches = 3 };
+        var stored = engine with { ExcludedSeasonIds = [season], ScopeRevision = 4 };
+
+        var merged = (VideoRequestPayload)engine.Reconcile(stored.Serialize());
+
+        CollectionAssert.AreEqual(new[] { season }, merged.ExcludedSeasonIds);
+        Assert.AreEqual(4, merged.ScopeRevision);
+
+        var legacy = VideoRequestPayload.Parse("""{"workId":"00000000-0000-0000-0000-000000000001","title":"Show","scope":1,"selectedEpisodeIds":[],"monitorFuture":true}""")!;
+        Assert.IsNotNull(legacy.ExcludedSeasonIds);
+        Assert.AreEqual(0, legacy.ExcludedSeasonIds.Length);
+        Assert.IsTrue(new VideoRequestSelection(legacy, DateTime.UtcNow).Includes(Guid.NewGuid(), Guid.NewGuid(), null));
+    }
+
+    [TestMethod]
+    public void AWholeSeasonSwitchesAsOneUnitUnderEveryScopeAndAnIdlessSeasonFallsBackToItsEpisodes()
+    {
+        var created = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var season = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        var inSeason = new[] { new VideoEpisodeRef(Guid.NewGuid(), season, 1, created.AddDays(-30)), new VideoEpisodeRef(Guid.NewGuid(), season, 1, created.AddDays(-20)) };
+        var elsewhere = new VideoEpisodeRef(Guid.NewGuid(), other, 2, created.AddDays(-10));
+
+        foreach (var scope in new[] { VideoRequestScope.AllCurrentAndFuture, VideoRequestScope.FutureOnly })
+        {
+            var payload = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, scope, [], true);
+            var off = VideoUnitMonitoring.Switch(payload, created, created, inSeason, season, false);
+            Assert.AreEqual(scope, off.Scope);
+            var offSelection = new VideoRequestSelection(off, created);
+            Assert.IsFalse(inSeason.Any(episode => offSelection.Includes(episode.Id, season, episode.AiredAt)));
+            Assert.IsTrue(offSelection.Includes(elsewhere.Id, other, created.AddDays(2)), "Other seasons are untouched.");
+
+            var on = VideoUnitMonitoring.Switch(off, created, created, inSeason, season, true);
+            Assert.AreEqual(0, on.ExcludedSeasonIds!.Length);
+            var onSelection = new VideoRequestSelection(on, created);
+            Assert.IsTrue(inSeason.All(episode => onSelection.Includes(episode.Id, season, episode.AiredAt)), "Switched back on it covers its past episodes too.");
+        }
+
+        var idless = inSeason.Select(episode => episode with { SeasonId = null }).ToList();
+        var all = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.AllCurrentAndFuture, [], true);
+        var idlessOff = VideoUnitMonitoring.Switch(all, created, created, idless, null, false);
+        CollectionAssert.AreEquivalent(idless.Select(episode => episode.Id).ToArray(), idlessOff.ExcludedEpisodeIds!, "Without a season id each existing episode is excluded.");
+        Assert.AreEqual(0, idlessOff.ExcludedSeasonIds!.Length);
+    }
+
+    [TestMethod]
+    public void AnEpisodeOffInASelectedSeasonIsExcludedAndTheCapIsEnforcedWithoutASeasonId()
+    {
+        var created = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var season = Guid.NewGuid();
+        var episode = new VideoEpisodeRef(Guid.NewGuid(), season, 1, created.AddDays(-5));
+        var custom = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.Custom, [], false, SelectedSeasonIds: [season]);
+
+        var off = VideoUnitMonitoring.Switch(custom, created, created, [episode], null, false);
+
+        CollectionAssert.AreEqual(new[] { episode.Id }, off.ExcludedEpisodeIds);
+        CollectionAssert.AreEqual(new[] { season }, off.SelectedSeasonIds);
+        Assert.IsTrue(off.Monitored);
+        Assert.AreSame(off, VideoUnitMonitoring.Switch(off, created, created, [episode], null, false), "Excluding an excluded episode changes nothing.");
+
+        var many = Enumerable.Range(0, 5001).Select(_ => new VideoEpisodeRef(Guid.NewGuid(), null, 1, created.AddDays(-5))).ToList();
+        var fromNothing = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.Custom, [], false) { Monitored = false };
+        Assert.ThrowsExactly<ArgumentException>(() => VideoUnitMonitoring.Switch(fromNothing, created, created, many, null, true));
     }
 
     [TestMethod]
@@ -1050,6 +1189,23 @@ public sealed class VideoAdminSurfaceTests
         {
             Count++;
             return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    /// <summary>A clock that stops the first caller until the test lets it go, so a second admin can act between that caller's read and its write.</summary>
+    private sealed class PausingClock(TaskCompletionSource paused, Task resume) : TimeProvider
+    {
+        private int calls;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                paused.TrySetResult();
+                resume.Wait();
+            }
+
+            return DateTimeOffset.UtcNow;
         }
     }
 }

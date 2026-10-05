@@ -130,15 +130,16 @@ public sealed class MediaWorkModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        if (!await details.OwnsFileAsync(id, fileId, cancellationToken))
-        {
-            return NotFound();
-        }
-
         try
         {
-            var status = await reanalysis.ReanalyzeAsync(fileId, new OperationDescriptor(ReanalyzeOperationKind, "Video", "Re-analyse video media", ProfileId: currentAccount.ProfileId), cancellationToken);
-            TempData["Notice"] = status == MediaAnalysisStatus.Succeeded ? Ui["admin.media.reanalyzed"] : Ui["admin.media.reanalyzeIncomplete"];
+            var descriptor = new OperationDescriptor(ReanalyzeOperationKind, "Video", "Re-analyse video media", ProfileId: currentAccount.ProfileId);
+            var result = await reanalysis.ReanalyzeVideoFileAsync(id, fileId, descriptor, cancellationToken);
+            if (!result.Found)
+            {
+                return NotFound();
+            }
+
+            TempData["Notice"] = result.Status == MediaAnalysisStatus.Succeeded ? Ui["admin.media.reanalyzed"] : Ui["admin.media.reanalyzeIncomplete"];
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or DbException)
         {

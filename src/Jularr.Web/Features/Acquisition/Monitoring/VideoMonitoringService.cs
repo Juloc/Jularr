@@ -178,21 +178,20 @@ public sealed class VideoMonitoringService(
 
     /// <summary>
     /// Applies <see cref="VideoUnitMonitoring.Switch"/> to the stored payload inside the compare-and-set write, so a concurrent edit of another
-    /// unit is never overwritten. The read before it only decides whether the Series stays monitored (a switch that leaves nothing selected
-    /// ends the request like monitoring Off).
+    /// unit is never overwritten. The read before it only decides whether a Series without an open request needs one; whether an open request
+    /// ends is decided from the payload this very write produces (see <see cref="ApplyAsync"/>).
     /// </summary>
     private async Task<VideoMonitoringOutcome> SwitchUnitAsync(Work work, List<VideoEpisodeRef> targets, Guid? wholeSeasonId, bool monitored, CancellationToken cancellationToken)
     {
         var request = await FindOpenRequestAsync(MediaAcquisitionKind.Tv, work.Id, cancellationToken)
             ?? await FindStoppedRequestAsync(MediaAcquisitionKind.Tv, work.Id, cancellationToken);
         var now = clock.GetUtcNow().UtcDateTime;
-        var read = request is null ? Unmonitored(work) : VideoRequestPayload.Of(request, work.Id, work.CanonicalTitle, work.Year);
+        var read = request is null
+            ? VideoRequestPayload.Default(MediaAcquisitionKind.Tv, work.Id, work.CanonicalTitle, work.Year) with { Monitored = false }
+            : VideoRequestPayload.Of(request, work.Id, work.CanonicalTitle, work.Year);
         var on = VideoUnitMonitoring.Switch(read, request?.CreatedAt ?? now, now, targets, wholeSeasonId, monitored).Monitored;
         return await ApplyAsync(work, MediaAcquisitionKind.Tv, on, (payload, created) => VideoUnitMonitoring.Switch(payload, created, now, targets, wholeSeasonId, monitored), cancellationToken);
     }
-
-    private static VideoRequestPayload Unmonitored(Work work) =>
-        VideoRequestPayload.Default(MediaAcquisitionKind.Tv, work.Id, work.CanonicalTitle, work.Year) with { Monitored = false };
 
     /// <summary>Assigns the quality profile of one Work, or clears the override with a blank id.</summary>
     public async Task<VideoMonitoringOutcome> SetProfileAsync(MediaAcquisitionKind kind, Guid workId, string? profileId, CancellationToken cancellationToken)
@@ -207,14 +206,53 @@ public sealed class VideoMonitoringService(
         return VideoMonitoringOutcome.Saved;
     }
 
+    private delegate VideoRequestPayload PayloadEdit(VideoRequestPayload payload, DateTime requestCreatedAt);
+
+    /// <summary>
+    /// One edit of a request payload as the compare-and-set write sees it: the patch and the status choice both run on the payload stored at
+    /// that moment, so the status always follows the payload that is written. An edit that returns its input unchanged writes nothing new.
+    /// </summary>
+    private sealed class PayloadChange(VideoRequestPayload seed, PayloadEdit edit, DateTime requestCreatedAt)
+    {
+        public bool Changed { get; private set; } = true;
+
+        /// <summary>
+        /// The stored payload after the edit: a new revision and a fresh search. Turning monitoring on after it was off also forgets what the
+        /// earlier search tried, so a reopened request does not start in a back-off.
+        /// </summary>
+        public VideoRequestPayload Result(string? stored)
+        {
+            var current = VideoRequestPayload.Parse(stored) ?? seed;
+            var edited = edit(current, requestCreatedAt);
+            Changed = !ReferenceEquals(edited, current);
+            if (!Changed)
+            {
+                return current;
+            }
+
+            var next = edited with { ScopeRevision = current.ScopeRevision + 1, Searches = 0, NextSearchUtc = null, LastProblem = null };
+            return !current.Monitored && next.Monitored
+                ? next with { TriedReleases = null, ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null }
+                : next;
+        }
+
+        public string? Patch(string? stored)
+        {
+            var result = Result(stored);
+            return Changed ? result.Serialize() : stored;
+        }
+    }
+
     /// <summary>
     /// Writes <paramref name="edit"/> to the title's request: the open one, else the one monitoring Off ended (reopened with its requester),
-    /// else a new request. Every write is conditional on the status it was decided from, so a concurrent change makes it look again instead of
+    /// else a new request. Every write is conditional on the status it was decided from, and the status is chosen from the payload the same
+    /// write stores (an approved request ends when that payload is no longer monitored), so a concurrent change makes it look again instead of
     /// leaving a status and a payload that disagree. Off with nothing open changes nothing.
     /// </summary>
-    private async Task<VideoMonitoringOutcome> ApplyAsync(Work work, MediaAcquisitionKind kind, bool on, Func<VideoRequestPayload, DateTime, VideoRequestPayload> edit, CancellationToken cancellationToken)
+    private async Task<VideoMonitoringOutcome> ApplyAsync(Work work, MediaAcquisitionKind kind, bool on, PayloadEdit edit, CancellationToken cancellationToken)
     {
         var seed = VideoRequestPayload.Default(kind, work.Id, work.CanonicalTitle, work.Year);
+        AcquisitionRequestStatus? endStatus = null;
         try
         {
             for (var attempt = 0; attempt < MaxAttempts; attempt++)
@@ -222,12 +260,15 @@ public sealed class VideoMonitoringService(
                 var open = await FindOpenRequestAsync(kind, work.Id, cancellationToken);
                 if (open is not null)
                 {
-                    var ends = !on && open.Status == AcquisitionRequestStatus.Approved;
-                    var endStatus = ends ? await engine.StatusWhenMonitoringStopsAsync(kind, work.Id, cancellationToken) : open.Status;
-                    var message = ends ? MonitoringTurnedOff : open.Status == AcquisitionRequestStatus.Approved ? MonitoringChanged : null;
-                    if (await requests.PatchPayloadAsync(open.Id, stored => Edited(stored, seed, edit, open.CreatedAt), open.Status, endStatus, message, cancellationToken))
+                    if (open.Status == AcquisitionRequestStatus.Approved)
                     {
-                        return VideoMonitoringOutcome.Saved;
+                        endStatus ??= await engine.StatusWhenMonitoringStopsAsync(kind, work.Id, cancellationToken);
+                    }
+
+                    var change = new PayloadChange(seed, edit, open.CreatedAt);
+                    if (await requests.PatchPayloadAsync(open.Id, change.Patch, open.Status, stored => StatusAfter(open.Status, endStatus, change, stored), cancellationToken))
+                    {
+                        return change.Changed ? VideoMonitoringOutcome.Saved : VideoMonitoringOutcome.Unchanged;
                     }
 
                     continue;
@@ -245,9 +286,10 @@ public sealed class VideoMonitoringService(
 
                 if (await FindStoppedRequestAsync(kind, work.Id, cancellationToken) is { } stopped)
                 {
-                    if (await requests.PatchPayloadAsync(stopped.Id, stored => Edited(stored, seed, edit, stopped.CreatedAt), stopped.Status, AcquisitionRequestStatus.Approved, "Monitoring was turned on again.", cancellationToken))
+                    var reopen = new PayloadChange(seed, edit, stopped.CreatedAt);
+                    if (await requests.PatchPayloadAsync(stopped.Id, reopen.Patch, stopped.Status, stored => StatusAfterReopen(stopped.Status, reopen, stored), cancellationToken))
                     {
-                        return VideoMonitoringOutcome.Saved;
+                        return reopen.Changed ? VideoMonitoringOutcome.Saved : VideoMonitoringOutcome.Unchanged;
                     }
 
                     continue;
@@ -258,7 +300,8 @@ public sealed class VideoMonitoringService(
                     return VideoMonitoringOutcome.NotAcquirable;
                 }
 
-                var draft = new AcquisitionRequestDraft(kind, identity.Provider, identity.ExternalId, work.CanonicalTitle, null, null, edit(seed with { Monitored = false }, clock.GetUtcNow().UtcDateTime).Serialize());
+                var created = edit(seed with { Monitored = false }, clock.GetUtcNow().UtcDateTime);
+                var draft = new AcquisitionRequestDraft(kind, identity.Provider, identity.ExternalId, work.CanonicalTitle, null, null, created.Serialize());
                 if (!(await requestService.SubmitWithOutcomeAsync(draft, cancellationToken)).AlreadyRequested)
                 {
                     return VideoMonitoringOutcome.Saved;
@@ -273,18 +316,25 @@ public sealed class VideoMonitoringService(
         return VideoMonitoringOutcome.Conflict;
     }
 
-    /// <summary>
-    /// The stored payload after an Admin change: the edit itself, a new revision and a fresh search. Turning monitoring on after it was off
-    /// also forgets what the earlier search tried, so a reopened request does not start in a back-off.
-    /// </summary>
-    private static string Edited(string? stored, VideoRequestPayload seed, Func<VideoRequestPayload, DateTime, VideoRequestPayload> edit, DateTime requestCreatedAt)
+    /// <summary>The status an open request gets from the payload being written: an approved one ends once that payload is unmonitored.</summary>
+    private static AcquisitionStatusOutcome StatusAfter(AcquisitionRequestStatus status, AcquisitionRequestStatus? endStatus, PayloadChange change, string? stored)
     {
-        var current = VideoRequestPayload.Parse(stored) ?? seed;
-        var next = edit(current, requestCreatedAt) with { ScopeRevision = current.ScopeRevision + 1, Searches = 0, NextSearchUtc = null, LastProblem = null };
-        return (!current.Monitored && next.Monitored
-            ? next with { TriedReleases = null, ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null }
-            : next).Serialize();
+        var result = change.Result(stored);
+        if (!change.Changed || status != AcquisitionRequestStatus.Approved)
+        {
+            return new AcquisitionStatusOutcome(status, null);
+        }
+
+        return result.Monitored
+            ? new AcquisitionStatusOutcome(status, MonitoringChanged)
+            : new AcquisitionStatusOutcome(endStatus ?? status, MonitoringTurnedOff);
     }
+
+    /// <summary>A stopped request is reopened only when the payload being written is monitored again; otherwise it stays as it ended.</summary>
+    private static AcquisitionStatusOutcome StatusAfterReopen(AcquisitionRequestStatus status, PayloadChange change, string? stored) =>
+        change.Result(stored).Monitored && change.Changed
+            ? new AcquisitionStatusOutcome(AcquisitionRequestStatus.Approved, "Monitoring was turned on again.")
+            : new AcquisitionStatusOutcome(status, null);
 
     /// <summary>The newest request monitoring Off ended for the Work, which turning monitoring on reopens.</summary>
     private async Task<AcquisitionRequest?> FindStoppedRequestAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
