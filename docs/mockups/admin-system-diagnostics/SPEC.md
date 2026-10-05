@@ -288,20 +288,550 @@ Purpose:
 
 This tab implements #859 and is Admin/System-only.
 
-### Overview
+### Database Overview — binding first-screen UI contract
 
-Show concise evidence such as:
-- PostgreSQL version and database size;
-- active/idle connections;
-- transaction commit/rollback context;
-- cache/read/temp-I/O context;
-- deadlock count/current lock waits;
-- most expensive statement in the selected recent period;
-- slowest frequently-called statement;
-- largest table/index;
-- autovacuum/analyze warnings when evidence exists.
+This subsection defines the first detailed database screen to implement/mock up.
 
-Do not produce a fake one-number database health score.
+Canonical destination:
+
+`Admin -> System & Diagnostics -> Datenbank -> Übersicht`
+
+Preferred route/state:
+
+`/Admin/System?tab=database&view=overview`
+
+A different internal route is acceptable if the shared Admin shell requires it, but Database remains a secondary System & Diagnostics destination rather than a new main-sidebar item.
+
+Approved future mockup asset name:
+
+`docs/mockups/admin-system-diagnostics/database-overview-light.png`
+
+The first approved mockup is **Desktop / Light / Clean / Detailed mode**. Dark, Original Jularr and Compact reuse the same information architecture.
+
+#### Primary question
+
+Within roughly five seconds an admin should be able to answer:
+
+1. Is PostgreSQL reachable and behaving normally?
+2. Is database pressure contributing to a slow Jularr instance?
+3. Which SQL workload is consuming the most database time?
+4. Are locks, long transactions, deadlocks, temp I/O or vacuum/analyze pressure present?
+5. Which table/index is consuming unusual space or work?
+6. Is this a current spike or a recent regression?
+
+The screen is operational diagnostics, not a generic analytics dashboard and not a database-management console.
+
+#### Page shell
+
+Use the normal shared Admin shell.
+
+Top area, in order:
+
+1. shared page title: **System & Diagnostics**;
+2. primary System tabs, with **Datenbank** active;
+3. Database secondary navigation:
+   - Übersicht
+   - Statements
+   - Tabellen
+   - Indizes
+   - Locks & Waits
+   - I/O & Vacuum
+   - Verlauf
+4. one compact toolbar for time/freshness context.
+
+Do not repeat another large `Datenbank` hero title under the active tab. A small section heading or concise context line is enough.
+
+#### Database toolbar
+
+Desktop right side:
+
+- time range selector for historical/aggregate context:
+  - 15 min
+  - 1 h — default
+  - 24 h
+  - 7 d
+  - 30 d when retained history supports it;
+- live/freshness indicator:
+  - green dot + `Live` while current lightweight state is fresh;
+  - `Updated 12 s ago` or localized equivalent;
+  - stale/reconnecting state when sampling is delayed;
+- optional overflow/info action for collection capability/status.
+
+The selected time range affects historical and statement-aggregate panels. It does **not** pretend current lock/session state is historical.
+
+Do not add a large primary `Refresh` button when automatic bounded sampling is healthy. A retry/refresh action appears only when live data is unavailable/stale or the backend exposes a real manual resample action.
+
+#### Problem banner
+
+When there is a material current problem, place one concise problem strip directly below the toolbar and above healthy summaries.
+
+Examples:
+- PostgreSQL unreachable;
+- connection saturation;
+- active blocking chain;
+- unusually long transaction;
+- deadlocks increased in the selected period;
+- autovacuum materially behind;
+- statement statistics unavailable because `pg_stat_statements` is not configured.
+
+Rules:
+- highest-severity current issue first;
+- one-line primary message;
+- optional concise evidence;
+- direct action/link into the owning Database subview;
+- multiple lower-priority issues collapse behind `+N weitere`;
+- when healthy, do not reserve a large empty warning card.
+
+Historical anomalies that are no longer active should appear in the History/Trend area, not as a permanent red current-state banner.
+
+#### Summary band
+
+Below problems, use one dense horizontal summary band rather than large KPI cards.
+
+Desktop Detailed mode contains six compact cells:
+
+1. **PostgreSQL**
+   - Online / Warning / Error
+   - detected version as secondary text.
+
+2. **Datenbankgröße**
+   - current database size;
+   - small selected-period delta only when reliable history exists.
+
+3. **Verbindungen**
+   - active + idle/total context;
+   - current pressure state;
+   - do not present application Npgsql pool occupancy here as if it were PostgreSQL session count. Pool detail belongs to Application Performance (#860).
+
+4. **DB-Zeit**
+   - total statement execution time accumulated in the selected period from persisted deltas;
+   - optional tiny trend indicator;
+   - label must make clear this is aggregate database execution time, not wall-clock uptime.
+
+5. **Locks / Deadlocks**
+   - current waiting sessions / blockers;
+   - deadlock count in selected period;
+   - healthy zero stays visually quiet.
+
+6. **Vacuum / Analyze**
+   - Healthy / Attention / Unknown;
+   - concise count of tables requiring attention, not a fabricated overall percentage.
+
+Compact mode turns the same data into one dense status row/table. Mobile stacks it into two-column or single-column rows while keeping touch targets accessible.
+
+No vanity metrics and no unexplained `health score 83%`.
+
+#### Main desktop grid
+
+After the summary band, use a **12-column responsive grid**.
+
+Desktop:
+- left/main column: 8 columns;
+- right/diagnostic column: 4 columns.
+
+At narrower tablet widths, sections become one column while preserving order.
+
+##### Main panel A — SQL workload
+
+Position: first, left 8 columns.
+
+Title:
+**SQL-Workload**
+
+Purpose:
+show the few statements currently responsible for most database cost without requiring the admin to open the full Statements page.
+
+Header controls:
+- segmented sort:
+  - Gesamtzeit — default;
+  - Durchschnitt;
+  - Aufrufe;
+  - I/O;
+- `Alle Statements` link opens Statements preserving selected range + sort.
+
+Table rows: maximum 5 on Overview.
+
+Columns in Detailed Desktop:
+- Statement
+- Aufrufe
+- Gesamtzeit
+- Ø Zeit
+- Reads / I/O signal
+
+Statement cell:
+- one or two lines of normalized, sanitized SQL;
+- monospace;
+- parameter values never shown;
+- no horizontal page-wide code overflow;
+- truncate visually with full bounded normalized text available in detail drawer;
+- optional small owning/app correlation label only when reliably known, e.g. `Library.Browse`.
+
+Highlighting:
+- do not color a statement red merely because it is first;
+- warning color only if a real threshold/regression/problem rule is met;
+- show a small regression indicator when recent history establishes a meaningful change from baseline.
+
+Row activation opens the **Statement quick-detail drawer** described below.
+
+If `pg_stat_statements` is unavailable, replace the table body with a compact capability state explaining that statement-level statistics are unavailable. Keep all other database panels functional.
+
+##### Side panel B — Current pressure
+
+Position: first, right 4 columns.
+
+Title:
+**Aktueller Druck**
+
+Use a compact key/value/status list, not six mini cards.
+
+Rows when data exists:
+- aktive Queries;
+- wartende Queries;
+- längste aktive Query;
+- längste Transaktion;
+- physical-read pressure;
+- temp I/O;
+- cache-hit context;
+- rollback rate/context where useful.
+
+Each row:
+- label;
+- current value;
+- quiet Healthy / Warning / Critical semantic state only when a threshold is justified;
+- optional tiny sparkline only for metrics with persisted recent samples.
+
+Do not show metrics merely because PostgreSQL exposes them. Every row must answer a diagnostic question.
+
+##### Main panel C — Locks & long transactions
+
+Position: second row, full width when active; otherwise compact left/main placement.
+
+When active blockers/waits or materially long transactions exist:
+- promote this panel directly below SQL Workload/Current Pressure;
+- show up to 4 active rows.
+
+Columns:
+- Waiting / Transaction
+- Age
+- Wait event
+- Blocked by
+- Statement/operation summary
+- Details action
+
+A blocker chain should read humanly, e.g.:
+
+`Library browse query -> waits for transaction 812 -> Work update`
+
+Do not expose raw parameter values.
+
+When there are no waits and no problematic long transaction:
+- do not render a large empty table;
+- show one compact calm line such as `Keine aktiven Lock-Waits` with `Locks & Waits öffnen`.
+
+Deadlocks are historical events and belong in the selected-period summary/history unless an incident from #853 is currently relevant.
+
+##### Main panel D — Tables & maintenance attention
+
+Position: next left/main 8 columns.
+
+Title:
+**Tabellen & Wartung**
+
+Purpose:
+surface only tables that deserve attention.
+
+Maximum 5 rows, sorted by strongest evidence:
+- high dead-tuple pressure;
+- autovacuum/analyze concern;
+- unexpectedly heavy sequential workload on a materially large table;
+- unusual growth;
+- another explicitly modeled PostgreSQL warning.
+
+Columns:
+- Tabelle
+- Größe
+- Live / Dead rows context
+- Scan pattern
+- Vacuum / Analyze
+- Status
+
+Healthy tables do not fill this table merely to reach five rows.
+
+Empty healthy state:
+a compact `Keine Tabellen benötigen aktuell Aufmerksamkeit` row plus link to `Alle Tabellen`.
+
+Do not place `VACUUM FULL`, `REINDEX` or other maintenance execution buttons on Overview.
+
+##### Side panel E — Space
+
+Position: next right 4 columns.
+
+Title:
+**Speicher**
+
+Show:
+- DB total;
+- table data;
+- indexes;
+- largest table;
+- largest index.
+
+Use a restrained horizontal stacked bar only if the values can be measured reliably and it improves comparison.
+
+Below it:
+- `Tabellen öffnen`;
+- `Indizes öffnen`.
+
+Do not show WAL/archive disk usage here unless Jularr can attribute it reliably to the database/deployment.
+
+##### Full-width panel F — Verlauf / regression glance
+
+Position: bottom full width.
+
+Title:
+**Letzte Entwicklung**
+
+This is not the full History page. It provides a compact glance over the selected time range.
+
+Desktop contains up to four small aligned trend plots in one visual band:
+- DB execution time / rate;
+- physical reads or read pressure;
+- temp I/O;
+- database size.
+
+Rules:
+- all plots share the same selected time axis;
+- deployment/Jularr version markers appear when that information is reliably available;
+- statistics-reset boundary appears as a visible discontinuity/annotation rather than connecting false deltas;
+- no fake smooth interpolation across missing samples;
+- no decorative chart if there is insufficient history.
+
+Action:
+`Verlauf öffnen` opens the full History subview with the selected range.
+
+#### Statement quick-detail drawer
+
+Activating one SQL Workload row opens a right-side drawer on Desktop/Tablet.
+
+Header:
+- `Statement`;
+- QueryId/short stable identifier;
+- current classification (Normal / Warning / Regression) only when modeled;
+- close action.
+
+Sections:
+
+1. **Normalized SQL**
+   - bounded sanitized SQL block;
+   - copy action may copy only this sanitized normalized SQL.
+
+2. **Selected period**
+   - calls;
+   - total execution time;
+   - average;
+   - min/max when available;
+   - rows;
+   - block hits/reads;
+   - temp I/O;
+   - I/O timing when enabled.
+
+3. **Trend**
+   - small history chart for execution time/calls;
+   - reset/version markers.
+
+4. **Related Jularr context**
+   - route/use-case names from #860 only when reliably correlated;
+   - never guess ownership from SQL text.
+
+Footer actions:
+- `In Statements öffnen`;
+- optionally `Diagnose öffnen` when there is a real diagnostic workflow.
+
+Must **not** contain:
+- Execute;
+- Edit SQL;
+- Kill;
+- automatic `EXPLAIN ANALYZE`;
+- bind parameter values;
+- arbitrary raw database console.
+
+Mobile uses a full-height sheet/page instead of a narrow drawer.
+
+#### Refresh/sampling behavior
+
+The Overview is assembled from independently sampled sources.
+
+Target UX behavior:
+- lightweight live connection/wait/session state updates roughly every 5–10 seconds when practical;
+- statement/statistics aggregates normally sample on a slower bounded cadence such as 30–60 seconds;
+- table/index size and maintenance data may refresh substantially less often;
+- exact backend cadence remains centrally configurable/implementation-owned and must not be hard-coded independently in the page.
+
+Every panel carries enough freshness metadata internally to distinguish:
+- current;
+- stale;
+- collecting;
+- unavailable.
+
+A slow/unavailable panel must not blank the rest of the page.
+
+Incoming updates must not:
+- reset selected time range;
+- change selected workload sort;
+- close a Statement drawer;
+- jump scroll position;
+- reorder a table while the admin is actively selecting/copying unless the update can be applied without interaction loss.
+
+#### Detailed vs Compact
+
+Both modes use the same data contract and actions.
+
+Detailed:
+- summary band;
+- short contextual subtitles where useful;
+- 5-row Overview tables;
+- trend band;
+- Statement drawer with expanded metric labels.
+
+Compact:
+- summary as one dense status table/strip;
+- fewer secondary descriptions;
+- 3–5 dense rows;
+- smaller trend band;
+- secondary values move into row detail/drawer;
+- warnings and actions remain fully visible.
+
+No feature or diagnostic signal exists only in Detailed mode.
+
+#### Light / Dark / skins
+
+The first mockup is Clean Light.
+
+Clean Light:
+- neutral off-white app background;
+- white or subtly separated surfaces;
+- restrained purple Jularr accent;
+- thin neutral borders/dividers;
+- semantic Warning/Error colors only for real state;
+- monospace SQL distinct but not placed in a dark terminal block by default.
+
+Dark uses the same hierarchy and density with semantic dark tokens.
+
+Original Jularr may apply the shared Original skin, but Database diagnostics remain restrained. Do not place mascot artwork, watercolor backgrounds or decorative sakura elements behind dense SQL/tables/charts where they reduce scanability.
+
+#### Responsive behavior
+
+Desktop is the primary DBA experience.
+
+Tablet:
+- Database secondary navigation may horizontally scroll;
+- 8/4 grid collapses to one column;
+- Statement drawer may become wider/two-pane;
+- tables retain horizontal scroll only when column reduction would lose essential meaning.
+
+Mobile:
+- Overview is supported for essential diagnostics;
+- summary cells become compact stacked rows;
+- SQL Workload shows Statement, total/average time and one secondary metric; remaining columns move into detail;
+- Tables Attention shows table + status + primary evidence;
+- charts become one-at-a-time compact rows;
+- Statement details use full-screen sheet;
+- no tiny desktop table squeezed below usable width.
+
+TV: unsupported.
+
+#### Loading / partial / empty / error states
+
+Required explicit states:
+
+- initial Overview loading;
+- PostgreSQL online;
+- PostgreSQL unreachable with historical data available;
+- PostgreSQL unreachable with no history;
+- statement statistics available;
+- `pg_stat_statements` unavailable/not configured;
+- statement statistics collecting first sample;
+- PostgreSQL statistics reset detected;
+- history collecting;
+- selected range has no history;
+- one metric source unavailable due to privilege/configuration;
+- no active lock waits;
+- active blocker chain;
+- long-running transaction;
+- deadlocks in selected period;
+- maintenance attention;
+- all maintenance healthy;
+- stale sample;
+- sampler delayed/throttled by #857;
+- permission denied.
+
+Partial failure is a first-class state. For example, if statement statistics are unavailable, the page can still show DB health, connections, size, locks and table maintenance.
+
+#### Threshold semantics
+
+The UI must not invent universal PostgreSQL thresholds solely for visual coloring.
+
+A warning/critical state must come from:
+- a defined Jularr threshold with documented rationale;
+- instance/resource budget context;
+- a known correctness/availability condition;
+- or a meaningful regression against reliable retained baseline.
+
+Examples:
+- `1 sequential scan` is never automatically bad;
+- `0 index scans` never automatically means remove index;
+- cache-hit ratio alone is not a universal red/green score;
+- high DB execution time may be normal if call volume also rose;
+- table dead tuples require context such as table size/churn/autovacuum state.
+
+Tooltip/help may explain why a row is flagged.
+
+#### Security / permissions
+
+Requires Admin/System diagnostics authorization.
+
+The Overview and drawer never expose:
+- database password/connection string secrets;
+- bind parameter values;
+- auth tokens/cookies/API keys;
+- arbitrary environment variables;
+- unrestricted raw SQL execution;
+- a raw database editor.
+
+Normalized SQL still passes the same sanitization/redaction policy as #853 before persistence/display/export.
+
+#### Accessibility
+
+- all state colors also have text/icon meaning;
+- tabs and segmented controls keyboard accessible;
+- sortable table headers expose current sort;
+- charts have accessible text summaries;
+- drawer focus is trapped/restored correctly;
+- SQL code block supports keyboard selection/copy;
+- warning icons have meaningful labels;
+- live updates use non-disruptive announcements and do not continuously spam screen readers.
+
+#### Overview acceptance criteria
+
+The Database Overview is complete only when:
+
+- it uses the shared System & Diagnostics/Admin shell;
+- Database secondary navigation exists and Overview is the default Database view;
+- the time range and freshness state are clear;
+- current critical DB problems are prioritized without permanent warning clutter;
+- summary band distinguishes PostgreSQL sessions from Npgsql application pool metrics;
+- top SQL workload is visible and can open safe detail;
+- `pg_stat_statements` absence degrades only the statement panel;
+- current lock/blocking problems are immediately visible;
+- maintenance attention is evidence-based;
+- storage composition is understandable;
+- bounded history shows real gaps/reset/version markers rather than fabricated continuity;
+- partial failures do not blank unrelated panels;
+- all visible SQL is normalized/sanitized;
+- no destructive/raw SQL action is exposed;
+- Detailed/Compact use the same contract;
+- Desktop/Tablet/Mobile behavior follows this spec;
+- the approved mockup matches this information order and density.
 
 ### Statements
 
