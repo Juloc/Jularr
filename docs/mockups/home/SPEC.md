@@ -271,7 +271,8 @@ This row is derived from canonical local progress plus verified local package av
 It may include:
 - Continue Watching;
 - Continue Reading;
-- Continue Listening.
+- Continue Listening;
+- Continue Playing when the Games domain exposes a genuinely local, launchable Game state.
 
 Examples:
 
@@ -439,14 +440,21 @@ Do not silently replace newer local progress with stale server progress.
 
 ### Games while offline
 
-Games remain outside the managed media Offline download contract.
+Games remain outside the **media** Offline package owner, but are first-class in the shared Offline consumer experience through the Games-owned install/package adapter (#851).
 
-A Game may appear on disconnected Home only when the existing Games domain says there is a genuinely local, launchable/resumable target.
+A Game may appear on disconnected Home only when the Games domain says there is a genuinely local, launchable/resumable target and all required release/runtime/BIOS/local package prerequisites are satisfied.
+
+Jularr-managed Game packages may appear in:
+- **Offline fortsetzen** / Continue Playing;
+- **Auf diesem Gerät verfügbar**;
+- **Downloads & Offline -> Games**;
+- local Offline search where supported.
 
 Do not:
-- label Games as Jularr Offline downloads;
-- count installed/ROM content in `Downloads & Offline`;
-- invent a Game offline package to fill the shelf.
+- convert Game/GameRelease into MediaCore Work/MediaProgress;
+- invent a playable state from ROM presence alone when runtime/BIOS/package prerequisites are missing;
+- count externally managed launcher bytes as Jularr-managed Offline storage without authoritative integration support;
+- claim an external launcher Game is Offline playable when the integration cannot establish that truthfully.
 
 ### Desktop approved reference
 
@@ -487,7 +495,7 @@ Any incidental generated navigation labels that conflict with this text specific
 - [ ] Search is local-only when supported and never pretends live server results exist.
 - [ ] Reconnection revalidates ownership and synchronizes/refreshes without discarding newer local progress.
 - [ ] No new permanent Mobile Downloads bottom-nav slot is created by the Offline reference.
-- [ ] Games remain governed by the Games domain rather than the media Offline package subsystem.
+- [ ] Games remain governed by the Games domain rather than the media Offline package subsystem, while Jularr-managed local Game installs can project into shared Offline Home/manager surfaces.
 
 ## Explicit exclusions
 
