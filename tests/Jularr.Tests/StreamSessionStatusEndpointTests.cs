@@ -42,7 +42,7 @@ public sealed class StreamSessionStatusEndpointTests
 
         Assert.AreEqual(HttpStatusCode.OK, status.Status);
         StringAssert.Contains(status.Body, "\"state\":\"ended\"");
-        StringAssert.Contains(status.Body, "\"recoverable\":true", "No reason is known, so planning the same mode again is sensible.");
+        StringAssert.Contains(status.Body, "\"recoverable\":false", "An unknown ending is never assumed to be harmless: the ordinary fallback decides.");
 
         var missing = await host.SendAsync(HttpMethod.Get, s_path + Guid.NewGuid(), profile: Owner);
         Assert.AreEqual(HttpStatusCode.NotFound, missing.Status);

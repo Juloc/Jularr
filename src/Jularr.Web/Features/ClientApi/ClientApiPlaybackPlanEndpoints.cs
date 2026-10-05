@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
@@ -487,7 +488,7 @@ public static class ClientApiPlaybackPlanEndpoints
             {
                 return Results.NotFound(new ClientErrorResponse(
                     "hls_asset_not_found",
-                    $"The HLS playback segment is unavailable or expired ({(manager.EndReason(hlsSessionId)?.ToString() ?? "unknown")})."));
+                    $"The HLS playback segment is unavailable or expired ({(manager.EndReason(hlsSessionId) is { } ended ? JsonNamingPolicy.SnakeCaseLower.ConvertName(ended.ToString()) : "unknown")})."));
             }
 
             if (fileName == "index.m3u8")
@@ -531,8 +532,10 @@ public static class ClientApiPlaybackPlanEndpoints
                 return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Active, null, Recoverable: false));
             }
 
+            // Only an ending the server chose for capacity reasons says nothing against the mode; an unknown reason or a crash does not.
             var reason = manager.EndReason(hlsSessionId);
-            return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Ended, reason, Recoverable: reason != HlsSessionEndReason.EncoderExited));
+            var recoverable = reason is HlsSessionEndReason.Idle or HlsSessionEndReason.CacheBudget or HlsSessionEndReason.CacheFreeSpace;
+            return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Ended, reason, recoverable));
         })
         .RequireRateLimiting(RateLimitPolicy);
 

@@ -164,19 +164,20 @@ public sealed class PlaybackAdmissionFlowTests
     }
 
     [TestMethod]
-    public async Task AHungHardwareDriverThatTimesOutIsChargedOnceSoftwareServesTheRequest()
+    public async Task ATimeoutIsNeverHardwareEvidenceSoASleepingSourceCannotOpenTheBreaker()
     {
         var kit = await HardwareKitAsync();
         var plan = Transcode(Video(sourceCodec: "hevc", encoder: "h264_nvenc"));
 
-        for (var request = 1; request <= PlaybackBackendBreaker.FailureThreshold; request++)
+        for (var request = 1; request <= PlaybackBackendBreaker.FailureThreshold * 2; request++)
         {
             var started = await kit.Admission.StartAsync(plan, Profile, admitted => admitted.Encoder.IsHardware ? Fail(admitted, new TimeoutException("no first segment")) : Succeed(admitted));
+            Assert.AreEqual(PlaybackHardwareBackend.Software, started.Encoder.Backend, "Software gets its try.");
             started.Lease!.Dispose();
-            Assert.AreEqual(request, kit.Breaker.State(PlaybackHardwareBackend.Nvenc).ConsecutiveFailures);
         }
 
-        Assert.IsTrue(kit.Breaker.State(PlaybackHardwareBackend.Nvenc).IsOpen, "A hung driver opens the breaker like any other failing one.");
+        Assert.AreEqual(0, kit.Breaker.State(PlaybackHardwareBackend.Nvenc).ConsecutiveFailures, "A healthy GPU stays in service while the disk wakes up.");
+        Assert.IsFalse(kit.Hardware.IsHardwareDecodingDisabled(PlaybackHardwareBackend.Nvenc));
     }
 
     [TestMethod]

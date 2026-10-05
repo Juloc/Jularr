@@ -17,10 +17,18 @@
         return status.gone === true || (status.state === "ended" && status.recoverable === true);
     };
 
-    // The budget of recoveries returns only after real playback: stableSeconds of media time past the recovery
-    // point. A stream that dies seconds after every restart must not respawn ffmpeg forever.
-    const recoveriesAfterProgress = (recoveries, mediaSecondsSinceRecovery) =>
-        recoveries > 0 && mediaSecondsSinceRecovery >= stableSeconds ? 0 : recoveries;
+    // The budget of recoveries returns only after real playback: stableSeconds of media actually played since the recovery.
+    // A stream that dies seconds after every restart must not respawn ffmpeg forever.
+    const recoveriesAfterProgress = (recoveries, playedSeconds) =>
+        recoveries > 0 && playedSeconds >= stableSeconds ? 0 : recoveries;
 
-    window.JularrStreamRecovery = Object.freeze({ maxRecoveries, stableSeconds, shouldReplanSameMode, recoveriesAfterProgress });
+    // Played time grows by the media time between two timeupdate events, but only for small forward steps: a seek jumps
+    // by more than maxStepSeconds and a backwards step is no playback, so neither can earn the budget back.
+    const maxStepSeconds = 2;
+    const accumulatePlayed = (playedSeconds, previousTime, currentTime) => {
+        const step = currentTime - previousTime;
+        return step > 0 && step <= maxStepSeconds ? playedSeconds + step : playedSeconds;
+    };
+
+    window.JularrStreamRecovery = Object.freeze({ maxRecoveries, stableSeconds, shouldReplanSameMode, recoveriesAfterProgress, accumulatePlayed });
 })();

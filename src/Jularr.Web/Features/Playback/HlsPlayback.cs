@@ -74,8 +74,6 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     private readonly Lock _endGate = new();
     private readonly Dictionary<Guid, HlsSessionEndReason> _endReasons = [];
     private readonly Queue<Guid> _endOrder = [];
-    private readonly HashSet<string> _retiredRoots = new(StringComparer.Ordinal);
-    private string? _activeRoot;
     private readonly PlaybackTranscodingSettingsStore _settings;
     private readonly TimeProvider _time;
     private readonly HlsProcessStarter _startProcess;
@@ -157,7 +155,6 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                 }
 
                 PlaybackCacheOwnership.MarkRoot(policy.HlsCachePath);
-                NoteActiveRoot(policy.HlsCachePath);
                 if (PruneToPolicy(policy, terminateRunning: false) is { } refusal)
                 {
                     throw new PlaybackAdmissionRefusedException(refusal);
@@ -263,6 +260,12 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     /// <summary>Why a session that was ended without its player asking (idle, cache policy, encoder crash) is gone; null when unknown or when it was ended normally.</summary>
     public HlsSessionEndReason? EndReason(Guid sessionId)
     {
+        // A crashed encoder is reported as such at once, before the next reap has recorded it: a pure read of the entry.
+        if (_sessions.TryGetValue(sessionId, out var live) && HasCrashed(live))
+        {
+            return HlsSessionEndReason.EncoderExited;
+        }
+
         lock (_endGate)
         {
             return _endReasons.TryGetValue(sessionId, out var reason) ? reason : null;
@@ -275,7 +278,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         if (_sessions.TryGetValue(sessionId, out var entry) &&
             string.Equals(entry.ProfileId, profileId, StringComparison.Ordinal))
         {
-            Remove(sessionId);
+            Remove(sessionId, HlsSessionEndReason.Stopped);
         }
     }
 
@@ -347,7 +350,6 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         lock (_gate)
         {
             var policy = _settings.Current;
-            NoteActiveRoot(policy.HlsCachePath);
 
             // Orphans first: leftovers of a crashed process count against the budget, and ending a healthy session
             // because of them would be wrong when deleting them already clears the policy.
@@ -594,6 +596,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // A file that vanished or cannot be read adds nothing to the measurement; the next pass sees the real state.
             return 0;
         }
     }
@@ -643,28 +646,18 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         return removed;
     }
 
-    // A changed cache folder retires the old one: its running sessions end on their own, and its leftovers are swept once they age out.
-    private void NoteActiveRoot(string root)
-    {
-        if (_activeRoot is not null && !string.Equals(_activeRoot, root, StringComparison.Ordinal))
-        {
-            _retiredRoots.Add(_activeRoot);
-        }
-
-        _retiredRoots.Remove(root);
-        _activeRoot = root;
-    }
-
+    // A changed cache folder retires the old one (the settings store remembers it): its running sessions end on their own, and
+    // its leftovers are swept once they age out. The folder is forgotten when nothing of Jularr's is left in it.
     private int RemoveRetiredRootOrphans()
     {
         var removed = 0;
-        foreach (var root in _retiredRoots.ToArray())
+        foreach (var root in _settings.RetiredRoots)
         {
             removed += RemoveOrphanDirectories(root);
             var stillUsed = _sessions.Values.Any(x => IsUnder(root, x.DirectoryPath)) || (Directory.Exists(root) && Directory.EnumerateDirectories(root).Any(x => PlaybackCacheOwnership.IsDeletableSession(root, x)));
             if (!stillUsed)
             {
-                _retiredRoots.Remove(root);
+                _settings.ForgetRetiredRoot(root);
             }
         }
 
@@ -699,7 +692,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                 break;
             }
 
-            Remove(oldest.SessionId);
+            Remove(oldest.SessionId, HlsSessionEndReason.Replaced);
         }
     }
 
@@ -745,6 +738,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         }
         catch (InvalidOperationException)
         {
+            // The process exited between the check and the kill: it is gone, which is what ending the session wants.
         }
         finally
         {
@@ -831,7 +825,9 @@ public enum HlsSessionEndReason
     Idle,
     CacheBudget,
     CacheFreeSpace,
-    EncoderExited
+    EncoderExited,
+    Stopped,
+    Replaced
 }
 
 /// <summary>Bytes of the HLS cache folder, per session directory and in total, measured once per pass.</summary>

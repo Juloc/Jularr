@@ -499,6 +499,28 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task ACrashedEncoderIsReportedAsSuchBeforeAnyReapAndStopsAndEvictionsHaveTheirOwnReasons()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var crashed = await cache.StartAsync("profile-0", segmentBytes: 10);
+        cache.Processes[0].HasExited = true;
+        cache.Processes[0].ExitCode = 1;
+
+        Assert.AreEqual(HlsSessionEndReason.EncoderExited, cache.Manager.EndReason(crashed.SessionId), "Asked before the sweeper ran, the truth is still told, and nothing was written to find out.");
+        Assert.AreEqual(1, cache.Manager.ActiveSessions);
+
+        var stopped = await cache.StartAsync("profile-1", segmentBytes: 10);
+        cache.Manager.Stop(stopped.SessionId, "profile-1");
+        Assert.AreEqual(HlsSessionEndReason.Stopped, cache.Manager.EndReason(stopped.SessionId));
+
+        var first = await cache.StartAsync("profile-2", segmentBytes: 10);
+        cache.Time.Advance(TimeSpan.FromSeconds(1));
+        await cache.StartAsync("profile-2", segmentBytes: 10);
+        await cache.StartAsync("profile-2", segmentBytes: 10);
+        Assert.AreEqual(HlsSessionEndReason.Replaced, cache.Manager.EndReason(first.SessionId), "The profile's own capacity replaced its oldest session.");
+    }
+
+    [TestMethod]
     public async Task AFinishedRemuxFreesItsSlotButStaysReadable()
     {
         await using var cache = await CacheAsync(budgetBytes: 1L << 30);
@@ -731,6 +753,49 @@ public sealed class PlaybackServerResourceTests
         Assert.IsFalse(leftover.Exists, "The retired folder's aged leftovers are swept.");
         Assert.IsTrue(result.OrphanDirectories >= 1);
         Assert.AreEqual(HlsSessionEndReason.CacheBudget, cache.Manager.EndReason(running.SessionId), "The old folder's session is the largest and ends first when the budget is exceeded.");
+    }
+
+    [TestMethod]
+    public async Task ARetiredFolderSurvivesARestartAndIsSweptThenForgotten()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 20);
+        var oldRoot = cache.Root;
+        var leftover = Directory.CreateDirectory(Path.Combine(oldRoot, Guid.NewGuid().ToString("N")));
+        await File.WriteAllBytesAsync(Path.Combine(leftover.FullName, "segment-00000.m4s"), new byte[10]);
+        leftover.LastWriteTimeUtc = cache.Time.GetUtcNow().UtcDateTime - HlsPlaybackSessionManager.IdleLifetime - TimeSpan.FromMinutes(1);
+        var newRoot = Path.Combine(cache.Kit.DataRoot, "hls-new");
+        Assert.IsTrue((await cache.Kit.Settings.SaveAsync(cache.Kit.Settings.Current with { HlsCachePath = newRoot })).Succeeded);
+
+        var restarted = new PlaybackTranscodingSettingsStore(cache.Kit.DataRoot);
+        await restarted.LoadAsync();
+        CollectionAssert.Contains(restarted.RetiredRoots.ToArray(), oldRoot, "The old folder is remembered in the settings file.");
+        using var manager = new HlsPlaybackSessionManager(restarted, cache.Time, NullLogger<HlsPlaybackSessionManager>.Instance, _ => new FakeHlsProcess(), _ => null);
+
+        var result = manager.Sweep();
+
+        Assert.IsFalse(leftover.Exists, "A new process still sweeps the old folder by its ownership marker.");
+        Assert.AreEqual(1, result.OrphanDirectories);
+        CollectionAssert.DoesNotContain(restarted.RetiredRoots.ToArray(), oldRoot, "Nothing of Jularr's is left there, so it is forgotten.");
+    }
+
+    [TestMethod]
+    public async Task AFailedSettingsWriteDoesNotLeaveTheFolderMarked()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        Directory.CreateDirectory(kit.DataRoot);
+        await File.WriteAllTextAsync(Path.Combine(kit.DataRoot, "playback"), "a file where the settings folder should be");
+        var cache = Path.Combine(kit.DataRoot, "claimed");
+        try
+        {
+            await Assert.ThrowsAsync<IOException>(() => kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { HlsCachePath = cache }));
+
+            Assert.IsFalse(File.Exists(Path.Combine(cache, PlaybackCacheOwnership.MarkerFileName)), "Claimed for settings that were never stored: released again.");
+            Assert.AreEqual(PlaybackTranscodingSettings.Default, kit.Settings.Current);
+        }
+        finally
+        {
+            Directory.Delete(kit.DataRoot, recursive: true);
+        }
     }
 
     [TestMethod]

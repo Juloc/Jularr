@@ -13,7 +13,7 @@ public sealed class PlayerRecoveryTests
     [TestMethod]
     [DataRow("{ state: 'ended', reason: 'idle', recoverable: true }", 0, true)]
     [DataRow("{ state: 'ended', reason: 'cache_budget', recoverable: true }", 2, true)]
-    [DataRow("{ state: 'ended', reason: null, recoverable: true }", 0, true)]
+    [DataRow("{ state: 'ended', reason: null, recoverable: false }", 0, false)]
     [DataRow("{ gone: true }", 1, true)]
     [DataRow("{ state: 'ended', reason: 'encoder_exited', recoverable: false }", 0, false)]
     [DataRow("{ state: 'active', reason: null, recoverable: false }", 0, false)]
@@ -28,6 +28,9 @@ public sealed class PlayerRecoveryTests
     [TestMethod]
     public void TheBudgetOnlyReturnsAfterThirtySecondsOfRealPlayback()
     {
+        Assert.AreEqual(1.5, RunNumber("return window.JularrStreamRecovery.accumulatePlayed(1, 10, 10.5);"), "A normal timeupdate step counts as played.");
+        Assert.AreEqual(1.0, RunNumber("return window.JularrStreamRecovery.accumulatePlayed(1, 10, 400);"), "A forward seek is not playback.");
+        Assert.AreEqual(1.0, RunNumber("return window.JularrStreamRecovery.accumulatePlayed(1, 400, 10);"), "Neither is a step backwards.");
         Assert.AreEqual(2.0, RunNumber("return window.JularrStreamRecovery.recoveriesAfterProgress(2, 29.9);"), "A stream that dies seconds after every restart keeps its count.");
         Assert.AreEqual(0.0, RunNumber("return window.JularrStreamRecovery.recoveriesAfterProgress(2, 30);"));
         Assert.AreEqual(0.0, RunNumber("return window.JularrStreamRecovery.recoveriesAfterProgress(0, 500);"));

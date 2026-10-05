@@ -159,7 +159,8 @@
     // so the same mode is planned again (see player-recovery.js for the bounds).
     const streamRecovery = window.JularrStreamRecovery;
     let sessionRecoveries = 0;
-    let recoveryStartedAt = 0;
+    let playedSinceRecovery = 0;
+    let lastPlayedTime = 0;
     const streamIsLive = () => delivery !== null && delivery.transport !== "file";
 
     const readSceneStartSeconds = () => {
@@ -1713,7 +1714,10 @@
     });
 
     video.addEventListener("timeupdate", () => {
-        sessionRecoveries = streamRecovery.recoveriesAfterProgress(sessionRecoveries, absoluteCurrentTime() - recoveryStartedAt);
+        const now = absoluteCurrentTime();
+        playedSinceRecovery = streamRecovery.accumulatePlayed(playedSinceRecovery, lastPlayedTime, now);
+        lastPlayedTime = now;
+        sessionRecoveries = streamRecovery.recoveriesAfterProgress(sessionRecoveries, playedSinceRecovery);
     });
 
     // A failed video element carries no HTTP status, so the stream session is asked whether the server ended it.
@@ -1762,7 +1766,8 @@
         if (streamRecovery.shouldReplanSameMode(await readStreamSessionStatus(), sessionRecoveries)) {
             sessionRecoveries += 1;
             pendingResumeTime = absoluteCurrentTime();
-            recoveryStartedAt = pendingResumeTime;
+            playedSinceRecovery = 0;
+            lastPlayedTime = pendingResumeTime;
             resumeShouldPlay = playbackWasRequested;
             showPlayerError(text["playback.status.retrying"]);
             void applyPlayback();

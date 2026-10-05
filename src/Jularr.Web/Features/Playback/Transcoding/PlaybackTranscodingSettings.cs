@@ -170,13 +170,14 @@ public sealed record PlaybackSettingsSaveResult(PlaybackTranscodingSettings? Sav
 public sealed class PlaybackTranscodingSettingsStore
 {
     public const string FileName = "transcoding.json";
+    private const int MaxRetiredRoots = 8;
 
     private static readonly JsonSerializerOptions s_jsonOptions =
         new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _path;
-    private PlaybackTranscodingSettings _current = PlaybackTranscodingSettings.Default;
+    private Stored _current = new(PlaybackTranscodingSettings.Default, []);
 
     public PlaybackTranscodingSettingsStore(string dataRoot)
     {
@@ -184,7 +185,14 @@ public sealed class PlaybackTranscodingSettingsStore
         _path = Path.Combine(dataRoot, "playback", FileName);
     }
 
-    public PlaybackTranscodingSettings Current => Volatile.Read(ref _current);
+    public PlaybackTranscodingSettings Current => Volatile.Read(ref _current).Settings;
+
+    /// <summary>
+    /// Cache folders the policy moved away from. Sessions and leftovers of such a folder are still Jularr's, so the
+    /// session manager keeps sweeping them until they are gone (<see cref="ForgetRetiredRoot"/>). Stored with the settings,
+    /// so a restart does not forget them.
+    /// </summary>
+    public IReadOnlyList<string> RetiredRoots => Volatile.Read(ref _current).RetiredRoots;
 
     /// <summary>Reads the stored settings without touching <see cref="Current"/>; what an Admin page shows is not what the server enforces until it is saved or loaded at startup.</summary>
     public async Task<PlaybackTranscodingSettings> ReadStoredAsync(CancellationToken cancellationToken = default)
@@ -192,7 +200,7 @@ public sealed class PlaybackTranscodingSettingsStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            return await ReadAsync(cancellationToken);
+            return (await ReadAsync(cancellationToken)).Settings;
         }
         finally
         {
@@ -208,7 +216,7 @@ public sealed class PlaybackTranscodingSettingsStore
         {
             var loaded = await ReadAsync(cancellationToken);
             Volatile.Write(ref _current, loaded);
-            return loaded;
+            return loaded.Settings;
         }
         finally
         {
@@ -217,8 +225,9 @@ public sealed class PlaybackTranscodingSettingsStore
     }
 
     /// <summary>
-    /// Validates, proves the cache folder is writable, then stores the settings atomically. Nothing
-    /// is stored and <see cref="Current"/> is unchanged when any rule fails.
+    /// Validates, proves the cache folder is writable and claims it, then stores the settings atomically. Nothing
+    /// is stored and <see cref="Current"/> is unchanged when any rule fails; a folder claimed for settings that
+    /// could not be stored is released again. The previous folder becomes a retired root.
     /// </summary>
     public async Task<PlaybackSettingsSaveResult> SaveAsync(PlaybackTranscodingSettings settings, CancellationToken cancellationToken = default)
     {
@@ -230,6 +239,7 @@ public sealed class PlaybackTranscodingSettingsStore
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackSettingsIssueCode.PathNotEmpty));
         }
 
+        var markerExisted = File.Exists(Path.Combine(normalized.HlsCachePath, PlaybackCacheOwnership.MarkerFileName));
         if (issues.Count == 0 && !TryMarkWritable(normalized.HlsCachePath))
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.HlsCachePath), PlaybackSettingsIssueCode.PathNotWritable));
@@ -243,19 +253,30 @@ public sealed class PlaybackTranscodingSettingsStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            var temporary = $"{_path}.tmp-{Guid.NewGuid():N}";
-            try
+            var previous = Volatile.Read(ref _current);
+            var retired = previous.RetiredRoots.Where(x => !string.Equals(x, normalized.HlsCachePath, StringComparison.Ordinal)).ToList();
+            if (!string.Equals(previous.Settings.HlsCachePath, normalized.HlsCachePath, StringComparison.Ordinal) && !retired.Contains(previous.Settings.HlsCachePath))
             {
-                await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(Persisted.From(normalized), s_jsonOptions), cancellationToken);
-                File.Move(temporary, _path, overwrite: true);
-            }
-            finally
-            {
-                File.Delete(temporary);
+                retired.Add(previous.Settings.HlsCachePath);
             }
 
-            Volatile.Write(ref _current, normalized);
+            var stored = new Stored(normalized, [.. retired.TakeLast(MaxRetiredRoots)]);
+            try
+            {
+                Persist(stored);
+            }
+            catch
+            {
+                // A folder claimed for settings that were never stored must not stay marked as Jularr's.
+                if (!markerExisted)
+                {
+                    File.Delete(Path.Combine(normalized.HlsCachePath, PlaybackCacheOwnership.MarkerFileName));
+                }
+
+                throw;
+            }
+
+            Volatile.Write(ref _current, stored);
             return new PlaybackSettingsSaveResult(normalized, []);
         }
         finally
@@ -264,11 +285,49 @@ public sealed class PlaybackTranscodingSettingsStore
         }
     }
 
-    private async Task<PlaybackTranscodingSettings> ReadAsync(CancellationToken cancellationToken)
+    /// <summary>Drops a retired root once nothing of Jularr's is left in it. The settings file is rewritten; the enforced policy does not change.</summary>
+    public void ForgetRetiredRoot(string root)
+    {
+        _gate.Wait();
+        try
+        {
+            var current = Volatile.Read(ref _current);
+            if (!current.RetiredRoots.Contains(root))
+            {
+                return;
+            }
+
+            var stored = new Stored(current.Settings, [.. current.RetiredRoots.Where(x => !string.Equals(x, root, StringComparison.Ordinal))]);
+            Persist(stored);
+            Volatile.Write(ref _current, stored);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // A temporary file moved over the old one: a crash never leaves a half-written settings file.
+    private void Persist(Stored stored)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        var temporary = $"{_path}.tmp-{Guid.NewGuid():N}";
+        try
+        {
+            File.WriteAllText(temporary, JsonSerializer.Serialize(Persisted.From(stored), s_jsonOptions));
+            File.Move(temporary, _path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
+    }
+
+    private async Task<Stored> ReadAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_path))
         {
-            return PlaybackTranscodingSettings.Default;
+            return new Stored(PlaybackTranscodingSettings.Default, []);
         }
 
         Persisted? persisted;
@@ -289,7 +348,8 @@ public sealed class PlaybackTranscodingSettingsStore
             throw new InvalidDataException($"Playback transcoding settings '{_path}' are invalid ({fields}).");
         }
 
-        return settings with { HlsCachePath = PlaybackTranscodingSettingsRules.NormalizePath(settings.HlsCachePath) };
+        var retired = (persisted?.RetiredCachePaths ?? []).Where(x => PlaybackTranscodingSettingsRules.ValidatePath(x) is null).Select(PlaybackTranscodingSettingsRules.NormalizePath).ToArray();
+        return new Stored(settings with { HlsCachePath = PlaybackTranscodingSettingsRules.NormalizePath(settings.HlsCachePath) }, retired);
     }
 
     // Writing the ownership marker is the proof that the process can really write there, and it claims the folder at save time:
@@ -307,6 +367,9 @@ public sealed class PlaybackTranscodingSettingsStore
         }
     }
 
+    // The enforced policy and the retired folders always travel together: one value, replaced atomically.
+    private sealed record Stored(PlaybackTranscodingSettings Settings, string[] RetiredRoots);
+
     // Absent properties keep their default, so a field added in a later build never invalidates an older file.
     private sealed record Persisted(
         bool? TranscodingEnabled,
@@ -316,18 +379,20 @@ public sealed class PlaybackTranscodingSettingsStore
         int? AudioOnlySessions,
         string? HlsCachePath,
         long? CacheBudgetBytes,
-        long? FreeSpaceFloorBytes)
+        long? FreeSpaceFloorBytes,
+        string[]? RetiredCachePaths)
     {
-        public static Persisted From(PlaybackTranscodingSettings settings) =>
+        public static Persisted From(Stored stored) =>
             new(
-                settings.TranscodingEnabled,
-                settings.SoftwareVideoSessions,
-                settings.HardwareVideoSessions,
-                settings.RemuxSessions,
-                settings.AudioOnlySessions,
-                settings.HlsCachePath,
-                settings.CacheBudgetBytes,
-                settings.FreeSpaceFloorBytes);
+                stored.Settings.TranscodingEnabled,
+                stored.Settings.SoftwareVideoSessions,
+                stored.Settings.HardwareVideoSessions,
+                stored.Settings.RemuxSessions,
+                stored.Settings.AudioOnlySessions,
+                stored.Settings.HlsCachePath,
+                stored.Settings.CacheBudgetBytes,
+                stored.Settings.FreeSpaceFloorBytes,
+                stored.RetiredRoots);
 
         public PlaybackTranscodingSettings ToSettings()
         {

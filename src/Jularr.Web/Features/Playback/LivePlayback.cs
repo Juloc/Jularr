@@ -198,8 +198,11 @@ public sealed class LivePlaybackStream : Stream
         // timeout and the caller's token. Losing the race ends the process and closes the pipe, which also frees the lease.
         var buffer = new byte[PrefixBufferSize];
         var read = _output.ReadAsync(buffer, CancellationToken.None).AsTask();
-        var wait = Task.Delay(timeout, cancellationToken);
-        if (await Task.WhenAny(read, wait) != read)
+        using var waitSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var wait = Task.Delay(timeout, waitSource.Token);
+        var finished = await Task.WhenAny(read, wait);
+        await waitSource.CancelAsync();
+        if (finished != read)
         {
             Dispose();
             _ = read.ContinueWith(static finished => _ = finished.Exception, TaskContinuationOptions.OnlyOnFaulted);
@@ -285,13 +288,14 @@ public sealed class LivePlaybackStream : Stream
         _disposed = true;
         try
         {
-            _output.Dispose();
+            // The process is ended first so a blocked pipe read is released by its exit, then the pipe is closed.
+            _endProcess();
         }
         finally
         {
             try
             {
-                _endProcess();
+                _output.Dispose();
             }
             finally
             {
@@ -313,6 +317,7 @@ public sealed class LivePlaybackStream : Stream
         }
         catch (InvalidOperationException)
         {
+            // The process exited between the check and the kill: it is gone, which is what the caller wants.
         }
 
         process.Dispose();
