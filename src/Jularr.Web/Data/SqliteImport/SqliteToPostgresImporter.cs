@@ -77,6 +77,16 @@ public static class SqliteToPostgresImporter
                     continue;
                 }
 
+                if (table.Name == "NotificationSubscriptions")
+                {
+                    var sourceColumns = await ReadSqliteColumnsAsync(sqlite, table.Name, cancellationToken);
+                    if (sourceColumns.Contains("Mode"))
+                    {
+                        totalRows += await CopyLegacyNotificationSubscriptionsAsync(sqlite, pgConnection, transaction, cancellationToken);
+                        continue;
+                    }
+                }
+
                 totalRows += await CopyTableAsync(sqlite, pgConnection, transaction, table, cancellationToken);
             }
 
@@ -188,6 +198,86 @@ public static class SqliteToPostgresImporter
             }
 
             await insert.ExecuteNonQueryAsync(cancellationToken);
+            rows++;
+        }
+
+        return rows;
+    }
+
+    private static async Task<int> CopyLegacyNotificationSubscriptionsAsync(SqliteConnection sqlite, NpgsqlConnection pg, NpgsqlTransaction transaction, CancellationToken cancellationToken)
+    {
+        await using var read = sqlite.CreateCommand();
+        read.CommandText =
+            """
+            SELECT "ProfileId", "Category", "Mode", "UpdatedAtUtc"
+            FROM "NotificationSubscriptions";
+            """;
+
+        var rows = 0;
+        await using var reader = await read.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var profileId = reader.GetString(0);
+            var category = Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture);
+            var legacyMode = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
+            var updatedAtUtc = ParseTimestampUtc(reader.GetValue(3));
+            var (enabled, timing, channel) = legacyMode switch
+            {
+                LegacyNotificationModeOff => (false, NotificationTimingImmediate, NotificationChannelInApp),
+                LegacyNotificationModeInApp => (true, NotificationTimingImmediate, NotificationChannelInApp),
+                LegacyNotificationModePush => (true, NotificationTimingImmediate, NotificationChannelPush),
+                LegacyNotificationModeDigest => (false, NotificationTimingDigest, NotificationChannelInApp),
+                _ => throw new InvalidDataException($"Unsupported legacy notification mode {legacyMode} for profile '{profileId}'.")
+            };
+
+            await using (var preference = pg.CreateCommand())
+            {
+                preference.Transaction = transaction;
+                preference.CommandText =
+                    """
+                    INSERT INTO "NotificationSubscriptions" ("ProfileId", "Category", "Enabled", "Timing", "UpdatedAtUtc")
+                    VALUES (@profileId, @category, @enabled, @timing, @updatedAtUtc);
+                    """;
+                preference.Parameters.AddWithValue("@profileId", profileId);
+                preference.Parameters.AddWithValue("@category", category);
+                preference.Parameters.AddWithValue("@enabled", enabled);
+                preference.Parameters.AddWithValue("@timing", timing);
+                preference.Parameters.AddWithValue("@updatedAtUtc", updatedAtUtc);
+                await preference.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await using (var selectedChannel = pg.CreateCommand())
+            {
+                selectedChannel.Transaction = transaction;
+                selectedChannel.CommandText =
+                    """
+                    INSERT INTO "NotificationSubscriptionChannels" ("ProfileId", "Category", "Channel")
+                    VALUES (@profileId, @category, @channel);
+                    """;
+                selectedChannel.Parameters.AddWithValue("@profileId", profileId);
+                selectedChannel.Parameters.AddWithValue("@category", category);
+                selectedChannel.Parameters.AddWithValue("@channel", channel);
+                await selectedChannel.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            if (legacyMode == LegacyNotificationModePush)
+            {
+                await using var profileChannel = pg.CreateCommand();
+                profileChannel.Transaction = transaction;
+                profileChannel.CommandText =
+                    """
+                    INSERT INTO "NotificationProfileChannels" ("ProfileId", "Channel", "Enabled", "UpdatedAtUtc")
+                    VALUES (@profileId, @channel, TRUE, @updatedAtUtc)
+                    ON CONFLICT ("ProfileId", "Channel") DO UPDATE SET
+                        "Enabled" = TRUE,
+                        "UpdatedAtUtc" = excluded."UpdatedAtUtc";
+                    """;
+                profileChannel.Parameters.AddWithValue("@profileId", profileId);
+                profileChannel.Parameters.AddWithValue("@channel", NotificationChannelPush);
+                profileChannel.Parameters.AddWithValue("@updatedAtUtc", updatedAtUtc);
+                await profileChannel.ExecuteNonQueryAsync(cancellationToken);
+            }
+
             rows++;
         }
 
@@ -454,6 +544,15 @@ public static class SqliteToPostgresImporter
                 "is not imported again.");
         }
     }
+
+    private const int LegacyNotificationModeOff = 0;
+    private const int LegacyNotificationModeInApp = 1;
+    private const int LegacyNotificationModePush = 2;
+    private const int LegacyNotificationModeDigest = 3;
+    private const int NotificationChannelInApp = 1;
+    private const int NotificationChannelPush = 2;
+    private const int NotificationTimingImmediate = 1;
+    private const int NotificationTimingDigest = 2;
 
     private sealed record ColumnInfo(string Name, string DataType, bool IsIdentity);
 
