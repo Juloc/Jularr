@@ -109,6 +109,8 @@ Detailed audio/subtitle/edition language information belongs in the preview/deta
 
 Binding shared specification: `docs/mockups/media-preview/SPEC.md`.
 
+Binding missing-media playback intent: `docs/mockups/instant-play/SPEC.md`.
+
 Desktop:
 - ordinary hover may highlight the card and reveal a Quick View affordance;
 - the card itself does **not** expand/reflow on hover;
@@ -356,6 +358,8 @@ Provider-specific records, regional releases or ROM variants must not become dup
 Opening a local Game goes to Game Detail.
 
 Opening a non-local Game uses the same canonical Game Detail / shared Request behavior as the rest of Jularr.
+
+For watchable media, opening a non-local title never acquires it merely from card activation. Detail/Preview resolves the effective action: Play/Continue when local, Start watching/Watch now when Playback + instant acquisition are permitted, or Request when explicit acquisition/approval is required. Manager-only instances never expose the playback-intent actions.
 
 Media Preview / Quick View is not required for Games in V1; a Game card may open Game Detail directly unless a future Games-specific preview is explicitly approved.
 
