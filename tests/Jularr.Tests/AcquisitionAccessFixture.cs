@@ -44,6 +44,10 @@ internal sealed class AcquisitionAccessFixture : IAsyncDisposable
         return new AcquisitionAccessFixture(directory, db);
     }
 
+    /// <summary>A second context on the same database, as a second concurrent request would have.</summary>
+    public AppDbContext OpenContext() =>
+        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(Db.Database.GetConnectionString()).Options);
+
     public AcquisitionRequestService Service(string profileId, bool isOwner, params IAcquisitionRequestExecutor[] executors) =>
         Service(profileId, isOwner ? AccountRole.Owner : AccountRole.User, executors);
 

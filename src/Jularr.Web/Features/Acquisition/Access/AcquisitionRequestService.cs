@@ -48,9 +48,15 @@ public sealed class AcquisitionRequestService(
     }
 
     /// <summary>Requests a title. Returns the open request for it, new or existing.</summary>
-    public async Task<AcquisitionRequest> SubmitAsync(
-        AcquisitionRequestDraft draft,
-        CancellationToken cancellationToken)
+    public async Task<AcquisitionRequest> SubmitAsync(AcquisitionRequestDraft draft, CancellationToken cancellationToken) =>
+        (await SubmitWithOutcomeAsync(draft, cancellationToken)).Request;
+
+    /// <summary>
+    /// Requests a title and says whether the title already had an open request. A title is only ever requested once
+    /// at a time: when another profile wins the race for the same title, the unique index rejects this insert and the
+    /// winner's open request is returned, so a concurrent duplicate never fails and never reads as a new request.
+    /// </summary>
+    public async Task<AcquisitionSubmission> SubmitWithOutcomeAsync(AcquisitionRequestDraft draft, CancellationToken cancellationToken)
     {
         var capabilities = await GetCapabilitiesAsync(draft.Kind, cancellationToken);
         if (!capabilities.CanRequest)
@@ -61,33 +67,31 @@ public sealed class AcquisitionRequestService(
         draft = await PrepareDraftAsync(draft, cancellationToken);
         if (await store.FindOpenAsync(draft.Kind, draft.Provider, draft.ExternalId, cancellationToken) is { } open)
         {
-            return open;
+            return new AcquisitionSubmission(open, AlreadyRequested: true);
         }
 
+        var status = AcquisitionRequestStatus.Approved;
+        var decidedBy = account.ProfileId;
         if (!capabilities.AutoApproves)
         {
             var decision = await EvaluateAutoApprovalAsync(draft.Kind, cancellationToken);
-            if (decision.Rule is not { } rule)
-            {
-                return await store.CreateAsync(draft, account.ProfileId, AcquisitionRequestStatus.Pending, null, cancellationToken);
-            }
-
-            var autoApproved = await store.CreateAsync(
-                draft,
-                account.ProfileId,
-                AcquisitionRequestStatus.Approved,
-                AcquisitionAutoApproval.DecidedBy(rule.Id),
-                cancellationToken);
-            return await ExecuteAsync(autoApproved, cancellationToken);
+            status = decision.Rule is null ? AcquisitionRequestStatus.Pending : AcquisitionRequestStatus.Approved;
+            decidedBy = decision.Rule is { } rule ? AcquisitionAutoApproval.DecidedBy(rule.Id) : null;
         }
 
-        var approved = await store.CreateAsync(
-            draft,
-            account.ProfileId,
-            AcquisitionRequestStatus.Approved,
-            account.ProfileId,
-            cancellationToken);
-        return await ExecuteAsync(approved, cancellationToken);
+        AcquisitionRequest created;
+        try
+        {
+            created = await store.CreateAsync(draft, account.ProfileId, status, decidedBy, cancellationToken);
+        }
+        catch (OpenRequestExistsException)
+        {
+            var winner = await store.FindOpenAsync(draft.Kind, draft.Provider, draft.ExternalId, cancellationToken)
+                ?? throw new InvalidOperationException("The open request for this title disappeared while it was being requested.");
+            return new AcquisitionSubmission(winner, AlreadyRequested: true);
+        }
+
+        return new AcquisitionSubmission(status == AcquisitionRequestStatus.Pending ? created : await ExecuteAsync(created, cancellationToken), AlreadyRequested: false);
     }
 
     public async Task<AcquisitionRequest> ApproveAsync(Guid id, CancellationToken cancellationToken)

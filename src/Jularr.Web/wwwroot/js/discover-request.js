@@ -82,7 +82,7 @@
     function showIdentity() {
         title.textContent = identity.title;
         meta.textContent = identity.meta || "";
-        dialog.setAttribute("aria-label", text("label").replace("{title}", identity.title));
+        dialog.setAttribute("aria-label", text("label").replace("{title}", () => identity.title));
         cover.replaceChildren();
         if (/^https?:\/\//i.test(identity.cover || "")) {
             const image = document.createElement("img");
@@ -290,14 +290,17 @@
         return data;
     }
 
-    function notify(payload) {
-        root.dispatchEvent(new CustomEvent("dc:request-created", { detail: { identity, payload } }));
+    function notify(payload, owner = identity) {
+        root.dispatchEvent(new CustomEvent("dc:request-created", { detail: { identity: owner, payload } }));
     }
 
     form.addEventListener("submit", async event => {
         event.preventDefault();
         if (submitting || submit.disabled) return;
 
+        // The dialog may be closed and reopened for another title while the request is in flight; only the title
+        // that was submitted gets its card updated, and the dialog body is only touched while it still shows it.
+        const current = identity;
         submitting = true;
         submit.disabled = true;
         body.querySelector(".dc-rq-error")?.remove();
@@ -309,19 +312,23 @@
                 headers: { Accept: "text/html" }
             });
             if (response.status === 403 || response.status === 404) {
-                showMessage(text("forbidden"), false);
-                submit.hidden = true;
+                if (identity === current) {
+                    showMessage(text("forbidden"), false);
+                    submit.hidden = true;
+                }
+
                 return;
             }
 
             if (!response.ok) {
-                showSubmitError(response.status === 400 ? text("invalid") : text("failed"));
+                if (identity === current) showSubmitError(response.status === 400 ? text("invalid") : text("failed"));
                 return;
             }
 
-            body.innerHTML = await response.text();
-            foot.hidden = true;
-            const result = body.querySelector("[data-dc-rq-result]");
+            const markup = await response.text();
+            const view = document.createElement("div");
+            view.innerHTML = markup;
+            const result = view.querySelector("[data-dc-rq-result]");
             notify({
                 requestId: result.dataset.requestId,
                 status: result.dataset.status,
@@ -329,13 +336,19 @@
                 message: result.dataset.message || null,
                 resultUrl: result.dataset.resultUrl || null,
                 done: result.dataset.done === "true"
-            });
-            body.querySelector("#dc-rq-result-title")?.focus();
+            }, current);
+            if (identity === current) {
+                body.replaceChildren(...view.childNodes);
+                foot.hidden = true;
+                body.querySelector("#dc-rq-result-title")?.focus();
+            }
         } catch {
-            showSubmitError(text("failed"));
+            if (identity === current) showSubmitError(text("failed"));
         } finally {
-            submitting = false;
-            refreshSubmit();
+            if (identity === current) {
+                submitting = false;
+                refreshSubmit();
+            }
         }
     });
 
@@ -347,7 +360,8 @@
 
         event.preventDefault();
         identity = identityOf(trigger);
-        opener = trigger;
+        submitting = false;
+        opener = trigger.closest(".dc-pv") ? null : trigger;
         // The preview sheet gives way to the dialog; closing the dialog returns to the card.
         root.querySelector("[data-dc-sheet]")?.close();
         foot.hidden = false;
@@ -371,6 +385,7 @@
         body.replaceChildren();
         const card = [...root.querySelectorAll("[data-dc-card]")].find(item =>
             item.dataset.dcCategory === identity?.category && item.dataset.dcExternalId === identity?.externalId);
+        // A button of the preview sheet is gone by now, as is a card button replaced by the live request state.
         const target = opener?.isConnected ? opener : card?.querySelector("[data-dc-title-link]");
         target?.focus();
         opener = null;

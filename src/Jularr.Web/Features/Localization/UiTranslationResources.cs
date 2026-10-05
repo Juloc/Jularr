@@ -3516,7 +3516,7 @@ public static class UiTranslationResources
         M("books.page.noMatches", "No books match these filters.", "Books", "Empty state", "Shown when filters hide every book.", "neutral empty state", 50),
         M("books.page.requestsEmpty", "You have not requested any books yet.", "Books", "Empty state", "Shown in the Requests tab without requests.", "neutral empty state", 60),
         M("books.page.withdraw", "Withdraw", "Books", "Button", "Withdraws the profile's own pending request.", "short action", 14),
-        M("books.add.subtitle", "Request a book. Jularr imports a free edition or downloads it from your indexers once the request is approved.", "Books", "Body", "Explains requesting in the book dialog.", "clear helpful copy", 140, null, ["Jularr"]),
+        M("books.add.subtitle", "Request a book. Jularr imports a free edition or downloads it from your indexers.", "Books", "Body", "Explains requesting in the book dialog.", "clear helpful copy", 140, null, ["Jularr"]),
         M("books.add.searchPlaceholder", "Title, author or ISBN", "Books", "Placeholder", "Search field in the Add book dialog.", "short placeholder", 32, null, ["ISBN"]),
         M("books.add.searching", "Searching…", "Books", "Status", "Shown while the catalog search runs.", "compact status", 16),
         M("books.add.noResults", "No books found.", "Books", "Empty state", "Shown when the catalog search has no results.", "neutral empty state", 30),

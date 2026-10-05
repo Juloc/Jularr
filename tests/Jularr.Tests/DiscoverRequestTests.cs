@@ -88,6 +88,59 @@ public sealed class DiscoverRequestTests
     }
 
     [TestMethod]
+    [DataRow("not a language", null)]
+    [DataRow(null, "%%%")]
+    [DataRow("off", null)]
+    public async Task AnAnimeRequestWithAnInvalidLanguageIsRejectedAndCreatesNothing(string? audio, string? subtitles)
+    {
+        await using var host = await RequestHost.CreateAsync();
+
+        var result = await host.Page(Alice).OnPostRequestAsync(Form("anime", "154587", audio: audio, subtitles: subtitles), CancellationToken.None);
+
+        Assert.IsInstanceOfType<BadRequestResult>(result, "Subtitles may be switched off, audio may not.");
+        Assert.AreEqual(0, (await host.Fixture.Store.ListAsync(null, null, openOnly: false, 10, CancellationToken.None)).Count);
+    }
+
+    [TestMethod]
+    public async Task TheStoreRefusesASecondOpenRequestForTheSameTitle()
+    {
+        await using var host = await RequestHost.CreateAsync();
+        var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", Movie, "Fight Club", null, null);
+        await host.Fixture.Store.CreateAsync(draft, Alice, AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+
+        await Assert.ThrowsExactlyAsync<OpenRequestExistsException>(
+            () => host.Fixture.Store.CreateAsync(draft, "bob", AcquisitionRequestStatus.Pending, null, CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task TwoProfilesRequestingTheSameTitleAtOnceShareOneOpenRequestAndNeitherFails()
+    {
+        await using var host = await RequestHost.CreateAsync();
+        await using var secondDb = host.Fixture.OpenContext();
+        var first = host.Fixture.Service(Alice, AccountRole.User);
+        var second = new AcquisitionRequestService(
+            new AcquisitionAccessStore(secondDb),
+            [],
+            AcquisitionAccessFixture.Account("bob", AccountRole.User),
+            new MediaCapabilityService(host.Fixture.Capabilities),
+            host.Fixture.Settings,
+            host.Fixture.Events,
+            NullLogger<AcquisitionRequestService>.Instance);
+
+        for (var title = 1; title <= 8; title++)
+        {
+            var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", title.ToString(), "A movie", null, null);
+
+            var outcomes = await Task.WhenAll(first.SubmitWithOutcomeAsync(draft, CancellationToken.None), second.SubmitWithOutcomeAsync(draft, CancellationToken.None));
+
+            Assert.AreEqual(outcomes[0].Request.Id, outcomes[1].Request.Id, "Both profiles end on the same open request.");
+            Assert.AreEqual(1, outcomes.Count(outcome => !outcome.AlreadyRequested), "Exactly one of them created it; the other joined it.");
+        }
+
+        Assert.AreEqual(8, (await host.Fixture.Store.ListAsync(null, null, openOnly: true, 50, CancellationToken.None)).Count);
+    }
+
+    [TestMethod]
     public async Task AProfileWithoutTheCapabilityIsRefusedByEveryRequestHandler()
     {
         await using var host = await RequestHost.CreateAsync();

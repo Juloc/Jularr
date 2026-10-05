@@ -3,12 +3,17 @@ using System.Data.Common;
 using System.Globalization;
 using Jularr.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Jularr.Web.Features.Acquisition.Access;
+
+/// <summary>Another open request for the same title exists already (unique index on the open title).</summary>
+public sealed class OpenRequestExistsException(Exception inner) : Exception("The title already has an open request.", inner);
 
 /// <summary>Persistence of the access policies and acquisition requests (tables from migration 20260927120000).</summary>
 public sealed class AcquisitionAccessStore(AppDbContext db)
 {
+    private const string OpenTitleIndex = "IX_AcquisitionRequests_OpenTitle";
     private const string OpenStatuses = "'pending', 'approved', 'searching', 'downloading', 'importing'";
 
     private const string Columns =
@@ -305,7 +310,15 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             Add(command, "@now", now);
             Add(command, "@decidedBy", decidedByProfileId);
             Add(command, "@decidedAt", request.DecidedAt);
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            try
+            {
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation && exception.ConstraintName == OpenTitleIndex)
+            {
+                throw new OpenRequestExistsException(exception);
+            }
+
             return true;
         }, cancellationToken);
 

@@ -425,9 +425,7 @@ public sealed class IndexModel(
             ? await scopes.LoadStructureAsync(work.Id, cancellationToken)
             : [];
         var preference = await LoadPreferenceAsync(cancellationToken);
-        return Partial(
-            "_DiscoverRequestSettings",
-            new DiscoverRequestSettingsView(Ui, target.Kind, existing, seasons, OfferedLanguage(preference.Audio), OfferedLanguage(preference.Subtitle)));
+        return Partial("_DiscoverRequestSettings", new DiscoverRequestSettingsView(Ui, target.Kind, existing, seasons, OfferedLanguage(preference.Audio), OfferedLanguage(preference.Subtitle)));
     }
 
     /// <summary>
@@ -468,8 +466,7 @@ public sealed class IndexModel(
                     return BadRequest();
                 }
 
-                var choice = new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture);
-                var payload = await scopes.BuildTvPayloadAsync(work, choice, cancellationToken);
+                var payload = await scopes.BuildTvPayloadAsync(work, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
                 draft = draft with { PayloadJson = payload.Serialize() };
                 summary.Add(DiscoverRequestSummary.Scope(payload, Ui));
             }
@@ -490,10 +487,9 @@ public sealed class IndexModel(
                 return BadRequest();
             }
 
-            var alreadyRequested = await requestStore.FindOpenAsync(target.Kind, target.Provider, target.ExternalId, cancellationToken) is not null;
-            var request = await requests.SubmitAsync(draft, cancellationToken);
-            var progress = await RequestProgressPercentAsync(request, cancellationToken);
-            return Partial("_DiscoverRequestResult", new DiscoverRequestResultView(Ui, request, alreadyRequested, alreadyRequested ? [] : summary, progress));
+            var submission = await requests.SubmitWithOutcomeAsync(draft, cancellationToken);
+            var (progress, _) = await RequestProgressAsync(submission.Request, cancellationToken);
+            return Partial("_DiscoverRequestResult", new DiscoverRequestResultView(Ui, submission.Request, submission.AlreadyRequested, submission.AlreadyRequested ? [] : summary, progress));
         }
         catch (AcquisitionAccessDeniedException)
         {
@@ -589,24 +585,20 @@ public sealed class IndexModel(
             return NotFound();
         }
 
-        OperationSnapshot? operation = null;
-        if (request.OperationId is { } operationId)
-        {
-            operation = await new OperationStore(db).GetAsync(operationId, cancellationToken);
-        }
-
+        var (progress, message) = await RequestProgressAsync(request, cancellationToken);
         return new JsonResult(new
         {
             requestId = request.Id,
             status = AcquisitionAccessNames.Status(request.Status),
-            progress = ProgressPercent(request, operation),
-            message = request.StatusMessage ?? operation?.Message,
+            progress,
+            message,
             resultUrl = request.ResultUrl,
             done = request.Status is AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed
         });
     }
 
-    private async Task<int> RequestProgressPercentAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    /// <summary>The consumer-facing progress and message of a request, read from its operation when it has one.</summary>
+    private async Task<(int Percent, string? Message)> RequestProgressAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
         OperationSnapshot? operation = null;
         if (request.OperationId is { } operationId)
@@ -614,11 +606,6 @@ public sealed class IndexModel(
             operation = await new OperationStore(db).GetAsync(operationId, cancellationToken);
         }
 
-        return ProgressPercent(request, operation);
-    }
-
-    private static int ProgressPercent(AcquisitionRequest request, OperationSnapshot? operation)
-    {
         var percent = request.Status switch
         {
             AcquisitionRequestStatus.Pending => 0,
@@ -629,7 +616,7 @@ public sealed class IndexModel(
             AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed => 100,
             _ => 0
         };
-        return Math.Clamp(percent, 0, 100);
+        return (Math.Clamp(percent, 0, 100), request.StatusMessage ?? operation?.Message);
     }
 
     private static readonly IReadOnlyDictionary<string, MediaAcquisitionKind> Categories =

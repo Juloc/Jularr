@@ -160,6 +160,9 @@ public sealed record AcquisitionRequestDraft(
     string? PayloadJson = null,
     AcquisitionRequestOptions? Options = null);
 
+/// <summary>The request a submit ended with, and whether it was an open request for the title already.</summary>
+public sealed record AcquisitionSubmission(AcquisitionRequest Request, bool AlreadyRequested);
+
 public sealed record AcquisitionExecution(
     AcquisitionRequestStatus Status,
     string? Message,
