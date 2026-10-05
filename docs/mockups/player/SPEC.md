@@ -1051,6 +1051,100 @@ Original media stays read-only. Jularr must not destructively rewrite the only s
 
 Automatic repair may normalize objectively broken timestamp structure when the condition is deterministic and reversible. Jularr must not automatically guess subjective lip-sync from picture/speech content and persist that guess as truth.
 
+### Offset versus progressive drift
+
+Jularr must distinguish a constant timing offset from progressive A/V drift.
+
+- **Constant offset:** audio is early/late by roughly the same amount throughout playback.
+- **Progressive drift:** audio gradually moves further away from video over time.
+- The two conditions must not share one opaque correction path.
+- Constant offsets may use the explicit session/user/canonical timing correction described above.
+- Progressive drift requires timestamp/clock diagnosis and, where needed, controlled audio timestamp correction/resampling or another deterministic FFmpeg synchronization strategy.
+- A drift repair must preserve pitch and playback speed unless the selected repair method explicitly requires a bounded synchronization correction.
+- Diagnostics should expose observed drift separately from the configured static offset.
+
+### Subtitle sync
+
+Subtitle timing correction follows the same explicit model:
+- user can apply a temporary subtitle delay/advance without changing media progress;
+- optional remembered correction is scoped to the exact Version/File + subtitle Track;
+- canonical admin overrides are separate from personal/session adjustments;
+- subtitle timing correction must survive seek, track changes, quality changes and restoration of the same ActiveSession;
+- subtitle offset must never be silently folded into audio correction.
+
+### Playback problem reporting
+
+The Player should expose a compact **Report playback problem** action when diagnostics are available.
+
+For sync-related reports Jularr records a bounded technical snapshot such as:
+- canonical Work/Version/File/Track identities;
+- selected audio/subtitle tracks;
+- playback position;
+- PlaybackPlan and delivery mode;
+- active user/session timing corrections;
+- relevant probed source timing facts;
+- client capability summary;
+- remux/transcode encoder/backend when applicable;
+- recent seek/re-plan/fallback events relevant to timing.
+
+The report must not include raw filesystem paths, secrets, arbitrary FFmpeg command strings or unrelated private data. Admin diagnostics should make the report reproducible where possible.
+
+### Timing fault classification
+
+Diagnostics may classify evidence into explicit categories such as:
+- source/container timing fault;
+- audio-track offset;
+- subtitle-track offset;
+- progressive drift;
+- remux/transcode timing regression;
+- client-specific playback behavior;
+- unknown / insufficient evidence.
+
+Classification must be evidence-based. Jularr must not claim a source is objectively broken when only a subjective lip-sync complaint exists.
+
+### Correction precedence
+
+Timing corrections use one deterministic precedence model so fixes are never applied twice:
+1. structural source/derivative timestamp repair;
+2. canonical File/Track timing override;
+3. personal user timing override;
+4. temporary ActiveSession adjustment.
+
+Diagnostics show the effective correction and its components. Re-planning, seeking or changing tracks must recompute from these canonical inputs rather than adding offsets incrementally.
+
+### Known-bad source feedback
+
+When an admin has confirmed a Version/release as timing-broken:
+- Jularr may mark that exact source/release as bad;
+- replacement/re-request uses the normal acquisition pipeline;
+- release scoring should strongly penalize the confirmed bad release/fingerprint so the same broken source is not selected again;
+- this signal must be scoped narrowly enough not to blacklist unrelated releases with similar names.
+
+### Repaired derivative cache
+
+When a deterministic non-destructive remux/repair produces a verified compatible derivative:
+- cache/reuse the repaired derivative for future playback when policy/storage allows;
+- record provenance back to the original File and the repair recipe/version;
+- invalidate/rebuild when the source changes or the repair logic version makes the derivative stale;
+- never replace the canonical original silently;
+- avoid repeating the same repair on every playback session.
+
+### Real-media regression corpus
+
+In addition to unit/argument tests, maintain a small legal test corpus or generated fixtures covering:
+- constant positive and negative audio offset;
+- progressive drift;
+- non-zero and negative stream starts;
+- timestamp discontinuities;
+- remux with copied audio/video;
+- audio conversion without video encode;
+- full transcode;
+- HLS/fMP4 segmentation and seeking;
+- subtitle offset cases;
+- already-correct media.
+
+Regression runs should verify not only command construction but actual observed output timing where practical.
+
 ### Verification
 Regression coverage must include at least:
 - positive and negative audio offsets;
