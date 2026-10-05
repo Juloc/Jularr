@@ -25,6 +25,160 @@ The Player must:
 
 The Player is not an Admin diagnostics page and does not choose its own media-processing strategy.
 
+## 1a. Best-in-class Player quality bar
+
+Jularr does not target parity with one competitor. The product goal is to combine the strongest relevant qualities of established iPhone/iPad media clients while retaining Jularr's own architecture and UI.
+
+Reference baselines:
+- **Plex** for server-aware Direct Play/Direct Stream/Transcode UX, quality selection, continuation/mini-player behavior, casting and skip-marker integration;
+- **Infuse** for broad local/container/codec/subtitle compatibility, precise playback controls, chapters, gestures, AirPlay/subtitle quality and polished HDR playback;
+- **Swiftfin** for the practical split between Apple-native playback and a broader compatibility engine;
+- **Stremio** for compatibility-player behavior, subtitle live-sync concepts, external-display handling, storage/download diagnostics and immediate control response.
+
+These are behavior/quality references, not UI templates. Jularr must not copy proprietary visual design or create product-specific compatibility hacks.
+
+### Responsiveness and first-frame quality
+
+The Player must feel immediate even when media startup is not immediate:
+- Play/Pause and control-visibility actions update their visible state without waiting for a network/server round trip;
+- seek gestures/buttons show immediate local feedback while the actual seek resolves;
+- a spinner appears only when playback is genuinely waiting, not as a generic transition animation;
+- PlaybackPlan acquisition, manifest/source opening, decoder startup and first decoded frame are measured separately so slow server planning is not confused with slow player UI;
+- startup, seek and rebuffer performance are compared on the same device/media/network against current reference clients during real-device qualification;
+- avoidable Jularr-controlled overhead must be investigated when the same source/device plays materially faster in a reference client.
+
+Do not define one fake universal startup-time promise across local Direct Play, remote HLS, remux and transcode. Keep p50/p95 measurements per delivery mode and device class instead.
+
+### Scrubbing and seeking
+
+The Player should provide:
+- frame/time preview while scrubbing when preview data is available;
+- chapter/segment labels during scrub;
+- immediate -10/+30 visual feedback;
+- accurate final position after seek with no cumulative drift;
+- robust repeated/rapid seek handling without queueing stale requests;
+- seek recovery that preserves the requested logical position when a delivery session/engine must restart.
+
+### Audio quality and synchronization
+
+Best-in-class playback requires:
+- fast in-session audio-track switching where the selected delivery engine permits it;
+- user/session audio-delay correction with explicit reset;
+- subtitle-delay correction independently from audio delay;
+- no cumulative offset drift across pause/resume, seek, quality change or engine/delivery switch;
+- playback-speed changes with pitch-preserving output where the active platform engine supports it;
+- correct handling of headphones/AirPods/Bluetooth/HomePod/AirPlay route changes and phone/system audio interruptions;
+- resuming only when platform semantics and the user's prior playing state make that appropriate;
+- clear diagnostics when the selected audio codec/layout forces remux/transcode or local compatibility-engine fallback.
+
+### Subtitle quality
+
+Jularr should exceed ordinary media-server playback here:
+- embedded and external subtitle tracks share canonical Track identity;
+- SRT/WebVTT/ASS/SSA/PGS and other supported formats preserve styling/positioning as far as the selected rendering engine can safely support them;
+- native-system/AirPlay delivery can use a compatible derived subtitle representation without changing subtitle identity;
+- subtitle offset can be adjusted live and reset instantly;
+- Learning rendering/word interaction remains an optional Jularr layer over the same canonical cues;
+- switching quality, version, engine or transcode mode should preserve the user's logical subtitle choice whenever an equivalent track exists;
+- missing fonts or unsupported styling must degrade deliberately rather than silently hiding subtitles.
+
+### Video fidelity
+
+The Player must prefer preserving source intent:
+- use hardware decoding where supported and efficient;
+- preserve original frame rate, resolution, bit depth and HDR metadata when the device/output path supports them;
+- prefer an Apple-native path for HDR/Dolby Vision/AirPlay/PiP when it gives materially better platform fidelity;
+- use compatibility-engine or server fallback when native playback would require avoidable content loss;
+- never tone-map, deinterlace, rescale or convert frame rate unless the source/output/client actually requires it or the user selected a different quality;
+- expose Fit/Fill/Zoom without permanently altering playback quality;
+- use platform spatial-audio capabilities only when the current route/content legitimately supports them.
+
+### Versions, tracks and quality changes
+
+Changing Version/Asset, quality, audio or subtitle during playback must preserve:
+- ActiveSession;
+- logical position;
+- playing/paused state where safe;
+- selected language/preferences where an equivalent track exists.
+
+A change may rebuild delivery/decoder state, but it must not look like starting an unrelated playback session.
+
+### Recovery ladder
+
+Playback recovery should be automatic but bounded and explainable.
+
+For a recoverable failure, prefer:
+1. retry/resume the current delivery/engine when the failure is plausibly transient;
+2. re-open the same plan/session if the media pipeline itself reset;
+3. on native clients, switch to the declared alternate local engine when its capability report says it can play the same selected media;
+4. request canonical remux/direct-stream fallback;
+5. request canonical server transcode;
+6. show a useful error with diagnostics/retry rather than loop forever.
+
+Every fallback preserves logical position and selected tracks where possible. Diagnostics record why the fallback happened. Never oscillate repeatedly between engines/plans.
+
+### Network and lifecycle resilience
+
+Playback must survive ordinary client changes:
+- Wi-Fi <-> cellular/network handover where the underlying delivery can recover;
+- foreground/background transitions supported by the platform;
+- audio-route changes;
+- orientation/window/Stage Manager changes;
+- temporary server reconnects;
+- app/PWA navigation into and out of the mini-player.
+
+The client must not mark content completed or reset position merely because a media surface was recreated.
+
+### Next-item warmup
+
+When Auto Play/Up Next is enabled, the client/server may pre-resolve the next canonical target and its likely PlaybackPlan near the end of the current item so the transition is fast.
+
+Warmup may fetch lightweight metadata/manifest/initial delivery information, but must:
+- respect metered-data/battery/resource policy;
+- not create a second durable ActiveSession before playback actually starts;
+- not begin an expensive transcode or large download speculatively unless policy explicitly allows it;
+- be cancelled when the user disables autoplay, seeks away from the end or selects another item.
+
+### Native/offline parity
+
+A verified offline copy should use the same Player semantics as streaming:
+- same track/language preferences;
+- same chapters/skip markers where packaged;
+- same Learning behavior where the required derived data is packaged;
+- same progress/session model;
+- same quality and synchronization controls that are meaningful locally.
+
+Offline playback must not become a stripped-down second Player.
+
+### Best-in-class verification corpus
+
+Maintain a legal/internal playback corpus and expected-capability matrix covering representative combinations such as:
+- MP4/fMP4/MKV/TS;
+- H.264, HEVC Main/Main10, AV1 and representative legacy compatibility cases;
+- SDR, HDR10 and Dolby Vision samples where test hardware legally supports them;
+- AAC, AC-3/E-AC-3, FLAC and representative DTS/TrueHD compatibility cases;
+- stereo and multichannel layouts;
+- SRT, WebVTT, ASS/SSA and image subtitle samples;
+- multiple audio/subtitle tracks;
+- chapters/intro/outro/credits markers;
+- high-bitrate 1080p/4K;
+- malformed/edge-case timestamps and known A/V-sync regressions.
+
+For each relevant real device class, qualification records:
+- selected PlaybackPlan and local engine;
+- startup-to-first-frame;
+- seek latency/accuracy;
+- rebuffer behavior;
+- dropped frames where exposed;
+- A/V sync;
+- subtitle correctness;
+- HDR/output behavior;
+- PiP/AirPlay/external-display behavior;
+- battery/thermal observations for representative long playback;
+- recovery result after network/route/interruption tests.
+
+A feature is not considered "best-in-class" merely because it exists. It must remain responsive, correct and explainable under this corpus.
+
 ## 2. Route / entry contract
 
 Entry can come from:
