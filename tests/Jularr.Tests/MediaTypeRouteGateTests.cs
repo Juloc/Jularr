@@ -76,6 +76,8 @@ public sealed class MediaTypeRouteGateTests
     [DataRow("/Novels", "lightNovel", false)]
     [DataRow("/Manga", "manga", false)]
     [DataRow("/Library", "anime", false)]
+    [DataRow("/Library", "movie", false)]
+    [DataRow("/Library", "series", false)]
     [DataRow("/Books", "book", true)]
     [DataRow("/Library", "book", true)]
     [DataRow("/Novels", "anime", true)]

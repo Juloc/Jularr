@@ -1,6 +1,7 @@
 @page
 @using Jularr.Web.Features.Collections
 @using Jularr.Web.Features.Library
+@using Jularr.Web.Features.MediaCore
 @model Jularr.Web.Pages.Library.IndexModel
 @* Layout and hierarchy follow docs/mockups/library (binding): a Library | Collections switch, the media-type
    tabs, one toolbar (count, Filters, Sort, layout) and a poster grid. The address is the only state. *@
@@ -40,18 +41,11 @@
                    aria-current="@(query.Collections ? "page" : null)" data-lib-nav>@ui["collections.nav.title"]</a>
             </nav>
         </div>
-        @if (isOwner && !query.Collections)
-        {
-            <div class="lib-head-actions">
-                <a class="button" href="/Settings/Sonarr">@ui["library.index.importFromSonarr"]</a>
-                <a class="button" href="/Settings">@ui["library.index.manageRoots"]</a>
-            </div>
-        }
     </header>
 
     @if (!query.Collections)
     {
-        <partial name="_LibraryTypeTabs" model="ui" />
+        <partial name="_LibraryScopeTabs" model="(Model.ScopeTabs, ui)" />
     }
 
     <p class="lib-notice" data-lib-offline hidden role="status">
@@ -84,6 +78,10 @@
                     <span class="lib-pop-backdrop" data-lib-close></span>
                     <div class="lib-pop-panel lib-filter-panel" role="dialog" aria-label="@ui["library.browse.filters"]">
                         <form method="get" action="@LibraryBrowse.BasePath" data-lib-filters>
+                            @if (query.MediaType is { } scope)
+                            {
+                                <input type="hidden" name="type" value="@WorkMediaTypes.ToStorage(scope)" />
+                            }
                             @if (query.Sort != LibrarySort.Recent)
                             {
                                 <input type="hidden" name="sort" value="@LibraryBrowse.SortName(query.Sort)" />
@@ -296,6 +294,12 @@
         else if (query.Collections)
         {
             <partial name="_LibraryCollections" model="(Model.Collections, ui)" />
+        }
+        else if (state == LibraryPageState.Empty && Model.LibraryTotal > 0)
+        {
+            <div class="lib-message">
+                <p>@ui["library.browse.scopeEmpty"]</p>
+            </div>
         }
         else if (state == LibraryPageState.Empty)
         {

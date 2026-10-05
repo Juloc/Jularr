@@ -8,6 +8,8 @@ namespace Jularr.Web.Ui;
 public enum MediaBannerKind
 {
     Anime,
+    Series,
+    Movie,
     Manga,
     LightNovel,
     Book
@@ -128,7 +130,7 @@ public sealed record MediaBannerCardModel(
             ? new MediaBannerStatusView(releaseStatus, ui[StatusKey(releaseStatus)])
             : null;
 
-        var reading = data.Kind != MediaBannerKind.Anime;
+        var reading = data.Kind is MediaBannerKind.Manga or MediaBannerKind.LightNovel or MediaBannerKind.Book;
         MediaBannerActionView? action = null;
         MediaBannerProgressView? progress = null;
         if (data.Progress is { } unit)
@@ -153,7 +155,7 @@ public sealed record MediaBannerCardModel(
         var groups = data.GroupCount is int count and > 0
             ? new MediaBannerFact(
                 count.ToString(culture),
-                ui[data.Kind == MediaBannerKind.Anime ? "library.mediaCard.seasons" : "library.mediaCard.volumes"])
+                ui[data.Kind is MediaBannerKind.Anime or MediaBannerKind.Series ? "library.mediaCard.seasons" : "library.mediaCard.volumes"])
             : null;
 
         var rating = FormatRating(data.AverageScore, culture) is { } score
@@ -263,6 +265,8 @@ public sealed record MediaBannerCardModel(
 
     public static string KindKey(MediaBannerKind kind) => kind switch
     {
+        MediaBannerKind.Series => "library.mediaCard.kind.series",
+        MediaBannerKind.Movie => "library.mediaCard.kind.movie",
         MediaBannerKind.Manga => "library.mediaCard.kind.manga",
         MediaBannerKind.LightNovel => "library.mediaCard.kind.lightNovel",
         MediaBannerKind.Book => "library.mediaCard.kind.book",

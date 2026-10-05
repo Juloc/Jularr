@@ -199,8 +199,9 @@ public sealed class LocalFirstPageGetTests
     public async Task AnimeLibraryGetRendersWithoutExternalCallsAsync()
     {
         await using var fixture = await LocalFirstFixture.CreateAsync();
-        await fixture.AddAnimeAsync("Local Anime", episodes: 3);
+        await new LibraryCanonicalSeed(fixture.Db).AddAnimeAsync("Local Anime", [(1, 1, true), (1, 2, true), (1, 3, true)]);
         var page = fixture.Attach(fixture.LibraryPage());
+        page.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "owner"), new Claim(ClaimTypes.Role, Jularr.Web.Features.Auth.AccountRoles.Owner)], "test"));
 
         await page.OnGetAsync(CancellationToken.None);
 
@@ -445,6 +446,8 @@ public sealed class LocalFirstPageGetTests
                 Db,
                 new Jularr.Web.Features.Shell.AppShellService(
                     new MediaCapabilityService(new MediaCapabilityStore(root)))),
+            new Jularr.Web.Features.Shell.AppShellService(
+                new MediaCapabilityService(new MediaCapabilityStore(root))),
             NullLogger<LibraryIndexModel>.Instance);
 
         public DiscoverIndexModel DiscoverPage()

@@ -68,15 +68,17 @@ public sealed record UiNavigationSection(string TitleKey, UiNavigationEntry[] En
 /// </summary>
 public static class UiNavigationCatalog
 {
+    /// <summary>Id of the Library tab that serves every video type; the Library page renders its scopes itself.</summary>
+    public const string LibraryVideoTabId = "library-video";
+
     /// <summary>
-    /// Media types inside Library. The Library destination is active on all of them. Movies and
-    /// series have no consumer pages yet; a tab for them is one more entry here, and the sidebar,
-    /// tabs and route gate follow.
+    /// Media types inside Library. The Library destination is active on all of them. The video tab is one
+    /// destination: Anime, Series and Movies are scopes of the same page, not separate routes.
     /// </summary>
     public static readonly UiNavigationEntry[] LibraryTabs =
     [
-        new("library-anime", "nav.libraryTab.anime", "/Library", "library",
-            MediaRoutes: [new("/Library", [WorkMediaType.Anime])]),
+        new(LibraryVideoTabId, "nav.libraryTab.video", "/Library", "library",
+            MediaRoutes: [new("/Library", [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie])]),
         new("library-reading", "nav.libraryTab.reading", "/Reading", "reading",
             MediaRoutes:
             [

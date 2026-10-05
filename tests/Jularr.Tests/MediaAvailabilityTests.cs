@@ -95,23 +95,21 @@ public sealed class MediaAvailabilityTests
     public async Task LibraryCardsCarryWhatTheLibraryAndTheOpenRequestsKnowAsync()
     {
         await using var fixture = await EpisodeFlowFixture.CreateAsync();
-        var playable = await fixture.AddAnimeAsync("playable");
-        await fixture.AddEpisodeAsync(playable, 1, 1);
-        var empty = await fixture.AddAnimeAsync("empty");
-        await fixture.AddEpisodeAsync(empty, 1, 1, withMedia: false);
-        var requested = await fixture.AddAnimeAsync("requested");
-        await fixture.AddEpisodeAsync(requested, 1, 1, withMedia: false);
-        var finished = await fixture.AddAnimeAsync("finished");
-        await fixture.AddEpisodeAsync(finished, 1, 1, withMedia: false);
-        await AddMatchAsync(fixture.Db, requested, "42");
-        await AddMatchAsync(fixture.Db, finished, "7");
+        var seed = new LibraryCanonicalSeed(fixture.Db);
+        await seed.AddAnimeAsync("playable", [(1, 1, true)]);
+        await seed.AddAnimeAsync("empty", [(1, 1, false)]);
+        var requested = await seed.AddAnimeAsync("requested", [(1, 1, false)]);
+        var finished = await seed.AddAnimeAsync("finished", [(1, 1, false)]);
+        await AddMatchAsync(fixture.Db, requested.Anime, "42");
+        await AddMatchAsync(fixture.Db, finished.Anime, "7");
 
         var store = new AcquisitionAccessStore(fixture.Db);
         await store.CreateAsync(AnimeDraft("42"), "alice", AcquisitionRequestStatus.Searching, "owner", CancellationToken.None);
         await store.CreateAsync(AnimeDraft("7"), "alice", AcquisitionRequestStatus.Completed, "owner", CancellationToken.None);
 
-        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetAnimeAsync("alice", CancellationToken.None))
-            .ToDictionary(card => card.Title);
+        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetAnimeEntriesAsync("alice", CancellationToken.None))
+            .Entries
+            .ToDictionary(entry => entry.Card.Title, entry => entry.Card);
         var badges = cards.ToDictionary(pair => pair.Key, pair => MediaBannerCardModel.Create(pair.Value, Ui).Availability?.Label);
 
         Assert.IsNull(badges["playable"], "It has a play button already.");

@@ -1,6 +1,7 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Ui;
 
 namespace Jularr.Tests;
@@ -33,12 +34,15 @@ public sealed class LibraryBrowseTests
         int missing = 0,
         DateTime? added = null,
         DateTime? watched = null,
-        AcquisitionRequestStatus? request = null) =>
+        AcquisitionRequestStatus? request = null,
+        WorkMediaType mediaType = WorkMediaType.Anime,
+        int? runtimeMinutes = null,
+        int? remainingMinutes = null) =>
         new(
             new MediaBannerCardData(
-                MediaBannerKind.Anime,
+                mediaType == WorkMediaType.Movie ? MediaBannerKind.Movie : mediaType == WorkMediaType.Series ? MediaBannerKind.Series : MediaBannerKind.Anime,
                 title,
-                "/Library/Anime/" + title,
+                LibraryCardView.DetailHref(mediaType, TitleId(title)),
                 ProviderStatus: status,
                 Year: year,
                 AverageScore: score,
@@ -51,7 +55,13 @@ public sealed class LibraryBrowseTests
             playable,
             missing,
             added ?? Stamp,
-            watched);
+            watched,
+            TitleId(title),
+            mediaType,
+            runtimeMinutes,
+            remainingMinutes);
+
+    private static Guid TitleId(string title) => new(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(title)));
 
     private static MediaBannerProgress Progress(
         MediaBannerProgressState state,
@@ -59,6 +69,64 @@ public sealed class LibraryBrowseTests
         int? season = null,
         int? percent = null) =>
         new(state, MediaBannerUnit.Episode, next, "/Library/Episode/" + next, null, season, percent);
+
+    [TestMethod]
+    public void TheMediaTypeScopeRoundTripsThroughTheAddressAndIsNotAFilter()
+    {
+        var query = Parse("type=movie&sort=title");
+
+        Assert.AreEqual(WorkMediaType.Movie, query.MediaType);
+        Assert.AreEqual("/Library?type=movie&sort=title", LibraryBrowse.Href(query));
+        Assert.AreEqual(0, query.ActiveFilterCount);
+        Assert.AreEqual(WorkMediaType.Movie, query.WithoutFilters().MediaType, "Resetting filters keeps the tab.");
+        Assert.AreEqual(WorkMediaType.Series, Parse("type=tv").MediaType);
+        Assert.IsNull(Parse("type=book").MediaType, "Only video types are scopes of this page.");
+        Assert.IsNull(Parse("type=nonsense").MediaType);
+    }
+
+    [TestMethod]
+    public void ScopeTabsListTheVisibleVideoTypesThenTheOtherLibraryDestinations()
+    {
+        var other = new[] { new UiNavigationItem("library-books", "nav.books", "/Books", "books", false) };
+        var query = Parse("type=series&sort=title");
+
+        var tabs = LibraryBrowse.ScopeTabs(query, [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie], other);
+
+        CollectionAssert.AreEqual(
+            new[] { "/Library?sort=title", "/Library?type=anime&sort=title", "/Library?type=series&sort=title", "/Library?type=movie&sort=title", "/Books" },
+            tabs.Select(x => x.Href).ToArray());
+        CollectionAssert.AreEqual(new[] { false, false, true, false, false }, tabs.Select(x => x.IsActive).ToArray());
+
+        var single = LibraryBrowse.ScopeTabs(new LibraryBrowseQuery(), [WorkMediaType.Movie], []);
+        Assert.AreEqual("library.browse.scope.movie", Assert.ContainsSingle(single).LabelKey, "A single type has no All tab.");
+    }
+
+    [TestMethod]
+    public void MovieCardsShowYearAndRuntimeThenTimeLeftAndNeverAPlayShortcut()
+    {
+        var plain = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, runtimeMinutes: 124, progress: Progress(MediaBannerProgressState.NotStarted));
+        var resumed = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, runtimeMinutes: 124, remainingMinutes: 48, progress: Progress(MediaBannerProgressState.InProgress, percent: 61));
+        var done = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, progress: Progress(MediaBannerProgressState.Completed, percent: 100));
+        var unknownRuntime = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, runtimeMinutes: 45);
+
+        Assert.AreEqual("2024 · 2h 04m", LibraryCardView.Create(plain, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual("48 min left", LibraryCardView.Create(resumed, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual(61, LibraryCardView.Create(resumed, LibraryLanguagePreference.None, Ui).ProgressPercent);
+        Assert.AreEqual("Completed", LibraryCardView.Create(done, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual("2024 · 45m", LibraryCardView.Create(unknownRuntime, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.IsNull(LibraryCardView.Create(resumed, LibraryLanguagePreference.None, Ui).Action, "Movies play from their detail page.");
+        Assert.IsNotNull(LibraryCardView.Create(Entry("Anime", progress: Progress(MediaBannerProgressState.NotStarted)), LibraryLanguagePreference.None, Ui).Action);
+    }
+
+    [TestMethod]
+    public void DetailHrefIsOneFunctionPerMediaType()
+    {
+        var id = Guid.NewGuid();
+
+        Assert.AreEqual($"/Library/Anime/{id}", LibraryCardView.DetailHref(WorkMediaType.Anime, id));
+        Assert.AreEqual($"/Library/Series/{id}", LibraryCardView.DetailHref(WorkMediaType.Series, id));
+        Assert.AreEqual($"/Library/Movie/{id}", LibraryCardView.DetailHref(WorkMediaType.Movie, id));
+    }
 
     [TestMethod]
     public void PlainLibraryHasNoQueryAndEveryViewRoundTripsThroughTheAddress()

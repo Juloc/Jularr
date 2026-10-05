@@ -106,6 +106,26 @@ public sealed class VideoProgressService(AppDbContext db)
             : ToSnapshot(row);
     }
 
+    /// <summary>
+    /// Every canonical progress row of one profile in a single read, for browse surfaces that show
+    /// continue state for many Works at once instead of loading each target through <see cref="GetAsync"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<MediaProgressSnapshot>> ListAsync(
+        string profileId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateProfile(profileId);
+        var rows = await db.Database.SqlQueryRaw<MediaProgressDbRow>(
+                """
+                SELECT "Id", "ProfileId", "WorkId", "WorkEpisodeId", "PositionMs", "DurationMs", "IsCompleted", "UpdatedAt"
+                FROM "MediaProgress"
+                WHERE "ProfileId" = {0}
+                """,
+                profileId)
+            .ToListAsync(cancellationToken);
+        return [.. rows.Select(ToSnapshot)];
+    }
+
     public async Task<MediaProgressSnapshot?> UpdateAsync(
         string profileId,
         MediaProgressTarget target,

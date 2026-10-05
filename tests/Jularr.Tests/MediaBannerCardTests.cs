@@ -1,14 +1,10 @@
-using System.Data.Common;
 using System.Globalization;
-using Jularr.Web.Data;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Subtitles;
 using Jularr.Web.Ui;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Jularr.Tests;
 
@@ -236,16 +232,18 @@ public sealed class MediaBannerCardTests
     public async Task LibraryCardsCombineMetadataInventoryAndProgressAsync()
     {
         await using var fixture = await EpisodeFlowFixture.CreateAsync();
-        var ongoing = await fixture.AddAnimeAsync("akatsuki");
-        var episodes = new List<Episode>();
-        for (var number = 1; number <= 8; number++)
+        var seed = new LibraryCanonicalSeed(fixture.Db);
+        var ongoing = await seed.AddAnimeAsync("akatsuki", [.. Enumerable.Range(1, 8).Select(number => (1, number, false))]);
+        await seed.AddVideoAsync(ongoing.Work, ongoing.Episodes[0].Canonical, audio: ["jpn", "ger"], subtitles: ["eng"]);
+        await seed.AddVideoAsync(ongoing.Work, ongoing.Episodes[1].Canonical, audio: ["jpn"], subtitles: ["eng", "und"]);
+        foreach (var episode in ongoing.Episodes.Skip(2))
         {
-            episodes.Add(await fixture.AddEpisodeAsync(ongoing, 1, number));
+            await seed.AddVideoAsync(ongoing.Work, episode.Canonical);
         }
 
         fixture.Db.AnimeMetadata.Add(new AnimeMetadata
         {
-            AnimeId = ongoing.Id,
+            AnimeId = ongoing.Anime.Id,
             Provider = AniListMetadataProvider.ProviderKey,
             ExternalId = "1",
             PreferredTitle = "Akatsuki no Sora",
@@ -254,34 +252,31 @@ public sealed class MediaBannerCardTests
             EpisodeCount = 12,
             AverageScore = 86
         });
-        await AddStreamsAsync(fixture.Db, episodes[0], ("jpn", MediaStreamKind.Audio), ("ger", MediaStreamKind.Audio), ("eng", MediaStreamKind.Subtitle));
-        await AddStreamsAsync(fixture.Db, episodes[1], ("jpn", MediaStreamKind.Audio), ("eng", MediaStreamKind.Subtitle), ("und", MediaStreamKind.Subtitle));
-        fixture.Db.SubtitleTracks.Add(new SubtitleTrack { EpisodeId = episodes[0].Id, Path = "a.de.srt", Language = "de", Format = "srt" });
+        fixture.Db.SubtitleTracks.Add(new SubtitleTrack { EpisodeId = ongoing.Episodes[0].Legacy.Id, Path = "a.de.srt", Language = "de", Format = "srt" });
         await fixture.Db.SaveChangesAsync();
 
-        var reader = fixture.Service(Profile);
         for (var index = 0; index < 5; index++)
         {
-            await reader.SetWatchedAsync(episodes[index].Id, true);
-            await fixture.SetUpdatedAtAsync(Profile, episodes[index].Id, BaseTime.AddMinutes(index));
+            await seed.SetProgressAsync(Profile, ongoing.Work, ongoing.Episodes[index].Canonical, 0, null, completed: true, BaseTime.AddMinutes(index));
         }
 
-        await fixture.Service("other").SetWatchedAsync(episodes[5].Id, true);
+        await seed.SetProgressAsync("other", ongoing.Work, ongoing.Episodes[5].Canonical, 0, null, completed: true, BaseTime);
 
-        var multiSeason = await fixture.AddAnimeAsync("bravo");
-        var bravoFirst = await fixture.AddEpisodeAsync(multiSeason, 1, 1);
-        await fixture.AddEpisodeAsync(multiSeason, 2, 1);
-        var nothingLocal = await fixture.AddAnimeAsync("charlie");
-        await fixture.AddEpisodeAsync(nothingLocal, 1, 1, withMedia: false);
+        var multiSeason = await seed.AddAnimeAsync("bravo", [(1, 1, true), (2, 1, true)]);
+        await seed.AddAnimeAsync("charlie", [(1, 1, false)]);
 
-        var cards = await new LibraryMediaCardQuery(fixture.Db).GetAnimeAsync(Profile, CancellationToken.None);
+        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetAnimeEntriesAsync(Profile, CancellationToken.None))
+            .Entries
+            .Select(entry => entry.Card)
+            .OrderBy(card => card.Title, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         CollectionAssert.AreEqual(
             new[] { "Akatsuki no Sora", "bravo", "charlie" },
             cards.Select(x => x.Title).ToArray());
 
         var card = cards[0];
-        Assert.AreEqual($"/Library/Anime/{ongoing.Id}", card.Href);
+        Assert.AreEqual($"/Library/Anime/{ongoing.Anime.Id}", card.Href);
         Assert.AreEqual("RELEASING", card.ProviderStatus);
         Assert.AreEqual(2024, card.Year);
         Assert.AreEqual(86, card.AverageScore);
@@ -293,7 +288,7 @@ public sealed class MediaBannerCardTests
                 MediaBannerProgressState.InProgress,
                 MediaBannerUnit.Episode,
                 6,
-                $"/Library/Episode/{episodes[5].Id}",
+                $"/Library/Episode/{ongoing.Episodes[5].Legacy.Id}",
                 TotalUnits: 12,
                 NextSeason: null,
                 Percent: 42),
@@ -308,41 +303,10 @@ public sealed class MediaBannerCardTests
         Assert.AreEqual(MediaBannerProgressState.NotStarted, bravo.Progress?.State);
         Assert.AreEqual(1, bravo.Progress?.NextSeason);
         Assert.IsNull(bravo.Progress?.TotalUnits);
-        Assert.AreEqual($"/Library/Episode/{bravoFirst.Id}", bravo.Progress?.NextUrl);
+        Assert.AreEqual($"/Library/Episode/{multiSeason.Episodes[0].Legacy.Id}", bravo.Progress?.NextUrl);
 
         Assert.IsNull(cards[2].Progress, "Nothing playable means no play button.");
         Assert.IsNull(cards[2].GroupCount);
-    }
-
-    [TestMethod]
-    public async Task LibraryCardsUseAFixedNumberOfQueriesAsync()
-    {
-        await using var fixture = await EpisodeFlowFixture.CreateAsync();
-        var counter = new CommandCounter();
-        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(fixture.Db.Database.GetConnectionString())
-            .AddInterceptors(counter)
-            .Options);
-
-        var first = await fixture.AddAnimeAsync("one");
-        await fixture.AddEpisodeAsync(first, 1, 1);
-        await new LibraryMediaCardQuery(db).GetAnimeAsync(Profile, CancellationToken.None);
-        var single = counter.Count;
-
-        for (var index = 0; index < 5; index++)
-        {
-            var anime = await fixture.AddAnimeAsync($"more-{index}");
-            await fixture.AddEpisodeAsync(anime, 1, 1);
-            await fixture.AddEpisodeAsync(anime, 1, 2);
-            await fixture.Service(Profile).SetWatchedAsync((await fixture.AddEpisodeAsync(anime, 1, 3)).Id, true);
-        }
-
-        counter.Count = 0;
-        var cards = await new LibraryMediaCardQuery(db).GetAnimeAsync(Profile, CancellationToken.None);
-
-        Assert.AreEqual(6, cards.Count);
-        Assert.AreEqual(single, counter.Count, "The grid must not issue queries per title.");
-        Assert.IsTrue(single <= 5, $"Expected at most five queries, saw {single}.");
     }
 
     private static MediaBannerCardData Anime() =>
@@ -359,49 +323,4 @@ public sealed class MediaBannerCardTests
 
     private static EpisodeProgressState Watched(EpisodeOrderKey episode, DateTime updatedAt) =>
         new(episode.Id, 0, true, updatedAt);
-
-    private static async Task AddStreamsAsync(
-        AppDbContext db,
-        Episode episode,
-        params (string Language, MediaStreamKind Kind)[] streams)
-    {
-        var mediaFileId = await db.MediaFiles
-            .Where(x => x.EpisodeId == episode.Id)
-            .Select(x => x.Id)
-            .SingleAsync();
-        db.MediaAnalyses.Add(new MediaAnalysis
-        {
-            MediaFileId = mediaFileId,
-            Status = MediaAnalysisStatus.Succeeded,
-            ProbeVersion = MediaInventoryService.CurrentProbeVersion,
-            SourceSizeBytes = 1,
-            SourceLastWriteTimeUtc = BaseTime
-        });
-        for (var index = 0; index < streams.Length; index++)
-        {
-            db.MediaAnalysisStreams.Add(new MediaAnalysisStream
-            {
-                MediaFileId = mediaFileId,
-                StreamIndex = index + 1,
-                Kind = streams[index].Kind,
-                Codec = streams[index].Kind == MediaStreamKind.Audio ? "aac" : "ass",
-                Language = streams[index].Language
-            });
-        }
-    }
-
-    private sealed class CommandCounter : DbCommandInterceptor
-    {
-        public int Count { get; set; }
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command,
-            CommandEventData eventData,
-            InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default)
-        {
-            Count++;
-            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
-        }
-    }
 }

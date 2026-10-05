@@ -1,0 +1,14 @@
+@using Jularr.Web.Features.Library
+@using Jularr.Web.Features.Localization
+@model (IReadOnlyList<LibraryScopeTab> Tabs, UiTextBundle Ui)
+@* Media-type scope of the Library (docs/mockups/library): the video scopes switch this page, the other types open their own page.
+   A single destination has nothing to switch to. Styled by the shared library-type-tabs rules in site.css. *@
+@if (Model.Tabs.Count > 1)
+{
+    <nav class="library-type-tabs" aria-label="@Model.Ui["nav.libraryTabsAria"]">
+        @foreach (var tab in Model.Tabs)
+        {
+            <a class="library-type-tab @(tab.IsActive ? "active" : "")" href="@tab.Href" aria-current="@(tab.IsActive ? "page" : null)" data-lib-nav>@Model.Ui[tab.LabelKey]</a>
+        }
+    </nav>
+}

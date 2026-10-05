@@ -48,8 +48,8 @@ public sealed partial class AppShellNavigationTests
     }
 
     [TestMethod]
-    [DataRow("/Library", "library-anime")]
-    [DataRow("/Library/Anime/7a4c", "library-anime")]
+    [DataRow("/Library", "library-video")]
+    [DataRow("/Library/Anime/7a4c", "library-video")]
     [DataRow("/Reading", "library-reading")]
     [DataRow("/Novels/Work/7a4c", "library-reading")]
     [DataRow("/Manga", "library-reading")]

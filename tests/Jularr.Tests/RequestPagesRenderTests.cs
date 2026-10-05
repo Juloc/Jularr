@@ -187,35 +187,19 @@ public sealed class RequestPagesRenderTests
     public async Task LibraryCardsShowTheAvailabilityBadgeOnlyWhereItAddsSomething()
     {
         await using var host = await RequestPagesHost.CreateAsync();
-        var root = new LibraryRoot { Name = "Test", Path = Path.GetTempPath() };
-        host.Db.Add(root);
-        var playable = new Anime { Key = "playable", Title = "Playable Show" };
-        var empty = new Anime { Key = "empty", Title = "Empty Show" };
-        var requested = new Anime { Key = "requested", Title = "Requested Show" };
-        host.Db.AddRange(playable, empty, requested);
-        await host.Db.SaveChangesAsync();
-        var episode = new Episode { AnimeId = playable.Id, SeasonNumber = 1, Number = 1, Title = "One" };
-        host.Db.Add(episode);
-        host.Db.Add(new Episode { AnimeId = empty.Id, SeasonNumber = 1, Number = 1, Title = "One" });
-        host.Db.Add(new Episode { AnimeId = requested.Id, SeasonNumber = 1, Number = 1, Title = "One" });
-        host.Db.Add(new MediaFile
-        {
-            LibraryRootId = root.Id,
-            EpisodeId = episode.Id,
-            Path = Path.Combine(Path.GetTempPath(), $"playable-{Guid.NewGuid():N}.mkv"),
-            SizeBytes = 1,
-            LastWriteTimeUtc = DateTime.UtcNow
-        });
+        var seed = new LibraryCanonicalSeed(host.Db);
+        await seed.AddAnimeAsync("Playable Show", [(1, 1, true)]);
+        await seed.AddAnimeAsync("Empty Show", [(1, 1, false)]);
+        var requested = await seed.AddAnimeAsync("Requested Show", [(1, 1, false)]);
         host.Db.AnimeMetadata.Add(new AnimeMetadata
         {
-            AnimeId = requested.Id,
+            AnimeId = requested.Anime.Id,
             Provider = "anilist",
             ExternalId = "42",
-            PreferredTitle = requested.Title
+            PreferredTitle = requested.Anime.Title
         });
-        await host.Db.SaveChangesAsync();
-        await new AcquisitionAccessStore(host.Db).CreateAsync(
-            Anime("42", requested.Title),
+        await host.Db.SaveChangesAsync();        await new AcquisitionAccessStore(host.Db).CreateAsync(
+            Anime("42", "Requested Show"),
             "someone",
             AcquisitionRequestStatus.Downloading,
             "owner",

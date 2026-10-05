@@ -13,7 +13,6 @@
 .lib-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; }
 .lib-head-main { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; min-width: 0; }
 .lib-head h1 { margin: 0; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.1; letter-spacing: -.02em; }
-.lib-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .lib-switch {
     display: inline-flex; gap: 4px; padding: 4px;
     border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
@@ -249,8 +248,6 @@
 
 /* Phone: two-column posters, Filters and Sort as bottom sheets ---------------------------------- */
 @media (max-width: 760px) {
-    .lib-head-actions { width: 100%; }
-    .lib-head-actions .button { flex: 1; text-align: center; }
     .lib-toolbar { gap: 8px; }
     .lib-count { flex: 1 0 100%; }
     .lib-controls { flex: 1 0 100%; flex-wrap: nowrap; }
