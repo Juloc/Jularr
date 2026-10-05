@@ -319,7 +319,7 @@ The response carries `sessionId`, `plan` and `delivery`. `plan.mode` is `direct_
 
 #### Playback telemetry (`playbackTelemetry`)
 
-A playing client reports what it observes about the session every ~5 s with `PUT /stream-sessions/{sessionId}/telemetry` (answer `204`; `404` `stream_session_not_found` for a session that is not the caller's or expired; `400` `invalid_telemetry` for a missing or impossible value; `429` over the separate per-account limit of 90 reports a minute; body at most 1 KiB):
+A playing client reports what it observes about the session every ~5 s with `PUT /stream-sessions/{sessionId}/telemetry` (answer `200` with the quality advice below; `404` `stream_session_not_found` for a session that is not the caller's or expired; `400` `invalid_telemetry` for a missing or impossible value; `429` over the separate per-account limit of 90 reports a minute; body at most 1 KiB):
 
 ```json
 { "sequence": 12, "state": "playing", "bufferAheadSeconds": 12.4, "throughputKbps": 24000, "stallCount": 1, "stallTotalMs": 1840, "positionSeconds": 612.5 }
@@ -330,6 +330,29 @@ A playing client reports what it observes about the session every ~5 s with `PUT
 - `bufferAheadSeconds` (0..3600) is the media buffered ahead of the playhead; `positionSeconds` (0..604800) is the absolute playback position. `throughputKbps` (0..10 000 000, optional) is the smoothed rate at which the client received media, over about 15 s; it is a delivery rate, not link capacity, and it is left out when the client could not measure it. `stallCount` and `stallTotalMs` are cumulative for the session. A stall is playback waiting for media after it had started; the initial start and a user seek are not stalls.
 - The server keeps the report in memory on the session only. Nothing is written to the database and the report disappears with the session.
 - When a client re-plans (`replacesSessionId`) the same title, and the replaced session's last report is not older than 2 minutes, the buffer and the stalls of the last 60 s it reported feed the next plan's Automatic quality (two stalls step it down) and win over the request's `network.bufferSeconds` and `network.recentStalls` hints. `network.throughputKbps` stays the request's own hint.
+
+
+#### Quality advice and conversion speed (answer of the telemetry report)
+
+The answer to every accepted report is `200` with a small JSON body; a repeated or older report is answered like a new one, because the body is a reading of the session's current state, never of the request:
+
+```json
+{ "advice": "step_down", "reason": "transcode_too_slow", "transcodeSpeed": 0.62, "transcodeFps": 12.5 }
+```
+
+- `advice` is `none`, `step_down` or `step_up`; `reason` (null when `none`) is `stalls`, `low_buffer`, `transcode_too_slow` or `throughput_headroom`. The server is the only decision owner (one rule, `PlaybackAdaptation`): a step down follows the existing two-stalls-in-60-s rule, a buffer below 4 s while the delivery rate falls, or a server transcode that stayed under real time (below 1.0x for 10 s after 10 s of produced media). A step up needs `quality = auto`, a throughput of at least 1.5x the next tier's bitrate in every report of the last 60 s (healthy buffer, no stall, no gap over 15 s), 120 s since the delivery started (any change of the delivery restarts this cooldown) and no transcode running below 1.15x. It never goes above the source, above a tier the server's encoder already failed to sustain, or while the viewer fixed a tier (`original`, `20mbps` ... `1mbps`); a too-slow transcode is the one exception, because a tier the server cannot encode cannot be played. Apart from a too-slow transcode, no advice is given within the first 20 s of a delivery or while the player reports `paused`.
+- A client follows `step_down` / `step_up` by planning again at the same absolute position: `POST ... /playback-plan` with `replacesSessionId` set to the session, the same selections (audio, subtitle, `quality`, `mode`) and the failed modes **unchanged** (a stall is no verdict on a mode and must not enter `failedModes`). The server plans the next tier itself (one ladder step; the reasons `stall_limit`, `bandwidth_limit` or `transcode_too_slow` explain it), keeps the ActiveSession and progress, and starts a new cooldown. A client keeps at least 30 s between two switches and at most 6 per 10 minutes, never switches while paused or while a plan is being replaced, and never treats the advice as a command it must obey: a native client that cannot switch may ignore it.
+- A transcode that stays too slow is re-planned in this order: a lower quality tier (down to 1 Mbps), then another healthy encoder backend, then an `unavailable` plan with the blocker `transcode_unsustainable`; a client that can play the original untouched gets it with the warning `limit_ignored_no_transcoder` instead. Slowness never counts against a hardware encoder's circuit breaker.
+- `transcodeSpeed` (media seconds produced per wall second, ffmpeg's own cumulative factor) and `transcodeFps` are what the server measured while converting the video; they are null for Direct Play, remux and while no measurement exists. They belong in diagnostics only, next to the values the client observed itself.
+- A server whose running conversions of the same kind already stay under real time refuses a new one at once: `503` with the code `transcoder_overloaded` and `Retry-After: 30`. Every admission refusal (`transcoder_busy`, `profile_session_limit` 15 s, `transcoder_overloaded` 30 s, `cache_budget_exhausted`, `cache_free_space_low` 60 s) carries `Retry-After` where asking again can help; `transcoding_disabled` and `cache_folder_not_owned` carry none (only an Admin changes them). The server never queues a refused delivery.
+
+
+#### Known gaps of the adaptive playback (#403 slice D)
+
+- **No pacing yet.** An HLS transcode still encodes at full speed to the end of the file instead of pausing at a high-water mark and resuming at the low-water mark of the buffer policy. Real pacing needs, at least: (a) a way to suspend and resume the ffmpeg process (`SIGSTOP`/`SIGCONT` on Linux through a small seam on `IHlsEncoderProcess`; `-readrate` only paces to a fixed factor, cannot burst after a seek and `-readrate_initial_burst` needs ffmpeg 6.1 or newer, which the runtime image does not guarantee); (b) the produced-ahead distance from what the server itself knows (newest segment on disk minus the newest segment the player requested), not from the 5 s telemetry; (c) the transcode meter to restart its run on every resume, because ffmpeg's `speed` is a cumulative average and a pause would read as a too-slow encode and trigger a needless re-plan; (d) the hold time to count against the idle expiry, the hardware-session slot and the first-output timeout. Without (c) the safe approach does not exist, so it is not built.
+- **ffmpeg's `speed` is a cumulative average since the process started**, ignored for the first 10 s of produced media and required to stay under 1.0x for 10 s. A server that is slow only for a short moment is not re-planned; a slowdown in the middle of a very long run reacts slowly.
+- **Only plan-based transcodes are measured and counted for overload.** The legacy `/episodes/{id}/hls` and `/fallback` routes (which are being retired) are admitted and slot-limited but never measured.
+- The Android phone and TV players do not follow the advice yet; the contract above is what they implement. The Admin session list does not show the conversion speed (it has no column for it in its mockup); the speed is in the player diagnostics.
 
 ### 5.1 Native algorithm
 
@@ -835,7 +858,7 @@ Contract versions (the number in `GET /capabilities`; the route prefix stays `/a
 - `2` (current, minimum supported `2`): playback checkpoints carry a client-declared `completed` flag and the server no longer infers completion from a position (`PUT /episodes/{id}/progress`, `PUT /video/progress`, `POST /offline/progress`). Clients set `completed` only when playback itself reached 95% of the duration (continuous forward playback from below the threshold) or ended, or when the user marks the item watched. A seek, scrub or resume that lands at or beyond 95% is only a resume point, and after such a seek only `ended` or an explicit watched action completes it. A version 1 client never declared threshold completion, so the server reports minimum supported version 2 and the app shows its existing "update required" state; there is deliberately no server-side position-inference fallback.
 - `1`: initial contract.
 
-Additive extensions that keep version `2`: `PUT /stream-sessions/{id}/telemetry`, the `playbackTelemetry` feature flag and the optional `plan.buffer` object (see 5.0). A client that ignores them keeps working unchanged.
+Additive extensions that keep version `2`: `PUT /stream-sessions/{id}/telemetry` with its answer (`advice`, `reason`, `transcodeSpeed`, `transcodeFps`), the `playbackTelemetry` feature flag, the optional `plan.buffer` object and the `Retry-After` header of playback refusals (see 5.0). A client that ignores them keeps working unchanged.
 
 Additive extensions of contract version 2 (Instant Play, `docs/mockups/instant-play/SPEC.md`; clients read `features.playbackEnabled` and `features.playbackIntents` from `GET /capabilities`):
 

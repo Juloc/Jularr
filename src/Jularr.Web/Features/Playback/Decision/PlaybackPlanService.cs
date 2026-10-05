@@ -313,7 +313,8 @@ public sealed class PlaybackPlanService(
             directive));
 
         // No encoder is left that keeps up: the slow transcode behind the replaced session must stop now instead of running on unused.
-        if (previous is not null && plan.Mode == PlaybackDeliveryMode.Unavailable && plan.Reasons.Any(x => x.Code == PlaybackReasonCodes.TranscodeUnsustainable) && sessions.Remove(previous.Id, profileId) && activeSessions is not null)
+        var unsustainable = plan.Mode == PlaybackDeliveryMode.Unavailable && plan.Reasons.Any(x => x.Code == PlaybackReasonCodes.TranscodeUnsustainable);
+        if (previous is not null && unsustainable && sessions.Remove(previous.Id, profileId) && activeSessions is not null)
         {
             await activeSessions.EndAsync(previous.Id, profileId, cancellationToken);
         }

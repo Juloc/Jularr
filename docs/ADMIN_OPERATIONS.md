@@ -208,6 +208,8 @@ Server-side remux and transcode limits live in **Admin > Transcoding** and are s
 
 Hardware encoders (NVENC, QSV, VAAPI, AMF, in that order, then software) are detected at startup and on **Admin > Health > Detect again**: ffmpeg must list the encoder and a short test encode must pass. Three consecutive failures of a backend (counted only when the software fallback of the same request then succeeds) pause it for ten minutes.
 
+A video transcode is measured while it runs (ffmpeg's `-progress` speed): after 10 s of produced media a speed under 1.0x for 10 s means the server cannot keep up. The player is then re-planned in this order: a lower quality tier, another healthy encoder backend, and only then no playback with the reason "The server cannot convert this video fast enough right now" (a device that can play the original untouched gets it). Slowness never counts as a hardware failure and never opens the circuit breaker. While a running conversion is below real time, a new conversion of the same kind (software or hardware) is refused at once with a retry hint instead of queued. Automatic quality also raises the quality again, one tier at a time, only after 60 s of stable delivery and never within 120 s of any change.
+
 The shipped `compose.yaml` passes **no GPU device** to the container, so detection finds software only until the operator adds one. Nothing in Jularr turns this on by itself. Optional mappings for the owner's own compose file (the container runs as UID `1654`, so the render node's group must be added):
 
 ```yaml
