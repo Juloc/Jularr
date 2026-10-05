@@ -481,6 +481,25 @@ Notification delivery detail may link to:
 
 Do not require admins to inspect raw logs for normal notification health.
 
+## Incident / error alert boundary (#853)
+
+Technical incident/error diagnostics remain owned by the canonical incident system, not by Notifications.
+
+Notifications only own delivery/routing of an alert derived from an incident/error policy.
+
+Rules:
+
+- one technical failure is recorded first by the incident/error owner;
+- repeated equivalent incidents may be grouped/thresholded before any alert is emitted;
+- notification policy may route an Admin-audience incident alert to configured sinks;
+- the notification payload contains only the safe summary/reference required for the recipient;
+- full stack traces, nested exception chains, SQL, secrets and unsafe internal details remain in Admin diagnostics and are not copied into Webhook/E-Mail/Push payloads;
+- a failed notification delivery never deletes/changes the source incident and never replays or rolls back the source business operation;
+- notification delivery failure may itself produce sanitized delivery diagnostics without recursively creating alert storms;
+- Accepted/Known incident policy may suppress delivery while occurrence capture/history continues.
+
+Do not create a separate webhook/error bus for incidents. Reuse the canonical event/notification/sink pipeline and the durable delivery work tracked by #835/#837.
+
 ## Provider boundary
 
 Notification delivery channels are not Metadata/Indexer/Subtitle providers.
