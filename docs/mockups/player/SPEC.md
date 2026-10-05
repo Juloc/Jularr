@@ -600,6 +600,95 @@ The implementation should have:
 
 Playback compatibility remains owned by the canonical capability document + PlaybackPlan. Presentation capability must never become a rule such as `iOS = transcode`.
 
+### AirPlay and Apple-native delivery integration
+
+AirPlay is a first-class Player capability, not a reason to expose Safari's complete native control bar.
+
+Where WebKit exposes the playback-target picker:
+- Jularr may expose its own AirPlay/route action and invoke the platform picker from that user gesture;
+- route availability and route-change events update the existing Player state;
+- the action is hidden/disabled when the current environment cannot offer a route;
+- AirPlay does not create another ActiveSession or progress owner.
+
+The PlaybackPlan should prefer an Apple-native delivery representation when it avoids unnecessary transcoding and improves native playback integration. Native HLS/fMP4 is therefore a valid delivery target when the selected codec/track combination is compatible. This remains capability-driven; never encode `iOS = HLS`.
+
+When the same canonical subtitle track needs different delivery representations:
+- Jularr-owned Inline/Theater playback may render the canonical cues itself for Learning and custom styling;
+- AirPlay/native-system delivery may expose a compatible HLS/WebVTT/native text rendition derived from that same canonical track;
+- there is still one canonical subtitle identity and preference; delivery format is not a second subtitle model.
+
+### Managed Media Source / advanced adaptive web path
+
+Managed Media Source may be used where current WebKit exposes it and it materially improves adaptive/energy-efficient playback. It is an optional delivery mechanism behind the same PlaybackPlan, not a mandatory dependency and not a replacement for native HLS.
+
+If a Managed Media Source path is used, preserve a normal media/HLS source that WebKit can use for system/AirPlay presentation where required. Switching delivery representation must preserve the same logical ActiveSession, position and selected tracks.
+
+### Explicit system-player action
+
+In addition to the normal Jularr Fullscreen action, an overflow action such as **Open in System Player** may be offered when native video presentation is available.
+
+This is intentionally different from Fullscreen:
+- Fullscreen tries to preserve Jularr UI via ElementFullscreen/Theater;
+- System Player intentionally hands presentation to Apple's native media surface for maximum platform integration;
+- the user is told when Jularr-only interaction such as Learning overlays will be unavailable there;
+- return restores the Jularr presentation over the same ActiveSession.
+
+### iOS media self-test and bounded diagnostics
+
+Because real iPhone/iPad WebKit behavior cannot be inferred reliably from desktop/headless tests, Jularr should provide a developer/admin-accessible **Media Self Test** that runs on the actual client.
+
+The self-test should report machine-readable confirmed/inferred/unknown capability results for at least:
+- `canPlayType` / MediaCapabilities results for representative H.264, HEVC, AV1 and relevant audio combinations;
+- native HLS and fMP4;
+- MSE / Managed Media Source when exposed;
+- HDR capability where reliably detectable;
+- PiP and WebKit presentation modes;
+- element fullscreen and native video fullscreen;
+- AirPlay/playback-target picker availability;
+- Media Session;
+- Screen Wake Lock;
+- standalone/Home Screen presentation context;
+- storage estimate/persistence support;
+- relevant viewport/safe-area dimensions.
+
+Diagnostics may offer a **Copy diagnostics** action for support/debugging. Do not include credentials, auth tokens, private media URLs or raw internal exception stacks.
+
+When detailed Player diagnostics are enabled, keep a small bounded in-memory media-event ring buffer, for example the latest ~100 meaningful events:
+- load/start/play/pause;
+- waiting/stalled/playing;
+- seeking/seeked;
+- source/delivery-plan changes;
+- fullscreen/PiP/native presentation enter/leave;
+- AirPlay route changes;
+- visibility/background transitions;
+- recoverable media errors.
+
+Each event should carry only useful timing/state context such as monotonic/client timestamp, current position, PlaybackPlan/session diagnostic id and public error/reason code. This is debugging telemetry, not another durable playback history.
+
+### iOS PWA storage/offline behavior
+
+iOS storage is finite and may be reclaimed. Offline UI must therefore distinguish **requested download**, **verified locally present**, **storage removed/reclaimed**, and **corrupt/incomplete package**.
+
+Where supported:
+- use Storage API estimate/persistence capabilities to improve preflight and diagnostics;
+- show meaningful available/quota information before unusually large offline packages;
+- verify package manifests/checksums before advertising content as ready offline;
+- recover cleanly when WebKit removes local data;
+- never promise browser storage persistence that the platform does not guarantee.
+
+This supplements the canonical offline package contract; it must not create an iOS-only offline database.
+
+### PWA notification/platform integration
+
+Home Screen/PWA integration should progressively use platform capabilities when available:
+- Web Push for meaningful Jularr notifications such as completed downloads or requested-content availability;
+- Badging where supported;
+- declarative push delivery where supported and appropriate;
+- Screen Wake Lock while active playback needs it;
+- Media Session metadata/actions for platform surfaces.
+
+These capabilities must consume the canonical Jularr notification/session state. They must not create separate iOS-only notification or progress truth.
+
 ### Required iPhone/iPad verification matrix
 
 Manual real-device verification is required in addition to browser/DOM regression tests because headless automation cannot prove all WebKit media surfaces.
