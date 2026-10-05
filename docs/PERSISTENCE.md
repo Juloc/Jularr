@@ -171,6 +171,25 @@ A supported existing installation upgrades once, then never reads SQLite again.
 
 ## Derived statistics / aggregate read projections (#858)
 
+### Product/user statistics are real tables
+
+For Jularr, expensive product/user statistics are persisted in normal typed PostgreSQL tables when repeated source-wide aggregation would be wasteful. Examples include per-profile watched/completed counts, watch/listen/read/play duration totals, daily activity buckets, library/storage aggregate buckets, acquisition/import trends and incident/provider-health aggregates.
+
+These are not merely in-memory caches. They have explicit relational columns, PK/UNIQUE/indexes, update timestamps/projection version and rebuild semantics.
+
+Prefer a small number of coherent statistic families such as:
+- per-profile all-time summary;
+- per-profile daily activity buckets;
+- instance/library/storage aggregate buckets;
+- acquisition/import daily aggregates;
+- incident/provider-health aggregate buckets.
+
+Do not use one generic EAV/JSON metrics table for unrelated statistics.
+
+Canonical progress/session/history owners drive these projections. UI reads never increment counters directly. Updates must be retry-safe/idempotent and expensive rebuilds must be bounded/coalesced.
+
+
+
 Expensive reusable statistics are not recomputed from large source tables on every UI/API read.
 
 When a count/distribution/trend is materially expensive and can tolerate a defined freshness window, use a purpose-built relational statistics projection owned by one service. The projection is derived/rebuildable state, never a competing source of the underlying business truth.
@@ -331,3 +350,23 @@ Conversion plan:
 - Owner steps: create `.env` with `JULARR_DB_PASSWORD`, run the one-time importer
   against the existing `/data` SQLite database, then cut the app image over to the
   #570 release.
+
+
+## PostgreSQL engine diagnostics history (#859)
+
+Admin database diagnostics use PostgreSQL live statistics/system views for current evidence and Jularr-owned typed history tables for bounded trends.
+
+Relevant live sources include `pg_stat_statements` when configured, `pg_stat_database`, `pg_stat_activity`, `pg_locks`, `pg_stat_user_tables`, `pg_stat_user_indexes`, `pg_stat_io` and version-appropriate vacuum/checkpoint/WAL views.
+
+Because runtime statistics can reset/restart and current locks/activity are ephemeral, Jularr persists sampled **deltas** with a statistics-reset epoch/watermark. Never subtract cumulative counters across a PostgreSQL reset.
+
+Statement history is keyed by PostgreSQL query identity/query id plus time bucket and records only bounded normalized/sanitized query text. Bind values/secrets are never persisted for this feature.
+
+Retention is explicit:
+- fine-grained recent samples;
+- rolled-up older buckets where useful;
+- expiry so observability tables cannot grow indefinitely.
+
+This diagnostics history is operational observability and is separate from #858 product/user statistics. Both use normal typed relational tables and bounded background refresh rather than expensive aggregation on every Admin read.
+
+PostgreSQL index maintenance is evidence-driven. Normal diagnostics show size/use/vacuum evidence; optional deeper `pgstattuple`/`pgstatindex` inspection is on-demand only. Do not implement a SQL Server-style blind fragmentation/rebuild schedule.
