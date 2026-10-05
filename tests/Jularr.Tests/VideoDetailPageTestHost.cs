@@ -108,7 +108,11 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                 .UseContentRoot(FindWebProjectRoot())
                 .ConfigureServices(services =>
                 {
-                    services.AddRazorPages(options => options.Conventions.AddMediaTypeGates()).AddApplicationPart(typeof(MovieDetailModel).Assembly);
+                    services.AddRazorPages(options =>
+                    {
+                        options.Conventions.AddMediaTypeGates();
+                        options.Conventions.ConfigureFilter(new Microsoft.AspNetCore.Mvc.IgnoreAntiforgeryTokenAttribute());
+                    }).AddApplicationPart(typeof(MovieDetailModel).Assembly);
                     services.AddDbContext<AppDbContext>(options => options.UseSqlite(connectionString));
                     services.AddHttpContextAccessor();
                     services.AddAuthorization(options => JularrPolicies.Register(options));
@@ -246,6 +250,25 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
 
         using var response = await client.SendAsync(request);
         return (response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>Posts a form to a page handler as the signed-in profile (or the owner) without following the redirect; antiforgery is not part of what these tests cover.</summary>
+    public async Task<(HttpStatusCode Status, string? Location, IReadOnlyList<string> Cookies)> PostFormAsync(string path, IReadOnlyDictionary<string, string> fields, bool asOwner = false, string? profile = null)
+    {
+        using var client = new HttpClient(server.CreateHandler()) { BaseAddress = server.BaseAddress };
+        if (asOwner)
+        {
+            client.DefaultRequestHeaders.Add(OwnerHeader, "true");
+        }
+
+        if (profile is not null)
+        {
+            client.DefaultRequestHeaders.Add(ProfileHeader, profile);
+        }
+
+        using var response = await client.PostAsync(path, new FormUrlEncodedContent(fields));
+        var cookies = response.Headers.TryGetValues("Set-Cookie", out var values) ? values.ToArray() : [];
+        return (response.StatusCode, response.Headers.Location?.OriginalString, cookies);
     }
 
     /// <summary>The page of an existing title; fails with the response when it is not a plain 200.</summary>

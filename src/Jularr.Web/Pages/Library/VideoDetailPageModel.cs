@@ -8,6 +8,7 @@ using Jularr.Web.Features.Shell;
 using Jularr.Web.Ui;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Pages.Library;
 
@@ -54,6 +55,14 @@ public abstract class VideoDetailPageModel(
     /// </summary>
     public async Task<IActionResult> OnPostStartAsync(Guid workId, Guid? episodeId, CancellationToken cancellationToken)
     {
+        // The same guard as the read: the Work must be of this page's media type and the type visible to the profile, so a page of a
+        // visible type cannot be used to start the acquisition of a Work of a hidden one.
+        var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
+        if (!access.IsVisible(MediaType) || !await db.Works.AsNoTracking().AnyAsync(x => x.Id == workId && x.MediaType == MediaType, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var result = await intents.StartAsync(workId, episodeId, cancellationToken);
         if (result.Outcome == PlaybackIntentOutcome.TargetNotFound)
         {

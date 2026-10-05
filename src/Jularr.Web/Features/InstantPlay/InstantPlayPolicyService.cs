@@ -7,8 +7,8 @@ namespace Jularr.Web.Features.InstantPlay;
 /// <summary>
 /// Resolves the capability chain of the Instant Play contract for the signed-in profile: instance modules, then the profile's
 /// request capability and auto-approval (<see cref="AcquisitionRequestService.GetCapabilitiesAsync"/>), then acquisition health.
-/// Whether Playback is available is only the instance switch; the profile's visibility of a media type is enforced at the page and API
-/// boundary before this runs.
+/// Whether Playback is available is only the instance switch; the profile's visibility of a media type is not decided here: every caller (the
+/// client API filter, the detail page handlers) must have checked it, and the Work's media type, before it starts an intent.
 /// </summary>
 public sealed class InstantPlayPolicyService(IInstanceModuleService modules, AcquisitionRequestService requests, VideoAcquisitionEngine acquisition)
 {
