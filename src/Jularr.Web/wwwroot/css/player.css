@@ -6,6 +6,9 @@
     --player-accent: var(--accent);
     --player-accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
     --player-muted: #aeb6c2;
+    /* The chrome sits on the video in both themes, so the loaded part of the timeline is one light tone on dark. */
+    --player-buffered: rgba(255, 255, 255, .6);
+    --player-timeline-rest: rgba(255, 255, 255, .28);
     --player-focus: var(--focus-ring);
     --player-control-size: 44px;
     --player-control-radius: 10px;
@@ -439,6 +442,23 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
     .player-seek-feedback.is-rippling::before { animation: none; }
 }
 
+/* Loading indicator: only while playback genuinely waits for media (episode-player.js toggles hidden after a short delay). */
+.player-spinner {
+    position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; pointer-events: none;
+}
+.player-spinner[hidden] { display: none; }
+.player-spinner-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.player-spinner > span {
+    width: 52px; height: 52px; border-radius: 50%;
+    border: 4px solid rgba(255,255,255,.25); border-top-color: #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.25);
+    animation: player-spin .9s linear infinite;
+}
+@keyframes player-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .player-spinner > span { animation: none; border-top-color: rgba(255,255,255,.25); border-right-color: #fff; }
+}
+
 .player-chrome {
     position: absolute; inset: 0; z-index: 5;
     pointer-events: none;
@@ -515,7 +535,15 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
     background: linear-gradient(to right, var(--accent) 0 var(--progress, 0%), rgba(255,255,255,.28) var(--progress, 0%) 100%);
     transition: height .12s ease;
 }
-.player-timeline { width: 100%; }
+/* Three layers, top to bottom: the played fill, the buffered ranges (written by episode-player.js, lit where media is loaded)
+   and the unbuffered rest. The buffered layer is lighter than the rest, so it reads without relying on the accent colour. */
+.player-timeline {
+    width: 100%;
+    background:
+        linear-gradient(to right, var(--accent) 0 var(--progress, 0%), transparent var(--progress, 0%) 100%),
+        var(--buffered-ranges, linear-gradient(transparent, transparent)),
+        var(--player-timeline-rest);
+}
 .player-timeline:hover, .player-timeline:focus-visible { height: 6px; }
 .player-volume-slider { width: 84px; margin-inline-end: 4px; }
 .player-timeline::-webkit-slider-thumb, .player-volume-slider::-webkit-slider-thumb {

@@ -158,6 +158,10 @@
     // The server ends a stream itself when it sits idle or the cache policy needs room. That says nothing against the mode,
     // so the same mode is planned again (see player-recovery.js for the bounds).
     const streamRecovery = window.JularrStreamRecovery;
+    // What this player observes about its buffer (ranges, stalls, receive rate) and reports to the server (player-buffering.js).
+    const buffering = window.JularrPlayerBuffering;
+    const stalls = buffering.createStallTracker();
+    const throughput = buffering.createThroughputEstimator();
     let sessionRecoveries = 0;
     let playedSinceRecovery = 0;
     let lastPlayedTime = 0;
@@ -235,6 +239,29 @@
         return clampToDuration(absolute);
     };
 
+    // The buffered ranges of the element in absolute media time: a live stream's ranges start at the position it was started at.
+    const bufferedRanges = () => buffering.rangesOf(video.buffered, loadedStreamLive ? streamStartSeconds : 0);
+    const bufferAheadSeconds = () => buffering.bufferAhead(bufferedRanges(), absoluteCurrentTime());
+
+    // The buffered media as its own layer of the timeline, behind the played fill (player.css), and its end for assistive technology.
+    const renderBuffered = () => {
+        timeline.style.setProperty("--buffered-ranges", buffering.bufferedGradient(bufferedRanges(), hasKnownDuration ? durationSeconds : 0));
+    };
+
+    // The slider's spoken value: where it is and how far media is loaded; the same while scrubbing and while playing.
+    const describeTimeline = (position) => {
+        const loadedUntil = buffering.bufferedEnd(bufferedRanges(), position);
+        if (loadedUntil !== null && loadedUntil > position) {
+            timeline.setAttribute("aria-valuetext", format("playback.timeline.valueText", {
+                position: formatTime(position),
+                duration: formatTime(durationSeconds),
+                buffered: formatTime(loadedUntil)
+            }));
+        } else {
+            timeline.removeAttribute("aria-valuetext");
+        }
+    };
+
     const updateTimeline = () => {
         if (!hasKnownDuration) {
             timeline.disabled = true;
@@ -250,6 +277,7 @@
             const current = absoluteCurrentTime();
             timeline.value = String(current);
             timelineCurrent.textContent = formatTime(current);
+            describeTimeline(current);
         }
     };
 
@@ -530,15 +558,21 @@
                 : text["playback.diagnostics.processingNone"]]);
 
         if (!video.hidden) {
-            const now = video.currentTime;
-            let ahead = 0;
-            for (let index = 0; index < video.buffered.length; index++) {
-                if (video.buffered.start(index) <= now + 0.25 && video.buffered.end(index) > now) {
-                    ahead = video.buffered.end(index) - now;
-                }
+            // What the player really has (buffer ahead, stalls, receive rate) next to what the plan asks for (buffer target).
+            const nowMs = performance.now();
+            rows.push(["buffer", format("playback.diagnostics.seconds", { value: Math.round(bufferAheadSeconds()) })]);
+            if (plan.buffer) {
+                rows.push(["bufferPolicy", format("playback.diagnostics.bufferPolicyValue", {
+                    preset: text[`playback.buffer.${plan.buffer.preset}`] || plan.buffer.preset,
+                    target: plan.buffer.targetAheadSeconds,
+                    low: plan.buffer.lowWaterSeconds,
+                    startup: plan.buffer.startupSeconds
+                })]);
             }
 
-            rows.push(["buffer", format("playback.diagnostics.seconds", { value: Math.round(ahead) })]);
+            const stallSummary = stalls.snapshot(nowMs);
+            rows.push(["stalls", format("playback.diagnostics.stallsValue", { count: stallSummary.count, seconds: (stallSummary.totalMs / 1000).toFixed(1) })]);
+            rows.push(["throughput", mbps(throughput.value(nowMs))]);
             const frames = typeof video.getVideoPlaybackQuality === "function" ? video.getVideoPlaybackQuality() : null;
             if (frames && frames.totalVideoFrames > 0) {
                 rows.push(["droppedFrames", `${frames.droppedVideoFrames} / ${frames.totalVideoFrames}`]);
@@ -645,6 +679,30 @@
 
         return url.toString();
     };
+
+    // The spinner is shown only while playback is genuinely waiting for media (the first data after Play, a stall, a seek that has not
+    // delivered data) and only after it lasted a moment. The element is never paused on purpose to wait: a paused element loads only a couple of seconds, so
+    // such a wait would delay the start without loading anything more.
+    const spinner = root.querySelector("[data-player-spinner]");
+    const waitingIndicator = buffering.createDelayedIndicator({
+        timers: window,
+        delayMs: buffering.waitingIndicatorDelayMs,
+        apply: (shown) => {
+            if (spinner) {
+                spinner.hidden = !shown;
+            }
+        }
+    });
+    // The system player and picture-in-picture own the picture while handed over; the presentation handler below keeps this current.
+    let presentationHandedOver = false;
+    const syncWaiting = () => waitingIndicator.set(buffering.isWaitingForMedia({
+        hidden: video.hidden,
+        paused: video.paused,
+        ended: video.ended,
+        failed: video.error !== null,
+        handedOver: presentationHandedOver,
+        readyState: video.readyState
+    }));
 
     const loadSource = (requestedStart = 0) => {
         if (!delivery) {
@@ -957,7 +1015,90 @@
         return option?.dataset.image === "true" ? option.value : null;
     };
 
+    // Runtime telemetry (#403): every few seconds the buffer, the smoothed receive rate and the stalls of this session go to the
+    // server, which keeps them in memory for the next plan and for diagnostics. Best effort: a lost report costs one sample and
+    // never playback. The rate is sampled once a second from how fast the buffered range grows, which says nothing while the
+    // browser is not fetching, so those samples are skipped.
+    const telemetryUrlTemplate = root.dataset.streamSessionTelemetryUrlTemplate || "";
+    let telemetrySequence = 0;
+    let lastReportedState = null;
+    let telemetryAvailable = false;
+
+    const beginTelemetrySession = () => {
+        stalls.resetSession();
+        throughput.reset();
+        telemetrySequence = 0;
+        lastReportedState = null;
+        telemetryAvailable = Boolean(streamSessionId && telemetryUrlTemplate);
+    };
+
+    const sampleThroughput = () => {
+        if (!telemetryAvailable || !streamSessionId || video.hidden || !plan) {
+            return;
+        }
+
+        const position = absoluteCurrentTime();
+        const end = buffering.bufferedEnd(bufferedRanges(), position);
+        const target = plan.buffer?.targetAheadSeconds ?? Infinity;
+        const idle = video.networkState === HTMLMediaElement.NETWORK_IDLE ||
+            (end !== null && (end - position >= target || (hasKnownDuration && end >= durationSeconds - 1)));
+        throughput.observe({
+            nowMs: performance.now(),
+            bufferedEndSeconds: end,
+            bitrateKbps: plan.quality?.deliveredBitrateKbps ?? plan.quality?.sourceBitrateKbps,
+            idle
+        });
+    };
+
+    // force: the evidence goes out even when the state did not change, e.g. just before a new plan replaces this session.
+    const sendTelemetry = async (force = false) => {
+        if (!telemetryAvailable || !streamSessionId || video.hidden) {
+            return;
+        }
+
+        // A seek that has not delivered media yet is playback waiting for media, not a pause.
+        const state = video.paused || video.ended || video.error ? "paused" : stalls.isStalled() || video.seeking ? "buffering" : "playing";
+        if (!force && !buffering.shouldReport(state, lastReportedState)) {
+            return;
+        }
+
+        lastReportedState = state;
+        const nowMs = performance.now();
+        const body = buffering.buildReport({
+            sequence: ++telemetrySequence,
+            state,
+            bufferAheadSeconds: bufferAheadSeconds(),
+            throughputKbps: throughput.value(nowMs),
+            stalls: stalls.snapshot(nowMs),
+            positionSeconds: absoluteCurrentTime()
+        });
+        try {
+            // A re-plan waits for the flush, so it is bounded tightly; a refusal (429, 400) never holds the re-plan back.
+            const response = await fetch(telemetryUrlTemplate.replace("__session__", streamSessionId), {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+                signal: AbortSignal.timeout ? AbortSignal.timeout(force ? 1000 : 4000) : undefined
+            });
+            if (response.status === 404) {
+                // The server no longer knows the session: the broken stream is handled by the error path, so reporting stops here.
+                telemetryAvailable = false;
+            } else if (!response.ok) {
+                console.warn("The playback telemetry was refused.", response.status);
+            }
+        } catch (error) {
+            console.warn("The playback telemetry could not be sent.", error);
+        }
+    };
+
+    window.setInterval(sampleThroughput, 1000);
+    window.setInterval(() => void sendTelemetry(), buffering.reportIntervalMs);
+
     const requestPlan = async () => {
+        // The replaced session's last evidence (buffer, stalls) must be on the server before it plans the replacement.
+        await sendTelemetry(true);
+
         let capabilities = null;
         try {
             capabilities = capabilityProbe ? await capabilityProbe.detect() : null;
@@ -1032,6 +1173,7 @@
         planCapabilitiesInferred = response.capabilitiesInferred === true;
         streamSessionId = response.sessionId || null;
         delivery = response.delivery || null;
+        beginTelemetrySession();
         renderPlan();
 
         if (plan.mode === "unavailable" || !delivery) {
@@ -1521,6 +1663,7 @@
 
         timelinePreviewing = true;
         timelineCurrent.textContent = formatTime(Number(timeline.value));
+        describeTimeline(Number(timeline.value));
     });
 
     timeline.addEventListener("change", () => {
@@ -1694,7 +1837,30 @@
         startFrameSync();
     });
 
+    // Stalls: waiting for media after playback had started. The tracker ignores the initial start, seeks and paused time.
+    video.addEventListener("loadstart", () => {
+        stalls.sourceChanged(performance.now());
+        throughput.reset();
+    });
+    video.addEventListener("seeking", () => {
+        stalls.seeking(performance.now());
+        throughput.reset();
+    });
+    video.addEventListener("seeked", () => stalls.seeked(video.readyState));
+    video.addEventListener("waiting", () => stalls.waiting(performance.now(), video.paused));
+    video.addEventListener("playing", () => stalls.playing(performance.now()));
+    video.addEventListener("ended", () => stalls.paused(performance.now()));
+    video.addEventListener("emptied", () => stalls.sourceChanged(performance.now()));
+    for (const name of ["waiting", "playing", "seeking", "seeked", "loadeddata", "canplay", "play", "pause", "ended", "emptied", "error"]) {
+        video.addEventListener(name, syncWaiting);
+    }
+
+    for (const name of ["progress", "timeupdate", "seeked", "loadedmetadata", "durationchange", "emptied"]) {
+        video.addEventListener(name, renderBuffered);
+    }
+
     video.addEventListener("pause", () => {
+        stalls.paused(performance.now());
         if (!video.ended) {
             persistProgress(false, true);
         }
@@ -1746,6 +1912,7 @@
     };
 
     video.addEventListener("error", async () => {
+        stalls.paused(performance.now());
         storageWakeRequested = storageWakeRequested || playbackWasRequested;
         const availability = await readStorageAvailability();
         if (availability && availability.state !== "available") {
@@ -1839,6 +2006,8 @@
     const presentation = window.JularrPlayerPresentation;
     const handedOverModes = new Set([presentation.modes.nativeFullscreen, presentation.modes.pictureInPicture]);
     root.addEventListener(presentation.changeEvent, event => {
+        presentationHandedOver = handedOverModes.has(event.detail.mode);
+        syncWaiting();
         if (absoluteCurrentTime() > 0 && (handedOverModes.has(event.detail.mode) || handedOverModes.has(event.detail.previousMode))) {
             persistProgress(false, true);
         }

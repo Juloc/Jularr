@@ -66,6 +66,12 @@
             <span data-seek-feedback-label></span>
         </div>
 
+        @* Shown by the player script only while playback genuinely waits for media (stall, seek, startup buffer). *@
+        <div class="player-spinner" data-player-spinner role="status" hidden>
+            <span aria-hidden="true"></span>
+            <span class="player-spinner-label">@ui["library.watch.buffering"]</span>
+        </div>
+
         <div class="playback-preparation" data-playback-placeholder>
             <span class="eyebrow">@ui["library.episode.browserPlayback"]</span>
             <strong data-playback-status>@ui["library.episode.startingPlayback"]</strong>

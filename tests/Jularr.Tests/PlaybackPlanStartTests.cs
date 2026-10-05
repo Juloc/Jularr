@@ -171,13 +171,19 @@ public sealed partial class PlaybackPlanStartTests
             Assert.IsTrue(UiTranslationResources.TryGet(key, out _), $"{key} is used by the player but missing.");
         }
 
-        foreach (var row in new[] { "mode", "source", "delivered", "audio", "quality", "support", "processing", "buffer", "droppedFrames" })
+        foreach (var row in new[] { "mode", "source", "delivered", "audio", "quality", "support", "processing", "buffer", "bufferPolicy", "stalls", "throughput", "droppedFrames" })
         {
             StringAssert.Contains(player, $"[\"{row}\",");
             Assert.IsTrue(UiTranslationResources.TryGet($"playback.diagnostics.{row}", out _), $"playback.diagnostics.{row} is missing.");
         }
 
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        foreach (var preset in Enum.GetValues<PlaybackBufferPreset>())
+        {
+            var name = JsonSerializer.Serialize(preset, options).Trim('"');
+            Assert.IsTrue(UiTranslationResources.TryGet($"playback.buffer.{name}", out _), $"playback.buffer.{name} is missing.");
+        }
+
         foreach (var support in Enum.GetValues<PlaybackCapabilitySupport>())
         {
             var name = JsonSerializer.Serialize(support, options).Trim('"');
