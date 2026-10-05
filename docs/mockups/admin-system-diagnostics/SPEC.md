@@ -835,30 +835,608 @@ The Database Overview is complete only when:
 - Desktop/Tablet/Mobile behavior follows this spec;
 - the approved mockup matches this information order and density.
 
-### Statements
+### Database Statements — binding second-screen UI contract
 
-When `pg_stat_statements` is available, show normalized/query-id based statistics:
+Canonical destination:
+
+`Admin -> System & Diagnostics -> Datenbank -> Statements`
+
+Preferred route/state:
+
+`/Admin/System?tab=database&view=statements`
+
+Mockup assets for this screen live beside this `SPEC.md` in `docs/mockups/admin-system-diagnostics/`.
+
+First mockup filename:
+
+`database-statements-light.png`
+
+The first approved mockup is **Desktop / Light / Clean / Detailed mode**.
+
+#### Purpose
+
+Statements is the full workload-analysis screen for PostgreSQL statement statistics.
+
+It answers:
+
+1. Which normalized SQL consumes the most total database time?
+2. Which commonly executed SQL is slow per call?
+3. Which SQL runs unusually often?
+4. Which SQL causes physical reads, temp I/O or other avoidable database pressure?
+5. Which statement became materially worse in the selected period?
+6. Which Jularr route/use case is associated with the workload when correlation evidence exists?
+
+It is not:
+- a SQL console;
+- a query editor;
+- a generic log viewer;
+- an automatic index adviser;
+- a page that executes arbitrary `EXPLAIN ANALYZE`;
+- a place to expose bind parameter values.
+
+#### Page shell and navigation
+
+Reuse the exact System & Diagnostics shell and Database secondary navigation from Database Overview.
+
+Active secondary tab:
+**Statements**
+
+The Database time-range/freshness toolbar remains visible and keeps the same selection when navigating Overview <-> Statements <-> other Database subviews.
+
+Default selected range:
+**1 h**
+
+Supported ranges follow available retained history:
+- 15 min;
+- 1 h;
+- 24 h;
+- 7 d;
+- 30 d when retained.
+
+The page must make clear whether values are:
+- selected-period deltas from Jularr history;
+- current cumulative PostgreSQL statistics since the active statistics epoch;
+- or unavailable.
+
+Do not mix these meanings under one unlabeled number.
+
+#### Capability/status strip
+
+Directly below the Database sub-navigation/tool bar, show one compact status strip only when useful.
+
+Possible content:
+- `pg_stat_statements aktiv`;
+- current statistics reset/epoch start time;
+- first historical sample still collecting;
+- I/O timing unavailable;
+- planning statistics unavailable;
+- history retention shorter than selected range;
+- `pg_stat_statements` unavailable/not configured.
+
+Normal healthy capability state should remain subtle and may collapse to a small info affordance.
+
+If `pg_stat_statements` is unavailable:
+- do not render an empty fake Statements table;
+- render a clear capability panel explaining that statement-level workload statistics require PostgreSQL support/configuration;
+- show which Database screens still work;
+- optionally link to safe setup documentation/status;
+- do not offer an in-app superuser escalation or silently alter PostgreSQL preload settings.
+
+#### Top workload summary
+
+When data exists, use one compact summary strip above the table.
+
+Suggested cells:
+
+1. **Statements observed**
+   - unique query IDs represented in the selected period.
+
+2. **Calls**
+   - total calls in selected period.
+
+3. **DB execution time**
+   - total execution-time delta in selected period.
+
+4. **Physical reads**
+   - total shared-block reads / bytes-equivalent only where reliably derived.
+
+5. **Temp I/O**
+   - temp blocks/bytes in selected period.
+
+6. **Regressions**
+   - number of statements currently flagged by a defined regression rule;
+   - omit/Unknown when no reliable comparison baseline exists.
+
+These cells are context, not vanity KPIs. Keep them dense and quiet.
+
+#### Primary toolbar
+
+Immediately above the main table.
+
+Left side:
+
+**Ranking segmented control**
+- Gesamtzeit — default;
+- Ø Zeit;
+- Aufrufe;
+- Reads;
+- Temp I/O;
+- Regressionen.
+
+Ranking changes server-side ordering; it must not require loading every statement into the browser.
+
+**Search**
+- searches normalized/sanitized SQL text and QueryId;
+- placeholder: `Statement oder Query-ID suchen ...`;
+- debounced/bounded;
+- no bind-value search because bind values are never stored.
+
+Right side / filter area:
+
+- optional Jularr context filter when #860 correlation exists:
+  - Alle Bereiche;
+  - Library;
+  - Playback;
+  - Search;
+  - Import;
+  - Metadata;
+  - other stable operation families actually present.
+- `Filter` action opens advanced filters.
+
+Advanced filters may include:
+- minimum call count;
+- statement class: SELECT / INSERT / UPDATE / DELETE / other when classification is reliable;
+- only warnings/regressions;
+- physical-read threshold;
+- temp-I/O threshold;
+- associated Jularr operation/use case;
+- stats epoch where historical troubleshooting requires it.
+
+Do not expose arbitrary SQL regex execution against PostgreSQL as a UI feature.
+
+A `Filter zurücksetzen` action appears only when filters are active.
+
+#### Main Statements table
+
+This is the dominant content of the screen.
+
+Desktop Detailed columns:
+
+1. **Statement**
+2. **Aufrufe**
+3. **Gesamtzeit**
+4. **Ø Zeit**
+5. **Anteil**
+6. **Rows**
+7. **Reads**
+8. **Temp I/O**
+9. **Trend**
+10. **Aktion**
+
+Optional metrics that are not reliably available in all deployments stay in the detail drawer rather than producing many empty columns.
+
+##### Statement column
+
+Contains:
+- normalized, sanitized SQL;
+- monospace;
+- maximum two visible lines in Detailed mode;
+- QueryId as muted secondary metadata;
+- optional stable Jularr context chip below, e.g. `Library.Browse`, only when real correlation exists.
+
+Never show:
+- bind parameter values;
+- connection string;
+- credentials;
+- raw request/user data.
+
+No syntax-color rainbow is required. Readability is more important than decorative SQL highlighting.
+
+##### Calls
+
+Period-correct call delta.
+
+May include a small change indicator versus the previous equivalent period only when:
+- previous-period data exists;
+- both periods are in compatible statistics epochs or the comparison logic safely handles reset boundaries;
+- sample volume is sufficient.
+
+##### Total time
+
+Period-correct total execution time.
+
+This is the default ranking because a moderately slow query called very frequently can be a larger problem than the single slowest call.
+
+##### Average time
+
+Computed from selected-period execution-time delta / call delta where possible.
+
+Do not label cumulative PostgreSQL mean as selected-period mean unless it really is period-correct.
+
+##### Share
+
+Small horizontal contribution bar + percentage of measured statement execution time in the selected period.
+
+This is useful for quickly seeing that e.g. the top five statements consume 80% of DB execution time.
+
+Do not display a percentage when captured statement data is incomplete enough to make the denominator misleading.
+
+##### Rows
+
+Period-correct rows processed/returned as available from statement statistics.
+
+Use compact formatting (e.g. 1.2 M) with exact value in accessible tooltip/detail.
+
+##### Reads
+
+Show physical/shared block read signal for the selected period.
+
+Detailed drawer may additionally show block hits, writes/dirties and I/O timing where supported.
+
+Do not equate high logical block hits with a problem.
+
+##### Temp I/O
+
+Period delta of temp blocks/bytes.
+
+Zero is visually quiet.
+
+Meaningful temp spill may receive Warning only under a documented rule/context.
+
+##### Trend
+
+One compact status:
+- Stable;
+- Faster;
+- Slower;
+- New;
+- Insufficient baseline;
+- Reset boundary.
+
+When reliable, show a small percent change for **period-comparable average or total cost**, clearly identifying which metric the trend refers to.
+
+Do not call something a regression only because total time rose when call volume rose proportionally.
+
+Preferred regression evidence considers at least:
+- per-call cost change and sample volume;
+- physical/temp I/O change;
+- call-volume change separately;
+- reliable comparison window.
+
+##### Action
+
+One compact details action / row activation.
+
+No execute/edit/kill button in the table.
+
+#### Ranking semantics
+
+Each ranking has a clear meaning:
+
+**Gesamtzeit**
+- selected-period total execution time descending.
+
+**Ø Zeit**
+- selected-period average duration descending;
+- default minimum call threshold should prevent one-off noise when appropriate;
+- threshold remains visible/adjustable rather than silently hiding data.
+
+**Aufrufe**
+- selected-period calls descending.
+
+**Reads**
+- physical/shared block reads descending.
+
+**Temp I/O**
+- temp I/O descending.
+
+**Regressionen**
+- strongest reliable degradation first;
+- requires comparable retained history;
+- unavailable state when no baseline exists.
+
+Changing ranking preserves search/filter/time range.
+
+#### Sorting and pagination
+
+- Ranking controls set the primary sort.
+- Compatible table headers may refine sort direction/secondary sort.
+- Use server-side bounded pagination/cursor/keyset behavior appropriate to the query source.
+- Never materialize all `pg_stat_statements` rows/history into browser memory merely for client-side sorting.
+- Default page size should remain operationally dense (e.g. around 25–50 rows), exact value owned by implementation.
+- Preserve current filters/ranking when moving between pages.
+- New samples must not cause the admin to lose the current row/detail context.
+
+#### Statement detail drawer — full version
+
+Selecting a row opens the full Statement drawer.
+
+Desktop:
+right-side drawer wide enough for SQL + metrics without covering the entire table.
+
+Tablet:
+wide drawer or two-pane layout.
+
+Mobile:
+full-screen detail sheet/page.
+
+Header:
+- `Statement`;
+- short QueryId;
+- optional `Regression` / `Warning` state only if justified;
+- Jularr operation context when reliably known;
+- close action.
+
+##### Section A — Normalized SQL
+
+- sanitized normalized SQL;
+- monospace;
+- wraps within drawer;
+- bounded length;
+- safe copy action.
+
+Secondary metadata:
+- QueryId;
+- statement class when reliable;
+- statistics epoch/reset context;
+- first/last observed in Jularr retained history where available.
+
+##### Section B — Selected period
+
+Dense metric grid/table:
 - calls;
-- total and mean execution time;
-- min/max where available;
+- total execution time;
+- average time;
 - rows;
-- shared block hits/reads;
-- temp blocks;
+- shared block reads;
+- shared block hits;
+- temp blocks read/written;
 - I/O timing when enabled;
-- WAL/parallel metrics where supported.
+- WAL metrics where supported/useful;
+- planning metrics only when PostgreSQL collects them.
 
-Sort/rank by:
-- total database time;
-- mean execution time;
-- call count;
-- physical/temp I/O;
-- rows processed.
+A metric not supported by the running PostgreSQL/configuration displays `Nicht erfasst`, not zero.
 
-Jularr persists bounded statement-stat deltas/history so an admin can compare hour/day/week periods and detect regressions. Handle PostgreSQL statistics reset epochs explicitly.
+Min/max semantics require care:
+- current PostgreSQL cumulative min/max may be shown only when explicitly labeled as `seit Statistik-Reset`;
+- do not present them as selected-period min/max unless Jularr has a period-correct source.
 
-Never run arbitrary `EXPLAIN ANALYZE` automatically. It executes statements and may mutate data.
+##### Section C — Comparison
 
-If `pg_stat_statements` is unavailable, show a clear setup/unsupported state. Do not grant PostgreSQL superuser to the normal application just to obtain diagnostics.
+When previous-period/baseline data is reliable:
+- calls change;
+- average-time change;
+- total-time change;
+- read change;
+- temp-I/O change.
+
+Present cause-neutral language:
+`Ø Zeit +42 %`, not `Index fehlt` unless later evidence actually proves that.
+
+When baseline is sparse/reset/incompatible:
+show `Kein verlässlicher Vergleich verfügbar`.
+
+##### Section D — Trend
+
+One primary chart with metric switch:
+- Ø Zeit;
+- Gesamtzeit;
+- Aufrufe;
+- Reads;
+- Temp I/O.
+
+Rules:
+- same retained time buckets as #859 history;
+- no interpolation over missing/reset boundaries;
+- Jularr version/deployment markers when available;
+- sampled values clearly represent bucket aggregates, not per-call traces.
+
+##### Section E — Jularr context
+
+Only when #860 provides real low-cardinality correlation.
+
+Show:
+- associated route template/use-case;
+- call/operation family;
+- relative contribution where measurable;
+- link to Application Performance filtered to that operation.
+
+Never infer a feature solely from table names or SQL text.
+
+##### Section F — Diagnostic guidance
+
+Show evidence-based hints only.
+
+Examples:
+- `Hohe physische Reads bei häufigem Statement`;
+- `Temp-I/O ist gegenüber der Vorperiode deutlich gestiegen`;
+- `Durchschnittliche Laufzeit stieg bei ähnlicher Aufrufzahl`;
+- `Noch zu wenig Historie für eine Regressionseinschätzung`.
+
+Do not auto-assert:
+- `Index fehlt`;
+- `REINDEX erforderlich`;
+- `VACUUM behebt das`;
+unless another diagnostic has actually established that evidence.
+
+Footer actions:
+- `In Verlauf öffnen` with QueryId filter;
+- `Application Performance öffnen` when correlated;
+- optional `Diagnose` link when a concrete safe diagnostic workflow exists.
+
+Explicitly forbidden:
+- Execute;
+- Edit SQL;
+- arbitrary SQL console;
+- replay with captured values;
+- automatic `EXPLAIN ANALYZE`;
+- bind parameter inspection.
+
+#### Previous-period comparison
+
+For selected range R, a comparison may use the immediately preceding equal-length retained range.
+
+Examples:
+- selected 1 h -> previous 1 h;
+- selected 24 h -> previous 24 h.
+
+Comparison must account for:
+- PostgreSQL stats resets;
+- missing samples;
+- deployment gaps;
+- insufficient calls.
+
+The UI should hide/mark unreliable comparison instead of forcing a percentage.
+
+#### Live update behavior
+
+Statements is historical/aggregate analysis, not a twitchy live table.
+
+- sample cadence follows #859/#857;
+- incoming samples update summary/trends;
+- do not reorder the visible table every few seconds while the admin is inspecting it;
+- apply new ranking/order on a deliberate refresh boundary or when interaction is idle;
+- an open Statement drawer remains open and updates its data non-disruptively;
+- search/filter/pagination state is preserved.
+
+Freshness indicator states:
+- Live/current;
+- collecting;
+- stale;
+- sampler throttled;
+- source unavailable.
+
+#### Detailed vs Compact
+
+Detailed:
+- summary strip;
+- full primary toolbar;
+- 10-column table where width permits;
+- two-line SQL;
+- trend/status column;
+- rich drawer.
+
+Compact:
+- no semantic loss;
+- table prioritizes Statement, Calls, Total, Avg, Reads/Temp signal, Trend;
+- secondary metrics move to row detail/drawer;
+- tighter row height;
+- SQL normally one visible line;
+- filters remain available;
+- regressions/warnings remain visible.
+
+#### Responsive
+
+Desktop:
+primary experience.
+
+Tablet:
+- toolbar may wrap into two rows;
+- lower-priority columns hide into expandable row/detail;
+- drawer remains usable.
+
+Mobile:
+- Database secondary tabs horizontally scroll;
+- ranking becomes horizontal chips/segmented row;
+- search remains full width;
+- advanced filters use bottom sheet;
+- Statements become stacked dense rows rather than a 10-column miniature table.
+
+Mobile row:
+- normalized SQL, max 2 lines;
+- QueryId/context secondary;
+- primary ranked metric;
+- calls;
+- average or I/O secondary metric depending on ranking;
+- trend badge;
+- tap opens full-screen detail.
+
+No horizontal code overflow across the whole page.
+
+TV: unsupported.
+
+#### Empty / partial / error states
+
+Required:
+- initial loading;
+- `pg_stat_statements` unavailable;
+- extension available but first sample not yet captured;
+- selected time range has no statement activity;
+- search/filter has no matches;
+- history shorter than selected range;
+- statistics reset inside selected range;
+- I/O timing not enabled;
+- planning metrics not enabled;
+- partial metrics unavailable due to PostgreSQL version/privilege;
+- sampler stale/throttled;
+- PostgreSQL currently offline but retained history available;
+- PostgreSQL offline with no retained statement history;
+- regression ranking unavailable due to insufficient baseline;
+- permission denied.
+
+Partial capability never turns unsupported metrics into zeros.
+
+#### Threshold / regression rules
+
+Statement warning colors are evidence-driven.
+
+Do not use a universal rule such as:
+- every query >100 ms is red;
+- every sequential scan is bad;
+- every physical read is bad.
+
+A warning/regression can use:
+- a configured/documented Jularr performance budget;
+- statistically/reliably meaningful retained-baseline change;
+- excessive resource impact relative to the selected period;
+- known operational failure/timeout evidence.
+
+The UI should make the reason inspectable.
+
+#### Security / privacy
+
+Statements is Admin/System diagnostics only.
+
+Never persist/display:
+- bind parameter values;
+- authentication/session tokens;
+- passwords/API keys;
+- connection-string secrets;
+- raw personal request data.
+
+Normalized SQL text is still passed through canonical redaction before durable history/display/export.
+
+Do not create high-cardinality telemetry dimensions from user IDs/resource IDs merely to correlate statements.
+
+#### Accessibility
+
+- ranking/filter/search are keyboard accessible;
+- active ranking has text and semantic selected state;
+- sortable headers expose sort direction;
+- SQL is selectable and screen-reader friendly;
+- contribution bars/trends have textual equivalents;
+- regression status does not rely on color alone;
+- drawer focus behavior follows shared Admin accessibility rules;
+- live updates do not continuously reannounce rows.
+
+#### Statements acceptance criteria
+
+Statements is complete only when:
+
+- selected-period metrics are distinguished from cumulative-since-reset metrics;
+- top workload can rank by total time, average, calls, reads, temp I/O and reliable regressions;
+- normalized SQL is sanitized and bind-free;
+- search/filter operate on bounded server-side data;
+- the browser never loads the full workload solely to sort/filter;
+- period comparisons handle reset/missing-sample boundaries;
+- no fake p95/min/max selected-period values are invented from `pg_stat_statements`;
+- unsupported metrics are `Nicht erfasst`, not zero;
+- one statement can be inspected deeply without leaving the table;
+- Jularr route/use-case context appears only from real #860 correlation;
+- no execute/edit/kill/arbitrary EXPLAIN action exists;
+- live sampling never disrupts inspection;
+- Detailed/Compact and Desktop/Tablet/Mobile follow this contract;
+- approved mockup follows this hierarchy and density.
 
 ### Tables
 
