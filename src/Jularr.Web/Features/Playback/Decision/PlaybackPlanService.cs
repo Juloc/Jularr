@@ -121,7 +121,8 @@ public sealed class PlaybackServerCapabilityProvider(
             TranscodingEnabled = settings.Current.TranscodingEnabled,
             H264Encoder = PlaybackHardwareBackends.H264Encoder(choice.Target.Backend),
             MaxTranscodeHeight = choice.Target.IsHardware ? PlaybackServerCapabilities.HardwareMaxHeight : PlaybackServerCapabilities.SoftwareMaxHeight,
-            SuspendedHardware = choice.Suspended
+            SuspendedHardware = choice.Suspended,
+            BufferPreset = settings.Current.BufferPreset
         };
     }
 }

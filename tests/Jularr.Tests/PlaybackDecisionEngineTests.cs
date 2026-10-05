@@ -342,6 +342,57 @@ public sealed class PlaybackDecisionEngineTests
     }
 
     [TestMethod]
+    [DataRow(PlaybackBufferPreset.Low, 15, 6)]
+    [DataRow(PlaybackBufferPreset.Normal, 30, 12)]
+    [DataRow(PlaybackBufferPreset.High, 60, 24)]
+    [DataRow(PlaybackBufferPreset.Max, 120, 48)]
+    public void EveryPlanCarriesTheServerBufferPresetWithItsTargetAndLowWaterMark(PlaybackBufferPreset preset, int target, int lowWater)
+    {
+        var server = PlaybackServerCapabilities.Software() with { BufferPreset = preset };
+
+        var plan = PlaybackDecisionEngine.Decide(new PlaybackDecisionRequest(H264AacMp4, Chromium, server));
+
+        Assert.AreEqual(new PlaybackBufferPolicy(preset, PlaybackBufferPolicy.DirectStartupSeconds, target, lowWater), plan.Buffer);
+    }
+
+    [TestMethod]
+    public void TheStartupBufferIsLargerOnlyWhenTheServerEncodesVideo()
+    {
+        var directPlay = PlaybackDecisionEngine.Decide(Request(H264AacMp4, Chromium));
+        var remux = PlaybackDecisionEngine.Decide(Request(HevcHdrMkv, ChromiumHevc));
+        var transcode = PlaybackDecisionEngine.Decide(Request(H264AacMp4, Chromium) with { ModePreference = PlaybackModePreference.AlwaysTranscode });
+
+        Assert.AreEqual(PlaybackDeliveryMode.DirectPlay, directPlay.Mode);
+        Assert.AreEqual(PlaybackDeliveryMode.DirectStream, remux.Mode);
+        Assert.AreEqual(PlaybackDeliveryMode.Transcode, transcode.Mode);
+        Assert.AreEqual(3, directPlay.Buffer!.StartupSeconds);
+        Assert.AreEqual(3, remux.Buffer!.StartupSeconds);
+        Assert.AreEqual(6, transcode.Buffer!.StartupSeconds);
+        Assert.AreEqual(PlaybackBufferPreset.Normal, transcode.Buffer.Preset, "Normal is the default preset.");
+    }
+
+    [TestMethod]
+    public void APlanThatCannotPlayHasNoBufferPolicy()
+    {
+        var everyMode = new HashSet<PlaybackDeliveryMode> { PlaybackDeliveryMode.DirectPlay, PlaybackDeliveryMode.DirectStream, PlaybackDeliveryMode.Transcode };
+
+        var plan = PlaybackDecisionEngine.Decide(Request(H264AacMp4, Chromium) with { FailedModes = everyMode });
+
+        Assert.AreEqual(PlaybackDeliveryMode.Unavailable, plan.Mode);
+        Assert.IsNull(plan.Buffer);
+    }
+
+    [TestMethod]
+    public void TheBufferPolicyIsPartOfThePlanContractInSnakeCase()
+    {
+        var plan = PlaybackDecisionEngine.Decide(Request(H264AacMp4, Chromium) with { Server = PlaybackServerCapabilities.Software() with { BufferPreset = PlaybackBufferPreset.High } });
+
+        var json = JsonSerializer.Serialize(plan, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        StringAssert.Contains(json, "\"buffer\":{\"preset\":\"high\",\"startupSeconds\":3,\"targetAheadSeconds\":60,\"lowWaterSeconds\":24}");
+    }
+
+    [TestMethod]
     public void QualityPresetNamesIncludeLegacyCaps()
     {
         CollectionAssert.AreEqual(

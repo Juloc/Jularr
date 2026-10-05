@@ -44,6 +44,9 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
     [BindProperty]
     public long FreeSpaceFloorGiB { get; set; }
 
+    [BindProperty]
+    public PlaybackBufferPreset BufferPreset { get; set; }
+
     public int Running(PlaybackCostClass costClass) => slots.Active(costClass);
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
@@ -83,7 +86,8 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
                 AudioOnlySessions,
                 HlsCachePath ?? "",
                 ToBytes(CacheBudgetGiB),
-                ToBytes(FreeSpaceFloorGiB)),
+                ToBytes(FreeSpaceFloorGiB),
+                BufferPreset),
             cancellationToken);
         if (!result.Succeeded)
         {
@@ -109,6 +113,7 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
         HlsCachePath = settings.HlsCachePath;
         CacheBudgetGiB = settings.CacheBudgetBytes / PlaybackTranscodingSettings.BytesPerGiB;
         FreeSpaceFloorGiB = settings.FreeSpaceFloorBytes / PlaybackTranscodingSettings.BytesPerGiB;
+        BufferPreset = settings.BufferPreset;
     }
 
     private static string FormField(string settingsField) =>
@@ -120,6 +125,7 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
             nameof(PlaybackCostClass.AudioOnly) => nameof(AudioOnlySessions),
             nameof(PlaybackTranscodingSettings.CacheBudgetBytes) => nameof(CacheBudgetGiB),
             nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes) => nameof(FreeSpaceFloorGiB),
+            nameof(PlaybackTranscodingSettings.BufferPreset) => nameof(BufferPreset),
             _ => nameof(HlsCachePath)
         };
 

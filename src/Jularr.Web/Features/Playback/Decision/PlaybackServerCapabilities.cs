@@ -17,7 +17,8 @@ public sealed record PlaybackServerCapabilities(
     int MaxTranscodeHeight,
     bool CanToneMap,
     bool CanBurnInSubtitles,
-    PlaybackBackendSuspension? SuspendedHardware = null)
+    PlaybackBackendSuspension? SuspendedHardware = null,
+    PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal)
 {
     public const string SoftwareH264Encoder = "libx264";
 

@@ -76,6 +76,34 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task TheBufferPresetDefaultsToNormalSurvivesARestartAndReachesTheServerCapabilities()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        try
+        {
+            Assert.AreEqual(PlaybackBufferPreset.Normal, PlaybackTranscodingSettings.Default.BufferPreset);
+            Assert.AreEqual(PlaybackBufferPreset.Normal, kit.Capabilities.Current().BufferPreset);
+
+            var saved = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { BufferPreset = PlaybackBufferPreset.Max, HlsCachePath = Path.Combine(kit.DataRoot, "hls") });
+            Assert.IsTrue(saved.Succeeded);
+            Assert.AreEqual(PlaybackBufferPreset.Max, kit.Capabilities.Current().BufferPreset, "The next plan carries the new preset without a restart.");
+
+            var restarted = new PlaybackTranscodingSettingsStore(kit.DataRoot);
+            Assert.AreEqual(PlaybackBufferPreset.Max, (await restarted.LoadAsync()).BufferPreset);
+            StringAssert.Contains(await File.ReadAllTextAsync(Path.Combine(kit.DataRoot, "playback", PlaybackTranscodingSettingsStore.FileName)), "\"bufferPreset\": \"max\"");
+
+            var invalid = await kit.Settings.SaveAsync(PlaybackTranscodingSettings.Default with { BufferPreset = (PlaybackBufferPreset)42, HlsCachePath = Path.Combine(kit.DataRoot, "hls") });
+            Assert.IsFalse(invalid.Succeeded);
+            Assert.AreEqual(PlaybackSettingsIssueCode.BufferPresetInvalid, invalid.Issues.Single().Code);
+            Assert.AreEqual(PlaybackBufferPreset.Max, kit.Settings.Current.BufferPreset);
+        }
+        finally
+        {
+            Directory.Delete(kit.DataRoot, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public async Task SavedSettingsSurviveARestartAndApplyImmediately()
     {
         var kit = PlaybackServerTestKit.Create();

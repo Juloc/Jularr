@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Jularr.Web.Features.Playback.Decision;
 
 namespace Jularr.Web.Features.Playback.Transcoding;
 
@@ -17,7 +18,8 @@ public enum PlaybackCostClass
 /// <summary>
 /// The Admin-editable server resource policy of playback (#403): whether the server may
 /// transcode, how many sessions each cost class may run, and where and how large the HLS cache
-/// may grow. Defaults keep a modest low-core server at one software transcode plus remux.
+/// may grow, plus the buffer preset every plan carries. Defaults keep a modest low-core server at one
+/// software transcode plus remux.
 /// </summary>
 public sealed record PlaybackTranscodingSettings(
     bool TranscodingEnabled,
@@ -27,7 +29,8 @@ public sealed record PlaybackTranscodingSettings(
     int AudioOnlySessions,
     string HlsCachePath,
     long CacheBudgetBytes,
-    long FreeSpaceFloorBytes)
+    long FreeSpaceFloorBytes,
+    PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal)
 {
     public const string DefaultHlsCachePath = "/data/playback-cache/hls";
     public const int MaxSessionsPerClass = 64;
@@ -46,7 +49,8 @@ public sealed record PlaybackTranscodingSettings(
         AudioOnlySessions: 8,
         HlsCachePath: DefaultHlsCachePath,
         CacheBudgetBytes: 10 * BytesPerGiB,
-        FreeSpaceFloorBytes: 5 * BytesPerGiB);
+        FreeSpaceFloorBytes: 5 * BytesPerGiB,
+        BufferPreset: PlaybackBufferPreset.Normal);
 
     public int LimitFor(PlaybackCostClass costClass) =>
         costClass switch
@@ -70,7 +74,8 @@ public enum PlaybackSettingsIssueCode
     PathNotEmpty,
     LimitRange,
     BudgetRange,
-    FloorRange
+    FloorRange,
+    BufferPresetInvalid
 }
 
 /// <summary>One rejected setting: the field name and why.</summary>
@@ -106,6 +111,11 @@ public static class PlaybackTranscodingSettingsRules
         if (floor < 0 || floor > PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB * PlaybackTranscodingSettings.BytesPerGiB)
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes), PlaybackSettingsIssueCode.FloorRange));
+        }
+
+        if (!Enum.IsDefined(settings.BufferPreset))
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.BufferPreset), PlaybackSettingsIssueCode.BufferPresetInvalid));
         }
 
         if (ValidatePath(settings.HlsCachePath) is { } pathIssue)
@@ -380,7 +390,8 @@ public sealed class PlaybackTranscodingSettingsStore
         string? HlsCachePath,
         long? CacheBudgetBytes,
         long? FreeSpaceFloorBytes,
-        string[]? RetiredCachePaths)
+        string[]? RetiredCachePaths,
+        PlaybackBufferPreset? BufferPreset = null)
     {
         public static Persisted From(Stored stored) =>
             new(
@@ -392,7 +403,8 @@ public sealed class PlaybackTranscodingSettingsStore
                 stored.Settings.HlsCachePath,
                 stored.Settings.CacheBudgetBytes,
                 stored.Settings.FreeSpaceFloorBytes,
-                stored.RetiredRoots);
+                stored.RetiredRoots,
+                stored.Settings.BufferPreset);
 
         public PlaybackTranscodingSettings ToSettings()
         {
@@ -405,7 +417,8 @@ public sealed class PlaybackTranscodingSettingsStore
                 AudioOnlySessions ?? defaults.AudioOnlySessions,
                 HlsCachePath ?? defaults.HlsCachePath,
                 CacheBudgetBytes ?? defaults.CacheBudgetBytes,
-                FreeSpaceFloorBytes ?? defaults.FreeSpaceFloorBytes);
+                FreeSpaceFloorBytes ?? defaults.FreeSpaceFloorBytes,
+                BufferPreset ?? defaults.BufferPreset);
         }
     }
 }

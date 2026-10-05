@@ -178,7 +178,8 @@ public sealed record PlaybackPlan(
     IReadOnlyList<PlaybackReason> Reasons,
     PlaybackCapabilitySupport Confidence,
     string? SourceContainer = null,
-    PlaybackSubtitleOutput? Subtitle = null)
+    PlaybackSubtitleOutput? Subtitle = null,
+    PlaybackBufferPolicy? Buffer = null)
 {
     public bool UsesServerProcessing =>
         Mode is PlaybackDeliveryMode.DirectStream or PlaybackDeliveryMode.Transcode;

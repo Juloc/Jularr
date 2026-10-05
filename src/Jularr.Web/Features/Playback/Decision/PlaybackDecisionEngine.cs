@@ -44,7 +44,8 @@ public static class PlaybackDecisionEngine
         return plan with
         {
             SourceContainer = PlaybackContainerNames.Name(request.Media.Container),
-            Subtitle = SubtitleOutput(request, plan)
+            Subtitle = SubtitleOutput(request, plan),
+            Buffer = plan.Mode == PlaybackDeliveryMode.Unavailable ? null : PlaybackBufferPolicy.For(request.Server.BufferPreset, plan.Mode)
         };
     }
 

@@ -1,5 +1,6 @@
 @page
 @model Jularr.Web.Pages.Admin.TranscodingModel
+@using Jularr.Web.Features.Playback.Decision
 @using Jularr.Web.Features.Playback.Transcoding
 @{
     var ui = Model.Ui;
@@ -72,6 +73,23 @@
                 <span>@ui["admin.transcoding.freeSpaceFloor"]</span>
                 <input asp-for="FreeSpaceFloorGiB" type="number" inputmode="numeric" min="0" max="@PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB" />
                 <span asp-validation-for="FreeSpaceFloorGiB" class="field-validation-error"></span>
+            </label>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading"><h2>@ui["admin.transcoding.bufferTitle"]</h2></div>
+        <div class="form-stack">
+            <label>
+                <span>@ui["admin.transcoding.bufferPreset"]</span>
+                <select asp-for="BufferPreset">
+                    @foreach (var preset in Enum.GetValues<PlaybackBufferPreset>())
+                    {
+                        <option value="@preset" selected="@(preset == Model.BufferPreset)">@ui.Format("admin.transcoding.bufferOption", ("name", ui["playback.buffer." + preset.ToString().ToLowerInvariant()]), ("seconds", PlaybackBufferPolicy.TargetSeconds(preset)))</option>
+                    }
+                </select>
+                <small class="muted">@ui["admin.transcoding.bufferHint"]</small>
+                <span asp-validation-for="BufferPreset" class="field-validation-error"></span>
             </label>
         </div>
     </section>

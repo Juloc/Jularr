@@ -6,6 +6,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Frontend;
@@ -90,6 +91,23 @@ public sealed class TranscodingPageTests
         Assert.AreEqual(host.CachePath, saved.HlsCachePath);
         Assert.IsFalse(saved.TranscodingEnabled, "An unchecked box is off.");
         Assert.AreEqual(1, host.Kit.Slots.Capacity(PlaybackCostClass.SoftwareVideo));
+    }
+
+    [TestMethod]
+    public async Task TheBufferPresetIsSavedShownAndOnlyOneOfTheOfferedPresetsIsAccepted()
+    {
+        await using var host = await TranscodingPageHost.CreateAsync();
+
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(host.ValidForm(("BufferPreset", "High"))));
+        Assert.AreEqual(PlaybackBufferPreset.High, host.Kit.Settings.Current.BufferPreset);
+        var html = await host.GetHtmlAsync();
+        Assert.IsTrue(Regex.IsMatch(html, "<option value=\"High\" selected[^>]*>High · 60 s</option>"), "The stored preset is the selected option.");
+        StringAssert.Contains(html, "Low · 15 s");
+        StringAssert.Contains(html, "Max · 120 s");
+
+        var refused = await host.PostForHtmlAsync(host.ValidForm(("BufferPreset", "Forever")));
+        Assert.AreEqual(HttpStatusCode.OK, refused.Status);
+        Assert.AreEqual(PlaybackBufferPreset.High, host.Kit.Settings.Current.BufferPreset, "A value that is no preset changes nothing.");
     }
 
     [TestMethod]
@@ -202,7 +220,8 @@ public sealed class TranscodingPageTests
                 ["AudioOnlySessions"] = "8",
                 ["HlsCachePath"] = CachePath,
                 ["CacheBudgetGiB"] = "10",
-                ["FreeSpaceFloorGiB"] = "5"
+                ["FreeSpaceFloorGiB"] = "5",
+                ["BufferPreset"] = "Normal"
             };
             foreach (var (name, value) in overrides)
             {
