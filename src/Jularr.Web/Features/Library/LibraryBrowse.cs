@@ -310,7 +310,7 @@ public sealed record LibraryCardView(
         {
             LibraryAvailabilityState.Requested => new(
                 state,
-                ui["requests.status." + AcquisitionAccessNames.Status(entry.Card.Availability!.Request!.Value)]),
+                ui[ConsumerAcquisitionLabels.StatusKey(entry.Card.Availability!.Request!.Value)]),
             LibraryAvailabilityState.Partial => new(state, ui.Format("library.browse.availability.partialCount", ("available", entry.PlayableUnits), ("total", entry.PlayableUnits + entry.MissingUnits))),
             LibraryAvailabilityState.Missing => new(state, ui["library.browse.availability.missing"]),
             _ => null

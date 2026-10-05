@@ -36,6 +36,7 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
                 ClientVideoPlayerRequest request => request.Target,
                 ClientPlaybackPlanRequest request => request.Target,
                 ClientVideoProgressUpdate update => update.Target,
+                ClientPlaybackIntentRequest request => request.Target,
                 _ => null
             })
             .FirstOrDefault(target => target is not null);

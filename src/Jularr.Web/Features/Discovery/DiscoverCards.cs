@@ -148,7 +148,7 @@ public static partial class DiscoverCardFactory
         var release = MediaBannerCardModel.MapStatus(item.Status);
         var requestLabel = open is null
             ? null
-            : ui["requests.status." + AcquisitionAccessNames.Status(open.Status)];
+            : ui[ConsumerAcquisitionLabels.StatusKey(open.Status)];
 
         return new DiscoverCardView(
             item.Id,
@@ -324,7 +324,7 @@ public static class DiscoverStates
                 .Where(code => code is not null && code != PlaybackLanguages.SubtitlesOff)
                 .Select(code => code!)
                 .ToArray();
-            var stage = ui["requests.status." + AcquisitionAccessNames.Status(open.Status)];
+            var stage = ui[ConsumerAcquisitionLabels.StatusKey(open.Status)];
 
             if (requested.Length > 0 && preference.IsSet)
             {

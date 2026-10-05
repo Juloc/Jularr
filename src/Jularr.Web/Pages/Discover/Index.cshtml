@@ -1,4 +1,5 @@
 @page "/Discover"
+@using Jularr.Web.Features.Acquisition.Access
 @using Jularr.Web.Features.Discovery
 @using Jularr.Web.Ui
 @model Jularr.Web.Pages.Discover.IndexModel
@@ -66,14 +67,14 @@
      data-text-open="@ui["requests.open"]"
      data-text-source-for="@ui["discover.import.sourceFor"]"
      data-text-source-url="@ui["discover.import.sourceUrlHeading"]"
-     data-status-pending="@ui["requests.status.pending"]"
-     data-status-approved="@ui["requests.status.approved"]"
-     data-status-searching="@ui["requests.status.searching"]"
-     data-status-downloading="@ui["requests.status.downloading"]"
-     data-status-importing="@ui["requests.status.importing"]"
-     data-status-completed="@ui["requests.status.completed"]"
-     data-status-failed="@ui["requests.status.failed"]"
-     data-status-rejected="@ui["requests.status.rejected"]">
+     data-status-pending="@ui[ConsumerAcquisitionLabels.StatusKey("pending")]"
+     data-status-approved="@ui[ConsumerAcquisitionLabels.StatusKey("approved")]"
+     data-status-searching="@ui[ConsumerAcquisitionLabels.StatusKey("searching")]"
+     data-status-downloading="@ui[ConsumerAcquisitionLabels.StatusKey("downloading")]"
+     data-status-importing="@ui[ConsumerAcquisitionLabels.StatusKey("importing")]"
+     data-status-completed="@ui[ConsumerAcquisitionLabels.StatusKey("completed")]"
+     data-status-failed="@ui[ConsumerAcquisitionLabels.StatusKey("failed")]"
+     data-status-rejected="@ui[ConsumerAcquisitionLabels.StatusKey("rejected")]">
     @Html.AntiForgeryToken()
 
     <header class="dc-head">

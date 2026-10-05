@@ -214,7 +214,7 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(CardOf("Empty Show"), "lib-state-missing");
         StringAssert.Contains(CardOf("Empty Show"), "Not available");
         StringAssert.Contains(CardOf("Requested Show"), "lib-state-requested");
-        StringAssert.Contains(CardOf("Requested Show"), "Downloading");
+        StringAssert.Contains(CardOf("Requested Show"), "Getting media");
     }
 
     private static AcquisitionRequestDraft Anime(string id, string title, AcquisitionRequestOptions? options = null) =>

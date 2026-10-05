@@ -181,7 +181,7 @@
                                 <small>@request.StatusMessage</small>
                             }
                         </div>
-                        <span class="status-pill request-status-@requestStatus">@ui["requests.status." + requestStatus]</span>
+                        <span class="status-pill request-status-@requestStatus">@ui[ConsumerAcquisitionLabels.StatusKey(requestStatus)]</span>
                         @if (request.ResultUrl is { } resultUrl)
                         {
                             <a class="button" href="@resultUrl">@ui["requests.open"]</a>
@@ -218,13 +218,13 @@
             data-edition-format-epub="@ui["books.add.editionFormat.epub"]"
             data-edition-format-text="@ui["books.add.editionFormat.text"]"
             data-edition-format-listing="@ui["books.add.editionFormat.listing"]"
-            data-status-pending="@ui["requests.status.pending"]"
-            data-status-approved="@ui["requests.status.approved"]"
-            data-status-searching="@ui["requests.status.searching"]"
-            data-status-downloading="@ui["requests.status.downloading"]"
-            data-status-completed="@ui["requests.status.completed"]"
-            data-status-failed="@ui["requests.status.failed"]"
-            data-status-rejected="@ui["requests.status.rejected"]"
+            data-status-pending="@ui[ConsumerAcquisitionLabels.StatusKey("pending")]"
+            data-status-approved="@ui[ConsumerAcquisitionLabels.StatusKey("approved")]"
+            data-status-searching="@ui[ConsumerAcquisitionLabels.StatusKey("searching")]"
+            data-status-downloading="@ui[ConsumerAcquisitionLabels.StatusKey("downloading")]"
+            data-status-completed="@ui[ConsumerAcquisitionLabels.StatusKey("completed")]"
+            data-status-failed="@ui[ConsumerAcquisitionLabels.StatusKey("failed")]"
+            data-status-rejected="@ui[ConsumerAcquisitionLabels.StatusKey("rejected")]"
             data-status-importing="@ui["books.add.importing"]"
             data-text-retry="@ui["books.add.retry"]">
         <div class="books-add-header">

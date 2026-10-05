@@ -86,7 +86,7 @@
                         {
                             <text> · @request.Subtitle</text>
                         }
-                        <span class="status-pill request-status-@status">@ui["requests.status." + status]</span>
+                        <span class="status-pill request-status-@status">@ui[ConsumerAcquisitionLabels.StatusKey(status)]</span>
                     </span>
                     <time datetime="@Iso(request.UpdatedAt)">@Shown(request.UpdatedAt)</time>
                 </li>

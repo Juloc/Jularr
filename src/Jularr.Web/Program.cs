@@ -382,6 +382,7 @@ builder.Services.AddSingleton<PlaybackPreparationTracker>();
 builder.Services.AddScoped<PlaybackPreparationService>();
 builder.Services.AddScoped<PlaybackService>();
 Jularr.Web.Features.Playback.Decision.PlaybackDecisionRegistration.AddPlaybackDecision(builder.Services);
+Jularr.Web.Features.InstantPlay.InstantPlayRegistration.AddInstantPlay(builder.Services);
 // Universal media core (#592): the provider-independent work/identity model the #556 children build on.
 Jularr.Web.Features.MediaCore.MediaCoreRegistration.AddMediaCore(builder.Services);
 // Smart & manual collections (#427): user-curated and rule-driven cross-media shelves over works.
@@ -412,7 +413,6 @@ builder.Services.AddScoped<MediaSegmentService>();
 builder.Services.AddScoped<MediaSegmentSidecarImporter>();
 builder.Services.AddScoped<VideoProgressService>();
 builder.Services.AddScoped<VideoDetailQuery>();
-builder.Services.AddScoped<Jularr.Web.Features.InstantPlay.InstantPlayPolicyService>();
 builder.Services.AddScoped<CanonicalVideoTargetResolver>();
 builder.Services.AddScoped<CanonicalVideoProgressBackfillService>();
 builder.Services.AddScoped<ActiveSessionService>();
@@ -752,6 +752,7 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 app.MapClientApiV1();
 app.MapClientApiPlaybackPlanV1();
+app.MapClientApiPlaybackIntentsV1();
 app.MapAcquisitionApiV1();
 app.MapClientApiOfflineV1();
 app.MapClientApiOfflineMediaPackageV1();

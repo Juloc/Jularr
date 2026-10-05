@@ -137,7 +137,7 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddScoped<ReleaseRequestTracker>();
                     services.AddScoped<VideoRequestWorkResolver>();
                     services.AddScoped<VideoAcquisitionEngine>();
-                    services.AddScoped<InstantPlayPolicyService>();
+                    services.AddInstantPlay();
                     services.AddSingleton<IMediaProbeRunner>(probe);
                     services.AddSingleton<MediaInventoryService>();
                     services.AddScoped<CanonicalMediaStorageService>();
@@ -182,6 +182,7 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     {
                         endpoints.MapRazorPages();
                         endpoints.MapClientApiPlaybackPlanV1();
+                        endpoints.MapClientApiPlaybackIntentsV1();
                     });
                 }))
             .StartAsync();
@@ -259,7 +260,8 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
     public async Task MakeAcquisitionReadyAsync()
     {
         await IndexerStore.SaveAsync(new IndexerEntry(Guid.NewGuid(), "Video test indexer", IndexerType.Newznab, Enabled: true, Priority: 1, new IndexerSettings("https://indexer.invalid", [2000, 5000], [], 100), "indexer-key"));
-        await ClientStore.SaveAsync(new DownloadClientEntry(Guid.NewGuid(), "SABnzbd", DownloadClientType.Sabnzbd, Enabled: true, Priority: 1, new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?>()), "secret-key"));
+        var settings = new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?>());
+        await ClientStore.SaveAsync(new DownloadClientEntry(Guid.NewGuid(), "SABnzbd", DownloadClientType.Sabnzbd, Enabled: true, Priority: 1, settings, "secret-key"));
     }
 
     public async ValueTask DisposeAsync()

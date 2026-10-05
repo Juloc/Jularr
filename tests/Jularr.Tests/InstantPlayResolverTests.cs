@@ -36,6 +36,10 @@ public sealed class InstantPlayResolverTests
 
     private static OpenRequestFacts OpenSeries(AcquisitionRequestStatus status, params Guid[] covers) => new(status, CoversWork: false, covers.ToHashSet());
 
+    private static OpenRequestFacts Pending() => Open(AcquisitionRequestStatus.Pending);
+
+    private static OpenRequestFacts PendingSeries(params Guid[] covers) => OpenSeries(AcquisitionRequestStatus.Pending, covers);
+
     private static void AssertAction(PrimaryAction action, PrimaryActionKind kind, PrimaryActionReason reason, Guid? episodeId = null, string? message = null)
     {
         Assert.AreEqual((kind, reason, episodeId), (action.Kind, action.Reason, action.WorkEpisodeId), message);
@@ -226,7 +230,7 @@ public sealed class InstantPlayResolverTests
 
         AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Downloading)), Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive);
         AssertAction(PrimaryActionResolver.Resolve(Series(units, open: OpenSeries(AcquisitionRequestStatus.Searching, units[0].Id)), Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive, units[0].Id);
-        AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Pending)), Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.AwaitingApproval, message: "Approval is never bypassed.");
+        AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Pending()), Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.AwaitingApproval, message: "Approval is never bypassed.");
         AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Searching)), ManagerOnly), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive);
         Assert.AreEqual(PrimaryActionKind.Play, PrimaryActionResolver.Resolve(Movie(true, open: Open(AcquisitionRequestStatus.Downloading)), Everything).Kind, "Playable content wins over an open request.");
     }
@@ -236,10 +240,11 @@ public sealed class InstantPlayResolverTests
     {
         var units = new[] { Unit(1, 1, local: false), Unit(1, 2, local: false) };
 
-        var attach = PrimaryActionResolver.Resolve(Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, units[1].Id)), Everything);
-        AssertAction(attach, PrimaryActionKind.StartWatching, PrimaryActionReason.InstantAcquisition, units[0].Id);
+        var approved = Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, units[1].Id));
+        AssertAction(PrimaryActionResolver.Resolve(approved, Everything), PrimaryActionKind.StartWatching, PrimaryActionReason.InstantAcquisition, units[0].Id);
+        AssertAction(PrimaryActionResolver.Resolve(approved, ApprovalNeeded), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive, units[0].Id);
 
-        AssertAction(PrimaryActionResolver.Resolve(Series(units, open: OpenSeries(AcquisitionRequestStatus.Pending, units[1].Id)), Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.AwaitingApproval, units[0].Id);
-        AssertAction(PrimaryActionResolver.Resolve(Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, units[1].Id)), ApprovalNeeded), PrimaryActionKind.ShowRequestState, PrimaryActionReason.RequestActive, units[0].Id);
+        var pending = Series(units, open: PendingSeries(units[1].Id));
+        AssertAction(PrimaryActionResolver.Resolve(pending, Everything), PrimaryActionKind.ShowRequestState, PrimaryActionReason.AwaitingApproval, units[0].Id);
     }
 }

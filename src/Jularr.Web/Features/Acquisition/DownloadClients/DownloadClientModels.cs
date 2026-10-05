@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
+using Jularr.Web.Features.Operations;
 
 namespace Jularr.Web.Features.Acquisition.DownloadClients;
 
@@ -106,14 +107,16 @@ public sealed record DownloadClientTestResult(
     string? Error = null);
 
 /// <summary>
-/// One release submission. Exactly one of <see cref="Url"/>/<see cref="File"/> is set.
+/// One release submission. Exactly one of <see cref="Url"/>/<see cref="File"/> is set. <see cref="Priority"/> is how soon the client
+/// should take it before its other queued downloads: <see cref="OperationPriority.High"/> for a release a profile is waiting to watch.
 /// </summary>
 public sealed record DownloadClientSubmitRequest(
     Uri? Url,
     string? Name,
     MediaAcquisitionKind MediaKind,
     Stream? File = null,
-    string? FileName = null);
+    string? FileName = null,
+    OperationPriority Priority = OperationPriority.Normal);
 
 /// <summary>Where the completed-download import stands for one external download.</summary>
 public enum DownloadImportState

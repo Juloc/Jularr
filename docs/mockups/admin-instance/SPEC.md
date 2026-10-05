@@ -36,6 +36,7 @@ Already implemented and must be reused:
 - current feature modules:
   - Learning
   - Acquisition
+  - Playback (default on; off is the manager-only mode of `docs/mockups/instant-play/SPEC.md`: no Watch page, player, plan, progress or stream API and no play action, while Request, monitoring and acquisition stay)
   - Tracking
 
 Do not replace these contracts with a second settings model.

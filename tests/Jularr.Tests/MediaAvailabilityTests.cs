@@ -54,11 +54,11 @@ public sealed class MediaAvailabilityTests
         Assert.AreEqual("available", available?.CssModifier);
 
         // A requested title uses the words of the request lists for the stage it is in.
-        Assert.AreEqual("Requested", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Pending)).Availability?.Label);
-        Assert.AreEqual("Approved", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Approved)).Availability?.Label);
-        Assert.AreEqual("Searching", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Searching)).Availability?.Label);
-        Assert.AreEqual("Downloading", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Downloading)).Availability?.Label);
-        Assert.AreEqual("Importing", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Importing)).Availability?.Label);
+        Assert.AreEqual("Waiting for approval", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Pending)).Availability?.Label);
+        Assert.AreEqual("Looking for media", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Approved)).Availability?.Label);
+        Assert.AreEqual("Looking for media", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Searching)).Availability?.Label);
+        Assert.AreEqual("Getting media", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Downloading)).Availability?.Label);
+        Assert.AreEqual("Preparing", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Importing)).Availability?.Label);
         Assert.AreEqual("requested", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Pending)).Availability?.CssModifier);
     }
 
@@ -89,7 +89,7 @@ public sealed class MediaAvailabilityTests
                 Progress = new MediaBannerProgress(MediaBannerProgressState.NotStarted, MediaBannerUnit.Episode, 1, "/Library/Episode/1")
             },
             Ui);
-        Assert.AreEqual("Searching", requestedWithAction.Availability?.Label, "Only the redundant Available badge is dropped.");
+        Assert.AreEqual("Looking for media", requestedWithAction.Availability?.Label, "Only the redundant Available badge is dropped.");
     }
 
     [TestMethod]
@@ -115,7 +115,7 @@ public sealed class MediaAvailabilityTests
 
         Assert.IsNull(badges["playable"], "It has a play button already.");
         Assert.AreEqual("In library", badges["empty"]);
-        Assert.AreEqual("Searching", badges["requested"]);
+        Assert.AreEqual("Looking for media", badges["requested"]);
         Assert.AreEqual("In library", badges["finished"], "A finished request no longer says anything.");
         Assert.AreEqual(true, cards["playable"].Availability?.HasPlayableContent);
         Assert.AreEqual(false, cards["empty"].Availability?.HasPlayableContent);

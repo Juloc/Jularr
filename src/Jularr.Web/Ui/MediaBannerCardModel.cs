@@ -197,7 +197,7 @@ public sealed record MediaBannerCardModel(
             MediaAvailabilityState.Available when hasPlayAction => null,
             MediaAvailabilityState.Available => new(state, ui["library.mediaCard.availability.available"]),
             MediaAvailabilityState.Local => new(state, ui["library.mediaCard.availability.local"]),
-            _ => new(state, ui["requests.status." + AcquisitionAccessNames.Status(facts.Request!.Value)])
+            _ => new(state, ui[ConsumerAcquisitionLabels.StatusKey(facts.Request!.Value)])
         };
     }
 

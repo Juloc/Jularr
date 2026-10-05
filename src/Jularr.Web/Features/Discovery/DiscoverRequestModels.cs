@@ -89,10 +89,10 @@ public sealed record DiscoverRequestResultView(
     {
         AcquisitionRequestStatus.Pending => Ui["discover.request.state.pending"],
         AcquisitionRequestStatus.Approved when Request.WasAutoApproved => Ui["requests.autoApproved"],
-        AcquisitionRequestStatus.Approved => Ui["requests.status.approved"],
+        AcquisitionRequestStatus.Approved => Ui[ConsumerAcquisitionLabels.StatusKey(Request.Status)],
         AcquisitionRequestStatus.Searching => Ui["discover.request.state.searching"],
         AcquisitionRequestStatus.Importing => Ui["discover.request.state.importing"],
-        _ => Ui["requests.status." + AcquisitionAccessNames.Status(Request.Status)]
+        _ => Ui[ConsumerAcquisitionLabels.StatusKey(Request.Status)]
     };
 
     /// <summary>One sentence in consumer words for the current state; a rejection has none because its reason is not necessarily user-visible.</summary>

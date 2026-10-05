@@ -297,7 +297,7 @@ stops profile-specific work where applicable; it does not disable shared instanc
 users. Re-enabling restores the preserved profile state subject to current policy.
 
 All current instance modules are exposed in Admin → Instance: Anime, Movies, TV, Manga, Novel, Books,
-Audiobooks, Learning, Acquisition and Tracking. Their personal toggles appear only where the module is
+Audiobooks, Learning, Acquisition, Playback and Tracking. Their personal toggles appear only where the module is
 meaningful and permitted for that profile.
 
 ## 5. Parity matrices

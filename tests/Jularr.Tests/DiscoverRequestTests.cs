@@ -62,7 +62,7 @@ public sealed class DiscoverRequestTests
 
         Assert.AreEqual("Waiting for approval", waiting.StateLabel);
         Assert.AreEqual(AcquisitionRequestStatus.Pending, waiting.Request.Status);
-        Assert.AreEqual("Downloading", approved.StateLabel);
+        Assert.AreEqual("Getting media", approved.StateLabel);
         Assert.AreEqual(1, executor.Runs, "Only the instant profile's request reached the executor.");
         Assert.IsFalse(waiting.Summary.Count > 0 || approved.Summary.Count > 0, "A movie has no scope to summarize.");
     }

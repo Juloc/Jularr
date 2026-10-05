@@ -454,7 +454,7 @@ public sealed class LibraryBrowseTests
             Entry("R", playable: 0, request: AcquisitionRequestStatus.Downloading), LibraryLanguagePreference.None, Ui);
 
         Assert.AreEqual(LibraryAvailabilityState.Requested, card.Availability?.State);
-        Assert.AreEqual("Downloading", card.Availability?.Label);
+        Assert.AreEqual("Getting media", card.Availability?.Label);
     }
 
     [TestMethod]

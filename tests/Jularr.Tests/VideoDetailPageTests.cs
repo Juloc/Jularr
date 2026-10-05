@@ -146,7 +146,7 @@ public sealed class VideoDetailPageTests
 
         var hero = Between(html, "<section class=\"ad-hero", "</section>");
         StringAssert.Contains(hero, "href=\"/Requests\"");
-        StringAssert.Contains(hero, "Downloading");
+        StringAssert.Contains(hero, "Getting media");
         Assert.IsFalse(html.Contains("data-dc-card-request", StringComparison.Ordinal), "A title is requested once at a time.");
         Assert.IsFalse(html.Contains("data-dc-rq", StringComparison.Ordinal));
     }

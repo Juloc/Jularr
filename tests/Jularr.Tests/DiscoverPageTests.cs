@@ -268,7 +268,7 @@ public sealed class DiscoverPageTests
         Assert.AreEqual(DiscoverStateKind.RequestedOtherLanguage, other.State.Kind);
         Assert.AreEqual("EN requested", other.State.Label);
         Assert.AreEqual(DiscoverStateKind.Requested, unspecified.State.Kind);
-        Assert.AreEqual("Downloading", unspecified.State.Label, "Without a language choice the stage of the request is the state.");
+        Assert.AreEqual("Getting media", unspecified.State.Label, "Without a language choice the stage of the request is the state.");
         Assert.AreEqual("downloading", unspecified.RequestStatus);
         Assert.IsNotNull(unspecified.RequestId);
         Assert.IsFalse(unspecified.CanRequest, "A requested title offers no second request.");

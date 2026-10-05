@@ -172,9 +172,7 @@ public sealed class IndexModel(
                 HttpContext,
                 db);
             TempData["Status"] = request.StatusMessage
-                ?? ui[
-                    "requests.status."
-                    + AcquisitionAccessNames.Status(request.Status)];
+                ?? ui[ConsumerAcquisitionLabels.StatusKey(request.Status)];
 
             return RedirectToPage(
                 new

@@ -81,7 +81,7 @@ else
                     }
                     <time datetime="@Iso(request.UpdatedAt)">@Shown(request.UpdatedAt)</time>
                 </div>
-                <span class="status-pill request-status-@status">@ui["requests.status." + status]</span>
+                <span class="status-pill request-status-@status">@ui[ConsumerAcquisitionLabels.StatusKey(status)]</span>
                 <div class="request-actions">
                     @if (request.Status == AcquisitionRequestStatus.Pending)
                     {

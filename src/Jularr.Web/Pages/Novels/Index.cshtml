@@ -1,5 +1,6 @@
 @page "/Novels"
 @model Jularr.Web.Pages.Novels.IndexModel
+@using Jularr.Web.Features.Acquisition.Access
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["novels.index.title"];
@@ -116,7 +117,7 @@
                                         else if (result.RequestStatus is { Length: > 0 } requestStatus)
                                         {
                                             <button class="button" type="button" disabled>
-                                                @ui["requests.status." + requestStatus]
+                                                @ui[ConsumerAcquisitionLabels.StatusKey(requestStatus)]
                                             </button>
                                         }
                                         else if (!result.Source.CanAdd)

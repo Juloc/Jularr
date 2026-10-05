@@ -34,8 +34,7 @@
     var watched = detail.Episodes.Count(x => x.IsWatched);
     var watchedPercent = knownEpisodes == 0 ? 0 : watched * 100 / knownEpisodes;
     var hasStrip = runtime is not null || knownEpisodes > 0 || audio.Any || subtitles.Any || watched > 0;
-    string RequestStateKey(AcquisitionRequestStatus status) =>
-        AnimeDetailView.AvailabilityKey(AnimeDetailView.Availability(AnimeEpisodeMediaFacts.None, status, null, null));
+    string RequestStateKey(AcquisitionRequestStatus status) => ConsumerAcquisitionLabels.StatusKey(status);
     string RequestStateIcon(AcquisitionRequestStatus status) =>
         AnimeDetailView.AvailabilityName(AnimeDetailView.Availability(AnimeEpisodeMediaFacts.None, status, null, null));
 }
