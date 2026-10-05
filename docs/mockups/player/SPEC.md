@@ -2,6 +2,8 @@
 
 Status: **binding planning specification for Player mockups**. This document refines the baseline in `UX.md` and issue #403. It does not authorize feature implementation before the canonical Playback/File/Track/Progress contracts are ready.
 
+Binding missing-media playback intent: `docs/mockups/instant-play/SPEC.md`.
+
 Architecture source of truth:
 - `Work -> Structure -> Edition -> Version -> Asset -> File -> Track`
 - `PlaybackPlan` decides Direct Play / Direct Stream or Remux / Transcode / Unavailable.
@@ -977,7 +979,7 @@ When the next item is not locally ready but user policy allows instant acquisiti
 ## 14. Preparing / loading / partial states
 
 ### Resolving
-Short initial state while capabilities, file availability and PlaybackPlan are resolved.
+Short initial state while capabilities, file availability and PlaybackPlan are resolved. This state is only entered after a playable local target exists; manager-only instances and still-acquiring media do not open the Player.
 
 Show:
 - media title/context;
@@ -985,13 +987,17 @@ Show:
 - no fake timeline.
 
 ### Preparing / acquiring
-Used when content is not ready locally but the play action triggered the acquisition flow.
+Used when content is not ready locally but an explicit playback intent triggered canonical Request/acquisition under the Instant Play contract.
+
+Before Player startup, the originating Detail/Preview surface owns the consumer sequence `Looking for media -> Getting episode/movie/media -> Preparing`. The full Player is not opened merely to show acquisition progress.
 
 Show compact user information such as:
 - Preparing;
 - requested language/profile summary if useful;
 - progress only when reliable;
-- Cancel/Back only when policy permits.
+- Stop waiting/Back only when policy permits.
+
+`Stop waiting` cancels only the transient auto-start intent; it must not falsely claim to cancel shared Request/monitoring acquisition. If the user navigates away before Ready, Jularr must not unexpectedly open the Player later.
 
 Do not expose indexer/download-client internals.
 
@@ -1007,6 +1013,10 @@ Keep the current frame when possible, show a center spinner after a short delay,
 
 ### Storage waking/offline
 Explain that media storage is unavailable/waking and expose Retry/Back. Do not classify it as codec failure.
+
+### Manager-only boundary
+
+When Jularr Playback is disabled/unavailable for the instance, this Player surface is not part of the consumer flow. Acquisition ends at `Available` / `Monitoring future releases` on Detail/Request surfaces. Do not render disabled Player chrome as a manager-only availability page.
 
 ## 15. Empty / unavailable states
 
