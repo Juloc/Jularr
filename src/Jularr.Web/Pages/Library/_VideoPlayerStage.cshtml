@@ -9,7 +9,8 @@
    WorkEpisode) render this same markup and run the same player scripts; only the routes and ids in the view differ. *@
 @{
     var ui = Model.Ui;
-    var seekStep = PlayerDesign.SeekStepSeconds;
+    var seekBack = PlayerDesign.SeekBackSeconds;
+    var seekForward = PlayerDesign.SeekForwardSeconds;
     var invariant = System.Globalization.CultureInfo.InvariantCulture;
 }
 <section class="player-panel"
@@ -26,6 +27,8 @@
          data-player-bootstrap-url="@Model.PlayerBootstrapUrl"
          data-progress-url="@Model.ProgressUrl"
          data-completion-threshold="@Jularr.Web.Features.Progress.VideoProgressService.CompletionThreshold.ToString("0.###", invariant)"
+         data-seek-back-seconds="@seekBack"
+         data-seek-forward-seconds="@seekForward"
          data-resume-seconds="@Model.ResumeSeconds.ToString("0.###", invariant)"
          data-next-url="@(Model.NextUrl ?? "")"
          data-autoplay-next="@Model.AutoplayNext.ToString().ToLowerInvariant()"
@@ -89,9 +92,9 @@
             @* The one play/pause button. Tapping the video only shows or hides these controls. *@
             <div class="player-center">
                 <button class="player-round-button" type="button" data-player-action="seekBack10"
-                        aria-label="@ui.Format("library.episode.seekBack", ("seconds", seekStep))">
+                        aria-label="@ui.Format("library.episode.seekBack", ("seconds", seekBack))">
                     <partial name="_PlayerIcon" model="@("seekBack")" />
-                    <span>@seekStep</span>
+                    <span>@seekBack</span>
                 </button>
                 <button class="player-round-button player-round-button-main" type="button" data-chrome-play
                         aria-label="@ui["library.watch.play"]"
@@ -99,9 +102,9 @@
                     <partial name="_PlayerIcon" model="@("play")" />
                 </button>
                 <button class="player-round-button" type="button" data-player-action="seekForward10"
-                        aria-label="@ui.Format("library.episode.seekForward", ("seconds", seekStep))">
+                        aria-label="@ui.Format("library.episode.seekForward", ("seconds", seekForward))">
                     <partial name="_PlayerIcon" model="@("seekForward")" />
-                    <span>@seekStep</span>
+                    <span>@seekForward</span>
                 </button>
             </div>
 
@@ -286,6 +289,12 @@
                     </label>
                 }
 
+                @* Only offered where the device exposes its own video player (iPhone/iPad); the normal full screen button never opens it. *@
+                <div class="player-setting-system" data-chrome-system-player-group hidden>
+                    <button class="button" type="button" data-chrome-system-player>@ui["library.watch.systemPlayer"]</button>
+                    <small class="player-setting-hint">@ui["library.watch.systemPlayerHint"]</small>
+                </div>
+
                 <div class="player-settings-actions">
                     <button class="button"
                             type="button"
@@ -363,7 +372,6 @@
             fileDefaultAudioTrackId = controlsData.FileDefaultAudioTrackId,
             initialAudioTrackId = controlsData.InitialAudioTrackId,
             sourceHeight = controlsData.SourceHeight,
-            seekStepSeconds = seekStep,
             subtitleCuesUrlTemplate = Model.SubtitleCuesUrlTemplate
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
     }

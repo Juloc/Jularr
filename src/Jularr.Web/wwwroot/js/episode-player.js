@@ -89,9 +89,7 @@
             return {};
         }
     })();
-    const seekStepSeconds = Number(controlsData.seekStepSeconds) > 0
-        ? Number(controlsData.seekStepSeconds)
-        : 10;
+    const seekSeconds = design.seekSeconds(root);
 
     if (!video || !stage || !placeholder || !playbackStatus ||
         !playbackSummary || !playbackBadge || !modeSelect || !overlay || !data ||
@@ -1304,10 +1302,10 @@
                 break;
             }
             case design.actions.seekBack10:
-                seekToAbsolute(seekBase() - seekStepSeconds, undefined, true);
+                seekToAbsolute(seekBase() - seekSeconds.back, undefined, true);
                 break;
             case design.actions.seekForward10:
-                seekToAbsolute(seekBase() + seekStepSeconds, undefined, true);
+                seekToAbsolute(seekBase() + seekSeconds.forward, undefined, true);
                 break;
             case design.actions.seekTo:
                 if (Number.isFinite(detail.seconds)) {
@@ -1783,6 +1781,22 @@
                 credentials: "same-origin",
                 keepalive: true
             }).catch(() => {});
+        }
+    });
+
+    // Handing the video to the system player or picture-in-picture, and coming back, changes the surface and
+    // not the session: the position is flushed like a pause and nothing else is touched. Moving to the
+    // background is the last moment the page is guaranteed to run, so it flushes too.
+    const presentation = window.JularrPlayerPresentation;
+    const handedOverModes = new Set([presentation.modes.nativeFullscreen, presentation.modes.pictureInPicture]);
+    root.addEventListener(presentation.changeEvent, event => {
+        if (absoluteCurrentTime() > 0 && (handedOverModes.has(event.detail.mode) || handedOverModes.has(event.detail.previousMode))) {
+            persistProgress(false, true);
+        }
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden" && absoluteCurrentTime() > 0) {
+            persistProgress(false, true);
         }
     });
 

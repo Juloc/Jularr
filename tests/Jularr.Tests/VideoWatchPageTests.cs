@@ -88,6 +88,27 @@ public sealed class VideoWatchPageTests
     }
 
     [TestMethod]
+    public async Task TheWatchPlayerDeclaresTheAsymmetricSeekStepsAndKeepsTheVideoInlineWithoutNativeControls()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire");
+        await host.AttachVideoAsync(movie, null, "moon-empire.mp4");
+
+        var html = await host.GetOkAsync($"/Library/Watch/{movie.Id}");
+
+        var root = html[html.IndexOf("<section class=\"player-panel\"", StringComparison.Ordinal)..];
+        StringAssert.Contains(root[..root.IndexOf('>')], "data-seek-back-seconds=\"10\"");
+        StringAssert.Contains(root[..root.IndexOf('>')], "data-seek-forward-seconds=\"30\"");
+        StringAssert.Contains(html, "aria-label=\"Back 10 seconds\"");
+        StringAssert.Contains(html, "aria-label=\"Forward 30 seconds\"");
+        var video = System.Text.RegularExpressions.Regex.Match(html, "<video[^>]*>").Value;
+        StringAssert.Contains(video, "playsinline");
+        Assert.IsFalse(video.Contains("controls", StringComparison.Ordinal), video);
+        StringAssert.Contains(html, "/js/player-presentation.js");
+        StringAssert.Contains(html, "data-chrome-system-player-group hidden", "The system player action starts hidden until the device proves it can offer it.");
+    }
+
+    [TestMethod]
     public async Task ASeriesEpisodeTargetsTheWorkEpisodeAndChainsToTheNextPlayableOne()
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();

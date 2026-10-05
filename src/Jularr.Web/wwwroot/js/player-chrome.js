@@ -105,14 +105,8 @@
     // --- taps on the video (touch and mouse alike) --------------------------------------------
     // A tap shows or hides the controls and never pauses. Double tap left/right seeks, repeated
     // taps add up; double tap in the middle toggles full screen (player-gestures.js decides).
-    const seekStep = (() => {
-        try {
-            return Number(JSON.parse(root.querySelector("[data-player-controls-data]")?.textContent || "{}").seekStepSeconds) || 10;
-        } catch {
-            return 10;
-        }
-    })();
-    const taps = window.JularrPlayerGestures?.createTapDecider({ stepSeconds: seekStep });
+    const seekSeconds = design.seekSeconds(root);
+    const taps = window.JularrPlayerGestures?.createTapDecider({ backSeconds: seekSeconds.back, forwardSeconds: seekSeconds.forward });
     const interactive = ".player-center button, .player-bottom, .player-settings, .player-learning-sheet, .post-play, " +
         ".player-error, .player-subtitle-bubble, .playback-preparation-actions, button, a, input, select, textarea, label, summary";
     const isSurface = target => target instanceof Element && !target.closest(interactive);
@@ -154,7 +148,7 @@
             design?.dispatch(root, decision.zone === "back" ? "seekBack10" : "seekForward10");
             showSeekFeedback(decision.zone, decision.total);
         } else if (decision.action === "doubleTapCenter") {
-            void toggleFullscreen();
+            void presentation.toggleFullscreen();
         }
     };
 
@@ -235,52 +229,49 @@
     });
     renderVolume();
 
-    // --- full screen & picture-in-picture --------------------------------------------------
-    const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
-    const toggleFullscreen = async () => {
-        try {
-            if (fullscreenElement()) {
-                await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-            } else if (stage.requestFullscreen || stage.webkitRequestFullscreen) {
-                await (stage.requestFullscreen || stage.webkitRequestFullscreen).call(stage);
-            } else if (video.webkitEnterFullscreen) {
-                // iOS Safari only allows the <video> element itself to go full screen.
-                video.webkitEnterFullscreen();
-            }
-        } catch { /* user gesture or platform refused */ }
-    };
-    const renderFullscreen = () => {
-        const active = fullscreenElement() === stage;
-        stage.classList.toggle("is-fullscreen", active);
+    // --- presentation: inline, Theater, element / system full screen, picture-in-picture --------------------
+    // player-presentation.js owns the modes and the one resolver; this block only renders its state. The
+    // capability snapshot is probed once here and downgraded by the resolver when a real call fails.
+    const presentationModes = window.JularrPlayerPresentation.modes;
+    const systemPlayerGroup = stage.querySelector("[data-chrome-system-player-group]");
+    const renderPresentation = state => {
         for (const button of stage.querySelectorAll("[data-chrome-fullscreen]")) {
-            setIcon(button, active ? "fullscreenExit" : "fullscreen");
-            button.setAttribute("aria-label", active ? button.dataset.labelExit : button.dataset.labelEnter);
+            setIcon(button, state.immersive ? "fullscreenExit" : "fullscreen");
+            button.setAttribute("aria-label", state.immersive ? button.dataset.labelExit : button.dataset.labelEnter);
             button.title = button.getAttribute("aria-label");
         }
-    };
-    for (const button of stage.querySelectorAll("[data-chrome-fullscreen]")) {
-        button.addEventListener("click", toggleFullscreen);
-    }
-    document.addEventListener("fullscreenchange", renderFullscreen);
-    document.addEventListener("webkitfullscreenchange", renderFullscreen);
 
-    const supportsPip = (document.pictureInPictureEnabled === true && typeof video.requestPictureInPicture === "function")
-        || typeof video.webkitSetPresentationMode === "function";
-    if (pipButton && supportsPip && !video.disablePictureInPicture) {
-        pipButton.hidden = false;
-        pipButton.addEventListener("click", async () => {
-            try {
-                if (document.pictureInPictureElement) {
-                    await document.exitPictureInPicture();
-                } else if (typeof video.requestPictureInPicture === "function" && document.pictureInPictureEnabled) {
-                    await video.requestPictureInPicture();
-                } else {
-                    // Safari on iOS/iPadOS.
-                    video.webkitSetPresentationMode(video.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture");
-                }
-            } catch { /* not ready yet */ }
-        });
+        if (pipButton) {
+            pipButton.hidden = !state.supports.pictureInPicture;
+            pipButton.setAttribute("aria-pressed", String(state.mode === presentationModes.pictureInPicture));
+        }
+
+        if (systemPlayerGroup) systemPlayerGroup.hidden = !state.supports.nativeFullscreen;
+        if (state.mode !== state.previousMode) {
+            root.dispatchEvent(new CustomEvent(window.JularrPlayerPresentation.changeEvent, {
+                bubbles: true,
+                detail: { mode: state.mode, previousMode: state.previousMode }
+            }));
+            // Back in a Jularr-owned mode the controls come up so the user is not left with a bare picture.
+            show();
+        }
+    };
+    const presentation = window.JularrPlayerPresentation.create({
+        win: window,
+        stage,
+        video,
+        capabilities: window.JularrPlaybackCapabilities.probePresentation(document, stage, video),
+        onUpdate: renderPresentation
+    });
+    for (const button of stage.querySelectorAll("[data-chrome-fullscreen]")) {
+        button.addEventListener("click", () => void presentation.toggleFullscreen());
     }
+
+    pipButton?.addEventListener("click", () => void presentation.togglePictureInPicture());
+    stage.querySelector("[data-chrome-system-player]")?.addEventListener("click", () => {
+        setSettings(false);
+        presentation.toggleNativeFullscreen();
+    });
 
     // --- settings menu --------------------------------------------------------------------
     const settingsToggles = stage.querySelectorAll("[data-chrome-settings-toggle]");
@@ -369,13 +360,17 @@
                 video.muted = !video.muted;
                 break;
             case "f":
-                void toggleFullscreen();
+                void presentation.toggleFullscreen();
                 break;
             case "c":
                 subtitleButton?.click();
                 break;
             case "Escape":
-                if (settingsOpen()) setSettings(false);
+                // Closing the menu uses the key; the next Escape leaves Theater (player-presentation.js).
+                if (settingsOpen()) {
+                    event.preventDefault();
+                    setSettings(false);
+                }
                 break;
         }
         show();
@@ -383,7 +378,8 @@
 
     renderPlayState();
     renderTimelineFill();
-    renderFullscreen();
+    const initialPresentation = presentation.state();
+    renderPresentation({ ...initialPresentation, previousMode: initialPresentation.mode });
 })();
 
 // Season filter for the episode list next to the player, and the owner's sources dialog.

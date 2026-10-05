@@ -89,7 +89,7 @@ public sealed class PlayerDesignTests
     }
 
     [TestMethod]
-    public void PlaybackSpeedsAndSeekStepComeFromTheCanonicalTokens()
+    public void PlaybackSpeedsAndSeekIncrementsComeFromTheCanonicalTokens()
     {
         var root = FindRepositoryRoot();
         using var document = JsonDocument.Parse(File.ReadAllText(
@@ -103,9 +103,11 @@ public sealed class PlayerDesignTests
         Assert.AreEqual(0.5, speeds.Min());
         Assert.AreEqual(2.0, speeds.Max());
         CollectionAssert.Contains(speeds, 1.0);
-        Assert.AreEqual(
-            playback.GetProperty("seekStepSeconds").GetInt32(),
-            Jularr.Web.Features.Playback.PlayerDesign.SeekStepSeconds);
+        Assert.AreEqual(10, Jularr.Web.Features.Playback.PlayerDesign.SeekBackSeconds, "SPEC: manual seek is 10 seconds back ...");
+        Assert.AreEqual(30, Jularr.Web.Features.Playback.PlayerDesign.SeekForwardSeconds, "... and 30 seconds forward.");
+        Assert.AreEqual(playback.GetProperty("seekBackSeconds").GetInt32(), Jularr.Web.Features.Playback.PlayerDesign.SeekBackSeconds);
+        Assert.AreEqual(playback.GetProperty("seekForwardSeconds").GetInt32(), Jularr.Web.Features.Playback.PlayerDesign.SeekForwardSeconds);
+        Assert.IsFalse(playback.TryGetProperty("seekStepSeconds", out _), "There is no single symmetric seek step.");
     }
 
     [TestMethod]

@@ -381,7 +381,33 @@
     outline: none;
     color: #fff;
 }
-.video-stage.is-fullscreen { max-height: none; aspect-ratio: auto; width: 100vw; height: 100vh; border-radius: 0; }
+/* Presentation: player-presentation.js writes data-presentation on the stage. Inline is the page layout above.
+   ElementFullscreen is this stage in the browser's fullscreen; Theater is the same stage fixed over the whole
+   viewport where element fullscreen is not available (iPhone WebKit) and keeps every Jularr control and overlay. */
+.video-stage[data-presentation="element-fullscreen"],
+.video-stage[data-presentation="theater"] { max-height: none; aspect-ratio: auto; border-radius: 0; }
+.video-stage[data-presentation="element-fullscreen"] { width: 100vw; height: 100vh; }
+.video-stage[data-presentation="theater"] {
+    position: fixed; inset: 0; z-index: 1000;
+    width: 100%; height: 100vh; height: 100dvh;
+    overscroll-behavior: none;
+    animation: player-theater-in .18s ease-out;
+}
+@keyframes player-theater-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+    .video-stage[data-presentation="theater"] { animation: none; }
+}
+/* The page behind a Theater stage neither scrolls nor rubber-bands; removing the attribute restores it. */
+html[data-player-theater], html[data-player-theater] body { overflow: hidden; overscroll-behavior: none; }
+/* Notch, Dynamic Island and home indicator stay clear of the controls in the full-screen modes. */
+.video-stage[data-presentation="element-fullscreen"] .player-chrome,
+.video-stage[data-presentation="theater"] .player-chrome {
+    inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+.video-stage[data-presentation="element-fullscreen"] .player-subtitle-stack,
+.video-stage[data-presentation="theater"] .player-subtitle-stack { margin-bottom: env(safe-area-inset-bottom, 0px); }
+.video-stage[data-presentation="element-fullscreen"] .player-skip-segment,
+.video-stage[data-presentation="theater"] .player-skip-segment { margin: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) 0; }
 .watch-main .video-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .video-stage[data-chrome-state="hidden"] { cursor: none; }
 /* Taps belong to the player (show/hide, double-tap seek): no browser zoom, highlight or selection. */
@@ -532,8 +558,10 @@
 .player-diagnostics dt { color: rgba(255,255,255,.56); }
 .player-diagnostics dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .player-settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.player-settings-actions .button { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.16); color: #fff; }
+.player-settings-actions .button, .player-setting-system .button { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.16); color: #fff; }
 .player-settings-actions .button[hidden] { display: none; }
+.player-setting-system { display: grid; gap: 4px; justify-items: start; }
+.player-setting-system[hidden] { display: none; }
 
 /* Before playback starts only the header and settings are useful (mode, retry). */
 .video-stage.player-placeholder .player-center,
@@ -641,7 +669,6 @@
     .player-heading span[lang] { display: none; }
     .player-bottom { padding: 0 8px 6px; }
     .player-chrome .player-icon-button { width: 36px; height: 36px; }
-    .player-bar [data-chrome-pip] { display: none; }
     .player-bar { gap: 6px; }
     .player-time { font-size: 12px; }
     .watch-main .player-subtitle-stack { bottom: 84px; }

@@ -1,5 +1,7 @@
 (() => {
     const ACTION_EVENT = "jularr:player-action";
+    // seekBack10/seekForward10 are the stable cross-client command ids (companion, TV, session hub); every
+    // web consumer seeks by the canonical back/forward increments from seekSeconds(), never by the id's number.
     const actions = Object.freeze({
         playPause: "playPause",
         seekBack10: "seekBack10",
@@ -16,6 +18,18 @@
         closeOverlay: "closeOverlay",
         exitPlayer: "exitPlayer"
     });
+
+    // The manual seek increments of design/player/player-tokens.json (back 10 s, forward 30 s). The server renders
+    // them on the player root so the chrome, the player and the media session read one asymmetric pair.
+    const seekSeconds = root => {
+        const back = Number(root.dataset.seekBackSeconds);
+        const forward = Number(root.dataset.seekForwardSeconds);
+        if (!(back > 0) || !(forward > 0)) {
+            throw new Error("The player root must declare data-seek-back-seconds and data-seek-forward-seconds.");
+        }
+
+        return Object.freeze({ back, forward });
+    };
 
     const dispatch = (root, action, detail = {}) => {
         root.dispatchEvent(new CustomEvent(ACTION_EVENT, {
@@ -151,6 +165,7 @@
     window.JularrPlayerDesign = Object.freeze({
         actionEvent: ACTION_EVENT,
         actions,
+        seekSeconds,
         dispatch,
         cueText,
         cueIndexAt,
