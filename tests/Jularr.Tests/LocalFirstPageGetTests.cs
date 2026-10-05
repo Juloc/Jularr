@@ -533,6 +533,7 @@ public sealed class LocalFirstPageGetTests
                     OwnerAccount,
                     new RecordingEventPublisher()),
                 new AcquisitionAccessStore(Db),
+                new VideoRequestScopeResolver(Db),
                 watchlistStore,
                 franchiseService,
                 recommendations,

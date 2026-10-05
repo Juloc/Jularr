@@ -1,0 +1,131 @@
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Discovery
+@using Jularr.Web.Features.Localization
+@model DiscoverRequestSettingsView
+@* The settings groups of the Request dialog for one resolved title. Only the groups that apply to the media kind are
+   rendered: a series has one Scope control with the Included content derived from it, anime has its language
+   preference, every other kind is just the identity and Request. Scope and ids are re-validated by the server. *@
+@{
+    var ui = Model.Ui;
+    string SeasonLabel(VideoRequestSeason season) =>
+        season.IsSpecial ? ui["discover.request.specials"] : ui.Format("discover.request.season", ("number", season.Number));
+    string EpisodeCount(VideoRequestSeason season)
+    {
+        var upcoming = season.Episodes.Count(episode => episode.AiredAt is { } aired && aired > DateTime.UtcNow);
+        return upcoming > 0
+            ? ui.Format("discover.request.episodesUpcoming", ("count", season.Episodes.Count), ("upcoming", upcoming))
+            : ui.Format("discover.request.episodes", ("count", season.Episodes.Count));
+    }
+}
+@if (Model.Existing is { } existing)
+{
+    <p class="dc-rq-notice"
+       role="status"
+       data-dc-rq-existing
+       data-request-id="@existing.Id"
+       data-status="@AcquisitionAccessNames.Status(existing.Status)">
+        <strong>@ui["discover.request.exists"]</strong>
+        <span>@ui["requests.status." + AcquisitionAccessNames.Status(existing.Status)]</span>
+    </p>
+}
+
+@if (Model.OffersScope)
+{
+    <div class="dc-rq-field">
+        <label for="dc-rq-scope">@ui["discover.request.scope"]</label>
+        <select id="dc-rq-scope" name="scope" data-dc-rq-scope aria-describedby="dc-rq-scope-hint">
+            <option value="all">@ui["discover.request.scope.all"]</option>
+            <option value="future">@ui["discover.request.scope.future"]</option>
+            <option value="custom">@ui["discover.request.scope.custom"]</option>
+        </select>
+        <p id="dc-rq-scope-hint" class="dc-rq-hint" data-dc-rq-scope-hint>@ui["discover.request.scope.all.hint"]</p>
+    </div>
+
+    <fieldset class="dc-rq-field dc-rq-content" data-dc-rq-content>
+        <legend>@ui["discover.request.included"]</legend>
+        <p class="dc-rq-hint" data-dc-rq-count></p>
+        <ul class="dc-rq-tree">
+            @for (var index = 0; index < Model.Seasons.Count; index++)
+            {
+                var season = Model.Seasons[index];
+                <li class="dc-rq-season" data-dc-rq-season data-season-id="@season.Id">
+                    <div class="dc-rq-row">
+                        <input type="checkbox" id="dc-rq-s-@index" data-dc-rq-season-check />
+                        <label for="dc-rq-s-@index">
+                            <span>@SeasonLabel(season)</span>
+                            <small>@EpisodeCount(season)</small>
+                        </label>
+                        @if (season.Episodes.Count > 0)
+                        {
+                            <button type="button"
+                                    class="dc-icon-btn dc-rq-expand"
+                                    aria-expanded="false"
+                                    aria-controls="dc-rq-e-@index"
+                                    aria-label="@ui.Format("discover.request.expand", ("season", SeasonLabel(season)))"
+                                    data-dc-rq-expand>
+                                <partial name="_DiscoverIcon" model='"chevron"' />
+                            </button>
+                        }
+                    </div>
+                    @if (season.Episodes.Count > 0)
+                    {
+                        <ul class="dc-rq-episodes" id="dc-rq-e-@index" hidden>
+                            @foreach (var episode in season.Episodes)
+                            {
+                                <li>
+                                    <input type="checkbox" id="dc-rq-ep-@episode.Id" value="@episode.Id" data-dc-rq-episode />
+                                    <label for="dc-rq-ep-@episode.Id">
+                                        <span>@episode.Number</span>
+                                        @if (!string.IsNullOrWhiteSpace(episode.Title))
+                                        {
+                                            <small>@episode.Title</small>
+                                        }
+                                    </label>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </li>
+            }
+            <li class="dc-rq-season dc-rq-future">
+                <div class="dc-rq-row">
+                    <input type="checkbox" id="dc-rq-future" data-dc-rq-future />
+                    <label for="dc-rq-future">
+                        <span>@ui["discover.request.future"]</span>
+                        <small>@ui["discover.request.future.hint"]</small>
+                    </label>
+                </div>
+            </li>
+        </ul>
+    </fieldset>
+}
+
+@if (Model.OffersLanguage)
+{
+    <fieldset class="dc-rq-field">
+        <legend>@ui["discover.request.language"]</legend>
+        <div class="dc-rq-pair">
+            <label>
+                <span>@ui["requests.new.audio"]</span>
+                <select name="audio" data-dc-rq-audio>
+                    <option value="">@ui["requests.new.anyLanguage"]</option>
+                    @foreach (var (tag, name) in RequestLanguages.Choices)
+                    {
+                        <option value="@tag" selected="@(Model.DefaultAudio == tag)">@name</option>
+                    }
+                </select>
+            </label>
+            <label>
+                <span>@ui["requests.new.subtitles"]</span>
+                <select name="subtitles" data-dc-rq-subtitles>
+                    <option value="">@ui["requests.new.anyLanguage"]</option>
+                    <option value="off" selected="@(Model.DefaultSubtitles == "off")">@ui["requests.new.noSubtitles"]</option>
+                    @foreach (var (tag, name) in RequestLanguages.Choices)
+                    {
+                        <option value="@tag" selected="@(Model.DefaultSubtitles == tag)">@name</option>
+                    }
+                </select>
+            </label>
+        </div>
+    </fieldset>
+}

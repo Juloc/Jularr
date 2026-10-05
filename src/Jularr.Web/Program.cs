@@ -525,6 +525,7 @@ builder.Services.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(servic
 builder.Services.AddScoped<IndexerSearchCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestScopeResolver>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.WantedListService>();
 builder.Services.AddScoped<Jularr.Web.Features.Library.AdminMediaDetailService>();
 // Request experience (#597): auto-approval rules and requester-selectable quality profiles are

@@ -79,7 +79,7 @@ public sealed record DiscoverCardView(
     string? PlayLabel,
     string? Format,
     string? RawStatus,
-    string AddAction,
+    bool CanRequest,
     string? ImportMangaUrl,
     bool CanFollow,
     bool IsFollowed,
@@ -100,7 +100,7 @@ public sealed record DiscoverContext(
     IReadOnlyDictionary<(MediaAcquisitionKind Kind, string ExternalId), AcquisitionRequest> OpenRequests,
     IReadOnlyDictionary<string, DiscoverLocalFacts> Local,
     IReadOnlyDictionary<string, Guid?> Followed,
-    IReadOnlyDictionary<string, string> AddActions);
+    IReadOnlySet<string> RequestableCategories);
 
 public static partial class DiscoverCardFactory
 {
@@ -126,11 +126,8 @@ public static partial class DiscoverCardFactory
                 ? facts
                 : null;
 
-        var addAction = !item.IsLocal && open is null && context.AddActions.TryGetValue(item.Category, out var action)
-            ? action
-            : "";
-
-        var state = DiscoverStates.Resolve(item, open, local, context.Preference, addAction.Length > 0, ui);
+        var canRequest = !item.IsLocal && open is null && context.RequestableCategories.Contains(item.Category);
+        var state = DiscoverStates.Resolve(item, open, local, context.Preference, canRequest, ui);
 
         var providerUrl = ProviderUrl(item);
         var importUrl = item.DetailsUrl.StartsWith("/Discover/MangaImport", StringComparison.Ordinal)
@@ -187,7 +184,7 @@ public static partial class DiscoverCardFactory
             local?.PlayLabel,
             item.Format,
             item.Status,
-            addAction,
+            canRequest,
             importUrl,
             canFollow,
             isFollowed,

@@ -21,7 +21,7 @@ public sealed class DiscoverPartialRenderTests
         string label = "DE available",
         string href = "https://anilist.co/anime/1",
         bool isLocal = false,
-        string addAction = "request",
+        bool canRequest = true,
         string? poster = "https://img.example/cover.jpg",
         string? playUrl = null) =>
         new(
@@ -53,7 +53,7 @@ public sealed class DiscoverPartialRenderTests
             playUrl is null ? null : "Continue watching",
             "TV",
             "FINISHED",
-            addAction,
+            canRequest,
             null,
             true,
             false,
@@ -109,7 +109,7 @@ public sealed class DiscoverPartialRenderTests
         var html = await RenderAsync(CardView, (Card(), Ui));
         var visible = html[..html.IndexOf("<template", StringComparison.Ordinal)];
 
-        StringAssert.Contains(visible, "data-dc-card-add");
+        StringAssert.Contains(visible, "data-dc-card-request>");
         Assert.IsTrue(Regex.IsMatch(visible, @">\s*Request\s*</button>"));
         StringAssert.Contains(visible, "data-dc-provider=\"anilist\"");
     }
@@ -123,7 +123,7 @@ public sealed class DiscoverPartialRenderTests
         StringAssert.Contains(preview, "data-external-id=\"1\"");
         StringAssert.Contains(preview, "A mage looks back on her journey.");
         StringAssert.Contains(preview, "<dt>Status</dt><dd>Finished</dd>");
-        StringAssert.Contains(preview, "data-dc-add");
+        StringAssert.Contains(preview, "data-dc-request>");
         Assert.IsTrue(Regex.IsMatch(preview, @">\s*Request\s*</button>"));
         StringAssert.Contains(preview, "data-dc-follow ");
         StringAssert.Contains(preview, "Follow franchise");
@@ -141,7 +141,7 @@ public sealed class DiscoverPartialRenderTests
             label: "In library",
             href: "/Library/Anime/a",
             isLocal: true,
-            addAction: "",
+            canRequest: false,
             playUrl: "/Library/Episode/e");
 
         var html = await RenderAsync(CardView, (card, Ui));
@@ -149,7 +149,7 @@ public sealed class DiscoverPartialRenderTests
         StringAssert.Contains(html, "class=\"dc-card is-local\"");
         StringAssert.Contains(html, "href=\"/Library/Episode/e\"");
         StringAssert.Contains(html, "Continue watching");
-        Assert.IsFalse(html.Contains("data-dc-add", StringComparison.Ordinal));
+        Assert.IsFalse(html.Contains("data-dc-request>", StringComparison.Ordinal) || html.Contains("data-dc-card-request>", StringComparison.Ordinal));
         Assert.IsFalse(html.Contains("target=\"_blank\"", StringComparison.Ordinal));
     }
 

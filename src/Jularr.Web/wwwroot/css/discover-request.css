@@ -1,0 +1,85 @@
+/* The Discover Request dialog (docs/mockups/add-request-flow): one medium centered modal on desktop, one full-height
+   sheet on mobile. Identity header, the settings groups of the title, a sticky Cancel + Request footer; the same
+   dialog shows the success state. Surfaces use the shared theme tokens, so light, dark and every accent work
+   unchanged. State is shown with icon, text and weight, never a coloured left edge (CssAccentStripeTests). */
+
+.dc-rq {
+    width: min(480px, 94vw); max-height: min(88vh, 760px); padding: 0; overflow: hidden;
+    border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text);
+    box-shadow: 0 30px 80px rgb(0 0 0 / .4);
+}
+.dc-rq::backdrop { background: rgb(0 0 0 / .55); }
+.dc-rq[open] { display: flex; }
+.dc-rq-panel { display: flex; flex-direction: column; width: 100%; min-height: 0; max-height: inherit; }
+
+.dc-rq-head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 16px 12px; }
+.dc-rq-cover {
+    display: grid; place-items: center; flex: none; width: 52px; aspect-ratio: 2 / 3; overflow: hidden;
+    border-radius: 8px; background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--accent-text);
+}
+.dc-rq-cover img { width: 100%; height: 100%; object-fit: cover; }
+.dc-rq-initial { font-size: 22px; font-weight: 800; }
+.dc-rq-identity { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.dc-rq-identity h2 { margin: 0; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+.dc-rq-identity h2:focus { outline: none; }
+.dc-rq-identity h2:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.dc-rq-identity p { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+
+.dc-rq-body { display: grid; flex: 1 1 auto; align-content: start; gap: 16px; min-height: 0; padding: 4px 16px 16px; overflow: auto; overscroll-behavior: contain; }
+.dc-rq-body:empty { display: none; }
+.dc-rq-loading, .dc-rq-hint { margin: 0; color: var(--muted); font-size: 13px; }
+.dc-rq-error { margin: 0; padding: 10px 12px; border: 1px solid var(--danger-border, var(--border)); border-radius: 10px; color: var(--danger-text); font-size: 13px; font-weight: 600; }
+.dc-rq-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-text); font-size: 13px; }
+
+.dc-rq-field { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.dc-rq-field > label, .dc-rq-field > legend, .dc-rq-pair label > span { padding: 0; color: var(--text); font-size: 13px; font-weight: 700; }
+.dc-rq-field select, .dc-rq-pair select {
+    width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--field-bg, var(--surface)); color: var(--text); font: inherit; font-size: 14px;
+}
+.dc-rq-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dc-rq-pair label { display: grid; gap: 6px; min-width: 0; }
+
+.dc-rq-tree, .dc-rq-episodes { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.dc-rq-tree { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.dc-rq-season + .dc-rq-season { border-top: 1px solid var(--border); }
+.dc-rq-row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 8px 4px 12px; }
+.dc-rq-row > label, .dc-rq-episodes label { display: grid; flex: 1; gap: 1px; min-width: 0; cursor: pointer; }
+.dc-rq-row > label span { font-size: 14px; font-weight: 700; }
+.dc-rq-row > label small, .dc-rq-episodes small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.dc-rq-tree input[type="checkbox"] { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.dc-rq-expand { width: 44px; min-height: 44px; }
+.dc-rq-expand .dc-icon { transition: transform .15s; }
+.dc-rq-expand[aria-expanded="true"] .dc-icon { transform: rotate(180deg); }
+.dc-rq-episodes { max-height: 220px; padding: 4px 12px 8px 42px; overflow: auto; background: var(--surface-2); }
+.dc-rq-episodes li { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.dc-rq-episodes label { grid-template-columns: auto 1fr; align-items: baseline; gap: 8px; font-size: 13px; }
+
+.dc-rq-foot {
+    display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border); background: var(--surface);
+}
+.dc-rq-foot .button { min-height: 44px; }
+
+.dc-rq-result { display: grid; justify-items: center; gap: 10px; padding: 8px 0 4px; text-align: center; }
+.dc-rq-check { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: color-mix(in srgb, var(--success-text) 14%, transparent); color: var(--success-text); }
+.dc-rq-check .dc-icon { width: 32px; height: 32px; }
+.dc-rq-result h3 { margin: 0; font-size: 20px; }
+.dc-rq-result h3:focus { outline: none; }
+.dc-rq-summary { display: grid; gap: 4px; margin: 0; padding: 0; color: var(--muted); font-size: 14px; list-style: none; }
+.dc-rq-state { color: var(--text); }
+.dc-rq-result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; padding-top: 6px; }
+.dc-rq-result-actions .button { min-height: 44px; }
+
+@media (max-width: 760px) {
+    .dc-rq { width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; }
+    .dc-rq-panel { height: 100%; }
+    .dc-rq-head { padding-top: calc(16px + env(safe-area-inset-top)); }
+    .dc-rq-head .dc-icon-btn { width: 44px; min-height: 44px; }
+    .dc-rq-foot .button { flex: 1; }
+    .dc-rq-pair { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dc-rq-expand .dc-icon { transition: none; }
+}

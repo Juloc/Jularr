@@ -1,0 +1,31 @@
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Discovery
+@model DiscoverRequestResultView
+@* The success state of the Request dialog: what was requested and where the request stands. The data attributes
+   let discover.js bring the card behind the dialog in line with the persisted request state. *@
+@{
+    var ui = Model.Ui;
+    var request = Model.Request;
+}
+<div class="dc-rq-result"
+     data-dc-rq-result
+     data-request-id="@request.Id"
+     data-status="@AcquisitionAccessNames.Status(request.Status)"
+     data-progress="@Model.Progress"
+     data-done="@(Model.IsDone ? "true" : "false")"
+     data-result-url="@request.ResultUrl"
+     data-message="@request.StatusMessage">
+    <span class="dc-rq-check" aria-hidden="true"><partial name="_DiscoverIcon" model='"library"' /></span>
+    <h3 id="dc-rq-result-title" tabindex="-1">@ui[Model.AlreadyRequested ? "discover.request.exists" : "discover.request.created"]</h3>
+    <ul class="dc-rq-summary">
+        @foreach (var line in Model.Summary)
+        {
+            <li>@line</li>
+        }
+        <li class="dc-rq-state"><strong data-dc-rq-state>@Model.StateLabel</strong></li>
+    </ul>
+    <div class="dc-rq-result-actions">
+        <a class="button" href="@AcquisitionRequestService.HistoryPath">@ui["discover.request.viewStatus"]</a>
+        <button type="button" class="button button-primary" data-dc-rq-close>@ui["discover.request.done"]</button>
+    </div>
+</div>

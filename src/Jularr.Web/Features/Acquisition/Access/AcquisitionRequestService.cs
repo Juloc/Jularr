@@ -5,11 +5,11 @@ using Jularr.Web.Features.Instance;
 namespace Jularr.Web.Features.Acquisition.Access;
 
 /// <summary>
-/// The one path for adding a title from search, for every media type. What the profile may do comes
-/// from the capability matrix (#436): a profile with <see cref="MediaCapability.Instant"/> adds right
-/// away, one with <see cref="MediaCapability.Request"/> creates a request, and anything below cannot
-/// add. A request waits for the owner unless an auto-approval rule approves it; an approved request
-/// goes to the media type's executor.
+/// The one path for requesting a title from search, for every media type. What the profile may do comes
+/// from the capability matrix (#436): a profile with <see cref="MediaCapability.Instant"/> has its request
+/// approved right away, one with <see cref="MediaCapability.Request"/> creates a request, and anything
+/// below cannot request. A request waits for the owner unless an auto-approval rule approves it; an
+/// approved request goes to the media type's executor.
 /// </summary>
 public sealed class AcquisitionRequestService(
     AcquisitionAccessStore store,
@@ -47,15 +47,15 @@ public sealed class AcquisitionRequestService(
         return AcquisitionCapabilities.Resolve(kind, capability, policy.Manual, account.Can(JularrPolicies.AdminMedia));
     }
 
-    /// <summary>Adds (or requests) a title. Returns the open request for it, new or existing.</summary>
+    /// <summary>Requests a title. Returns the open request for it, new or existing.</summary>
     public async Task<AcquisitionRequest> SubmitAsync(
         AcquisitionRequestDraft draft,
         CancellationToken cancellationToken)
     {
         var capabilities = await GetCapabilitiesAsync(draft.Kind, cancellationToken);
-        if (!capabilities.CanAdd)
+        if (!capabilities.CanRequest)
         {
-            throw new AcquisitionAccessDeniedException("You may not request or add this kind of media.");
+            throw new AcquisitionAccessDeniedException("You may not request this kind of media.");
         }
 
         draft = await PrepareDraftAsync(draft, cancellationToken);
@@ -64,7 +64,7 @@ public sealed class AcquisitionRequestService(
             return open;
         }
 
-        if (capabilities.AddCreatesRequest)
+        if (!capabilities.AutoApproves)
         {
             var decision = await EvaluateAutoApprovalAsync(draft.Kind, cancellationToken);
             if (decision.Rule is not { } rule)

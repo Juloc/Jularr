@@ -47,16 +47,18 @@
 
 @section Head {
     <link rel="stylesheet" href="~/css/discover-browse.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-request.css" asp-append-version="true" />
 }
 
 <div class="dc-page"
      data-discover
      data-is-owner="@Model.IsOwner.ToString().ToLowerInvariant()"
-     data-add-url="@Url.Page("/Discover/Index", "Add")"
+     data-resolve-url="@Url.Page("/Discover/Index", "Resolve")"
+     data-request-url="@Url.Page("/Discover/Index", "Request")"
      data-request-status-url="@Url.Page("/Discover/Index", "RequestStatus")"
      data-watchlist-url="@Url.Page("/Discover/Index", "Watchlist")"
      data-franchise-url="@Url.Page("/Discover/Index", "FollowFranchise")"
-     data-text-add-failed="@ui["discover.card.addFailed"]"
+     data-text-action-failed="@ui["discover.card.actionFailed"]"
      data-text-follow="@ui["discover.card.follow"]"
      data-text-followed="@ui["discover.card.followed"]"
      data-text-unfollow="@ui["discover.card.unfollow"]"
@@ -274,8 +276,10 @@
         </button>
         <div class="dc-sheet-content" data-dc-sheet-content></div>
     </dialog>
+    <partial name="_DiscoverRequestDialog" model="ui" />
 </div>
 
 @section Scripts {
     <script src="~/js/discover.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-request.js" asp-append-version="true" defer></script>
 }

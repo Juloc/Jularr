@@ -75,23 +75,28 @@ public sealed record AcquisitionAccessPolicy(
         new(kind, ManualAddMode.OwnerOnly);
 }
 
-/// <summary>What the current profile may do for one media type — the only thing pages check.</summary>
+/// <summary>
+/// What the current profile may do for one media type — the only thing pages check. Every profile that
+/// <see cref="CanRequest"/> sees the same Request action; <see cref="AutoApproves"/> is approval policy
+/// only and must never change a label or a button.
+/// </summary>
 public sealed record AcquisitionCapabilities(
     MediaAcquisitionKind Kind,
-    bool CanAdd,
-    bool AddCreatesRequest,
+    bool CanRequest,
+    bool AutoApproves,
     bool CanAddManually,
     bool IsOwner)
 {
-    /// <summary>
-    /// A capability of <see cref="MediaCapability.Request"/> creates a request, <see cref="MediaCapability.Instant"/>
-    /// adds right away, anything below cannot add. Managers of media (the owner and media managers) may
-    /// always use the manual add tools; everyone else follows the media type's manual rule.
-    /// </summary>
     /// <summary>What a plain user gets from the built-in defaults: may request, no manual tools. Page models start from it until they resolve the real thing.</summary>
     public static AcquisitionCapabilities Default(MediaAcquisitionKind kind) =>
         Resolve(kind, MediaCapability.Request, AcquisitionAccessPolicy.Default(kind).Manual, isOwner: false);
 
+    /// <summary>
+    /// A capability of <see cref="MediaCapability.Request"/> or above may request; <see cref="MediaCapability.Instant"/>
+    /// approves that request right away, <see cref="MediaCapability.Request"/> waits for an approver or an
+    /// auto-approval rule. Managers of media (the owner and media managers) may always use the manual add tools;
+    /// everyone else follows the media type's manual rule.
+    /// </summary>
     public static AcquisitionCapabilities Resolve(
         MediaAcquisitionKind kind,
         MediaCapability capability,
@@ -99,8 +104,8 @@ public sealed record AcquisitionCapabilities(
         bool isOwner) =>
         new(
             kind,
-            CanAdd: capability >= MediaCapability.Request,
-            AddCreatesRequest: capability == MediaCapability.Request,
+            CanRequest: capability >= MediaCapability.Request,
+            AutoApproves: capability >= MediaCapability.Instant,
             CanAddManually: isOwner || manual == ManualAddMode.Users,
             IsOwner: isOwner);
 }

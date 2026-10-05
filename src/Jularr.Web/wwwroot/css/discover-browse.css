@@ -236,8 +236,8 @@
 .dc-pv-facts dd { margin: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .dc-pv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; padding-top: 4px; }
 .dc-pv-actions .button { display: inline-flex; align-items: center; gap: 6px; }
-.dc-pv-add { display: inline-flex; align-items: center; gap: 8px; }
-.dc-pv-add .dc-request-live { width: auto; min-width: 140px; }
+.dc-pv-request { display: inline-flex; align-items: center; gap: 8px; }
+.dc-pv-request .dc-request-live { width: auto; min-width: 140px; }
 .dc-pv-status {
     padding: 6px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text);
     font-size: 13px; font-weight: 700;

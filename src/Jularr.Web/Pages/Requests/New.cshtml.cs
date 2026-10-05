@@ -12,9 +12,9 @@ namespace Jularr.Web.Pages.Requests;
 /// <summary>
 /// Requests an anime title with options (#597): the whole series, chosen seasons or chosen episodes, the
 /// audio and subtitle language, and a quality profile the owner opened to requests. What happens next —
-/// a request the owner approves, an auto-approved request or an immediate add — follows the profile's
-/// capability for anime (the capability matrix) and the owner's auto-approval rules, exactly as for the
-/// one-click request in Discover.
+/// a request the owner approves or an immediately approved request — follows the profile's capability for
+/// anime (the capability matrix) and the owner's auto-approval rules, exactly as for the Request dialog in
+/// Discover; the action is always Request.
 /// </summary>
 public sealed class NewModel(
     AppDbContext db,
@@ -61,7 +61,6 @@ public sealed class NewModel(
     [BindProperty]
     public string? QualityProfileId { get; set; }
 
-    public bool AddCreatesRequest { get; private set; }
     public IReadOnlyList<QualityProfile> SelectableProfiles { get; private set; } = [];
     public string? Error { get; private set; }
 
@@ -93,8 +92,7 @@ public sealed class NewModel(
                     string.IsNullOrWhiteSpace(CoverImageUrl) ? null : CoverImageUrl.Trim(),
                     Options: options),
                 cancellationToken);
-            TempData["Status"] = request.StatusMessage
-                ?? Ui[AddCreatesRequest ? "requests.new.sent" : "requests.new.added"];
+            TempData["Status"] = request.StatusMessage ?? Ui["requests.new.sent"];
             return RedirectToPage("/Requests/Index");
         }
         catch (AcquisitionAccessDeniedException)
@@ -118,7 +116,7 @@ public sealed class NewModel(
         }
 
         var access = await requests.GetCapabilitiesAsync(MediaAcquisitionKind.Anime, cancellationToken);
-        if (!access.CanAdd)
+        if (!access.CanRequest)
         {
             return Forbid();
         }
@@ -129,7 +127,6 @@ public sealed class NewModel(
             CoverImageUrl = null;
         }
 
-        AddCreatesRequest = access.AddCreatesRequest;
         var profiles = (await qualityProfiles.LoadAsync(cancellationToken)).Profiles;
         var opened = (await settings.LoadAsync(cancellationToken)).RequesterQualityProfileIds;
         SelectableProfiles = account.Can(JularrPolicies.AdminMedia)

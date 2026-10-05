@@ -121,22 +121,4 @@ public sealed class AnimeAcquisitionRequestExecutorTests
         Assert.IsTrue(MediaPathParser.TryParse(root, Path.Combine(root, folder, "Season 01", "x - S01E01.mkv"), out var descriptor));
         Assert.AreEqual(descriptor.AnimeKey, MediaPathParser.AnimeKeyForSeriesFolder(folder));
     }
-
-    [TestMethod]
-    [DataRow(MediaAcquisitionKind.Anime, true, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.Anime, false, MediaCapability.Request, "request")]
-    [DataRow(MediaAcquisitionKind.Anime, false, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.Anime, false, MediaCapability.Browse, "")]
-    [DataRow(MediaAcquisitionKind.Manga, true, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.Manga, false, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.LightNovel, false, MediaCapability.Request, "request")]
-    [DataRow(MediaAcquisitionKind.LightNovel, false, MediaCapability.Hidden, "")]
-    [DataRow(MediaAcquisitionKind.Book, true, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.Book, false, MediaCapability.Request, "request")]
-    public void DiscoverCardActionFollowsTheCapability(MediaAcquisitionKind kind, bool isOwner, MediaCapability capability, string expected)
-    {
-        var access = AcquisitionCapabilities.Resolve(kind, capability, ManualAddMode.OwnerOnly, isOwner);
-
-        Assert.AreEqual(expected, DiscoverIndexModel.AddAction(kind, access));
-    }
 }

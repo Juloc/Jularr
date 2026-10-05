@@ -432,7 +432,7 @@
         if (change.followed !== undefined) showFollowState(scope, change.followed);
         if (change.franchiseId) showFranchise(scope, change.franchiseId);
         if (change.requestId) {
-            const slot = scope.querySelector("[data-dc-add-slot]");
+            const slot = scope.querySelector("[data-dc-request-slot]");
             if (slot) {
                 slot.dataset.dcLiveRequest = change.requestId;
                 slot.dataset.dcLiveStatus = change.status || "pending";
@@ -443,114 +443,40 @@
     }
 
     function remember(scope, change) {
-        const holder = scope.closest("[data-dc-sheet]");
-        const key = holder?.dataset.for;
-        if (!key) return;
-        overrides.set(key, { ...(overrides.get(key) || {}), ...change });
-        if (change.requestId) {
-            const card = document.querySelector(`[data-dc-card][data-dc-key="${key}"]`);
-            if (card) {
-                card.dataset.dcRequestId = change.requestId;
-                card.dataset.dcRequestStatus = change.status || "pending";
-                const slot = card.querySelector("[data-dc-card-request-slot]");
-                if (slot) {
-                    slot.dataset.dcLiveRequest = change.requestId;
-                    slot.dataset.dcLiveStatus = change.status || "pending";
-                    renderRequestSlot(slot, change);
-                }
-                showRequested(card, requestProgressLabel(change));
-                pollRequest(change.requestId);
-            }
-        }
+        const key = scope.closest("[data-dc-sheet]")?.dataset.for;
+        if (key) overrides.set(key, { ...(overrides.get(key) || {}), ...change });
     }
 
-    async function submitDiscoverRequest(data, button, scope) {
-        button.disabled = true;
-        const slot = button.closest("[data-dc-add-slot], [data-dc-card-request-slot]");
+    // The Request dialog (discover-request.js) owns submitting; the persisted request it created is brought
+    // to the card behind it and to the preview of that card here.
+    root.addEventListener("dc:request-created", event => {
+        const { identity, payload } = event.detail;
+        const card = [...body.querySelectorAll("[data-dc-card]")].find(item =>
+            item.dataset.dcCategory === identity.category && item.dataset.dcExternalId === identity.externalId);
+        if (!card) return;
+
+        card.dataset.dcRequestId = payload.requestId;
+        card.dataset.dcRequestStatus = payload.status;
+        const slot = card.querySelector("[data-dc-card-request-slot]");
         if (slot) {
-            renderRequestSlot(slot, {
-                status: "searching",
-                progress: 10,
-                done: false
-            });
+            slot.dataset.dcLiveRequest = payload.requestId;
+            slot.dataset.dcLiveStatus = payload.status;
+            renderRequestSlot(slot, payload);
         }
-        showRequested(scope, `${statusText("searching")} · 10%`);
 
-        try {
-            const payload = await postForm(root.dataset.addUrl, {
-                category: data.category,
-                provider: data.provider,
-                externalId: data.externalId,
-                title: data.title,
-                subtitle: data.subtitle,
-                author: data.author,
-                coverImageUrl: data.cover
-            });
-
-            if (slot) {
-                slot.dataset.dcLiveRequest = payload.requestId;
-                slot.dataset.dcLiveStatus = payload.status;
-                renderRequestSlot(slot, payload);
-            }
-            showRequested(scope, requestProgressLabel(payload));
-            pollRequest(payload.requestId);
-            return payload;
-        } catch {
-            if (slot) {
-                const retry = document.createElement("button");
-                retry.type = "button";
-                retry.className = "button button-primary dc-card-request";
-                retry.textContent = text("textAddFailed");
-                if (scope.matches(".dc-pv")) {
-                    retry.dataset.dcAdd = "";
-                } else {
-                    retry.dataset.dcCardAdd = "";
-                }
-                slot.replaceChildren(retry);
-            } else {
-                button.disabled = false;
-                button.textContent = text("textAddFailed");
-            }
-            return null;
-        }
-    }
+        showRequested(card, requestProgressLabel(payload));
+        const key = keyOf(card);
+        overrides.set(key, { ...(overrides.get(key) || {}), ...payload });
+        pollRequest(payload.requestId);
+    });
 
     root.addEventListener("click", async event => {
         const target = event.target instanceof Element ? event.target : null;
         if (!target) return;
 
-        const cardAdd = target.closest("[data-dc-card-add]");
-        if (cardAdd) {
-            const card = cardAdd.closest("[data-dc-card]");
-            if (!card) return;
-            const payload = await submitDiscoverRequest({
-                category: card.dataset.dcCategory,
-                provider: card.dataset.dcProvider,
-                externalId: card.dataset.dcExternalId,
-                title: card.dataset.dcTitle,
-                subtitle: card.dataset.dcSubtitle,
-                author: card.dataset.dcAuthor,
-                cover: card.dataset.dcCover
-            }, cardAdd, card);
-            if (payload) {
-                card.dataset.dcRequestId = payload.requestId;
-                card.dataset.dcRequestStatus = payload.status;
-            }
-            return;
-        }
-
         const preview = target.closest(".dc-pv");
         if (!preview) return;
         const data = preview.dataset;
-
-        const add = target.closest("[data-dc-add]");
-        if (add) {
-            const payload = await submitDiscoverRequest(data, add, preview);
-            if (payload) {
-                remember(preview, payload);
-            }
-            return;
-        }
 
         const follow = target.closest("[data-dc-follow]");
         if (follow) {
@@ -572,7 +498,7 @@
                 showFollowState(preview, payload.followed === true);
                 remember(preview, { followed: payload.followed === true });
             } catch {
-                follow.title = text("textAddFailed");
+                follow.title = text("textActionFailed");
             } finally {
                 follow.disabled = false;
             }
@@ -591,7 +517,7 @@
                 showFranchise(preview, payload.franchiseId);
                 remember(preview, { franchiseId: payload.franchiseId });
             } catch {
-                franchise.title = text("textAddFailed");
+                franchise.title = text("textActionFailed");
                 franchise.disabled = false;
             }
             return;

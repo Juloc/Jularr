@@ -81,7 +81,7 @@ public sealed class RequestPagesRenderTests
     }
 
     [TestMethod]
-    public async Task RequestFormOffersTheOptionsAndNamesTheOutcomeAfterTheCapability()
+    public async Task RequestFormOffersTheOptionsAndTheSameRequestActionForEveryCapability()
     {
         await using var host = await RequestPagesHost.CreateAsync();
         await host.Settings.SetRequesterQualityProfilesAsync([AnimeQualityProfiles.DefaultAnime1080pId]);
@@ -98,15 +98,15 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(user, "日本語");
         StringAssert.Contains(user, "No subtitles");
         StringAssert.Contains(user, "Anime 1080p");
-        StringAssert.Contains(user, "Send request");
+        StringAssert.Matches(user, new System.Text.RegularExpressions.Regex(@"type=""submit"">\s*Request\s*</button>"));
 
-        // Only the profiles the owner opened are offered to a requester; the owner adds instead of requesting.
+        // Only the profiles the owner opened are offered to a requester; the owner sees the same Request action.
         var noProfiles = await host.GetHtmlAsync(path, asOwner: false, mediaCapability: MediaCapability.Request, openProfiles: false);
         Assert.IsFalse(noProfiles.Contains("name=\"QualityProfileId\"", StringComparison.Ordinal));
         var owner = await host.GetHtmlAsync(path, asOwner: true);
         StringAssert.Contains(owner, "name=\"QualityProfileId\"");
-        Assert.IsFalse(owner.Contains("Send request", StringComparison.Ordinal));
-        StringAssert.Matches(owner, new System.Text.RegularExpressions.Regex(@"type=""submit"">\s*Add\s*</button>"));
+        StringAssert.Matches(owner, new System.Text.RegularExpressions.Regex(@"type=""submit"">\s*Request\s*</button>"));
+        Assert.IsFalse(owner.Contains(">Add<", StringComparison.Ordinal), "Instant approval never becomes another action.");
 
         var refused = await host.GetStatusAsync(path, asOwner: false, MediaCapability.Browse);
         Assert.AreEqual(HttpStatusCode.Forbidden, refused);

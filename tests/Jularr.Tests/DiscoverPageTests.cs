@@ -191,14 +191,14 @@ public sealed class DiscoverPageTests
         LibraryLanguagePreference? preference = null,
         IEnumerable<AcquisitionRequest>? requests = null,
         IDictionary<string, DiscoverLocalFacts>? local = null,
-        string add = "request") =>
+        params string[] requestable) =>
         new(
             Ui,
             preference ?? LibraryLanguagePreference.From("de", null),
             (requests ?? []).ToDictionary(request => (request.Kind, request.ExternalId)),
             new Dictionary<string, DiscoverLocalFacts>(local ?? new Dictionary<string, DiscoverLocalFacts>()),
             new Dictionary<string, Guid?>(),
-            new Dictionary<string, string> { ["anime"] = add, ["manga"] = "", ["light-novel"] = "" });
+            new HashSet<string>(requestable.Length == 0 ? ["anime"] : requestable.Where(category => category.Length > 0), StringComparer.Ordinal));
 
     [TestMethod]
     public void ALibraryTitleWithThePreferredLanguageSaysSo()
@@ -271,7 +271,7 @@ public sealed class DiscoverPageTests
         Assert.AreEqual("Downloading", unspecified.State.Label, "Without a language choice the stage of the request is the state.");
         Assert.AreEqual("downloading", unspecified.RequestStatus);
         Assert.IsNotNull(unspecified.RequestId);
-        Assert.AreEqual("", unspecified.AddAction, "A requested title offers no second request.");
+        Assert.IsFalse(unspecified.CanRequest, "A requested title offers no second request.");
     }
 
     [TestMethod]
@@ -281,36 +281,27 @@ public sealed class DiscoverPageTests
             MediaAcquisitionKind.Book,
             DiscoverCardFactory.AcquisitionKindOf("book"));
 
-        var context = Context(add: "request") with
-        {
-            AddActions = new Dictionary<string, string>
-            {
-                ["anime"] = "request",
-                ["manga"] = "request",
-                ["light-novel"] = "request",
-                ["book"] = "request"
-            }
-        };
+        var context = Context(requestable: ["anime", "manga", "light-novel", "book"]);
         var book = DiscoverCardFactory.Create(
             Item("book", "ol-dune", title: "Dune", details: "/Books/ol-dune"),
             context);
 
-        Assert.AreEqual("request", book.AddAction);
+        Assert.IsTrue(book.CanRequest);
         Assert.AreEqual(DiscoverStateKind.NotRequested, book.State.Kind);
     }
 
     [TestMethod]
     public void ATitleNobodyRequestedIsNotRequestedOrNotAvailableByPermission()
     {
-        var requestable = DiscoverCardFactory.Create(Item(), Context(add: "request"));
-        var locked = DiscoverCardFactory.Create(Item(), Context(add: ""));
+        var requestable = DiscoverCardFactory.Create(Item(), Context(requestable: "anime"));
+        var locked = DiscoverCardFactory.Create(Item(), Context(requestable: ""));
 
         Assert.AreEqual(DiscoverStateKind.NotRequested, requestable.State.Kind);
         Assert.AreEqual("Not requested", requestable.State.Label);
-        Assert.AreEqual("request", requestable.AddAction);
+        Assert.IsTrue(requestable.CanRequest);
         Assert.AreEqual(DiscoverStateKind.NotAvailable, locked.State.Kind);
         Assert.AreEqual("Not available", locked.State.Label);
-        Assert.AreEqual("", locked.AddAction);
+        Assert.IsFalse(locked.CanRequest);
     }
 
     // ---- Card content ----------------------------------------------------------------------------------

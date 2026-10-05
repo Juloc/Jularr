@@ -47,11 +47,11 @@
                   data-dc-live-status="@card.RequestStatus">
             </span>
         }
-        else if (!card.IsLocal && card.AddAction.Length > 0)
+        else if (!card.IsLocal && card.CanRequest)
         {
             <span class="dc-card-action" data-dc-card-request-slot>
-                <button type="button" class="button button-primary dc-card-request" data-dc-card-add>
-                    @ui[card.AddAction == "add" ? "discover.card.add" : "discover.card.request"]
+                <button type="button" class="button button-primary dc-card-request" data-dc-card-request>
+                    @ui["discover.card.request"]
                 </button>
             </span>
         }
@@ -143,17 +143,17 @@
                     }
                     else if (card.RequestId is { } requestId)
                     {
-                        <span class="dc-pv-add"
-                              data-dc-add-slot
+                        <span class="dc-pv-request"
+                              data-dc-request-slot
                               data-dc-live-request="@requestId"
                               data-dc-live-status="@card.RequestStatus">
                         </span>
                     }
-                    else if (card.AddAction.Length > 0)
+                    else if (card.CanRequest)
                     {
-                        <span class="dc-pv-add" data-dc-add-slot>
-                            <button type="button" class="button button-primary" data-dc-add>
-                                @ui[card.AddAction == "add" ? "discover.card.add" : "discover.card.request"]
+                        <span class="dc-pv-request" data-dc-request-slot>
+                            <button type="button" class="button button-primary" data-dc-request>
+                                @ui["discover.card.request"]
                             </button>
                         </span>
                     }

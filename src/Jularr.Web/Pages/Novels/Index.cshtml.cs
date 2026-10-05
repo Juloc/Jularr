@@ -70,7 +70,7 @@ public sealed class IndexModel(
 
         // The search panel is only rendered for accounts that may add or request, so an
         // account without that right must not make outbound searches either.
-        if (SearchQuery.Length == 0 || !Access.CanAdd)
+        if (SearchQuery.Length == 0 || !Access.CanRequest)
         {
             return;
         }
@@ -209,13 +209,13 @@ public sealed class IndexModel(
         var capabilities = await requests.GetCapabilitiesAsync(
             MediaAcquisitionKind.LightNovel,
             cancellationToken);
-        if (!capabilities.CanAdd)
+        if (!capabilities.CanRequest)
         {
             return Forbid();
         }
 
         if (source.DirectImportUrl is { } directImportUrl &&
-            !capabilities.AddCreatesRequest)
+            capabilities.AutoApproves)
         {
             var sourceUrl = directImportUrl(normalizedId);
 
@@ -317,7 +317,7 @@ public sealed class IndexModel(
         var capabilities = await requests.GetCapabilitiesAsync(
             MediaAcquisitionKind.LightNovel,
             cancellationToken);
-        if (!capabilities.CanAdd || capabilities.AddCreatesRequest)
+        if (!capabilities.CanRequest || !capabilities.AutoApproves)
         {
             return Forbid();
         }
