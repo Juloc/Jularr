@@ -133,16 +133,24 @@ to have aired for its AniList entry: every number of a finished entry, otherwise
 release calendar (the AniList airing schedule, no provider call) and everything before its next upcoming release. That monotone rule also
 covers episodes older than the calendar's roughly month-long window, so a request made at episode 14 of a long run still needs episodes
 1 to 13. An entry the calendar has no row for (a releasing series whose airing data has not been fetched yet) keeps all its tracked
-episodes in the request, so it is never reported complete before every one of them has a file. Nothing is added to what the pipeline
-tracks: a matched entry without an episode count only has the episodes it already has, so the request completes with those; with none
-it stays Approved (looking for media). Episodes that air later are picked up by the series' monitoring and never keep the request open,
-also for a request of the whole series. Specials are only requested through the files they have: a missing special is not expected.
-A request is Completed when every requested episode has a file and at least one does.
+episodes in the request, so it is never reported complete before every one of them has a file. Episodes that air later are picked up by
+the series' monitoring and never keep the request open, also for a request of the whole series. Specials are only requested through the
+files they have: a missing special is not expected. A request is Completed when every requested episode has a file and at least one does.
+
+**Nothing tracked.** A matched entry without an episode count (or a series with several local seasons and no mappings) expects no episodes,
+so the pipeline tracks and searches only what the library has. Such a request is never reported Completed when nothing is tracked for its
+scope, or when the calendar shows more episodes aired than the library has (an entry that is finished without a count says nothing about
+how many, so it does not count). It stays Approved with a message of its own, "Not available yet. There is no episode list for this
+title, so nothing can be searched yet.", rather than "Looking for the requested episodes." When no indexer is set up, an otherwise
+searching request says "Not available yet. Searching is not set up on this server."
 
 **Approval and execution.** Creating the series and starting monitoring is the executor's job. An Approved request whose series does not
-exist yet is therefore left as it is by the pass (it may be waiting for the executor, for example right after approval); only a request that
-is already past Approved reports a missing series as Failed. When the executor fails a request it unlinks any download the request had, so
-the failure is not overwritten by a read-back.
+exist yet is therefore left as it is by the pass (it may be waiting for the executor, for example right after approval). One that has
+waited `WantedAcquisitionService.StaleSearchingAfter` untouched is run again by the pass (a crash after the approval, an Anime module that
+was off when it was approved), a bounded number per pass; only a request already past Approved reports a missing series as Failed. When
+the executor fails a request for good it unlinks any download the request had, so the failure is not overwritten by a read-back; a failure
+it throws (the monitoring state could not be read, say) may be transient and keeps the link, so the owner's pending decision survives.
+
 **Cost and bounds.** Per pass the monitoring state, ownership, acquisition relations and import records are loaded once and shared by all
 requests, and the observation reads the episode slots without titles, so it makes no provider call. Open requests are read in batches of
 `WantedAcquisitionService.FollowBatchSize` by id, so every request is reached however many there are. A request whose observation throws
@@ -153,6 +161,7 @@ following the same download again, a retry while it runs, or the move between it
 
 Completed is never reported earlier, so a requested title is not shown as available before its media exists. Requests that were
 completed under the earlier behavior (on start) are left as they are.
+
 ### Known gaps
 
 - **TV and Anime disagree on "current + future".** A TV request with future monitoring (`VideoRequestPayload.MonitorFuture`, "All current +
@@ -161,10 +170,18 @@ completed under the earlier behavior (on start) are left as they are.
   a separate "Monitoring future releases" state, but no consumer state for the latter exists in `src`. Proposed unification: both complete
   when the aired requested scope is satisfied, and the consumer acquisition projection (the Instant Play backend slice) exposes
   "Available now" together with "Monitoring future releases" from the monitoring state rather than from the request status.
-- **Episodes beyond the tracked set.** A matched AniList entry without an episode count tracks only the episodes the library has, so
-  episodes the calendar says have aired are neither searched nor part of the request until the count is known.
+- **Entries without an episode count are not searched.** The legacy pipeline only tracks existing episodes for them
+  (`AnimeAcquisitionInventory`), so such a request cannot make progress by itself and shows the "no episode list" message until files appear
+  by other means or the count becomes known. The proper fix belongs to a pipeline slice: seed the expected slots from the calendar's
+  highest aired number, so the pipeline searches them and the request's rule needs no special case.
+- **The aired maximum is derived, not stored.** After roughly a week of failed calendar refreshes the cache no longer lists upcoming
+  releases and the request can complete early on stale data; an airing that is rescheduled can lower the maximum again, because nothing
+  persists the highest number seen; a CANCELLED or HIATUS entry without calendar rows keeps all its tracked episodes in the request, so it
+  stays open until every one has a file.
 - **Notice race.** If the Wanted pass and an executor run move the same request into Downloading at the same moment, the requester may
-  receive two "release available" notices for one download (same dedup key, so one entry that becomes unread again).
+  receive two "release available" notices for one download (same dedup key, so one entry that becomes unread again). Fixing it needs the
+  notified operation persisted on the request.
+
 ## Search, scoring and grab
 
 For each wanted episode the pipeline creates an `anime-search` operation, queries every enabled,

@@ -431,7 +431,10 @@ public sealed class WantedAcquisitionService(
     /// <summary>
     /// Brings every open request of a monitored media type to the state of its pipeline, batch by batch by id so none is left out however
     /// many there are. The pipeline's state is loaded once for the whole pass. A request whose observation fails is logged with its cause and
-    /// left as it is, so one broken request neither stops the others nor the rest of the pass. Returns how many requests changed.
+    /// left as it is, so one broken request neither stops the others nor the rest of the pass. An approved request whose executor never
+    /// ran for it (the pass found no series: a crash after the approval, an Anime module that was off when it was approved) is run again once it has
+    /// waited <see cref="StaleSearchingAfter"/> without being touched, at most <see cref="MaxRequestsPerKindPerPass"/> per pass. Returns how many
+    /// requests changed.
     /// </summary>
     private static async Task<int> FollowMonitoredAsync(IServiceProvider services, IMonitoredAcquisitionExecutor executor, DateTime nowUtc, CancellationToken cancellationToken)
     {
@@ -450,6 +453,7 @@ public sealed class WantedAcquisitionService(
         var store = services.GetRequiredService<AcquisitionAccessStore>();
         var requestService = services.GetRequiredService<AcquisitionRequestService>();
         var followed = 0;
+        var rerun = 0;
         Guid? after = null;
         while (true)
         {
@@ -459,7 +463,14 @@ public sealed class WantedAcquisitionService(
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    followed += await requestService.FollowMonitoredAsync(request, observation, cancellationToken) ? 1 : 0;
+                    var outcome = await requestService.FollowMonitoredAsync(request, observation, cancellationToken);
+                    followed += outcome == MonitoredFollowOutcome.Changed ? 1 : 0;
+                    if (outcome == MonitoredFollowOutcome.NotExecuted && rerun < MaxRequestsPerKindPerPass && nowUtc - request.UpdatedAt >= StaleSearchingAfter)
+                    {
+                        rerun++;
+                        followed++;
+                        await requestService.ContinueAsync(request.Id, cancellationToken);
+                    }
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {

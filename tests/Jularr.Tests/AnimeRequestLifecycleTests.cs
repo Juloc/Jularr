@@ -296,4 +296,44 @@ public sealed class AnimeRequestLifecycleTests
         Assert.IsNull(failed.OperationId);
         Assert.AreEqual(0, await environment.RequestPassAsync(), "The reason the executor gave is not overwritten by a read-back.");
         StringAssert.Contains((await environment.GetRequestAsync(request.Id)).StatusMessage, "Admin → System");
+    }
+
+    [TestMethod]
+    public async Task AnApprovedRequestTheExecutorNeverRanForIsRunAgainOnceItHasWaitedLongEnough()
+    {
+        await using var environment = await CreateAsync();
+        var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", FrierenId, "Frieren", null, null);
+        var store = new AcquisitionAccessStore(environment.Db);
+        var approved = await store.CreateAsync(draft, "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
+        await store.UpdateStatusAsync(approved.Id, AcquisitionRequestStatus.Approved, "Acquisition is disabled for this media type.", null, null, null, CancellationToken.None);
+
+        // The module was off when it was approved and is on now (or the process stopped before the claim): a fresh request is left alone.
+        Assert.AreEqual(0, await environment.RequestPassAsync(DateTime.UtcNow));
+        Assert.AreEqual(0, await environment.Db.Anime.CountAsync());
+
+        Assert.AreEqual(1, await environment.RequestPassAsync(DateTime.UtcNow + WantedAcquisitionService.StaleSearchingAfter + TimeSpan.FromMinutes(1)));
+
+        Assert.AreEqual(1, await environment.Db.Anime.CountAsync(), "The approval was executed after all.");
+        Assert.AreEqual(1, environment.Scheduler.QueuedRequests);
+        Assert.AreEqual("Looking for the requested episodes.", (await environment.GetRequestAsync(approved.Id)).StatusMessage);
+        Assert.AreEqual(0, await environment.RequestPassAsync(DateTime.UtcNow + WantedAcquisitionService.StaleSearchingAfter + TimeSpan.FromMinutes(2)), "It is not run again: the series exists now.");
+        Assert.AreEqual(1, environment.Scheduler.QueuedRequests);
+    }
+
+    [TestMethod]
+    public async Task ApprovingAFailedRequestKeepsItsDownloadLinkWhenTheExecutorThrows()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync(status: "FINISHED");
+        var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", FrierenId, "Frieren", null, null);
+        var store = new AcquisitionAccessStore(environment.Db);
+        var request = await store.CreateAsync(draft, "owner", AcquisitionRequestStatus.Failed, "owner", CancellationToken.None);
+        var download = Guid.NewGuid();
+        await store.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Failed, "The download needs a decision.", download, null, null, CancellationToken.None);
+        await environment.CorruptMonitoringStateAsync();
+
+        var retried = await environment.RunRequestAsync(request.Id);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Failed, retried.Status);
+        Assert.AreEqual(download, retried.OperationId, "The monitoring state could not be read this time; the owner's pending decision is still there.");
     }}

@@ -139,6 +139,7 @@ public sealed class AnimeAcquisitionRequestExecutor(
             await ownershipStore.LoadAsync(cancellationToken),
             await pipeline.LoadAcquisitionSnapshotAsync(cancellationToken),
             await calendar.GetSourcesAsync(AniListReleaseNormalizer.Provider, cancellationToken),
+            await pipeline.IsProwlarrConfiguredAsync(cancellationToken),
             nowUtc);
 
     private async Task<AcquisitionExecution> ObserveNowAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>

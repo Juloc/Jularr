@@ -194,9 +194,15 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         var snapshot = new ReleaseSourceSnapshot(
             aniListId,
             status,
-            [.. releases.Select(release => new CachedRelease(AniListMetadataProvider.ProviderKey, aniListId, release.Episode == 1 ? ReleaseKind.SeasonPremiere : ReleaseKind.Episode, release.Episode, ReleaseDate.FromInstant(release.At)))]);
-        await scope.ServiceProvider.GetRequiredService<ReleaseCalendarCacheStore>().SaveAsync(AniListMetadataProvider.ProviderKey, [snapshot], DateTimeOffset.UtcNow.AddYears(-1), DateTime.UtcNow, CancellationToken.None);
+            [.. releases.Select(release => new CachedRelease(AniListMetadataProvider.ProviderKey, aniListId, KindOf(release.Episode), release.Episode, ReleaseDate.FromInstant(release.At)))]);
+        var cache = scope.ServiceProvider.GetRequiredService<ReleaseCalendarCacheStore>();
+        await cache.SaveAsync(AniListMetadataProvider.ProviderKey, [snapshot], DateTimeOffset.UtcNow.AddYears(-1), DateTime.UtcNow, CancellationToken.None);
     }
+
+    private static ReleaseKind KindOf(int episode) => episode == 1 ? ReleaseKind.SeasonPremiere : ReleaseKind.Episode;
+
+    /// <summary>The monitoring state file can no longer be read, so anything that loads it fails.</summary>
+    public Task CorruptMonitoringStateAsync() => File.WriteAllTextAsync(Path.Combine(DataRoot, "acquisition", "monitoring.json"), "{ not json");
 
     public async Task<AniListAutoMonitorRunResult> RunAniListAutoMonitorAsync(string profileId)
     {

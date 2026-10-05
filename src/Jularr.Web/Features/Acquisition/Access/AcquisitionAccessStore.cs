@@ -509,22 +509,11 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
         string? message,
         Guid? operationId,
         CancellationToken cancellationToken) =>
-        TryTransitionStatusAsync(id, expected, status, message, operationId, resultUrl: null, cancellationToken);
-
-    /// <summary>The same transition that also replaces the result address of the request.</summary>
-    public Task<AcquisitionStatusTransition?> TryTransitionStatusAsync(
-        Guid id,
-        IReadOnlyCollection<AcquisitionRequestStatus> expected,
-        AcquisitionRequestStatus status,
-        string? message,
-        Guid? operationId,
-        string? resultUrl,
-        CancellationToken cancellationToken) =>
-        TryTransitionStatusAsync(id, expected, status, message, operationId, resultUrl, clearOperation: false, cancellationToken);
+        TryTransitionStatusAsync(id, expected, status, message, operationId, resultUrl: null, clearOperation: false, cancellationToken);
 
     /// <summary>
-    /// The same transition that, when <paramref name="clearOperation"/> is set, also unlinks the download the request had: a request that
-    /// is back to waiting for a release must not point at a download that is no longer its own.
+    /// The same transition that also replaces the result address of the request and, when <paramref name="clearOperation"/> is set, unlinks
+    /// the download the request had: a request that is back to waiting for a release must not point at a download that is no longer its own.
     /// </summary>
     public Task<AcquisitionStatusTransition?> TryTransitionStatusAsync(
         Guid id,

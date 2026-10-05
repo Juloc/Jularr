@@ -24,10 +24,13 @@ internal sealed class AnimeRequestObservation(
     AcquisitionOwnershipState ownership,
     AnimeAcquisitionSnapshot acquisitions,
     IReadOnlyDictionary<string, ReleaseCacheSource> releaseSources,
+    bool searchConfigured,
     DateTime nowUtc) : IRequestObservation
 {
     private const string FinishedStatus = "FINISHED";
     private const string LookingMessage = "Looking for the requested episodes.";
+    private const string NoEpisodeListMessage = "Not available yet. There is no episode list for this title, so nothing can be searched yet.";
+    private const string SearchNotSetUpMessage = "Not available yet. Searching is not set up on this server.";
 
     public async Task<AcquisitionExecution?> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
@@ -49,13 +52,14 @@ internal sealed class AnimeRequestObservation(
         var resultUrl = $"/Library/Anime/{slots.Anime.Id}";
         var airedUpTo = await AiredUpToAsync(slots, cancellationToken);
         var options = request.Options;
-        var requested = slots.Slots
-            .Where(slot => options.Includes(slot.Key.SeasonNumber, slot.Key.EpisodeNumber)
-                && AnimeMonitoringEngine.IsMonitored(monitoring, slot.Key)
-                && !IsKnownNotAired(slot, airedUpTo))
-            .ToArray();
+        var inScope = slots.Slots.Where(slot => options.Includes(slot.Key.SeasonNumber, slot.Key.EpisodeNumber) && AnimeMonitoringEngine.IsMonitored(monitoring, slot.Key)).ToArray();
+        var requested = inScope.Where(slot => !IsKnownNotAired(slot, airedUpTo)).ToArray();
         var missing = requested.Where(slot => !slot.HasFile).Select(slot => slot.Key).ToArray();
-        if (missing.Length == 0 && requested.Any(slot => slot.HasFile))
+
+        // Nothing the pipeline tracks for this request can be searched, or episodes have aired that it does not track at all: the request is not
+        // available however many files exist, and it says why instead of looking like a search that is running.
+        var untracked = inScope.Length == 0 || (slots.ExpectedEpisodesUnknown && AiredBeyondTracked(slots, airedUpTo));
+        if (!untracked && missing.Length == 0 && requested.Any(slot => slot.HasFile))
         {
             return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "The requested episodes are in the library.", ResultUrl: resultUrl);
         }
@@ -82,7 +86,8 @@ internal sealed class AnimeRequestObservation(
             return new AcquisitionExecution(AcquisitionRequestStatus.Failed, reason, needsOwner.Download.Id, resultUrl);
         }
 
-        return new AcquisitionExecution(AcquisitionRequestStatus.Approved, LookingMessage, ResultUrl: resultUrl);
+        var message = untracked ? NoEpisodeListMessage : searchConfigured ? LookingMessage : SearchNotSetUpMessage;
+        return new AcquisitionExecution(AcquisitionRequestStatus.Approved, message, ResultUrl: resultUrl);
     }
 
     /// <summary>
@@ -94,7 +99,7 @@ internal sealed class AnimeRequestObservation(
     private async Task<IReadOnlyDictionary<string, int>> AiredUpToAsync(AnimeEpisodeSlots slots, CancellationToken cancellationToken)
     {
         var airedUpTo = new Dictionary<string, int>(StringComparer.Ordinal);
-        var sources = slots.Slots.Select(slot => slot.SourceExternalId).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+        var sources = slots.Slots.Select(slot => slot.SourceExternalId).Append(slots.ExpectedEpisodesUnknown ? slots.MatchedExternalId : null).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
         if (sources.Length == 0)
         {
             return airedUpTo;
@@ -125,6 +130,16 @@ internal sealed class AnimeRequestObservation(
 
         return airedUpTo;
     }
+
+    /// <summary>
+    /// For a series that expects no episodes: whether its AniList entry is known to have aired more episodes than the library has. A finished
+    /// entry without a count says nothing about how many, so it never counts.
+    /// </summary>
+    private static bool AiredBeyondTracked(AnimeEpisodeSlots slots, IReadOnlyDictionary<string, int> airedUpTo) =>
+        slots.MatchedExternalId is { } source
+        && airedUpTo.TryGetValue(source, out var aired)
+        && aired != int.MaxValue
+        && aired > slots.Slots.Where(slot => slot.HasFile).Select(slot => slot.Key.EpisodeNumber).DefaultIfEmpty(0).Max();
 
     /// <summary>
     /// An episode is out of the request only when its AniList entry is known and the episode is beyond what has aired and has no file.

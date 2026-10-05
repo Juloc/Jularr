@@ -189,7 +189,7 @@ public sealed class MonitoredRequestFollowTests
 
         var changed = await world.Requests.FollowMonitoredAsync(request, observation, CancellationToken.None);
 
-        Assert.IsFalse(changed, "The conditional change lost to the owner's decision.");
+        Assert.AreEqual(MonitoredFollowOutcome.Unchanged, changed, "The conditional change lost to the owner's decision.");
         Assert.AreEqual(AcquisitionRequestStatus.Completed, (await world.Store.GetAsync(request.Id, CancellationToken.None))!.Status);
     }
 

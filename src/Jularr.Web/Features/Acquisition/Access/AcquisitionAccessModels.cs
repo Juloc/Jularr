@@ -212,8 +212,20 @@ public interface IMonitoredAcquisitionExecutor : IAcquisitionRequestExecutor
 /// <summary>Where the monitoring pipeline stands for one request, read against the state loaded when the observation began.</summary>
 public interface IRequestObservation
 {
-    /// <summary>The state to bring the request to, or null when the pipeline has nothing to say about it yet and the request stays as it is.</summary>
+    /// <summary>The state to bring the request to, or null when its executor has not run for it yet, so the pipeline has nothing to report.</summary>
     Task<AcquisitionExecution?> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken);
+}
+
+/// <summary>What following a request of a monitored media type did.</summary>
+public enum MonitoredFollowOutcome
+{
+    /// <summary>The request already is where its pipeline is, or somebody else moved it on meanwhile.</summary>
+    Unchanged,
+
+    Changed,
+
+    /// <summary>The request is approved but its executor has not run for it (its series does not exist), so there is no pipeline state to follow.</summary>
+    NotExecuted
 }
 
 public sealed class AcquisitionAccessDeniedException(string message) : Exception(message);
@@ -262,7 +274,6 @@ public static class AcquisitionAccessNames
         MediaAcquisitionKind.Audiobook => WorkMediaType.Book,
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
-
 
     /// <summary>Whether a request in this status still waits for a decision or for its title to arrive.</summary>
     public static bool IsOpen(AcquisitionRequestStatus status) => status is AcquisitionRequestStatus.Pending
