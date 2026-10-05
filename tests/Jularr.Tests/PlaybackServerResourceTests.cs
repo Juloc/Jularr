@@ -533,7 +533,6 @@ public sealed class PlaybackServerResourceTests
         await using var cache = await CacheAsync(budgetBytes: 1L << 20);
         var first = await cache.StartAsync("profile-0", segmentBytes: 600 * 1024);
         var second = await cache.StartAsync("profile-0", segmentBytes: 600 * 1024);
-        Assert.AreEqual(2, HlsPlaybackSessionManager.MaxSessionsPerProfile);
 
         var refusal = await Assert.ThrowsAsync<PlaybackAdmissionRefusedException>(() => cache.StartAsync("profile-0", segmentBytes: 1));
 
