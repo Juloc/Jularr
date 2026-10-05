@@ -1,25 +1,390 @@
 # Maintainability and AI Coding Discipline
 
-Jularr uses the canonical Juloc maintainability rules defined in [Juloc/agent-control `docs/MAINTAINABILITY_CONVENTIONS.md`](https://github.com/Juloc/agent-control/blob/main/docs/MAINTAINABILITY_CONVENTIONS.md).
+Jularr uses the canonical Juloc engineering and maintainability rules:
+
+- [Agent Control engineering rules](https://github.com/Juloc/agent-control/blob/main/docs/ENGINEERING_RULES.md)
+- [Agent Control maintainability rules](https://github.com/Juloc/agent-control/blob/main/docs/MAINTAINABILITY_CONVENTIONS.md)
+- [Agent Control database conventions](https://github.com/Juloc/agent-control/blob/main/docs/DATABASE_CONVENTIONS.md)
+- [Agent Control C# conventions](https://github.com/Juloc/agent-control/blob/main/docs/CSHARP_CONVENTIONS.md)
 
 They are mandatory for every implementation task and for all new or intentionally touched code. They are not optional recommendations.
 
-Jularr-specific enforcement summary:
+This document adds the Jularr-specific target architecture and conventions. Repository-specific rules refine the central defaults; they do not weaken security, correctness, data integrity, testing or maintainability requirements.
 
-- Before creating a new service, store, helper, interface, provider, manager, handler, configuration path or dependency, inspect the existing Jularr owner/pattern first.
-- Keep the modular-monolith ownership model. Do not create parallel feature/data/configuration paths or microservices for responsibilities that already belong in Jularr.
-- UI/page code does not become a second owner of backend business rules or persistence behavior.
-- Keep coherent control flow readable top-to-bottom. Do not manufacture tiny helpers, wrappers or forwarding methods to make metrics look cleaner.
-- Names and effects must match. Reads/validation do not hide unrelated mutations.
-- One business rule has one canonical backend/domain owner.
-- Do not swallow errors, use broad catch-all fallbacks, or silently continue with defaults/legacy paths.
-- Propagate cancellation and use real timeouts for I/O-bound work.
-- Avoid N+1 queries, whole-table application filtering, unnecessary mappings/allocations and speculative abstraction in hot paths.
-- New dependencies/technologies require a concrete present need.
-- Comments explain why, constraints and non-obvious intent; they do not narrate obvious code.
-- Behavior and regression tests matter more than tests of implementation wiring.
-- Do not accumulate Legacy/Old/V2/fallback runtime branches. Migrate and remove obsolete paths within the supported upgrade window.
-- When a structural rule is objectively and safely machine-checkable, add or extend a guard/test so CI can reject regressions.
-- The canonical maintainability completion gate must be run before any AI agent reports work complete.
+## 1. Scope: improve touched code, no big-bang rewrite
+
+Jularr evolves incrementally.
+
+- New code MUST follow the current target conventions.
+- Intentionally touched legacy code MUST move toward the current target when the directly related migration is safe and in scope.
+- Untouched legacy code does not require a repository-wide style/architecture rewrite.
+- Do not extend a known obsolete pattern merely because nearby code still uses it.
+- Do not create a permanent old/new dual runtime path. Migrate durable state once and remove the obsolete path within the supported upgrade window.
+- If a directly related legacy violation cannot safely be fixed in the current task, create/update a focused GitHub Issue instead of normalizing or copying it.
+
+Issue #852 tracks the cross-cutting migration/enforcement work. Issue #853 tracks the canonical incident/error target.
+
+## 2. Modular-monolith ownership
+
+Jularr remains a modular monolith.
+
+- One responsibility has one clear canonical owner.
+- Organize primarily by feature/domain ownership.
+- Do not introduce microservices, duplicate state stores, duplicate configuration paths or parallel business-rule implementations.
+- A feature may expose narrow contracts to another feature; unrelated features MUST NOT reach into its tables or private implementation to perform business logic.
+- Shared infrastructure is allowed only for genuinely shared responsibilities.
+- Before adding a service, store, helper, interface, factory, provider, manager, handler, abstraction, configuration path or dependency, inspect the current owner/pattern first.
+- Prefer extending the correct existing owner over creating a second architecture.
+
+A competent developer should be able to predict where behavior lives before searching the entire repository.
+
+## 3. Required backend boundary
+
+The target dependency direction is:
+
+```text
+Frontend / native client
+        ↓
+API / Razor / transport
+        ↓
+Authorization / user-context boundary
+        ↓
+Domain / application core
+        ↓
+Store / persistence
+        ↓
+PostgreSQL
+```
+
+### Store / persistence
+
+Persistence components:
+
+- own SQL and persistence mapping;
+- know PostgreSQL/data concerns;
+- do not own HTTP/Razor/UI behavior;
+- do not decide Owner/Admin/User permissions;
+- do not become a second business-rule owner.
+
+### Domain / application core
+
+Domain/application code:
+
+- owns business invariants and reusable business operations;
+- validates domain state;
+- is role-agnostic: it does not decide that a caller is Owner/Admin/User;
+- receives explicit actor/profile/resource data when business behavior genuinely depends on them;
+- can be called safely from authorized HTTP flows, background work or other canonical entry points.
+
+### Authorization / user-context boundary
+
+The authorization boundary:
+
+- resolves the current actor/profile and effective capabilities;
+- verifies that actor may execute the use case;
+- passes explicit IDs/data to the lower operation;
+- never relies on hidden/disabled UI as authorization.
+
+Do not create an `AuthorizedXService` wrapper for every trivial operation merely to make a diagram symmetrical. Use the simplest clear boundary that keeps permission logic above role-agnostic domain/persistence behavior.
+
+### API / Razor / transport
+
+Endpoints/pages:
+
+- authenticate and authorize;
+- validate transport/request shape;
+- call the canonical use case/read model;
+- translate canonical results/errors into HTTP/UI;
+- do not duplicate domain rules;
+- do not become a second persistence owner.
+
+New/touched Razor Pages and API handlers MUST NOT add direct database access when a canonical Store/Query owner should own it.
+
+## 4. Resource identity
+
+Normal persisted Jularr resources use numeric identity.
+
+Target default:
+
+- PostgreSQL PK: `BIGINT GENERATED BY DEFAULT AS IDENTITY`;
+- C#: `long`;
+- FKs: matching `bigint` / `long`;
+- normal API/URL identity: the same numeric ID.
+
+Examples include ordinary Work, Episode, Book, Game, Request and similar resource identities.
+
+Do not add a second public UUID merely to hide an ordinary numeric ID.
+
+UUID/opaque unpredictable identifiers are reserved for cases where unpredictability itself is a security or distributed-identity requirement, for example:
+
+- public session handles;
+- one-time tokens;
+- password-reset / verification / invite tokens;
+- capability URLs;
+- independently generated identities that genuinely cannot use the normal server-owned numeric identity.
+
+Provider IDs remain separate mapping/provenance fields. AniList/TMDB/etc. IDs never become Jularr's canonical identity merely because they are stable externally.
+
+## 5. SQL-first persistence for new/touched paths
+
+For Jularr, the target persistence style is explicit, parameterized PostgreSQL SQL behind the owning Store/Persistence component.
+
+- Do not add new EF-heavy persistence paths when an explicit Store/SQL path is appropriate.
+- Existing EF paths are migrated incrementally when intentionally touched; do not perform a bulk conversion solely for style.
+- Raw SQL MUST be parameterized.
+- Keep filtering, joins, grouping, sorting and pagination in PostgreSQL where it is the correct execution engine.
+- Avoid N+1, whole-library application filtering and unnecessary mapping/allocation layers.
+- Select only required columns on important read paths.
+- Multi-step mutations that form one business action use an explicit transaction.
+- Database FK/UNIQUE/NOT NULL/CHECK constraints enforce structural validity, but business actions stay in backend code.
+- Do not use triggers, cascades, `SET NULL`, `SET DEFAULT` or other automatic database actions as hidden business workflows unless an explicit documented exception exists.
+- Indexes exist for actual access paths; do not add redundant indexes mechanically.
+
+SQL formatting follows the canonical AE01 SQL Formatter profile where available. Use readable, meaningful aliases rather than opaque single-letter aliases. Preserve the established formatter style for `as`/alias layout instead of inventing a competing format.
+
+## 6. Read semantics and locking
+
+Pure reads are actually read-only.
+
+- PostgreSQL MVCC is the normal concurrency model.
+- Do not introduce SQL Server-style `NOLOCK`; PostgreSQL does not need that pattern.
+- A pure UI/API/read-model query MUST NOT take a write lock.
+- Do not use `FOR UPDATE` unless the same business action genuinely needs a locked read before mutation.
+- While a legacy EF read remains, use `AsNoTracking()` for pure reads.
+- Read models should be purpose-built projections/DTOs, not tracked persistence entities handed upward for accidental mutation.
+- Reads and validation MUST NOT hide unrelated durable writes.
+
+A read-before-write sequence is not a "pure read"; it must deliberately handle concurrency when correctness depends on the observed state remaining unchanged.
+
+## 7. Read/write separation without CQRS ceremony
+
+Jularr distinguishes read intent from mutation intent, but does not introduce framework ceremony for its own sake.
+
+- Read paths may use optimized query/read-model DTOs.
+- Mutation paths have explicit business actions and transaction boundaries.
+- Prefer `ApproveRequest`, `MoveImportedFile`, `SetPlaybackProgress` or another precise operation over generic `Process`/`Handle`/`Save`.
+- Do not create a Command + Handler + Validator + Mapper + Interface stack for a trivial operation unless those pieces each own real behavior.
+- The business flow should be visible top-to-bottom without opening many forwarding files.
+
+## 8. Resource-oriented API and routes
+
+Normal API/routes are resource-oriented.
+
+Preferred shapes:
+
+```text
+GET    /books/{id}
+POST   /books
+PATCH  /books/{id}
+DELETE /books/{id}
+GET    /books/{id}/read
+GET    /works/{id}/play
+POST   /requests/{id}/cancel
+```
+
+Rules:
+
+- resource first;
+- resource ID directly after the resource;
+- subresource/action after the ID;
+- normal resource IDs use the normal numeric ID;
+- do not introduce action-first forms such as `/books/read/{guid}` when the action belongs to one resource;
+- transport shape does not determine domain ownership.
+
+Security tokens/session handles are separate contracts and are not forced into ordinary CRUD identity semantics.
+
+## 9. Error, exception and incident contract
+
+Issue #853 defines the target incident/error system. New/touched failure handling must converge toward it.
+
+Core rules:
+
+- Expected validation/not-found/conflict/forbidden states are explicit results, not generic internal exceptions.
+- A catch may add useful semantic context, but MUST preserve the original cause/inner exception.
+- Do not log the same exception independently at every layer.
+- The real request/job/operation boundary records one top-level incident and preserves the complete cause tree.
+- Multiple child failures in one parent operation remain grouped under that parent rather than becoming unrelated top-level spam.
+- Repeated equivalent failures are fingerprinted/grouped while preserving individual occurrences.
+- Secrets and sensitive values are redacted before durable diagnostics.
+
+Normal frontend/native clients receive only safe contract information:
+
+- localized primary message;
+- safe incident/reference ID when one exists;
+- stable machine-readable error code only where client behavior genuinely needs it.
+
+Normal clients MUST NOT receive stack traces, nested internal exception chains, SQL, secret values, unsafe filesystem details or raw sensitive provider payloads.
+
+Internal diagnostics remain technical. User-visible messages are localized through the canonical Jularr localization catalog; clients never branch on translated prose.
+
+## 10. Naming and code shape
+
+Code is written for the next human maintainer.
+
+- Names use Jularr/domain vocabulary.
+- Avoid generic dumping-ground names such as `Helper`, `Utils`, `Common`, `Manager`, `ProcessData`, `HandleThing`, `Service2` unless a narrow concrete responsibility genuinely justifies the name.
+- One class/file may be larger when it owns one coherent responsibility.
+- Do not split coherent control flow into artificial 1-5 line helpers to satisfy a metric.
+- Do not create forwarding wrappers that only call another method unchanged.
+- Extract a helper/type only for real domain behavior, validation/policy, meaningful complexity, genuine reuse or an architectural/framework boundary.
+- Comments explain intent, invariants, constraints and non-obvious trade-offs; they do not narrate obvious code.
+- Do not add AI-style prose, generated-by commentary or speculative architecture essays inside source files.
+
+C# formatting/naming/line-width rules remain the canonical Agent Control C# conventions.
+
+## 11. Data contracts, nullability and finite states
+
+- Persistence entities are not API/UI contracts.
+- DTO/view models contain only what the consumer needs.
+- Do not create universal DTOs with large sets of unrelated nullable properties.
+- A nullable value must have one clear contract meaning.
+- Do not use `null` interchangeably for "not found", "forbidden", "invalid", "not loaded" and "failed".
+- Known finite states use enums/typed values rather than magic strings.
+- External provider strings stay at adapter boundaries unless Jularr deliberately owns that vocabulary.
+- Numeric IDs stay numeric unless an external contract provides a concrete reason otherwise.
+
+## 12. Time, collections, concurrency and idempotency
+
+- Persist instants consistently in UTC.
+- Use `TimeProvider` when current time affects business behavior or deterministic tests.
+- List/history/library APIs and queries are bounded; do not accidentally load an unlimited table/library because current test data is small.
+- Prefer keyset/seek pagination for large ordered datasets when the UX permits it.
+- Every read-before-write flow must consider races.
+- Use constraints, compare-and-set/versioning, suitable isolation or deliberate locking when correctness requires it.
+- Imports, scans, retries, callbacks, scheduled work and background jobs are idempotent where real execution can repeat.
+- Do not implement "idempotency" by swallowing all duplicate-looking failures; define the actual invariant/identity.
+
+## 13. Events and background work
+
+- Events represent genuine domain facts or decoupled side effects.
+- Do not hide the normal control flow of one business mutation in a chain of event handlers.
+- One mutation still has one visible canonical orchestrator.
+- Events do not become a second writer of the same business rule/state transition.
+- Long-running work uses Jularr's canonical operation/background-work infrastructure.
+- Do not spawn unmanaged fire-and-forget tasks.
+- Cancellation, timeout, retry, idempotency and final-failure semantics are explicit.
+- Retry only known transient + safe-to-retry failures.
+
+## 14. Frontend and native-client maintainability
+
+Frontend code follows the same quality rules as backend code.
+
+- Frontend/native clients own presentation and interaction, not canonical business decisions.
+- The backend exposes canonical capabilities/state such as allowed/playable/requestable; clients render that state instead of rebuilding permission/business logic.
+- Reuse shared components/partials, design tokens, navigation patterns, dialogs, error states, loading states and controls when they represent the same product concept.
+- Desktop/mobile/native layouts may differ; business semantics do not.
+- Do not create giant global JavaScript or CSS dumping grounds for unrelated features.
+- Prefer coherent feature/component modules without artificial fragmentation.
+- Do not repair CSS architecture with growing specificity or repeated `!important`.
+- Accessibility is part of completion: keyboard/focus, semantics, contrast, reduced motion and touch targets where applicable.
+- Loading, empty, permission-denied, error, offline/degraded and success states are intentional where the feature can reach them.
+
+## 15. Performance
+
+Performance is designed and measured without making the code obscure.
+
+- Avoid obvious N+1 access, full-table/library reads, repeated remote calls, unnecessary parsing/serialization and needless mappings/allocations.
+- Important SQL is evaluated with real PostgreSQL query plans/timings when performance matters.
+- Optimize from evidence, not folklore.
+- Do not sacrifice clear ownership/control flow for microscopic speculative optimization.
+- New caches require a concrete need plus explicit invalidation/ownership semantics; they are not a default fix for slow code.
+
+## 16. Configuration and dependencies
+
+- One setting has one canonical source.
+- No shadow environment fallback, duplicate config file or magic rescue default may make a broken primary path appear to work.
+- Do not turn ordinary literals into configuration without a real requirement.
+- Every new package/framework/service must solve a current concrete problem.
+- Do not add a dependency for trivial functionality that is clearer locally.
+- Do not introduce multiple competing libraries/technologies for one responsibility without an intentional migration.
+
+## 17. Testing and executable architecture rules
+
+Tests protect behavior and regressions, not implementation wiring.
+
+Prefer focused tests for:
+
+- business invariants;
+- parsing/validation;
+- SQL/query behavior;
+- state transitions;
+- concurrency/idempotency boundaries;
+- error contracts/root-cause preservation;
+- authorization boundaries;
+- regressions.
+
+PostgreSQL-specific behavior is tested against PostgreSQL-compatible behavior; SQLite is not treated as equivalent for dialect/concurrency/constraint semantics.
+
+When a structural rule is deterministic and low-noise, add/extend a guard/analyzer/source test/CI check. Important candidates include:
+
+- no new ordinary UUID/GUID PKs for normal resources;
+- no direct DB access from new/touched UI/transport code outside approved owners;
+- no unparameterized SQL;
+- no resource routes using action-before-ID when standard resource routing applies;
+- forbidden layer dependencies;
+- duplicate configuration ownership;
+- forbidden authorship metadata.
+
+Do not encode subjective design judgment in brittle regex tests.
+
+## 18. Reviewability and change shape
+
+A change should be understandable to a human reviewer.
+
+- Keep one change focused on one coherent product/engineering purpose.
+- Do not mix broad formatting/renaming/speculative refactors with an unrelated bug fix unless required for correctness.
+- Keep diffs small enough that behavioral changes remain visible.
+- Generated/mechanical changes should be isolated or clearly identifiable when practical.
+- Do not leave commented-out code, stale wrappers, obsolete compatibility branches or vague TODO debris.
+- Real unfinished work belongs in GitHub Issues.
+- Source control is the history; do not keep dead code "just in case".
+
+## 19. Mandatory AI startup check
+
+Before implementation, every agent regardless of capability level must be able to answer:
+
+1. What feature/domain owns this responsibility?
+2. What existing Store/service/query/component already owns the nearest equivalent behavior?
+3. Is this a read, mutation, policy decision, transport concern or persistence concern?
+4. What IDs/data contracts does the canonical owner use?
+5. Which business rule is authoritative?
+6. Which tests/guards protect the affected behavior?
+7. Is there directly related legacy code that must be migrated rather than copied?
+
+If the agent cannot answer these from the repository, it must inspect/search before inventing new structure.
+
+## 20. Mandatory completion check
+
+Before reporting an implementation complete, re-check at minimum:
+
+- one clear owner per changed responsibility;
+- no duplicate business/config/data path;
+- no unnecessary service/interface/helper/factory/provider/manager/wrapper;
+- readable top-to-bottom control flow;
+- precise domain naming;
+- no hidden writes in reads/validation;
+- correct authorization boundary;
+- correct resource IDs/routes;
+- parameterized/owned persistence;
+- correct transaction/concurrency semantics;
+- preserved error/root-cause meaning;
+- safe localized client error surface;
+- cancellation/timeouts for I/O;
+- no obvious N+1/full-dataset/repeated-I/O regression;
+- bounded collections/pagination where needed;
+- deterministic/idempotent repeated-work behavior where applicable;
+- coherent frontend states/accessibility where applicable;
+- behavior/regression tests;
+- objective architecture guards where practical;
+- no obsolete compatibility/TODO/dead-code debris;
+- required repository validation passed.
 
 A change that introduces a new violation in intentionally touched code is not complete.
+
+## Final decision rule
+
+Code is written for the next competent human maintainer, not to make an architecture diagram look impressive.
+
+Choose the simplest design that preserves clear ownership, correctness, security, performance, testability and understandable control flow.
+
+If an abstraction, layer, pattern or dependency does not materially improve those properties for a current requirement, do not add it.
