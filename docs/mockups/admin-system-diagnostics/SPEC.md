@@ -210,6 +210,27 @@ Minimum useful periods:
 
 Do not fake 24h/7d history from a five-minute in-memory buffer.
 
+### Application performance (#860)
+
+Resources also includes a performance-focused view over Jularr itself, not only CPU/RAM charts.
+
+Show bounded aggregated evidence such as:
+- route/endpoint request count and duration by stable route template;
+- slowest/common/high-total-time endpoints;
+- error/cancellation rate;
+- important application use-case timings;
+- background queue depth, queue wait and execution duration;
+- worker saturation/throttling from #857;
+- external provider HTTP latency/error/queueing by stable provider identity;
+- .NET GC pause/allocation/heap and ThreadPool queue/lock-contention evidence where useful;
+- optional privacy-conscious sampled browser/PWA performance trends when implemented.
+
+Do not use raw resource URLs, user IDs, titles, file paths or arbitrary exception text as metric dimensions. Metric cardinality must stay bounded.
+
+Use built-in ASP.NET Core/.NET metrics where they already provide the signal. Persist only bounded aggregate time buckets needed for history; do not write one permanent telemetry row for every normal request.
+
+Database-specific statement/index/lock analysis remains in the **Datenbank** tab (#859).
+
 ### Container/resource limits
 
 Where cgroup/container limits are available, show:
