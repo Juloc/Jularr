@@ -8,6 +8,7 @@ Primary backlog:
 - #839 — true offline cold-start + unified local Reader repository;
 - #840 — device-local Offline actions on consumer detail surfaces;
 - #415 — Smart Offline, only after the explicit Offline foundation is stable.
+- #851 — Games: first-class device-local Offline/install support through a Games-owned package/install owner projected into shared Offline surfaces.
 
 Detailed Phase A contract/owner plan:
 - `docs/implementation/offline-phase-a-contracts.md`
@@ -276,7 +277,7 @@ Consumer projection should be able to express:
 - Work title;
 - unit title/label;
 - artwork/local artwork descriptor;
-- media category: Video / Reading / Audio;
+- consumer category: Video / Reading / Audio / Games; Games is supplied by the Games-owned adapter from #851 rather than the media package owner;
 - package origin: explicit / Smart Offline;
 - state: queued/downloading/paused/waiting/verifying/failed/ready;
 - downloaded/total bytes when meaningful;
@@ -826,7 +827,7 @@ It does not directly enumerate separate Reading/binary stores in each page.
 Implement:
 - Downloads;
 - Offline available;
-- Video / Reading / Audio filters;
+- Video / Reading / Audio / Games filters when the current client exposes a Games Offline adapter;
 - grouping;
 - Pause/Resume/Retry/Remove/Update;
 - Smart Offline label/Keep Offline;
