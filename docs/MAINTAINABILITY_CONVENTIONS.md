@@ -388,3 +388,38 @@ Code is written for the next competent human maintainer, not to make an architec
 Choose the simplest design that preserves clear ownership, correctness, security, performance, testability and understandable control flow.
 
 If an abstraction, layer, pattern or dependency does not materially improve those properties for a current requirement, do not add it.
+
+
+## 21. Weak-server resource discipline
+
+Issue #857 defines Jularr's shared resource-governor/performance-budget target.
+
+For new or intentionally touched expensive work:
+
+- interactive playback/reader/UI work takes priority over background maintenance;
+- CPU-, disk-, provider- and database-heavy background work has bounded concurrency;
+- queues are bounded or durable and have explicit backpressure/coalescing behavior;
+- provider outages use timeout/health/cooldown/bounded retry instead of retry storms;
+- optional provider/AI work must not sit on normal local Library/Home/Reader critical paths;
+- caches have a canonical owner, explicit invalidation and a memory/storage budget;
+- startup does not synchronously perform full scans/provider refresh/artwork rebuild;
+- graceful shutdown propagates cancellation and leaves durable work resumable;
+- performance-sensitive hot paths have bounded query/result shapes and measurable regression coverage where practical.
+
+Do not add Redis, Kafka, a distributed scheduler or another service merely as a generic performance pattern for the normal single-server product.
+
+## 22. Precomputed statistics and aggregate projections
+
+Issue #858 defines the canonical pattern for expensive statistics.
+
+- Expensive reusable counts/distributions/trends SHOULD be maintained as purpose-built derived relational projections when recomputing from raw data on every read would be materially wasteful.
+- Each statistics family has one projection owner/service.
+- UI/API reads the projection; it does not recompute or own refresh logic.
+- Statistics tables are derived/rebuildable state and do not become a competing source of domain truth.
+- Choose incremental affected-bucket updates, coalesced durable refresh jobs or periodic refresh according to the required freshness.
+- Every projection defines its staleness/freshness contract and can be rebuilt from canonical source data.
+- Projection refresh uses set-based SQL/batching and follows #857 resource limits.
+- Keep simple indexed counts/lookups direct; do not introduce projection tables when the source query is already cheap.
+- Dashboards combine cheap persisted aggregates with genuinely live values instead of recalculating historical summaries on every page load.
+- Profile/user statistics remain correctly scoped and must not justify collecting unnecessary raw sensitive telemetry.
+
