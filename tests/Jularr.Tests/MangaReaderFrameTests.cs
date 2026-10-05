@@ -86,7 +86,8 @@ public sealed class MangaReaderFrameTests
 
         Assert.IsFalse(page.Contains("data-reader-menu=\"language\"", StringComparison.Ordinal));
         Assert.IsFalse(page.Contains("model=\"@(\"translate\")\"", StringComparison.Ordinal));
-        Assert.IsFalse(Regex.IsMatch(page + script, "bubble|Sprechblase", RegexOptions.IgnoreCase));
+        // "bubbles: false" is the DOM CustomEvent option, not a speech-bubble feature.
+        Assert.IsFalse(Regex.IsMatch(page + script, "bubble(?!s\\s*:)|Sprechblase", RegexOptions.IgnoreCase));
     }
 
     [TestMethod]

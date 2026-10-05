@@ -136,12 +136,17 @@ public sealed class MangaReaderPreferenceTests
         var script = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "manga-reader.js"));
         var page = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Manga", "Read.cshtml"));
 
+        var adapter = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Features", "Manga", "MangaReaderPreferences.cs"));
+
         StringAssert.Contains(page, "data-manga-settings");
         StringAssert.Contains(script, "readJson(\"[data-manga-settings]\"");
         StringAssert.Contains(script, "queuePreferenceSave");
         StringAssert.Contains(script, "savePreference(\"series\", \"mode\")");
         StringAssert.Contains(script, "imageZoomPercent");
-        StringAssert.Contains(script, "imagePageDirection");
+        // The client posts the page direction as "pageDirection"; the adapter owns the mapping to the canonical imagePageDirection field.
+        StringAssert.Contains(script, "data.set(\"pageDirection\", direction)");
+        StringAssert.Contains(script, "rightToLeft: \"pageDirection\"");
+        StringAssert.Contains(adapter, "\"pageDirection\" => [\"imagePageDirection\"]");
         Assert.IsFalse(script.Contains("localStorage.", StringComparison.Ordinal), "Durable Manga reader settings must use ReaderPreference.");
         Assert.IsFalse(script.Contains("anilingo.reader.manga.", StringComparison.Ordinal), "The legacy per-device Manga settings key must not return.");
     }
