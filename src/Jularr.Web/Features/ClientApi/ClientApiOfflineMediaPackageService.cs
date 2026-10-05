@@ -99,19 +99,15 @@ public sealed class ClientApiOfflineMediaPackageService(
         CancellationToken cancellationToken)
     {
         var normalized = kind.ToLowerInvariant();
-        if (instanceModules is not null
-            && OfflineInstanceModule(normalized) is { } module
-            && !await instanceModules.IsEnabledAsync(module, cancellationToken))
+        if (instanceModules is not null && OfflineInstanceModule(normalized) is { } module)
         {
-            return null;
-        }
-
-        // A video package is the media itself for playing, so a manager-only instance serves none; books, manga and audiobooks keep their own module switch.
-        if (instanceModules is not null
-            && normalized is "episode" or "movie" or "tv" or "series"
-            && !await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken))
-        {
-            return null;
+            // A video package is the media itself for playing, so a manager-only instance serves none; books, manga and audiobooks keep
+            // only their own module switch. The kind list lives in OfflineInstanceModule alone.
+            var video = module is InstanceModule.Anime or InstanceModule.Movie or InstanceModule.Tv;
+            if (!await instanceModules.IsEnabledAsync(module, cancellationToken) || video && !await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken))
+            {
+                return null;
+            }
         }
 
         return normalized switch

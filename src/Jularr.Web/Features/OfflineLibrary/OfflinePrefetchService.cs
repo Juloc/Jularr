@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Instance;
 
 namespace Jularr.Web.Features.OfflineLibrary;
 
@@ -12,10 +13,15 @@ namespace Jularr.Web.Features.OfflineLibrary;
 public sealed class OfflinePrefetchService(
     OfflinePrefetchPolicyStore store,
     OfflinePrefetchCandidateSource candidates,
-    CurrentAccountContext currentAccount)
+    CurrentAccountContext currentAccount,
+    IInstanceModuleService? instanceModules = null)
 {
-    public Task<OfflinePrefetchPolicy> GetPolicyAsync(CancellationToken cancellationToken = default) =>
-        store.LoadAsync(currentAccount.ProfileId, cancellationToken);
+    /// <summary>The profile's policy as it applies on this instance: episodes are video for playing, so a manager-only instance prefetches none; chapters keep their own switches.</summary>
+    public async Task<OfflinePrefetchPolicy> GetPolicyAsync(CancellationToken cancellationToken = default)
+    {
+        var policy = await store.LoadAsync(currentAccount.ProfileId, cancellationToken);
+        return instanceModules is not null && !await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken) ? policy with { IncludeEpisodes = false } : policy;
+    }
 
     public async Task<(OfflinePrefetchPolicy Policy, OfflinePrefetchPlan Plan)> PlanAsync(
         OfflinePrefetchDeviceState device,

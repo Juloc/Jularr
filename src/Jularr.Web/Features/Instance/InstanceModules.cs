@@ -332,6 +332,8 @@ public static class InstanceModuleRoutes
             [
                 "/Settings/AniList"
             ],
+            // Only what serves or locates playable bytes, plans or starts playback, or spawns ffmpeg: manager-only clients keep episode
+            // metadata, flow, progress and watched marks, cues and segments, storage availability and offline books/manga.
             [InstanceModule.Playback] =
             [
                 "/Library/Watch",
@@ -342,23 +344,39 @@ public static class InstanceModuleRoutes
                 "/api/client/v1/video/progress",
                 "/api/client/v1/video/subtitle-tracks",
                 "/api/client/v1/stream-sessions",
-                "/api/client/v1/media",
-                "/api/client/v1/episodes",
-                "/api/client/v1/offline/media",
-                "/api/client/v1/offline/prefetch",
-                "/api/client/v1/offline/progress"
+                "/api/client/v1/media/*/content",
+                "/api/client/v1/media/*/trickplay",
+                "/api/client/v1/episodes/*/player",
+                "/api/client/v1/episodes/*/hls",
+                "/api/client/v1/episodes/*/fallback",
+                "/api/client/v1/episodes/*/playback-plan",
+                "/api/client/v1/episodes/*/offline-download",
+                "/api/client/v1/episodes/*/trickplay",
+                "/api/client/v1/episodes/*/subtitle-tracks",
+                "/api/client/v1/offline/media"
             ]
         };
 
     public static IReadOnlyList<InstanceModule> Resolve(PathString path) =>
         Roots
-            .Where(pair => pair.Value.Any(root =>
-                path.StartsWithSegments(
-                    new PathString(root),
-                    StringComparison.OrdinalIgnoreCase)))
+            .Where(pair => pair.Value.Any(root => Matches(path, root)))
             .Select(pair => pair.Key)
             .Distinct()
             .ToArray();
+
+    /// <summary>A root is a path prefix; a <c>*</c> segment in it matches any one segment (an id), so a route can be gated by what follows the id.</summary>
+    private static bool Matches(PathString path, string root)
+    {
+        if (!root.Contains('*'))
+        {
+            return path.StartsWithSegments(new PathString(root), StringComparison.OrdinalIgnoreCase);
+        }
+
+        var wanted = root.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var actual = (path.Value ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return actual.Length >= wanted.Length
+            && wanted.Select((segment, index) => segment == "*" || string.Equals(segment, actual[index], StringComparison.OrdinalIgnoreCase)).All(matches => matches);
+    }
 
     public static bool TryResolve(PathString path, out InstanceModule module)
     {

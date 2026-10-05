@@ -1,3 +1,4 @@
+using System.Reflection;
 using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Pages.Library;
@@ -25,17 +26,26 @@ public sealed class InstantPlayPlaybackGateTests
     /// <summary>Routes that stream or locate media for playing. Exact route templates, relative to the client API base path unless they start with /Library.</summary>
     private static readonly string[] Streaming =
     [
-        "/episodes/{episodeId:guid}/player", "/episodes/{episodeId:guid}/hls", "/episodes/{episodeId:guid}/fallback", "/episodes/{episodeId:guid}/playback-plan",
-        "/episodes/{episodeId:guid}/offline-download", "/episodes/{episodeId:guid}/trickplay", "/episodes/{episodeId:guid}/trickplay/{fileName}",
-        "/episodes/{episodeId:guid}/hls/{sessionId:guid}/{fileName}", "/episodes/{episodeId:guid}/cues", "/episodes/{episodeId:guid}/subtitle-tracks/{trackId}/cues", "/episodes/{episodeId:guid}/segments",
-        "/episodes/{episodeId:guid}", "/episodes/{episodeId:guid}/flow", "/episodes/{episodeId:guid}/progress", "/episodes/{episodeId:guid}/watched",
-        "/media/{mediaFileId:guid}/content", "/media/{mediaFileId:guid}/availability", "/media/{mediaFileId:guid}/trickplay", "/media/{mediaFileId:guid}/trickplay/{fileName}",
+        "/episodes/{episodeId:guid}/player", "/episodes/{episodeId:guid}/hls", "/episodes/{episodeId:guid}/hls/{sessionId:guid}/{fileName}",
+        "/episodes/{episodeId:guid}/fallback", "/episodes/{episodeId:guid}/playback-plan", "/episodes/{episodeId:guid}/offline-download",
+        "/episodes/{episodeId:guid}/trickplay", "/episodes/{episodeId:guid}/trickplay/{fileName}", "/episodes/{episodeId:guid}/subtitle-tracks/{trackId}/cues",
+        "/media/{mediaFileId:guid}/content", "/media/{mediaFileId:guid}/trickplay", "/media/{mediaFileId:guid}/trickplay/{fileName}",
         "/video/player", "/video/playback-plan", "/video/playback-intents", "/video/progress", "/video/subtitle-tracks/{trackId}/cues",
         "/stream-sessions/{sessionId:guid}", "/stream-sessions/{sessionId:guid}/stream", "/stream-sessions/{sessionId:guid}/hls",
         "/stream-sessions/{sessionId:guid}/hls/{hlsSessionId:guid}/{fileName}", "/stream-sessions/{sessionId:guid}/telemetry",
-        "/offline/media/{mediaFileId:guid}/content", "/offline/prefetch/policy", "/offline/prefetch/plan", "/offline/progress",
+        "/offline/media/{mediaFileId:guid}/content",
         "/Library/Watch/{workId:guid}/{episodeId:guid?}", "/Library/Episode/{id:guid}", "/Library/Episode/{id:guid}/segments"
     ];
+
+    /// <summary>
+    /// Routes that return file bytes but are not video playback and gate themselves per kind or are another media type's: the handler is
+    /// found by <see cref="IlCallScanner"/>, so a route that serves files must be named in <see cref="Streaming"/> or here, with its reason.
+    /// </summary>
+    private static readonly Dictionary<string, string> FileServingNotGated = new()
+    {
+        ["/offline-media/{kind}/{id:guid}/resources/{resourceId}"] = "serves every offline kind; ClientApiOfflineMediaPackageService refuses the video kinds when Playback is off",
+        ["/offline-library/assets/{volumeId:guid}/{asset}"] = "novel volume illustrations (books)"
+    };
 
     /// <summary>
     /// Routes that carry no playable bytes and no player: account, library listings, request state, books, manga and audiobooks, pairing and
@@ -43,6 +53,9 @@ public sealed class InstantPlayPlaybackGateTests
     /// </summary>
     private static readonly string[] NotStreaming =
     [
+        "/episodes/{episodeId:guid}", "/episodes/{episodeId:guid}/cues", "/episodes/{episodeId:guid}/segments", "/episodes/{episodeId:guid}/flow",
+        "/episodes/{episodeId:guid}/progress", "/episodes/{episodeId:guid}/watched", "/media/{mediaFileId:guid}/availability",
+        "/offline/progress", "/offline/prefetch/policy", "/offline/prefetch/plan",
         "/capabilities", "/session/login", "/session/logout", "/me", "/library", "/anime/{animeId:guid}", "/continue-watching", "/watchlist",
         "/me/playback-preferences", "/me/playback-history", "/me/tts-preferences", "/speech/models", "/terms/{termId:guid}", "/terms/{termId:guid}/state",
         "/library-roots/{rootId:guid}/availability", "/library-roots/{rootId:guid}/test", "/library-roots/{rootId:guid}/wake", "/requests/{requestId:guid}",
@@ -56,7 +69,7 @@ public sealed class InstantPlayPlaybackGateTests
         "/playback-sessions/{sessionId:guid}/participant-state", "/playback-sessions/{sessionId:guid}/revoke", "/playback-sessions/{sessionId:guid}/state"
     ];
 
-    private static async Task<string[]> EnumerateRoutesAsync()
+    private static async Task<(string Route, RouteEndpoint Endpoint)[]> EnumerateAsync()
     {
         using var host = await new HostBuilder()
             .ConfigureWebHost(web => web
@@ -71,6 +84,7 @@ public sealed class InstantPlayPlaybackGateTests
                     {
                         services.AddSingleton(type, _ => null!);
                     }
+
                     services.AddRazorPages().AddApplicationPart(typeof(MovieDetailModel).Assembly);
                 })
                 .Configure(app =>
@@ -95,17 +109,33 @@ public sealed class InstantPlayPlaybackGateTests
         [
             .. host.Services.GetRequiredService<EndpointDataSource>().Endpoints
                 .OfType<RouteEndpoint>()
-                .Select(endpoint => "/" + endpoint.RoutePattern.RawText!.TrimStart('/'))
-                .Where(route => route.StartsWith(Api, StringComparison.Ordinal) || route.StartsWith("/Library", StringComparison.Ordinal))
-                .Select(route => route.StartsWith(Api, StringComparison.Ordinal) ? route[Api.Length..] : route)
-                .Distinct()
+                .Select(endpoint => (Route: "/" + endpoint.RoutePattern.RawText!.TrimStart('/'), Endpoint: endpoint))
+                .Where(x => x.Route.StartsWith(Api, StringComparison.Ordinal) || x.Route.StartsWith("/Library", StringComparison.Ordinal))
+                .Select(x => (x.Route.StartsWith(Api, StringComparison.Ordinal) ? x.Route[Api.Length..] : x.Route, x.Endpoint))
+                .DistinctBy(x => x.Item1)
         ];
+    }
+
+    /// <summary>Whether a handler (or the helpers of its endpoint class) can write file bytes to the response.</summary>
+    private static bool ReturnsFileBytes(RouteEndpoint endpoint)
+    {
+        if (endpoint.Metadata.GetMetadata<MethodInfo>() is not { } handler)
+        {
+            return false;
+        }
+
+        return IlCallScanner.Reach(handler).Any(called =>
+            called.DeclaringType is { } type
+            && (type.Name is "Results" or "TypedResults" && called.Name is "File" or "Stream" or "PhysicalFile" or "VirtualFile"
+                || type.Name == "HttpResponseWritingExtensions"
+                || type.Name == "HttpResponse" && called.Name == "get_Body"));
     }
 
     [TestMethod]
     public async Task EveryRouteThatCanStreamOrLocateMediaIsGatedByThePlaybackModule()
     {
-        var routes = await EnumerateRoutesAsync();
+        var endpoints = await EnumerateAsync();
+        var routes = endpoints.Select(x => x.Route).ToArray();
         Assert.IsGreaterThan(40, routes.Length, "The enumeration must actually see the routes.");
 
         var unclassified = routes.Except(Streaming).Except(NotStreaming).Order().ToArray();
@@ -114,7 +144,16 @@ public sealed class InstantPlayPlaybackGateTests
         var ungated = Streaming.Where(route => !InstanceModuleRoutes.Resolve(new PathString(route.StartsWith("/Library", StringComparison.Ordinal) ? route : Api + route)).Contains(InstanceModule.Playback)).ToArray();
         Assert.IsEmpty(ungated, "These routes can serve media but stay reachable on a manager-only instance:\n" + string.Join("\n", ungated));
 
-        var stale = Streaming.Concat(NotStreaming).Except(routes).ToArray();
+        // The hand lists are checked against the handlers themselves: a route that writes file bytes cannot sit in NotStreaming unnoticed.
+        var undeclaredFileRoutes = endpoints.Where(x => ReturnsFileBytes(x.Endpoint) && !Streaming.Contains(x.Route) && !FileServingNotGated.ContainsKey(x.Route)).Select(x => x.Route).Order().ToArray();
+        Assert.IsEmpty(undeclaredFileRoutes, "These handlers return file bytes but are neither gated streaming routes nor documented exceptions:\n" + string.Join("\n", undeclaredFileRoutes));
+        var flagged = endpoints.Where(x => ReturnsFileBytes(x.Endpoint)).Select(x => x.Route).ToArray();
+        foreach (var known in new[] { "/media/{mediaFileId:guid}/content", "/offline-library/assets/{volumeId:guid}/{asset}", "/offline-media/{kind}/{id:guid}/resources/{resourceId}" })
+        {
+            CollectionAssert.Contains(flagged, known, "The IL scanner must recognise a handler that returns a file.");
+        }
+
+        var stale = Streaming.Concat(NotStreaming).Concat(FileServingNotGated.Keys).Except(routes).ToArray();
         Assert.IsEmpty(stale, "Classified routes that no longer exist:\n" + string.Join("\n", stale));
     }
 }
