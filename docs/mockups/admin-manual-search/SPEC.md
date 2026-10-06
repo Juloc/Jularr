@@ -241,17 +241,19 @@ The visible score is contextual to the current **profile + language target**.
 
 It is not an intrinsic property of a release.
 
-The score may include:
-- title/identity match
-- season/episode/unit match
-- quality preference
-- language policy
-- audio/subtitle requirements
+Identity and requested-unit coverage are **decision gates/evidence**, not preference-score points.
+
+The preference score may include:
+- quality preference inside eligible tiers/groups
+- language preference after permanent requirements are satisfied
+- audio/subtitle preferences
 - custom format/release preferences
 - source/indexer preference
-- season-pack preference
-- size/age rules
-- other profile-owned rules
+- explicit pack preference after canonical coverage is validated
+- preferred size/age rules
+- other profile-owned preference rules
+
+Hard identity, Require/Reject, safety and quality-eligibility outcomes are shown alongside the score rather than hidden inside it.
 
 The selected candidate drawer exposes a score breakdown.
 
@@ -273,7 +275,9 @@ Clearly show:
 Example:
 `Season Pack · S01 · 12/12 · E01–E12 · enthält Ziel E03`
 
-A complete pack may score above a single episode if the active profile prefers packs.
+A complete pack may rank above singles when canonical coverage utility plus the active profile makes it the better acquisition plan.
+
+Pack preference is not a blind fixed bonus: current Wanted coverage, existing local units, duplicate/unwanted units and size are part of the decision after identity validation.
 
 A partial or wrong-season pack remains visible and receives a warning/rejection reason.
 
