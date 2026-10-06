@@ -715,7 +715,7 @@ The primary score is contextual to the selected acquisition profile + language t
 
 Rejected and suspicious candidates remain visible by default so the admin can understand why automatic acquisition did not choose them. This includes likely wrong-episode/unit matches. Identity mismatches are clearly marked and can never be automatically grabbed; any permitted manual override requires explicit confirmation and target mapping.
 
-Candidate columns are configurable and all meaningful fields are filterable. Default ordering follows the effective profile score, then decision quality/source preference.
+Candidate columns are configurable and all meaningful fields are filterable. Default ordering follows the canonical selection hierarchy: identity/eligibility state, quality/fallback tier, preference score, coverage utility and configured source/tiebreak policy. Network response order is never meaningful.
 
 ## 22. Downloads / Imports inside Activity
 
@@ -798,7 +798,7 @@ One profile owns:
 - minimum acceptance score and upgrade-until-score;
 - normalized language policy;
 - reusable Release Rules with profile-specific effect/score;
-- explicit hard Reject rules;
+- explicit hard Require and Reject rules;
 - per-quality/group size policy where supported;
 - wait/delay and source/provider preference;
 - default-per-media-kind and per-Work assignment;
@@ -808,7 +808,7 @@ Shared Release Rule definitions answer *what is detected*; the effect inside a p
 
 Normal workflow stays inside the profile. A secondary Rule Library is allowed, but there is no required permanent Custom Formats sidebar destination.
 
-Automatic acquisition, Manual Search and Score-Test must use the same scorer/decision explanation. Sonarr Quality Profiles, Custom Formats, Release Profiles and Delay Profiles are migration inputs translated into the Jularr model, not parallel runtime models.
+Automatic acquisition and Manual Search must use the same canonical Search Planner (`docs/ACQUISITION_SEARCH_PLANNER.md`). Automatic acquisition, Manual Search and Score-Test must use the same canonical selection/scoring explanation (`docs/AUTOMATIC_RELEASE_SELECTION.md`). Sonarr Quality Profiles, Custom Formats, Release Profiles and Delay Profiles are migration inputs translated into the Jularr model, not parallel runtime models.
 
 Provider credentials remain in Providers, downloader transport in Downloader and paths in Storage.
 
