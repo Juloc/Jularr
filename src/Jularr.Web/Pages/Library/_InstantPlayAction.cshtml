@@ -11,7 +11,10 @@
     var compact = Model.Compact;
     var workId = page.Detail.WorkId;
     var unit = Model.Episode is null ? "movie" : "episode";
-    var buttonClass = compact ? "ip-button ip-button-compact" : "ad-primary ip-button";
+    var context = !compact && Model.Episode is { } contextEpisode
+        ? ui.Format("library.watch.season", ("number", contextEpisode.SeasonNumber)) + " · " + ui.Format("library.browse.card.episode", ("number", contextEpisode.Number))
+        : null;
+    var buttonClass = compact ? "ip-button ip-button-compact" : "ad-primary ip-button" + (context is null ? "" : " has-context");
 }
 <div class="ip-action@(compact ? " is-compact" : "")"
      data-instant-play
@@ -27,13 +30,15 @@
             <span class="ip-icon" aria-hidden="true">
                 <partial name="_AnimeDetailIcon" model='"play"' />
                 <svg class="ip-ring" viewBox="0 0 24 24" width="16" height="16" focusable="false"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" /></svg>
-                <svg class="ip-alert" viewBox="0 0 24 24" width="16" height="16" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5 21 19.5H3z" /><path d="M12 10v4.5M12 17.2v.01" /></svg>
+                <span class="ip-alert"><partial name="_AnimeDetailIcon" model='"alert"' /></span>
             </span>
-            <span class="ip-label" data-ip-label>@ui[VideoDetailView.PlayKey(action)]</span>
-            @if (!compact && Model.Episode is { } episode)
-            {
-                <small class="ip-code">@AnimeDetailView.EpisodeCode(episode.SeasonNumber, episode.Number)</small>
-            }
+            <span class="ip-text">
+                <span class="ip-label" data-ip-label>@ui[VideoDetailView.PlayKey(action)]</span>
+                @if (context is not null)
+                {
+                    <small class="ip-code">@context</small>
+                }
+            </span>
             <span class="ip-progress" data-ip-progress hidden aria-hidden="true"></span>
         </button>
     </form>
@@ -48,6 +53,14 @@
                 <partial name="_AnimeDetailIcon" model='"chevron"' />
             </summary>
             <div class="ad-menu-panel ip-panel">
+                <template data-ip-icons>
+                    <span data-ip-icon="approved"><partial name="_AnimeDetailIcon" model='"check"' /></span>
+                    <span data-ip-icon="looking"><partial name="_AnimeDetailIcon" model='"search"' /></span>
+                    <span data-ip-icon="found"><partial name="_AnimeDetailIcon" model='"available"' /></span>
+                    <span data-ip-icon="getting"><partial name="_AnimeDetailIcon" model='"downloading"' /></span>
+                    <span data-ip-icon="preparing"><partial name="_AnimeDetailIcon" model='"cog"' /></span>
+                    <span data-ip-icon="ready"><partial name="_AnimeDetailIcon" model='"play"' /></span>
+                </template>
                 <ol class="ip-milestones" data-ip-milestones></ol>
                 @if (Model.Episode is { } selected)
                 {

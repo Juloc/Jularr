@@ -108,6 +108,7 @@ public sealed partial class InstantPlayPageMarkupTests
         StringAssert.Contains(css, "prefers-reduced-motion: reduce");
         StringAssert.Contains(css, ":focus-visible");
         Assert.IsFalse(css.Contains("!important", StringComparison.Ordinal));
+        Assert.IsFalse(Regex.IsMatch(css, "#[0-9a-fA-F]{3,8}[^0-9a-fA-F]|rgb[(]"), "Colours come from the theme and hero tokens, never from literals.");
     }
 
     [TestMethod]
@@ -127,7 +128,8 @@ public sealed partial class InstantPlayPageMarkupTests
         StringAssert.Contains(hero, "data-ip-unit=\"episode\"");
         StringAssert.Contains(hero, $"data-ip-episode-id=\"{first.Id}\"", "Start watching targets the next required episode, not the Series.");
         StringAssert.Contains(hero, ">Start watching<");
-        StringAssert.Contains(hero, "S01 E01");
+        StringAssert.Contains(hero, "Season 1 · Episode 1", "The button says which episode it starts on a second line.");
+        StringAssert.Contains(hero, "has-context");
         Assert.AreEqual(3, Regex.Matches(html, "data-instant-play(?![-a-z])").Count, "The hero and the two missing rows, not the local episode.");
         foreach (var row in new[] { first, second })
         {
@@ -224,7 +226,8 @@ public sealed partial class InstantPlayPageMarkupTests
 
         var hero = Hero(await host.GetOkAsync($"/Library/Movie/{movie.Id}"));
 
-        StringAssert.Contains(VisibleText(hero), "Looking for media");
+        Assert.IsFalse(hero.Contains("ip-observe", StringComparison.Ordinal), "A profile that may not read the request is told nothing of it.");
+        Assert.IsFalse(VisibleText(hero).Contains("Looking for media", StringComparison.Ordinal));
         Assert.IsFalse(hero.Contains("data-instant-play", StringComparison.Ordinal), "The status read answers 404 for this profile, so the page does not poll it.");
     }
 

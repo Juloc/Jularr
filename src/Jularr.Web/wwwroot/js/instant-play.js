@@ -14,6 +14,10 @@
     // A wait on one page that has lasted this long (visible time only) stops with an honest "status temporarily unavailable".
     const maxWaitMs = 30 * 60 * 1000;
     const maxConsecutiveFailures = 5;
+    // A percentage that moved is not news every poll: the page asks no more often than this while only the percentage changes, which
+    // keeps a few open tabs well inside the per-account status limit.
+    const percentChangeDelayMs = 2500;
+    const maxRetryAfterMs = 60000;
     const requestTimeoutMs = 15000;
     // The live region speaks state changes and progress in steps this wide, never every percent.
     const announceStepPercent = 25;
@@ -56,6 +60,8 @@
         let currentRequestId = requestId;
         let episodeId = target.workEpisodeId ?? null;
         let holdsIntent = false;
+        // Another control reads the same request while this one rests: one poller per request.
+        let rested = false;
         let timer = null;
         let inFlight = null;
         let generation = 0;
@@ -111,6 +117,9 @@
             publish();
         };
 
+        // The Player opens only for a viewer who is still here, still holds the wait and was given a place to go.
+        const mayOpenPlayer = () => Boolean(watchHref) && holdsIntent && isVisible();
+
         const handOver = () => {
             clearTimer();
             cancelInFlight();
@@ -126,8 +135,8 @@
                 return;
             }
 
-            // A hidden page is paused, not ended: becoming visible polls at once (see resume).
-            if (!isVisible()) {
+            // A hidden page or a resting control is paused, not ended: becoming visible or active polls at once (see resume).
+            if (!isVisible() || rested) {
                 return;
             }
 
@@ -141,15 +150,16 @@
 
         // Records the projection the server answered and decides what happens next: keep polling, open the Player, or end.
         const adopt = (next) => {
-            const changed = view?.state !== next.state || percentOf(view) !== percentOf(next);
+            const stateChanged = view?.state !== next.state;
+            const percentChanged = percentOf(view) !== percentOf(next);
             view = next;
-            if (next.state === readyState && watchHref && holdsIntent && isVisible()) {
+            if (next.state === readyState && mayOpenPlayer()) {
                 handOver();
                 return;
             }
 
             if (workingStates.has(next.state)) {
-                delay = changed ? firstPollDelayMs : Math.min(maxPollDelayMs, Math.round(delay * pollBackoff));
+                delay = stateChanged ? firstPollDelayMs : percentChanged ? percentChangeDelayMs : Math.min(maxPollDelayMs, Math.round(delay * pollBackoff));
                 publish();
                 scheduleNext();
                 return;
@@ -179,6 +189,13 @@
                     return;
                 }
 
+                // Too many requests is the server asking for room, not a failure: wait as long as it says (bounded) and do not count it.
+                if (!error && response.status === 429) {
+                    delay = Math.min(maxRetryAfterMs, Math.max(response.retryAfterMs ?? 0, Math.round(delay * pollBackoff), percentChangeDelayMs));
+                    scheduleNext();
+                    return;
+                }
+
                 // A request that is gone or hidden answers 404 for good; anything else may be a moment: retry within the bounds.
                 failures = !error && response.status === 404 ? maxConsecutiveFailures : failures + 1;
                 if (failures >= maxConsecutiveFailures) {
@@ -202,7 +219,7 @@
 
             switch (body.outcome) {
                 case "play_now":
-                    if (holdsIntent && isVisible()) {
+                    if (mayOpenPlayer()) {
                         handOver();
                     } else {
                         end(null);
@@ -279,9 +296,27 @@
             publish();
         };
 
-        /** The viewer left (page hidden, navigation, another tab): the transient intent is cleared and polling pauses. */
+        /**
+         * The viewer left (page hidden, a link followed, the page going away): the transient intent is cleared, polling pauses and an
+         * answer still on its way is ignored. A wait whose Player was opening goes back to its action, so a page restored from the
+         * back/forward cache never shows a stuck "Starting playback".
+         */
         const leave = () => {
             clearTimer();
+            // An intent already sent keeps going (the request exists once it answers); a poll is abandoned.
+            if (phase !== "starting") {
+                cancelInFlight();
+            }
+
+            if (phase === "handingOver") {
+                holdsIntent = false;
+                phase = observeOnly ? "observing" : "idle";
+                notice = null;
+                view = observeOnly ? view : null;
+                publish();
+                return;
+            }
+
             if (!holdsIntent) {
                 return;
             }
@@ -291,19 +326,32 @@
                 phase = "observing";
             }
 
-            // A starting wait keeps its in-flight intent (the request exists once it answers) but can no longer open the Player.
             publish();
         };
 
+        const canPoll = () => phase === "observing" && Boolean(currentRequestId) && !(view && !workingStates.has(view.state)) && !rested && timer === null && inFlight === null && isVisible();
+
         /** The page is visible again: a viewer who only observes sees the current state at once, and the Player never opens. */
         const resume = () => {
-            if (phase === "observing" && currentRequestId && !(view && !workingStates.has(view.state)) && timer === null && inFlight === null) {
+            if (canPoll()) {
                 delay = firstPollDelayMs;
                 timer = timers.setTimeout(poll, 0);
             }
         };
 
-        /** Back to the normal action, for example after a notice was dismissed. */
+        /** Another control reads this request now (or stops doing so): a resting wait neither polls nor keeps an answer. */
+        const rest = (on) => {
+            rested = on;
+            if (on) {
+                clearTimer();
+                cancelInFlight();
+                return;
+            }
+
+            resume();
+        };
+
+        /** Back to the normal action, for example after a notice was dismissed; an observer starts looking again. */
         const reset = () => {
             clearTimer();
             cancelInFlight();
@@ -311,7 +359,16 @@
             phase = observeOnly ? "observing" : "idle";
             notice = null;
             view = observeOnly ? view : null;
+            if (observeOnly && currentRequestId) {
+                failures = 0;
+                waitedMs = 0;
+                delay = firstPollDelayMs;
+            }
+
             publish();
+            if (observeOnly) {
+                resume();
+            }
         };
 
         // The server just projected the state it was rendered with, so the first look is a poll interval away.
@@ -319,7 +376,19 @@
             timer = timers.setTimeout(poll, firstPollDelayMs);
         }
 
-        return Object.freeze({ start, stop, leave, resume, reset, snapshot });
+        return Object.freeze({ start, stop, leave, resume, rest, reset, snapshot });
+    };
+
+    // The Retry-After of an answer in milliseconds, whether the server sent seconds or a date; null when there is none.
+    const retryAfterOf = (response) => {
+        const value = response.headers?.get?.("Retry-After");
+        if (!value) {
+            return null;
+        }
+
+        const seconds = Number(value);
+        const waitMs = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
+        return Number.isFinite(waitMs) && waitMs > 0 ? waitMs : null;
     };
 
     // The only network this feature uses: the existing client API, same-origin with the page's session, bounded by a timeout.
@@ -328,7 +397,7 @@
             const controller = typeof AbortController === "function" ? new AbortController() : null;
             const timeout = timers.setTimeout(() => controller?.abort(), requestTimeoutMs);
             fetchImpl(url, { credentials: "same-origin", cache: "no-store", signal: controller?.signal, ...init })
-                .then((response) => response.json().catch(() => null).then((body) => ({ status: response.status, body })))
+                .then((response) => response.json().catch(() => null).then((body) => ({ status: response.status, body, retryAfterMs: retryAfterOf(response) })))
                 .then((result) => callback(null, result), (error) => callback(error ?? new Error("request failed")))
                 .finally(() => timers.clearTimeout(timeout));
             return { abort: () => controller?.abort() };
@@ -346,6 +415,49 @@
         };
     };
 
+    /**
+     * What the controls of one page share: at most one wait holding the viewer's intent, one poller per request (the observers beside an
+     * action rest while it works), and the page-level events. The DOM binding below only feeds it the events of the browser.
+     */
+    const createCoordinator = ({ reload }) => {
+        const waits = [];
+        const observers = [];
+        const holders = new Set();
+        let active = null;
+
+        return {
+            addAction: (wait) => { waits.push(wait); },
+            addObserver: (wait) => { waits.push(wait); observers.push(wait); },
+            /** The action holds the request (any phase but idle) or lets go of it. */
+            holding: (wait, on) => {
+                if (on) {
+                    holders.add(wait);
+                } else {
+                    holders.delete(wait);
+                }
+
+                observers.forEach((observer) => observer.rest(holders.size > 0));
+            },
+            /** Pressing a playback action ends the previous wait without a notice. */
+            begin: (wait) => {
+                if (active && active !== wait) {
+                    active.reset();
+                }
+
+                active = wait;
+                wait.start();
+            },
+            leaveAll: () => waits.forEach((wait) => wait.leave()),
+            resumeAll: () => waits.forEach((wait) => wait.resume()),
+            /** A page restored from the back/forward cache shows what it showed when it was left: the server is asked again. */
+            pageShown: (persisted) => {
+                if (persisted && waits.length > 0) {
+                    reload();
+                }
+            }
+        };
+    };
+
     window.JularrInstantPlay = Object.freeze({
         firstPollDelayMs,
         maxPollDelayMs,
@@ -354,7 +466,8 @@
         announceStepPercent,
         milestones,
         createWait,
-        createApi
+        createApi,
+        createCoordinator
     });
 
     if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") {
@@ -370,7 +483,22 @@
             return {};
         }
     })();
-    const label = (key, values = {}) => Object.entries(values).reduce((result, [name, value]) => result.replace(`{${name}}`, String(value)), text[key] ?? "");
+    // A missing text or an unknown state is a defect of the page, not something to paper over: it is logged once and the viewer sees a
+    // neutral wording instead of a made-up state.
+    const warned = new Set();
+    const warnOnce = (what) => {
+        if (!warned.has(what)) {
+            warned.add(what);
+            console.warn(`instant-play: ${what}`);
+        }
+    };
+    const label = (key, values = {}) => {
+        if (!(key in text)) {
+            warnOnce(`no text for ${key}`);
+        }
+
+        return Object.entries(values).reduce((result, [name, value]) => result.replace(`{${name}}`, String(value)), text[key] ?? "");
+    };
 
     const stateKeys = {
         waiting_for_approval: "acquisition.state.waitingForApproval",
@@ -388,16 +516,32 @@
     const failureKeys = { episode: "acquisition.instant.failed.episode", movie: "acquisition.instant.failed.movie", media: "acquisition.instant.failed.media" };
     const milestoneKeys = { approved: "acquisition.instant.milestone.approved", looking: "acquisition.state.lookingForMedia", found: "acquisition.instant.milestone.found", preparing: "acquisition.instant.milestone.preparing" };
 
-    const stateText = (state, mediaUnit) => label(state === "getting_media" ? gettingKeys[mediaUnit] ?? gettingKeys.media : stateKeys[state] ?? stateKeys.looking_for_media);
+    const stateText = (state, mediaUnit) => {
+        if (state === "getting_media") {
+            return label(gettingKeys[mediaUnit] ?? gettingKeys.media);
+        }
+
+        if (!(state in stateKeys)) {
+            warnOnce(`unknown state ${state}`);
+            return label("acquisition.instant.unavailable");
+        }
+
+        return label(stateKeys[state]);
+    };
     const progressText = (state, mediaUnit, percent) => label("acquisition.instant.progress", { state: stateText(state, mediaUnit), percent });
     const workingText = (state, mediaUnit, percent) => (percent === null ? label("acquisition.instant.working", { state: stateText(state, mediaUnit) }) : progressText(state, mediaUnit, percent));
 
     const timers = { setTimeout: (fn, ms) => window.setTimeout(fn, ms), clearTimeout: (id) => window.clearTimeout(id) };
 
-    // One transient wait per page: pressing another playback action ends the previous wait without a notice.
-    let active = null;
-    const waits = [];
-    const observers = [];
+    // The Player is a page of this application: anything else the data might name is not opened.
+    const openPlayer = (href) => {
+        const url = new URL(href, window.location.href);
+        if (url.origin === window.location.origin) {
+            window.location.assign(url.href);
+        }
+    };
+
+    const coordinator = createCoordinator({ reload: () => window.location.reload() });
 
     // What the notice of an ended wait says: its title, hint and which actions it offers.
     const noticeOf = (snapshot, mediaUnit) => {
@@ -473,21 +617,17 @@
         const stopButton = root.querySelector("[data-ip-stop]");
         const details = root.querySelector("[data-ip-details]");
         const milestoneList = root.querySelector("[data-ip-milestones]");
+        const icons = root.querySelector("[data-ip-icons]");
         const noticeBox = root.querySelector("[data-ip-notice]");
         const live = root.querySelector("[data-ip-live]");
         const idleText = labelNode.textContent;
         const mediaUnit = root.dataset.ipUnit || "media";
         let lastAnnouncement = 0;
         let wait = null;
-        let observersPaused = false;
 
         const render = (snapshot) => {
             // The request is read by this wait while it runs; the observers beside the action rest meanwhile.
-            const holding = snapshot.phase !== "idle";
-            if (holding !== observersPaused) {
-                observersPaused = holding;
-                observers.forEach((observer) => (holding ? observer.leave() : observer.resume()));
-            }
+            coordinator.holding(wait, snapshot.phase !== "idle");
 
             const working = isWorking(snapshot);
             const noticeInfo = snapshot.phase === "ended" ? noticeOf(snapshot, mediaUnit) : null;
@@ -530,14 +670,22 @@
                 milestoneList.replaceChildren(...snapshot.milestones.map((milestone) => {
                     const item = document.createElement("li");
                     item.dataset.status = milestone.status;
-                    if (milestone.key === "getting") {
-                        item.textContent = milestone.percent === null ? stateText("getting_media", unit) : progressText("getting_media", unit, milestone.percent);
-                    } else if (milestone.key === "ready") {
-                        item.textContent = stateText(snapshot.view?.state === "available" ? "available" : readyState, unit);
-                    } else {
-                        item.textContent = label(milestoneKeys[milestone.key]);
+                    const icon = icons?.content.querySelector(`[data-ip-icon="${milestone.key}"]`)?.cloneNode(true);
+                    if (icon) {
+                        icon.removeAttribute("data-ip-icon");
+                        item.append(icon);
                     }
 
+                    const textNode = document.createElement("span");
+                    if (milestone.key === "getting") {
+                        textNode.textContent = milestone.percent === null ? stateText("getting_media", unit) : progressText("getting_media", unit, milestone.percent);
+                    } else if (milestone.key === "ready") {
+                        textNode.textContent = stateText(snapshot.view?.state === "available" ? "available" : readyState, unit);
+                    } else {
+                        textNode.textContent = label(milestoneKeys[milestone.key]);
+                    }
+
+                    item.append(textNode);
                     return item;
                 }));
             }
@@ -567,20 +715,13 @@
             timers,
             isVisible: () => document.visibilityState !== "hidden",
             watchHref: root.dataset.ipWatchHref || null,
-            navigate: (href) => window.location.assign(href),
+            navigate: openPlayer,
             reload: () => window.location.reload(),
             onChange: render
         });
-        waits.push(wait);
+        coordinator.addAction(wait);
 
-        const begin = () => {
-            if (active && active !== wait) {
-                active.reset();
-            }
-
-            active = wait;
-            wait.start();
-        };
+        const begin = () => coordinator.begin(wait);
 
         form.addEventListener("submit", (event) => {
             event.preventDefault();
@@ -597,6 +738,8 @@
             root.querySelector(`[data-ip-action=${name}]`)?.addEventListener("click", () => {
                 wait.reset();
                 begin();
+                // The control that was pressed is hidden by now: the keyboard stays on the action.
+                button.focus();
             });
         }
 
@@ -622,6 +765,13 @@
             timers,
             isVisible: () => document.visibilityState !== "hidden",
             onChange: (snapshot) => {
+                // A wait that ended without an answer says so, and the pill itself is the way to look again.
+                if (snapshot.phase === "ended" && snapshot.notice === "unavailable") {
+                    labelNode.textContent = `${label("acquisition.instant.unavailable")} · ${label("acquisition.instant.retry")}`;
+                    root.dataset.ipState = "unavailable";
+                    return;
+                }
+
                 if (!snapshot.view) {
                     return;
                 }
@@ -635,8 +785,13 @@
                 }
             }
         });
-        observers.push(wait);
-        waits.push(wait);
+        root.addEventListener("click", (event) => {
+            if (root.dataset.ipState === "unavailable") {
+                event.preventDefault();
+                wait.reset();
+            }
+        });
+        coordinator.addObserver(wait);
     };
 
     for (const root of document.querySelectorAll("[data-instant-play]")) {
@@ -647,13 +802,26 @@
         bindObserver(root);
     }
 
-    const leaveAll = () => waits.forEach((wait) => wait.leave());
-    const resumeAll = () => waits.forEach((wait) => wait.resume());
-    document.addEventListener("visibilitychange", () => (document.visibilityState === "hidden" ? leaveAll() : resumeAll()));
-    window.addEventListener("pagehide", leaveAll);
-    window.addEventListener("pageshow", (event) => {
-        if (event.persisted) {
-            resumeAll();
+    // Leaving by any road clears the transient intent: the tab hidden, a link followed, another form submitted, the page going away.
+    // Handlers that take over a click or a submit have prevented the default by now and do not leave.
+    const followsLink = (event) => {
+        const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+        return link !== null && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
+            && (!link.target || link.target === "_self") && !link.getAttribute("href").startsWith("#");
+    };
+
+    document.addEventListener("click", (event) => {
+        if (!event.defaultPrevented && followsLink(event)) {
+            coordinator.leaveAll();
         }
     });
+    document.addEventListener("submit", (event) => {
+        if (!event.defaultPrevented) {
+            coordinator.leaveAll();
+        }
+    });
+    document.addEventListener("visibilitychange", () => (document.visibilityState === "hidden" ? coordinator.leaveAll() : coordinator.resumeAll()));
+    window.addEventListener("pagehide", coordinator.leaveAll);
+    window.addEventListener("beforeunload", coordinator.leaveAll);
+    window.addEventListener("pageshow", (event) => coordinator.pageShown(event.persisted));
 })();

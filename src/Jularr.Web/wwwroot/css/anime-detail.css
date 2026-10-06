@@ -20,6 +20,23 @@
     border-radius: calc(var(--radius-card) + 4px);
     background: #120f1a; color: #fff; box-shadow: var(--shadow-card);
 }
+/* The hero scrim is dark in light and dark themes alike, so the pills that sit on it share one set of fixed tokens: a light status
+   pill with dark ink, and the semantic tints for waiting, failure and ready (instant-play.css uses them). */
+.ad-hero {
+    --hero-ink: #15121c;
+    --hero-on-scrim: #fff;
+    --hero-pill: rgb(255 255 255 / .92);
+    --hero-glass: rgb(255 255 255 / .14);
+    --hero-glass-hover: rgb(255 255 255 / .24);
+    --hero-glass-edge: rgb(255 255 255 / .34);
+    --hero-shadow: 0 8px 22px rgb(0 0 0 / .28);
+    --hero-danger: #fde8e8;
+    --hero-on-danger: #8f1d1d;
+    --hero-warning: #fff3d6;
+    --hero-on-warning: #6b4a00;
+    --hero-success: #1f7a4d;
+    --hero-success-hover: #196a41;
+}
 .ad-hero-derived {
     background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 50%, #120f1a) 0%, #120f1a 75%);
 }

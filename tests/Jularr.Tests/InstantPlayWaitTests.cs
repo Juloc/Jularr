@@ -138,17 +138,165 @@ public sealed class InstantPlayWaitTests
     }
 
     [TestMethod]
-    public void AHiddenPageDoesNotPollEvenWhenAPollWasInFlight()
+    public void AHiddenPageAbandonsAPollInFlightAndNeverRearmsFromItsAnswer()
     {
         var result = Json("""
             const wait = make(); wait.start(); reply('intent', 200, acquiring(view('looking_for_media')));
             timers.next(); // a poll is in flight
             visible = false; wait.leave();
-            reply('status', 200, status(view('looking_for_media')));
-            return { scheduled: timers.scheduled(), statusCalls: calls.filter((c) => c.kind === 'status').length };
+            const abandoned = pending.status === null;
+            visible = true; // the answer is no longer anybody's: even a visible page must not re-arm from it
+            return { abandoned, scheduled: timers.scheduled(), statusCalls: calls.filter((c) => c.kind === 'status').length };
             """);
 
-        Assert.AreEqual("{\"scheduled\":[],\"statusCalls\":1}", result);
+        Assert.AreEqual("{\"abandoned\":true,\"scheduled\":[],\"statusCalls\":1}", result);
+    }
+
+    [TestMethod]
+    public void AReadyAnswerThatIsStillOnItsWayWhenTheViewerLeavesNeverOpensThePlayer()
+    {
+        var result = Json("""
+            const wait = make(); wait.start(); reply('intent', 200, acquiring(view('looking_for_media')));
+            timers.next();
+            const answer = pending.status;
+            wait.leave();
+            if (answer) answer(null, { status: 200, body: status(view('ready_to_watch')) });
+            return { navigations, phase: wait.snapshot().phase };
+            """);
+
+        Assert.AreEqual("{\"navigations\":[],\"phase\":\"observing\"}", result, "The late answer of an abandoned poll is ignored.");
+    }
+
+    [TestMethod]
+    public void AWaitWhosePlayerWasOpeningGoesBackToItsActionWhenThePageIsLeftSoARestoredPageIsNeverStuck()
+    {
+        var result = Json("""
+            const wait = make(); wait.start(); reply('intent', 200, acquiring(view('looking_for_media')));
+            step(view('ready_to_watch'));
+            const opening = wait.snapshot().phase;
+            wait.leave(); // pagehide while navigating to the Player
+            const restored = wait.snapshot();
+            return { opening, phase: restored.phase, holds: restored.holdsIntent, view: restored.view, scheduled: timers.scheduled() };
+            """);
+
+        Assert.AreEqual("{\"opening\":\"handingOver\",\"phase\":\"idle\",\"holds\":false,\"view\":null,\"scheduled\":[]}", result);
+    }
+
+    [TestMethod]
+    public void ThePlayerOnlyOpensWhereAPlaceToGoWasGiven()
+    {
+        var result = Json("""
+            const wait = make({ watchHref: null }); wait.start();
+            reply('intent', 200, { outcome: 'play_now', target: { workId: 'w1', workEpisodeId: 'e1' } });
+            const other = make({ watchHref: '' }); other.start();
+            reply('intent', 200, acquiring(view('ready_to_watch')));
+            return { navigations, a: wait.snapshot().phase, b: other.snapshot().phase };
+            """);
+
+        Assert.AreEqual("{\"navigations\":[],\"a\":\"ended\",\"b\":\"ended\"}", result);
+    }
+
+    [TestMethod]
+    public void AChangingPercentageIsAskedForNoOftenerThanTwoAndAHalfSecondsAndAStateChangeStartsOverAtOnePointFive()
+    {
+        var result = Json("""
+            const wait = make(); wait.start(); reply('intent', 200, acquiring(view('getting_media', { progressPercent: 1 })));
+            const first = timers.scheduled();
+            step(view('getting_media', { progressPercent: 2 }));
+            const percentOnly = timers.scheduled();
+            step(view('preparing'));
+            return { first, percentOnly, state: timers.scheduled() };
+            """);
+
+        Assert.AreEqual("{\"first\":[1500],\"percentOnly\":[2500],\"state\":[1500]}", result);
+    }
+
+    [TestMethod]
+    public void ARateLimitAnswerIsHonouredAndNeverCountsTowardsTheFailureCap()
+    {
+        var result = Json("""
+            const wait = make(); wait.start(); reply('intent', 200, acquiring(view('looking_for_media')));
+            const delays = [];
+            for (let i = 0; i < 8; i++) { delays.push(timers.next()); reply('status', 429, null); }
+            const afterEight = wait.snapshot().phase;
+            const fresh = make(); fresh.start(); reply('intent', 200, acquiring(view('looking_for_media')));
+            timers.queue.clear(); fresh.reset(); fresh.start(); reply('intent', 200, acquiring(view('looking_for_media')));
+            timers.next(); pending.status(null, { status: 429, body: null, retryAfterMs: 30000 });
+            const honoured = timers.scheduled();
+            timers.next(); pending.status(null, { status: 429, body: null, retryAfterMs: 900000 });
+            return { afterEight, honoured, capped: timers.scheduled(), minimum: Math.min(...delays) };
+            """);
+
+        Assert.AreEqual("{\"afterEight\":\"waiting\",\"honoured\":[30000],\"capped\":[60000],\"minimum\":1500}", result, "Eight limits in a row do not end the wait; Retry-After is followed up to a minute.");
+    }
+
+    [TestMethod]
+    public void OneControlPollsARequestAtATimeAndTheObserversRestWhileAnActionHoldsIt()
+    {
+        var result = Json("""
+            const page = window.JularrInstantPlay.createCoordinator({ reload: () => { reloads++; } });
+            const action = make(); const observer = make({ observeOnly: true, requestId: 'r1' });
+            page.addAction(action); page.addObserver(observer);
+            const observing = timers.scheduled(); // the observer's first look
+            page.holding(action, false); // nothing holds yet
+            page.begin(action); // the viewer presses the action
+            reply('intent', 200, acquiring(view('looking_for_media')));
+            page.holding(action, true);
+            const whileHolding = timers.scheduled(); // only the action's poll is armed
+            visible = false; page.leaveAll(); visible = true; page.resumeAll();
+            const afterTabSwitch = timers.scheduled(); // the action observes again; the observer still rests
+            timers.next();
+            return { observing, whileHolding, afterTabSwitch, statusCalls: calls.filter((c) => c.kind === 'status').length };
+            """);
+
+        Assert.AreEqual("{\"observing\":[1500],\"whileHolding\":[1500],\"afterTabSwitch\":[0],\"statusCalls\":1}", result, "One poll for the request, from the action.");
+    }
+
+    [TestMethod]
+    public void AnObserverStartsLookingAgainWhenTheActionLetsGoOfTheRequest()
+    {
+        var result = Json("""
+            const page = window.JularrInstantPlay.createCoordinator({ reload: () => {} });
+            const action = make(); const observer = make({ observeOnly: true, requestId: 'r1' });
+            page.addAction(action); page.addObserver(observer);
+            page.holding(action, true);
+            const resting = timers.scheduled();
+            page.holding(action, false);
+            return { resting, resumed: timers.scheduled() };
+            """);
+
+        Assert.AreEqual("{\"resting\":[],\"resumed\":[0]}", result);
+    }
+
+    [TestMethod]
+    public void APageRestoredFromTheBackForwardCacheIsAskedAgainOnlyWhereThereIsAControl()
+    {
+        var result = Json("""
+            const run = (controls, persisted) => {
+                let reloads = 0;
+                const page = window.JularrInstantPlay.createCoordinator({ reload: () => { reloads++; } });
+                for (let i = 0; i < controls; i++) page.addAction(make());
+                page.pageShown(persisted);
+                return reloads;
+            };
+            return { restored: run(1, true), fresh: run(1, false), none: run(0, true) };
+            """);
+
+        Assert.AreEqual("{\"restored\":1,\"fresh\":0,\"none\":0}", result);
+    }
+
+    [TestMethod]
+    public void AnObserverWhoseWaitEndedWithoutAnAnswerLooksAgainWhenAsked()
+    {
+        var result = Json("""
+            const observer = make({ observeOnly: true, requestId: 'r1' });
+            for (let i = 0; i < 5; i++) { timers.next(); fail('status'); }
+            const ended = observer.snapshot();
+            observer.reset();
+            return { phase: ended.phase, notice: ended.notice, again: timers.scheduled(), now: observer.snapshot().phase };
+            """);
+
+        Assert.AreEqual("{\"phase\":\"ended\",\"notice\":\"unavailable\",\"again\":[0],\"now\":\"observing\"}", result);
     }
 
     [TestMethod]
@@ -183,7 +331,9 @@ public sealed class InstantPlayWaitTests
     [DataRow("not_available", "not_available")]
     public void OutcomesWithNothingToWaitForEndTheWaitWithTheirNotice(string outcome, string notice)
     {
-        var result = Json($"const wait = make(); wait.start(); reply('intent', 200, {{ outcome: '{outcome}', target: {{ workId: 'w1', workEpisodeId: 'e1' }} }}); const s = wait.snapshot(); return {{ phase: s.phase, notice: s.notice, scheduled: timers.scheduled(), reloads }};");
+        var result = Json(
+            $"const wait = make(); wait.start(); reply('intent', 200, {{ outcome: '{outcome}', target: {{ workId: 'w1', workEpisodeId: 'e1' }} }}); "
+            + "const s = wait.snapshot(); return { phase: s.phase, notice: s.notice, scheduled: timers.scheduled(), reloads };");
 
         Assert.AreEqual($"{{\"phase\":\"ended\",\"notice\":\"{notice}\",\"scheduled\":[],\"reloads\":0}}", result);
     }
@@ -220,7 +370,9 @@ public sealed class InstantPlayWaitTests
     [DataRow("available")]
     public void EveryStateThatNothingWillChangeEndsPollingAndIsShownAsItIs(string state)
     {
-        var result = Json($"const wait = make(); wait.start(); reply('intent', 200, acquiring(view('looking_for_media'))); step(view('{state}')); const s = wait.snapshot(); return {{ phase: s.phase, scheduled: timers.scheduled(), navigations, state: s.view.state }};");
+        var result = Json(
+            $"const wait = make(); wait.start(); reply('intent', 200, acquiring(view('looking_for_media'))); step(view('{state}')); "
+            + "const s = wait.snapshot(); return { phase: s.phase, scheduled: timers.scheduled(), navigations, state: s.view.state };");
 
         Assert.AreEqual($"{{\"phase\":\"ended\",\"scheduled\":[],\"navigations\":[],\"state\":\"{state}\"}}", result);
     }
@@ -309,7 +461,8 @@ public sealed class InstantPlayWaitTests
             const known = wait.snapshot().percent;
             step(view('preparing', { progressPercent: 77 }));
             const afterPreparing = wait.snapshot().percent;
-            return { unknown, known, afterPreparing, getting: window.JularrInstantPlay.milestones(view('getting_media')).map((m) => m.percent), gettingKnown: window.JularrInstantPlay.milestones(view('getting_media', { progressPercent: 42 })).map((m) => m.percent) };
+            const percents = (v) => window.JularrInstantPlay.milestones(v).map((m) => m.percent);
+            return { unknown, known, afterPreparing, getting: percents(view('getting_media')), gettingKnown: percents(view('getting_media', { progressPercent: 42 })) };
             """);
 
         Assert.AreEqual("{\"unknown\":null,\"known\":42,\"afterPreparing\":null,\"getting\":[null,null,null,null],\"gettingKnown\":[null,null,null,42]}", result);
@@ -379,7 +532,10 @@ public sealed class InstantPlayWaitTests
         var result = Json("""
             const requests = [];
             const thenable = (value) => ({ then: (ok) => thenable(ok(value)), catch: () => thenable(value), finally: (fn) => { fn(); return thenable(value); } });
-            const fetchImpl = (url, init) => { requests.push({ url, method: init.method, credentials: init.credentials, body: init.body ?? null, type: init.headers['Content-Type'] ?? null }); return thenable({ status: 200, json: () => thenable({ ok: true }) }); };
+            const fetchImpl = (url, init) => {
+                requests.push({ url, method: init.method, credentials: init.credentials, body: init.body ?? null, type: init.headers['Content-Type'] ?? null });
+                return thenable({ status: 200, json: () => thenable({ ok: true }) });
+            };
             const real = window.JularrInstantPlay.createApi({ intentUrl: '/api/client/v1/video/playback-intents', statusUrl: '/api/client/v1/requests/{id}', fetchImpl, timers });
             real.postIntent({ workId: 'w 1', workEpisodeId: null }, () => {});
             real.getStatus('r/1', 'e1', () => {});

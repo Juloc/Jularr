@@ -27,7 +27,9 @@ public abstract class VideoDetailPageModel(
     PlaybackIntentService intents,
     ConsumerAcquisitionQuery acquisition) : PageModel
 {
-    private static readonly HashSet<string> PlayingWords = new(["acquisition.state.readyToWatch", "acquisition.instant.milestone.preparing", "acquisition.instant.stopWaiting", "acquisition.instant.stopped", "acquisition.instant.stoppedHint"], StringComparer.Ordinal);
+    private static readonly HashSet<string> PlayingWords = new(
+        ["acquisition.state.readyToWatch", "acquisition.instant.milestone.preparing", "acquisition.instant.stopWaiting", "acquisition.instant.stopped", "acquisition.instant.stoppedHint"],
+        StringComparer.Ordinal);
 
     private InstantPlayPolicy? policy;
 
