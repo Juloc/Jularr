@@ -6,10 +6,6 @@ namespace Jularr.Web.Data;
 /// Applies EF Core migrations to the canonical PostgreSQL database at startup and in
 /// tests. EF Core takes its own advisory lock for the duration of the migration, so a
 /// second instance starting against the same database waits rather than racing.
-///
-/// The one-time import of a legacy SQLite database (the previous persistence epoch) is
-/// handled separately by <see cref="SqliteImport.SqliteToPostgresImporter"/> before the
-/// application starts serving requests.
 /// </summary>
 public static class DatabaseMigrationBridge
 {
