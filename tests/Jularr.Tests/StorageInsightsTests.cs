@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Audiobooks;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Storage;
 using Jularr.Web.Features.Storage.Insights;
@@ -49,6 +50,50 @@ public sealed class StorageInsightsTests
         Assert.AreEqual(5, report.LargestItems[0].EpisodeNumber);
         Assert.AreEqual("Show A", report.LargestItems[1].Title);
         Assert.AreEqual(3 * Gigabyte, report.LargestItems[1].Bytes);
+    }
+
+    [TestMethod]
+    public async Task UsageCountsMoviesAsMoviesAndNeverAsEpisodesOrDuplicates()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Media", scope.Dir("media"));
+        scope.AddMovieFile(root, "Ember Road", 8 * Gigabyte);
+        scope.AddMovieFile(root, "Salt Flats", 4 * Gigabyte);
+        scope.AddMedia(root, scope.AddAnime("Show"), 1, 1, Gigabyte);
+        await scope.Db.SaveChangesAsync();
+
+        var report = await scope.Usage.GetAsync(5, CancellationToken.None);
+
+        var movies = report.MediaTypes.Single(x => x.Kind == StorageMediaKind.Movies);
+        Assert.AreEqual(2, movies.FileCount);
+        Assert.AreEqual(12 * Gigabyte, movies.Bytes);
+        var episodes = report.MediaTypes.Single(x => x.Kind == StorageMediaKind.Episodes);
+        Assert.AreEqual(1, episodes.FileCount);
+        Assert.IsFalse(report.MediaTypes.Any(x => x.Kind == StorageMediaKind.UnmatchedVideo), "A healthy library has no unmatched row.");
+        Assert.AreEqual(0, report.Roots.Single().DuplicateEpisodes, "Two movies in one root are not a duplicate episode.");
+        Assert.AreEqual("Ember Road", report.LargestItems[0].Title);
+        Assert.IsNull(report.LargestItems[0].EpisodeNumber, "A movie has no episode number.");
+        Assert.AreEqual("Show", report.LargestItems.Single(x => x.EpisodeNumber is not null).Title);
+    }
+
+    [TestMethod]
+    public async Task UsageListsAVideoNoWorkOrEpisodeClaimsAsUnmatched()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Media", scope.Dir("media"));
+        scope.Db.MediaFiles.Add(new MediaFile
+        {
+            LibraryRootId = root.Id,
+            Path = Path.Combine(root.Path, "loose.mkv"),
+            SizeBytes = 3 * Gigabyte,
+            LastWriteTimeUtc = new DateTime(2025, 1, 2, 3, 4, 5, DateTimeKind.Utc)
+        });
+        await scope.Db.SaveChangesAsync();
+
+        var report = await scope.Usage.GetAsync(5, CancellationToken.None);
+
+        Assert.AreEqual(3 * Gigabyte, report.MediaTypes.Single(x => x.Kind == StorageMediaKind.UnmatchedVideo).Bytes);
+        Assert.AreEqual(0, report.MediaTypes.Single(x => x.Kind == StorageMediaKind.Movies).FileCount);
     }
 
     [TestMethod]
@@ -340,6 +385,24 @@ public sealed class StorageInsightsTests
             };
             Db.MediaFiles.Add(file);
             return file;
+        }
+
+        public void AddMovieFile(LibraryRoot root, string title, long bytes)
+        {
+            var work = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = title };
+            var version = new WorkVersion { WorkId = work.Id, VersionKey = $"video-file:{title}" };
+            var asset = new MediaAsset { WorkId = work.Id, WorkVersionId = version.Id, Kind = MediaAssetKind.Video };
+            Db.Works.Add(work);
+            Db.WorkVersions.Add(version);
+            Db.MediaAssets.Add(asset);
+            Db.MediaFiles.Add(new MediaFile
+            {
+                LibraryRootId = root.Id,
+                MediaAssetId = asset.Id,
+                Path = Path.Combine(root.Path, $"{title}.mkv"),
+                SizeBytes = bytes,
+                LastWriteTimeUtc = new DateTime(2025, 1, 2, 3, 4, 5, DateTimeKind.Utc)
+            });
         }
 
         public void AddAudiobookFile(long bytes)

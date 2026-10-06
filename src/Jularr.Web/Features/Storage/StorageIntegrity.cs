@@ -25,11 +25,17 @@ public sealed class StorageIntegrityService(AppDbContext db)
     public async Task<IReadOnlyDictionary<Guid, StorageIntegritySummary>> SummarizeAsync(
         CancellationToken cancellationToken)
     {
-        var duplicates = await db.MediaFiles
-            .AsNoTracking()
-            .GroupBy(x => new { x.LibraryRootId, x.EpisodeId })
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key.LibraryRootId)
+        // Only files that belong to an episode can duplicate one. A movie or an unmatched file has no episode, and grouping those
+        // by a missing identity would report every such file in a root as a duplicate episode.
+        var duplicates = await (
+                from file in db.MediaFiles.AsNoTracking()
+                join asset in db.MediaAssets.AsNoTracking() on file.MediaAssetId equals asset.Id into assets
+                from asset in assets.DefaultIfEmpty()
+                let episodeId = file.EpisodeId ?? asset.WorkEpisodeId
+                where episodeId != null
+                group file by new { file.LibraryRootId, episodeId } into episodeFiles
+                where episodeFiles.Count() > 1
+                select episodeFiles.Key.LibraryRootId)
             .ToListAsync(cancellationToken);
 
         var empty = await db.MediaFiles

@@ -72,7 +72,7 @@
                                     }
                                 </td>
                                 <td data-label="@ui["admin.storage.destinations.column.placement"]">
-                                    <select class="admset-control" name="placementPolicy" form="@formId" aria-label="@ui["admin.storage.destinations.column.placement"]: @Model.ContentTypeLabel(destination.ContentType)">
+                                    <select class="admset-control admset-control-fit" name="placementPolicy" form="@formId" aria-label="@ui["admin.storage.destinations.column.placement"]: @Model.ContentTypeLabel(destination.ContentType)">
                                         @foreach (var policy in Enum.GetValues<Jularr.Web.Features.Library.LibraryPlacementPolicy>())
                                         {
                                             <option value="@policy" selected="@((current?.PlacementPolicy ?? Jularr.Web.Features.Library.LibraryPlacementPolicy.HardlinkOrCopy) == policy)">@Model.PlacementLabel(policy)</option>
@@ -199,7 +199,9 @@
                         <div class="operation-copy">
                             <strong>@item.Title</strong>
                             <span>
-                                @ui.Format("admin.storage.largest.episode", ("season", item.SeasonNumber), ("episode", item.EpisodeNumber))
+                                @(item.SeasonNumber is { } season && item.EpisodeNumber is { } episode
+                                    ? ui.Format("admin.storage.largest.episode", ("season", season), ("episode", episode))
+                                    : ui["admin.storage.largest.movie"])
                                 · @item.RootName
                                 @if (item.RootHealth != StorageHealthState.Online)
                                 {

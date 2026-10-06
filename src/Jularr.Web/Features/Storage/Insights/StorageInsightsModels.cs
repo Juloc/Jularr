@@ -100,7 +100,9 @@ public sealed record StorageRootUsage(
 
 public enum StorageMediaKind
 {
+    Movies,
     Episodes,
+    UnmatchedVideo,
     Audiobooks,
     Books
 }
@@ -110,8 +112,9 @@ public sealed record StorageMediaTypeUsage(StorageMediaKind Kind, long FileCount
 public sealed record StorageLargestItem(
     Guid MediaFileId,
     string Title,
-    int SeasonNumber,
-    int EpisodeNumber,
+    // Both null for a movie, which has no season or episode.
+    int? SeasonNumber,
+    int? EpisodeNumber,
     Guid RootId,
     string RootName,
     long Bytes,
