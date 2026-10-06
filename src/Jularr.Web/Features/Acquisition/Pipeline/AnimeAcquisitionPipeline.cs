@@ -1152,6 +1152,9 @@ public sealed class AnimeAcquisitionPipeline(
             .ThenByDescending(candidate => candidate.Score.Accepted)
             .ThenBy(candidate => candidate.Score.QualityRank)
             .ThenByDescending(candidate => candidate.Score.Score)
+            .ThenBy(candidate => candidate.Release.Sources.FirstOrDefault()?.Priority ?? 0)
+            .ThenByDescending(candidate => candidate.Release.PublishedAt)
+            .ThenBy(candidate => candidate.Release.Identity, StringComparer.Ordinal)
             .ToArray();
     }
 

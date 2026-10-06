@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Selection;
 
 namespace Jularr.Web.Features.Acquisition.Access;
 
@@ -15,6 +16,8 @@ public enum VideoIdentityMatch
     Matches,
     ContainsTarget,
     WrongTitle,
+    WrongYear,
+    AmbiguousTitle,
     WrongSeason,
     WrongEpisode,
     Unparseable,
@@ -23,25 +26,36 @@ public enum VideoIdentityMatch
 }
 
 /// <summary>
-/// One returned release evaluated by the shared video pipeline. <see cref="Score"/> is the profile score of the parsed release;
-/// it exists whenever the title could be parsed, but only an identity-valid, accepted release is <see cref="IsGrabbable"/>.
+/// One returned release as the shared selection engine judged it. <see cref="Score"/> is the profile score of the parsed release; it
+/// exists whenever the title could be parsed, but only a selectable release (identity valid, profile accepted) is
+/// <see cref="IsGrabbable"/> by automatic acquisition. A release whose identity is only ambiguous can still be taken by an owner
+/// (<see cref="IsManuallyGrabbable"/>); a profile rejection never can.
 /// </summary>
 public sealed record VideoReleaseEvaluation(
     ProwlarrReleaseCandidate Candidate,
     ReleaseInfo? Parsed,
-    ReleaseScoreResult? Score,
-    VideoIdentityMatch Identity)
+    VideoIdentityMatch Identity,
+    CandidateEvaluation Selection)
 {
-    public bool IsIdentityValid => Identity is VideoIdentityMatch.Matches or VideoIdentityMatch.ContainsTarget;
+    public ReleaseScoreResult? Score => Selection.Score;
 
-    public bool IsGrabbable => IsIdentityValid && Score is { Accepted: true } && Candidate.InternalDownloadUri is not null;
+    public bool IsIdentityValid => Selection.Candidate.Identity.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong;
+
+    public bool IsGrabbable => Selection.IsSelectable && Candidate.InternalDownloadUri is not null;
+
+    public bool IsManuallyGrabbable => (IsGrabbable || Selection.Decision == SelectionDecision.ManualReview) && Candidate.InternalDownloadUri is not null;
 }
 
 /// <summary>The result of one search: the profile it was scored with, per-indexer warnings and every evaluated release.</summary>
 public sealed record VideoSearchEvaluation(
     QualityProfile Profile,
     AcquisitionSearchResult Search,
-    IReadOnlyList<VideoReleaseEvaluation> Releases);
+    IReadOnlyList<VideoReleaseEvaluation> Releases,
+    SelectionResult Selection)
+{
+    /// <summary>The releases automatic acquisition may take, best first.</summary>
+    public IReadOnlyList<VideoReleaseEvaluation> Grabbable => [.. Releases.Where(release => release.IsGrabbable)];
+}
 
 /// <summary>A configuration gap that stops video acquisition before any search runs.</summary>
 public enum VideoAcquisitionSetupProblem

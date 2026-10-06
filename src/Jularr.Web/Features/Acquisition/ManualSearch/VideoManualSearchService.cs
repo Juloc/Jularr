@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Instance;
 
 namespace Jularr.Web.Features.Acquisition.ManualSearch;
@@ -120,7 +121,7 @@ public sealed partial class VideoManualSearchService(
             // The grab never trusts what the list showed: it searches again past the evidence cache and validates the identity.
             var evaluation = await engine.SearchManualAsync(request, target, cancellationToken, SearchDepth.Normal, refresh: true);
             var selected = evaluation.Releases.FirstOrDefault(release => release.Candidate.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
-            if (selected is null || !selected.IsGrabbable)
+            if (selected is null || !selected.IsManuallyGrabbable)
             {
                 return new ManualGrabOutcome(ManualGrabStatus.NotAvailable, null, request);
             }
@@ -278,12 +279,19 @@ public sealed partial class VideoManualSearchService(
             reasons.Add(new ManualSearchReason(ManualSearchReasonCode.LowerQuality, evaluation.Score!.QualityKey));
         }
 
+        // The engine's own findings beyond identity and the profile rules (a fallback tier that is active or still waiting) are shown as they are.
+        reasons.AddRange(evaluation.Selection.Reasons
+            .Where(reason => reason.Kind == SelectionReasonKind.Fallback)
+            .Select(reason => new ManualSearchReason(reason.Code == "FallbackTier" ? ManualSearchReasonCode.FallbackTier : ManualSearchReasonCode.WaitingForFallbackTier, reason.Detail)));
+
         if (isTried)
         {
             reasons.Add(new ManualSearchReason(ManualSearchReasonCode.AlreadyTried));
         }
 
-        var verdict = !evaluation.IsGrabbable ? ManualSearchVerdict.Rejected : lowerQuality ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
+        var verdict = !evaluation.IsManuallyGrabbable
+            ? ManualSearchVerdict.Rejected
+            : lowerQuality || evaluation.Selection.Decision is SelectionDecision.Temporary or SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
         return new ManualSearchCandidate(
             candidate.Identity,
             candidate.Title,
@@ -302,7 +310,7 @@ public sealed partial class VideoManualSearchService(
             reasons,
             evaluation.Score?.ScoreReasons ?? [],
             isTried,
-            CanGrab: evaluation.IsGrabbable && !isTried)
+            CanGrab: evaluation.IsManuallyGrabbable && !isTried)
         {
             Provenance = candidate.Provenance,
             Sources = [.. candidate.Sources.Select(source => source.Indexer)]
@@ -315,6 +323,8 @@ public sealed partial class VideoManualSearchService(
             VideoIdentityMatch.Matches => ManualSearchReasonCode.MatchesTarget,
             VideoIdentityMatch.ContainsTarget => ManualSearchReasonCode.ContainsTarget,
             VideoIdentityMatch.WrongTitle => ManualSearchReasonCode.WrongTitle,
+            VideoIdentityMatch.WrongYear => ManualSearchReasonCode.WrongYear,
+            VideoIdentityMatch.AmbiguousTitle => ManualSearchReasonCode.AmbiguousIdentity,
             VideoIdentityMatch.WrongSeason => ManualSearchReasonCode.WrongSeason,
             VideoIdentityMatch.WrongEpisode => ManualSearchReasonCode.WrongEpisode,
             VideoIdentityMatch.Unparseable => ManualSearchReasonCode.Unparseable,

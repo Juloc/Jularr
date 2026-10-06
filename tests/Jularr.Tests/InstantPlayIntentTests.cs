@@ -120,7 +120,7 @@ public sealed class InstantPlayIntentTests
     {
         await using var host = await MovieHostAsync();
         await host.AttachFileAsync(null);
-        var other = await host.AddWorkAsync("Arrival", "329865");
+        var other = await host.AddWorkAsync("Arrival", "329865", 2016);
 
         var local = await Intents(host, playback: false).StartAsync(host.Work.Id, null, CancellationToken.None);
         var missing = await Intents(host, playback: false).StartAsync(other.Id, null, CancellationToken.None);
@@ -407,7 +407,7 @@ public sealed class InstantPlayIntentTests
     public async Task AWantedPassSearchesTheRequestAProfileIsWaitingForFirst()
     {
         await using var host = await MovieHostAsync("Arrival.2016.1080p.WEB-DL.x264-GROUP");
-        await host.AddWorkAsync("Arrival", "329865");
+        await host.AddWorkAsync("Arrival", "329865", 2016);
         await host.Requests.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", "329865", "Arrival", null, null), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
         await Task.Delay(20);
         var waited = new VideoRequestPayload(host.Work.Id, "Dune", 2021, VideoRequestScope.WholeWork, [], MonitorFuture: false) { PlaybackMarkers = [Marker(null)] };

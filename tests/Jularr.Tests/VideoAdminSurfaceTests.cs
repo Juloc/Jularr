@@ -543,7 +543,7 @@ public sealed class VideoAdminSurfaceTests
         var works = await movie.Get<VideoRequestWorkResolver>().ResolveAsync([request, unknown, book], CancellationToken.None);
 
         Assert.AreEqual(1, works.Count);
-        Assert.AreEqual(new VideoRequestWork(movie.Work.Id, "Dune", 2021), works[request.Id]);
+        Assert.AreEqual((movie.Work.Id, "Dune", (int?)2021), (works[request.Id].WorkId, works[request.Id].Title, works[request.Id].Year));
         Assert.AreEqual($"/Library/Movie/{movie.Work.Id:D}", VideoWorkLinks.DetailPath(MediaAcquisitionKind.Movie, works[request.Id].WorkId));
         Assert.AreEqual($"/Library/Series/{movie.Work.Id:D}", VideoWorkLinks.DetailPath(MediaAcquisitionKind.Tv, works[request.Id].WorkId));
 

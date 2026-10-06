@@ -306,9 +306,9 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
     }
 
     /// <summary>Adds another Work of the host's media type with its provider identity, for tests that need several titles in one list.</summary>
-    public async Task<Work> AddWorkAsync(string title, string tmdbId)
+    public async Task<Work> AddWorkAsync(string title, string tmdbId, int year = 2020)
     {
-        var work = new Work { MediaType = Work.MediaType, CanonicalTitle = title, Year = 2020 };
+        var work = new Work { MediaType = Work.MediaType, CanonicalTitle = title, Year = year };
         Environment.Db.Works.Add(work);
         Environment.Db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = work.Id, MediaType = work.MediaType, Provider = "tmdb", ExternalId = tmdbId, IsPrimary = true, Evidence = "test" });
         await Environment.Db.SaveChangesAsync();

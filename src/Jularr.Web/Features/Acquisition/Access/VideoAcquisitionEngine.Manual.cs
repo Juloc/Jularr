@@ -17,6 +17,9 @@ public sealed record VideoManualTarget(
 {
     /// <summary>The confirmed provider ids of the Work, sent to indexers that support them.</summary>
     public IReadOnlyDictionary<string, string>? ExternalIds { get; init; }
+
+    /// <summary>Every unit of the Series, so a pack's coverage can be told from the units nobody asked for.</summary>
+    public IReadOnlyList<VideoUnit> AllUnits { get; init; } = [];
 }
 
 // Manual Search entry points of the shared Movie/TV engine. They reuse the search, scoring and grab code of automatic acquisition
@@ -70,17 +73,18 @@ public sealed partial class VideoAcquisitionEngine
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
-        var missing = (await LoadTvUnitsAsync(target.WorkId, cancellationToken)).Where(x => !x.HasFile && (x.AiredAt is null || x.AiredAt <= now)).ToArray();
+        var all = await LoadTvUnitsAsync(target.WorkId, cancellationToken);
+        var missing = all.Where(x => !x.HasFile && (x.AiredAt is null || x.AiredAt <= now)).ToArray();
         if (requestedUnitId is not null)
         {
             var requested = missing.FirstOrDefault(x => x.Id == requestedUnitId);
-            return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, requested, missing, profile, HasLocalFile: false, UnitChanged: requested is null) { ExternalIds = target.ExternalIds };
+            return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, requested, missing, profile, HasLocalFile: false, UnitChanged: requested is null) { ExternalIds = target.ExternalIds, AllUnits = all };
         }
 
         var unit = missing.FirstOrDefault(x => x.Id == payload.ActiveWorkEpisodeId)
                    ?? await FindNextTvUnitAsync(request, payload, cancellationToken)
                    ?? missing.FirstOrDefault();
-        return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, unit, missing, profile, HasLocalFile: false) { ExternalIds = target.ExternalIds };
+        return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, unit, missing, profile, HasLocalFile: false) { ExternalIds = target.ExternalIds, AllUnits = all };
     }
 
     /// <summary>
@@ -88,7 +92,15 @@ public sealed partial class VideoAcquisitionEngine
     /// belong to this search only; they never change the persistent Acquisition Profile of the Work.
     /// </summary>
     public Task<VideoSearchEvaluation> SearchManualAsync(AcquisitionRequest request, VideoManualTarget target, CancellationToken cancellationToken, SearchDepth depth = SearchDepth.Normal, bool refresh = false) =>
-        SearchAndEvaluateAsync(request.Kind, target.Payload, target.Unit, target.ExternalIds ?? new Dictionary<string, string>(), target.Profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, cancellationToken);
+        SearchAndEvaluateAsync(
+            request,
+            target.Payload,
+            target.Unit,
+            new VideoUnitScope(target.AllUnits, target.MissingUnits),
+            target.ExternalIds ?? new Dictionary<string, string>(),
+            target.Profile,
+            new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh },
+            cancellationToken);
 
     /// <summary>
     /// Submits the one release the owner selected through the shared grab path. The caller has already verified that it is grabbable
@@ -96,7 +108,7 @@ public sealed partial class VideoAcquisitionEngine
     /// </summary>
     public Task<AcquisitionExecution> GrabManualAsync(AcquisitionRequest request, VideoManualTarget target, VideoReleaseEvaluation selected, VideoGrabProgress progress, CancellationToken cancellationToken)
     {
-        if (!selected.IsGrabbable)
+        if (!selected.IsManuallyGrabbable)
         {
             throw new InvalidOperationException("The selected release is not eligible.");
         }

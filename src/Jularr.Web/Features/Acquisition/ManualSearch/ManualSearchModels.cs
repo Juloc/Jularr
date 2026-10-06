@@ -27,6 +27,8 @@ public enum ManualSearchReasonCode
     MatchesTarget,
     ContainsTarget,
     WrongTitle,
+    WrongYear,
+    AmbiguousIdentity,
     WrongSeason,
     WrongEpisode,
     Unparseable,
@@ -34,6 +36,8 @@ public enum ManualSearchReasonCode
     NoDownload,
     ProfileRejected,
     LowerQuality,
+    FallbackTier,
+    WaitingForFallbackTier,
     AlreadyTried
 }
 

@@ -99,15 +99,26 @@ public static class ReleaseScorer
         }
 
         var score = 0;
+        var infoReasons = new List<string>();
         foreach (var rule in profile.ScoreRules)
         {
-            if (!Matches(rule, candidate.Release))
+            var matched = Matches(rule, candidate.Release);
+            switch (rule.EffectiveEffect)
             {
-                continue;
+                case ReleaseRuleEffect.Require when !matched:
+                    rejections.Add($"Missing required rule '{rule.Name}'.");
+                    break;
+                case ReleaseRuleEffect.Reject when matched:
+                    rejections.Add($"Matches reject rule '{rule.Name}'.");
+                    break;
+                case ReleaseRuleEffect.Info when matched:
+                    infoReasons.Add(rule.Name);
+                    break;
+                case ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid when matched:
+                    score += rule.Score;
+                    scoreReasons.Add($"{rule.Name}: {(rule.Score >= 0 ? "+" : "")}{rule.Score}");
+                    break;
             }
-
-            score += rule.Score;
-            scoreReasons.Add($"{rule.Name}: {(rule.Score >= 0 ? "+" : "")}{rule.Score}");
         }
 
         if (score < profile.MinimumScore)
@@ -122,7 +133,10 @@ public static class ReleaseScorer
             qualityKey,
             qualityRank,
             rejections,
-            scoreReasons);
+            scoreReasons)
+        {
+            InfoReasons = infoReasons
+        };
     }
 
     public static IReadOnlyList<ReleaseScoreResult> Rank(
@@ -160,13 +174,20 @@ public static class ReleaseScorer
             return false;
         }
 
+        if (profile.UpgradeUntilScore is { } untilScore && current.Score >= untilScore)
+        {
+            return false;
+        }
+
+        // A better quality tier is an upgrade by the configured number of steps; unknown ranks never count as a step. Within one
+        // quality the preference score has to improve by the configured delta, so tiny differences never churn files.
         if (candidate.QualityRank < current.QualityRank)
         {
-            return true;
+            return current.QualityRank == int.MaxValue || current.QualityRank - candidate.QualityRank >= Math.Max(1, profile.UpgradeMinimumQualitySteps);
         }
 
         return candidate.QualityRank == current.QualityRank &&
-               candidate.Score > current.Score;
+               candidate.Score - current.Score >= Math.Max(1, profile.UpgradeMinimumScoreDelta);
     }
 
     public static IReadOnlyList<string> ValidateProfile(QualityProfile profile)
@@ -236,6 +257,29 @@ public static class ReleaseScorer
         foreach (var pattern in profile.RequiredRegex.Concat(profile.RejectedRegex))
         {
             ValidateRegex(pattern, errors);
+        }
+
+        var previousWait = -1;
+        foreach (var tier in profile.FallbackTiers ?? [])
+        {
+            if (tier.AfterMinutes <= previousWait)
+            {
+                errors.Add("Fallback tiers must wait longer than the tier before them.");
+            }
+
+            previousWait = tier.AfterMinutes;
+            foreach (var added in tier.AddedQualities ?? [])
+            {
+                if (!profile.QualityOrder.Contains(added, StringComparer.OrdinalIgnoreCase))
+                {
+                    errors.Add($"Fallback quality '{added}' is missing from quality order.");
+                }
+            }
+        }
+
+        if (profile.UpgradeMinimumScoreDelta < 1 || profile.UpgradeMinimumQualitySteps < 1)
+        {
+            errors.Add("Upgrade benefit thresholds must be at least 1.");
         }
 
         foreach (var rule in profile.ScoreRules)
