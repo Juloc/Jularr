@@ -29,7 +29,7 @@ public sealed class ProwlarrSettingsStore
         ArgumentNullException.ThrowIfNull(directory);
 
         protector = dataProtectionProvider.CreateProtector(
-            "AniLingo.Acquisition.Prowlarr.ApiKey.v1");
+            "Jularr.Acquisition.Prowlarr.ApiKey.v1");
         storePath = Path.Combine(directory.FullName, FileName);
     }
 
