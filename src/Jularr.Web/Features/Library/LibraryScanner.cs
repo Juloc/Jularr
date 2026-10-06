@@ -18,8 +18,7 @@ public sealed class LibraryScanner(
     ILogger<LibraryScanner> logger,
     AnimeMetadataService? metadataService = null,
     MediaSegmentSidecarImporter? segmentSidecars = null,
-    AnimeArtworkLibrary? artworkLibrary = null,
-    CanonicalVideoStorageBackfillService? canonicalVideoBackfill = null)
+    AnimeArtworkLibrary? artworkLibrary = null)
 {
     private readonly AnimeArtworkLibrary artwork =
         artworkLibrary ?? new AnimeArtworkLibrary(db, Microsoft.Extensions.Logging.Abstractions.NullLogger<AnimeArtworkLibrary>.Instance);
@@ -414,10 +413,6 @@ public sealed class LibraryScanner(
 
         await db.SaveChangesAsync(cancellationToken);
 
-        if (canonicalVideoBackfill is not null)
-        {
-            await canonicalVideoBackfill.BackfillLegacyAnimeAsync(rootId, cancellationToken);
-        }
 
         if (metadataService is not null)
         {
