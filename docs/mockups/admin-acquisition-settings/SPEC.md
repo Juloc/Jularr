@@ -1038,3 +1038,81 @@ Unsupported.
 - No silent cross-profile edits to shared rule definitions.
 - No silent Sonarr-import guess that converts ambiguous negative scores to Reject.
 - No loss of current persisted profile behavior during migration.
+
+
+## 2026-10-06 search/selection refinement
+
+Binding generic behavior now lives in:
+
+- `docs/ACQUISITION_SEARCH_PLANNER.md` / #864 — how candidates are searched;
+- `docs/AUTOMATIC_RELEASE_SELECTION.md` / #865 — how normalized candidates are automatically accepted/ranked/delayed/upgraded.
+
+This profile spec remains the canonical **Admin editor UX** for those policies. It must not create a second search or scoring engine.
+
+### Search is not scoring
+
+Acquisition Profile Release Rules normally do **not** rewrite indexer queries. Query construction is owned by the Search Planner from canonical target identity + indexer capabilities. Profile rules evaluate normalized returned candidates.
+
+The profile may narrow eligible providers/indexers/media paths or express source preference, but it does not encode raw Newznab query templates.
+
+### Required rule effects
+
+Target profile effects are now explicitly:
+
+- Require
+- Prefer
+- Avoid
+- Reject
+- Info
+
+`Require` is a hard eligibility gate. Do not force common requirements into inverse regex or magic negative scores.
+
+### Fallback tiers
+
+The profile may define explicit timed fallback tiers that relax only rules/preferences the owner chose to relax.
+
+Each tier must show:
+- when it becomes active;
+- which requirements/preferences change;
+- whether a candidate accepted at this tier is Temporary or Final;
+- which final target Jularr continues upgrading toward.
+
+Canonical identity and hard safety never relax.
+
+Fallback tiers integrate with Wartezeit & Quellen; do not create a separate scheduler.
+
+### Upgrade benefit
+
+In addition to target quality and Upgrade-until-score, profiles may set where meaningful:
+- minimum quality-tier improvement;
+- minimum score delta;
+- optional maximum added size/storage cost;
+- optional cooldown/minimum interval for equivalent upgrades.
+
+This prevents repeated tiny upgrades and score oscillation.
+
+### Pack / multi-unit policy
+
+Pack preference is evaluated with actual canonical coverage utility. Do not model `Season Pack +N` as sufficient by itself.
+
+Profile controls may express preference for packs, but automatic selection also considers:
+- how many Wanted targets are covered;
+- completeness;
+- existing local coverage;
+- duplicate/unwanted units;
+- size/storage cost.
+
+### Compatibility intent
+
+Profiles may expose simple inspectable intents/presets such as Maximum compatibility / Balanced / Best quality only when they resolve to explicit normal rules. Never introduce an opaque AI compatibility score.
+
+### Validation / simulation expansion
+
+The Test surface must also support:
+- rule-conflict detection;
+- impossible AND/Require/Reject combinations where detectable;
+- unreachable fallback/upgrade conditions;
+- simulation against real normalized recent/historical/current candidates;
+- predicted Auto winner, fallback tier and Temporary/Final state.
+
+All simulation uses the same production evaluator.
