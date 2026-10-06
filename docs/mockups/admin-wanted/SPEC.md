@@ -113,7 +113,7 @@ Filters:
 - rejection reason
 - profile score where useful
 
-Sorting defaults to effective-profile score, then decision quality and source preference.
+Default ordering follows the canonical automatic-selection hierarchy: decision eligibility/identity state first, then effective quality/fallback tier, preference score, coverage utility and configured source/tiebreak policy. Network response order is never significant.
 
 ### Candidate decision visibility
 
