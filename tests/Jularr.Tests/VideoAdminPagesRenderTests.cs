@@ -52,6 +52,21 @@ public sealed class VideoAdminPagesRenderTests
     }
 
     [TestMethod]
+    public async Task EveryAdminSurfaceOfAMovieShowsThePosterOfItsWorkAndNotACoverCopiedIntoTheRequest()
+    {
+        await using var movie = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Movie, "Dune", 2021, "438631", DuneRelease);
+        var request = await movie.CreateApprovedAsync();
+        await RequestArtworkSeed.AddPosterAsync(movie.Environment.Db, movie.Work.Id);
+        await using var host = await VideoAdminPageHost.CreateAsync(movie);
+        var poster = $"src=\"/works/{movie.Work.Id:D}/artwork/";
+
+        StringAssert.Contains(await host.GetHtmlAsync("/Admin/Wanted"), poster);
+        StringAssert.Contains(await host.GetHtmlAsync("/Admin/Requests"), poster);
+        StringAssert.Contains(await host.GetHtmlAsync($"/Admin/Media/movie/{movie.Work.Id:D}"), poster);
+        Assert.IsNull((await movie.Requests.GetAsync(request.Id, CancellationToken.None))!.CoverImageUrl, "The request carries no cover; the poster is resolved, not stored.");
+    }
+
+    [TestMethod]
     public async Task RequestsOpenTheCanonicalPageAndSearchMovieAndSeriesThroughTheSharedAction()
     {
         await using var movie = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Movie, "Dune", 2021, "438631", DuneRelease);

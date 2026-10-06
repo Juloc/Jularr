@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
@@ -25,6 +26,7 @@ public sealed class RequestsModel(
     AcquisitionRequestSettingsStore settings,
     QualityProfileStore qualityProfiles,
     VideoRequestWorkResolver videoWorks,
+    RequestArtworkResolver artwork,
     ILogger<RequestsModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
@@ -55,6 +57,9 @@ public sealed class RequestsModel(
 
     /// <summary>The canonical Work of each Movie and TV request on the page, by request id; a request whose Work does not exist has no entry.</summary>
     public IReadOnlyDictionary<Guid, VideoRequestWork> VideoWorks { get; private set; } = new Dictionary<Guid, VideoRequestWork>();
+
+    /// <summary>The poster of each request on the page, by request id, from the canonical artwork of its title; a request without artwork has no entry.</summary>
+    public IReadOnlyDictionary<Guid, string> Posters { get; private set; } = new Dictionary<Guid, string>();
 
     /// <summary>
     /// Where "View media" goes: the canonical Library page of a Movie or Series Work, never a search or a path, and the
@@ -134,6 +139,7 @@ public sealed class RequestsModel(
                 .ToArray();
             Queue = AdminRequestQuery.Build(rows, filter, ProfileNames);
             VideoWorks = await videoWorks.ResolveAsync(Queue.Items, cancellationToken);
+            Posters = await artwork.ResolvePostersAsync(Queue.Items, User.FindFirstValue(ClaimTypes.NameIdentifier)!, cancellationToken);
         }
         catch (Exception exception) when (exception is DbException or InvalidOperationException or FormatException)
         {

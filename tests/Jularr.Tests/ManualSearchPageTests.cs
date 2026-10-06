@@ -48,6 +48,19 @@ public sealed class ManualSearchPageTests
     }
 
     [TestMethod]
+    public async Task TheTargetCardShowsThePosterOfTheWorkOfTheRequest()
+    {
+        await using var video = await MovieHostAsync();
+        var request = await video.CreateApprovedAsync();
+        await RequestArtworkSeed.AddPosterAsync(video.Environment.Db, video.Work.Id);
+        await using var page = await PageHost.CreateAsync(video);
+
+        var html = await page.GetHtmlAsync($"/Admin/ManualSearch?id={request.Id}");
+
+        StringAssert.Contains(html, $"src=\"/works/{video.Work.Id:D}/artwork/");
+    }
+
+    [TestMethod]
     public async Task OwnerSeesEveryCandidateWithItsScoreTagAndReasonAndNeverADownloadUrl()
     {
         await using var video = await MovieHostAsync();
@@ -224,7 +237,7 @@ public sealed class ManualSearchPageTests
         {
             User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "owner"), new Claim(ClaimTypes.Role, AccountRoles.Owner)], "test"))
         };
-        var page = new ManualSearchModel(video.Environment.Db, video.Get<VideoManualSearchService>())
+        var page = new ManualSearchModel(video.Environment.Db, video.Get<VideoManualSearchService>(), new RequestArtworkResolver(video.Environment.Db, new VideoRequestWorkResolver(video.Environment.Db)))
         {
             PageContext = new PageContext { HttpContext = httpContext, ViewData = new ViewDataDictionary<ManualSearchModel>(new EmptyModelMetadataProvider(), new ModelStateDictionary()) },
             TempData = new TempDataDictionary(httpContext, new NoTempData())
@@ -287,6 +300,7 @@ public sealed class ManualSearchPageTests
                         services.AddLogging();
                         services.AddSingleton<ViteAssetManifest>();
                         services.AddScoped<IAppShellService, AppShellService>();
+                        services.AddScoped<RequestArtworkResolver>();
                     })
                     .Configure(app =>
                     {

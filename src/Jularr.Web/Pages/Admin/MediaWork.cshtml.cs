@@ -26,6 +26,7 @@ public sealed class MediaWorkModel(
     VideoMonitoringService monitoring,
     AcquisitionRequestService requests,
     CurrentAccountContext currentAccount,
+    RequestArtworkResolver artwork,
     ILogger<MediaWorkModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
@@ -34,6 +35,9 @@ public sealed class MediaWorkModel(
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
     public AdminVideoMediaDetail? Detail { get; private set; }
+
+    /// <summary>The cached poster of the Work from the canonical Work artwork; null when it has none yet.</summary>
+    public string? PosterUrl { get; private set; }
 
     /// <summary>Whether the details could not be read.</summary>
     public bool Failed { get; private set; }
@@ -64,7 +68,13 @@ public sealed class MediaWorkModel(
             return Page();
         }
 
-        return Detail is null ? NotFound() : Page();
+        if (Detail is null)
+        {
+            return NotFound();
+        }
+
+        PosterUrl = (await artwork.ResolveWorkPostersAsync([Detail.WorkId], currentAccount.ProfileId, cancellationToken)).GetValueOrDefault(Detail.WorkId);
+        return Page();
     }
 
     /// <summary>Monitors or unmonitors a Movie.</summary>

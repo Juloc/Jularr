@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.ManualSearch;
@@ -22,13 +23,16 @@ public enum ManualSearchTab
 /// indexers; Current and History are request context. A POST carries only the request, the episode and an opaque release identity.
 /// </summary>
 [Authorize(Policy = JularrPolicies.AdminMedia)]
-public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService manualSearch) : PageModel
+public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService manualSearch, RequestArtworkResolver artwork) : PageModel
 {
     // Identities are provider guids plus an indexer id; anything longer is not a release this page produced.
     private const int MaxReleaseIdentityLength = 512;
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public ManualSearchTarget Target { get; private set; } = null!;
+
+    /// <summary>The poster of the target's title from its canonical artwork; null when it has none.</summary>
+    public string? PosterUrl { get; private set; }
     public ManualSearchResult? Result { get; private set; }
     public IReadOnlyList<ManualSearchCandidate> Candidates { get; private set; } = [];
     public ManualSearchCandidate? Selected { get; private set; }
@@ -73,7 +77,7 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
 
         if (ActiveTab != ManualSearchTab.Search)
         {
-            return await manualSearch.LoadAsync(id, unit, cancellationToken) is { } target ? Show(target) : NotFound();
+            return await manualSearch.LoadAsync(id, unit, cancellationToken) is { } target ? await ShowAsync(target, cancellationToken) : NotFound();
         }
 
         Result = await manualSearch.SearchAsync(id, unit, refresh, cancellationToken);
@@ -83,6 +87,7 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
         }
 
         Target = Result.Target;
+        PosterUrl = await PosterOfAsync(Target, cancellationToken);
         Indexers = Distinct(Result.Candidates.Select(candidate => candidate.Indexer));
         Qualities = Distinct(Result.Candidates.Select(candidate => candidate.Quality));
         Selected = string.IsNullOrWhiteSpace(release) ? null : Result.Candidates.FirstOrDefault(candidate => candidate.Identity == release.Trim());
@@ -190,11 +195,15 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
         return leading ?? candidate.Reasons[0];
     }
 
-    private PageResult Show(ManualSearchTarget target)
+    private async Task<PageResult> ShowAsync(ManualSearchTarget target, CancellationToken cancellationToken)
     {
         Target = target;
+        PosterUrl = await PosterOfAsync(target, cancellationToken);
         return Page();
     }
+
+    private async Task<string?> PosterOfAsync(ManualSearchTarget target, CancellationToken cancellationToken) =>
+        (await artwork.ResolvePostersAsync([target.Request], User.FindFirstValue(ClaimTypes.NameIdentifier)!, cancellationToken)).GetValueOrDefault(target.Request.Id);
 
     private IReadOnlyList<ManualSearchCandidate> ApplyFilters(IReadOnlyList<ManualSearchCandidate> candidates)
     {

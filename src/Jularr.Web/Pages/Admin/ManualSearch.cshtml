@@ -49,9 +49,9 @@
 
 <section class="bms-target-card" aria-label="@target.Title">
     <span class="bms-cover">
-        @if (!string.IsNullOrWhiteSpace(request.CoverImageUrl))
+        @if (Model.PosterUrl is { } poster)
         {
-            <img src="@request.CoverImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
+            <img src="@poster" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
         }
     </span>
     <div class="bms-target-copy">

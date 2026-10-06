@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Globalization;
+using System.Security.Claims;
 using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
@@ -28,6 +29,7 @@ public sealed class WantedModel(
     AcquisitionAccessStore store,
     AcquisitionRequestService requests,
     AnimeAcquisitionScheduler scheduler,
+    RequestArtworkResolver artwork,
     ILogger<WantedModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
@@ -42,6 +44,14 @@ public sealed class WantedModel(
 
     /// <summary>Whether anything at all is wanted, whatever the filters say.</summary>
     public bool AnyWanted { get; private set; }
+
+    /// <summary>The cached poster of each Movie or Series Work on the page, by Work id.</summary>
+    public IReadOnlyDictionary<Guid, string> WorkPosters { get; private set; } = new Dictionary<Guid, string>();
+
+    /// <summary>The cover of a row: the canonical Work poster of a Movie or Series, the cover the source carries for everything else.</summary>
+    public string? CoverOf(WantedItem item) => item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
+        ? item.WorkId is { } workId ? WorkPosters.GetValueOrDefault(workId) : null
+        : item.CoverUrl;
 
     /// <summary>The moment the page was built; ages are counted from it.</summary>
     public DateTime NowUtc { get; private set; } = DateTime.UtcNow;
@@ -183,6 +193,7 @@ public sealed class WantedModel(
                 .ToArray();
             AnyWanted = items.Length > 0;
             List = AdminWantedQuery.Build(items, filter);
+            WorkPosters = await artwork.ResolveWorkPostersAsync([.. List.Items.Where(item => item.WorkId is not null).Select(item => item.WorkId!.Value)], User.FindFirstValue(ClaimTypes.NameIdentifier)!, cancellationToken);
         }
         catch (Exception exception) when (exception is DbException or InvalidOperationException or FormatException or JsonException or IOException or InvalidDataException)
         {

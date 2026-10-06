@@ -164,9 +164,9 @@
                             <td class="admwant-cell-title">
                                 <div class="admwant-title-wrap">
                                     <span class="admwant-cover">
-                                        @if (!string.IsNullOrWhiteSpace(item.CoverUrl))
+                                        @if (Model.CoverOf(item) is { } cover)
                                         {
-                                            <img src="@item.CoverUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                                            <img src="@cover" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
                                         }
                                     </span>
                                     <span class="admwant-copy">

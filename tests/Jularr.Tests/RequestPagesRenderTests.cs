@@ -302,6 +302,7 @@ public sealed class RequestPagesRenderTests
                         services.AddScoped<Jularr.Web.Features.Franchises.FranchiseStore>();
                         services.AddCollections();
                         services.AddScoped<RequestHistoryQuery>();
+                        services.AddScoped<RequestArtworkResolver>();
                         services.AddScoped<AcquisitionRequestService>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                     })

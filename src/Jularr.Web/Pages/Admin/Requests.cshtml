@@ -149,9 +149,9 @@
                             <td class="admreq-cell-title">
                               <div class="admreq-title-wrap">
                                 <span class="admreq-cover">
-                                    @if (!string.IsNullOrWhiteSpace(request.CoverImageUrl))
+                                    @if (Model.Posters.TryGetValue(request.Id, out var poster))
                                     {
-                                        <img src="@request.CoverImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                                        <img src="@poster" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
                                     }
                                 </span>
                                 <span class="admreq-copy">

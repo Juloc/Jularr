@@ -83,6 +83,7 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
                     services.AddScoped<AcquisitionRequestService>();
                     services.AddScoped<VideoRequestScopeResolver>();
                     services.AddScoped<VideoRequestWorkResolver>();
+                    services.AddScoped<RequestArtworkResolver>();
                     services.AddScoped<VideoMonitoringService>();
                     services.AddScoped<AdminVideoMediaService>();
                     services.AddSingleton<IMediaProbeRunner, FakeMediaProbeRunner>();

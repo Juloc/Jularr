@@ -75,7 +75,16 @@
 }
 
 <section class="admmd-hero" aria-labelledby="admmd-title">
-    <div class="admmd-poster" aria-hidden="true"><span>@WatchlistLabels.Initial(detail.Title)</span></div>
+    <div class="admmd-poster" aria-hidden="true">
+        @if (Model.PosterUrl is { } poster)
+        {
+            <img src="@poster" alt="" decoding="async" />
+        }
+        else
+        {
+            <span>@WatchlistLabels.Initial(detail.Title)</span>
+        }
+    </div>
     <div class="admmd-hero-main">
         <div class="admmd-hero-top">
             <div class="admmd-titles">
