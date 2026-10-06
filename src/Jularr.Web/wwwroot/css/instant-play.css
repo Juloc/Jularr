@@ -1,0 +1,115 @@
+/* Instant Play on the Movie and Series pages (docs/mockups/instant-play/SPEC.md, sections 6, 7, 10, 16 and 19): the playback
+   action morphs in place, so the button keeps its size through every state. The hero copy sits on the dark scrim of
+   anime-detail.css in both themes, so working and notice states there are light pills; episode rows sit on page surfaces
+   and use the theme tokens. Progress is a thin line at the button's lower edge that only appears with a trustworthy
+   percentage, nothing like the player timeline. State is never colour alone (the label always says it) and never a coloured
+   edge stripe (CssAccentStripeTests). */
+
+/* The hero: the pieces join the action row of the hero. */
+.ip-action { display: contents; }
+.ip-action [hidden] { display: none; }
+.ip-form { margin: 0; }
+
+.ip-button { position: relative; overflow: hidden; min-inline-size: 15.5rem; }
+.ip-button[aria-disabled="true"] { cursor: default; }
+.ip-button[aria-disabled="true"]:hover { background: inherit; }
+.ip-label { min-width: 0; }
+
+.ip-icon { position: relative; display: inline-grid; flex: none; place-items: center; inline-size: 16px; block-size: 16px; }
+.ip-icon > * { grid-area: 1 / 1; }
+.ip-ring { display: none; }
+.ip-action[data-ip-state="working"] .ip-icon .ad-icon { display: none; }
+.ip-action[data-ip-state="working"] .ip-ring {
+    display: block; color: var(--accent); stroke-dasharray: 34 20; animation: ip-spin 1s linear infinite;
+}
+.ip-action[data-ip-state="working"] .ip-code { display: none; }
+/* A notice is not playable: no play glyph on it. */
+.ip-action[data-ip-state^="notice"] .ip-icon { display: none; }
+
+/* Working and notice states: the same pill, now a light status surface with dark text. */
+.ip-action[data-ip-state="working"] .ip-button,
+.ip-action[data-ip-state^="notice"] .ip-button {
+    border-color: transparent; background: rgb(255 255 255 / .92); color: #15121c; box-shadow: 0 8px 22px rgb(0 0 0 / .28);
+}
+.ip-action[data-ip-state="notice-error"] .ip-button { background: #fde8e8; color: #8f1d1d; }
+.ip-action[data-ip-state="notice-waiting"] .ip-button { background: #fff3d6; color: #6b4a00; }
+
+/* Reliable progress: a thin line on the lower edge of the button, hidden while no percentage is trustworthy. */
+.ip-progress { position: absolute; inset-inline: 0; inset-block-end: 0; block-size: 3px; background: rgb(21 18 28 / .14); }
+.ip-progress::after {
+    content: ""; display: block; block-size: 100%; inline-size: var(--ip-progress, 0%);
+    background: var(--accent); transition: inline-size .6s ease;
+}
+
+.ip-stop, .ip-notice-action {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 44px; padding: 0 18px; border: 1px solid rgb(255 255 255 / .34); border-radius: 999px;
+    background: rgb(255 255 255 / .14); color: #fff; font: inherit; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer;
+    backdrop-filter: blur(8px);
+}
+.ip-stop:hover, .ip-notice-action:hover { background: rgb(255 255 255 / .24); }
+
+.ip-details > summary .ad-icon { transition: transform .15s ease; transform: rotate(90deg); }
+.ip-details[open] > summary .ad-icon { transform: rotate(-90deg); }
+.ip-panel { min-width: 260px; gap: 10px; padding: 14px; }
+.ip-milestones { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ip-milestones li { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 13px; font-weight: 600; }
+.ip-milestones li::before {
+    content: ""; flex: none; inline-size: 10px; block-size: 10px; border-radius: 50%;
+    border: 2px solid var(--accent); background: transparent;
+}
+.ip-milestones li[data-status="done"]::before { border-color: var(--success-text); background: var(--success-text); }
+.ip-milestones li[data-status="current"] { color: var(--text); font-weight: 700; }
+.ip-facts { margin: 0; padding-top: 10px; border-top: 1px solid var(--border); }
+.ip-facts dt { color: var(--muted); font-size: 12px; font-weight: 700; }
+.ip-facts dd { margin: 2px 0 0; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+
+.ip-notice { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.ip-notice-hint { margin: 0; color: rgb(255 255 255 / .9); font-size: 13px; font-weight: 600; }
+.ip-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ip-notice-action { min-height: 36px; padding: 0 14px; font-size: 13px; }
+
+/* The status pill of an existing request beside the action follows the server's projection; the morphing action says the same
+   while it works, so the pill steps aside until the action is back to its normal state. */
+.ip-observe[data-ip-state="ready_to_watch"] { background: rgb(255 255 255 / .92); color: #15121c; }
+.ip-action[data-ip-phase]:not([data-ip-phase="idle"]) ~ .ip-observe { display: none; }
+
+/* Episode rows: the same control, compact, on page surfaces. */
+.ip-action.is-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.ip-action.is-compact .ip-form { flex: 1 1 auto; min-width: 0; }
+.ip-button-compact {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; inline-size: 100%; min-inline-size: 0;
+    min-block-size: 36px; padding: 6px 12px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-text); font: inherit; font-size: 12px; font-weight: 700; line-height: 1.25; text-align: center; cursor: pointer;
+}
+.ip-button-compact:hover { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); }
+.ip-action.is-compact[data-ip-state="working"] .ip-button-compact,
+.ip-action.is-compact[data-ip-state^="notice"] .ip-button-compact { border-color: var(--border); background: var(--surface-2); color: var(--text); box-shadow: none; }
+.ip-action.is-compact[data-ip-state="notice-error"] .ip-button-compact { background: color-mix(in srgb, var(--danger-text) 12%, var(--surface)); color: var(--danger-text); }
+.ip-action.is-compact .ip-progress { background: var(--soft-fill); }
+.ip-action.is-compact .ip-stop,
+.ip-action.is-compact .ip-notice-action {
+    min-height: 32px; padding: 0 10px; border-color: var(--border); background: transparent; color: var(--accent-text); font-size: 12px; backdrop-filter: none;
+}
+.ip-action.is-compact .ip-stop:hover,
+.ip-action.is-compact .ip-notice-action:hover { background: var(--surface-2); }
+.ip-action.is-compact .ip-notice-hint { color: var(--muted); font-size: 12px; }
+
+.ip-action :is(a, button, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ip-action[data-ip-state="working"] .ip-button:focus-visible { outline-color: #fff; }
+
+/* Phone: a large touch action; Details opens as a disclosure under the actions instead of a popover. */
+@media (max-width: 620px) {
+    .ip-form { flex: 1 1 100%; }
+    .ip-button { inline-size: 100%; min-inline-size: 0; }
+    .ip-details[open] { flex: 1 1 100%; }
+    .ip-details .ip-panel { position: static; margin-top: 8px; inline-size: 100%; box-shadow: none; }
+}
+
+@keyframes ip-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .ip-action[data-ip-state="working"] .ip-ring { animation: none; }
+    .ip-progress::after { transition: none; }
+    .ip-details > summary .ad-icon { transition: none; }
+}
