@@ -1,0 +1,75 @@
+@using Jularr.Web.Features.ClientApi
+@using Jularr.Web.Features.Library
+@model InstantPlayActionView
+@* The explicit playback intent of a missing target (docs/mockups/instant-play, sections 5-10): Start watching or Watch now. Without
+   script the form posts to the page handler and the page comes back with the saved request state; instant-play.js morphs the
+   button in place and fills the hidden parts (Stop waiting, Details, the notice). Hidden parts stay hidden without script. *@
+@{
+    var page = Model.Page;
+    var ui = page.Ui;
+    var action = Model.Action;
+    var compact = Model.Compact;
+    var workId = page.Detail.WorkId;
+    var unit = Model.Episode is null ? "movie" : "episode";
+    var buttonClass = compact ? "ip-button ip-button-compact" : "ad-primary ip-button";
+}
+<div class="ip-action@(compact ? " is-compact" : "")"
+     data-instant-play
+     data-ip-unit="@unit"
+     data-ip-work-id="@workId"
+     data-ip-episode-id="@action.WorkEpisodeId"
+     data-ip-watch-href="@VideoDetailView.WatchHref(workId, action.WorkEpisodeId)"
+     data-ip-intent-url="@ClientApiPlaybackIntentRoutes.Intents"
+     data-ip-status-url="@ClientApiPlaybackIntentRoutes.RequestStatus">
+    <form method="post" asp-page-handler="Start" asp-route-workId="@workId" class="ad-inline-form ip-form" data-ip-form>
+        <input type="hidden" name="episodeId" value="@action.WorkEpisodeId" />
+        <button type="submit" class="@buttonClass" data-ip-button aria-disabled="false" aria-busy="false">
+            <span class="ip-icon" aria-hidden="true">
+                <partial name="_AnimeDetailIcon" model='"play"' />
+                <svg class="ip-ring" viewBox="0 0 24 24" width="16" height="16" focusable="false"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" /></svg>
+            </span>
+            <span class="ip-label" data-ip-label>@ui[VideoDetailView.PlayKey(action)]</span>
+            @if (!compact && Model.Episode is { } episode)
+            {
+                <small class="ip-code">@AnimeDetailView.EpisodeCode(episode.SeasonNumber, episode.Number)</small>
+            }
+            <span class="ip-progress" data-ip-progress hidden aria-hidden="true"></span>
+        </button>
+    </form>
+
+    <button type="button" class="ip-stop" data-ip-stop hidden>@ui["acquisition.instant.stopWaiting"]</button>
+
+    @if (!compact)
+    {
+        <details class="ad-menu ip-details" data-ad-menu data-ip-details hidden>
+            <summary class="ad-secondary">
+                <span>@ui["acquisition.instant.details"]</span>
+                <partial name="_AnimeDetailIcon" model='"chevron"' />
+            </summary>
+            <div class="ad-menu-panel ip-panel">
+                <ol class="ip-milestones" data-ip-milestones></ol>
+                @if (Model.Episode is { } selected)
+                {
+                    <dl class="ip-facts">
+                        <div>
+                            <dt>@ui["acquisition.instant.selectedEpisode"]</dt>
+                            <dd>@AnimeDetailView.EpisodeCode(selected.SeasonNumber, selected.Number)@(string.IsNullOrWhiteSpace(selected.Title) ? "" : " · " + selected.Title)</dd>
+                        </div>
+                    </dl>
+                }
+            </div>
+        </details>
+    }
+
+    <div class="ip-notice" data-ip-notice hidden>
+        <p class="ip-notice-hint" data-ip-notice-hint></p>
+        <div class="ip-notice-actions">
+            <button type="button" class="ip-notice-action" data-ip-action="retry" hidden>@ui["acquisition.instant.retry"]</button>
+            <button type="button" class="ip-notice-action" data-ip-action="keep" hidden>@ui["acquisition.instant.keepLooking"]</button>
+            <a class="ip-notice-action" data-ip-action="view" href="@Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService.HistoryPath" hidden>@ui["acquisition.instant.viewDetails"]</a>
+            <button type="button" class="ip-notice-action" data-ip-action="back" hidden>@ui["acquisition.instant.back"]</button>
+        </div>
+    </div>
+
+    <p class="sr-only" role="status" aria-live="polite" data-ip-live></p>
+</div>

@@ -1,5 +1,6 @@
 @using System.Globalization
 @using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.ClientApi
 @using Jularr.Web.Features.InstantPlay
 @using Jularr.Web.Features.Library
 @using Jularr.Web.Features.MediaCore
@@ -34,7 +35,19 @@
     var watched = detail.Episodes.Count(x => x.IsWatched);
     var watchedPercent = knownEpisodes == 0 ? 0 : watched * 100 / knownEpisodes;
     var hasStrip = runtime is not null || knownEpisodes > 0 || audio.Any || subtitles.Any || watched > 0;
-    string RequestStateKey(AcquisitionRequestStatus status) => ConsumerAcquisitionLabels.StatusKey(status);
+    // The open request beside the action, in the words of the consumer projection: no pill while the target is simply ready, and
+    // "Monitoring future releases" when a ready or available title is also being watched for new releases. A profile that cannot
+    // read the projection gets the stored status in the same words and no live updates.
+    var requestState = Model.RequestState;
+    var observes = requestState?.State is ConsumerAcquisitionState.LookingForMedia or ConsumerAcquisitionState.GettingMedia or ConsumerAcquisitionState.Preparing;
+    string? requestPill = requestState switch
+    {
+        null => openStatus is { } stored ? ui[ConsumerAcquisitionLabels.StatusKey(stored)] : null,
+        { State: ConsumerAcquisitionState.ReadyToWatch or ConsumerAcquisitionState.Available, IsMonitoring: true } => ui["acquisition.state.monitoringFutureReleases"],
+        { State: ConsumerAcquisitionState.ReadyToWatch or ConsumerAcquisitionState.Available } => null,
+        { State: ConsumerAcquisitionState.GettingMedia, ProgressPercent: int percent } => ui.Format("acquisition.instant.progress", ("state", ui[ConsumerAcquisitionLabels.StateKey(requestState)]), ("percent", percent)),
+        _ => ui[ConsumerAcquisitionLabels.StateKey(requestState)]
+    };
     string RequestStateIcon(AcquisitionRequestStatus status) =>
         AnimeDetailView.AvailabilityName(AnimeDetailView.Availability(AnimeEpisodeMediaFacts.None, status, null, null));
 }
@@ -82,18 +95,8 @@
                     break;
                 case PrimaryActionKind.StartWatching:
                 case PrimaryActionKind.WatchNow:
-                    @* A missing target is started by the explicit playback intent; the in-place morph control replaces this form later. *@
-                    <form method="post" asp-page-handler="Start" asp-route-workId="@detail.WorkId" class="ad-inline-form">
-                        <input type="hidden" name="episodeId" value="@action.WorkEpisodeId" />
-                        <button type="submit" class="ad-primary">
-                            <partial name="_AnimeDetailIcon" model='"play"' />
-                            <span>@ui[VideoDetailView.PlayKey(action)]</span>
-                            @if (Model.ActionEpisode is { } startEpisode)
-                            {
-                                <small>@AnimeDetailView.EpisodeCode(startEpisode.SeasonNumber, startEpisode.Number)</small>
-                            }
-                        </button>
-                    </form>
+                    @* A missing target is started by the explicit playback intent, which morphs in place. *@
+                    <partial name="_InstantPlayAction" model="new InstantPlayActionView(Model, action, Model.ActionEpisode, false)" />
                     break;
                 case PrimaryActionKind.Available:
                     <span class="ad-secondary ad-static">
@@ -109,12 +112,30 @@
                     break;
             }
 
-            @if (openStatus is { } status)
+            @if (openStatus is { } status && requestPill is not null)
             {
-                <a class="ad-secondary" href="@AcquisitionRequestService.HistoryPath" title="@ui["discover.request.viewStatus"]">
-                    <partial name="_AnimeDetailIcon" model="RequestStateIcon(status)" />
-                    <span>@ui[RequestStateKey(status)]</span>
-                </a>
+                @* A request that is still being worked on is followed live by instant-play.js; every other state is simply shown. *@
+                if (observes)
+                {
+                    <a class="ad-secondary ip-observe" href="@AcquisitionRequestService.HistoryPath" title="@ui["discover.request.viewStatus"]"
+                       data-instant-play-observe
+                       data-ip-request-id="@detail.Request!.Open!.Id"
+                       data-ip-work-id="@detail.WorkId"
+                       data-ip-episode-id="@action.WorkEpisodeId"
+                       data-ip-unit="@(isMovie ? "movie" : "episode")"
+                       data-ip-watch-href="@(Model.PlaybackEnabled ? VideoDetailView.WatchHref(detail.WorkId, action.WorkEpisodeId) : "")"
+                       data-ip-status-url="@ClientApiPlaybackIntentRoutes.RequestStatus">
+                        <partial name="_AnimeDetailIcon" model="RequestStateIcon(status)" />
+                        <span data-ip-label>@requestPill</span>
+                    </a>
+                }
+                else
+                {
+                    <a class="ad-secondary ip-observe" href="@AcquisitionRequestService.HistoryPath" title="@ui["discover.request.viewStatus"]">
+                        <partial name="_AnimeDetailIcon" model="RequestStateIcon(status)" />
+                        <span>@requestPill</span>
+                    </a>
+                }
             }
 
             @if (offersRequest && !isMovie && missing.Count > 0 && action.Kind != PrimaryActionKind.Request)

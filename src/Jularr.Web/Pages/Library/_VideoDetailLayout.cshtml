@@ -17,6 +17,7 @@
 @section Head {
     <link rel="stylesheet" href="~/css/anime-detail.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/video-detail.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/instant-play.css" asp-append-version="true" />
     @if (offersRequest)
     {
         <link rel="stylesheet" href="~/css/discover-browse.css" asp-append-version="true" />
@@ -26,6 +27,8 @@
 @section Scripts {
     <script src="~/js/context-back-link.js" asp-append-version="true"></script>
     <script src="~/js/anime-detail.js" asp-append-version="true" defer></script>
+    <script type="application/json" id="instant-play-text">@Json.Serialize(page.InstantPlayText())</script>
+    <script src="~/js/instant-play.js" asp-append-version="true" defer></script>
     @if (offersRequest)
     {
         <script src="~/js/discover-request.js" asp-append-version="true" defer></script>

@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Library;
@@ -23,8 +24,13 @@ public abstract class VideoDetailPageModel(
     IAppShellService appShell,
     VideoDetailQuery query,
     InstantPlayPolicyService policies,
-    PlaybackIntentService intents) : PageModel
+    PlaybackIntentService intents,
+    ConsumerAcquisitionQuery acquisition) : PageModel
 {
+    private static readonly HashSet<string> PlayingWords = new(["acquisition.state.readyToWatch", "acquisition.instant.stopWaiting", "acquisition.instant.stopped", "acquisition.instant.stoppedHint"], StringComparer.Ordinal);
+
+    private InstantPlayPolicy? policy;
+
     protected abstract WorkMediaType MediaType { get; }
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
@@ -48,6 +54,37 @@ public abstract class VideoDetailPageModel(
 
     /// <summary>False on a manager-only instance: no page element links into the player.</summary>
     public bool PlaybackEnabled { get; private set; }
+
+    /// <summary>
+    /// The consumer state of the title's open request for the hero target, in the words every consumer surface uses; null when there is no
+    /// open request or the profile may not read it (the client API answers 404 for the same profile), so a page never polls what it cannot read.
+    /// </summary>
+    public ConsumerAcquisitionView? RequestState { get; private set; }
+
+    /// <summary>
+    /// The words instant-play.js renders (the consumer acquisition states and the playback-intent labels), so the page never carries its own
+    /// copy. An instance without Playback never ships the words of playing: "Starting playback", "Ready to watch" and "Stop waiting".
+    /// </summary>
+    public IReadOnlyDictionary<string, string> InstantPlayText()
+    {
+        var words = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var prefix in new[] { "acquisition.state.", "acquisition.playback.", "acquisition.instant." })
+        {
+            foreach (var (key, text) in Ui.WithPrefix(prefix))
+            {
+                var isPlaying = key.StartsWith("acquisition.playback.", StringComparison.Ordinal) || PlayingWords.Contains(key);
+                if (PlaybackEnabled || !isPlaying)
+                {
+                    words[key] = text;
+                }
+            }
+        }
+
+        return words;
+    }
+
+    /// <summary>The action of one episode of a Series, resolved like the hero action but for that episode (docs/mockups/instant-play, section 14).</summary>
+    public PrimaryAction ActionFor(Guid workEpisodeId) => PrimaryActionResolver.Resolve(Detail.Playback, policy!, workEpisodeId);
 
     /// <summary>
     /// The explicit playback intent of the hero action (Start watching, Watch now) until the in-place control sends it: a local target
@@ -94,12 +131,18 @@ public abstract class VideoDetailPageModel(
         }
 
         Detail = detail;
-        var policy = await policies.ResolveAsync(MediaType, cancellationToken);
+        policy = await policies.ResolveAsync(MediaType, cancellationToken);
         PlaybackEnabled = policy.PlaybackEnabled;
         PrimaryAction = PrimaryActionResolver.Resolve(detail.Playback, policy);
         ActionEpisode = PrimaryAction.WorkEpisodeId is { } episodeId ? detail.Episodes.FirstOrDefault(x => x.Id == episodeId) : null;
         PlayHref = PrimaryAction.TargetIsLocal && PrimaryAction.Kind is not (PrimaryActionKind.Available or PrimaryActionKind.None) ? VideoDetailView.WatchHref(PrimaryAction.WorkId, PrimaryAction.WorkEpisodeId) : null;
         OffersRequest = policy.AllowsRequest && detail.Request is { Open: null } && (PrimaryAction.Kind == PrimaryActionKind.Request || VideoDetailView.RequestableEpisodes(detail.Episodes).Count > 0);
+        if (detail.Request?.Open is { } open && (policy.AllowsRequest || open.RequestedByProfileId == account.ProfileId || account.Can(JularrPolicies.AdminMedia)))
+        {
+            // A local target has no state of its own to show, so the request as a whole is projected: it still says whether monitoring continues.
+            RequestState = await acquisition.ProjectAsync(open, PrimaryAction.TargetIsLocal ? null : PrimaryAction.WorkEpisodeId, policy.PlaybackEnabled, cancellationToken);
+        }
+
         return true;
     }
 }
