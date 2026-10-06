@@ -143,6 +143,23 @@ Consumer Library has no generic Add/import menu. New media is found through Disc
 
 Watchlist/Reading List is represented as profile-state filtering/deep-linking inside Library rather than another top-level destination or a fake Collection.
 
+### UI maturity classes and the Legacy page subtree
+
+Every Razor Page belongs to exactly one maturity class. The class follows from the page's binding `docs/mockups/<surface>/SPEC.md`, its approved mockup image and whether the implementation was reconciled against both; there is no separate status document.
+
+| Class | Meaning | Lives in |
+| --- | --- | --- |
+| A, approved | SPEC and mockup exist and the page was reconciled against them | its feature folder (`Pages/Library`, `Pages/Admin`, ...) |
+| B, unfinished | the SPEC direction exists but the implementation is materially incomplete, or the surface has no own SPEC yet | its feature folder |
+| C, legacy | old UI that was never reconciled with the current SPEC/mockup direction | `Pages/Legacy/<mirrored feature folder>` when cleanly separable, otherwise in place until detangled |
+
+- A page is created in its feature folder and starts as B; it becomes A only after its SPEC and mockup exist and the page was reconciled. A new page is never created under `Pages/Legacy`.
+- When two classes fit, the lower one applies.
+- A legacy page keeps its URL: it declares an explicit absolute `@page "/original/route"` (route parameters unchanged), keeps its PageModel namespace, and a `_ViewImports.cshtml` in its `Pages/Legacy/<Folder>` pins that namespace. `asp-page`, `RedirectToPage` and `Url.Page` use the new page name `/Legacy/<Folder>/<Page>`. Shared partials stay in `Pages/Shared` or their feature folder and are referenced by explicit path.
+- A page that shares page-private partials, or is linked through page names from shared shell code, with approved pages stays in place. Class A and B directories never reference partials under `Pages/Legacy`.
+- A legacy page leaves `Pages/Legacy` when it is rebuilt per its SPEC (back into the feature folder) or when its owning surface replaces it (deleted, with a redirect where the URL had users).
+- `LegacyPagesTests` guards the explicit routes, the unchanged URLs, the namespaces and the partial direction.
+
 ## 2. Media model
 
 Four layers per #510. Mapped to what exists in `src/Jularr.Web/Data` and `Features/` today:
