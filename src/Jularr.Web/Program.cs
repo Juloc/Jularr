@@ -81,10 +81,7 @@ builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaO
 var dataProtectionDirectory = new DirectoryInfo(builder.Configuration["DataProtection:KeysDirectory"] ?? "/data/keys");
 Directory.CreateDirectory(dataProtectionDirectory.FullName);
 builder.Services.AddDataProtection()
-    // Stays "AniLingo" after the Jularr rebrand: the application name isolates the Data Protection
-    // key ring, and changing it would invalidate every sign-in cookie and every secret already
-    // protected with it (download-client passwords, indexer/Prowlarr/SABnzbd/AI API keys, AniList tokens).
-    .SetApplicationName("AniLingo")
+    .SetApplicationName("Jularr")
     .PersistKeysToFileSystem(dataProtectionDirectory);
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
@@ -513,8 +510,6 @@ builder.Services.AddHttpClient<BookCatalogService>(client =>
 builder.Services.AddScoped<BookSearchCoordinator>();
 builder.Services.AddScoped<BookManualSearchService>();
 
-// Legacy single-connection stores: read once by the one-time settings migration below, then
-// unused. Kept registered only so that migration can resolve them.
 builder.Services.AddSingleton<SabnzbdSettingsStore>();
 builder.Services.AddSingleton<SabnzbdConnectionResolver>();
 builder.Services.AddSingleton<SabnzbdAcquisitionStore>();
@@ -796,28 +791,6 @@ try
     await InitializeDatabaseAsync(
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await SabnzbdSettingsMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await IndexerSettingsMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await DownloadClientSettingsMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await Jularr.Web.Features.Acquisition.Import.MediaFolderSettingsMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await Jularr.Web.Features.Acquisition.Import.VideoLibraryRootMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    var migratedBibles = await BookTranslationMemoryStore
-        .FromConfiguration(app.Configuration)
-        .MigrateLegacyAsync(CancellationToken.None);
-    if (migratedBibles > 0)
-    {
-        Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} Moved {migratedBibles} translation bible(s) into the shared story context.");
-    }
     Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} Database ready. Starting web server.");
 }
 catch (Exception ex)
@@ -837,9 +810,6 @@ static async Task InitializeDatabaseAsync(
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
     await DatabaseMigrationBridge.UpgradeAsync(db, log: log);
-
-    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    await Jularr.Web.Data.SqliteImport.SqliteToPostgresImporter.RunIfNeededAsync(db, configuration, log);
 
     var canonicalVideoBackfill = scope.ServiceProvider.GetRequiredService<CanonicalVideoStorageBackfillService>();
     var backfilledVideoFiles = await canonicalVideoBackfill.BackfillLegacyAnimeAsync(
