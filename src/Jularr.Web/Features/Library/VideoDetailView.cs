@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Watchlist;
 
 namespace Jularr.Web.Features.Library;
 
@@ -51,7 +52,7 @@ public static class VideoDetailView
     {
         var initials = Regex.Replace(name, "<[^>]*>", " ")
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-            .Select(FirstLetterOrDigit)
+            .Select(WatchlistLabels.FirstLetterOrDigit)
             .OfType<string>()
             .ToArray();
         return initials.Length switch
@@ -60,21 +61,6 @@ public static class VideoDetailView
             1 => initials[0].ToUpperInvariant(),
             _ => (initials[0] + initials[^1]).ToUpperInvariant()
         };
-    }
-
-    private static string? FirstLetterOrDigit(string word)
-    {
-        var elements = StringInfo.GetTextElementEnumerator(word);
-        while (elements.MoveNext())
-        {
-            var element = (string)elements.Current;
-            if (char.IsLetterOrDigit(element, 0))
-            {
-                return element;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>The canonical web player of a Movie (a Work) or one episode (a WorkEpisode).</summary>

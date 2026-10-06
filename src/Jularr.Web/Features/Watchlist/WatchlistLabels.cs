@@ -22,9 +22,23 @@ public static class WatchlistLabels
         _ => null
     };
 
-    /// <summary>The first letter of a title, for a cover placeholder.</summary>
+    /// <summary>The first letter or digit of a title, for a cover placeholder; provider text that starts with markup or punctuation never becomes the initial.</summary>
     public static string Initial(string? title) =>
-        string.IsNullOrWhiteSpace(title)
-            ? ""
-            : StringInfo.GetNextTextElement(title.Trim(), 0);
+        string.IsNullOrWhiteSpace(title) ? "" : FirstLetterOrDigit(title) ?? "·";
+
+    /// <summary>The first text element of <paramref name="text"/> that is a letter or a digit, or null.</summary>
+    public static string? FirstLetterOrDigit(string text)
+    {
+        var elements = StringInfo.GetTextElementEnumerator(text);
+        while (elements.MoveNext())
+        {
+            var element = (string)elements.Current;
+            if (char.IsLetterOrDigit(element, 0))
+            {
+                return element;
+            }
+        }
+
+        return null;
+    }
 }

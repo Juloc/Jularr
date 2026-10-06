@@ -189,6 +189,31 @@ public sealed class DiscoverSectionComposerTests
     }
 
     [TestMethod]
+    public void EveryPathOfThisApplicationSurvivesWhateverTheOperatingSystemMakesOfItAsAFileAddress()
+    {
+        // On Unix "/Library/Movie/1" parses as an absolute file address, on Windows it does not: the rule must not depend on the parser.
+        foreach (var path in new[] { "/Library/Movie/6f1a", "/Library/Anime/6f1a", "/Books/ol-OL45804W", "/Discover/MangaImport?anilistId=7&title=Berserk", "/works/6f1a/artwork/3?v=0123456789ab", "/Novels/Work/6f1a" })
+        {
+            Assert.AreEqual(path, DiscoverUrls.Safe(path), path);
+        }
+
+        foreach (var hostile in new[] { "/x\ny", "/x\r\ny", "/x\u0000y", "https://example.test/\nx", "https://example.test/x\u0007y", "\t//evil.example", "/\\evil.example", "///evil.example" })
+        {
+            Assert.IsNull(DiscoverUrls.Safe(hostile), hostile.Replace("\n", "\\n"));
+        }
+    }
+
+    [TestMethod]
+    public void ACoverPlaceholderNeverShowsMarkupOrPunctuationAsTheInitial()
+    {
+        Assert.AreEqual("F", Jularr.Web.Features.Watchlist.WatchlistLabels.Initial("  Frieren"));
+        Assert.AreEqual("i", Jularr.Web.Features.Watchlist.WatchlistLabels.Initial("<img src=x onerror=alert(1)>"));
+        Assert.AreEqual("狂", Jularr.Web.Features.Watchlist.WatchlistLabels.Initial("「狂」の物語"));
+        Assert.AreEqual("·", Jularr.Web.Features.Watchlist.WatchlistLabels.Initial("<<<>>>"));
+        Assert.AreEqual("", Jularr.Web.Features.Watchlist.WatchlistLabels.Initial("   "));
+    }
+
+    [TestMethod]
     public void TheSignatureChangesWhenTheViewerWouldNoticeAndOnlyThen()
     {
         var one = Item("anime", "anilist", "1", "A");

@@ -406,13 +406,19 @@ public static class DiscoverUrls
             return null;
         }
 
-        if (Uri.TryCreate(candidate, UriKind.Absolute, out var absolute))
+        // A path of this application is decided by its text first: on Unix a path such as /Library/Movie/1 also parses as an absolute file address, so the
+        // parser cannot tell it from a foreign scheme. A protocol-relative address (//host), a backslash variant or a control character would leave the application.
+        if (candidate.Any(char.IsControl))
         {
-            return absolute.Scheme is "http" or "https" ? candidate : null;
+            return null;
         }
 
-        // A path of this application; a protocol-relative address (//host) or a backslash variant would leave it.
-        return candidate.StartsWith('/') && !candidate.StartsWith("//", StringComparison.Ordinal) && !candidate.StartsWith("/\\", StringComparison.Ordinal) ? candidate : null;
+        if (candidate.StartsWith('/'))
+        {
+            return candidate.Length > 1 && candidate[1] is '/' or '\\' ? null : candidate;
+        }
+
+        return Uri.TryCreate(candidate, UriKind.Absolute, out var absolute) && absolute.Scheme is "http" or "https" ? candidate : null;
     }
 }
 
