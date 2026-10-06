@@ -75,7 +75,8 @@ else
                     {
                         <span>@ui["requests.autoApproved"]</span>
                     }
-                    @if (!string.IsNullOrWhiteSpace(request.StatusMessage))
+                    @* The stored message of a request is technical (indexer and downloader texts); only the reason of a rejection is for the requester. *@
+                    @if (request.Status == AcquisitionRequestStatus.Rejected && !string.IsNullOrWhiteSpace(request.StatusMessage))
                     {
                         <small>@request.StatusMessage</small>
                     }

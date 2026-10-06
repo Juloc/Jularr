@@ -312,28 +312,14 @@
 
     function requestProgressLabel(payload) {
         const stage = statusText(payload.status || "pending");
-        const progress = Number.isFinite(payload.progress) ? Math.max(0, Math.min(100, payload.progress)) : 0;
-        return payload.done || progress <= 0 ? stage : `${stage} · ${progress}%`;
-    }
-
-    function defaultProgress(status) {
-        return {
-            pending: 0,
-            approved: 5,
-            searching: 15,
-            downloading: 35,
-            importing: 90,
-            completed: 100,
-            rejected: 100,
-            failed: 100
-        }[status] ?? 0;
+        const progress = Number.isFinite(payload.progress) ? Math.max(0, Math.min(100, payload.progress)) : null;
+        return payload.done || progress === null ? stage : `${stage} · ${progress}%`;
     }
 
     function renderRequestSlot(slot, payload) {
         if (!slot) return;
-        const progress = Number.isFinite(payload.progress)
-            ? Math.max(0, Math.min(100, payload.progress))
-            : defaultProgress(payload.status);
+        // Only a percentage the server read from the transfer is ever shown; without one the ring is an empty outline.
+        const progress = Number.isFinite(payload.progress) ? Math.max(0, Math.min(100, payload.progress)) : null;
         slot.dataset.dcLiveRequest = payload.requestId || slot.dataset.dcLiveRequest || "";
         slot.dataset.dcLiveStatus = payload.status || "";
 
@@ -352,17 +338,18 @@
 
         const ring = document.createElement("span");
         ring.className = "dc-request-ring";
-        ring.style.setProperty("--dc-progress", `${progress}%`);
-        const number = document.createElement("span");
-        number.textContent = `${Math.round(progress)}%`;
-        ring.append(number);
+        ring.style.setProperty("--dc-progress", `${progress ?? 0}%`);
+        if (progress !== null) {
+            const number = document.createElement("span");
+            number.textContent = `${Math.round(progress)}%`;
+            ring.append(number);
+        }
 
         const label = document.createElement("span");
         label.className = "dc-request-live-label";
         label.textContent = statusText(payload.status || "pending");
 
         live.append(ring, label);
-        if (payload.message) live.title = payload.message;
         slot.replaceChildren(live);
     }
 
@@ -421,7 +408,7 @@
             renderRequestSlot(slot, {
                 requestId,
                 status: slot.dataset.dcLiveStatus || "pending",
-                progress: defaultProgress(slot.dataset.dcLiveStatus || "pending"),
+                progress: null,
                 done: false
             });
             pollRequest(requestId);

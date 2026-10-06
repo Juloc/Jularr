@@ -488,7 +488,7 @@ public sealed class IndexModel(
             }
 
             var submission = await requests.SubmitWithOutcomeAsync(draft, cancellationToken);
-            var (progress, _) = await RequestProgressAsync(submission.Request, cancellationToken);
+            var progress = await RequestProgressAsync(submission.Request, cancellationToken);
             return Partial("_DiscoverRequestResult", new DiscoverRequestResultView(Ui, submission.Request, submission.AlreadyRequested, submission.AlreadyRequested ? [] : summary, progress));
         }
         catch (AcquisitionAccessDeniedException)
@@ -585,38 +585,28 @@ public sealed class IndexModel(
             return NotFound();
         }
 
-        var (progress, message) = await RequestProgressAsync(request, cancellationToken);
         return new JsonResult(new
         {
             requestId = request.Id,
             status = AcquisitionAccessNames.Status(request.Status),
-            progress,
-            message,
+            progress = await RequestProgressAsync(request, cancellationToken),
             resultUrl = request.ResultUrl,
             done = request.Status is AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed
         });
     }
 
-    /// <summary>The consumer-facing progress and message of a request, read from its operation when it has one.</summary>
-    private async Task<(int Percent, string? Message)> RequestProgressAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// The whole percent of a request's transfer, only while the download reports a trustworthy size; null otherwise. A status never stands
+    /// for a percentage, and the message of an operation or request is a technical text a consumer is not shown.
+    /// </summary>
+    private async Task<int?> RequestProgressAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
-        OperationSnapshot? operation = null;
-        if (request.OperationId is { } operationId)
+        if (request.Status != AcquisitionRequestStatus.Downloading || request.OperationId is not { } operationId)
         {
-            operation = await new OperationStore(db).GetAsync(operationId, cancellationToken);
+            return null;
         }
 
-        var percent = request.Status switch
-        {
-            AcquisitionRequestStatus.Pending => 0,
-            AcquisitionRequestStatus.Approved => 5,
-            AcquisitionRequestStatus.Searching => 15,
-            AcquisitionRequestStatus.Downloading => operation?.ProgressPercent ?? 35,
-            AcquisitionRequestStatus.Importing => operation?.ProgressPercent is { } importProgress ? Math.Max(80, importProgress) : 90,
-            AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed => 100,
-            _ => 0
-        };
-        return (Math.Clamp(percent, 0, 100), request.StatusMessage ?? operation?.Message);
+        return ConsumerAcquisitionProjector.ReliableProgress(await new OperationStore(db).GetAsync(operationId, cancellationToken));
     }
 
     private static readonly IReadOnlyDictionary<string, MediaAcquisitionKind> Categories =

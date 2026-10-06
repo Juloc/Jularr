@@ -80,7 +80,7 @@ public sealed record DiscoverRequestResultView(
     AcquisitionRequest Request,
     bool AlreadyRequested,
     IReadOnlyList<string> Summary,
-    int Progress)
+    int? Progress)
 {
     public bool IsDone => Request.Status is AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed;
 

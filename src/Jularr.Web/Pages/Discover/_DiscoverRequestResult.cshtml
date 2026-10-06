@@ -13,8 +13,7 @@
      data-status="@AcquisitionAccessNames.Status(request.Status)"
      data-progress="@Model.Progress"
      data-done="@(Model.IsDone ? "true" : "false")"
-     data-result-url="@request.ResultUrl"
-     data-message="@request.StatusMessage">
+     data-result-url="@request.ResultUrl">
     <span class="dc-rq-check@(Model.AlreadyRequested ? " is-existing" : "")" aria-hidden="true"><partial name="_DiscoverIcon" model='Model.AlreadyRequested ? "requested" : "library"' /></span>
     <h3 id="dc-rq-result-title" tabindex="-1">@ui[Model.AlreadyRequested ? "discover.request.exists" : "discover.request.created"]</h3>
     <ul class="dc-rq-summary">

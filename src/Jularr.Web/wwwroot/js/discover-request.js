@@ -322,8 +322,7 @@
         return {
             requestId: result.dataset.requestId,
             status: result.dataset.status,
-            progress: Number(result.dataset.progress),
-            message: result.dataset.message || null,
+            progress: result.dataset.progress ? Number(result.dataset.progress) : null,
             resultUrl: result.dataset.resultUrl || null,
             done: result.dataset.done === "true"
         };

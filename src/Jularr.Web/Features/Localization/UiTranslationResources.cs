@@ -3736,7 +3736,6 @@ public static class UiTranslationResources
         M("books.add.freeEdition", "Free edition available", "Books", "Label", "Marks results with a free, directly importable edition.", "short label", 28),
         M("books.add.close", "Close", "Books", "Button", "Closes the Add book dialog.", "very short action", 10),
         M("books.add.manual", "Add manually", "Books", "Summary", "Expands the manual add tools in the Add book dialog.", "short heading", 24),
-        M("books.add.importing", "Importing", "Books", "Status", "Request status in the Add book dialog: the download finished and the book is being imported.", "compact status", 14),
         M("books.add.retry", "Retry", "Books", "Button", "Adds a book again after its request failed.", "very short action", 10),
         M("books.add.editionsCount", "{count} editions", "Books", "Summary", "Expands a work's edition picker in the Add book dialog (#405); shows how many provider records it merged.", "short label", 24, new Dictionary<string, string> { ["count"] = "Number of editions." }),
         M("books.add.editionFormat.epub", "EPUB", "Books", "Label", "Edition picker (#405): this provider record has a file Jularr can import directly.", "very short label", 10, null, ["EPUB"]),

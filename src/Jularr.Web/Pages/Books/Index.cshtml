@@ -176,7 +176,8 @@
                             {
                                 <span>@request.Subtitle</span>
                             }
-                            @if (!string.IsNullOrWhiteSpace(request.StatusMessage))
+                            @* The stored message of a request is technical (indexer and downloader texts); only the reason of a rejection is for the requester. *@
+                            @if (request.Status == AcquisitionRequestStatus.Rejected && !string.IsNullOrWhiteSpace(request.StatusMessage))
                             {
                                 <small>@request.StatusMessage</small>
                             }
@@ -225,7 +226,7 @@
             data-status-completed="@ui[ConsumerAcquisitionLabels.StatusKey("completed")]"
             data-status-failed="@ui[ConsumerAcquisitionLabels.StatusKey("failed")]"
             data-status-rejected="@ui[ConsumerAcquisitionLabels.StatusKey("rejected")]"
-            data-status-importing="@ui["books.add.importing"]"
+            data-status-importing="@ui[ConsumerAcquisitionLabels.StatusKey("importing")]"
             data-text-retry="@ui["books.add.retry"]">
         <div class="books-add-header">
             <div>
