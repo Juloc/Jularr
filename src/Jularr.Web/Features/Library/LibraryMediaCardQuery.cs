@@ -22,6 +22,8 @@ namespace Jularr.Web.Features.Library;
 /// common first; sidecar subtitles have no canonical track yet and reach the Work through their legacy episode link.</item>
 /// <item>Progress and the next episode come from the profile's canonical <c>MediaProgress</c>; see <see cref="NextRequiredEpisode"/>.</item>
 /// <item>Requested and partial states are projections of the shared acquisition requests and of the files, never Library state.</item>
+/// <item>Movie and Series posters, backdrops and ratings come from the persisted Work metadata (#820) in one query for the whole page;
+/// a title the spool has not fetched yet simply has none.</item>
 /// <item>Anime keeps its legacy-keyed detail and player routes plus its provider metadata and artwork until those move to the
 /// Work (#820); they are reached through the Anime <see cref="WorkSourceLink"/>, which the canonical backfill guarantees.</item>
 /// </list>
@@ -183,6 +185,15 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
             select new LanguageRow(languageGroup.Key.WorkId, languageGroup.Key.Kind, languageGroup.Key.Language!, languageGroup.Count(), languageGroup.Min(x => x.StreamIndex)))
             .ToListAsync(cancellationToken);
 
+        // Movie and Series cards show the locally persisted artwork and rating (#820); Anime keeps its own artwork until it moves to the Work.
+        IReadOnlyDictionary<Guid, WorkCardMetadata> cardMetadata = new Dictionary<Guid, WorkCardMetadata>();
+        var videoWorkIds = works.Where(x => x.MediaType is WorkMediaType.Movie or WorkMediaType.Series).Select(x => x.Id).ToArray();
+        if (videoWorkIds.Length > 0)
+        {
+            var rows = await new WorkMetadataStore(db).LoadCardMetadataAsync(videoWorkIds, cancellationToken);
+            cardMetadata = rows.Count == 0 ? cardMetadata : WorkMetadataPresentation.ResolveCards(rows, await WorkMetadataLocales.ForProfileAsync(db, profileId, cancellationToken));
+        }
+
         var progress = await new VideoProgressService(db).ListAsync(profileId, workIds, cancellationToken);
         var context = new ReadContext(
             units,
@@ -195,6 +206,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
             embeddedTracks.Concat(sidecarSubtitles).ToLookup(x => (x.WorkId, x.Kind)),
             animeRows,
             requestByWork,
+            cardMetadata,
             (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime);
 
         var entries = new List<LibraryCardEntry>(works.Count);
@@ -280,8 +292,9 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
             .Max();
 
         var href = LibraryBrowse.DetailHref(work.MediaType, anime?.AnimeId ?? work.Id);
-        var poster = anime is null ? null : AnimeArtworkStore.ResolvePosterUrl(anime.AnimeId, anime.CoverImageUrl);
-        var fanart = anime is null ? null : AnimeArtworkStore.ResolveFanartUrl(anime.AnimeId, anime.BannerImageUrl);
+        context.CardMetadata.TryGetValue(work.Id, out var metadata);
+        var poster = anime is null ? metadata?.PosterUrl : AnimeArtworkStore.ResolvePosterUrl(anime.AnimeId, anime.CoverImageUrl);
+        var fanart = anime is null ? metadata?.BackdropUrl : AnimeArtworkStore.ResolveFanartUrl(anime.AnimeId, anime.BannerImageUrl);
         var card = new MediaBannerCardData(
             anime is null ? MediaBannerKind.Series : MediaBannerKind.Anime,
             anime?.Title ?? work.Title,
@@ -289,7 +302,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
             fanart ?? poster,
             anime?.Status,
             anime?.Year ?? work.Year,
-            anime?.AverageScore,
+            anime is null ? AverageScore(metadata) : anime.AverageScore,
             OrderLanguages(context.Languages[(work.Id, MediaTrackKind.Audio)]),
             OrderLanguages(context.Languages[(work.Id, MediaTrackKind.Subtitle)]),
             localSeasons.Length > 0 ? localSeasons.Length : null,
@@ -318,18 +331,25 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
             ? (int)Math.Ceiling((durationMs - row.PositionMs) / 60000d)
             : null;
 
+        context.CardMetadata.TryGetValue(work.Id, out var metadata);
         var card = new MediaBannerCardData(
             MediaBannerKind.Movie,
             work.Title,
             href,
+            BackdropUrl: metadata?.BackdropUrl ?? metadata?.PosterUrl,
             Year: work.Year,
+            AverageScore: AverageScore(metadata),
             AudioLanguages: OrderLanguages(context.Languages[(work.Id, MediaTrackKind.Audio)]),
             SubtitleLanguages: OrderLanguages(context.Languages[(work.Id, MediaTrackKind.Subtitle)]),
             Progress: progress,
             Availability: new MediaAvailabilityFacts(InLibrary: true, HasPlayableContent: files.Length > 0, Request: context.RequestByWork.TryGetValue(work.Id, out var requestStatus) ? requestStatus : null));
 
-        return new LibraryCardEntry(card, null, null, files.Length > 0 ? 1 : 0, 0, work.CreatedAt, meaningful ? row!.UpdatedAt : null, work.Id, work.MediaType, runtimeMinutes, remainingMinutes);
+        var poster = metadata?.PosterUrl ?? metadata?.BackdropUrl;
+        return new LibraryCardEntry(card, poster, null, files.Length > 0 ? 1 : 0, 0, work.CreatedAt, meaningful ? row!.UpdatedAt : null, work.Id, work.MediaType, runtimeMinutes, remainingMinutes);
     }
+
+    // Cards show provider scores on the 0-100 scale of AniList; persisted Work ratings are 0-10.
+    private static int? AverageScore(WorkCardMetadata? metadata) => metadata?.Rating is { } rating ? (int)Math.Round(rating * 10) : null;
 
     private static MediaBannerProgress? BuildProgress(WorkRow work, AnimeRow? anime, string href, IReadOnlyList<UnitRow> episodes, IReadOnlyList<EpisodeOrderKey> playable, IReadOnlyList<int> localSeasons, ReadContext context)
     {
@@ -417,6 +437,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
         ILookup<(Guid WorkId, MediaTrackKind Kind), LanguageRow> Languages,
         IReadOnlyDictionary<Guid, AnimeRow> Anime,
         IReadOnlyDictionary<Guid, AcquisitionRequestStatus> RequestByWork,
+        IReadOnlyDictionary<Guid, WorkCardMetadata> CardMetadata,
         DateTime NowUtc);
 }
 

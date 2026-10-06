@@ -43,7 +43,9 @@ public sealed record VideoDetailRequest(MediaAcquisitionKind Kind, string Catego
 
 /// <summary>
 /// The profile-scoped read model of one Movie or Series Work, built from canonical Work, Asset, File, Track and progress rows.
-/// <see cref="Playback"/> carries what <see cref="PrimaryActionResolver"/> needs to resolve the primary action under the capability policy.
+/// <see cref="Playback"/> carries what <see cref="PrimaryActionResolver"/> needs to resolve the primary action under the capability policy;
+/// <see cref="Metadata"/> is the locally persisted provider metadata and artwork resolved for the profile's locale, null until the spool
+/// fetched it.
 /// </summary>
 public sealed record VideoDetail(
     Guid WorkId,
@@ -58,7 +60,8 @@ public sealed record VideoDetail(
     IReadOnlyList<VideoDetailEpisode> Episodes,
     PlaybackFacts Playback,
     IReadOnlyList<VideoDetailRelated> Related,
-    VideoDetailRequest? Request)
+    VideoDetailRequest? Request,
+    WorkMetadataView? Metadata)
 {
     /// <summary>The languages of every version (Movie) or episode (Series), computed once.</summary>
     public IReadOnlySet<string> Audio { get; } = (MediaType == WorkMediaType.Movie ? Versions.SelectMany(x => x.Audio) : Episodes.SelectMany(x => x.Audio)).ToHashSet(StringComparer.Ordinal);
@@ -70,7 +73,8 @@ public sealed record VideoDetail(
 
 /// <summary>
 /// The one read model behind the Movie and Series detail pages. A fixed number of set-based queries, whatever the
-/// episode count: Work, titles, provider identity, files, tracks, episodes, progress, relations and the open request.
+/// episode count: Work, titles, provider identity, files, tracks, episodes, progress, relations, the open request and the persisted
+/// metadata. It never calls a provider and never writes: missing metadata is left null for the page to omit.
 /// Request state per episode comes from the shared request payload through <see cref="VideoRequestSelection"/>, so
 /// the page and the acquisition executor agree on what a request covers.
 /// </summary>
@@ -115,6 +119,8 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var snapshots = await progress.ListAsync(profileId, [workId], cancellationToken);
         var open = tmdbId is null ? null : await requests.FindOpenAsync(VideoWorkLinks.AcquisitionKind(mediaType), TmdbDiscoveryProvider.ProviderKey, tmdbId, cancellationToken);
         var related = await LoadRelatedAsync(workId, visibleMediaTypes, cancellationToken);
+        var metadataLocale = await WorkMetadataLocales.ForProfileAsync(db, profileId, cancellationToken);
+        var metadata = WorkMetadataPresentation.Resolve(workId, await new WorkMetadataStore(db).LoadAsync(workId, cancellationToken), metadataLocale);
 
         IReadOnlyList<VideoDetailVersion> versions = [];
         MediaProgressSnapshot? movieProgress = null;
@@ -132,8 +138,10 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             (episodes, playback) = await LoadEpisodesAsync(workId, tmdbId is not null, files, tracks, snapshots, open, preference, cancellationToken);
         }
 
+        // The localized title of the profile's locale wins over the cached canonical title.
+        var title = metadata?.Title ?? work.CanonicalTitle;
         var nativeTitle = titles.FirstOrDefault(x => x.TitleType == WorkTitleType.Native)?.Value;
-        var shownTitles = new[] { work.CanonicalTitle, nativeTitle };
+        var shownTitles = new[] { title, nativeTitle };
         var alsoKnownAs = titles
             .Where(x => x.TitleType is WorkTitleType.Original or WorkTitleType.English or WorkTitleType.Alternative or WorkTitleType.Localized or WorkTitleType.Synonym)
             .Select(x => x.Value.Trim())
@@ -145,7 +153,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         return new VideoDetail(
             workId,
             mediaType,
-            work.CanonicalTitle,
+            title,
             nativeTitle,
             alsoKnownAs,
             work.Year,
@@ -155,7 +163,8 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             episodes,
             playback,
             related,
-            tmdbId is null ? null : new VideoDetailRequest(VideoWorkLinks.AcquisitionKind(mediaType), mediaType == WorkMediaType.Movie ? "movie" : "tv", TmdbDiscoveryProvider.ProviderKey, tmdbId, open));
+            tmdbId is null ? null : new VideoDetailRequest(VideoWorkLinks.AcquisitionKind(mediaType), mediaType == WorkMediaType.Movie ? "movie" : "tv", TmdbDiscoveryProvider.ProviderKey, tmdbId, open),
+            metadata);
     }
 
     private async Task<LibraryLanguagePreference> LoadPreferenceAsync(string profileId, CancellationToken cancellationToken)
