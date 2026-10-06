@@ -178,7 +178,7 @@ public sealed class SonarrConnectionStore
         ArgumentNullException.ThrowIfNull(dataProtectionProvider);
         ArgumentNullException.ThrowIfNull(directory);
 
-        protector = dataProtectionProvider.CreateProtector("AniLingo.Sonarr.Connection.v1");
+        protector = dataProtectionProvider.CreateProtector("Jularr.Sonarr.Connection.v1");
         rootPath = directory.FullName;
         connectionPath = Path.Combine(rootPath, "connection.json");
     }
