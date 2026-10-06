@@ -58,7 +58,7 @@ public sealed class AniListAccountStore
         ArgumentNullException.ThrowIfNull(integrationDirectory);
 
         protector = dataProtectionProvider.CreateProtector(
-            "AniLingo.AniList.AccessToken.v1");
+            "Jularr.AniList.AccessToken.v1");
         this.logger = logger;
         this.integrationDirectory = integrationDirectory.FullName;
         accountDirectory = Path.Combine(
