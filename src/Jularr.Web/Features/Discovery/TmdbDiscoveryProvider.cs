@@ -1,3 +1,4 @@
+using Jularr.Web.Ui;
 using System.Net;
 using System.Globalization;
 using System.Net.Http.Headers;
@@ -105,61 +106,197 @@ public sealed partial class TmdbDiscoveryProvider(
                && (normalized = id.ToString(CultureInfo.InvariantCulture)).Length > 0;
     }
 
-    public async Task<IReadOnlyList<TmdbDiscoveryCandidate>> SearchAsync(
+    /// <summary>
+    /// One Discover page of movies or series: a search, or a browse view. A browse view uses the provider's own list where one exists and the
+    /// discover endpoint as soon as the viewer narrows it, so the genres, years and statuses are applied by TMDB and paging stays truthful.
+    /// TMDB trending and popularity are global rankings; no region is sent because the application never infers one.
+    /// </summary>
+    public async Task<DiscoveryProviderPage<TmdbDiscoveryCandidate>> DiscoverPageAsync(
         TmdbDiscoveryMediaType mediaType,
-        string query,
+        DiscoveryRequest request,
         int limit,
-        string genre,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(query))
+        var searching = request.Mode == DiscoveryMode.Search;
+        if (searching && string.IsNullOrWhiteSpace(request.Query))
         {
-            return [];
+            return new DiscoveryProviderPage<TmdbDiscoveryCandidate>([], false);
         }
 
         var locale = CurrentLocale();
-        var path = mediaType == TmdbDiscoveryMediaType.Movie ? "search/movie" : "search/tv";
-        var key = $"tmdb:search:{mediaType}:{locale}:{genre}:{query.Trim().ToLowerInvariant()}";
+        var (path, query) = searching ? SearchRequest(mediaType, request, locale) : BrowseRequest(mediaType, request, locale);
+        var key = $"tmdb:{mediaType}:{path}:{string.Join('&', query.Select(x => x.Key + "=" + x.Value))}";
         var page = await cache.GetOrFetchAsync(
             key,
-            TimeSpan.FromMinutes(2),
-            ct => GetPageAsync(
-                path,
-                [
-                    ("query", query.Trim()),
-                    ("include_adult", "false"),
-                    ("language", locale),
-                    ("page", "1")
-                ],
-                mediaType,
-                ct),
-            cancellationToken);
-
-        return FilterGenre(page.Results, mediaType, genre)
-            .Take(Math.Clamp(limit, 1, 40))
-            .ToArray();
-    }
-
-    public async Task<IReadOnlyList<TmdbDiscoveryCandidate>> BrowseAsync(
-        TmdbDiscoveryMediaType mediaType,
-        DiscoveryMode mode,
-        int limit,
-        string genre,
-        CancellationToken cancellationToken)
-    {
-        var locale = CurrentLocale();
-        var path = BrowsePath(mediaType, mode);
-        var query = BrowseQuery(mediaType, mode, locale, genre);
-        var key = $"tmdb:browse:{mediaType}:{mode}:{locale}:{genre}:{string.Join('&', query.Select(x => x.Value))}";
-        var page = await cache.GetOrFetchAsync(
-            key,
-            TimeSpan.FromMinutes(10),
+            searching ? TimeSpan.FromMinutes(2) : TimeSpan.FromMinutes(10),
             ct => GetPageAsync(path, query, mediaType, ct),
             cancellationToken);
 
-        return FilterGenre(page.Results, mediaType, genre)
-            .Take(Math.Clamp(limit, 1, 40))
-            .ToArray();
+        // The search endpoint cannot filter by genre; the browse endpoints did it already, and repeating it is harmless.
+        var items = HasGenres(page.Results, mediaType, request.EffectiveGenres).Take(Math.Clamp(limit, 1, 40)).ToArray();
+        return new DiscoveryProviderPage<TmdbDiscoveryCandidate>(items, request.Page < page.TotalPages && request.Page < 500);
+    }
+
+    private static (string Path, IReadOnlyList<(string Key, string Value)> Query) SearchRequest(TmdbDiscoveryMediaType mediaType, DiscoveryRequest request, string locale)
+    {
+        var query = new List<(string Key, string Value)>
+        {
+            ("query", request.Query.Trim()),
+            ("include_adult", "false"),
+            ("language", locale),
+            ("page", Math.Max(1, request.Page).ToString(CultureInfo.InvariantCulture))
+        };
+        if (request.Filter.YearFrom is { } from && request.Filter.YearTo == from)
+        {
+            query.Add((mediaType == TmdbDiscoveryMediaType.Movie ? "primary_release_year" : "first_air_date_year", from.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        return (mediaType == TmdbDiscoveryMediaType.Movie ? "search/movie" : "search/tv", query);
+    }
+
+    private static (string Path, IReadOnlyList<(string Key, string Value)> Query) BrowseRequest(TmdbDiscoveryMediaType mediaType, DiscoveryRequest request, string locale)
+    {
+        var movie = mediaType == TmdbDiscoveryMediaType.Movie;
+        var type = movie ? "movie" : "tv";
+        var mode = request.Mode;
+        var filter = request.Filter;
+        var genres = request.EffectiveGenres;
+        var query = new List<(string Key, string Value)>
+        {
+            ("language", locale),
+            ("page", Math.Max(1, request.Page).ToString(CultureInfo.InvariantCulture))
+        };
+
+        var narrowed = genres.Count > 0 || filter.YearFrom is not null || filter.YearTo is not null || filter.StatusList.Count > 0;
+        var today = DateTime.UtcNow.Date;
+        if (!narrowed)
+        {
+            switch (mode)
+            {
+                case DiscoveryMode.Top:
+                    return ($"{type}/popular", query);
+                case DiscoveryMode.TopRated:
+                    return ($"{type}/top_rated", query);
+                case DiscoveryMode.New when movie:
+                    return ("movie/now_playing", query);
+                case DiscoveryMode.Upcoming when movie:
+                    return ("movie/upcoming", query);
+                case DiscoveryMode.Popular or DiscoveryMode.New or DiscoveryMode.Upcoming:
+                    break;
+                default:
+                    return ($"trending/{type}/day", query);
+            }
+        }
+
+        // The discover endpoint: one ranking and the viewer's constraints, all applied by TMDB.
+        var dateKey = movie ? "primary_release_date" : "first_air_date";
+        DateTime? gte = filter.YearFrom is { } from ? new DateTime(from, 1, 1) : null;
+        DateTime? lte = filter.YearTo is { } to ? new DateTime(to, 12, 31) : null;
+        if (mode == DiscoveryMode.New)
+        {
+            lte = lte is { } cap && cap < today ? cap : today;
+            if (!narrowed)
+            {
+                gte = today.AddDays(-30);
+            }
+        }
+        else if (mode == DiscoveryMode.Upcoming)
+        {
+            gte = gte is { } floor && floor > today ? floor : today.AddDays(1);
+        }
+
+        var statuses = filter.StatusList;
+        if (movie)
+        {
+            // A movie is either released or not yet: the two statuses are the two sides of today.
+            if (statuses.Contains(MediaReleaseStatus.Upcoming) && !statuses.Contains(MediaReleaseStatus.Finished))
+            {
+                gte = gte is { } floor && floor > today ? floor : today.AddDays(1);
+            }
+            else if (statuses.Contains(MediaReleaseStatus.Finished) && !statuses.Contains(MediaReleaseStatus.Upcoming))
+            {
+                lte = lte is { } cap && cap < today ? cap : today;
+            }
+        }
+        else if (statuses.Count > 0)
+        {
+            var codes = statuses.SelectMany(status => status switch
+            {
+                MediaReleaseStatus.Ongoing => new[] { "0" },
+                MediaReleaseStatus.Upcoming => ["1", "2"],
+                MediaReleaseStatus.Finished => ["3"],
+                MediaReleaseStatus.Cancelled => ["4"],
+                _ => Array.Empty<string>()
+            }).Distinct().ToArray();
+            if (codes.Length > 0)
+            {
+                query.Add(("with_status", string.Join('|', codes)));
+            }
+        }
+
+        if (gte is { } start)
+        {
+            query.Add(($"{dateKey}.gte", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        }
+
+        if (lte is { } end)
+        {
+            query.Add(($"{dateKey}.lte", end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        }
+
+        var ids = genres.Select(genre => GenreId(mediaType, genre)).OfType<int>().ToArray();
+        if (ids.Length > 0)
+        {
+            // A comma is AND at TMDB: the titles that have every selected genre.
+            query.Add(("with_genres", string.Join(',', ids.Select(id => id.ToString(CultureInfo.InvariantCulture)))));
+        }
+
+        query.Add(("sort_by", mode switch
+        {
+            DiscoveryMode.New => movie ? "primary_release_date.desc" : "first_air_date.desc",
+            DiscoveryMode.Upcoming => movie ? "primary_release_date.asc" : "first_air_date.asc",
+            DiscoveryMode.Popular => "vote_count.desc",
+            DiscoveryMode.TopRated => "vote_average.desc",
+            _ => "popularity.desc"
+        }));
+        if (mode == DiscoveryMode.TopRated)
+        {
+            // Top rated needs an audience: the best score of a handful of voters is not a rating.
+            query.Add(("vote_count.gte", "500"));
+        }
+
+        if (mode == DiscoveryMode.Upcoming && !movie)
+        {
+            query.Add(("include_null_first_air_dates", "false"));
+        }
+
+        return ($"discover/{type}", query);
+    }
+
+    private static int? GenreId(TmdbDiscoveryMediaType mediaType, string genre)
+    {
+        if (string.IsNullOrWhiteSpace(genre))
+        {
+            return null;
+        }
+
+        var map = mediaType == TmdbDiscoveryMediaType.Movie ? MovieGenres : TvGenres;
+        return map.TryGetValue(genre.Trim(), out var id) ? id : null;
+    }
+
+    /// <summary>The titles that have every selected genre; a genre TMDB has no id for matches nothing.</summary>
+    private static IEnumerable<TmdbDiscoveryCandidate> HasGenres(
+        IEnumerable<TmdbDiscoveryCandidate> rows,
+        TmdbDiscoveryMediaType mediaType,
+        IReadOnlyList<string> genres)
+    {
+        if (genres.Count == 0)
+        {
+            return rows;
+        }
+
+        var ids = genres.Select(genre => GenreId(mediaType, genre)).ToArray();
+        return ids.Any(id => id is null) ? [] : rows.Where(row => ids.All(id => row.GenreIds.Contains(id!.Value)));
     }
 
     /// <summary>
@@ -594,7 +731,8 @@ public sealed partial class TmdbDiscoveryProvider(
                     x.GenreIds ?? [],
                     x.VoteAverage,
                     BackdropUrl(x.BackdropPath)))
-                .ToArray());
+                .ToArray(),
+            page.TotalPages);
     }
 
     private async Task<T> GetJsonAsync<T>(
@@ -691,84 +829,6 @@ public sealed partial class TmdbDiscoveryProvider(
         }
     }
 
-    private static string BrowsePath(TmdbDiscoveryMediaType mediaType, DiscoveryMode mode)
-    {
-        var type = mediaType == TmdbDiscoveryMediaType.Movie ? "movie" : "tv";
-        return mode switch
-        {
-            DiscoveryMode.Top => $"{type}/popular",
-            DiscoveryMode.New when mediaType == TmdbDiscoveryMediaType.Movie => "movie/now_playing",
-            DiscoveryMode.New => "discover/tv",
-            DiscoveryMode.Upcoming when mediaType == TmdbDiscoveryMediaType.Movie => "movie/upcoming",
-            DiscoveryMode.Upcoming => "discover/tv",
-            _ => $"trending/{type}/day"
-        };
-    }
-
-    private static IReadOnlyList<(string Key, string Value)> BrowseQuery(
-        TmdbDiscoveryMediaType mediaType,
-        DiscoveryMode mode,
-        string locale,
-        string genre)
-    {
-        var query = new List<(string Key, string Value)>
-        {
-            ("language", locale),
-            ("page", "1")
-        };
-
-        if (mediaType == TmdbDiscoveryMediaType.Series && mode is DiscoveryMode.New or DiscoveryMode.Upcoming)
-        {
-            var today = DateTime.UtcNow.Date;
-            if (mode == DiscoveryMode.New)
-            {
-                query.Add(("first_air_date.gte", today.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
-                query.Add(("first_air_date.lte", today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
-                query.Add(("sort_by", "first_air_date.desc"));
-            }
-            else
-            {
-                query.Add(("first_air_date.gte", today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
-                query.Add(("sort_by", "first_air_date.asc"));
-                query.Add(("include_null_first_air_dates", "false"));
-            }
-        }
-
-        if (GenreId(mediaType, genre) is { } genreId)
-        {
-            query.Add(("with_genres", genreId.ToString(CultureInfo.InvariantCulture)));
-        }
-
-        return query;
-    }
-
-    private static int? GenreId(TmdbDiscoveryMediaType mediaType, string genre)
-    {
-        if (string.IsNullOrWhiteSpace(genre))
-        {
-            return null;
-        }
-
-        var map = mediaType == TmdbDiscoveryMediaType.Movie ? MovieGenres : TvGenres;
-        return map.TryGetValue(genre.Trim(), out var id) ? id : null;
-    }
-
-    private static IEnumerable<TmdbDiscoveryCandidate> FilterGenre(
-        IEnumerable<TmdbDiscoveryCandidate> rows,
-        TmdbDiscoveryMediaType mediaType,
-        string genre)
-    {
-        if (string.IsNullOrWhiteSpace(genre))
-        {
-            return rows;
-        }
-
-        var map = mediaType == TmdbDiscoveryMediaType.Movie ? MovieGenres : TvGenres;
-        return map.TryGetValue(genre.Trim(), out var id)
-            ? rows.Where(x => x.GenreIds.Contains(id))
-            : [];
-    }
-
     private static string CurrentLocale()
     {
         var locale = CultureInfo.CurrentUICulture.Name;
@@ -791,12 +851,15 @@ public sealed partial class TmdbDiscoveryProvider(
             ? DateTime.SpecifyKind(date.Date, DateTimeKind.Utc)
             : null;
 
-    private sealed record TmdbPage(IReadOnlyList<TmdbDiscoveryCandidate> Results);
+    private sealed record TmdbPage(IReadOnlyList<TmdbDiscoveryCandidate> Results, int TotalPages);
 
     private sealed class TmdbPageDto
     {
         [JsonPropertyName("results")]
         public List<TmdbListItem>? Results { get; set; }
+
+        [JsonPropertyName("total_pages")]
+        public int TotalPages { get; set; }
     }
 
     private sealed class TmdbListItem

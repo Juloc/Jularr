@@ -22,19 +22,18 @@ public sealed class DiscoveryShelfTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "trending-anime", "top-anime",
+                "trending-anime", "top-anime", "new-anime", "upcoming-anime",
                 "trending-series", "top-series", "new-series", "upcoming-series",
                 "trending-movie", "top-movie", "new-movie", "upcoming-movie",
-                "trending-lightnovel", "top-lightnovel",
+                "trending-lightnovel", "top-lightnovel", "new-lightnovel", "upcoming-lightnovel",
                 "trending-book", "top-book", "new-book",
-                "trending-manga", "top-manga"
+                "trending-manga", "top-manga", "new-manga", "upcoming-manga"
             },
             plans.Select(plan => plan.Id).ToArray());
 
-        Assert.AreEqual(3, plans.Count(plan => plan.Kind == DiscoveryShelfKind.NewlyPublished));
-        Assert.AreEqual(2, plans.Count(plan => plan.Kind == DiscoveryShelfKind.Upcoming));
-        Assert.IsTrue(plans.Where(plan => plan.Mode == DiscoveryMode.Upcoming)
-            .All(plan => plan.Category is DiscoveryCategory.Movie or DiscoveryCategory.Series));
+        Assert.AreEqual(6, plans.Count(plan => plan.Kind == DiscoveryShelfKind.NewlyPublished));
+        Assert.AreEqual(5, plans.Count(plan => plan.Kind == DiscoveryShelfKind.Upcoming));
+        Assert.IsFalse(plans.Any(plan => plan.Mode == DiscoveryMode.Upcoming && plan.Category == DiscoveryCategory.Book), "Open Library announces nothing in advance.");
     }
 
     [TestMethod]
@@ -83,7 +82,7 @@ public sealed class DiscoveryShelfTests
     public void DeepLinkMatchesTheClientDiscoverUrlScheme()
     {
         Assert.AreEqual("/", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.All, DiscoveryMode.Trending, ""));
-        Assert.AreEqual("/?category=anime", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Anime, DiscoveryMode.Trending, ""));
+        Assert.AreEqual("/?category=anime&mode=trending", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Anime, DiscoveryMode.Trending, ""), "A scope of one type opens its overview without a mode, so its Trending view names itself.");
         Assert.AreEqual("/?category=book&mode=new", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Book, DiscoveryMode.New, ""));
         Assert.AreEqual("/?category=movie&mode=upcoming", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Movie, DiscoveryMode.Upcoming, ""));
         Assert.AreEqual("/?category=tv&mode=top", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Series, DiscoveryMode.Top, ""));
@@ -153,6 +152,8 @@ public sealed class DiscoveryShelfTests
 
     private sealed class FakeFeed : IDiscoveryFeed
     {
+        public Task<bool> IsAniListConnectedAsync(CancellationToken cancellationToken) => Task.FromResult(false);
+
         public int Loads { get; private set; }
 
         /// <summary>The requests of every load, in the order the loads were made.</summary>

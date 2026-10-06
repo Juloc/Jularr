@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -77,10 +78,12 @@ public sealed partial class NovelAniListProvider(
         }
         """;
 
-    private const string ReadingBrowseQuery = """
-        query ($perPage: Int!, $sort: [MediaSort!], $genre: [String]) {
-          Page(page: 1, perPage: $perPage) {
-            media(type: MANGA, isAdult: false, sort: $sort, genre_in: $genre) {
+    /// <summary>One page of manga or light novels for Discover. The format filter is applied by AniList (manga excludes NOVEL, light novels require it), so a page never holds the other kind.</summary>
+    private const string ReadingDiscoverQuery = """
+        query ($page: Int!, $perPage: Int!, $search: String, $sort: [MediaSort!], $genre: [String], $status: [MediaStatus], $startFrom: FuzzyDateInt, $startTo: FuzzyDateInt, $format: MediaFormat, $formatNot: [MediaFormat], $popularityMin: Int) {
+          Page(page: $page, perPage: $perPage) {
+            pageInfo { hasNextPage }
+            media(type: MANGA, isAdult: false, search: $search, sort: $sort, genre_in: $genre, status_in: $status, startDate_greater: $startFrom, startDate_lesser: $startTo, format: $format, format_not_in: $formatNot, popularity_greater: $popularityMin) {
               id
               title { romaji english native }
               description(asHtml: false)
@@ -229,43 +232,13 @@ public sealed partial class NovelAniListProvider(
             includeManga);
     }
 
-    public Task<IReadOnlyList<AniListReadingMediaCandidate>> BrowseReadingMediaAsync(
-        bool trending,
-        int limit,
-        bool includeNovels,
-        bool includeManga,
-        CancellationToken cancellationToken) =>
-        BrowseReadingMediaAsync(trending, limit, includeNovels, includeManga, null, cancellationToken);
-
-    public async Task<IReadOnlyList<AniListReadingMediaCandidate>> BrowseReadingMediaAsync(
-        bool trending,
-        int limit,
-        bool includeNovels,
-        bool includeManga,
-        string? genre,
+    /// <summary>One Discover page of manga or light novels (a browse view or a search) with the viewer's filters applied by AniList.</summary>
+    public async Task<DiscoveryProviderPage<AniListReadingMediaCandidate>> DiscoverReadingPageAsync(
+        AniListDiscoveryOptions options,
         CancellationToken cancellationToken)
     {
-        if (!includeNovels && !includeManga)
-        {
-            return [];
-        }
-
-        var json = await SendAsync(
-            ReadingBrowseQuery,
-            new
-            {
-                perPage = Math.Clamp(limit, 1, 24),
-                sort = trending
-                    ? new[] { "TRENDING_DESC", "POPULARITY_DESC" }
-                    : new[] { "SCORE_DESC", "POPULARITY_DESC" },
-                genre = GenreVariable(genre)
-            },
-            cancellationToken);
-
-        return ParseReadingMediaResponse(
-            json,
-            includeNovels,
-            includeManga);
+        var json = await SendAsync(ReadingDiscoverQuery, options.Variables(), cancellationToken);
+        return new DiscoveryProviderPage<AniListReadingMediaCandidate>(ParseReadingMediaResponse(json, true, true), AniListPageInfo.HasNextPage(json));
     }
 
     // AniList treats a null genre_in as "no filter"; an empty array would match nothing.

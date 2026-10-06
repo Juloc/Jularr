@@ -56,14 +56,12 @@ public static class DiscoveryShelfComposer
         {
             plans.Add(Row(type, DiscoveryShelfKind.Trending, DiscoveryMode.Trending));
             plans.Add(Row(type, DiscoveryShelfKind.Top, DiscoveryMode.Top));
-            if (type is WorkMediaType.Movie or WorkMediaType.Series)
+            plans.Add(Row(type, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
+
+            // Open Library announces nothing in advance; every other source has a real "not yet released" feed.
+            if (type != WorkMediaType.Book)
             {
-                plans.Add(Row(type, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
                 plans.Add(Row(type, DiscoveryShelfKind.Upcoming, DiscoveryMode.Upcoming));
-            }
-            else if (type == WorkMediaType.Book)
-            {
-                plans.Add(Row(type, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
             }
         }
 
@@ -202,7 +200,7 @@ public sealed class DiscoveryShelfService(IDiscoveryFeed feed, IAppShellService 
         }
 
         var audience = new DiscoveryAudience(profileId, isOwner, access.VisibleMediaTypes.ToHashSet());
-        var load = await feed.LoadAsync([.. plans.Select(plan => new DiscoveryRequest("", plan.Category, plan.Mode))], audience, wait, cancellationToken);
+        var load = await feed.LoadAsync([.. plans.Select(plan => new DiscoveryRequest("", plan.Category, plan.Mode) { Preview = true })], audience, wait, cancellationToken);
         var overlay = await feed.OverlayLocalStateAsync(load.Batches.SelectMany(batch => batch.Items), profileId, cancellationToken);
 
         var rows = new List<DiscoveryShelfRow>(plans.Length);

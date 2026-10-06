@@ -36,10 +36,15 @@
         const data = new FormData(form);
         const params = new URLSearchParams();
         const value = name => String(data.get(name) || "").trim();
+        // The multi-valued filters repeat their field; the address keeps them as one comma separated value.
+        const values = name => data.getAll(name).map(item => String(item).trim()).filter(Boolean).join(",");
         if (value("q")) params.set("q", value("q"));
         if (value("category") && value("category") !== "all") params.set("category", value("category"));
-        if (value("mode") && value("mode") !== "trending") params.set("mode", value("mode"));
-        ["genre", "year", "status", "avail"].forEach(name => {
+        if (value("mode") && value("mode") !== "all") params.set("mode", value("mode"));
+        ["genre", "status", "avail"].forEach(name => {
+            if (values(name)) params.set(name, values(name));
+        });
+        ["from", "to"].forEach(name => {
             if (value(name)) params.set(name, value(name));
         });
         if (value("pref") === "1") params.set("pref", "1");
@@ -60,8 +65,8 @@
             if (q) url.searchParams.set("q", q); else url.searchParams.delete("q");
             link.setAttribute("href", url.pathname + url.search);
         });
-        const browseGroup = document.querySelector("[data-dc-browse-group]");
-        if (browseGroup) browseGroup.hidden = q.length > 0;
+        // Typing turns the page into Search mode: the landing (Hero, Continue) and the browse views give way to the results.
+        document.querySelectorAll("[data-dc-landing], .dc-browse, .dc-tokens").forEach(element => { element.hidden = q.length > 0; });
     }
 
     // ---- Body: sections of titles, fetched after first paint and completed by later generations ----------------------------------------
@@ -370,6 +375,124 @@
             loadBody();
         }, SEARCH_DELAY);
     }
+
+    // ---- Filters: the genre list filters as the viewer types and a year preset only sets the range
+
+    document.addEventListener("input", event => {
+        const field = event.target instanceof Element ? event.target.closest("[data-dc-genre-search]") : null;
+        if (!field) return;
+        const needle = field.value.trim().toLowerCase();
+        field.closest("fieldset")?.querySelectorAll("[data-dc-option]").forEach(option => {
+            option.hidden = needle.length > 0 && !option.dataset.dcOption.includes(needle) && !option.textContent.toLowerCase().includes(needle);
+        });
+    });
+
+    document.addEventListener("click", event => {
+        const preset = event.target instanceof Element ? event.target.closest("[data-dc-year-preset]") : null;
+        if (!preset) return;
+        const [from, to] = preset.dataset.dcYearPreset.split("-");
+        const group = preset.closest("fieldset");
+        group.querySelector("[data-dc-year-from]").value = from;
+        group.querySelector("[data-dc-year-to]").value = to;
+    });
+
+    // ---- Paging: a view of one media type loads provider pages as the viewer scrolls --------------------------------------------------------
+    //
+    // The body says when a full provider page came back (data-dc-has-more). A sentinel after the grid asks for the next page when it comes near;
+    // the cards are appended without touching the ones above, titles the viewer already has are skipped, a failed page keeps what is loaded and
+    // offers a retry, and the end of the source (or five pages in a row that add nothing) stops the loading.
+
+    const pager = { address: "", page: 1, loading: false, done: false, empty: 0, sentinel: null, observer: null };
+    const cardKey = card => `${card.dataset.dcCategory}|${card.dataset.dcProvider}|${card.dataset.dcExternalId}`;
+
+    function gridList() {
+        return body.querySelector("[data-dc-section][data-dc-layout='grid'] ul:not(.dc-ghosts)");
+    }
+
+    function stopPaging() {
+        pager.observer?.disconnect();
+        pager.sentinel?.remove();
+        pager.sentinel = null;
+    }
+
+    function ensurePager() {
+        const current = bodyRoot();
+        const list = gridList();
+        if (!current || !list || current.dataset.dcHasMore !== "true" || Number(current.dataset.dcPending) > 0) {
+            stopPaging();
+            return;
+        }
+
+        const address = window.location.pathname + window.location.search;
+        if (pager.address !== address) {
+            Object.assign(pager, { address, page: 1, loading: false, done: false, empty: 0 });
+            stopPaging();
+        }
+
+        if (pager.done || pager.sentinel?.isConnected) return;
+        const sentinel = document.createElement("div");
+        sentinel.className = "dc-sentinel";
+        sentinel.dataset.dcSentinel = "";
+        list.closest("[data-dc-section]").after(sentinel);
+        pager.sentinel = sentinel;
+        pager.observer = new IntersectionObserver(entries => {
+            if (entries.some(entry => entry.isIntersecting)) void loadMore();
+        }, { rootMargin: "600px 0px" });
+        pager.observer.observe(sentinel);
+    }
+
+    async function loadMore() {
+        const list = gridList();
+        if (pager.loading || pager.done || !list || !pager.sentinel) return;
+        pager.loading = true;
+        pager.sentinel.dataset.state = "loading";
+        pager.sentinel.replaceChildren();
+        const address = pager.address;
+        try {
+            const params = new URLSearchParams(window.location.search);
+            params.set("handler", "Body");
+            params.set("pg", String(pager.page + 1));
+            const response = await fetch(`${window.location.pathname}?${params}`, { cache: "no-store", headers: { "X-Requested-With": "fetch" } });
+            if (!response.ok) throw new Error(String(response.status));
+            const more = new DOMParser().parseFromString(await response.text(), "text/html").querySelector("[data-dc-more-items]");
+            if (address !== pager.address || !more) return;
+            const known = new Set([...list.querySelectorAll("[data-dc-card]")].map(cardKey));
+            let added = 0;
+            more.querySelectorAll(":scope > li").forEach(item => {
+                const card = item.querySelector("[data-dc-card]");
+                const key = card ? cardKey(card) : "";
+                if (!key || known.has(key)) return;
+                known.add(key);
+                list.append(document.importNode(item, true));
+                added += 1;
+            });
+            pager.page += 1;
+            pager.empty = added === 0 ? pager.empty + 1 : 0;
+            pager.done = more.dataset.dcHasMore !== "true" || pager.empty >= 5;
+            if (pager.done) stopPaging();
+        } catch {
+            if (address === pager.address && pager.sentinel) {
+                const retry = document.createElement("button");
+                retry.type = "button";
+                retry.className = "button";
+                retry.textContent = root.dataset.textRetry || "Retry";
+                retry.addEventListener("click", () => { retry.remove(); pager.loading = false; void loadMore(); });
+                pager.sentinel.replaceChildren(retry);
+            }
+            return;
+        } finally {
+            pager.loading = false;
+            if (pager.sentinel) delete pager.sentinel.dataset.state;
+        }
+
+        // The sentinel may still be in view (a short page, a local filter that hid most of it): ask again.
+        if (!pager.done && pager.sentinel) {
+            pager.observer?.unobserve(pager.sentinel);
+            pager.observer?.observe(pager.sentinel);
+        }
+    }
+
+    new MutationObserver(() => ensurePager()).observe(body, { childList: true, subtree: true });
 
     searchInput.addEventListener("input", () => {
         syncTabs();

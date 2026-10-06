@@ -611,7 +611,7 @@ public sealed class DiscoverRequestTests
                 null!,
                 null!,
                 null!,
-                null!,
+                new Jularr.Web.Features.Instance.InstanceModuleStore(Path.Combine(Path.GetTempPath(), $"jularr-discover-modules-{Guid.NewGuid():N}")),
                 null!, NullLogger<DiscoverIndexModel>.Instance);
             var httpContext = new DefaultHttpContext
             {

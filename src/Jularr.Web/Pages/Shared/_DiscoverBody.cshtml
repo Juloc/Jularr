@@ -8,7 +8,7 @@
     var ui = Model.Ui;
     var query = Model.Query;
 }
-<div data-dc-state="@Model.State.ToString().ToLowerInvariant()" data-dc-settled="@Model.Settled" data-dc-pending="@Model.Pending">
+<div data-dc-state="@Model.State.ToString().ToLowerInvariant()" data-dc-settled="@Model.Settled" data-dc-pending="@Model.Pending" data-dc-has-more="@(Model.HasMore ? "true" : null)">
     @switch (Model.State)
     {
         case DiscoverBodyState.Sections:
@@ -54,7 +54,7 @@
         case DiscoverBodyState.BooksNotInList:
             <div class="dc-message">
                 <p>@ui["discover.results.booksNotInList"]</p>
-                <a class="button" href="@query.WithoutFilters().Href">@ui["library.browse.noResults.reset"]</a>
+                <a class="button" href="@((query with { Mode = DiscoveryMode.Overview }).WithoutFilters().Href)">@ui["library.browse.noResults.reset"]</a>
             </div>
             break;
     }

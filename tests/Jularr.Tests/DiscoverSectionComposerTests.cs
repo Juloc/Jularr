@@ -126,12 +126,12 @@ public sealed class DiscoverSectionComposerTests
             [Source(DiscoverySource.Anime, DiscoverySourceState.Ready, Item("anime", "anilist", "1", "A", 2023), Item("anime", "anilist", "2", "B", 2024), Item("anime", "anilist", "3", "C", 2024))]);
 
         var (all, total) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime }, Context());
-        var (narrowed, _) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime, Year = 2024 }, Context());
-        var (none, noneTotal) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime, Year = 1999 }, Context());
+        var (narrowed, _) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime, YearFrom = 2024, YearTo = 2024 }, Context());
+        var (none, noneTotal) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime, YearFrom = 1999, YearTo = 1999 }, Context());
 
         Assert.AreEqual(DiscoverSectionLayout.Grid, all.Single().Layout);
-        Assert.AreEqual("3 results", all.Single().Count);
-        Assert.AreEqual("2 of 3 results", narrowed.Single().Count);
+        Assert.IsNull(all.Single().Count, "A paged view has no count: the titles loaded so far are not the results.");
+        Assert.AreEqual(2, narrowed.Single().Cards.Count);
         Assert.AreEqual(3, total);
         Assert.AreEqual(0, none.Count, "Nothing left after the filters is the no-results state of the body, not an empty grid.");
         Assert.AreEqual(3, noneTotal);

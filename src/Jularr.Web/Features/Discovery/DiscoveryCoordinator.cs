@@ -26,6 +26,7 @@ public sealed class DiscoveryCoordinator(
     ILogger<DiscoveryCoordinator> logger,
     IInstanceModuleService? instanceModules = null) : IDiscoveryFeed
 {
+    // A shelf is a bounded preview of a view; the view itself loads full provider pages as the viewer scrolls.
     private const int AnimeLimit = 10;
     private const int ReadingLimit = 14;
     private const int BookLimit = 10;
@@ -102,7 +103,7 @@ public sealed class DiscoveryCoordinator(
                 continue;
             }
 
-            var key = $"{DiscoverySources.Name(source)}|{request.Mode}|{request.Genre}|{request.Query.ToLowerInvariant()}|{CultureInfo.CurrentUICulture.Name}"
+            var key = $"{DiscoverySources.Name(source)}|{request.Category}|{request.Mode}|p{request.Page}{(request.Preview ? "s" : "")}|{request.EffectiveFilter.CacheKey}|{request.Query.ToLowerInvariant()}|{CultureInfo.CurrentUICulture.Name}"
                 + (source == DiscoverySource.Reading && audience.IsOwner ? "|owner" : "");
             var freshness = request.Mode == DiscoveryMode.Search ? SearchFreshness : BrowseFreshness;
             calls.Add(new SourceCall(source, key, freshness, FetchFor(source, request, audience.IsOwner)));
@@ -127,18 +128,20 @@ public sealed class DiscoveryCoordinator(
         DiscoverySource.Anime => async (services, cancellationToken) =>
         {
             var provider = services.GetRequiredService<AniListMetadataProvider>();
-            var rows = request.Mode == DiscoveryMode.Search
-                ? await provider.SearchAsync(request.Query, AnimeLimit, request.Genre, cancellationToken)
-                : await provider.BrowseAsync(request.Mode == DiscoveryMode.Trending, AnimeLimit, request.Genre, cancellationToken);
-            return rows.Select(MapAnime).ToArray();
+            var page = await provider.DiscoverPageAsync(AniListOptions(request, AniListDiscoveryKind.Anime, request.Preview ? AnimeLimit : DiscoverySources.PageSize), cancellationToken);
+            return page.Items.Select(MapAnime).ToArray();
         },
         DiscoverySource.Reading => async (services, cancellationToken) =>
         {
             var provider = services.GetRequiredService<NovelAniListProvider>();
-            var rows = request.Mode == DiscoveryMode.Search
-                ? await provider.SearchReadingMediaAsync(request.Query, ReadingLimit, true, true, request.Genre, cancellationToken)
-                : await provider.BrowseReadingMediaAsync(request.Mode == DiscoveryMode.Trending, ReadingLimit, true, true, request.Genre, cancellationToken);
-            return rows.Select(row => MapReading(row, isOwner)).ToArray();
+            var kind = request.Category switch
+            {
+                DiscoveryCategory.Manga => AniListDiscoveryKind.Manga,
+                DiscoveryCategory.LightNovel => AniListDiscoveryKind.LightNovel,
+                _ => AniListDiscoveryKind.Reading
+            };
+            var page = await provider.DiscoverReadingPageAsync(AniListOptions(request, kind, request.Preview ? ReadingLimit : DiscoverySources.PageSize), cancellationToken);
+            return page.Items.Select(row => MapReading(row, isOwner)).ToArray();
         },
         DiscoverySource.Movies => (services, cancellationToken) => FetchTmdbAsync(services, TmdbDiscoveryMediaType.Movie, request, cancellationToken),
         DiscoverySource.Series => (services, cancellationToken) => FetchTmdbAsync(services, TmdbDiscoveryMediaType.Series, request, cancellationToken),
@@ -146,14 +149,28 @@ public sealed class DiscoveryCoordinator(
         {
             var books = services.GetRequiredService<BookCatalogService>();
             var bookSearch = services.GetService<BookSearchCoordinator>();
-            var rows = request.Mode == DiscoveryMode.Search
-                ? bookSearch is null
-                    ? await books.SearchAsync(request.Query, cancellationToken)
-                    : await SearchBooksAsync(bookSearch, request.Query, cancellationToken)
-                : await books.BrowseAsync(ToBookBrowseMode(request.Mode), cancellationToken);
-            return rows.Where(row => MatchesGenre(row, request.Genre)).Take(BookLimit).Select(MapBook).ToArray();
+            var size = request.Preview ? BookLimit : DiscoverySources.PageSize;
+            IReadOnlyList<BookCatalogItem> rows;
+            if (request.Mode == DiscoveryMode.Search)
+            {
+                // The merged book search of several catalogs has no common cursor, so a search is one page.
+                rows = request.Page > 1
+                    ? []
+                    : bookSearch is null
+                        ? await books.SearchAsync(request.Query, cancellationToken)
+                        : await SearchBooksAsync(bookSearch, request.Query, cancellationToken);
+            }
+            else
+            {
+                rows = await books.BrowseAsync(ToBookBrowseMode(request.Mode), cancellationToken, (Math.Max(1, request.Page) - 1) * size, size);
+            }
+
+            return rows.Where(row => MatchesGenres(row, request.EffectiveGenres)).Take(size).Select(MapBook).ToArray();
         }
     };
+
+    private static AniListDiscoveryOptions AniListOptions(DiscoveryRequest request, AniListDiscoveryKind kind, int perPage) =>
+        new(request.Page, perPage, request.Mode == DiscoveryMode.Search ? request.Query : "", request.Mode, request.EffectiveFilter, kind);
 
     private static async Task<IReadOnlyList<BookCatalogItem>> SearchBooksAsync(BookSearchCoordinator bookSearch, string query, CancellationToken cancellationToken) =>
         BooksOrFailure(await bookSearch.SearchAsync(query, cancellationToken));
@@ -167,10 +184,8 @@ public sealed class DiscoveryCoordinator(
     private static async Task<IReadOnlyList<DiscoveryItem>> FetchTmdbAsync(IServiceProvider services, TmdbDiscoveryMediaType mediaType, DiscoveryRequest request, CancellationToken cancellationToken)
     {
         var provider = services.GetRequiredService<TmdbDiscoveryProvider>();
-        var rows = request.Mode == DiscoveryMode.Search
-            ? await provider.SearchAsync(mediaType, request.Query, TmdbLimit, request.Genre, cancellationToken)
-            : await provider.BrowseAsync(mediaType, request.Mode, TmdbLimit, request.Genre, cancellationToken);
-        return rows.Select(MapTmdb).ToArray();
+        var page = await provider.DiscoverPageAsync(mediaType, request, request.Preview ? TmdbLimit : DiscoverySources.TmdbPageSize, cancellationToken);
+        return page.Items.Select(MapTmdb).ToArray();
     }
 
     /// <summary>Waits for the pending sources until the budget is spent, every source settled or, for a follow-up load, one more source settled than the caller already knows.</summary>
@@ -253,6 +268,9 @@ public sealed class DiscoveryCoordinator(
     };
 
     /// <summary>My AniList is private to the account: it is read inline for this viewer and never shared through the source flights.</summary>
+    public async Task<bool> IsAniListConnectedAsync(CancellationToken cancellationToken) =>
+        (await aniListAccount.GetStatusAsync(cancellationToken)).IsConnected;
+
     private async Task<DiscoveryBatch> LoadMyListAsync(DiscoveryRequest request, DiscoveryAudience audience, InstanceModuleSettings instance, CancellationToken cancellationToken)
     {
         var animeEnabled = instance.IsEnabled(InstanceModule.Anime) && audience.VisibleMediaTypes.Contains(WorkMediaType.Anime);
@@ -597,10 +615,11 @@ public sealed class DiscoveryCoordinator(
     // (Google Books, Wikisource, Gutenberg) never populate Subjects here. A
     // genre filter can only be honored where subject data actually exists, so
     // items without subjects are kept rather than dropped or fake-matched.
-    private static bool MatchesGenre(BookCatalogItem row, string genre) =>
-        genre.Length == 0
+    /// <summary>A book matches when its subjects cover every selected genre; a book without subjects is not excluded because nothing says it does not match.</summary>
+    private static bool MatchesGenres(BookCatalogItem row, IReadOnlyList<string> genres) =>
+        genres.Count == 0
         || row.Subjects.Count == 0
-        || row.Subjects.Any(subject => subject.Contains(genre, StringComparison.OrdinalIgnoreCase));
+        || genres.All(genre => row.Subjects.Any(subject => subject.Contains(genre, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>The Books browse row for a shared discovery mode (#371). Other categories keep
     /// their own <see cref="DiscoveryMode.Trending"/>-flag branching; only Books has a source for
@@ -608,7 +627,7 @@ public sealed class DiscoveryCoordinator(
     private static BookBrowseMode ToBookBrowseMode(DiscoveryMode mode) =>
         mode switch
         {
-            DiscoveryMode.Top => BookBrowseMode.Popular,
+            DiscoveryMode.Top or DiscoveryMode.Popular => BookBrowseMode.Popular,
             DiscoveryMode.New => BookBrowseMode.New,
             _ => BookBrowseMode.Trending
         };

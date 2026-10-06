@@ -6,41 +6,23 @@
     var ui = Model.Ui;
     var query = Model.Query;
     var active = query.ActiveFilterCount;
-
-    var thisYear = DateTime.UtcNow.Year;
-    var years = Enumerable.Range(thisYear - 24, 25).Reverse().ToList();
-    if (query.Year is { } selectedYear && !years.Contains(selectedYear))
-    {
-        years.Add(selectedYear);
-    }
-
-    var browseModes = new List<(DiscoveryMode Mode, string LabelKey)>
-    {
-        (DiscoveryMode.Trending, "discover.tabs.trending"),
-        (DiscoveryMode.Top, "discover.tabs.top")
-    };
-    if (query.Category is DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
-    {
-        browseModes.Add((DiscoveryMode.New, "discover.tabs.new"));
-    }
-
-    if (query.Category is DiscoveryCategory.Movie or DiscoveryCategory.Series)
-    {
-        browseModes.Add((DiscoveryMode.Upcoming, "discover.tabs.upcoming"));
-    }
-    else
-    {
-        browseModes.Add((DiscoveryMode.MyList, "discover.tabs.myAniList"));
-    }
-
+    var statuses = DiscoverBrowseModes.StatusesFor(query.Category);
     var availabilities = new[]
     {
         (DiscoverAvailabilityFilter.InLibrary, "discover.filter.availabilityLibrary"),
         (DiscoverAvailabilityFilter.Requested, "discover.filter.availabilityRequested"),
         (DiscoverAvailabilityFilter.NotInLibrary, "discover.filter.availabilityNew")
     };
+    var presets = new[]
+    {
+        (2020, 2029, "discover.filter.preset2020s"),
+        (2010, 2019, "discover.filter.preset2010s"),
+        (2000, 2009, "discover.filter.preset2000s"),
+        (1900, 1999, "discover.filter.presetBefore2000")
+    };
 }
-@* The Filter control of the Home/Discover surface, rendered in the content header. Its fields belong to the page's form (id dc-form). *@
+@* The Filter control of the Home/Discover surface, rendered in the content header. It only narrows: the media type and the browse view are
+   chosen elsewhere. Its fields belong to the page's form (id dc-form); the multi-valued ones repeat their name. *@
 <details class="dc-pop" data-dc-pop>
     <summary class="dc-btn@(active > 0 ? " is-active" : "")"
              aria-label="@(active > 0 ? ui.Format("library.browse.filtersActiveAria", ("count", active)) : ui["library.browse.filters"])">
@@ -65,63 +47,65 @@
         </div>
 
         <div class="dc-groups">
-            <fieldset class="dc-group" data-dc-browse-group hidden="@query.IsSearch">
-                <legend>@ui["discover.filter.groupBrowse"]</legend>
-                @foreach (var (mode, labelKey) in browseModes)
-                {
-                    <label class="dc-check">
-                        <input type="radio" form="dc-form" name="mode" value="@DiscoverBrowseQuery.ModeName(mode)" checked="@(query.Mode == mode)" />
-                        <span>@ui[labelKey]</span>
-                    </label>
-                }
+            <fieldset class="dc-group" data-dc-genres>
+                <legend>@ui["discover.filter.genre"]</legend>
+                <input type="search" class="dc-genre-search" data-dc-genre-search autocomplete="off" placeholder="@ui["discover.filter.genreSearch"]" aria-label="@ui["discover.filter.genreSearch"]" />
+                <ul class="dc-options" role="group">
+                    @foreach (var genre in DiscoveryRequest.KnownGenres)
+                    {
+                        <li data-dc-option="@genre.ToLowerInvariant()">
+                            <label class="dc-check">
+                                <input type="checkbox" form="dc-form" name="genre" value="@genre" checked="@query.Genres.Contains(genre)" />
+                                <span>@ui[DiscoverGenres.Key(genre)!]</span>
+                            </label>
+                        </li>
+                    }
+                </ul>
             </fieldset>
 
             <fieldset class="dc-group">
-                <legend>@ui["library.browse.filter.groupMetadata"]</legend>
-                <label class="dc-select">
-                    <span>@ui["discover.filter.genre"]</span>
-                    <select form="dc-form" name="genre">
-                        <option value="">@ui["library.browse.filter.any"]</option>
-                        @foreach (var genre in DiscoveryRequest.KnownGenres)
-                        {
-                            <option value="@genre" selected="@(query.Genre == genre)">@ui[DiscoverGenres.Key(genre)!]</option>
-                        }
-                    </select>
-                </label>
-                <label class="dc-select">
-                    <span>@ui["library.browse.filter.year"]</span>
-                    <select form="dc-form" name="year">
-                        <option value="">@ui["library.browse.filter.any"]</option>
-                        @foreach (var year in years)
-                        {
-                            <option value="@year" selected="@(query.Year == year)">@year</option>
-                        }
-                    </select>
-                </label>
-                <label class="dc-select">
-                    <span>@ui["library.browse.filter.status"]</span>
-                    <select form="dc-form" name="status">
-                        <option value="">@ui["library.browse.filter.any"]</option>
-                        @foreach (var status in Enum.GetValues<MediaReleaseStatus>())
-                        {
-                            <option value="@DiscoverBrowseQuery.StatusName(status)" selected="@(query.Status == status)">@ui[MediaBannerCardModel.StatusKey(status)]</option>
-                        }
-                    </select>
-                </label>
+                <legend>@ui["library.browse.filter.year"]</legend>
+                <div class="dc-range">
+                    <label class="dc-select">
+                        <span>@ui["discover.filter.yearFrom"]</span>
+                        <input type="number" form="dc-form" name="from" min="1900" max="2100" inputmode="numeric" value="@query.YearFrom" data-dc-year-from />
+                    </label>
+                    <label class="dc-select">
+                        <span>@ui["discover.filter.yearTo"]</span>
+                        <input type="number" form="dc-form" name="to" min="1900" max="2100" inputmode="numeric" value="@query.YearTo" data-dc-year-to />
+                    </label>
+                </div>
+                <div class="dc-presets">
+                    @foreach (var (from, to, labelKey) in presets)
+                    {
+                        <button type="button" class="dc-preset" data-dc-year-preset="@from-@to">@ui[labelKey]</button>
+                    }
+                </div>
             </fieldset>
+
+            @if (statuses.Count > 0)
+            {
+                <fieldset class="dc-group">
+                    <legend>@ui["library.browse.filter.status"]</legend>
+                    @foreach (var status in statuses)
+                    {
+                        <label class="dc-check">
+                            <input type="checkbox" form="dc-form" name="status" value="@DiscoverBrowseQuery.StatusName(status)" checked="@query.Statuses.Contains(status)" />
+                            <span>@ui[MediaBannerCardModel.StatusKey(status)]</span>
+                        </label>
+                    }
+                </fieldset>
+            }
 
             <fieldset class="dc-group">
                 <legend>@ui["library.browse.filter.groupAvailability"]</legend>
-                <label class="dc-select">
-                    <span class="sr-only">@ui["library.browse.filter.groupAvailability"]</span>
-                    <select form="dc-form" name="avail">
-                        <option value="">@ui["library.browse.filter.any"]</option>
-                        @foreach (var (availability, labelKey) in availabilities)
-                        {
-                            <option value="@DiscoverBrowseQuery.AvailabilityName(availability)" selected="@(query.Availability == availability)">@ui[labelKey]</option>
-                        }
-                    </select>
-                </label>
+                @foreach (var (availability, labelKey) in availabilities)
+                {
+                    <label class="dc-check">
+                        <input type="checkbox" form="dc-form" name="avail" value="@DiscoverBrowseQuery.AvailabilityName(availability)" checked="@query.Availabilities.Contains(availability)" />
+                        <span>@ui[labelKey]</span>
+                    </label>
+                }
                 @if (Model.Preference.IsSet || query.PreferredLanguage)
                 {
                     <label class="dc-check">

@@ -34,19 +34,23 @@ public sealed class DiscoverPageTests
     [TestMethod]
     public void EveryFilterRoundTripsThroughTheAddress()
     {
-        var address = "/?q=frieren&category=anime&mode=top&genre=Sci-Fi&year=2023&status=finished&avail=library&pref=1";
+        var address = "/?q=frieren&category=anime&mode=top&genre=Sci-Fi,Fantasy&from=2015&to=2023&status=finished,ongoing&avail=library,requested&pref=1";
 
         var query = Parse(address[(address.IndexOf('?') + 1)..]);
 
         Assert.AreEqual("frieren", query.Text);
         Assert.AreEqual(DiscoveryCategory.Anime, query.Category);
         Assert.AreEqual(DiscoveryMode.Top, query.Mode);
-        Assert.AreEqual("Sci-Fi", query.Genre);
-        Assert.AreEqual(2023, query.Year);
-        Assert.AreEqual(MediaReleaseStatus.Finished, query.Status);
-        Assert.AreEqual(DiscoverAvailabilityFilter.InLibrary, query.Availability);
+        CollectionAssert.AreEqual(new[] { "Sci-Fi", "Fantasy" }, query.Genres.ToArray());
+        Assert.AreEqual(2015, query.YearFrom);
+        Assert.AreEqual(2023, query.YearTo);
+        CollectionAssert.AreEqual(new[] { MediaReleaseStatus.Finished, MediaReleaseStatus.Ongoing }, query.Statuses.ToArray());
+        CollectionAssert.AreEqual(new[] { DiscoverAvailabilityFilter.InLibrary, DiscoverAvailabilityFilter.Requested }, query.Availabilities.ToArray());
         Assert.IsTrue(query.PreferredLanguage);
-        Assert.AreEqual(5, query.ActiveFilterCount, "Genre, year, status, availability and language are the filters.");
+        Assert.AreEqual(8, query.ActiveFilterCount, "Two genres, the year range, two statuses, two availabilities and the language are the filters.");
+        Assert.AreEqual(8, query.ActiveFilters.Count, "Every active filter is one removable token.");
+        Assert.AreEqual("/?q=frieren&category=anime&mode=top&genre=Sci-Fi&from=2015&to=2023&status=finished,ongoing&avail=library,requested&pref=1", query.WithoutFilter("genre:Fantasy").Href);
+        Assert.AreEqual(0, query.WithoutFilters().ActiveFilterCount);
         Assert.IsFalse(query.IsLanding);
         Assert.AreEqual(address, query.Href);
     }
@@ -69,14 +73,25 @@ public sealed class DiscoverPageTests
         Assert.AreEqual(DiscoveryMode.New, Parse("category=tv&mode=new").Mode);
         Assert.AreEqual(DiscoveryMode.Upcoming, Parse("category=movie&mode=upcoming").Mode);
         Assert.AreEqual(DiscoveryMode.Upcoming, Parse("category=tv&mode=upcoming").Mode);
-        Assert.AreEqual(DiscoveryMode.Trending, Parse("category=anime&mode=new").Mode);
-        Assert.AreEqual(DiscoveryMode.Trending, Parse("category=anime&mode=upcoming").Mode);
+        Assert.AreEqual(DiscoveryMode.New, Parse("category=anime&mode=new").Mode);
+        Assert.AreEqual(DiscoveryMode.Upcoming, Parse("category=manga&mode=upcoming").Mode);
+        Assert.AreEqual(DiscoveryMode.Popular, Parse("category=light-novel&mode=popular").Mode);
+        Assert.AreEqual(DiscoveryMode.TopRated, Parse("category=tv&mode=top-rated").Mode);
+        Assert.AreEqual(DiscoveryMode.MyList, Parse("category=anime&mode=my-list").Mode);
+        Assert.AreEqual(DiscoveryMode.Overview, Parse("category=movie&mode=my-list").Mode, "My List is an AniList view.");
+        Assert.AreEqual(DiscoveryMode.Overview, Parse("category=book&mode=upcoming").Mode, "Open Library announces nothing.");
+        Assert.AreEqual(DiscoveryMode.Overview, Parse("category=book&mode=top-rated").Mode, "Books have no rating feed.");
+        Assert.AreEqual(DiscoveryMode.Overview, Parse("category=anime").Mode, "A scope opens its overview.");
+        Assert.AreEqual(DiscoveryMode.Trending, Parse("category=anime&mode=trending").Mode);
+        Assert.IsTrue(Parse("category=anime").IsLanding, "The overview of one type is its shelves one below the other.");
+        Assert.IsFalse(Parse("category=anime&mode=trending").IsLanding);
         Assert.AreEqual(DiscoveryMode.Trending, Parse("mode=search").Mode, "search is derived from the text, never asked for.");
 
         var junk = Parse("year=abc&status=gone&avail=x&pref=0&category=games");
-        Assert.IsNull(junk.Year);
-        Assert.IsNull(junk.Status);
-        Assert.AreEqual(DiscoverAvailabilityFilter.Any, junk.Availability);
+        Assert.IsNull(junk.YearFrom);
+        Assert.IsNull(junk.YearTo);
+        Assert.AreEqual(0, junk.Statuses.Count);
+        Assert.AreEqual(0, junk.Availabilities.Count);
         Assert.IsFalse(junk.PreferredLanguage);
         Assert.AreEqual(DiscoveryCategory.All, junk.Category);
         Assert.IsTrue(junk.IsLanding);
@@ -111,9 +126,9 @@ public sealed class DiscoverPageTests
     [TestMethod]
     public void MyAniListCountsAsAFilterOnlyWithoutASearchText()
     {
-        Assert.AreEqual(1, Parse("mode=my-list").ActiveFilterCount);
-        Assert.AreEqual(0, Parse("q=x&mode=my-list").ActiveFilterCount);
-        Assert.AreEqual(DiscoveryMode.Trending, Parse("mode=my-list&genre=Horror").WithoutFilters().Mode);
+        Assert.AreEqual(0, Parse("category=anime&mode=my-list").ActiveFilterCount, "My List is a browse view, never a filter.");
+        Assert.IsFalse(Parse("category=anime&mode=my-list").IsLanding);
+        Assert.AreEqual(DiscoveryMode.MyList, Parse("category=anime&mode=my-list&genre=Horror").WithoutFilters().Mode);
         Assert.AreEqual(DiscoveryMode.Top, Parse("mode=top&genre=Horror").WithoutFilters().Mode, "Top is an ordering, not a filter.");
     }
 

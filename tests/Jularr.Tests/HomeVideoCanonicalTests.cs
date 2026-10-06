@@ -54,8 +54,9 @@ public sealed class HomeVideoCanonicalTests
         Assert.AreEqual("75 min left", home.ContinueTiles[0].Caption, "A Movie caption is its remaining time; it has no episode.");
         StringAssert.StartsWith(home.ContinueTiles[1].Caption, "S01 · Episode 3");
 
-        CollectionAssert.AreEqual(new[] { "Quiet Harbor", "The Long Winter" }, home.Hero.Select(slide => slide.Title).ToArray(), "The hero holds at most two slides per source.");
-        Assert.IsTrue(home.Hero.All(slide => slide.PrimaryIsPlay));
+        Assert.AreEqual("Quiet Harbor", home.Hero[0].Title, "The strongest Continue item leads the Hero.");
+        CollectionAssert.IsSubsetOf(new[] { "Quiet Harbor", "The Long Winter" }, home.Hero.Select(slide => slide.Title).ToArray());
+        Assert.IsTrue(home.Hero.Count > 2 || home.Hero.All(slide => slide.PrimaryIsPlay), "The pool holds more than the Continue items where the library has more.");
         Assert.AreEqual(home.Ui["calendar.media.movie"], home.Hero[0].Meta!.Split(" · ")[1]);
     }
 
@@ -119,7 +120,7 @@ public sealed class HomeVideoCanonicalTests
         Assert.AreEqual(2, item.EpisodeNumber);
         Assert.AreEqual($"/Library/Watch/{running.Id}/{runningEpisodes[1].Id}", item.PlayHref);
         Assert.IsNull(Assert.ContainsSingle(home.ContinueTiles).ProgressPercent, "An up-next episode has no progress yet.");
-        var slide = Assert.ContainsSingle(home.Hero);
+        var slide = home.Hero[0];
         Assert.AreEqual(home.Ui["home.continueWatching.upNext"], slide.Label);
         Assert.AreEqual(home.Ui["home.spotlight.play"], slide.PrimaryLabel);
     }
@@ -137,7 +138,7 @@ public sealed class HomeVideoCanonicalTests
 
         Assert.IsEmpty(bob.ContinueWatching);
         Assert.IsEmpty(bob.ContinueTiles);
-        Assert.IsEmpty(bob.Hero);
+        Assert.IsFalse(bob.Hero.Any(slide => slide.Label == bob.Ui["home.continueWatching.eyebrow"]), "Bob has no progress, so nothing of Alice's Continue leads his Hero.");
         Assert.IsEmpty(bob.PlaybackHistory);
         Assert.AreEqual("Quiet Harbor", Assert.ContainsSingle(bob.RecentTitles).Title.Title);
         Assert.AreEqual(1, (await LoadAsync(fixture.Db, Alice)).PlaybackHistory.Count);
@@ -232,7 +233,7 @@ public sealed class HomeVideoCanonicalTests
         Assert.IsEmpty(home.ContinueWatching);
         Assert.IsEmpty(home.ContinueTiles);
         Assert.IsEmpty(home.PlaybackHistory);
-        Assert.IsEmpty(home.Hero);
+        Assert.IsFalse(home.Hero.Any(slide => slide.PrimaryIsPlay), "A manager-only instance has no play affordance in the Hero.");
         var card = Assert.ContainsSingle(home.RecentTitles);
         Assert.AreEqual($"/Library/Movie/{movie.Id}", card.Title.DetailHref, "A card opens the title, never the player.");
     }

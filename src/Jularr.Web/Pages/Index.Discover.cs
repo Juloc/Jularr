@@ -41,6 +41,12 @@ public sealed partial class IndexModel
     /// <summary>The categories this profile may request. Request and Instant capabilities look the same here: auto-approval is policy, never another action.</summary>
     public IReadOnlySet<string> RequestableCategories { get; private set; } = new HashSet<string>();
 
+    /// <summary>The watchable categories this profile may start at once: acquisition that approves itself, on an instance that plays.</summary>
+    public IReadOnlySet<string> InstantCategories { get; private set; } = new HashSet<string>();
+
+    /// <summary>Whether the My List browse view exists for this viewer: only for an AniList media type, and only with a connected AniList account.</summary>
+    public bool AniListConnected { get; private set; }
+
     /// <summary>The media types of this profile that Discover offers as tabs; a type the profile may not browse does not exist for it.</summary>
     public IReadOnlyList<(DiscoveryCategory Category, string LabelKey)> VisibleTabs { get; private set; } = DiscoverScopes.Tabs;
 
@@ -56,6 +62,8 @@ public sealed partial class IndexModel
         VisibleTabs = [.. DiscoverScopes.Tabs.Where(tab => DiscoverScopes.IsVisible(tab.Category, audience.VisibleMediaTypes))];
         RequestableCategories = await LoadRequestableCategoriesAsync(cancellationToken);
         Preference = await LoadPreferenceAsync(cancellationToken);
+        AniListConnected = Query.Category is DiscoveryCategory.Anime or DiscoveryCategory.Manga or DiscoveryCategory.LightNovel
+            && await coordinator.IsAniListConnectedAsync(cancellationToken);
 
         // The shell header shows the Filter and names the surface; it reads both from ViewData instead of knowing this page.
         ViewData["DiscoverFilter"] = new DiscoverFilterView(Query, Preference, Ui);
@@ -78,14 +86,22 @@ public sealed partial class IndexModel
     private async Task<IReadOnlySet<string>> LoadRequestableCategoriesAsync(CancellationToken cancellationToken)
     {
         var categories = new HashSet<string>(StringComparer.Ordinal);
+        var instant = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (category, kind) in Categories)
         {
-            if ((await requests.GetCapabilitiesAsync(kind, cancellationToken)).CanRequest)
+            var capabilities = await requests.GetCapabilitiesAsync(kind, cancellationToken);
+            if (capabilities.CanRequest)
             {
                 categories.Add(category);
+                if (capabilities.AutoApproves && category is "anime" or "movie" or "tv")
+                {
+                    instant.Add(category);
+                }
             }
         }
 
+        // Starting needs a player: a manager-only instance never offers it (docs/mockups/instant-play, section 11).
+        InstantCategories = instant.Count > 0 && await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken) ? instant : new HashSet<string>();
         return categories;
     }
 
@@ -122,7 +138,7 @@ public sealed partial class IndexModel
     /// reserved place; the browser asks again with <paramref name="after"/> (the sources it has seen settled) and receives the next generation
     /// as soon as one more source has answered. <paramref name="retry"/> names the sources a viewer asked to fetch again.
     /// </summary>
-    public async Task<IActionResult> OnGetBodyAsync(int? after, string? retry, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetBodyAsync(int? after, string? retry, int? pg, CancellationToken cancellationToken)
     {
         Response.Headers.CacheControl = "no-store";
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -136,6 +152,11 @@ public sealed partial class IndexModel
                 : new DiscoveryWait(FollowUpBudget, after, ParseSources(retry));
             RequestableCategories = await LoadRequestableCategoriesAsync(cancellationToken);
             Preference = await LoadPreferenceAsync(cancellationToken);
+            if (pg is > 1 && !Query.IsLanding && Query.Category != DiscoveryCategory.All)
+            {
+                return await BuildMoreAsync(audience, Math.Min(pg.Value, MaxPage), cancellationToken);
+            }
+
             var body = Query.IsLanding
                 ? await BuildLandingAsync(audience, wait, cancellationToken)
                 : await BuildResultsAsync(audience, wait, cancellationToken);
@@ -147,6 +168,27 @@ public sealed partial class IndexModel
             Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return Partial("_DiscoverBody", DiscoverBodyView.Of(Ui, Query, DiscoverBodyState.Unavailable));
         }
+    }
+
+    /// <summary>No view needs more than this many provider pages: a bound against a loop, not a limit a viewer reaches.</summary>
+    private const int MaxPage = 200;
+
+    /// <summary>A further provider page of one media type's view or search, as the cards to append. A page that fails is an error the browser retries without dropping the pages it holds.</summary>
+    private async Task<IActionResult> BuildMoreAsync(DiscoveryAudience audience, int page, CancellationToken cancellationToken)
+    {
+        var request = Query.ToRequest() with { Page = page };
+        var load = await coordinator.LoadAsync([request], audience, new DiscoveryWait(FollowUpBudget), cancellationToken);
+        var batch = load.Batches[0];
+        if (batch.HasPending || batch.Sources.Any(source => DiscoverySections.HasFailed(source.State)))
+        {
+            Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            return Partial("_DiscoverMore", new DiscoverMoreView(Ui, [], false));
+        }
+
+        var overlay = await coordinator.OverlayLocalStateAsync(batch.Items, audience.ProfileId, cancellationToken);
+        batch = batch.Select(item => overlay[item.Id]);
+        var context = await BuildContextAsync(batch.Items, cancellationToken);
+        return Partial("_DiscoverMore", new DiscoverMoreView(Ui, DiscoverSectionComposer.MorePage(batch, Query, context), DiscoverPaging.MayContinue(batch)));
     }
 
     private static IReadOnlySet<DiscoverySource>? ParseSources(string? names)
@@ -225,7 +267,10 @@ public sealed partial class IndexModel
         var context = await BuildContextAsync(batch.Items, cancellationToken);
         var (sections, total) = DiscoverSectionComposer.Results(batch, Query, context);
         var failed = batch.Sources.Any(source => DiscoverySections.HasFailed(source.State));
-        return new DiscoverBodyView(Ui, Query, BodyStateOf(sections, total, failed), sections, total, load.Settled, load.Pending);
+        return new DiscoverBodyView(Ui, Query, BodyStateOf(sections, total, failed), sections, total, load.Settled, load.Pending)
+        {
+            HasMore = Query.Category != DiscoveryCategory.All && DiscoverPaging.MayContinue(batch)
+        };
     }
 
     /// <summary>Sections that hold titles or wait for them make the body; otherwise the body says why there is nothing: filtered away, not answered or nothing found.</summary>
@@ -304,7 +349,8 @@ public sealed partial class IndexModel
             await LoadLocalFactsAsync(list, cancellationToken),
             followed,
             RequestableCategories,
-            account.IsOwner);
+            account.IsOwner,
+            InstantCategories);
     }
 
     private async Task<IReadOnlyDictionary<string, DiscoverLocalFacts>> LoadLocalFactsAsync(

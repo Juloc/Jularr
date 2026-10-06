@@ -6,7 +6,7 @@
 
 /* --dc-card-body-h is the height of everything under a poster (the title line, the type line and the indicator); real cards
    and ghost cards both use it, so a ghost has the exact size of the card that replaces it. */
-.dc-page { --dc-card-body-h: 64px; display: grid; gap: 16px; min-width: 0; margin-bottom: 20px; }
+.dc-page { --dc-card-body-h: 44px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; margin-bottom: 20px; }
 .dc-page :is(a, button, summary, select, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dc-icon { flex: none; }
 .dc-page [hidden] { display: none !important; }
@@ -189,11 +189,13 @@
 .dc-card:hover .dc-card-title :is(a, button), .dc-card-title :is(a, button):focus-visible { color: var(--accent-text); }
 .dc-card-meta { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
 .dc-card-media { position: relative; }
-.dc-card-request {
-    position: absolute; z-index: 2; inset-inline: 8px; bottom: 8px; width: auto; min-height: 34px; padding: 6px 10px; font-size: 12px;
-    opacity: 0; transition: opacity .15s;
-}
-.dc-card:hover .dc-card-request, .dc-card:focus-within .dc-card-request { opacity: 1; }
+/* The fixed bottom area of the cover: the state rests there, the canonical action takes its place on hover and focus. */
+.dc-card-foot { position: absolute; z-index: 2; inset-inline: 8px; bottom: 8px; display: grid; justify-items: start; }
+.dc-card-foot > * { grid-area: 1 / 1; }
+.dc-card-foot .dc-state { background: color-mix(in srgb, var(--surface) 90%, transparent); backdrop-filter: blur(6px); transition: opacity .15s; }
+.dc-card-action { width: 100%; min-height: 34px; padding: 6px 10px; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s; }
+.dc-card:hover .dc-card-action, .dc-card:focus-within .dc-card-action { opacity: 1; pointer-events: auto; }
+.dc-card:hover .dc-card-foot:has(.dc-card-action) .dc-state, .dc-card:focus-within .dc-card-foot:has(.dc-card-action) .dc-state { opacity: 0; }
 .dc-request-live {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     min-height: 36px; cursor: default; pointer-events: none;
@@ -356,7 +358,7 @@
 
 /* Touch has no hover: a tap opens the Detail, so the secondary Quick View action stays visible on the artwork (docs/mockups/media-preview, section 3) and Request is made from there. */
 @media (hover: none), (pointer: coarse) {
-    .dc-card-request { display: none; }
+    .dc-card-action { display: none; }
     .dc-card-preview { opacity: 1; width: 40px; height: 40px; }
 }
 
@@ -371,3 +373,44 @@
 /* The Filter sits in the shell header: a pill beside the notification bell, its panel opening under it. */
 .app-header .dc-btn { min-height: 44px; border-radius: 999px; }
 .app-header .dc-pop-panel { inset-inline-end: 0; inset-inline-start: auto; }
+
+/* Browse view navigation: the rankings of the selected media type, compact and horizontally scrollable. Never part of the filters. */
+.dc-browse { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 0; }
+.dc-browse::-webkit-scrollbar { display: none; }
+.dc-browse-item {
+    flex: none; padding: 7px 14px; border-radius: 999px; color: var(--muted); font-size: 13.5px; font-weight: 700; white-space: nowrap;
+}
+.dc-browse-item:hover { background: var(--surface-2); color: var(--text); }
+.dc-browse-item.is-active, .dc-browse-item.is-active:hover { background: var(--accent-soft); color: var(--accent-text); }
+
+/* The active filters as tokens: each removes itself, the last clears them all. */
+.dc-tokens { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dc-token {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600;
+}
+.dc-token:hover { background: var(--surface-2); }
+.dc-token .dc-icon { width: 14px; height: 14px; color: var(--muted); }
+.dc-token-clear { padding-inline: 12px; border-color: transparent; background: transparent; color: var(--accent-text); }
+
+/* Filter panel: searchable multi-select genres, a year range with presets. */
+.dc-genre-search {
+    width: 100%; min-height: 38px; margin-bottom: 8px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); color: var(--text); font: inherit; font-size: 13.5px;
+}
+.dc-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; max-height: 188px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.dc-options [hidden] { display: none; }
+.dc-range { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dc-range input {
+    width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); color: var(--text); font: inherit; font-size: 14px;
+}
+.dc-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dc-preset {
+    padding: 5px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+    color: var(--text); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.dc-preset:hover { background: var(--surface-2); }
+
+/* The place that loads the next provider page; it takes no room until it has something to say. */
+.dc-sentinel { display: flex; justify-content: center; min-height: 1px; padding: 8px 0; }

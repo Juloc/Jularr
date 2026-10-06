@@ -77,10 +77,12 @@ public sealed partial class BookCatalogService
         result.Failed ? throw new HttpRequestException($"The {row} books listing did not answer.") : result.Items;
 
     private async Task<IReadOnlyList<BookCatalogItem>> BrowseTrendingBooksAsync(
+        int offset,
+        int limit,
         CancellationToken cancellationToken)
     {
         var daily = await CaptureCatalogResultAsync(
-            token => BrowseOpenLibraryTrendingAsync("daily", token),
+            token => BrowseOpenLibraryTrendingAsync("daily", offset, limit, token),
             cancellationToken);
 
         if (daily.Items.Count > 0)
@@ -93,7 +95,7 @@ public sealed partial class BookCatalogService
         // Still preserve trending semantics when the daily window happens to be
         // unavailable. Do not silently substitute all-time Gutenberg downloads.
         var weekly = await CaptureCatalogResultAsync(
-            token => BrowseOpenLibraryTrendingAsync("weekly", token),
+            token => BrowseOpenLibraryTrendingAsync("weekly", offset, limit, token),
             cancellationToken);
         return await EnrichTrendingWithGoogleAsync(
             OrThrow(daily.Failed ? weekly : (weekly.Items, false), "trending"),
@@ -108,13 +110,17 @@ public sealed partial class BookCatalogService
     /// download counts.
     /// </summary>
     private async Task<IReadOnlyList<BookCatalogItem>> BrowseTopBooksAsync(
+        int offset,
+        int limit,
         CancellationToken cancellationToken)
     {
-        var items = OrThrow(await CaptureCatalogResultAsync(SearchOpenLibraryPopularAsync, cancellationToken), "popular");
+        var items = OrThrow(await CaptureCatalogResultAsync(token => SearchOpenLibraryPopularAsync(offset, limit, token), cancellationToken), "popular");
         return await EnrichTrendingWithGoogleAsync(items, cancellationToken);
     }
 
     private async Task<IReadOnlyList<BookCatalogItem>> SearchOpenLibraryPopularAsync(
+        int offset,
+        int limit,
         CancellationToken cancellationToken)
     {
         var uri = new Uri(
@@ -122,7 +128,7 @@ public sealed partial class BookCatalogService
             + "?q=" + Uri.EscapeDataString("*:*")
             + "&sort=editions"
             + "&fields=key,title,author_name,cover_i,first_publish_year,subject,isbn,edition_count,language"
-            + $"&limit={SearchLimit}");
+            + $"&limit={limit}&offset={offset}");
 
         var response = await GetJsonAsync<OpenLibrarySearchResponse>(
             uri,
@@ -135,7 +141,7 @@ public sealed partial class BookCatalogService
                 !string.IsNullOrWhiteSpace(x.Key)
                 && !string.IsNullOrWhiteSpace(x.Title)
                 && x.Key.StartsWith("/works/", StringComparison.Ordinal))
-            .Take(SearchLimit)
+            .Take(limit)
             .Select(MapOpenLibrarySearch)
             .ToArray();
     }
@@ -150,20 +156,24 @@ public sealed partial class BookCatalogService
     /// regardless.
     /// </summary>
     private async Task<IReadOnlyList<BookCatalogItem>> BrowseNewBooksAsync(
+        int offset,
+        int limit,
         CancellationToken cancellationToken)
     {
-        var items = OrThrow(await CaptureCatalogResultAsync(token => SearchOpenLibraryRecentAsync("fiction", token), cancellationToken), "new");
+        var items = OrThrow(await CaptureCatalogResultAsync(token => SearchOpenLibraryRecentAsync("fiction", offset, limit, token), cancellationToken), "new");
         return await EnrichTrendingWithGoogleAsync(items, cancellationToken);
     }
 
     private async Task<IReadOnlyList<BookCatalogItem>> SearchOpenLibraryRecentAsync(
         string subject,
+        int offset,
+        int limit,
         CancellationToken cancellationToken)
     {
         var uri = new Uri(
             $"https://openlibrary.org/subjects/{Uri.EscapeDataString(subject)}.json"
             + "?sort=new"
-            + $"&limit={SearchLimit}");
+            + $"&limit={limit}&offset={offset}");
 
         var response = await GetJsonAsync<OpenLibrarySubjectResponse>(
             uri,
@@ -178,7 +188,7 @@ public sealed partial class BookCatalogService
                 && !string.IsNullOrWhiteSpace(x.Title)
                 && x.Key.StartsWith("/works/", StringComparison.Ordinal)
                 && IsPlausibleBookTitle(x.Title!))
-            .Take(SearchLimit)
+            .Take(limit)
             .Select(x => MapOpenLibrarySubjectWork(x, currentYear))
             .ToArray();
     }
@@ -196,11 +206,13 @@ public sealed partial class BookCatalogService
 
     private async Task<IReadOnlyList<BookCatalogItem>> BrowseOpenLibraryTrendingAsync(
         string window,
+        int offset,
+        int limit,
         CancellationToken cancellationToken)
     {
         var response = await GetJsonAsync<OpenLibraryTrendingResponse>(
             new Uri(
-                $"https://openlibrary.org/trending/{window}.json?limit={SearchLimit}"),
+                $"https://openlibrary.org/trending/{window}.json?limit={limit}&offset={offset}"),
             cancellationToken)
             ?? throw new InvalidOperationException(
                 "Open Library trending returned no data.");

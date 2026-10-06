@@ -53,10 +53,26 @@
             <partial name="_DiscoverIcon" model='"preview"' />
         </button>
 
-        @if (!card.IsLocal && card.RequestId is null && card.CanRequest)
-        {
-            <button type="button" class="button button-primary dc-card-request" data-dc-card-request>@ui["discover.card.request"]</button>
-        }
+        @* The fixed bottom area of the cover: the state at rest, the canonical action on hover and focus (Play or Read for a local title, Start
+           watching where it starts at once, else Request). A card click never acquires: Start watching only opens the Detail. *@
+        <div class="dc-card-foot">
+            <partial name="_DiscoverState" model="card.State" />
+            @if (card.IsLocal && (card.PlayUrl ?? card.DetailUrl) is { Length: > 0 } actionUrl)
+            {
+                <a class="button button-primary dc-card-action" href="@actionUrl">@(card.PlayUrl is not null ? card.PlayLabel : card.Category is "manga" or "light-novel" or "book" ? ui["discover.card.read"] : ui["discover.card.open"])</a>
+            }
+            else if (!card.IsLocal && card.RequestId is null && card.CanRequest)
+            {
+                @if (card.StartsInstantly)
+                {
+                    <button type="button" class="button button-primary dc-card-action" data-dc-activate="open">@ui["discover.card.startWatching"]</button>
+                }
+                else
+                {
+                    <button type="button" class="button button-primary dc-card-action dc-card-request" data-dc-card-request>@ui["discover.card.request"]</button>
+                }
+            }
+        </div>
     </div>
 
     <div class="dc-card-body">
@@ -71,7 +87,6 @@
             }
         </h3>
         <p class="dc-card-meta">@card.Meta</p>
-        <partial name="_DiscoverState" model="card.State" />
     </div>
 
     <template data-dc-template>

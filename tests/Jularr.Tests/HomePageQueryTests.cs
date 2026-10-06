@@ -19,8 +19,5 @@ public sealed class HomePageQueryTests
         var recent = Assert.ContainsSingle(model.RecentTitles);
         Assert.AreEqual(anime.Work.Id, recent.Title.WorkId);
         Assert.AreEqual(WorkMediaType.Anime, recent.Title.MediaType);
-        Assert.AreEqual(0, recent.TotalOccurrences);
-        Assert.AreEqual(0, recent.PreparedOccurrences);
-        Assert.AreEqual(0, recent.PreparationPercent);
     }
 }

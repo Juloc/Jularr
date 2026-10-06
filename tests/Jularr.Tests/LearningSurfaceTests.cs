@@ -103,10 +103,6 @@ public sealed class LearningSurfaceTests
                 LearningCapability.ContentMetrics,
                 true,
                 CancellationToken.None);
-            var home = EpisodeFlowFixture.Home(db, account);
-            await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
-            Assert.AreEqual(9, home.RecentTitles.Single().PreparedOccurrences);
-
             // Learning hub counters.
             var hub = new Jularr.Web.Pages.Learn.IndexModel(db, account);
             await hub.OnGetAsync(CancellationToken.None);

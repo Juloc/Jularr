@@ -19,10 +19,11 @@ public enum DiscoverAvailabilityFilter
 }
 
 /// <summary>
-/// What the Discover address asks for (docs/mockups/discover): the search text, the media-type scope and the
-/// filter panel. Every member round-trips through the address, so any view can be bookmarked and shared; the
-/// server keeps no state. The address keeps the scheme the shelf deep links and Home already use
-/// (<c>q</c>, <c>category</c>, <c>mode</c>, <c>genre</c>).
+/// What the Discover address asks for (docs/mockups/discover): the search text, the media-type scope, the browse view and the filters. Every
+/// member round-trips through the address, so any view can be bookmarked and shared; the server keeps no state. The three concepts stay
+/// apart: the <see cref="Category"/> (what am I browsing), the <see cref="Mode"/> (which ranking) and the filters (how it is narrowed). The
+/// address keeps the scheme the shelf deep links and Home already use (<c>q</c>, <c>category</c>, <c>mode</c>, <c>genre</c>); the multi-valued
+/// filters are comma separated (<c>genre=Fantasy,Sci-Fi&amp;status=ongoing&amp;from=2015&amp;to=2026&amp;avail=library,requested</c>).
 /// </summary>
 public sealed record DiscoverBrowseQuery
 {
@@ -32,90 +33,135 @@ public sealed record DiscoverBrowseQuery
 
     public DiscoveryCategory Category { get; init; }
 
-    /// <summary>The browse ordering (trending, top, new) or the AniList list; a search text overrides it.</summary>
-    public DiscoveryMode Mode { get; init; }
+    /// <summary>The browse view (overview, trending, top, new, upcoming, popular, top rated) or the AniList list; a search text overrides it. Without one the scope opens its overview.</summary>
+    public DiscoveryMode Mode { get; init; } = DiscoveryMode.Overview;
 
-    public string Genre { get; init; } = "";
+    public IReadOnlyList<string> Genres { get; init; } = [];
 
-    public int? Year { get; init; }
+    public int? YearFrom { get; init; }
 
-    public MediaReleaseStatus? Status { get; init; }
+    public int? YearTo { get; init; }
 
-    public DiscoverAvailabilityFilter Availability { get; init; }
+    public IReadOnlyList<MediaReleaseStatus> Statuses { get; init; } = [];
+
+    public IReadOnlyList<DiscoverAvailabilityFilter> Availabilities { get; init; } = [];
 
     public bool PreferredLanguage { get; init; }
 
     public bool IsSearch => Text.Length > 0;
 
-    /// <summary>The filters that narrow what was loaded; the browse ordering is not one of them.</summary>
-    public bool HasPostFilters =>
-        Year is not null || Status is not null || Availability != DiscoverAvailabilityFilter.Any || PreferredLanguage;
+    /// <summary>The constraints the providers can filter on, pushed into every provider page.</summary>
+    public DiscoveryFilter ProviderFilter => new(Genres, YearFrom, YearTo, Statuses);
+
+    /// <summary>The constraints only the local state can answer (what the library and the requests know); paging continues until enough titles match.</summary>
+    public bool HasLocalFilters => Availabilities.Count > 0 || PreferredLanguage;
 
     /// <summary>How many filters are on; shown on the Filters button.</summary>
     public int ActiveFilterCount =>
-        (Genre.Length > 0 ? 1 : 0)
-        + (Year is null ? 0 : 1)
-        + (Status is null ? 0 : 1)
-        + (Availability == DiscoverAvailabilityFilter.Any ? 0 : 1)
-        + (PreferredLanguage ? 1 : 0)
-        + (!IsSearch && Mode == DiscoveryMode.MyList ? 1 : 0);
+        Genres.Count
+        + (YearFrom is null && YearTo is null ? 0 : 1)
+        + Statuses.Count
+        + Availabilities.Count
+        + (PreferredLanguage ? 1 : 0);
 
-    /// <summary>The default landing (shelves): no search text, the trending ordering and no filter.</summary>
-    public bool IsLanding => !IsSearch && Mode == DiscoveryMode.Trending && ActiveFilterCount == 0;
+    /// <summary>The overview (shelves one below the other, of every type or of the selected one): no search text, no chosen browse view and no filter.</summary>
+    public bool IsLanding => !IsSearch && Mode == DiscoveryMode.Overview && ActiveFilterCount == 0;
 
     public string Href => BuildHref(this);
 
     public DiscoveryRequest ToRequest() =>
-        new(Text, Category, IsSearch ? DiscoveryMode.Search : Mode, Genre);
+        new(Text, Category, IsSearch ? DiscoveryMode.Search : Mode == DiscoveryMode.Overview ? DiscoveryMode.Trending : Mode) { Filter = ProviderFilter };
 
-    /// <summary>The same view without any filter, keeping the search text, the scope and the ordering.</summary>
+    /// <summary>The same view without any filter, keeping the search text, the scope and the browse view.</summary>
     public DiscoverBrowseQuery WithoutFilters() => this with
     {
-        Genre = "",
-        Year = null,
-        Status = null,
-        Availability = DiscoverAvailabilityFilter.Any,
-        PreferredLanguage = false,
-        Mode = Mode == DiscoveryMode.MyList ? DiscoveryMode.Trending : Mode
+        Genres = [],
+        YearFrom = null,
+        YearTo = null,
+        Statuses = [],
+        Availabilities = [],
+        PreferredLanguage = false
+    };
+
+    /// <summary>The same view with one filter token removed (the token ids are those of <see cref="ActiveFilters"/>).</summary>
+    public DiscoverBrowseQuery WithoutFilter(string token) => token switch
+    {
+        "year" => this with { YearFrom = null, YearTo = null },
+        "pref" => this with { PreferredLanguage = false },
+        _ when token.StartsWith("genre:", StringComparison.Ordinal) => this with { Genres = [.. Genres.Where(genre => genre != token[6..])] },
+        _ when token.StartsWith("status:", StringComparison.Ordinal) => this with { Statuses = [.. Statuses.Where(status => StatusName(status) != token[7..])] },
+        _ when token.StartsWith("avail:", StringComparison.Ordinal) => this with { Availabilities = [.. Availabilities.Where(availability => AvailabilityName(availability) != token[6..])] },
+        _ => this
+    };
+
+    /// <summary>The active filters as removable tokens: a stable id (for <see cref="WithoutFilter"/>) and the kind that names its label.</summary>
+    public IReadOnlyList<(string Token, string Kind, string Value)> ActiveFilters
+    {
+        get
+        {
+            var tokens = new List<(string, string, string)>();
+            tokens.AddRange(Genres.Select(genre => ("genre:" + genre, "genre", genre)));
+            if (YearFrom is not null || YearTo is not null)
+            {
+                tokens.Add(("year", "year", YearRangeText(YearFrom, YearTo)));
+            }
+
+            tokens.AddRange(Statuses.Select(status => ("status:" + StatusName(status), "status", StatusName(status))));
+            tokens.AddRange(Availabilities.Select(availability => ("avail:" + AvailabilityName(availability), "avail", AvailabilityName(availability))));
+            if (PreferredLanguage)
+            {
+                tokens.Add(("pref", "pref", "1"));
+            }
+
+            return tokens;
+        }
+    }
+
+    public static string YearRangeText(int? from, int? to) => (from, to) switch
+    {
+        ({ } a, { } b) when a == b => a.ToString(CultureInfo.InvariantCulture),
+        ({ } a, { } b) => $"{a}–{b}",
+        ({ } a, null) => $"{a}–",
+        (null, { } b) => $"–{b}",
+        _ => ""
     };
 
     public static DiscoverBrowseQuery Parse(Func<string, string?> get)
     {
         ArgumentNullException.ThrowIfNull(get);
 
-        // The shared parser normalises text, scope, ordering and genre; without a text it never yields Search.
-        var request = DiscoveryRequest.Parse(get("q"), get("category"), get("mode"), get("genre"));
+        // The shared parser normalises text, scope and browse view; without a text it never yields Search.
+        var request = DiscoveryRequest.Parse(get("q"), get("category"), get("mode"));
         var parsedMode = DiscoveryRequest.Parse(null, get("category"), get("mode")).Mode;
-        var mode = parsedMode switch
+        var asked = string.IsNullOrWhiteSpace(get("mode")) ? DiscoveryMode.Overview : string.Equals(get("mode")?.Trim(), "all", StringComparison.OrdinalIgnoreCase) ? DiscoveryMode.Overview : parsedMode;
+        var mode = DiscoverBrowseModes.Supported(request.Category, asked) ? asked : DiscoveryMode.Overview;
+        var legacyYear = Year(get("year"));
+        var from = Year(get("from")) ?? legacyYear;
+        var to = Year(get("to")) ?? legacyYear;
+        if (from is { } low && to is { } high && low > high)
         {
-            DiscoveryMode.New when request.Category is not (DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
-                => DiscoveryMode.Trending,
-            DiscoveryMode.Upcoming when request.Category is not (DiscoveryCategory.Movie or DiscoveryCategory.Series)
-                => DiscoveryMode.Trending,
-            _ => parsedMode
-        };
+            (from, to) = (high, low);
+        }
 
         return new DiscoverBrowseQuery
         {
             Text = request.Query,
             Category = request.Category,
             Mode = mode,
-            Genre = request.Genre,
-            Year = int.TryParse(get("year"), NumberStyles.None, CultureInfo.InvariantCulture, out var year)
-                   && year is >= 1900 and <= 2100
-                ? year
-                : null,
-            Status = StatusFrom(get("status")),
-            Availability = get("avail")?.Trim().ToLowerInvariant() switch
-            {
-                "library" => DiscoverAvailabilityFilter.InLibrary,
-                "requested" => DiscoverAvailabilityFilter.Requested,
-                "new" => DiscoverAvailabilityFilter.NotInLibrary,
-                _ => DiscoverAvailabilityFilter.Any
-            },
+            Genres = [.. Split(get("genre")).Select(DiscoveryRequest.NormalizeGenre).Where(genre => genre.Length > 0).Distinct()],
+            YearFrom = from,
+            YearTo = to,
+            Statuses = [.. Split(get("status")).Select(StatusFrom).OfType<MediaReleaseStatus>().Distinct()],
+            Availabilities = [.. Split(get("avail")).Select(AvailabilityFrom).Where(availability => availability != DiscoverAvailabilityFilter.Any).Distinct()],
             PreferredLanguage = get("pref") == "1"
         };
     }
+
+    private static IEnumerable<string> Split(string? value) =>
+        (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(12);
+
+    private static int? Year(string? value) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var year) && year is >= 1900 and <= 2100 ? year : null;
 
     public static string CategoryName(DiscoveryCategory category) => category switch
     {
@@ -134,6 +180,9 @@ public sealed record DiscoverBrowseQuery
         DiscoveryMode.MyList => "my-list",
         DiscoveryMode.New => "new",
         DiscoveryMode.Upcoming => "upcoming",
+        DiscoveryMode.Popular => "popular",
+        DiscoveryMode.TopRated => "top-rated",
+        DiscoveryMode.Overview => "all",
         _ => "trending"
     };
 
@@ -147,16 +196,23 @@ public sealed record DiscoverBrowseQuery
         _ => ""
     };
 
-    private static MediaReleaseStatus? StatusFrom(string? value) =>
+    private static DiscoverAvailabilityFilter AvailabilityFrom(string value) => value.ToLowerInvariant() switch
+    {
+        "library" => DiscoverAvailabilityFilter.InLibrary,
+        "requested" => DiscoverAvailabilityFilter.Requested,
+        "new" => DiscoverAvailabilityFilter.NotInLibrary,
+        _ => DiscoverAvailabilityFilter.Any
+    };
+
+    private static MediaReleaseStatus? StatusFrom(string value) =>
         Enum.GetValues<MediaReleaseStatus>()
             .Cast<MediaReleaseStatus?>()
-            .FirstOrDefault(status => string.Equals(
-                StatusName(status!.Value), value?.Trim(), StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(status => string.Equals(StatusName(status!.Value), value, StringComparison.OrdinalIgnoreCase));
 
     private static string BuildHref(DiscoverBrowseQuery query)
     {
         var parts = new List<string>();
-        void Add(string name, string value) => parts.Add(name + "=" + Uri.EscapeDataString(value));
+        void Add(string name, string value) => parts.Add(name + "=" + Uri.EscapeDataString(value).Replace("%2C", ","));
 
         if (query.Text.Length > 0)
         {
@@ -168,29 +224,34 @@ public sealed record DiscoverBrowseQuery
             Add("category", CategoryName(query.Category));
         }
 
-        if (query.Mode != DiscoveryMode.Trending)
+        if (query.Mode != DiscoveryMode.Overview)
         {
             Add("mode", ModeName(query.Mode));
         }
 
-        if (query.Genre.Length > 0)
+        if (query.Genres.Count > 0)
         {
-            Add("genre", query.Genre);
+            Add("genre", string.Join(',', query.Genres));
         }
 
-        if (query.Year is { } year)
+        if (query.YearFrom is { } from)
         {
-            Add("year", year.ToString(CultureInfo.InvariantCulture));
+            Add("from", from.ToString(CultureInfo.InvariantCulture));
         }
 
-        if (query.Status is { } status)
+        if (query.YearTo is { } to)
         {
-            Add("status", StatusName(status));
+            Add("to", to.ToString(CultureInfo.InvariantCulture));
         }
 
-        if (query.Availability != DiscoverAvailabilityFilter.Any)
+        if (query.Statuses.Count > 0)
         {
-            Add("avail", AvailabilityName(query.Availability));
+            Add("status", string.Join(',', query.Statuses.Select(StatusName)));
+        }
+
+        if (query.Availabilities.Count > 0)
+        {
+            Add("avail", string.Join(',', query.Availabilities.Select(AvailabilityName)));
         }
 
         if (query.PreferredLanguage)
@@ -200,6 +261,56 @@ public sealed record DiscoverBrowseQuery
 
         return parts.Count == 0 ? BasePath : BasePath + "?" + string.Join('&', parts);
     }
+}
+
+/// <summary>
+/// The browse views a media type really has (docs/mockups/discover): a view is only offered where its provider can answer it truthfully.
+/// AniList (Anime, Manga, Light Novels) and TMDB (Movies, Series) rank by trend, score, start date, status and popularity; Open Library has a
+/// global trending feed, an all-time edition-count ranking and a recently catalogued feed, but no usable rating feed.
+/// </summary>
+public static class DiscoverBrowseModes
+{
+    private static readonly DiscoveryMode[] Video = [DiscoveryMode.Overview, DiscoveryMode.Trending, DiscoveryMode.Top, DiscoveryMode.New, DiscoveryMode.Upcoming, DiscoveryMode.Popular, DiscoveryMode.TopRated];
+    private static readonly DiscoveryMode[] AniList = [.. Video, DiscoveryMode.MyList];
+    private static readonly DiscoveryMode[] Books = [DiscoveryMode.Overview, DiscoveryMode.Trending, DiscoveryMode.Popular, DiscoveryMode.New];
+
+    /// <summary>The views of a scope in the order the browse navigation shows them; My List is included here and hidden when no account is connected.</summary>
+    public static IReadOnlyList<DiscoveryMode> For(DiscoveryCategory category) => category switch
+    {
+        DiscoveryCategory.Anime or DiscoveryCategory.Manga or DiscoveryCategory.LightNovel => AniList,
+        DiscoveryCategory.Movie or DiscoveryCategory.Series => Video,
+        DiscoveryCategory.Book => Books,
+        _ => AniList
+    };
+
+    public static bool Supported(DiscoveryCategory category, DiscoveryMode mode) =>
+        mode == DiscoveryMode.Search || For(category).Contains(mode);
+
+    /// <summary>The label key of a view in the browse navigation.</summary>
+    public static string LabelKey(DiscoveryMode mode) => mode switch
+    {
+        DiscoveryMode.Top => "discover.tabs.top",
+        DiscoveryMode.New => "discover.tabs.new",
+        DiscoveryMode.Upcoming => "discover.tabs.upcoming",
+        DiscoveryMode.Popular => "discover.tabs.popular",
+        DiscoveryMode.TopRated => "discover.tabs.topRated",
+        DiscoveryMode.Overview => "discover.categories.all",
+        DiscoveryMode.MyList => "discover.tabs.myList",
+        _ => "discover.tabs.trending"
+    };
+
+    /// <summary>The release statuses a source can filter on without guessing: AniList knows all five, TMDB distinguishes released from upcoming for movies and has a status for series; Open Library has none.</summary>
+    public static IReadOnlyList<MediaReleaseStatus> StatusesFor(DiscoveryCategory category) => category switch
+    {
+        DiscoveryCategory.Movie => [MediaReleaseStatus.Upcoming, MediaReleaseStatus.Finished],
+        DiscoveryCategory.Series => [MediaReleaseStatus.Ongoing, MediaReleaseStatus.Finished, MediaReleaseStatus.Upcoming, MediaReleaseStatus.Cancelled],
+        DiscoveryCategory.Book => [],
+        _ => [MediaReleaseStatus.Ongoing, MediaReleaseStatus.Finished, MediaReleaseStatus.Upcoming, MediaReleaseStatus.Hiatus, MediaReleaseStatus.Cancelled]
+    };
+
+    /// <summary>How far a view describes the viewer's region. No source of this application supplies a regional signal today.</summary>
+    public static DiscoveryRankingScope ScopeOf(DiscoveryCategory category, DiscoveryMode mode) =>
+        mode is DiscoveryMode.Search or DiscoveryMode.MyList ? DiscoveryRankingScope.Locale : DiscoveryRankingScope.Global;
 }
 
 /// <summary>The media-type switch under the search field: only the scopes with a discovery source behind them.</summary>

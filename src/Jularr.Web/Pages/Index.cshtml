@@ -30,6 +30,7 @@
      data-watchlist-url="@Url.Page("/Index", "Watchlist")"
      data-franchise-url="@Url.Page("/Index", "FollowFranchise")"
      data-text-action-failed="@ui["discover.card.actionFailed"]"
+     data-text-retry="@ui["library.browse.error.retry"]"
      data-text-follow="@ui["discover.card.follow"]"
      data-text-followed="@ui["discover.card.followed"]"
      data-text-unfollow="@ui["discover.card.unfollow"]"
@@ -55,6 +56,10 @@
         {
             <input type="hidden" name="category" value="@DiscoverBrowseQuery.CategoryName(query.Category)" />
         }
+        @if (query.Mode != DiscoveryMode.Overview)
+        {
+            <input type="hidden" name="mode" value="@DiscoverBrowseQuery.ModeName(query.Mode)" />
+        }
     </form>
 
     <nav class="dc-seg" aria-label="@ui["discover.categories.aria"]">
@@ -68,8 +73,45 @@
         }
     </nav>
 
+    @* The browse view of the selected type (never inside the filters), then the active filters as tokens that can be removed one by one. *@
+    @if (query.Category != DiscoveryCategory.All && !query.IsSearch)
+    {
+        <nav class="dc-browse" aria-label="@ui["discover.browse.aria"]">
+            @foreach (var mode in DiscoverBrowseModes.For(query.Category).Where(mode => mode != DiscoveryMode.MyList || Model.AniListConnected))
+            {
+                var current = query.Mode == mode;
+                <a class="dc-browse-item@(current ? " is-active" : "")"
+                   href="@((query with { Mode = mode }).Href)"
+                   aria-current="@(current ? "page" : null)">@ui[DiscoverBrowseModes.LabelKey(mode)]</a>
+            }
+        </nav>
+    }
+
+    @if (query.ActiveFilterCount > 0)
+    {
+        <div class="dc-tokens" role="group" aria-label="@ui["library.browse.filters"]">
+            @foreach (var (token, kind, value) in query.ActiveFilters)
+            {
+                var label = kind switch
+                {
+                    "genre" => ui[DiscoverGenres.Key(value)!],
+                    "status" => ui[MediaBannerCardModel.StatusKey(Enum.Parse<MediaReleaseStatus>(value, true))],
+                    "avail" => ui[value switch { "library" => "discover.filter.availabilityLibrary", "requested" => "discover.filter.availabilityRequested", _ => "discover.filter.availabilityNew" }],
+                    "pref" => ui.Format("library.browse.filter.preferred", ("languages", string.Join(" · ", Model.Preference.Codes))),
+                    _ => value
+                };
+                <a class="dc-token" href="@query.WithoutFilter(token).Href" aria-label="@ui.Format("discover.filter.removeAria", ("filter", label))">
+                    <span>@label</span>
+                    <partial name="_DiscoverIcon" model='"close"' />
+                </a>
+            }
+            <a class="dc-token dc-token-clear" href="@query.WithoutFilters().Href">@ui["discover.filter.clearAll"]</a>
+        </div>
+    }
+
     @if (query.IsLanding)
     {
+    <div data-dc-landing>
 @if (Model.Hero.Count > 0)
 {
     <section class="home-hero"
@@ -209,6 +251,7 @@
 }
 
 
+    </div>
     }
 
     <p class="dc-notice" data-dc-offline hidden role="status">
@@ -294,7 +337,7 @@
 {
 @if (Model.PlaybackHistory.Count > 0)
 {
-    <details class="panel playback-history" data-playback-history>
+    <details class="panel playback-history" data-playback-history data-dc-landing>
         <summary>
             <strong>@Model.Ui["home.history.title"]</strong>
             <span class="muted">@Model.PlaybackHistory.Count</span>

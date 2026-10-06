@@ -319,7 +319,7 @@ public sealed class DiscoverPartialRenderTests
     [TestMethod]
     public async Task EveryEmptyOrFailedStateExplainsItselfWithOneAction()
     {
-        var filtered = new DiscoverBrowseQuery { Text = "x", Genre = "Horror", Year = 2001 };
+        var filtered = new DiscoverBrowseQuery { Text = "x", Genres = ["Horror"], YearFrom = 2001, YearTo = 2001 };
 
         var noResults = await RenderAsync(BodyView, Body(DiscoverBodyState.NoResults, filtered, total: 4));
         StringAssert.Contains(noResults, "No titles match these filters");

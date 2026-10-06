@@ -135,7 +135,7 @@ public sealed class TmdbDiscoverStatesTests
         await using var rig = await CreateAsync(Answer);
         var batch = await LoadAsync(rig, DiscoveryCategory.Series, DiscoveryMode.Trending, owner: false);
 
-        var (narrowed, total) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Series, Year = 2008 }, Context(false));
+        var (narrowed, total) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Series, YearFrom = 2008, YearTo = 2008 }, Context(false));
 
         Assert.AreEqual(3, total);
         Assert.AreEqual("Breaking Bad", narrowed.Single().Cards.Single().Title);

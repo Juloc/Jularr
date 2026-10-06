@@ -154,12 +154,6 @@ public sealed partial class IndexModel(
     public int PlaybackHistoryLimit => VideoProgressService.HistoryLimit;
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
-    /// <summary>
-    /// Resolved ContentMetrics capability for the Anime media type. Controls
-    /// preparation percentages on recently discovered Anime cards.
-    /// </summary>
-    public bool ShowContentMetrics { get; private set; }
-
     /// <summary>True when Home has nothing of the profile's or of the library to show: the new-user empty state.</summary>
     public bool IsEmpty => Hero.Count == 0 && ContinueTiles.Count == 0 && ForYou.Count == 0 && RecentTitles.Count == 0;
 
@@ -214,29 +208,99 @@ public sealed partial class IndexModel(
         ContinueReading = FilterContinueReading(continueReading.Where(item => IsReadingEnabled(instance, item.Kind)).ToArray(), ActiveType);
 
         ContinueTiles = BuildContinueTiles();
-        var ownSlides = BuildWatchingSlides(ContinueReading).ToArray();
-        Hero = ownSlides.Length >= HeroLimit
-            ? ownSlides.Take(HeroLimit).ToArray()
-            : [.. ownSlides, .. (await LoadWatchlistSlidesAsync(cancellationToken)).Take(HeroLimit - ownSlides.Length)];
+        var watchlistSlides = await LoadWatchlistSlidesAsync(cancellationToken);
         ForYou = await LoadForYouAsync(cancellationToken);
 
         var recent = await videoQuery.GetRecentlyAddedAsync(account.ProfileId, videoTypes, RecentLimit, cancellationToken);
-        var animeLearning = await new LearningConfigurationStore(db, instanceModules).ResolveAsync(account.ProfileId, new LearningScopeContext(LearningMediaType.Anime), cancellationToken);
-        ShowContentMetrics = access.IsVisible(WorkMediaType.Anime) && animeLearning.IsEnabled(LearningCapability.ContentMetrics);
+        RecentTitles = [.. recent.Select(item => new HomeRecentTitle(item.Title, RecentSubtitle(item)))];
 
-        // Vocabulary coverage is only computed when the resolved Anime scope shows content metrics; otherwise Home never touches learning tables.
-        var coverage = ShowContentMetrics
-            ? await videoQuery.GetVocabularyCoverageAsync(account.ProfileId, [.. recent.Where(item => item.LegacyEpisodeId.HasValue).Select(item => item.LegacyEpisodeId!.Value)], cancellationToken)
-            : new Dictionary<Guid, (int Total, int Prepared)>();
-        RecentTitles =
-        [
-            .. recent.Select(item =>
-            {
-                var totals = item.LegacyEpisodeId is { } legacyEpisodeId ? coverage.GetValueOrDefault(legacyEpisodeId) : default;
-                return new HomeRecentTitle(item.Title, RecentSubtitle(item), totals.Total, totals.Prepared);
-            })
-        ];
+        // The Hero is a pool of useful candidates of several classes, not the first Continue item: Continue or Resume leads, then what is newly
+        // available in the library, then a personalized recommendation, then what the followed works released. The classes alternate, so a Continue
+        // item never monopolizes the Hero while it still comes first.
+        Hero = RotateClasses(
+            [
+                [.. BuildWatchingSlides(ContinueReading)],
+                [.. RecentTitles.Where(title => MatchesFilter(ActiveType, title.Title.MediaType)).Take(HeroPerSourceLimit).Select(NewlyAvailableSlide)],
+                [.. (ActiveType == DiscoveryCategory.All ? ForYou : []).Take(HeroPerSourceLimit).Select(RecommendedSlide)],
+                [.. watchlistSlides]
+            ],
+            HeroLimit);
     }
+
+    /// <summary>Takes one slide of every class in priority order, then the next of each, until the Hero is full; a class that has no more simply drops out.</summary>
+    public static IReadOnlyList<HomeHeroSlide> RotateClasses(IReadOnlyList<IReadOnlyList<HomeHeroSlide>> classes, int limit)
+    {
+        var result = new List<HomeHeroSlide>(limit);
+        for (var round = 0; result.Count < limit; round++)
+        {
+            var added = false;
+            foreach (var slides in classes)
+            {
+                if (round >= slides.Count || result.Count >= limit)
+                {
+                    continue;
+                }
+
+                added = true;
+
+                // A title that already leads the Hero in another class (a series being continued that is also newly added) is shown once.
+                if (!result.Any(existing => string.Equals(existing.Title, slides[round].Title, StringComparison.OrdinalIgnoreCase)))
+                {
+                    result.Add(slides[round]);
+                }
+            }
+
+            if (!added)
+            {
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>A title that is newly available in the library: a Movie plays directly, a series opens its Detail where the next episode is the primary action.</summary>
+    private HomeHeroSlide NewlyAvailableSlide(HomeRecentTitle recent)
+    {
+        var title = recent.Title;
+        var plays = PlaybackEnabled && title.MediaType == WorkMediaType.Movie;
+        var image = title.BackdropUrl ?? title.PosterUrl;
+        return new HomeHeroSlide(
+            Ui["home.hero.newlyAvailable"],
+            title.Title,
+            VideoMeta(title),
+            recent.Subtitle,
+            title.Description,
+            null,
+            null,
+            image,
+            title.BackdropUrl is not null,
+            plays ? $"/Library/Watch/{title.WorkId}" : title.DetailHref,
+            plays ? Ui["home.spotlight.play"] : Ui["home.spotlight.open"],
+            plays,
+            title.DetailHref,
+            Ui["home.spotlight.details"],
+            HomeHeroSecondary.Details);
+    }
+
+    /// <summary>A personalized recommendation: the title page is the primary action, because nothing of it is playable yet.</summary>
+    private HomeHeroSlide RecommendedSlide(HomePosterItem item) =>
+        new(
+            Ui["home.hero.recommended"],
+            item.Title,
+            null,
+            null,
+            null,
+            null,
+            null,
+            item.ImageUrl,
+            false,
+            item.Href,
+            Ui["home.spotlight.open"],
+            false,
+            item.Href,
+            Ui["home.spotlight.details"],
+            HomeHeroSecondary.Details);
 
     /// <summary>"S01 · Episode 4 · 32 min left" for an episode, "32 min left" for a Movie — the caption of a watching tile.</summary>
     public string WatchingCaption(HomeContinueVideo item) => string.Join(" · ", new[] { EpisodeLabel(item.SeasonNumber, item.EpisodeNumber), RemainingText(item) }.Where(part => part is not null));
@@ -561,11 +625,6 @@ public sealed partial class IndexModel(
     public static string ChipHref(HomeTypeChip chip) =>
         chip.QueryValue == "all" ? "/" : $"/?type={chip.QueryValue}";
 
-    /// <summary>One card of the "Recently discovered" row; the occurrence totals are only filled when content metrics are on.</summary>
-    public sealed record HomeRecentTitle(HomeVideoTitle Title, string Subtitle, int TotalOccurrences, int PreparedOccurrences)
-    {
-        public int PreparationPercent => TotalOccurrences == 0
-            ? 0
-            : (int)Math.Floor((double)PreparedOccurrences / TotalOccurrences * 100);
-    }
+    /// <summary>A title that is newly available in the library; the Hero offers it as one of its candidates.</summary>
+    public sealed record HomeRecentTitle(HomeVideoTitle Title, string Subtitle);
 }

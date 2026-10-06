@@ -26,7 +26,8 @@ public sealed class HomeHeroTests
 
         var home = await LoadHomeAsync(fixture.Db);
 
-        var slide = Assert.ContainsSingle(home.Hero);
+        var slide = Assert.ContainsSingle(home.Hero.Where(candidate => candidate.Label == home.Ui["home.continueWatching.eyebrow"]));
+        Assert.AreEqual(home.Hero[0], slide, "A Continue item leads the Hero.");
         Assert.AreEqual("Hero Anime", slide.Title);
         Assert.AreEqual(home.Ui["home.continueWatching.eyebrow"], slide.Label);
         Assert.AreEqual($"/Library/Episode/{episodeId}", slide.PrimaryHref);
@@ -52,16 +53,16 @@ public sealed class HomeHeroTests
         var home = await LoadHomeAsync(fixture.Db);
 
         CollectionAssert.AreEqual(
-            new[] { "Hero Anime", "Hero Novel", "Frieren" },
+            new[] { "Hero Anime", "Frieren", "Hero Novel" },
             home.Hero.Select(slide => slide.Title).ToArray());
 
-        var reading = home.Hero[1];
+        var reading = home.Hero[2];
         Assert.AreEqual(home.Ui["home.continueReading.eyebrow"], reading.Label);
         Assert.AreEqual(home.ContinueReading[0].ResumeUrl, reading.PrimaryHref, "Read opens the exact resume position.");
         Assert.AreEqual(home.Ui["home.spotlight.read"], reading.PrimaryLabel);
         Assert.IsFalse(reading.ImageIsBackdrop);
 
-        var release = home.Hero[2];
+        var release = home.Hero[1];
         Assert.AreEqual(home.Ui["home.spotlight.watchlist"], release.Label);
         Assert.AreEqual("https://cdn.example/cover.jpg", release.ImageUrl);
         Assert.IsFalse(release.ImageIsBackdrop, "A cover is a poster: shown over a derived background, never stretched.");

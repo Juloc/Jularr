@@ -1,0 +1,10 @@
+@using Jularr.Web.Features.Discovery
+@model DiscoverMoreView
+@* A further provider page of one media type's view or search: the cards the browser appends to the grid it already shows. The root says whether
+   yet another page may follow. Styles: wwwroot/css/discover-browse.css. *@
+<ul data-dc-more-items data-dc-has-more="@(Model.HasMore ? "true" : "false")">
+    @foreach (var card in Model.Cards)
+    {
+        <li><partial name="_DiscoverCard" model="(card, Model.Ui)" /></li>
+    }
+</ul>

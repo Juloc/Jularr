@@ -183,37 +183,6 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
     }
 
     /// <summary>
-    /// Occurrence-weighted vocabulary coverage of Anime episodes for one profile, keyed by the legacy episode id the learning tables still
-    /// use: the total term occurrences of the episode and how many of them are Known or Learning words of the profile.
-    /// </summary>
-    public async Task<IReadOnlyDictionary<Guid, (int Total, int Prepared)>> GetVocabularyCoverageAsync(string profileId, IReadOnlyCollection<Guid> legacyEpisodeIds, CancellationToken cancellationToken)
-    {
-        if (legacyEpisodeIds.Count == 0)
-        {
-            return new Dictionary<Guid, (int Total, int Prepared)>();
-        }
-
-        var episodeIds = legacyEpisodeIds.ToArray();
-        var totals = await db.EpisodeTerms
-            .AsNoTracking()
-            .Where(x => episodeIds.Contains(x.EpisodeId))
-            .GroupBy(x => x.EpisodeId)
-            .Select(group => new { EpisodeId = group.Key, Total = group.Sum(x => x.Occurrences) })
-            .ToDictionaryAsync(x => x.EpisodeId, x => x.Total, cancellationToken);
-
-        var prepared = await (
-            from episodeTerm in db.EpisodeTerms.AsNoTracking()
-            join state in LearningQueries.TermStates(db, profileId).Where(x => x.State == UserTermState.Known || x.State == UserTermState.Learning)
-                on episodeTerm.TermId equals state.TermId
-            where episodeIds.Contains(episodeTerm.EpisodeId)
-            group episodeTerm by episodeTerm.EpisodeId into episodeGroup
-            select new { EpisodeId = episodeGroup.Key, Prepared = episodeGroup.Sum(x => x.Occurrences) })
-            .ToDictionaryAsync(x => x.EpisodeId, x => x.Prepared, cancellationToken);
-
-        return totals.ToDictionary(x => x.Key, x => (x.Value, prepared.GetValueOrDefault(x.Key)));
-    }
-
-    /// <summary>
     /// The display facts of the given Works. Movie and Series come from the persisted Work metadata, Anime from its legacy record and
     /// provider metadata; a Work without a displayable identity (an Anime without legacy record, which has no page to open) is absent.
     /// </summary>

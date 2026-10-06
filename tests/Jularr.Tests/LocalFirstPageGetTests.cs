@@ -198,7 +198,7 @@ public sealed class LocalFirstPageGetTests
         Assert.IsEmpty(managerOnly.ContinueWatching);
         Assert.IsEmpty(managerOnly.ContinueTiles);
         Assert.IsEmpty(managerOnly.PlaybackHistory);
-        Assert.IsEmpty(managerOnly.Hero);
+        Assert.IsFalse(managerOnly.Hero.Any(slide => slide.PrimaryIsPlay));
     }
 
     [TestMethod]

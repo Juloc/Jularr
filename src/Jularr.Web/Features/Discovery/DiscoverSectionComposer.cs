@@ -87,11 +87,8 @@ public static class DiscoverSectionComposer
         {
             var cards = Cards(batch.Items, context);
             var shown = DiscoverFilter.Apply(cards, query);
-            var count = shown.Count == 1
-                ? ui["discover.results.countOne"]
-                : query.HasPostFilters
-                    ? ui.Format("discover.results.countFiltered", ("count", shown.Count), ("total", cards.Count))
-                    : ui.Format("discover.results.count", ("count", shown.Count));
+            // A browse view or a search loads provider pages as the viewer scrolls, so the number loaded so far is not a count of the results.
+            string? count = null;
             var state = DiscoverySections.StateOf(cards.Count, batch.Sources);
             var section = state switch
             {
@@ -136,6 +133,10 @@ public static class DiscoverSectionComposer
 
         return (sections, total);
     }
+
+    /// <summary>The cards of a further page of a view, narrowed by the local filters.</summary>
+    public static IReadOnlyList<DiscoverCardView> MorePage(DiscoveryBatch batch, DiscoverBrowseQuery query, DiscoverContext context) =>
+        DiscoverFilter.Apply(Cards(batch.Items, context), query);
 
     private static string SectionId(DiscoveryCategory group) => "group-" + DiscoverBrowseQuery.CategoryName(group);
 
