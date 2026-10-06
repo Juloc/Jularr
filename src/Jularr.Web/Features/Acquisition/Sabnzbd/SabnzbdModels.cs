@@ -12,21 +12,6 @@ public enum SabnzbdPurpose
     Anime
 }
 
-/// <summary>
-/// The one persisted SABnzbd configuration. Every field is optional on its
-/// own because configuration keys may supply the rest (see
-/// <see cref="SabnzbdConnectionResolver"/>).
-/// </summary>
-public sealed record SabnzbdStoredSettings(
-    string? BaseUrl,
-    [property: JsonIgnore] string? ApiKey,
-    string? BooksCategory,
-    string? AnimeCategory)
-{
-    public static SabnzbdStoredSettings Empty { get; } =
-        new(null, null, null, null);
-}
-
 /// <summary>Effective, validated connection settings.</summary>
 public sealed record SabnzbdSettings(
     string BaseUrl,
