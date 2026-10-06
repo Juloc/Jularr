@@ -8,10 +8,18 @@ public sealed record WorkCreditView(string Name, string? Role);
 
 public sealed record WorkTrailerView(string YouTubeKey)
 {
+    /// <summary>The only third-party origin a Work page ever frames, and only after the viewer starts the trailer.</summary>
+    public const string EmbedOrigin = "https://www.youtube-nocookie.com";
+
+    /// <summary>Whether the key has the shape of a YouTube video id; only such a key may become a link or an embed address.</summary>
+    public bool IsPlayable => IsYouTubeKey(YouTubeKey);
+
     public string WatchUrl => $"https://www.youtube.com/watch?v={YouTubeKey}";
 
     /// <summary>The privacy-enhanced embed address, which sets no cookie until the viewer starts playback.</summary>
-    public string EmbedUrl => $"https://www.youtube-nocookie.com/embed/{YouTubeKey}";
+    public string EmbedUrl => $"{EmbedOrigin}/embed/{YouTubeKey}";
+
+    public static bool IsYouTubeKey(string? value) => value is { Length: 11 } && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
 }
 
 /// <summary>

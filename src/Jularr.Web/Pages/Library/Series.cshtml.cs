@@ -5,6 +5,7 @@ using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Shell;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,7 +18,9 @@ public sealed class SeriesDetailModel(
     VideoDetailQuery query,
     InstantPlayPolicyService policies,
     PlaybackIntentService intents,
-    ConsumerAcquisitionQuery acquisition) : VideoDetailPageModel(db, account, appShell, query, policies, intents, acquisition)
+    ConsumerAcquisitionQuery acquisition,
+    WorkMetadataRefreshQueue metadataRefresh,
+    ILogger<VideoDetailPageModel> logger) : VideoDetailPageModel(db, account, appShell, query, policies, intents, acquisition, metadataRefresh, logger)
 {
     protected override WorkMediaType MediaType => WorkMediaType.Series;
 

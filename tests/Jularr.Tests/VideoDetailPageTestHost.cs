@@ -19,6 +19,7 @@ using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
@@ -86,7 +87,8 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
     public string MediaDirectory => Path.Combine(root, "media");
 
     /// <param name="sharedDatabasePath">The database path of another test host: both then serve the same PostgreSQL database, as one install does.</param>
-    public static async Task<VideoDetailPageTestHost> CreateAsync(string? sharedDatabasePath = null)
+    /// <param name="metadataRefreshQueue">Replaces the metadata queue the pages ask for a refresh when a Work is opened, to test a queue that fails.</param>
+    public static async Task<VideoDetailPageTestHost> CreateAsync(string? sharedDatabasePath = null, Func<IServiceProvider, WorkMetadataRefreshQueue>? metadataRefreshQueue = null)
     {
         var root = Path.Combine(Path.GetTempPath(), $"jularr-video-detail-{Guid.NewGuid():N}");
         var data = Directory.CreateDirectory(Path.Combine(root, "data"));
@@ -130,6 +132,16 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddScoped<VideoProgressService>();
                     services.AddScoped<VideoDetailQuery>();
                     services.AddScoped<WorkMetadataStore>();
+                    services.AddSingleton<WorkMetadataRefreshSignal>();
+                    if (metadataRefreshQueue is null)
+                    {
+                        services.AddScoped<WorkMetadataRefreshQueue>();
+                    }
+                    else
+                    {
+                        services.AddScoped(metadataRefreshQueue);
+                    }
+
                     var noDownloads = new WorkMetadataFixture.StubHttpClientFactory(new WorkMetadataFixture.StubHandler(_ => throw new InvalidOperationException("The page tests never download artwork.")));
                     services.AddSingleton(new Jularr.Web.Features.Artwork.WorkArtworkCache(Path.Combine(root, "artwork"), [], noDownloads));
                     services.AddSingleton<IInstanceModuleService>(modules);
@@ -201,6 +213,14 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
 
     /// <summary>A client of the signed-in profile, for tests that need the response itself (headers, content type).</summary>
     public HttpClient CreateClient() => server.CreateClient();
+
+    /// <summary>The raw markup of a page, exactly as sent: unlike <see cref="GetAsync"/> nothing is HTML-decoded, so encoding is testable.</summary>
+    public async Task<(HttpStatusCode Status, string Html, System.Net.Http.Headers.HttpResponseHeaders Headers)> GetRawAsync(string path)
+    {
+        using var client = server.CreateClient();
+        using var response = await client.GetAsync(path);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync(), response.Headers);
+    }
 
     public async Task<(HttpStatusCode Status, string Html)> GetAsync(string path, bool asOwner = false, string? profile = null)
     {

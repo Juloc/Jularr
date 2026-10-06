@@ -5,6 +5,7 @@ using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Ui;
 using Microsoft.AspNetCore.Mvc;
@@ -25,7 +26,9 @@ public abstract class VideoDetailPageModel(
     VideoDetailQuery query,
     InstantPlayPolicyService policies,
     PlaybackIntentService intents,
-    ConsumerAcquisitionQuery acquisition) : PageModel
+    ConsumerAcquisitionQuery acquisition,
+    WorkMetadataRefreshQueue metadataRefresh,
+    ILogger<VideoDetailPageModel> logger) : PageModel
 {
     private static readonly HashSet<string> PlayingWords = new(
         ["acquisition.state.readyToWatch", "acquisition.instant.milestone.preparing", "acquisition.instant.stopWaiting", "acquisition.instant.stopped", "acquisition.instant.stoppedHint"],
@@ -133,6 +136,13 @@ public abstract class VideoDetailPageModel(
         }
 
         Detail = detail;
+        await PromoteMetadataRefreshAsync(workId, detail.Metadata, cancellationToken);
+        if (MediaType == WorkMediaType.Movie && detail.Metadata?.Trailers.Any(x => x.IsPlayable) == true)
+        {
+            // The trailer facade adds one frame after the viewer clicks; no other page content may be framed.
+            Response.Headers.ContentSecurityPolicy = $"frame-src 'self' {WorkTrailerView.EmbedOrigin}";
+        }
+
         policy = await policies.ResolveAsync(MediaType, cancellationToken);
         PlaybackEnabled = policy.PlaybackEnabled;
         PrimaryAction = PrimaryActionResolver.Resolve(detail.Playback, policy);
@@ -146,5 +156,29 @@ public abstract class VideoDetailPageModel(
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Opening a Work asks the metadata spool to fetch what is missing at interactive priority (#820, open-time promotion). This is the one
+    /// write a detail read may make: an idempotent enqueue that never reaches a provider, never waits for a fetch and never touches metadata
+    /// that was fetched already; the page renders what is stored meanwhile. It runs only for a Work this profile may open (a hidden type or
+    /// an unknown Work is a 404 before this point). A queue failure must not take the page down, so it is logged and the page renders
+    /// without it; stale metadata is refreshed by the spool on its own schedule.
+    /// </summary>
+    private async Task PromoteMetadataRefreshAsync(Guid workId, WorkMetadataView? metadata, CancellationToken cancellationToken)
+    {
+        if (metadata?.RefreshedAt is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            await metadataRefresh.RequestMetadataRefreshAsync(workId, interactive: true, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Could not queue the metadata of Work {WorkId} when it was opened.", workId);
+        }
     }
 }

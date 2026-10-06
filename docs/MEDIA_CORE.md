@@ -185,8 +185,11 @@ are not claimed.
 
 **Entry points.** `TmdbDiscoveryProvider.EnsureCanonicalWorkAsync` (the Request materialization) queues the Work at `Requested`
 priority; it never fetches durable metadata inline. `WorkMetadataRefreshQueue.RequestMetadataRefreshAsync(workId, interactive)` is the
-narrow call for a detail page when a Work is opened (wiring it into the pages belongs to the UI slice): it promotes a missing or queued entry to `Interactive` without waiting and
-never refetches fresh data or bypasses a failure's backoff. The reconcile (start + every 6 h) is the idempotent backfill:
+narrow call for a detail page when a Work is opened: it promotes a missing or queued entry to `Interactive` without waiting and
+never refetches fresh data or bypasses a failure's backoff. The Movie and Series pages call it from `VideoDetailPageModel` after the Work
+was found and is visible to the profile, and only while the Work has no successfully fetched metadata yet (stale metadata is refreshed by
+the spool on its own schedule). It is the one write a detail read makes: an idempotent enqueue, never a provider call and never waited
+for; a queue failure is logged and the page renders what is stored. The reconcile (start + every 6 h) is the idempotent backfill:
 TMDB-identified Movie/Series Works without an entry are queued as `Imported` (file or progress), `Requested` (no legacy library
 record) or `Library`.
 
@@ -195,7 +198,10 @@ runtime, rating, certification, studios, production countries, trailers (YouTube
 poster/backdrop/logo as `/works/{workId}/artwork/{artworkId}?v=…` URLs; `VideoDetail.Title` is the localized title when one exists.
 Library Movie/Series cards get the localized title (same fallback as the detail page), poster, backdrop and rating from one query
 for the whole page. Reads never call a provider and never
-write. The artwork endpoint (`Pages/Artwork/Work`) serves only cached files, 404s for a media type the profile cannot browse, and
+write (apart from the open-time enqueue above). The Movie page renders the persisted backdrop (the poster as a blurred background without
+one), overview, genres, rating, studio, certification, the click-to-load trailer (a YouTube key is only ever a link or a no-cookie frame
+after the viewer's click, behind a `frame-src` header), cast and crew placeholders (no profile photos are persisted) and About; the Series
+page renders the hero parts; Library Movie/Series cards render the poster and a rating chip. Provider text is only ever encoded. The artwork endpoint (`Pages/Artwork/Work`) serves only cached files, 404s for a media type the profile cannot browse, and
 answers `private, immutable` with `nosniff`.
 
 **Single-locale assumptions to rework in slice 2.** `WorkMetadataFacts` is one row per Work: its certification is the region of
@@ -209,7 +215,7 @@ source locale) and readers resolve from the profile's UI locale.
 **Slice 2 and later.** Fixed/Free instance language mode and its setting; per-profile locale enrollment into the spool (rows for
 additional locales, no schema change); provider capability memory and a separate negative cache per `(provider, locale, field)`;
 machine-translation provenance columns (provider/model/version) when translation lands; Admin coverage/queue view with
-pause/resume/retry and explicit refresh; open-time promotion wired into the detail pages (UI slice); person artwork and "More like
+pause/resume/retry and explicit refresh; person artwork, secondary trailers and "More like
 this"; Anime metadata/artwork migration into these tables and retirement of the Anime-specific stores; Discover preferring persisted
 metadata for already durable Works; per-field merge of facts (a merge keeps the survivor's facts row whole, so a manual fact value of the
 absorbed Work is not carried over yet).
