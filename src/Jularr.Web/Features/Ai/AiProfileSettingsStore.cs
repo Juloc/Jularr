@@ -35,7 +35,7 @@ public sealed class AiProfileSettingsStore
         ArgumentNullException.ThrowIfNull(integrationDirectory);
 
         protector = dataProtectionProvider.CreateProtector(
-            "AniLingo.Ai.ProfileApiKey.v1");
+            "Jularr.Ai.ProfileApiKey.v1");
         this.logger = logger;
         accountDirectory = Path.Combine(
             integrationDirectory.FullName,
