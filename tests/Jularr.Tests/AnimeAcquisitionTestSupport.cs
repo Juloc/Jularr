@@ -623,12 +623,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
                     sonarrStore,
                     new SonarrArtworkImportService(db, new NoHttpClientFactory(), NullLogger<SonarrArtworkImportService>.Instance),
                     NullLogger<SonarrArtworkSyncService>.Instance),
-                NullLogger<LibraryScanner>.Instance,
-                canonicalVideoBackfill: new CanonicalVideoStorageBackfillService(
-                    db,
-                    new Jularr.Web.Features.MediaCore.LegacyWorkBridge(db, new Jularr.Web.Features.MediaCore.WorkService(db), new Jularr.Web.Features.MediaCore.WorkStructureService(db)),
-                    new CanonicalMediaStorageService(db),
-                    NullLogger<CanonicalVideoStorageBackfillService>.Instance));
+                NullLogger<LibraryScanner>.Instance;
         });
 
         return collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
