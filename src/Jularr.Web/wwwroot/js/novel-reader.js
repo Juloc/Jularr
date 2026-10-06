@@ -8,7 +8,7 @@
 
     const modules = window.JularrNovelReader || {};
     const profileId = document.body?.dataset.profileId || "unknown";
-    const storagePrefix = `anilingo.profile.${profileId}.novel`;
+    const storagePrefix = `jularr.profile.${profileId}.novel`;
     const storage = {
         view: `${storagePrefix}.view`,
         translationSource: `${storagePrefix}.translationSource`
