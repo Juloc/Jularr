@@ -29,7 +29,7 @@ public sealed class DiscoverSectionComposerTests
     private static DiscoverySourceResult Source(DiscoverySource source, DiscoverySourceState state, params DiscoveryItem[] items) => new(source, state, items);
 
     private static DiscoverLandingRow Row(string id, string label, params DiscoverySourceResult[] sources) =>
-        new(id, label + " row", "/Discover?category=" + id, [.. sources.SelectMany(source => source.Items)], sources, label);
+        new(id, label + " row", "/?category=" + id, [.. sources.SelectMany(source => source.Items)], sources, label);
 
     [TestMethod]
     public void ARowThatWaitsKeepsItsPlaceAsGhostCardsAndNoRowIsInventedForAnEmptyOne()
@@ -108,11 +108,12 @@ public sealed class DiscoverSectionComposerTests
         var (sections, total) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Text = "solo" }, Context());
         var (again, _) = DiscoverSectionComposer.Results(reversed, new DiscoverBrowseQuery { Text = "solo" }, Context());
 
-        CollectionAssert.AreEqual(new[] { "group-anime", "group-movie", "group-tv", "group-books-light-novels", "group-manga" }, sections.Select(section => section.Id).ToArray());
+        CollectionAssert.AreEqual(new[] { "group-anime", "group-movie", "group-tv", "group-light-novel", "group-book", "group-manga" }, sections.Select(section => section.Id).ToArray());
         Assert.AreEqual(5 + 1, total);
         Assert.IsTrue(sections.All(section => section.Collapsible && section.SeeAllUrl is not null));
-        Assert.AreEqual("/Discover?q=solo&category=anime", sections[0].SeeAllUrl, "See all keeps the search text.");
-        CollectionAssert.AreEquivalent(new[] { "Solo Book", "Solo Novel" }, sections[3].Cards.Select(card => card.Title).ToArray(), "Books and light novels are one group.");
+        Assert.AreEqual("/?q=solo&category=anime", sections[0].SeeAllUrl, "See all keeps the search text.");
+        CollectionAssert.AreEqual(new[] { "Solo Novel" }, sections[3].Cards.Select(card => card.Title).ToArray(), "Light novels are their own group.");
+        CollectionAssert.AreEqual(new[] { "Solo Book" }, sections[4].Cards.Select(card => card.Title).ToArray(), "Books are their own group.");
         CollectionAssert.AreEqual(sections.Select(section => section.Signature).ToArray(), again.Select(section => section.Signature).ToArray(), "Identical data renders identically.");
     }
 

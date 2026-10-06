@@ -16,7 +16,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class TmdbDiscoverStatesTests
 {
-    private const string BodyView = "/Pages/Discover/_DiscoverBody.cshtml";
+    private const string BodyView = "/Pages/Shared/_DiscoverBody.cshtml";
 
     private static readonly UiTextBundle Ui = UiTextBundle.English;
 

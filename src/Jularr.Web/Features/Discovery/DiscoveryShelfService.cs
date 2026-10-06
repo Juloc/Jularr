@@ -31,15 +31,16 @@ public static class DiscoveryShelfComposer
     public static IReadOnlyList<WorkMediaType> SupportedMediaTypes { get; } =
         [WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book];
 
-    /// <summary>Display order of media types across the board (anime first, books last).</summary>
+    /// <summary>Display order of the media types across the board, the order of the media-type bar.</summary>
     private static IReadOnlyList<WorkMediaType> DisplayOrder { get; } =
-        [WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book];
+        [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie, WorkMediaType.LightNovel, WorkMediaType.Book, WorkMediaType.Manga];
 
     /// <summary>
     /// The ordered rows for a profile's visible media types. Only types the profile may at least browse
     /// (<paramref name="visibleMediaTypes"/> from the capability policy), that have a provider feed, and
-    /// whose source is enabled, produce rows — so a Books-only user gets book rows only. Trending rows
-    /// lead (mixed media types), then Top rows, then the Books-only "newly published" row (#371).
+    /// whose source is enabled, produce rows — so a Books-only user gets book rows only. Each type is one
+    /// group of rows in the order Trending, Top, New (and Upcoming for Movies and Series); the New row of Books is the
+    /// newly published row (#371).
     /// </summary>
     public static IReadOnlyList<DiscoveryShelfPlan> Plan(IReadOnlyList<WorkMediaType> visibleMediaTypes)
     {
@@ -54,85 +55,19 @@ public static class DiscoveryShelfComposer
         foreach (var type in types)
         {
             plans.Add(Row(type, DiscoveryShelfKind.Trending, DiscoveryMode.Trending));
-        }
-
-        foreach (var type in types)
-        {
             plans.Add(Row(type, DiscoveryShelfKind.Top, DiscoveryMode.Top));
-        }
-
-        foreach (var type in types.Where(type => type is WorkMediaType.Movie or WorkMediaType.Series))
-        {
-            plans.Add(Row(type, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
-            plans.Add(Row(type, DiscoveryShelfKind.Upcoming, DiscoveryMode.Upcoming));
-        }
-
-        if (types.Contains(WorkMediaType.Book))
-        {
-            plans.Add(Row(WorkMediaType.Book, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
+            if (type is WorkMediaType.Movie or WorkMediaType.Series)
+            {
+                plans.Add(Row(type, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
+                plans.Add(Row(type, DiscoveryShelfKind.Upcoming, DiscoveryMode.Upcoming));
+            }
+            else if (type == WorkMediaType.Book)
+            {
+                plans.Add(Row(type, DiscoveryShelfKind.NewlyPublished, DiscoveryMode.New));
+            }
         }
 
         return plans;
-    }
-
-    /// <summary>
-    /// Presents Books and Light Novels as the one Discover scope users select, while preserving their
-    /// canonical media types on every item. Trending/Top rows are interleaved; the Books-only New row
-    /// stays separate because Light Novels do not currently have an honest recent-publication feed.
-    /// </summary>
-    public static IReadOnlyList<DiscoveryShelfRow> CombineBooksAndLightNovels(
-        IReadOnlyList<DiscoveryShelfRow> rows)
-    {
-        ArgumentNullException.ThrowIfNull(rows);
-
-        var result = new List<DiscoveryShelfRow>(rows.Count);
-        var consumed = new HashSet<int>();
-
-        for (var index = 0; index < rows.Count; index++)
-        {
-            if (consumed.Contains(index))
-            {
-                continue;
-            }
-
-            var row = rows[index];
-            if (row.Kind == DiscoveryShelfKind.NewlyPublished
-                || row.Category is not (DiscoveryCategory.Book or DiscoveryCategory.LightNovel))
-            {
-                result.Add(row);
-                continue;
-            }
-
-            var matching = rows
-                .Select((candidate, candidateIndex) => (candidate, candidateIndex))
-                .Where(entry =>
-                    !consumed.Contains(entry.candidateIndex)
-                    && entry.candidate.Kind == row.Kind
-                    && entry.candidate.Mode == row.Mode
-                    && string.Equals(entry.candidate.Genre, row.Genre, StringComparison.Ordinal)
-                    && entry.candidate.Category is DiscoveryCategory.Book or DiscoveryCategory.LightNovel)
-                .ToArray();
-
-            foreach (var entry in matching)
-            {
-                consumed.Add(entry.candidateIndex);
-            }
-
-            result.Add(new DiscoveryShelfRow(
-                $"{ModeSlug(row.Mode)}-books-light-novels",
-                row.Kind,
-                MediaType: null,
-                DiscoveryCategory.BooksAndLightNovels,
-                row.Mode,
-                row.Genre,
-                row.TitleKey,
-                "discover.categories.booksLightNovels",
-                Deduplicate(Interleave(
-                    matching.Select(entry => entry.candidate.Items).ToArray())),
-                [.. matching.SelectMany(entry => entry.candidate.Sources).DistinctBy(source => source.Source)]));
-        }
-
-        return result;
     }
 
     private static IReadOnlyList<DiscoveryItem> Interleave(

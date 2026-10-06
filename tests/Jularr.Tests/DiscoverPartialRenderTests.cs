@@ -9,8 +9,8 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class DiscoverPartialRenderTests
 {
-    private const string CardView = "/Pages/Discover/_DiscoverCard.cshtml";
-    private const string BodyView = "/Pages/Discover/_DiscoverBody.cshtml";
+    private const string CardView = "/Pages/Shared/_DiscoverCard.cshtml";
+    private const string BodyView = "/Pages/Shared/_DiscoverBody.cshtml";
 
     private static readonly UiTextBundle Ui = UiTextBundle.English;
 
@@ -237,14 +237,14 @@ public sealed class DiscoverPartialRenderTests
     {
         var sections = new[]
         {
-            Section("trending-anime", "Trending", [Card(), Card("Dune")], seeAll: "/Discover?category=anime"),
+            Section("trending-anime", "Trending", [Card(), Card("Dune")], seeAll: "/?category=anime"),
             Section("because", "Because you watched Solo", [Card("Mushoku")])
         };
 
         var html = await RenderAsync(BodyView, Body(DiscoverBodyState.Sections, sections: sections, settled: 2));
 
         StringAssert.Contains(html, "<h2 id=\"dc-section-trending-anime\">Trending</h2>");
-        StringAssert.Contains(html, "<a class=\"dc-shelf-more\" href=\"/Discover?category=anime\">See all</a>");
+        StringAssert.Contains(html, "<a class=\"dc-shelf-more\" href=\"/?category=anime\">See all</a>");
         Assert.AreEqual(1, Regex.Matches(html, "dc-shelf-more").Count, "A personalized row has no see-all link.");
         Assert.AreEqual(3, Regex.Matches(html, "<article class=\"dc-card").Count);
         StringAssert.Contains(html, "data-dc-settled=\"2\"");
@@ -264,7 +264,7 @@ public sealed class DiscoverPartialRenderTests
     [TestMethod]
     public async Task ASectionThatWaitsKeepsItsPlaceWithGhostCardsThatAreNotAnnouncedAndHaveNoActions()
     {
-        var waiting = Section("trending-movie", "Trending · Movie", [], state: DiscoverySectionState.Pending, seeAll: "/Discover?category=movie");
+        var waiting = Section("trending-movie", "Trending · Movie", [], state: DiscoverySectionState.Pending, seeAll: "/?category=movie");
         var grid = Section("results", null, [], DiscoverSectionLayout.Grid, DiscoverySectionState.Pending);
 
         var row = await RenderAsync(BodyView, Body(DiscoverBodyState.Sections, sections: [waiting], pending: 1));
@@ -323,7 +323,7 @@ public sealed class DiscoverPartialRenderTests
 
         var noResults = await RenderAsync(BodyView, Body(DiscoverBodyState.NoResults, filtered, total: 4));
         StringAssert.Contains(noResults, "No titles match these filters");
-        StringAssert.Contains(noResults, "href=\"/Discover?q=x\"");
+        StringAssert.Contains(noResults, "href=\"/?q=x\"");
 
         var empty = await RenderAsync(BodyView, Body(DiscoverBodyState.Empty));
         StringAssert.Contains(empty, "No results");
@@ -340,14 +340,17 @@ public sealed class DiscoverPartialRenderTests
 
         var books = await RenderAsync(BodyView, Body(DiscoverBodyState.BooksNotInList, new DiscoverBrowseQuery { Mode = DiscoveryMode.MyList }));
         StringAssert.Contains(books, "AniList lists have no books.");
-        StringAssert.Contains(books, "href=\"/Discover\"");
+        StringAssert.Contains(books, "href=\"/\"");
     }
 
     [TestMethod]
     public void ThePageShellHasTheSearchFilterAndMediaTypeSwitchAndNoGenreChipWall()
     {
-        var page = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Discover", "Index.cshtml"));
+        var pages = Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages");
+        var page = string.Concat(
+            File.ReadAllText(Path.Combine(pages, "Index.cshtml")),
+            File.ReadAllText(Path.Combine(pages, "Shared", "_DiscoverFilter.cshtml")),
+            File.ReadAllText(Path.Combine(pages, "Shared", "_AppSearch.cshtml")));
 
         StringAssert.Contains(page, "role=\"search\"");
         StringAssert.Contains(page, "name=\"q\"");
@@ -361,7 +364,7 @@ public sealed class DiscoverPartialRenderTests
         StringAssert.Contains(page, "<dialog class=\"dc-sheet\" data-dc-sheet>");
         Assert.IsFalse(page.Contains("discover-genre-row", StringComparison.Ordinal), "Genres live in the Filters panel, not in a second chip row.");
         Assert.IsFalse(page.Contains("discover-collections-link", StringComparison.Ordinal));
-        Assert.AreEqual(1, Regex.Matches(page, "<h1>").Count);
+        Assert.AreEqual(1, Regex.Matches(page, "<h1[ >]").Count);
     }
 
     [TestMethod]

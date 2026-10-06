@@ -128,7 +128,7 @@ public sealed class DiscoveryMangaHandoffTests
             "src",
             "Jularr.Web",
             "Pages",
-            "Discover",
+            "Shared",
             "_DiscoverCard.cshtml"));
 
         // The owner's manga import link is decided on the server and localized; the card only renders it.

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
@@ -29,7 +30,7 @@ using Jularr.Web.Features.Ai;
 using Jularr.Web.Infrastructure.Ai;
 using AiAdminModel = Jularr.Web.Pages.Admin.AiModel;
 using AiSettingsModel = Jularr.Web.Pages.Settings.AiModel;
-using DiscoverIndexModel = Jularr.Web.Pages.Discover.IndexModel;
+using DiscoverIndexModel = Jularr.Web.Pages.IndexModel;
 using DiscoverMangaImportModel = Jularr.Web.Pages.Discover.MangaImportModel;
 using LibraryIndexModel = Jularr.Web.Pages.Library.IndexModel;
 using MangaIndexModel = Jularr.Web.Pages.Manga.IndexModel;
@@ -156,7 +157,7 @@ public sealed class LocalFirstPageGetTests
         await fixture.ConnectAniListAsync();
         var page = fixture.Attach(fixture.DiscoverPage());
 
-        await page.OnGetAsync(CancellationToken.None);
+        await page.LoadDiscoverAsync(CancellationToken.None);
 
         // Browse/search results come from the explicit, no-store Results
         // handler after first paint; the page GET itself stays local.
@@ -171,7 +172,7 @@ public sealed class LocalFirstPageGetTests
         await new LibraryCanonicalSeed(fixture.Db).AddAnimeAsync("Local Anime", [(1, 1, true), (1, 2, true)]);
         var page = fixture.Attach(fixture.HomePage());
 
-        await page.OnGetAsync(CancellationToken.None);
+        await page.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         // Hero, Continue, For you and recently discovered come from local state only.
         Assert.AreEqual("Local Anime", Assert.ContainsSingle(page.RecentTitles).Title.Title);
@@ -186,12 +187,12 @@ public sealed class LocalFirstPageGetTests
         var anime = await new LibraryCanonicalSeed(fixture.Db).AddAnimeAsync("Local Anime", [(1, 1, true), (1, 2, true)]);
         await new VideoProgressService(fixture.Db).UpdateAsync("owner", MediaProgressTarget.Episode(anime.Work.Id, anime.Episodes[0].Canonical.Id), new MediaProgressUpdate(600_000, 1_400_000, false));
         var playing = fixture.Attach(fixture.HomePage(modules));
-        await playing.OnGetAsync(CancellationToken.None);
+        await playing.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
         Assert.AreEqual($"/Library/Episode/{anime.Episodes[0].Legacy.Id}", Assert.ContainsSingle(playing.ContinueWatching).PlayHref);
 
         await modules.SetAsync(Jularr.Web.Features.Instance.InstanceModule.Playback, false);
         var managerOnly = fixture.Attach(fixture.HomePage(modules));
-        await managerOnly.OnGetAsync(CancellationToken.None);
+        await managerOnly.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.AreEqual($"/Library/Anime/{anime.Anime.Id}", Assert.ContainsSingle(managerOnly.RecentTitles).Title.DetailHref);
         Assert.IsEmpty(managerOnly.ContinueWatching);
@@ -568,7 +569,7 @@ public sealed class LocalFirstPageGetTests
                 franchiseService,
                 recommendations,
                 new Jularr.Web.Features.Instance.InstanceModuleStore(root),
-                NullLogger<DiscoverIndexModel>.Instance);
+                null!, NullLogger<DiscoverIndexModel>.Instance);
         }
 
         public async Task<(Guid SeriesId, IReadOnlyList<Guid> ChapterIds)> AddMangaAsync(

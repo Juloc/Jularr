@@ -182,11 +182,11 @@ public sealed partial class UnfinishedNavigationTests
         var root = Path.Combine(RepositoryRoot(), "src", "Jularr.Web");
         var navigation = File.ReadAllText(Path.Combine(root, "Pages", "Shared", "_AppNavigation.cshtml"));
         var search = File.ReadAllText(Path.Combine(root, "Pages", "Shared", "_AppSearch.cshtml"));
-        var css = File.ReadAllText(Path.Combine(root, "wwwroot", "css", "discover-browse.css"));
-
+        
         Assert.IsFalse(navigation.Contains("/Discover", StringComparison.Ordinal), "The header search stays on every page, Discover included.");
         StringAssert.Contains(search, "Context.Request.Query[\"q\"]");
-        StringAssert.Contains(css, ".dc-search { display: none; }");
+        Assert.IsFalse(File.ReadAllText(Path.Combine(root, "Pages", "Index.cshtml")).Contains("class=\"dc-search\"", StringComparison.Ordinal), "The page has no search field of its own.");
+        StringAssert.Contains(search, "data-dc-search");
     }
 
     [TestMethod]

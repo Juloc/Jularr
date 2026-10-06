@@ -14,7 +14,7 @@
      data-progress="@Model.Progress"
      data-done="@(Model.IsDone ? "true" : "false")"
      data-result-url="@request.ResultUrl">
-    <span class="dc-rq-check@(Model.AlreadyRequested ? " is-existing" : "")" aria-hidden="true"><partial name="~/Pages/Discover/_DiscoverIcon.cshtml" model='Model.AlreadyRequested ? "requested" : "library"' /></span>
+    <span class="dc-rq-check@(Model.AlreadyRequested ? " is-existing" : "")" aria-hidden="true"><partial name="~/Pages/Shared/_DiscoverIcon.cshtml" model='Model.AlreadyRequested ? "requested" : "library"' /></span>
     <h3 id="dc-rq-result-title" tabindex="-1">@ui[Model.Updated ? "discover.request.updated" : Model.AlreadyRequested ? "discover.request.exists" : "discover.request.created"]</h3>
     <ul class="dc-rq-summary">
         @foreach (var line in Model.Summary)

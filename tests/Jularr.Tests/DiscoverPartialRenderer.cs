@@ -34,7 +34,7 @@ internal sealed class DiscoverPartialRenderer : IAsyncDisposable
                 {
                     services
                         .AddRazorPages()
-                        .AddApplicationPart(typeof(Jularr.Web.Pages.Discover.IndexModel).Assembly);
+                        .AddApplicationPart(typeof(Jularr.Web.Pages.IndexModel).Assembly);
                     services.AddLogging();
                     // No page routing here, so the folder of the Discover page is searched for its partials directly.
                     services.Configure<RazorViewEngineOptions>(options =>

@@ -5,7 +5,7 @@ using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Microsoft.EntityFrameworkCore;
-using DiscoverIndexModel = Jularr.Web.Pages.Discover.IndexModel;
+using DiscoverIndexModel = Jularr.Web.Pages.IndexModel;
 
 namespace Jularr.Tests;
 

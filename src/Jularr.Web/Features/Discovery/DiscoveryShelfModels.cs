@@ -116,7 +116,7 @@ public static class DiscoveryShelfLinks
             parts.Add("genre=" + Uri.EscapeDataString(genre));
         }
 
-        return parts.Count == 0 ? "/Discover" : "/Discover?" + string.Join('&', parts);
+        return parts.Count == 0 ? "/" : "/?" + string.Join('&', parts);
     }
 
     private static string CategoryParam(DiscoveryCategory category) => category switch
@@ -127,7 +127,6 @@ public static class DiscoveryShelfLinks
         DiscoveryCategory.LightNovel => "light-novel",
         DiscoveryCategory.Manga => "manga",
         DiscoveryCategory.Book => "book",
-        DiscoveryCategory.BooksAndLightNovels => "books-light-novels",
         _ => "all"
     };
 

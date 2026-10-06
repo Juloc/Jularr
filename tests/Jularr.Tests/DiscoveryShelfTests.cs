@@ -22,9 +22,12 @@ public sealed class DiscoveryShelfTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "trending-anime", "trending-movie", "trending-series", "trending-manga", "trending-lightnovel", "trending-book",
-                "top-anime", "top-movie", "top-series", "top-manga", "top-lightnovel", "top-book",
-                "new-movie", "upcoming-movie", "new-series", "upcoming-series", "new-book"
+                "trending-anime", "top-anime",
+                "trending-series", "top-series", "new-series", "upcoming-series",
+                "trending-movie", "top-movie", "new-movie", "upcoming-movie",
+                "trending-lightnovel", "top-lightnovel",
+                "trending-book", "top-book", "new-book",
+                "trending-manga", "top-manga"
             },
             plans.Select(plan => plan.Id).ToArray());
 
@@ -35,143 +38,18 @@ public sealed class DiscoveryShelfTests
     }
 
     [TestMethod]
-    public void BooksAndLightNovelsBecomeOneInterleavedDiscoverShelfPerMode()
-    {
-        DiscoveryShelfRow Row(
-            string id,
-            DiscoveryShelfKind kind,
-            WorkMediaType type,
-            DiscoveryCategory category,
-            DiscoveryMode mode,
-            params DiscoveryItem[] items) =>
-            new(
-                id,
-                kind,
-                type,
-                category,
-                mode,
-                "",
-                mode == DiscoveryMode.Top ? "discover.tabs.top" : mode == DiscoveryMode.New ? "discover.tabs.new" : "discover.tabs.trending",
-                type == WorkMediaType.Book ? "nav.books" : "discover.categories.lightNovel",
-                items,
-                [new DiscoverySourceResult(type == WorkMediaType.Book ? DiscoverySource.Books : DiscoverySource.Reading, DiscoverySourceState.Ready, items)]);
-
-        var rows = new[]
-        {
-            Row("trending-anime", DiscoveryShelfKind.Trending, WorkMediaType.Anime, DiscoveryCategory.Anime, DiscoveryMode.Trending,
-                Item("anime", "anilist", "a1", "Anime")),
-            Row("trending-lightnovel", DiscoveryShelfKind.Trending, WorkMediaType.LightNovel, DiscoveryCategory.LightNovel, DiscoveryMode.Trending,
-                Item("light-novel", "anilist", "ln1", "LN 1"),
-                Item("light-novel", "anilist", "ln2", "LN 2")),
-            Row("trending-book", DiscoveryShelfKind.Trending, WorkMediaType.Book, DiscoveryCategory.Book, DiscoveryMode.Trending,
-                Item("book", "openlibrary", "b1", "Book 1"),
-                Item("book", "openlibrary", "b2", "Book 2")),
-            Row("top-lightnovel", DiscoveryShelfKind.Top, WorkMediaType.LightNovel, DiscoveryCategory.LightNovel, DiscoveryMode.Top,
-                Item("light-novel", "anilist", "ln3", "LN 3")),
-            Row("top-book", DiscoveryShelfKind.Top, WorkMediaType.Book, DiscoveryCategory.Book, DiscoveryMode.Top,
-                Item("book", "openlibrary", "b3", "Book 3")),
-            Row("new-book", DiscoveryShelfKind.NewlyPublished, WorkMediaType.Book, DiscoveryCategory.Book, DiscoveryMode.New,
-                Item("book", "openlibrary", "b4", "Book 4"))
-        };
-
-        var combined = DiscoveryShelfComposer.CombineBooksAndLightNovels(rows);
-
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "trending-anime",
-                "trending-books-light-novels",
-                "top-books-light-novels",
-                "new-book"
-            },
-            combined.Select(row => row.Id).ToArray());
-
-        var trending = combined.Single(row => row.Id == "trending-books-light-novels");
-        Assert.IsNull(trending.MediaType);
-        Assert.AreEqual(DiscoveryCategory.BooksAndLightNovels, trending.Category);
-        CollectionAssert.AreEqual(
-            new[] { "LN 1", "Book 1", "LN 2", "Book 2" },
-            trending.Items.Select(item => item.Title).ToArray());
-        Assert.AreEqual(
-            "/Discover?category=books-light-novels",
-            trending.DeepLinkUrl);
-
-        var newBooks = combined.Single(row => row.Id == "new-book");
-        Assert.AreEqual(DiscoveryCategory.Book, newBooks.Category);
-    }
-
-    [TestMethod]
-    public void PlanOffersOnlyTheRowsOfTheVisibleTypes()
-    {
-        var plans = DiscoveryShelfComposer.Plan([WorkMediaType.Movie, WorkMediaType.Series]);
-
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "trending-movie", "trending-series",
-                "top-movie", "top-series",
-                "new-movie", "upcoming-movie",
-                "new-series", "upcoming-series"
-            },
-            plans.Select(plan => plan.Id).ToArray());
-        Assert.AreEqual(0, DiscoveryShelfComposer.Plan([]).Count);
-    }
-
-    [TestMethod]
-    public void DeduplicateMergesTheSameWorkAcrossSourcesByIdentity()
-    {
-        // Two sources return the same AniList anime with different provider casing/ids; the media-core
-        // identity normalises them, so the row keeps one (first occurrence wins).
-        var sourceA = new[] { Item("anime", "anilist", "111", "Frieren"), Item("anime", "anilist", "222", "Dandadan") };
-        var sourceB = new[] { Item("anime", "AniList", "111", "Frieren (dup)"), Item("book", "openlibrary", "111", "A Book") };
-
-        var deduped = DiscoveryShelfComposer.Deduplicate(sourceA.Concat(sourceB));
-
-        Assert.AreEqual(3, deduped.Count);
-        Assert.AreEqual("Frieren", deduped[0].Title, "First occurrence of the shared identity must win.");
-        // Same external id but a different media type is a different work and is kept.
-        Assert.IsTrue(deduped.Any(item => item.Category == "book" && item.ExternalId == "111"));
-    }
-
-    [TestMethod]
-    public async Task BoardOnlyContainsRowsForVisibleMediaTypes()
-    {
-        var feed = new FakeFeed();
-        var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Book));
-
-        var board = await service.GetBoardAsync(null, "cap-filter", isOwner: false, DiscoveryCategory.All, DiscoveryWait.None, CancellationToken.None);
-
-        Assert.IsTrue(board.Rows.Count > 0);
-        Assert.IsTrue(board.Rows.All(row => row.MediaType == WorkMediaType.Book), "A Books-only profile must see book rows only.");
-        Assert.IsTrue(board.Rows.All(row => row.Items.Count > 0), "Empty rows must be dropped.");
-    }
-
-    [TestMethod]
-    public async Task BoardContainsTmdbRowsForVisibleMovieAndSeriesTypes()
-    {
-        var feed = new FakeFeed();
-        var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Movie, WorkMediaType.Series));
-
-        var board = await service.GetBoardAsync(null, "tmdb-feed", isOwner: false, DiscoveryCategory.All, DiscoveryWait.None, CancellationToken.None);
-
-        Assert.IsFalse(board.IsEmpty);
-        Assert.IsTrue(board.Rows.All(row => row.MediaType is WorkMediaType.Movie or WorkMediaType.Series));
-        Assert.AreEqual(1, feed.Loads, "Every row of the board is requested in one load, so the provider calls run side by side.");
-    }
-
-    [TestMethod]
     public async Task OnlyTheRowsOfTheScopeTheViewerPickedAreRequestedSoNoOtherSourceIsCalledOrCounted()
     {
         var feed = new FakeFeed();
         var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Book, WorkMediaType.LightNovel));
 
         var anime = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.Anime, DiscoveryWait.None, CancellationToken.None);
-        var booksAndNovels = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.BooksAndLightNovels, DiscoveryWait.None, CancellationToken.None);
+        var lightNovels = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.LightNovel, DiscoveryWait.None, CancellationToken.None);
 
         Assert.IsTrue(anime.Rows.All(row => row.Category == DiscoveryCategory.Anime));
         Assert.IsTrue(feed.Requested[0].All(request => request.Category == DiscoveryCategory.Anime), "The Anime tab starts no TMDB, books or reading call.");
-        Assert.IsTrue(booksAndNovels.Rows.All(row => row.Category is DiscoveryCategory.Book or DiscoveryCategory.LightNovel));
-        Assert.IsTrue(feed.Requested[1].All(request => request.Category is DiscoveryCategory.Book or DiscoveryCategory.LightNovel));
+        Assert.IsTrue(lightNovels.Rows.All(row => row.Category == DiscoveryCategory.LightNovel));
+        Assert.IsTrue(feed.Requested[1].All(request => request.Category == DiscoveryCategory.LightNovel));
     }
 
     [TestMethod]
@@ -196,7 +74,7 @@ public sealed class DiscoveryShelfTests
         Assert.AreEqual(DiscoverySectionState.Unavailable, board.Rows.Single(row => row.Id == "top-series").State);
         Assert.IsFalse(board.Rows.Any(row => row.Id == "new-series"), "A row that every source answered with nothing is redundant chrome.");
         CollectionAssert.AreEqual(
-            new[] { "trending-movie", "trending-series", "top-movie", "top-series", "new-movie", "upcoming-movie", "upcoming-series" },
+            new[] { "trending-series", "top-series", "upcoming-series", "trending-movie", "top-movie", "new-movie", "upcoming-movie" },
             board.Rows.Select(row => row.Id).ToArray(),
             "The rows keep the order of the plan whatever their state.");
     }
@@ -204,12 +82,12 @@ public sealed class DiscoveryShelfTests
     [TestMethod]
     public void DeepLinkMatchesTheClientDiscoverUrlScheme()
     {
-        Assert.AreEqual("/Discover", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.All, DiscoveryMode.Trending, ""));
-        Assert.AreEqual("/Discover?category=anime", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Anime, DiscoveryMode.Trending, ""));
-        Assert.AreEqual("/Discover?category=book&mode=new", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Book, DiscoveryMode.New, ""));
-        Assert.AreEqual("/Discover?category=movie&mode=upcoming", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Movie, DiscoveryMode.Upcoming, ""));
-        Assert.AreEqual("/Discover?category=tv&mode=top", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Series, DiscoveryMode.Top, ""));
-        Assert.AreEqual("/Discover?category=light-novel&mode=top", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.LightNovel, DiscoveryMode.Top, ""));
+        Assert.AreEqual("/", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.All, DiscoveryMode.Trending, ""));
+        Assert.AreEqual("/?category=anime", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Anime, DiscoveryMode.Trending, ""));
+        Assert.AreEqual("/?category=book&mode=new", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Book, DiscoveryMode.New, ""));
+        Assert.AreEqual("/?category=movie&mode=upcoming", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Movie, DiscoveryMode.Upcoming, ""));
+        Assert.AreEqual("/?category=tv&mode=top", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Series, DiscoveryMode.Top, ""));
+        Assert.AreEqual("/?category=light-novel&mode=top", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.LightNovel, DiscoveryMode.Top, ""));
     }
 
     [TestMethod]

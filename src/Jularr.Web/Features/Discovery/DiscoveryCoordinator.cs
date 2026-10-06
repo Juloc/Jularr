@@ -279,7 +279,7 @@ public sealed class DiscoveryCoordinator(
                 cancellationToken));
         }
 
-        if ((mangaEnabled || novelEnabled) && category is DiscoveryCategory.All or DiscoveryCategory.LightNovel or DiscoveryCategory.Manga or DiscoveryCategory.BooksAndLightNovels)
+        if ((mangaEnabled || novelEnabled) && category is DiscoveryCategory.All or DiscoveryCategory.LightNovel or DiscoveryCategory.Manga)
         {
             results.Add(await CaptureMyListAsync(
                 DiscoverySource.Reading,
@@ -287,7 +287,7 @@ public sealed class DiscoveryCoordinator(
                     .Where(row => row.IsNovel ? novelEnabled : mangaEnabled)
                     .Where(row => category switch
                     {
-                        DiscoveryCategory.LightNovel or DiscoveryCategory.BooksAndLightNovels => row.IsNovel,
+                        DiscoveryCategory.LightNovel => row.IsNovel,
                         DiscoveryCategory.Manga => !row.IsNovel,
                         _ => true
                     })

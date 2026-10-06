@@ -1,14 +1,18 @@
 using System.Globalization;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Discovery;
+using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Novels;
+using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Reading;
 using Jularr.Web.Features.Recommendations;
@@ -25,13 +29,25 @@ namespace Jularr.Web.Pages;
 /// most recently added to the library. Every read is local — the database, the local release cache
 /// and the local recommendation engine; no provider calls.
 /// </summary>
-public sealed class IndexModel(
+public sealed partial class IndexModel(
+    IDiscoveryFeed coordinator,
+    DiscoveryShelfService shelves,
+    TmdbDiscoveryProvider tmdb,
     AppDbContext db,
-    CurrentAccountContext currentAccount,
+    NovelImportService novels,
+    NovelMetadataService novelMetadata,
+    CurrentAccountContext account,
+    OperationRunner operations,
+    AcquisitionRequestService requests,
+    AcquisitionAccessStore requestStore,
+    VideoRequestScopeResolver scopes,
+    WatchlistStore watchlist,
+    FranchiseService franchiseService,
+    MediaRecommendationService recommendations,
+    IInstanceModuleService instanceModules,
     VideoProgressService videoProgress,
-    IAppShellService appShell,
-    MediaRecommendationService? recommendations = null,
-    IInstanceModuleService? instanceModules = null) : PageModel
+    ILogger<IndexModel> logger,
+    IAppShellService? shell = null) : PageModel
 {
     /// <summary>
     /// The Home media-type filters, parsed from <c>?type=</c> the same way as Discover's
@@ -102,10 +118,10 @@ public sealed class IndexModel(
     /// <summary>Discover link for the Continue Watching heading, narrowed to the active video filter.</summary>
     public string ContinueWatchingDiscoverUrl => ActiveType switch
     {
-        DiscoveryCategory.Anime => "/Discover?category=anime&mode=my-list",
-        DiscoveryCategory.Movie => "/Discover?category=movie&mode=my-list",
-        DiscoveryCategory.Series => "/Discover?category=series&mode=my-list",
-        _ => "/Discover?mode=my-list"
+        DiscoveryCategory.Anime => "/?category=anime&mode=my-list",
+        DiscoveryCategory.Movie => "/?category=movie&mode=my-list",
+        DiscoveryCategory.Series => "/?category=series&mode=my-list",
+        _ => "/?mode=my-list"
     };
 
     /// <summary>
@@ -115,10 +131,10 @@ public sealed class IndexModel(
     /// </summary>
     public string ContinueReadingDiscoverUrl => ActiveType switch
     {
-        DiscoveryCategory.Manga => "/Discover?category=manga&mode=my-list",
-        DiscoveryCategory.LightNovel => "/Discover?category=light-novel&mode=my-list",
-        DiscoveryCategory.Book => "/Discover?category=book&mode=my-list",
-        _ => "/Discover?mode=my-list"
+        DiscoveryCategory.Manga => "/?category=manga&mode=my-list",
+        DiscoveryCategory.LightNovel => "/?category=light-novel&mode=my-list",
+        DiscoveryCategory.Book => "/?category=book&mode=my-list",
+        _ => "/?mode=my-list"
     };
 
     /// <summary>The merged row keeps the Continue Watching heading and link while anything is being watched.</summary>
@@ -148,27 +164,41 @@ public sealed class IndexModel(
     public bool IsEmpty => Hero.Count == 0 && ContinueTiles.Count == 0 && ForYou.Count == 0 && RecentTitles.Count == 0;
 
     /// <summary>Whether the profile may add library folders, so the empty state may link to them.</summary>
-    public bool CanManageStorage => currentAccount.Can(JularrPolicies.AdminSystem);
+    public bool CanManageStorage => account.Can(JularrPolicies.AdminSystem);
 
     public async Task<IActionResult> OnPostClearHistoryAsync(CancellationToken cancellationToken)
     {
-        await videoProgress.ClearHistoryAsync(currentAccount.ProfileId, cancellationToken);
+        await videoProgress.ClearHistoryAsync(account.ProfileId, cancellationToken);
 
         var ui = await new UiTranslationCatalogStore(db).LoadProfileBundleAsync(
-            currentAccount.ProfileId,
+            account.ProfileId,
             cancellationToken);
         TempData["Status"] = ui["home.history.cleared"];
         return RedirectToPage();
     }
 
-    public async Task OnGetAsync(CancellationToken cancellationToken, string? type = null)
+    public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        Ui = await new UiTranslationCatalogStore(db).LoadProfileBundleAsync(currentAccount.ProfileId, cancellationToken);
+        await LoadDiscoverAsync(cancellationToken);
 
-        ActiveType = DiscoveryRequest.ParseCategory(type);
-        var instance = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
+        // Typing or a filter turns the surface into results only, so nothing of Home is read for it.
+        if (Query.IsLanding)
+        {
+            await LoadHomeAsync(Query.Category, cancellationToken);
+        }
+        else
+        {
+            ActiveType = Query.Category;
+        }
+    }
+
+    /// <summary>The hero, the Continue cards and the playback history of the landing, for the media type the bar has selected.</summary>
+    public async Task LoadHomeAsync(DiscoveryCategory activeType, CancellationToken cancellationToken)
+    {
+        ActiveType = activeType;
+        var instance = await instanceModules.GetAsync(cancellationToken);
         PlaybackEnabled = instance.IsEnabled(InstanceModule.Playback);
-        var access = await appShell.GetMediaAccessAsync(currentAccount.User, cancellationToken);
+        var access = await shell!.GetMediaAccessAsync(account.User, cancellationToken);
         var videoTypes = LibraryBrowse.VideoMediaTypes.Where(access.IsVisible).ToArray();
         var videoQuery = new HomeVideoQuery(db, videoProgress);
 
@@ -176,11 +206,11 @@ public sealed class IndexModel(
         if (PlaybackEnabled)
         {
             var continueTypes = videoTypes.Where(mediaType => MatchesFilter(ActiveType, mediaType)).ToArray();
-            ContinueWatching = await videoQuery.GetContinueAsync(currentAccount.ProfileId, continueTypes, VideoProgressService.ContinueWatchingLimit, cancellationToken);
-            PlaybackHistory = await videoQuery.GetHistoryAsync(currentAccount.ProfileId, videoTypes, cancellationToken);
+            ContinueWatching = await videoQuery.GetContinueAsync(account.ProfileId, continueTypes, VideoProgressService.ContinueWatchingLimit, cancellationToken);
+            PlaybackHistory = await videoQuery.GetHistoryAsync(account.ProfileId, videoTypes, cancellationToken);
         }
 
-        var continueReading = await new ContinueReadingQuery(db).GetAsync(currentAccount.ProfileId, cancellationToken: cancellationToken);
+        var continueReading = await new ContinueReadingQuery(db).GetAsync(account.ProfileId, cancellationToken: cancellationToken);
         ContinueReading = FilterContinueReading(continueReading.Where(item => IsReadingEnabled(instance, item.Kind)).ToArray(), ActiveType);
 
         ContinueTiles = BuildContinueTiles();
@@ -190,13 +220,13 @@ public sealed class IndexModel(
             : [.. ownSlides, .. (await LoadWatchlistSlidesAsync(cancellationToken)).Take(HeroLimit - ownSlides.Length)];
         ForYou = await LoadForYouAsync(cancellationToken);
 
-        var recent = await videoQuery.GetRecentlyAddedAsync(currentAccount.ProfileId, videoTypes, RecentLimit, cancellationToken);
-        var animeLearning = await new LearningConfigurationStore(db, instanceModules).ResolveAsync(currentAccount.ProfileId, new LearningScopeContext(LearningMediaType.Anime), cancellationToken);
+        var recent = await videoQuery.GetRecentlyAddedAsync(account.ProfileId, videoTypes, RecentLimit, cancellationToken);
+        var animeLearning = await new LearningConfigurationStore(db, instanceModules).ResolveAsync(account.ProfileId, new LearningScopeContext(LearningMediaType.Anime), cancellationToken);
         ShowContentMetrics = access.IsVisible(WorkMediaType.Anime) && animeLearning.IsEnabled(LearningCapability.ContentMetrics);
 
         // Vocabulary coverage is only computed when the resolved Anime scope shows content metrics; otherwise Home never touches learning tables.
         var coverage = ShowContentMetrics
-            ? await videoQuery.GetVocabularyCoverageAsync(currentAccount.ProfileId, [.. recent.Where(item => item.LegacyEpisodeId.HasValue).Select(item => item.LegacyEpisodeId!.Value)], cancellationToken)
+            ? await videoQuery.GetVocabularyCoverageAsync(account.ProfileId, [.. recent.Where(item => item.LegacyEpisodeId.HasValue).Select(item => item.LegacyEpisodeId!.Value)], cancellationToken)
             : new Dictionary<Guid, (int Total, int Prepared)>();
         RecentTitles =
         [
@@ -378,7 +408,7 @@ public sealed class IndexModel(
             DiscoveryCategory.LightNovel => ReleaseMediaType.LightNovel,
             _ => null
         };
-        if (string.IsNullOrWhiteSpace(currentAccount.ProfileId) || ActiveType is DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
+        if (string.IsNullOrWhiteSpace(account.ProfileId) || ActiveType is DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
         {
             return [];
         }
@@ -396,7 +426,7 @@ public sealed class IndexModel(
                 zone,
                 presenter.Now,
                 MediaType: mediaType,
-                ProfileId: currentAccount.ProfileId),
+                ProfileId: account.ProfileId),
             cancellationToken);
 
         var instance = instanceModules is null
@@ -441,14 +471,14 @@ public sealed class IndexModel(
     /// </summary>
     private async Task<IReadOnlyList<HomePosterItem>> LoadForYouAsync(CancellationToken cancellationToken)
     {
-        if (recommendations is null || string.IsNullOrWhiteSpace(currentAccount.ProfileId))
+        if (recommendations is null || string.IsNullOrWhiteSpace(account.ProfileId))
         {
             return [];
         }
 
         var result = await recommendations.GetForProfileAsync(
-            currentAccount.User,
-            currentAccount.ProfileId,
+            account.User,
+            account.ProfileId,
             cancellationToken);
 
         return result.Shelves

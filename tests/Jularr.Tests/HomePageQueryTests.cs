@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 
@@ -13,7 +14,7 @@ public sealed class HomePageQueryTests
         var anime = await new LibraryCanonicalSeed(fixture.Db).AddAnimeAsync("Test", [(1, 1, true)]);
 
         var model = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account("owner"));
-        await model.OnGetAsync(CancellationToken.None);
+        await model.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         var recent = Assert.ContainsSingle(model.RecentTitles);
         Assert.AreEqual(anime.Work.Id, recent.Title.WorkId);

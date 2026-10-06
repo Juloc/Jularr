@@ -2,6 +2,20 @@
 
 Status: approved UX direction for the Jularr Home page.
 
+## One Home/Discover surface (binding product decision, 2026-10-07)
+
+This decision supersedes every conflicting rule in this specification and in `docs/mockups/home/SPEC.md` / `docs/mockups/discover/SPEC.md`.
+
+- Home and Discover are one consumer experience at `/`. An empty global Search is the normal Home/Discover surface. `/Discover` is only a permanent redirect to `/` that keeps the query string (search, scope, filters, handlers); there is one render implementation.
+- Content header (shell): left the context "Discover", centre the existing wide global Search (the only search field of the surface), right the Filter action, then Notifications. The Filter is not part of the page body.
+- Directly under the header, inside the page content, one wide rounded segmented control selects the media type: `All | Anime | Series | Movies | Light Novels | Books | Manga | Audiobooks | Games`, only the types enabled for the instance and profile. The active segment is a compact filled rounded segment inside one calm rounded surface. It is page content, not shell navigation; there is no loose chip row.
+- Books and Light Novels are separate scopes. Books are general Books providers. Light Novels are discovered from AniList novel media and resolved to Jularr's canonical Light Novel identity (never a duplicate Work because AniList is the discovery provider). Provider results are never mixed across the two.
+- Empty search composition, top to bottom: media-type bar, Hero, Continue Watching / Reading / Listening / Playing as applicable, discovery rows. Hero priority: a useful resumable item, newly available local media (especially just acquired or imported), relevant personalized content, a mixed Trending fallback across the enabled types. A stale or irrelevant Continue item never forces the Hero. Per type the initial row order is Trending, Top, New. Selecting one type keeps the same page and filters the Hero and rows to it.
+- Continue uses clean poster-oriented cards. A vertical poster is never shown inside a horizontal card over a blurred copy of itself; only the Hero uses landscape/backdrop artwork.
+- Horizontal rows are previews. See all opens the full result view for that exact type, ranking and filter and loads provider pages progressively with infinite scrolling until the source is exhausted; it reuses provider paging and caching and never fetches an unbounded catalogue in one request.
+- A non-empty query turns the same surface into Search mode: no Hero and no discovery rows, an infinite-scrolling result surface. Local, durable and cache hits render immediately; online provider searches run concurrently; later results are staged and committed only at a safe interaction boundary without moving the pointer, focus, touch or scroll anchors. The #595 / #820 locale, bounded-cache, canonical-identity and provider-failure rules still apply and no second search cache exists.
+- Primary consumer action: the rounded primary action grammar of the canonical Detail page (Play / Continue / Start watching, Read / Continue reading, Listen / Continue listening) through the existing Instant Play / Request state machine. A raw Request button is not the normal primary video action.
+
 ## Mockup files
 
 Expected references in this folder:

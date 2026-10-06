@@ -5,7 +5,8 @@
     if (!root) return;
 
     const form = root.querySelector("[data-dc-form]");
-    const searchInput = root.querySelector("[data-dc-search]");
+    // The search field lives in the shell header, outside the page root.
+    const searchInput = document.querySelector("[data-dc-search]");
     const body = root.querySelector("[data-dc-body]");
     const errorBox = root.querySelector("[data-dc-error]");
     const offlineNotice = root.querySelector("[data-dc-offline]");
@@ -59,7 +60,7 @@
             if (q) url.searchParams.set("q", q); else url.searchParams.delete("q");
             link.setAttribute("href", url.pathname + url.search);
         });
-        const browseGroup = root.querySelector("[data-dc-browse-group]");
+        const browseGroup = document.querySelector("[data-dc-browse-group]");
         if (browseGroup) browseGroup.hidden = q.length > 0;
     }
 

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Library;
@@ -116,7 +117,6 @@ public sealed class HomeHeroTests
         // Every row and the hero render only with content; no placeholders.
         StringAssert.Contains(view, "@if (Model.Hero.Count > 0)");
         StringAssert.Contains(view, "@if (Model.ContinueTiles.Count > 0)");
-        StringAssert.Contains(view, "@if (Model.ForYou.Count > 0)");
         StringAssert.Contains(view, "<partial name=\"_HomeContinueTile\"");
 
         // One progress segment per slide, each a button; the fill duration is a single data attribute.
@@ -225,7 +225,7 @@ public sealed class HomeHeroTests
     private static async Task<IndexModel> LoadHomeAsync(AppDbContext db)
     {
         var home = EpisodeFlowFixture.Home(db, EpisodeFlowFixture.Account(Profile));
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
         return home;
     }
 

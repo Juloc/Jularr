@@ -8,9 +8,7 @@ public enum DiscoveryCategory
     Series,
     LightNovel,
     Manga,
-    Book,
-    /// <summary>The combined "Books and Light Novels" scope of the Discover media-type switch.</summary>
-    BooksAndLightNovels
+    Book
 }
 
 public enum DiscoveryMode
@@ -106,7 +104,7 @@ public sealed record DiscoveryRequest(
                 DiscoveryCategory.LightNovel,
             "manga" => DiscoveryCategory.Manga,
             "book" or "books" => DiscoveryCategory.Book,
-            "books-light-novels" => DiscoveryCategory.BooksAndLightNovels,
+            "books-light-novels" => DiscoveryCategory.Book,
             _ => DiscoveryCategory.All
         };
 

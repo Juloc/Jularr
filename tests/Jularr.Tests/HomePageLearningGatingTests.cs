@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
@@ -27,7 +28,7 @@ public sealed class HomePageLearningGatingTests
         await fixture.SeedEpisodeWithDueVocabularyAsync();
 
         var home = fixture.Home();
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.IsFalse(home.ShowContentMetrics);
         Assert.AreEqual(1, home.RecentTitles.Count);
@@ -43,7 +44,7 @@ public sealed class HomePageLearningGatingTests
         await fixture.SetModeAsync(LearningMode.Study);
 
         var home = fixture.Home();
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.IsFalse(home.ShowContentMetrics, "ContentMetrics is opt-in even in Study.");
         Assert.AreEqual(0, home.RecentTitles[0].TotalOccurrences);
@@ -72,7 +73,7 @@ public sealed class HomePageLearningGatingTests
             CancellationToken.None);
 
         var home = fixture.Home();
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.IsTrue(home.ShowContentMetrics);
         Assert.AreEqual(3, home.RecentTitles[0].TotalOccurrences);
@@ -88,7 +89,7 @@ public sealed class HomePageLearningGatingTests
         await fixture.SetModeAsync(LearningMode.LanguageTools);
 
         var home = fixture.Home();
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.IsFalse(home.ShowContentMetrics);
         Assert.AreEqual(0, home.RecentTitles[0].TotalOccurrences);
@@ -100,15 +101,11 @@ public sealed class HomePageLearningGatingTests
         var view = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Jularr.Web", "Pages", "Index.cshtml"));
 
-        // Order (SPEC content hierarchy): hero → Continue → For you → recently discovered.
+        // Order (SPEC content hierarchy): hero → Continue; the discovery rows follow from the Body handler.
         var hero = view.IndexOf("data-home-hero", StringComparison.Ordinal);
         var continueRow = view.IndexOf("data-home-continue", StringComparison.Ordinal);
-        var forYou = view.IndexOf("data-home-for-you", StringComparison.Ordinal);
-        var library = view.IndexOf("home.library.recent", StringComparison.Ordinal);
         Assert.IsTrue(hero > 0);
         Assert.IsTrue(hero < continueRow, "The hero leads Home.");
-        Assert.IsTrue(continueRow < forYou, "Continue follows the hero.");
-        Assert.IsTrue(forYou < library);
 
         // SPEC "Explicit exclusions": no stat tiles; Home carries no Learning links, due-review
         // prompts or widgets at all.

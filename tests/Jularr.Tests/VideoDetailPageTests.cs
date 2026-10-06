@@ -128,8 +128,8 @@ public sealed class VideoDetailPageTests
         StringAssert.Contains(html, "data-dc-provider=\"tmdb\"");
         StringAssert.Contains(html, "data-dc-external-id=\"603\"");
         StringAssert.Contains(html, "data-dc-meta=\"2024 · Movie\"");
-        StringAssert.Contains(html, "data-resolve-url=\"/Discover?handler=Resolve\"");
-        StringAssert.Contains(html, "data-request-url=\"/Discover?handler=Request\"");
+        StringAssert.Contains(html, "data-resolve-url=\"/?handler=Resolve\"");
+        StringAssert.Contains(html, "data-request-url=\"/?handler=Request\"");
         StringAssert.Contains(html, "name=\"__RequestVerificationToken\"");
         StringAssert.Contains(html, "<dialog class=\"dc-rq\"");
         Assert.IsFalse(html.Contains("Versions & languages", StringComparison.Ordinal), "Nothing is playable, so there are no versions.");

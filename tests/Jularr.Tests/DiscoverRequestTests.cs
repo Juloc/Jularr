@@ -16,7 +16,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using DiscoverIndexModel = Jularr.Web.Pages.Discover.IndexModel;
+using DiscoverIndexModel = Jularr.Web.Pages.IndexModel;
 
 namespace Jularr.Tests;
 
@@ -42,8 +42,8 @@ public sealed class DiscoverRequestTests
 
         var requester = host.Page(Alice);
         var instant = host.Page("bob");
-        await requester.OnGetAsync(CancellationToken.None);
-        await instant.OnGetAsync(CancellationToken.None);
+        await requester.LoadDiscoverAsync(CancellationToken.None);
+        await instant.LoadDiscoverAsync(CancellationToken.None);
 
         Assert.IsTrue(requester.RequestableCategories.Contains("anime"));
         Assert.IsTrue(instant.RequestableCategories.Contains("anime"), "Instant is approval policy; the card still offers Request.");
@@ -169,7 +169,7 @@ public sealed class DiscoverRequestTests
         Assert.IsInstanceOfType<ForbidResult>(await page.OnPostRequestAsync(Form("tv", BreakingBad, scope: "all"), CancellationToken.None));
         Assert.AreEqual(0, await host.Fixture.Db.Works.CountAsync(), "A refused profile creates no Work by opening a card.");
         Assert.AreEqual(0, (await host.Fixture.Store.ListAsync(null, null, openOnly: false, 10, CancellationToken.None)).Count);
-        await page.OnGetAsync(CancellationToken.None);
+        await page.LoadDiscoverAsync(CancellationToken.None);
         Assert.IsFalse(page.RequestableCategories.Contains("tv"));
     }
 
@@ -379,15 +379,15 @@ public sealed class DiscoverRequestTests
         var seasons = new[] { new VideoRequestSeason(Guid.NewGuid(), 1, false, episodes), new VideoRequestSeason(Guid.NewGuid(), 0, true, []) };
 
         var series = WebUtility.HtmlDecode(await renderer.RenderAsync(
-            "/Pages/Discover/_DiscoverRequestSettings.cshtml",
+            "/Pages/Shared/_DiscoverRequestSettings.cshtml",
             new DiscoverRequestSettingsView(ui, MediaAcquisitionKind.Tv, null, seasons, null, null)));
         var movie = await renderer.RenderAsync(
-            "/Pages/Discover/_DiscoverRequestSettings.cshtml",
+            "/Pages/Shared/_DiscoverRequestSettings.cshtml",
             new DiscoverRequestSettingsView(ui, MediaAcquisitionKind.Movie, null, [], null, null));
         var anime = WebUtility.HtmlDecode(await renderer.RenderAsync(
-            "/Pages/Discover/_DiscoverRequestSettings.cshtml",
+            "/Pages/Shared/_DiscoverRequestSettings.cshtml",
             new DiscoverRequestSettingsView(ui, MediaAcquisitionKind.Anime, null, [], "ja", "off")));
-        var dialog = await renderer.RenderAsync("/Pages/Discover/_DiscoverRequestDialog.cshtml", ui);
+        var dialog = await renderer.RenderAsync("/Pages/Shared/_DiscoverRequestDialog.cshtml", ui);
 
         foreach (var scope in new[] { "all", "future", "custom" })
         {
@@ -428,10 +428,10 @@ public sealed class DiscoverRequestTests
             AcquisitionRequestStatus.Pending, null, null, null, DateTime.UtcNow, DateTime.UtcNow, null, null);
 
         var created = WebUtility.HtmlDecode(await renderer.RenderAsync(
-            "/Pages/Discover/_DiscoverRequestResult.cshtml",
+            "/Pages/Shared/_DiscoverRequestResult.cshtml",
             new DiscoverRequestResultView(UiTextBundle.English, request, false, ["Future only"], 0)));
         var existing = WebUtility.HtmlDecode(await renderer.RenderAsync(
-            "/Pages/Discover/_DiscoverRequestResult.cshtml",
+            "/Pages/Shared/_DiscoverRequestResult.cshtml",
             new DiscoverRequestResultView(UiTextBundle.English, request, true, [], 0)));
 
         StringAssert.Contains(created, ">Request created</h3>");
@@ -440,7 +440,7 @@ public sealed class DiscoverRequestTests
         StringAssert.Contains(created, "data-status=\"pending\"");
         StringAssert.Contains(created, $"href=\"/Requests/{request.Id:D}\"");
         var elsewhere = WebUtility.HtmlDecode(await renderer.RenderAsync(
-            "/Pages/Discover/_DiscoverRequestResult.cshtml",
+            "/Pages/Shared/_DiscoverRequestResult.cshtml",
             new DiscoverRequestResultView(UiTextBundle.English, request, true, [], 0, IsOwn: false)));
         StringAssert.Contains(elsewhere, "href=\"/Requests\"");
         Assert.IsFalse(elsewhere.Contains($"/Requests/{request.Id:D}", StringComparison.Ordinal), "Only the requester has a status page; for another profile's request it would be a dead link.");
@@ -450,10 +450,10 @@ public sealed class DiscoverRequestTests
         var searching = request with { Status = AcquisitionRequestStatus.Searching };
         var importing = request with { Status = AcquisitionRequestStatus.Importing };
         var settingsOfRequested = WebUtility.HtmlDecode(await renderer.RenderAsync(
-            "/Pages/Discover/_DiscoverRequestSettings.cshtml",
+            "/Pages/Shared/_DiscoverRequestSettings.cshtml",
             new DiscoverRequestSettingsView(UiTextBundle.English, MediaAcquisitionKind.Tv, searching, [], null, null)));
         var preparing = WebUtility.HtmlDecode(await renderer.RenderAsync(
-            "/Pages/Discover/_DiscoverRequestResult.cshtml",
+            "/Pages/Shared/_DiscoverRequestResult.cshtml",
             new DiscoverRequestResultView(UiTextBundle.English, importing, true, [], 0)));
 
         StringAssert.Contains(settingsOfRequested, ">Already requested</h3>");
@@ -612,7 +612,7 @@ public sealed class DiscoverRequestTests
                 null!,
                 null!,
                 null!,
-                NullLogger<DiscoverIndexModel>.Instance);
+                null!, NullLogger<DiscoverIndexModel>.Instance);
             var httpContext = new DefaultHttpContext
             {
                 User = AcquisitionAccessFixture.Principal(profileId, AccountRole.User),

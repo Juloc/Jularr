@@ -43,7 +43,7 @@ public sealed partial class AppShellNavigationTests
             UiNavigationCatalog.LibraryTabs.Select(tab => tab.Href).ToArray());
 
         var search = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Shared", "_AppSearch.cshtml"));
-        StringAssert.Contains(search, "action=\"/Discover\"");
+        StringAssert.Contains(search, "action=\"/\"");
         StringAssert.Contains(search, "name=\"q\"");
     }
 

@@ -1,0 +1,139 @@
+@using Jularr.Web.Features.Discovery
+@using Jularr.Web.Features.MediaCore
+@using Jularr.Web.Ui
+@model DiscoverFilterView
+@{
+    var ui = Model.Ui;
+    var query = Model.Query;
+    var active = query.ActiveFilterCount;
+
+    var thisYear = DateTime.UtcNow.Year;
+    var years = Enumerable.Range(thisYear - 24, 25).Reverse().ToList();
+    if (query.Year is { } selectedYear && !years.Contains(selectedYear))
+    {
+        years.Add(selectedYear);
+    }
+
+    var browseModes = new List<(DiscoveryMode Mode, string LabelKey)>
+    {
+        (DiscoveryMode.Trending, "discover.tabs.trending"),
+        (DiscoveryMode.Top, "discover.tabs.top")
+    };
+    if (query.Category is DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
+    {
+        browseModes.Add((DiscoveryMode.New, "discover.tabs.new"));
+    }
+
+    if (query.Category is DiscoveryCategory.Movie or DiscoveryCategory.Series)
+    {
+        browseModes.Add((DiscoveryMode.Upcoming, "discover.tabs.upcoming"));
+    }
+    else
+    {
+        browseModes.Add((DiscoveryMode.MyList, "discover.tabs.myAniList"));
+    }
+
+    var availabilities = new[]
+    {
+        (DiscoverAvailabilityFilter.InLibrary, "discover.filter.availabilityLibrary"),
+        (DiscoverAvailabilityFilter.Requested, "discover.filter.availabilityRequested"),
+        (DiscoverAvailabilityFilter.NotInLibrary, "discover.filter.availabilityNew")
+    };
+}
+@* The Filter control of the Home/Discover surface, rendered in the content header. Its fields belong to the page's form (id dc-form). *@
+<details class="dc-pop" data-dc-pop>
+    <summary class="dc-btn@(active > 0 ? " is-active" : "")"
+             aria-label="@(active > 0 ? ui.Format("library.browse.filtersActiveAria", ("count", active)) : ui["library.browse.filters"])">
+        <partial name="_DiscoverIcon" model='"filter"' />
+        <span class="dc-btn-label">@ui["library.browse.filters"]</span>
+        @if (active > 0)
+        {
+            <span class="dc-badge">@active</span>
+        }
+    </summary>
+    <span class="dc-pop-backdrop" data-dc-close></span>
+    <div class="dc-pop-panel" role="dialog" aria-label="@ui["library.browse.filters"]">
+        <div class="dc-pop-head">
+            <h2>@ui["library.browse.filters"]</h2>
+            @if (active > 0)
+            {
+                <a class="dc-reset" href="@query.WithoutFilters().Href">@ui["library.browse.filter.reset"]</a>
+            }
+            <button type="button" class="dc-icon-btn" data-dc-close aria-label="@ui["library.browse.close"]">
+                <partial name="_DiscoverIcon" model='"close"' />
+            </button>
+        </div>
+
+        <div class="dc-groups">
+            <fieldset class="dc-group" data-dc-browse-group hidden="@query.IsSearch">
+                <legend>@ui["discover.filter.groupBrowse"]</legend>
+                @foreach (var (mode, labelKey) in browseModes)
+                {
+                    <label class="dc-check">
+                        <input type="radio" form="dc-form" name="mode" value="@DiscoverBrowseQuery.ModeName(mode)" checked="@(query.Mode == mode)" />
+                        <span>@ui[labelKey]</span>
+                    </label>
+                }
+            </fieldset>
+
+            <fieldset class="dc-group">
+                <legend>@ui["library.browse.filter.groupMetadata"]</legend>
+                <label class="dc-select">
+                    <span>@ui["discover.filter.genre"]</span>
+                    <select form="dc-form" name="genre">
+                        <option value="">@ui["library.browse.filter.any"]</option>
+                        @foreach (var genre in DiscoveryRequest.KnownGenres)
+                        {
+                            <option value="@genre" selected="@(query.Genre == genre)">@ui[DiscoverGenres.Key(genre)!]</option>
+                        }
+                    </select>
+                </label>
+                <label class="dc-select">
+                    <span>@ui["library.browse.filter.year"]</span>
+                    <select form="dc-form" name="year">
+                        <option value="">@ui["library.browse.filter.any"]</option>
+                        @foreach (var year in years)
+                        {
+                            <option value="@year" selected="@(query.Year == year)">@year</option>
+                        }
+                    </select>
+                </label>
+                <label class="dc-select">
+                    <span>@ui["library.browse.filter.status"]</span>
+                    <select form="dc-form" name="status">
+                        <option value="">@ui["library.browse.filter.any"]</option>
+                        @foreach (var status in Enum.GetValues<MediaReleaseStatus>())
+                        {
+                            <option value="@DiscoverBrowseQuery.StatusName(status)" selected="@(query.Status == status)">@ui[MediaBannerCardModel.StatusKey(status)]</option>
+                        }
+                    </select>
+                </label>
+            </fieldset>
+
+            <fieldset class="dc-group">
+                <legend>@ui["library.browse.filter.groupAvailability"]</legend>
+                <label class="dc-select">
+                    <span class="sr-only">@ui["library.browse.filter.groupAvailability"]</span>
+                    <select form="dc-form" name="avail">
+                        <option value="">@ui["library.browse.filter.any"]</option>
+                        @foreach (var (availability, labelKey) in availabilities)
+                        {
+                            <option value="@DiscoverBrowseQuery.AvailabilityName(availability)" selected="@(query.Availability == availability)">@ui[labelKey]</option>
+                        }
+                    </select>
+                </label>
+                @if (Model.Preference.IsSet || query.PreferredLanguage)
+                {
+                    <label class="dc-check">
+                        <input type="checkbox" form="dc-form" name="pref" value="1" checked="@query.PreferredLanguage" />
+                        <span>@ui.Format("library.browse.filter.preferred", ("languages", string.Join(" · ", Model.Preference.Codes)))</span>
+                    </label>
+                }
+            </fieldset>
+        </div>
+
+        <div class="dc-pop-foot">
+            <button type="submit" form="dc-form" class="button button-primary">@ui["library.browse.filter.apply"]</button>
+        </div>
+    </div>
+</details>

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Pages;
@@ -139,14 +140,14 @@ public sealed class ContinueWatchingTests
             new EpisodeProgressUpdate(500_000, 1_400_000, false));
 
         var model = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account("reader"));
-        await model.OnGetAsync(CancellationToken.None);
+        await model.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         var item = Assert.ContainsSingle(model.ContinueWatching);
         Assert.AreEqual($"/Library/Episode/{episode.Id}", item.PlayHref);
         Assert.AreEqual($"/Library/Episode/{episode.Id}", Assert.ContainsSingle(model.PlaybackHistory).PlayHref);
 
         var otherModel = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account("other"));
-        await otherModel.OnGetAsync(CancellationToken.None);
+        await otherModel.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
         Assert.AreEqual(0, otherModel.ContinueWatching.Count);
         Assert.AreEqual(0, otherModel.PlaybackHistory.Count);
     }

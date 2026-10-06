@@ -362,8 +362,8 @@ public sealed class DiscoveryTests
             "src",
             "Jularr.Web",
             "Pages",
-            "Discover",
-            "Index.cshtml"));
+            "Shared",
+            "_DiscoverFilter.cshtml"));
 
         StringAssert.Contains(page, "DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series");
         StringAssert.Contains(page, "DiscoveryMode.New, \"discover.tabs.new\"");

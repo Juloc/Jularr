@@ -54,7 +54,7 @@ public sealed class DiscoverRateLimitTests
 
         async Task<HttpStatusCode> Get(string account, string handler)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, handler.Length == 0 ? "/Discover" : $"/Discover?handler={handler}");
+            using var request = new HttpRequestMessage(HttpMethod.Get, handler.Length == 0 ? "/" : $"/?handler={handler}");
             request.Headers.Add("X-Account", account);
             using var response = await client.SendAsync(request);
             return response.StatusCode;
@@ -104,7 +104,7 @@ public sealed class DiscoverRateLimitTests
                     });
                     app.UseRouting();
                     app.UseRateLimiter();
-                    app.UseEndpoints(endpoints => endpoints.MapGet("/Discover", () => "ok").RequireRateLimiting(DiscoveryRegistration.RateLimitPolicy));
+                    app.UseEndpoints(endpoints => endpoints.MapGet("/", () => "ok").RequireRateLimiting(DiscoveryRegistration.RateLimitPolicy));
                 }))
             .StartAsync();
 }

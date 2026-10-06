@@ -80,11 +80,11 @@ public sealed class DetailsModel(
         if (request.Kind == MediaAcquisitionKind.Tv)
         {
             return VideoRequestPayload.Parse(request.PayloadJson) is { } saved
-                ? Partial("~/Pages/Discover/_DiscoverRequestSettings.cshtml", new DiscoverRequestSettingsView(ui, request.Kind, null, await scopes.LoadStructureAsync(saved.WorkId, cancellationToken), null, null, saved))
+                ? Partial("~/Pages/Shared/_DiscoverRequestSettings.cshtml", new DiscoverRequestSettingsView(ui, request.Kind, null, await scopes.LoadStructureAsync(saved.WorkId, cancellationToken), null, null, saved))
                 : StatusCode(StatusCodes.Status409Conflict);
         }
 
-        return Partial("~/Pages/Discover/_DiscoverRequestSettings.cshtml", new DiscoverRequestSettingsView(ui, request.Kind, null, [], request.Options.AudioLanguage, request.Options.SubtitleLanguage));
+        return Partial("~/Pages/Shared/_DiscoverRequestSettings.cshtml", new DiscoverRequestSettingsView(ui, request.Kind, null, [], request.Options.AudioLanguage, request.Options.SubtitleLanguage));
     }
 
     /// <summary>Saves the Request dialog of an edit: the scope of a series, or the languages of an anime. Validated against the title, applied only while the request still waits.</summary>
@@ -138,7 +138,7 @@ public sealed class DetailsModel(
 
         var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var summary = RequestStatusText.Intent(ui, updated).Select(row => $"{row.Label}: {row.Value}").ToArray();
-        return Partial("~/Pages/Discover/_DiscoverRequestResult.cshtml", new DiscoverRequestResultView(ui, updated, false, summary, null, Updated: true));
+        return Partial("~/Pages/Shared/_DiscoverRequestResult.cshtml", new DiscoverRequestResultView(ui, updated, false, summary, null, Updated: true));
     }
 
     private async Task<IActionResult> AnswerAsync(Guid id, bool panel, string? notice, CancellationToken cancellationToken)

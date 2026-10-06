@@ -2,6 +2,20 @@
 
 Status: **approved clean UX direction**.
 
+## One Home/Discover surface (binding product decision, 2026-10-07)
+
+This decision supersedes every conflicting rule in this specification and in `docs/mockups/home/SPEC.md` / `docs/mockups/discover/SPEC.md`.
+
+- Home and Discover are one consumer experience at `/`. An empty global Search is the normal Home/Discover surface. `/Discover` is only a permanent redirect to `/` that keeps the query string (search, scope, filters, handlers); there is one render implementation.
+- Content header (shell): left the context "Discover", centre the existing wide global Search (the only search field of the surface), right the Filter action, then Notifications. The Filter is not part of the page body.
+- Directly under the header, inside the page content, one wide rounded segmented control selects the media type: `All | Anime | Series | Movies | Light Novels | Books | Manga | Audiobooks | Games`, only the types enabled for the instance and profile. The active segment is a compact filled rounded segment inside one calm rounded surface. It is page content, not shell navigation; there is no loose chip row.
+- Books and Light Novels are separate scopes. Books are general Books providers. Light Novels are discovered from AniList novel media and resolved to Jularr's canonical Light Novel identity (never a duplicate Work because AniList is the discovery provider). Provider results are never mixed across the two.
+- Empty search composition, top to bottom: media-type bar, Hero, Continue Watching / Reading / Listening / Playing as applicable, discovery rows. Hero priority: a useful resumable item, newly available local media (especially just acquired or imported), relevant personalized content, a mixed Trending fallback across the enabled types. A stale or irrelevant Continue item never forces the Hero. Per type the initial row order is Trending, Top, New. Selecting one type keeps the same page and filters the Hero and rows to it.
+- Continue uses clean poster-oriented cards. A vertical poster is never shown inside a horizontal card over a blurred copy of itself; only the Hero uses landscape/backdrop artwork.
+- Horizontal rows are previews. See all opens the full result view for that exact type, ranking and filter and loads provider pages progressively with infinite scrolling until the source is exhausted; it reuses provider paging and caching and never fetches an unbounded catalogue in one request.
+- A non-empty query turns the same surface into Search mode: no Hero and no discovery rows, an infinite-scrolling result surface. Local, durable and cache hits render immediately; online provider searches run concurrently; later results are staged and committed only at a safe interaction boundary without moving the pointer, focus, touch or scroll anchors. The #595 / #820 locale, bounded-cache, canonical-identity and provider-failure rules still apply and no second search cache exists.
+- Primary consumer action: the rounded primary action grammar of the canonical Detail page (Play / Continue / Start watching, Read / Continue reading, Listen / Continue listening) through the existing Instant Play / Request state machine. A raw Request button is not the normal primary video action.
+
 ## Purpose
 
 Discover and Search are one coherent surface.
@@ -14,30 +28,15 @@ Discover and Search are one coherent surface.
 
 ## Global search bar
 
-The shell header carries the global Search everywhere except Discover: Discover owns the prominent search below, so the header field is omitted there (Ctrl/Cmd+K focuses Discover's field) and two equally dominant fields never appear.
+The shell header carries the one global Search on every page, Discover included (Ctrl/Cmd+K focuses it); Discover has no search field of its own.
 
-At the top of Discover on every platform:
-
-- very wide search bar
-- Discover/Compass icon inside or directly attached to it
-- searches Anime, Series, Movies, Books & Light Novels, Manga, Audiobooks and Games
-- optional compact Filter icon on the right
-- the control must clearly communicate both **search** and **discover**
+- very wide, rounded search field in the content header
+- searches Anime, Series, Movies, Light Novels, Books, Manga, Audiobooks and Games
+- the Filter action sits in the header to the right of it, before Notifications
 
 ## Media-type switch
 
-Directly below the search bar:
-
-- All
-- Anime
-- Series
-- Movies
-- Books & Light Novels
-- Manga
-- Audiobooks
-- Games
-
-This is the primary quick scope control.
+Directly below the header, as page content (see the decision above): All, Anime, Series, Movies, Light Novels, Books, Manga, Audiobooks, Games, restricted to the types enabled for the instance and profile. This is the primary quick scope control.
 
 ## Discover content
 
@@ -263,7 +262,7 @@ For watch/read/listen media, the canonical identity is Work. The Work/Season/Epi
 - The default model is **Work -> Season -> Episode** for Series/Anime. AniList is a metadata/presentation provider layered on top of that model, not a second library model.
 - One canonical Anime work may map to multiple AniList media entries (for example separate seasons, parts/cours, specials or sequels where the provider splits them differently).
 - **Default/global search** groups results by media type and deduplicates to one canonical Jularr work wherever identity resolution can prove the match. It must not normally show Season 1/2/3 as unrelated Anime cards just because AniList exposes separate entries.
-- Result groups are independently collapsible/expandable: Anime, Series, Movies, Books & Light Novels, Manga and Audiobooks. “Show all” keeps the active type/filter context.
+- Result groups are independently collapsible/expandable: Anime, Series, Movies, Light Novels, Books, Manga and Audiobooks. “Show all” keeps the active type/filter context.
 - When the **Anime** media-type filter is active, expose a compact result-view switch: **Jularr** / **AniList**.
   - **Jularr** (default): canonical work cards with seasons underneath/on the detail page.
   - **AniList**: provider-native entries may be shown individually for users/admins who intentionally want the AniList split.

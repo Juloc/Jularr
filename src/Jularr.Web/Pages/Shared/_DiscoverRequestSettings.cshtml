@@ -34,7 +34,7 @@
 @if (Model.Existing is { } existing)
 {
     @* An open request already covers this title: the dialog shows its state instead of a second form. *@
-    <partial name="~/Pages/Discover/_DiscoverRequestResult.cshtml" model="new DiscoverRequestResultView(ui, existing, true, [], 0, IsOwn: existing.RequestedByProfileId == Model.ProfileId)" />
+    <partial name="~/Pages/Shared/_DiscoverRequestResult.cshtml" model="new DiscoverRequestResultView(ui, existing, true, [], 0, IsOwn: existing.RequestedByProfileId == Model.ProfileId)" />
 }
 
 @if (Model.OffersScope || Model.OffersLanguage)
@@ -100,7 +100,7 @@
                                     aria-controls="dc-rq-e-@index"
                                     aria-label="@ui.Format("discover.request.expand", ("season", SeasonLabel(season)))"
                                     data-dc-rq-expand>
-                                <partial name="~/Pages/Discover/_DiscoverIcon.cshtml" model='"chevron"' />
+                                <partial name="~/Pages/Shared/_DiscoverIcon.cshtml" model='"chevron"' />
                             </button>
                         }
                     </div>

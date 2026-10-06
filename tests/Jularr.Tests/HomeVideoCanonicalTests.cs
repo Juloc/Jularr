@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.MediaCore;
@@ -198,8 +199,8 @@ public sealed class HomeVideoCanonicalTests
         await using var fixture = await EpisodeFlowFixture.CreateAsync();
         var owner = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account(Alice, AccountRoles.Owner));
         var member = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account(Bob));
-        await owner.OnGetAsync(CancellationToken.None);
-        await member.OnGetAsync(CancellationToken.None);
+        await owner.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
+        await member.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.IsTrue(owner.IsEmpty);
         Assert.IsTrue(owner.CanManageStorage);
@@ -208,7 +209,7 @@ public sealed class HomeVideoCanonicalTests
 
         var seed = new LibraryCanonicalSeed(fixture.Db);
         await seed.AddVideoAsync(await seed.AddWorkAsync(WorkMediaType.Movie, "Quiet Harbor"), null);
-        await member.OnGetAsync(CancellationToken.None);
+        await member.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.IsFalse(member.IsEmpty);
     }
@@ -225,7 +226,7 @@ public sealed class HomeVideoCanonicalTests
         await modules.SetAsync(InstanceModule.Playback, false);
 
         var home = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account(Alice), null, modules, null);
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.IsFalse(home.PlaybackEnabled);
         Assert.IsEmpty(home.ContinueWatching);
@@ -253,7 +254,7 @@ public sealed class HomeVideoCanonicalTests
         await modules.SetAsync(InstanceModule.Movie, false);
 
         var home = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account(Alice), null, modules, null);
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.AreEqual("The Long Winter", Assert.ContainsSingle(home.ContinueWatching).Title.Title);
         Assert.AreEqual("The Long Winter", Assert.ContainsSingle(home.RecentTitles).Title.Title);
@@ -299,7 +300,7 @@ public sealed class HomeVideoCanonicalTests
     private static async Task<IndexModel> LoadAsync(AppDbContext db, string profileId, string? type)
     {
         var home = EpisodeFlowFixture.Home(db, EpisodeFlowFixture.Account(profileId));
-        await home.OnGetAsync(CancellationToken.None, type);
+        await home.LoadHomeAsync(DiscoveryRequest.ParseCategory(type), CancellationToken.None);
         return home;
     }
 
