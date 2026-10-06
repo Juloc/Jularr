@@ -142,8 +142,8 @@ public sealed class ContinueWatchingTests
         await model.OnGetAsync(CancellationToken.None);
 
         var item = Assert.ContainsSingle(model.ContinueWatching);
-        Assert.AreEqual(episode.Id, item.EpisodeId);
-        Assert.AreEqual(episode.Id, Assert.ContainsSingle(model.PlaybackHistory).EpisodeId);
+        Assert.AreEqual($"/Library/Episode/{episode.Id}", item.PlayHref);
+        Assert.AreEqual($"/Library/Episode/{episode.Id}", Assert.ContainsSingle(model.PlaybackHistory).PlayHref);
 
         var otherModel = EpisodeFlowFixture.Home(fixture.Db, EpisodeFlowFixture.Account("other"));
         await otherModel.OnGetAsync(CancellationToken.None);

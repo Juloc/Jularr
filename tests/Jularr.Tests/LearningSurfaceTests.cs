@@ -37,15 +37,9 @@ public sealed class LearningSurfaceTests
             await using var db = new AppDbContext(options);
             await DatabaseMigrationBridge.UpgradeAsync(db);
 
-            var anime = new Anime { Key = "surface", Title = "Surface" };
-            var episode = new Episode
-            {
-                AnimeId = anime.Id,
-                SeasonNumber = 1,
-                Number = 1,
-                Title = "Episode 1",
-                DiscoveredAt = DateTime.UtcNow
-            };
+            var seeded = await new LibraryCanonicalSeed(db).AddAnimeAsync("Surface", [(1, 1, true)]);
+            var anime = seeded.Anime;
+            var episode = seeded.Episodes[0].Legacy;
             var cat = new Term { Language = "ja", Canonical = "猫", Reading = "ねこ", Meaning = "Katze" };
             var dog = new Term { Language = "ja", Canonical = "犬", Reading = "いぬ", Meaning = "Hund" };
             var sky = new Term { Language = "ja", Canonical = "空", Reading = "そら", Meaning = "Himmel" };
@@ -58,7 +52,7 @@ public sealed class LearningSurfaceTests
                 SourceUpdatedAt = DateTime.UtcNow
             };
 
-            db.AddRange(anime, episode, cat, dog, sky, track);
+            db.AddRange(cat, dog, sky, track);
             db.EpisodeTerms.AddRange(
                 new EpisodeTerm { EpisodeId = episode.Id, TermId = cat.Id, Occurrences = 6, FirstCueStartMs = 1_000 },
                 new EpisodeTerm { EpisodeId = episode.Id, TermId = dog.Id, Occurrences = 3, FirstCueStartMs = 2_000 },
@@ -110,7 +104,7 @@ public sealed class LearningSurfaceTests
                 CancellationToken.None);
             var home = EpisodeFlowFixture.Home(db, account);
             await home.OnGetAsync(CancellationToken.None);
-            Assert.AreEqual(9, home.RecentEpisodes.Single().PreparedOccurrences);
+            Assert.AreEqual(9, home.RecentTitles.Single().PreparedOccurrences);
 
             // Learning hub counters.
             var hub = new Jularr.Web.Pages.Learn.IndexModel(db, account);

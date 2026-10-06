@@ -402,8 +402,8 @@ public sealed class VideoProgressTests
         await service.UpdateAsync("reader", MediaProgressTarget.Episode(anime.Id, animeEpisode.Id), new MediaProgressUpdate(60_000, 120_000, Completed: false));
 
         Assert.AreEqual(2, (await service.GetContinueWatchingAsync("reader")).Count);
-        Assert.AreEqual(movie.Id, Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader", mediaType: WorkMediaType.Movie)).WorkId);
-        Assert.AreEqual(anime.Id, Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader", mediaType: WorkMediaType.Anime)).WorkId);
+        Assert.AreEqual(movie.Id, Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader", mediaTypes: [WorkMediaType.Movie])).WorkId);
+        Assert.AreEqual(anime.Id, Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader", mediaTypes: [WorkMediaType.Anime])).WorkId);
     }
 
     private static async Task<StoredFile> AddPlayableAsync(

@@ -297,17 +297,23 @@ public sealed class VideoProgressService(AppDbContext db)
     /// Shared Continue Watching for Movie, Series and Anime: one item per work, anchored on the work's most recently
     /// updated meaningful progress row. An unfinished anchor resumes; a completed anchor that carries a later rewatch
     /// resume position resumes that rewatch (the item stays completed); otherwise a completed episode anchor surfaces
-    /// the next playable uncompleted episode. <paramref name="mediaType"/> narrows the projection to one media type.
+    /// the next playable uncompleted episode. <paramref name="mediaTypes"/> narrows the projection to those media types before the
+    /// limit applies (null: every type; empty: nothing).
     /// </summary>
     public async Task<IReadOnlyList<VideoContinueWatchingItem>> GetContinueWatchingAsync(
         string profileId,
         int limit = ContinueWatchingLimit,
-        WorkMediaType? mediaType = null,
+        IReadOnlyCollection<WorkMediaType>? mediaTypes = null,
         CancellationToken cancellationToken = default)
     {
         ValidateProfile(profileId);
         limit = Math.Clamp(limit, 1, ContinueWatchingLimit);
-        var mediaTypeFilter = mediaType is { } requested ? (int)requested : -1;
+        if (mediaTypes is { Count: 0 })
+        {
+            return [];
+        }
+
+        var mediaTypeFilter = mediaTypes?.Select(type => (int)type).ToArray();
 
         var rows = await db.Database.SqlQueryRaw<ContinueWatchingDbRow>(
                 """
@@ -327,7 +333,7 @@ public sealed class VideoProgressService(AppDbContext db)
                 LEFT JOIN "WorkEpisodes" e ON e."Id" = p."WorkEpisodeId"
                 WHERE p."ProfileId" = {0}
                   AND (p."IsCompleted" = TRUE OR p."PositionMs" >= {1})
-                  AND ({2} < 0 OR w."MediaType" = {2})
+                  AND ({2}::int[] IS NULL OR w."MediaType" = ANY({2}))
                   AND EXISTS (
                       SELECT 1
                       FROM "MediaAssets" a
@@ -344,7 +350,7 @@ public sealed class VideoProgressService(AppDbContext db)
                 """,
                 profileId,
                 MinimumResumeMs,
-                mediaTypeFilter)
+                (object?)mediaTypeFilter ?? DBNull.Value)
             .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)

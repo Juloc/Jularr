@@ -6,26 +6,30 @@ using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Learning;
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Reading;
 using Jularr.Web.Features.Recommendations;
+using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Watchlist;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Pages;
 
 /// <summary>
 /// Home (docs/mockups/home/SPEC.md): a hero carousel of the profile's own media, one merged
-/// Continue row, the local "For you" row and recently discovered episodes. Every read is local —
-/// the database, the local release cache and the local recommendation engine; no provider calls.
+/// Continue row across Anime, Series, Movies and reading, the local "For you" row and the titles
+/// most recently added to the library. Every read is local — the database, the local release cache
+/// and the local recommendation engine; no provider calls.
 /// </summary>
 public sealed class IndexModel(
     AppDbContext db,
     CurrentAccountContext currentAccount,
-    EpisodeProgressService progress,
+    VideoProgressService videoProgress,
+    IAppShellService appShell,
     MediaRecommendationService? recommendations = null,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
@@ -64,8 +68,14 @@ public sealed class IndexModel(
     /// <summary>Most posters in the "For you" row.</summary>
     public const int ForYouLimit = 12;
 
-    public IReadOnlyList<HomeEpisode> RecentEpisodes { get; private set; } = [];
-    public IReadOnlyList<ContinueWatchingItem> ContinueWatching { get; private set; } = [];
+    /// <summary>Most titles in the "Recently discovered" row.</summary>
+    public const int RecentLimit = 12;
+
+    /// <summary>The newest additions to the library across Anime, Series and Movies, one card per title.</summary>
+    public IReadOnlyList<HomeRecentTitle> RecentTitles { get; private set; } = [];
+
+    /// <summary>Resumable and up-next video of the profile across every visible video type, newest first.</summary>
+    public IReadOnlyList<HomeContinueVideo> ContinueWatching { get; private set; } = [];
 
     /// <summary>
     /// Most recently read unfinished Novels, Books and Manga of the current
@@ -89,8 +99,14 @@ public sealed class IndexModel(
     /// <summary>The active Home media-type filter, from the <c>type</c> query parameter.</summary>
     public DiscoveryCategory ActiveType { get; private set; } = DiscoveryCategory.All;
 
-    /// <summary>Discover link for the Continue Watching heading; anime is the only Continue Watching medium.</summary>
-    public string ContinueWatchingDiscoverUrl => "/Discover?category=anime&mode=my-list";
+    /// <summary>Discover link for the Continue Watching heading, narrowed to the active video filter.</summary>
+    public string ContinueWatchingDiscoverUrl => ActiveType switch
+    {
+        DiscoveryCategory.Anime => "/Discover?category=anime&mode=my-list",
+        DiscoveryCategory.Movie => "/Discover?category=movie&mode=my-list",
+        DiscoveryCategory.Series => "/Discover?category=series&mode=my-list",
+        _ => "/Discover?mode=my-list"
+    };
 
     /// <summary>
     /// Discover link for the Continue Reading heading. Matches the active
@@ -114,25 +130,29 @@ public sealed class IndexModel(
         ? ContinueWatchingDiscoverUrl
         : ContinueReadingDiscoverUrl;
 
-    public IReadOnlyList<PlaybackHistoryItem> PlaybackHistory { get; private set; } = [];
+    public IReadOnlyList<HomePlaybackEntry> PlaybackHistory { get; private set; } = [];
 
     /// <summary>False on a manager-only instance: nothing on the page links into the player.</summary>
     public bool PlaybackEnabled { get; private set; } = true;
 
-    /// <summary>A recently added episode opens the player where there is one, otherwise the title it belongs to.</summary>
-    public string EpisodeHref(HomeEpisode episode) => PlaybackEnabled ? $"/Library/Episode/{episode.Id}" : $"/Library/Anime/{episode.AnimeId}";
-    public int PlaybackHistoryLimit => EpisodeProgressService.HistoryLimit;
+    public int PlaybackHistoryLimit => VideoProgressService.HistoryLimit;
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
     /// <summary>
     /// Resolved ContentMetrics capability for the Anime media type. Controls
-    /// preparation percentages on recently discovered episode cards.
+    /// preparation percentages on recently discovered Anime cards.
     /// </summary>
     public bool ShowContentMetrics { get; private set; }
 
+    /// <summary>True when Home has nothing of the profile's or of the library to show: the new-user empty state.</summary>
+    public bool IsEmpty => Hero.Count == 0 && ContinueTiles.Count == 0 && ForYou.Count == 0 && RecentTitles.Count == 0;
+
+    /// <summary>Whether the profile may add library folders, so the empty state may link to them.</summary>
+    public bool CanManageStorage => currentAccount.Can(JularrPolicies.AdminSystem);
+
     public async Task<IActionResult> OnPostClearHistoryAsync(CancellationToken cancellationToken)
     {
-        await progress.ClearHistoryAsync(cancellationToken);
+        await videoProgress.ClearHistoryAsync(currentAccount.ProfileId, cancellationToken);
 
         var ui = await new UiTranslationCatalogStore(db).LoadProfileBundleAsync(
             currentAccount.ProfileId,
@@ -143,107 +163,83 @@ public sealed class IndexModel(
 
     public async Task OnGetAsync(CancellationToken cancellationToken, string? type = null)
     {
-        Ui = await new UiTranslationCatalogStore(db).LoadProfileBundleAsync(
-            currentAccount.ProfileId,
-            cancellationToken);
+        Ui = await new UiTranslationCatalogStore(db).LoadProfileBundleAsync(currentAccount.ProfileId, cancellationToken);
 
         ActiveType = DiscoveryRequest.ParseCategory(type);
-        var instance = instanceModules is null
-            ? InstanceModuleSettings.Default
-            : await instanceModules.GetAsync(cancellationToken);
-        var animeEnabled = instance.IsEnabled(InstanceModule.Anime);
+        var instance = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
         PlaybackEnabled = instance.IsEnabled(InstanceModule.Playback);
+        var access = await appShell.GetMediaAccessAsync(currentAccount.User, cancellationToken);
+        var videoTypes = LibraryBrowse.VideoMediaTypes.Where(access.IsVisible).ToArray();
+        var videoQuery = new HomeVideoQuery(db, videoProgress);
 
-        // Continue watching and the playback history only exist where something plays; every link of them opens the player.
-        ContinueWatching = animeEnabled
-            && PlaybackEnabled
-            && (ActiveType is DiscoveryCategory.All or DiscoveryCategory.Anime)
-                ? await progress.GetContinueWatchingAsync(cancellationToken: cancellationToken)
-                : [];
-        PlaybackHistory = animeEnabled && PlaybackEnabled
-            ? await progress.GetHistoryAsync(cancellationToken)
-            : [];
+        // Resuming and the playback history only exist where something plays; every link of them opens the player.
+        if (PlaybackEnabled)
+        {
+            var continueTypes = videoTypes.Where(mediaType => MatchesFilter(ActiveType, mediaType)).ToArray();
+            ContinueWatching = await videoQuery.GetContinueAsync(currentAccount.ProfileId, continueTypes, VideoProgressService.ContinueWatchingLimit, cancellationToken);
+            PlaybackHistory = await videoQuery.GetHistoryAsync(currentAccount.ProfileId, videoTypes, cancellationToken);
+        }
 
-        var continueReading = await new ContinueReadingQuery(db).GetAsync(
-            currentAccount.ProfileId,
-            cancellationToken: cancellationToken);
-        ContinueReading = FilterContinueReading(
-            continueReading.Where(item => IsReadingEnabled(instance, item.Kind)).ToArray(),
-            ActiveType);
+        var continueReading = await new ContinueReadingQuery(db).GetAsync(currentAccount.ProfileId, cancellationToken: cancellationToken);
+        ContinueReading = FilterContinueReading(continueReading.Where(item => IsReadingEnabled(instance, item.Kind)).ToArray(), ActiveType);
 
-        var anime = await LoadAnimeArtworkAsync(
-            ContinueWatching.Select(item => item.AnimeId).Distinct().ToArray(),
-            cancellationToken);
-        ContinueTiles = BuildContinueTiles(anime);
-        var ownSlides = BuildWatchingSlides(anime, ContinueReading).ToArray();
+        ContinueTiles = BuildContinueTiles();
+        var ownSlides = BuildWatchingSlides(ContinueReading).ToArray();
         Hero = ownSlides.Length >= HeroLimit
             ? ownSlides.Take(HeroLimit).ToArray()
             : [.. ownSlides, .. (await LoadWatchlistSlidesAsync(cancellationToken)).Take(HeroLimit - ownSlides.Length)];
         ForYou = await LoadForYouAsync(cancellationToken);
 
-        var animeLearning = await new LearningConfigurationStore(db, instanceModules).ResolveAsync(
-            currentAccount.ProfileId,
-            new LearningScopeContext(LearningMediaType.Anime),
-            cancellationToken);
-        ShowContentMetrics = animeEnabled
-            && animeLearning.IsEnabled(LearningCapability.ContentMetrics);
+        var recent = await videoQuery.GetRecentlyAddedAsync(currentAccount.ProfileId, videoTypes, RecentLimit, cancellationToken);
+        var animeLearning = await new LearningConfigurationStore(db, instanceModules).ResolveAsync(currentAccount.ProfileId, new LearningScopeContext(LearningMediaType.Anime), cancellationToken);
+        ShowContentMetrics = access.IsVisible(WorkMediaType.Anime) && animeLearning.IsEnabled(LearningCapability.ContentMetrics);
 
-        var recentEpisodes = animeEnabled
-            ? await (
-                from episode in db.Episodes.AsNoTracking()
-                join animeRow in db.Anime.AsNoTracking() on episode.AnimeId equals animeRow.Id
-                join metadataValue in db.AnimeMetadata.AsNoTracking()
-                    on animeRow.Id equals metadataValue.AnimeId into metadataRows
-                from metadata in metadataRows.DefaultIfEmpty()
-                orderby episode.DiscoveredAt descending
-                select new HomeEpisode(
-                    episode.Id,
-                    animeRow.Id,
-                    metadata == null ? animeRow.Title : metadata.PreferredTitle,
-                    episode.SeasonNumber,
-                    episode.Number,
-                    0,
-                    0,
-                    metadata == null ? null : metadata.CoverImageUrl))
-                .Take(10)
-                .ToListAsync(cancellationToken)
-            : new List<HomeEpisode>();
-
-        // Vocabulary coverage is only computed when the resolved Anime scope
-        // shows content metrics; otherwise Home never touches learning tables.
+        // Vocabulary coverage is only computed when the resolved Anime scope shows content metrics; otherwise Home never touches learning tables.
         var coverage = ShowContentMetrics
-            ? await LoadCoverageAsync(
-                recentEpisodes.Select(x => x.Id).ToArray(),
-                cancellationToken)
+            ? await videoQuery.GetVocabularyCoverageAsync(currentAccount.ProfileId, [.. recent.Where(item => item.LegacyEpisodeId.HasValue).Select(item => item.LegacyEpisodeId!.Value)], cancellationToken)
             : new Dictionary<Guid, (int Total, int Prepared)>();
-
-        RecentEpisodes = recentEpisodes
-            .Select(row =>
+        RecentTitles =
+        [
+            .. recent.Select(item =>
             {
-                coverage.TryGetValue(row.Id, out var totals);
-                return row with
-                {
-                    TotalOccurrences = totals.Total,
-                    PreparedOccurrences = totals.Prepared,
-                    CoverImageUrl = AnimeArtworkStore.ResolvePosterUrl(
-                        row.AnimeId,
-                        row.CoverImageUrl)
-                };
+                var totals = item.LegacyEpisodeId is { } legacyEpisodeId ? coverage.GetValueOrDefault(legacyEpisodeId) : default;
+                return new HomeRecentTitle(item.Title, RecentSubtitle(item), totals.Total, totals.Prepared);
             })
-            .ToArray();
+        ];
     }
 
-    /// <summary>"S01 · Episode 4 · 32 min left" — the caption of a watching tile.</summary>
-    public string WatchingCaption(ContinueWatchingItem item) =>
-        RemainingText(item) is { } remaining ? $"{EpisodeLabel(item)} · {remaining}" : EpisodeLabel(item);
+    /// <summary>"S01 · Episode 4 · 32 min left" for an episode, "32 min left" for a Movie — the caption of a watching tile.</summary>
+    public string WatchingCaption(HomeContinueVideo item) => string.Join(" · ", new[] { EpisodeLabel(item.SeasonNumber, item.EpisodeNumber), RemainingText(item) }.Where(part => part is not null));
 
-    private string EpisodeLabel(ContinueWatchingItem item) => Ui.Format(
-        "home.continueWatching.episode",
-        ("season", item.SeasonNumber.ToString("00")),
-        ("episode", item.EpisodeNumber));
+    /// <summary>"S01 · Episode 4" for an episode; null for a Movie, which has no episode.</summary>
+    public string? EpisodeLabel(int? seasonNumber, int? episodeNumber) => seasonNumber is { } season && episodeNumber is { } episode
+        ? Ui.Format("home.continueWatching.episode", ("season", season.ToString("00")), ("episode", episode))
+        : null;
 
-    /// <summary>"22 min left" for a partly watched episode; null when nothing has been watched yet.</summary>
-    private string? RemainingText(ContinueWatchingItem item)
+    /// <summary>Whether a video type belongs to the active Home filter; the reading filters show no video.</summary>
+    private static bool MatchesFilter(DiscoveryCategory active, WorkMediaType mediaType) => active switch
+    {
+        DiscoveryCategory.All => true,
+        DiscoveryCategory.Anime => mediaType == WorkMediaType.Anime,
+        DiscoveryCategory.Movie => mediaType == WorkMediaType.Movie,
+        DiscoveryCategory.Series => mediaType == WorkMediaType.Series,
+        _ => false
+    };
+
+    /// <summary>The episode of an added episodic title; the year of a Movie, else its media type.</summary>
+    private string RecentSubtitle(HomeRecentVideo item) => EpisodeLabel(item.SeasonNumber, item.EpisodeNumber)
+        ?? item.Title.Year?.ToString(CultureInfo.InvariantCulture)
+        ?? MediaLabel(item.Title.MediaType);
+
+    private string MediaLabel(WorkMediaType mediaType) => mediaType switch
+    {
+        WorkMediaType.Movie => Ui["calendar.media.movie"],
+        WorkMediaType.Series => Ui["calendar.media.tv"],
+        _ => Ui["calendar.media.anime"]
+    };
+
+    /// <summary>"22 min left" for a partly watched title; null when nothing has been watched yet.</summary>
+    private string? RemainingText(HomeContinueVideo item)
     {
         if (item.ResumePositionMs <= 0)
         {
@@ -251,9 +247,7 @@ public sealed class IndexModel(
         }
 
         return item.RemainingMs is { } remainingMs
-            ? Ui.Format(
-                "home.continueWatching.remaining",
-                ("minutes", Math.Max(1, (int)Math.Ceiling(remainingMs / 60000d))))
+            ? Ui.Format("home.continueWatching.remaining", ("minutes", Math.Max(1, (int)Math.Ceiling(remainingMs / 60000d))))
             : Ui["home.continueWatching.resume"];
     }
 
@@ -280,67 +274,30 @@ public sealed class IndexModel(
         _ => $"/Novels/Work/{item.WorkId}"
     };
 
-    /// <summary>Backdrop and hero facts for the series in Continue Watching, read from local metadata only.</summary>
-    private async Task<IReadOnlyDictionary<Guid, AnimeHeroFacts>> LoadAnimeArtworkAsync(
-        Guid[] animeIds,
-        CancellationToken cancellationToken)
-    {
-        if (animeIds.Length == 0)
-        {
-            return new Dictionary<Guid, AnimeHeroFacts>();
-        }
-
-        var metadata = await db.AnimeMetadata.AsNoTracking()
-            .Where(row => animeIds.Contains(row.AnimeId))
-            .Select(row => new { row.AnimeId, row.BannerImageUrl, row.Description, row.SeasonYear, row.AverageScore })
-            .ToListAsync(cancellationToken);
-        var seasons = await db.Episodes.AsNoTracking()
-            .Where(episode => animeIds.Contains(episode.AnimeId) && episode.SeasonNumber > 0)
-            .GroupBy(episode => episode.AnimeId)
-            .Select(group => new { AnimeId = group.Key, Count = group.Select(episode => episode.SeasonNumber).Distinct().Count() })
-            .ToDictionaryAsync(row => row.AnimeId, row => row.Count, cancellationToken);
-        var byId = metadata.ToDictionary(row => row.AnimeId);
-
-        return animeIds.ToDictionary(
-            id => id,
-            id =>
-            {
-                byId.TryGetValue(id, out var row);
-                // A wide backdrop is the cached fanart, else the provider banner; never the poster.
-                var backdrop = AnimeArtworkStore.ResolveFanartUrl(id, row?.BannerImageUrl);
-                return new AnimeHeroFacts(
-                    string.IsNullOrWhiteSpace(backdrop) ? null : backdrop,
-                    string.IsNullOrWhiteSpace(row?.Description) ? null : row.Description.Trim(),
-                    row?.SeasonYear,
-                    row?.AverageScore,
-                    seasons.GetValueOrDefault(id));
-            });
-    }
-
     /// <summary>"2024 · Anime · 2 seasons · ★ 8.7" — only the facts Jularr actually has.</summary>
-    private string AnimeMeta(AnimeHeroFacts facts)
+    private string VideoMeta(HomeVideoTitle title)
     {
         var culture = ReleaseCalendarPresenter.CultureFor(Ui.Locale);
         return string.Join(" · ", new[]
         {
-            facts.Year?.ToString(CultureInfo.InvariantCulture),
-            Ui["calendar.media.anime"],
-            facts.Seasons > 1 ? Ui.Format("home.spotlight.seasons", ("count", facts.Seasons)) : null,
-            facts.Score is int score && score > 0 ? $"★ {(score / 10d).ToString("0.0", culture)}" : null
+            title.Year?.ToString(CultureInfo.InvariantCulture),
+            MediaLabel(title.MediaType),
+            title.SeasonCount > 1 ? Ui.Format("home.spotlight.seasons", ("count", title.SeasonCount)) : null,
+            title.Score is int score && score > 0 ? $"★ {(score / 10d).ToString("0.0", culture)}" : null
         }.Where(part => !string.IsNullOrEmpty(part)));
     }
 
-    private HomeContinueTile[] BuildContinueTiles(IReadOnlyDictionary<Guid, AnimeHeroFacts> anime)
+    private HomeContinueTile[] BuildContinueTiles()
     {
         var watching = ContinueWatching.Select(item =>
         {
-            var backdrop = anime.GetValueOrDefault(item.AnimeId)?.Backdrop;
+            var backdrop = item.Title.BackdropUrl;
             return (At: item.UpdatedAt, Tile: new HomeContinueTile(
-                item.AnimeTitle,
+                item.Title.Title,
                 WatchingCaption(item),
-                $"/Library/Episode/{item.EpisodeId}",
+                item.PlayHref,
                 item.ResumePositionMs > 0 ? item.Percent : null,
-                backdrop ?? item.CoverImageUrl,
+                backdrop ?? item.PosterUrl,
                 backdrop is not null,
                 Ui.Format("home.continueWatching.progressAria", ("percent", item.Percent))));
         });
@@ -359,37 +316,34 @@ public sealed class IndexModel(
             .ToArray();
     }
 
-    /// <summary>In-progress episodes, then in-progress reading, then up-next episodes (each newest first).</summary>
-    private IEnumerable<HomeHeroSlide> BuildWatchingSlides(
-        IReadOnlyDictionary<Guid, AnimeHeroFacts> anime,
-        IReadOnlyList<ContinueReadingItem> reading)
+    /// <summary>In-progress video, then in-progress reading, then up-next episodes (each newest first).</summary>
+    private IEnumerable<HomeHeroSlide> BuildWatchingSlides(IReadOnlyList<ContinueReadingItem> reading)
     {
-        HomeHeroSlide Watching(ContinueWatchingItem item, bool upNext)
+        HomeHeroSlide Watching(HomeContinueVideo item, bool upNext)
         {
-            var facts = anime.GetValueOrDefault(item.AnimeId) ?? AnimeHeroFacts.None;
-            var episode = string.IsNullOrWhiteSpace(item.EpisodeTitle)
-                ? EpisodeLabel(item)
-                : $"{EpisodeLabel(item)} – {item.EpisodeTitle.Trim()}";
+            var episodeLabel = EpisodeLabel(item.SeasonNumber, item.EpisodeNumber);
+            var subtitle = string.IsNullOrWhiteSpace(item.EpisodeTitle) ? episodeLabel : $"{episodeLabel} – {item.EpisodeTitle.Trim()}";
+            var backdrop = item.Title.BackdropUrl;
             return new HomeHeroSlide(
                 upNext ? Ui["home.continueWatching.upNext"] : Ui["home.continueWatching.eyebrow"],
-                item.AnimeTitle,
-                AnimeMeta(facts),
-                episode,
-                facts.Description,
+                item.Title.Title,
+                VideoMeta(item.Title),
+                subtitle,
+                item.Title.Description,
                 upNext || item.ResumePositionMs <= 0 ? null : item.Percent,
                 upNext ? null : RemainingText(item),
-                facts.Backdrop ?? item.CoverImageUrl,
-                facts.Backdrop is not null,
-                $"/Library/Episode/{item.EpisodeId}",
+                backdrop ?? item.PosterUrl,
+                backdrop is not null,
+                item.PlayHref,
                 upNext ? Ui["home.spotlight.play"] : Ui["home.spotlight.continue"],
                 true,
-                $"/Library/Anime/{item.AnimeId}",
+                item.Title.DetailHref,
                 Ui["home.spotlight.details"],
                 HomeHeroSecondary.Details);
         }
 
-        var recent = ContinueWatching.OrderByDescending(item => item.UpdatedAt).DistinctBy(item => item.AnimeId).ToArray();
-        var resume = recent.Where(item => item.Kind == ContinueWatchingKind.Resume).Take(HeroPerSourceLimit).Select(item => Watching(item, false));
+        var recent = ContinueWatching.OrderByDescending(item => item.UpdatedAt).DistinctBy(item => item.Title.WorkId).ToArray();
+        var resume = recent.Where(item => item.Kind == VideoContinueWatchingKind.Resume).Take(HeroPerSourceLimit).Select(item => Watching(item, false));
         var readingSlides = reading.Take(HeroPerSourceLimit).Select(item => new HomeHeroSlide(
             Ui["home.continueReading.eyebrow"],
             item.Title,
@@ -406,7 +360,7 @@ public sealed class IndexModel(
             ReadingDetailsUrl(item),
             Ui["home.spotlight.details"],
             HomeHeroSecondary.Details));
-        var upNext = recent.Where(item => item.Kind == ContinueWatchingKind.UpNext).Take(HeroPerSourceLimit).Select(item => Watching(item, true));
+        var upNext = recent.Where(item => item.Kind == VideoContinueWatchingKind.UpNext).Take(HeroPerSourceLimit).Select(item => Watching(item, true));
 
         return resume.Concat(readingSlides).Concat(upNext);
     }
@@ -424,7 +378,7 @@ public sealed class IndexModel(
             DiscoveryCategory.LightNovel => ReleaseMediaType.LightNovel,
             _ => null
         };
-        if (string.IsNullOrWhiteSpace(currentAccount.ProfileId) || ActiveType == DiscoveryCategory.Book)
+        if (string.IsNullOrWhiteSpace(currentAccount.ProfileId) || ActiveType is DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
         {
             return [];
         }
@@ -505,7 +459,7 @@ public sealed class IndexModel(
             .ToArray();
     }
 
-    /// <summary>Keeps only the reading items matching the active Home filter; "All" and "Anime" keep everything (Anime has no reading row of its own).</summary>
+    /// <summary>Whether the instance has the module of a reading medium enabled.</summary>
     private static bool IsReadingEnabled(
         InstanceModuleSettings instance,
         ContinueReadingKind kind) =>
@@ -524,56 +478,9 @@ public sealed class IndexModel(
             DiscoveryCategory.Manga => items.Where(x => x.Kind == ContinueReadingKind.Manga).ToArray(),
             DiscoveryCategory.LightNovel => items.Where(x => x.Kind == ContinueReadingKind.Novel).ToArray(),
             DiscoveryCategory.Book => items.Where(x => x.Kind == ContinueReadingKind.Book).ToArray(),
-            DiscoveryCategory.Anime => [],
+            DiscoveryCategory.Anime or DiscoveryCategory.Movie or DiscoveryCategory.Series => [],
             _ => items
         };
-
-    private async Task<Dictionary<Guid, (int Total, int Prepared)>> LoadCoverageAsync(
-        Guid[] episodeIds,
-        CancellationToken cancellationToken)
-    {
-        if (episodeIds.Length == 0)
-        {
-            return [];
-        }
-
-        var totals = await db.EpisodeTerms
-            .AsNoTracking()
-            .Where(x => episodeIds.Contains(x.EpisodeId))
-            .GroupBy(x => x.EpisodeId)
-            .Select(group => new
-            {
-                EpisodeId = group.Key,
-                Total = group.Sum(x => x.Occurrences)
-            })
-            .ToDictionaryAsync(x => x.EpisodeId, x => x.Total, cancellationToken);
-
-        var prepared = await (
-            from episodeTerm in db.EpisodeTerms.AsNoTracking()
-            join state in LearningQueries.TermStates(db, currentAccount.ProfileId)
-                    .Where(x =>
-                        x.State == UserTermState.Known
-                        || x.State == UserTermState.Learning)
-                on episodeTerm.TermId equals state.TermId
-            where episodeIds.Contains(episodeTerm.EpisodeId)
-            group episodeTerm by episodeTerm.EpisodeId
-            into episodeGroup
-            select new
-            {
-                EpisodeId = episodeGroup.Key,
-                Prepared = episodeGroup.Sum(x => x.Occurrences)
-            })
-            .ToDictionaryAsync(x => x.EpisodeId, x => x.Prepared, cancellationToken);
-
-        return totals.ToDictionary(
-            x => x.Key,
-            x => (x.Value, prepared.GetValueOrDefault(x.Key)));
-    }
-
-    private sealed record AnimeHeroFacts(string? Backdrop, string? Description, int? Year, int? Score, int Seasons)
-    {
-        public static AnimeHeroFacts None { get; } = new(null, null, null, null, 0);
-    }
 
     /// <summary>The small square secondary action of a hero slide.</summary>
     public enum HomeHeroSecondary
@@ -624,15 +531,8 @@ public sealed class IndexModel(
     public static string ChipHref(HomeTypeChip chip) =>
         chip.QueryValue == "all" ? "/" : $"/?type={chip.QueryValue}";
 
-    public sealed record HomeEpisode(
-        Guid Id,
-        Guid AnimeId,
-        string AnimeTitle,
-        int SeasonNumber,
-        int Number,
-        int TotalOccurrences,
-        int PreparedOccurrences,
-        string? CoverImageUrl)
+    /// <summary>One card of the "Recently discovered" row; the occurrence totals are only filled when content metrics are on.</summary>
+    public sealed record HomeRecentTitle(HomeVideoTitle Title, string Subtitle, int TotalOccurrences, int PreparedOccurrences)
     {
         public int PreparationPercent => TotalOccurrences == 0
             ? 0

@@ -1,4 +1,5 @@
 @page
+@using Jularr.Web.Features.MediaCore
 @using Jularr.Web.Features.Progress
 @model IndexModel
 @{
@@ -176,48 +177,49 @@
     </section>
 }
 
-<section class="home-row home-row-secondary">
-    <div class="home-row-heading">
-        <h2>@Model.Ui["home.library.recent"]</h2>
-        <a class="text-link" href="/Library">@Model.Ui["home.library.view"]</a>
-    </div>
-
-    @if (Model.RecentEpisodes.Count == 0)
-    {
-        <div class="empty-state">
-            <h3>@Model.Ui["home.empty.title"]</h3>
-            <p>@Model.Ui["home.empty.body"]</p>
-            <a class="button" href="/Settings">@Model.Ui["home.empty.settings"]</a>
+@if (Model.RecentTitles.Count > 0)
+{
+    <section class="home-row home-row-secondary" data-home-recent>
+        <div class="home-row-heading">
+            <h2>@Model.Ui["home.library.recent"]</h2>
+            <a class="text-link" href="/Library">@Model.Ui["home.library.view"]</a>
         </div>
-    }
-    else
-    {
         <div class="home-row-scroller" data-home-row>
             <div class="media-grid home-row-track home-media-track" data-home-row-track>
-                @foreach (var episode in Model.RecentEpisodes)
+                @foreach (var recent in Model.RecentTitles)
                 {
-                    var coverageLabel = !Model.ShowContentMetrics
+                    var coverageLabel = !Model.ShowContentMetrics || recent.Title.MediaType != WorkMediaType.Anime
                         ? null
-                        : episode.TotalOccurrences == 0
+                        : recent.TotalOccurrences == 0
                             ? Model.Ui["home.library.noLearningText"]
-                            : Model.Ui.Format("home.library.prepared", ("percent", episode.PreparationPercent));
+                            : Model.Ui.Format("home.library.prepared", ("percent", recent.PreparationPercent));
                     <partial name="_MediaCard" model='new MediaCardModel(
-                        episode.AnimeTitle,
-                        Model.Ui.Format(
-                            "home.continueWatching.episode",
-                            ("season", episode.SeasonNumber.ToString("00")),
-                            ("episode", episode.Number)),
-                        Model.EpisodeHref(episode),
-                        Model.ShowContentMetrics ? episode.PreparationPercent : null,
+                        recent.Title.Title,
+                        recent.Subtitle,
+                        recent.Title.DetailHref,
+                        coverageLabel is null ? null : recent.PreparationPercent,
                         coverageLabel,
-                        episode.CoverImageUrl,
+                        recent.Title.PosterUrl,
                         coverageLabel)' />
                 }
             </div>
             <partial name="_HomeRowArrows" model="Model.Ui" />
         </div>
-    }
-</section>
+    </section>
+}
+
+@if (Model.IsEmpty)
+{
+    <section class="empty-state" data-home-empty>
+        <h3>@Model.Ui["home.empty.title"]</h3>
+        <p>@Model.Ui["home.empty.body"]</p>
+        <a class="button" href="/Discover">@Model.Ui["home.empty.discover"]</a>
+        @if (Model.CanManageStorage)
+        {
+            <a class="button" href="/Admin/Storage">@Model.Ui["home.empty.storage"]</a>
+        }
+    </section>
+}
 
 @if (Model.PlaybackHistory.Count > 0)
 {
@@ -232,12 +234,12 @@
             @foreach (var entry in Model.PlaybackHistory)
             {
                 <li>
-                    <a href="/Library/Episode/@entry.EpisodeId">
-                        @entry.AnimeTitle ·
-                        @Model.Ui.Format(
-                            "home.continueWatching.episode",
-                            ("season", entry.SeasonNumber.ToString("00")),
-                            ("episode", entry.EpisodeNumber))
+                    <a href="@entry.PlayHref">
+                        @entry.Title.Title
+                        @if (Model.EpisodeLabel(entry.SeasonNumber, entry.EpisodeNumber) is { } episodeLabel)
+                        {
+                            <text>· @episodeLabel</text>
+                        }
                     </a>
                     <span>
                         <time datetime="@entry.LastPlayedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")">@entry.LastPlayedAt.ToString("yyyy-MM-dd HH:mm") UTC</time>

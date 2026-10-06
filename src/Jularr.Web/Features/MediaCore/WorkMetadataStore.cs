@@ -381,6 +381,37 @@ public sealed class WorkMetadataStore(AppDbContext db)
             [.. rows.Where(x => x.Kind == 2).Select(x => new WorkCardFacts(x.WorkId, x.Locale, x.Number))]);
     }
 
+    /// <summary>
+    /// The synopsis of each given Work in the display fallback of <paramref name="viewerLocale"/>, for surfaces that show one short text
+    /// per title (the Home hero). Works without a persisted synopsis are absent.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, string>> LoadOverviewsAsync(IReadOnlyCollection<Guid> workIds, string viewerLocale, CancellationToken cancellationToken)
+    {
+        if (workIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        var ids = workIds.ToArray();
+        var rows = await db.Database.SqlQuery<OverviewDbRow>(
+                $"""
+                SELECT overview."WorkId", overview."Locale", overview."Value", facts."OriginalLanguage"
+                FROM "WorkLocalizedValues" AS overview
+                LEFT JOIN "WorkMetadataFacts" AS facts ON facts."WorkId" = overview."WorkId"
+                WHERE overview."WorkId" = ANY({ids}) AND overview."Field" = {(int)WorkLocalizedField.Overview} AND overview."Position" = 0
+                """)
+            .ToListAsync(cancellationToken);
+        var overviews = new Dictionary<Guid, string>();
+        foreach (var work in rows.GroupBy(x => x.WorkId))
+        {
+            var order = WorkMetadataLocales.ResolutionOrder(viewerLocale, configuredFallback: null, work.First().OriginalLanguage);
+            var locale = WorkMetadataLocales.Pick([.. work.Select(x => x.Locale).Distinct(StringComparer.Ordinal)], order);
+            overviews[work.Key] = work.First(x => x.Locale == locale).Value;
+        }
+
+        return overviews;
+    }
+
     /// <summary>The media type and local derivative of one artwork variant of a Work; null when the Work has no such cached variant.</summary>
     public async Task<(WorkMediaType MediaType, string CacheKey)?> FindArtworkFileAsync(Guid workId, long artworkId, CancellationToken cancellationToken)
     {
@@ -469,6 +500,8 @@ public sealed class WorkMetadataStore(AppDbContext db)
     private sealed record ArtworkDbRow(long Id, int Slot, string Language, string Source, string ProviderFilePath, int? Width, int? Height, double? VoteAverage, string? CacheKey, bool IsManualOverride);
 
     private sealed record CardDbRow(Guid WorkId, int Kind, long? ArtworkId, int? Slot, string? Locale, string? Text, double? Number);
+
+    private sealed record OverviewDbRow(Guid WorkId, string Locale, string Value, string? OriginalLanguage);
 
     private sealed record ArtworkFileRow(int MediaType, string CacheKey);
 }

@@ -1,9 +1,12 @@
 using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Features.Recommendations;
+using Jularr.Web.Features.Shell;
 using Jularr.Web.Pages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -52,9 +55,17 @@ internal sealed class EpisodeFlowFixture : IAsyncDisposable
     public static EpisodeProgressService ProgressService(AppDbContext db, CurrentAccountContext account) =>
         new(db, account, new VideoProgressService(db), new CanonicalVideoTargetResolver(db, new LegacyWorkBridge(db, new WorkService(db), new WorkStructureService(db))));
 
-    /// <summary>The Home page wired like the application: progress through the shared adapter.</summary>
-    public static IndexModel Home(AppDbContext db, CurrentAccountContext account) =>
-        new(db, account, ProgressService(db, account));
+    /// <summary>The Home page wired like the application: canonical progress and the default media capabilities.</summary>
+    public static IndexModel Home(AppDbContext db, CurrentAccountContext account) => Home(db, account, null, null, null);
+
+    public static IndexModel Home(AppDbContext db, CurrentAccountContext account, MediaRecommendationService? recommendations, IInstanceModuleService? instanceModules, MediaCapabilityStore? capabilities) =>
+        new(
+            db,
+            account,
+            new VideoProgressService(db),
+            new AppShellService(new MediaCapabilityService(capabilities ?? new MediaCapabilityStore(Path.Combine(Path.GetTempPath(), $"jularr-home-capabilities-{Guid.NewGuid():N}")), instanceModules)),
+            recommendations,
+            instanceModules);
 
     public async Task<Anime> AddAnimeAsync(string key)
     {
@@ -141,18 +152,16 @@ internal sealed class EpisodeFlowFixture : IAsyncDisposable
         Assert.AreEqual(1, updated, "Expected exactly one canonical progress row.");
     }
 
-    public static CurrentAccountContext Account(string profileId)
+    public static CurrentAccountContext Account(string profileId, string? role = null)
     {
-        var httpContext = new DefaultHttpContext
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, profileId) };
+        if (role is not null)
         {
-            User = new ClaimsPrincipal(
-                new ClaimsIdentity(
-                    [new Claim(ClaimTypes.NameIdentifier, profileId)],
-                    "test"))
-        };
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
-        return new CurrentAccountContext(
-            new FixedHttpContextAccessor { HttpContext = httpContext });
+        var httpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test")) };
+        return new CurrentAccountContext(new FixedHttpContextAccessor { HttpContext = httpContext });
     }
 
     // HttpContextAccessor stores its context in a shared AsyncLocal, which

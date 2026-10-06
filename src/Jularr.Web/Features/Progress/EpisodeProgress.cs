@@ -386,7 +386,7 @@ public sealed class EpisodeProgressService(
         int limit = ContinueWatchingLimit,
         CancellationToken cancellationToken = default)
     {
-        var items = await videoProgress.GetContinueWatchingAsync(currentAccount.ProfileId, limit, WorkMediaType.Anime, cancellationToken);
+        var items = await videoProgress.GetContinueWatchingAsync(currentAccount.ProfileId, limit, [WorkMediaType.Anime], cancellationToken);
         var identities = await videoProgress.GetLegacyEpisodeIdentitiesAsync([.. items.Where(x => x.WorkEpisodeId.HasValue).Select(x => x.WorkEpisodeId!.Value)], cancellationToken);
         var details = await LoadEpisodeDetailsAsync([.. identities.Values.Select(x => x.EpisodeId)], cancellationToken);
 

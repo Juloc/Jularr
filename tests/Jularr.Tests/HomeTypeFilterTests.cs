@@ -31,7 +31,7 @@ public sealed class HomeTypeFilterTests
         Assert.AreEqual(DiscoveryCategory.All, home.ActiveType);
         Assert.AreEqual(1, home.ContinueWatching.Count);
         Assert.AreEqual(1, home.ContinueReading.Count);
-        Assert.AreEqual("/Discover?category=anime&mode=my-list", home.ContinueWatchingDiscoverUrl);
+        Assert.AreEqual("/Discover?mode=my-list", home.ContinueWatchingDiscoverUrl);
         Assert.AreEqual("/Discover?mode=my-list", home.ContinueReadingDiscoverUrl);
     }
 
