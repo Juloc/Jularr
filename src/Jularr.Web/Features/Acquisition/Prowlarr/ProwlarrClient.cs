@@ -76,7 +76,7 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
             return [];
         }
 
-        var settings = ProwlarrSettingsStore.NormalizeAndValidate(connection.Settings);
+        var settings = NormalizeAndValidate(connection.Settings);
         var path = BuildSearchPath(settings, search.Query);
 
         using var request = CreateRequest(
@@ -165,6 +165,37 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
         return releases;
     }
 
+    public static ProwlarrSettings NormalizeAndValidate(ProwlarrSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (!Uri.TryCreate(settings.BaseUrl?.Trim(), UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            string.IsNullOrWhiteSpace(uri.Host) ||
+            !string.IsNullOrEmpty(uri.UserInfo) ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment))
+        {
+            throw new ArgumentException(
+                "Prowlarr Base URL must be an absolute HTTP(S) URL without credentials, query or fragment.",
+                nameof(settings));
+        }
+
+        if (settings.SearchLimit is < 1 or > 1000)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(settings),
+                "Prowlarr search limit must be between 1 and 1000.");
+        }
+
+        return settings with
+        {
+            BaseUrl = uri.GetLeftPart(UriPartial.Path).TrimEnd('/'),
+            Categories = (settings.Categories ?? []).Where(value => value > 0).Distinct().Order().ToArray(),
+            IndexerIds = (settings.IndexerIds ?? []).Where(value => value > 0).Distinct().Order().ToArray()
+        };
+    }
+
     private static HttpRequestMessage CreateRequest(
         ProwlarrConnection connection,
         HttpMethod method,
@@ -172,7 +203,7 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
     {
         ArgumentNullException.ThrowIfNull(connection);
 
-        var settings = ProwlarrSettingsStore.NormalizeAndValidate(connection.Settings);
+        var settings = NormalizeAndValidate(connection.Settings);
         if (string.IsNullOrWhiteSpace(connection.ApiKey))
         {
             throw new ArgumentException(
