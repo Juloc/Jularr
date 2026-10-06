@@ -1438,18 +1438,530 @@ Statements is complete only when:
 - Detailed/Compact and Desktop/Tablet/Mobile follow this contract;
 - approved mockup follows this hierarchy and density.
 
-### Tables
+### Database Tables — binding third-screen UI contract
 
-Show PostgreSQL-native table evidence such as:
-- table/data/index/total size;
-- estimated live/dead tuples;
-- sequential/index scan activity;
-- insert/update/delete/HOT-update activity where useful;
-- last vacuum/autovacuum;
-- last analyze/autoanalyze;
-- vacuum/analyze counts/times where supported.
+Canonical destination:
 
-Warnings are review hints only. Do not automatically run VACUUM FULL or rewrite tables.
+`Admin -> System & Diagnostics -> Datenbank -> Tabellen`
+
+Preferred route/state:
+
+`/Admin/System?tab=database&view=tables`
+
+Mockup assets live beside this `SPEC.md`.
+
+First mockup filename:
+
+`database-tables-light.png`
+
+The first approved mockup is **Desktop / Light / Clean / Detailed mode**.
+
+#### Purpose
+
+Tables is the PostgreSQL table-health/workload screen.
+
+It answers:
+
+1. Which tables consume the most database space?
+2. Which tables have unusual growth or write churn?
+3. Which tables accumulate dead tuples or show vacuum/analyze pressure?
+4. Which tables are doing large sequential workloads that deserve review?
+5. Which tables are write-heavy/read-heavy and therefore likely to affect weak-server performance?
+6. Is a condition current, historical, or simply normal for that workload?
+
+It is not:
+- a raw catalog browser;
+- a schema editor;
+- a VACUUM/REINDEX console;
+- an automatic "fix everything" page;
+- a place that labels every sequential scan or dead tuple as an error.
+
+#### Page shell
+
+Reuse the exact Database shell/time-range/freshness behavior from Overview and Statements.
+
+Active secondary tab:
+**Tabellen**
+
+The selected time range affects:
+- growth deltas;
+- scan/read/write activity deltas;
+- maintenance/event history;
+- trend indicators.
+
+Current table size/live/dead estimates remain current-state values and must be labeled as such.
+
+#### Top summary strip
+
+Use one dense status strip, not large cards.
+
+Suggested cells:
+
+1. **Tabellen**
+   - number of user tables observed.
+
+2. **Tabellendaten**
+   - total table-data size, excluding indexes.
+
+3. **Indexdaten**
+   - total index size for context;
+   - clicking/opening this context can navigate to Indexes.
+
+4. **Dead tuples**
+   - total current estimated dead tuples;
+   - plus number of tables requiring evidence-based attention.
+
+5. **Vacuum / Analyze**
+   - number of tables with current maintenance attention;
+   - Healthy when none.
+
+6. **Wachstum**
+   - total table-data growth during the selected retained period when reliable;
+   - `Keine Historie` when no reliable baseline exists.
+
+No fake table-health percentage.
+
+#### Primary toolbar
+
+Left:
+
+**Ranking / view segmented control**
+- Aufmerksamkeit — default;
+- Größe;
+- Wachstum;
+- Reads;
+- Writes;
+- Dead Tuples.
+
+Search:
+`Tabelle suchen ...`
+
+Searches schema/table name only.
+
+Right:
+
+- schema filter when more than one relevant schema exists;
+- `Filter` action.
+
+Advanced filters may include:
+- minimum table size;
+- only maintenance attention;
+- only high write churn;
+- only significant sequential workload;
+- only growth anomalies;
+- last vacuum/analyze age;
+- schema.
+
+Do not expose arbitrary catalog SQL.
+
+#### Main Tables table
+
+This is the dominant screen.
+
+Desktop Detailed columns:
+
+1. **Tabelle**
+2. **Größe**
+3. **Wachstum**
+4. **Live / Dead**
+5. **Reads**
+6. **Scan-Muster**
+7. **Writes**
+8. **Vacuum**
+9. **Analyze**
+10. **Status**
+11. **Aktion**
+
+The exact visible columns may compress slightly at narrower widths, but the information remains available in row detail/drawer.
+
+##### Table name
+
+Show:
+- table name;
+- schema as muted secondary text when useful;
+- optional domain/owner label only if Jularr has explicit reliable mapping.
+
+Do not infer a feature owner purely from a table-name prefix if that mapping is not authoritative.
+
+##### Size
+
+Show current relation data size.
+
+A compact secondary value may show total including indexes, but the column label must make the distinction clear.
+
+Exact byte values remain accessible in detail.
+
+##### Growth
+
+Selected-period change from retained snapshots.
+
+States:
+- +X MB / +Y %;
+- stable;
+- shrinking only if reliable;
+- insufficient history;
+- reset/gap.
+
+Do not flag growth merely because a large active library naturally grows.
+
+##### Live / Dead
+
+Show current PostgreSQL estimates, e.g.:
+
+`12.4 M / 1.2 M`
+
+with explicit labels/tooltips for Live and Dead.
+
+A small dead-ratio indicator may be shown only as supporting evidence, not as an automatic health judgment.
+
+##### Reads
+
+Selected-period table-read activity where PostgreSQL exposes a reliable signal.
+
+Show compact aggregate useful for ranking, not every underlying counter.
+
+Detail drawer exposes:
+- seq scans;
+- seq tuples read;
+- index scans/fetch context;
+- relevant block/I/O history if available through #859 data.
+
+##### Scan pattern
+
+Human-readable evidence such as:
+- `Mostly indexed`;
+- `Mixed`;
+- `Seq-heavy`;
+- `No significant reads`;
+- `Insufficient data`.
+
+"Seq-heavy" is descriptive, not automatically Warning.
+
+Warning only when table size/workload/query evidence makes the pattern materially expensive.
+
+##### Writes
+
+Selected-period mutation activity:
+- inserts;
+- updates;
+- deletes;
+- HOT-update signal where useful.
+
+Main table may show one compact write count/rate.
+
+Detail drawer exposes breakdown.
+
+##### Vacuum
+
+Show:
+- last autovacuum/manual vacuum time where available;
+- compact state: Recent / Due attention / Never observed / Unknown.
+
+Never show "Overdue" based on time alone without workload/dead-tuple context.
+
+##### Analyze
+
+Same principle:
+- last auto/manual analyze;
+- current evidence of stale planner statistics where modeled;
+- no simplistic fixed timer threshold.
+
+##### Status
+
+Allowed semantic states:
+- Healthy;
+- Attention;
+- Warning;
+- Collecting;
+- Unknown.
+
+Status must have an inspectable reason.
+
+Examples:
+- `Dead tuples rising while autovacuum has not caught up`;
+- `Large table with sustained high sequential rows read`;
+- `Analyze evidence stale after heavy write churn`;
+- `Rapid growth compared with prior period`.
+
+Do not use:
+- `Needs VACUUM FULL`;
+- `Drop this table`;
+- `Index missing`;
+unless another dedicated diagnostic establishes that exact recommendation.
+
+#### Attention ranking
+
+Default `Aufmerksamkeit` ranks by evidence, not by one raw counter.
+
+Possible evidence contributors:
+- dead-tuple pressure relative to table size/write rate;
+- sustained maintenance backlog;
+- stale analyze evidence after substantial churn;
+- large sequential workload on a materially large table;
+- abnormal growth;
+- incident/timeout correlation.
+
+The ranking system must remain explainable in the detail drawer.
+
+No opaque AI "risk score".
+
+#### Row interaction
+
+Selecting a row opens the **Table detail drawer**.
+
+No destructive maintenance action appears directly in the row.
+
+#### Table detail drawer
+
+Desktop:
+right-side drawer.
+
+Mobile:
+full-screen detail sheet/page.
+
+Header:
+- table name;
+- schema;
+- current semantic status;
+- current total/table/index size summary;
+- close action.
+
+##### Section A — Storage
+
+Show:
+- table data size;
+- index size;
+- total relation size;
+- selected-period growth;
+- retained historical size chart where available.
+
+Optional composition bar:
+Table data vs indexes vs TOAST/other only when reliable.
+
+##### Section B — Rows & churn
+
+Show:
+- estimated live tuples;
+- estimated dead tuples;
+- inserts;
+- updates;
+- deletes;
+- HOT updates where useful;
+- selected-period write rate/trend.
+
+Explain estimates as estimates where PostgreSQL semantics require it.
+
+##### Section C — Reads / scan behavior
+
+Show:
+- seq scan count;
+- seq tuples read;
+- index scan/fetch context;
+- selected-period trend;
+- top related normalized statements from #859 when reliable.
+
+This section should help distinguish:
+- one expected maintenance scan;
+- repeated expensive table scans;
+- normal small-table sequential access.
+
+##### Section D — Vacuum & Analyze
+
+Show:
+- last manual vacuum;
+- last autovacuum;
+- vacuum/autovacuum counts/timing where supported;
+- last manual analyze;
+- last autoanalyze;
+- analyze/vacuum history snapshots where available;
+- current dead-tuple/write-churn context.
+
+Include a concise explanation:
+`Autovacuum is PostgreSQL's normal maintenance path; Jularr does not schedule blind VACUUM FULL/REINDEX operations.`
+
+No `Run VACUUM FULL` button.
+
+If the product later adds safe maintenance actions, they require their own explicit design/spec and authorization.
+
+##### Section E — Growth history
+
+Chart:
+- table data size;
+- index size;
+- optional write activity overlay/toggle.
+
+Markers:
+- Jularr deployments/version;
+- PostgreSQL stats/history reset/gap where relevant.
+
+No interpolation across missing historical samples.
+
+##### Section F — Diagnostic evidence
+
+Evidence-based notes only, examples:
+- `Dead tuple estimate rose from 3% to 11% while write volume increased 4x`;
+- `Autovacuum ran 18 min ago and dead tuples are falling`;
+- `Sequential rows read are high, but table is only 2 MB`;
+- `Analyze has not been observed since a large import`.
+
+The UI should explicitly de-escalate harmless-looking metrics when context says they are normal.
+
+##### Section G — Related
+
+Links:
+- `Statements für diese Tabelle` only if reliable SQL relation mapping exists;
+- `Indizes dieser Tabelle`;
+- `I/O & Vacuum`;
+- `Verlauf`.
+
+Never infer statement relation membership by unsafe free-text matching alone if PostgreSQL/query parsing evidence is not reliable.
+
+#### Healthy state behavior
+
+This page is not only a problem list.
+
+When all tables are healthy:
+- default Attention view shows a calm zero-problem state at top;
+- the table still remains available, ranked by current size/activity;
+- do not hide all tables completely;
+- status colors remain quiet.
+
+#### Pagination / scale
+
+- Server-side bounded pagination.
+- Do not load the entire table catalog/history into the browser solely for sorting.
+- Preserve filters/ranking/page when opening/closing a drawer.
+- For ordinary Jularr installations, the table count may be modest; the architecture still remains bounded.
+
+#### Live update behavior
+
+Table diagnostics update more slowly than current locks.
+
+- size/maintenance snapshots may refresh on a bounded background cadence;
+- selected-period activity aggregates update when samples arrive;
+- do not constantly reorder the table while the admin is inspecting it;
+- apply reorder at deliberate refresh/idle boundaries;
+- drawer remains open and updates non-disruptively.
+
+Freshness states:
+- current;
+- collecting;
+- stale;
+- sampler throttled;
+- PostgreSQL unavailable;
+- metric source unavailable.
+
+#### Detailed vs Compact
+
+Detailed:
+- full summary;
+- all primary columns;
+- richer status explanation;
+- two-line secondary data where needed.
+
+Compact:
+- prioritize Table, Size, Dead pressure, Reads/Writes summary, Vacuum, Status;
+- growth/scan/analyze secondary values move into row expansion/drawer;
+- one-line rows where practical;
+- no diagnostic meaning is removed.
+
+#### Responsive
+
+Desktop:
+primary experience.
+
+Tablet:
+- lower-priority columns collapse;
+- drawer remains usable.
+
+Mobile:
+- no miniature wide table;
+- each table becomes a dense stacked row:
+  - table;
+  - size;
+  - growth;
+  - live/dead summary;
+  - primary workload signal;
+  - vacuum/status;
+- sorting/ranking chips horizontally scroll;
+- filters use bottom sheet;
+- tap opens full-screen Table detail.
+
+TV: unsupported.
+
+#### Empty / partial / error states
+
+Required:
+- loading;
+- no user tables;
+- selected filter has no matches;
+- first size/history sample collecting;
+- no retained growth history;
+- table statistics reset/gap;
+- vacuum/analyze metrics partly unsupported;
+- relation-size source unavailable;
+- sampler stale/throttled;
+- PostgreSQL offline with retained history;
+- PostgreSQL offline without retained history;
+- permission denied.
+
+Unsupported metrics display `Nicht erfasst` / `Nicht verfügbar`, never misleading zero.
+
+#### Threshold semantics
+
+No universal red/green rules such as:
+- dead tuples >10% always red;
+- sequential scan count >0 bad;
+- vacuum older than one day bad;
+- large table bad.
+
+Warnings combine workload/context/history.
+
+Examples:
+- 20% dead tuples on a tiny rarely used table may be irrelevant;
+- 3% dead tuples on a very large hot table with rising write churn may matter;
+- sequential scans on a small lookup table can be entirely correct;
+- a large table is not unhealthy simply because it is large.
+
+#### Security
+
+Admin/System diagnostics only.
+
+No:
+- row contents/data browsing;
+- raw user/media records;
+- arbitrary SQL;
+- schema mutation;
+- connection secrets.
+
+This screen shows metadata/statistics, not table data.
+
+#### Accessibility
+
+- table headers expose sort state;
+- status has text/icon, not color only;
+- percentages/bars have textual equivalents;
+- charts have accessible summaries;
+- drawer focus behavior follows shared shell;
+- live updates do not continuously announce reorder/change noise.
+
+#### Tables acceptance criteria
+
+Tables is complete only when:
+
+- current size and selected-period activity are clearly distinguished;
+- size/table/index totals are not conflated;
+- live/dead tuple values are labeled as PostgreSQL estimates where appropriate;
+- Attention ranking is explainable and context-sensitive;
+- sequential scans are not automatically treated as errors;
+- vacuum/analyze status considers workload rather than only wall-clock age;
+- growth uses retained bounded history and handles gaps/resets;
+- table detail provides storage/churn/read/maintenance context without exposing row data;
+- no destructive maintenance or schema action exists;
+- server-side bounded sorting/filtering/pagination is used;
+- partial/unsupported PostgreSQL metrics degrade honestly;
+- Detailed/Compact and responsive behavior follow this contract;
+- approved mockup follows this information hierarchy and density.
 
 ### Indexes
 
