@@ -117,34 +117,6 @@ public sealed class TmdbDiscoveryTests
     }
 
     [TestMethod]
-    public async Task TmdbFailureOnlyDegradesTheRequestedMovieFeed()
-    {
-        await using var db = await MediaCoreTestSupport.CreateDbAsync();
-        using var client = Client(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        var tmdb = Provider(db, client);
-        var coordinator = new DiscoveryCoordinator(
-            null!,
-            null!,
-            null!,
-            tmdb,
-            null!,
-            db,
-            NullLogger<DiscoveryCoordinator>.Instance);
-
-        var response = await coordinator.GetAsync(
-            DiscoveryRequest.Parse(null, "movie", "trending"),
-            $"tmdb-outage-{Guid.NewGuid():N}",
-            isOwner: false,
-            includeAniList: false,
-            includeBooks: false,
-            CancellationToken.None);
-
-        Assert.AreEqual(0, response.Items.Count);
-        Assert.AreEqual(1, response.Warnings.Count);
-        StringAssert.Contains(response.Warnings[0], "TMDB movie");
-    }
-
-    [TestMethod]
     public async Task SeriesMaterializationCreatesCanonicalSeasonEpisodeStructure()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
@@ -202,7 +174,7 @@ public sealed class TmdbDiscoveryTests
             calls.ToArray());
     }
 
-    private static TmdbDiscoveryProvider Provider(
+    internal static TmdbDiscoveryProvider Provider(
         Jularr.Web.Data.AppDbContext db,
         HttpClient client)
     {
@@ -229,23 +201,27 @@ public sealed class TmdbDiscoveryTests
             new WorkMetadataRefreshQueue(new WorkMetadataStore(db), new WorkMetadataRefreshSignal(), clock));
     }
 
-    private static HttpClient Client(Func<HttpRequestMessage, HttpResponseMessage> handler) =>
+    internal static HttpClient Client(Func<HttpRequestMessage, HttpResponseMessage> handler) =>
+        AsyncClient(request => Task.FromResult(handler(request)));
+
+    /// <summary>A TMDB client whose answers a test can hold back, to decide in which order the sources answer.</summary>
+    internal static HttpClient AsyncClient(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) =>
         new(new StubHandler(handler))
         {
             BaseAddress = new Uri("https://api.themoviedb.org/3/")
         };
 
-    private static HttpResponseMessage Json(string json) =>
+    internal static HttpResponseMessage Json(string json) =>
         new(HttpStatusCode.OK)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
 
-    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> handler) : HttpMessageHandler
+    private sealed class StubHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken) =>
-            Task.FromResult(handler(request));
+            handler(request);
     }
 }

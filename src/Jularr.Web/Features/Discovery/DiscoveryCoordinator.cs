@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using System.Globalization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Instance;
@@ -9,382 +9,312 @@ using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Tracking;
 using Microsoft.EntityFrameworkCore;
+using SourceFetch = System.Func<System.IServiceProvider, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Jularr.Web.Features.Discovery.DiscoveryItem>>>;
 
 namespace Jularr.Web.Features.Discovery;
 
+/// <summary>
+/// Loads the titles Discover shows. Provider calls go through <see cref="DiscoverySourceFlights"/> (one call per source, shared and cached
+/// there); this class decides which sources a scope needs for a viewer, waits for them within the budget it is given and overlays the
+/// library state of the titles that came back. The order of the titles follows the sources, never the order in which they answered.
+/// </summary>
 public sealed class DiscoveryCoordinator(
-    AniListMetadataProvider animeProvider,
-    NovelAniListProvider readingProvider,
-    BookCatalogService books,
     TmdbDiscoveryProvider tmdb,
     AniListAccountService aniListAccount,
     AppDbContext db,
+    DiscoverySourceFlights flights,
     ILogger<DiscoveryCoordinator> logger,
-    IInstanceModuleService? instanceModules = null,
-    BookSearchCoordinator? bookSearch = null) : IDiscoveryFeed
+    IInstanceModuleService? instanceModules = null) : IDiscoveryFeed
 {
     private const int AnimeLimit = 10;
     private const int ReadingLimit = 14;
     private const int BookLimit = 10;
     private const int TmdbLimit = 12;
-    private const int MaximumResultCount = 30;
 
-    private static readonly ConcurrentDictionary<string, CacheEntry> Cache =
-        new(StringComparer.Ordinal);
+    private static readonly TimeSpan BrowseFreshness = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan SearchFreshness = TimeSpan.FromSeconds(45);
 
-    public async Task<DiscoveryResponse> GetAsync(
-        DiscoveryRequest request,
-        string profileId,
-        bool isOwner,
-        bool includeAniList,
-        bool includeBooks,
+    private sealed record SourceCall(DiscoverySource Source, string Key, TimeSpan Freshness, SourceFetch Fetch);
+
+    public async Task<DiscoveryLoad> LoadAsync(
+        IReadOnlyList<DiscoveryRequest> requests,
+        DiscoveryAudience audience,
+        DiscoveryWait wait,
         CancellationToken cancellationToken)
     {
-        var instance = instanceModules is null
-            ? InstanceModuleSettings.Default
-            : await instanceModules.GetAsync(cancellationToken);
-        var animeEnabled = instance.IsEnabled(InstanceModule.Anime);
-        var mangaEnabled = instance.IsEnabled(InstanceModule.Manga);
-        var novelEnabled = instance.IsEnabled(InstanceModule.Novel);
-        var bookEnabled = instance.IsEnabled(InstanceModule.Book);
-        var movieEnabled = instance.IsEnabled(InstanceModule.Movie);
-        var tvEnabled = instance.IsEnabled(InstanceModule.Tv);
+        var instance = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
+        var started = new Dictionary<string, DiscoverySourceFlight>(StringComparer.Ordinal);
+        var plans = new List<(DiscoveryRequest Request, IReadOnlyList<SourceCall> Calls)>(requests.Count);
+        var personal = new Dictionary<int, DiscoveryBatch>();
 
-        if (!CategoryAvailable(
-                request.Category,
-                animeEnabled,
-                mangaEnabled,
-                novelEnabled,
-                bookEnabled,
-                movieEnabled,
-                tvEnabled))
+        for (var index = 0; index < requests.Count; index++)
         {
-            return new DiscoveryResponse(
-                request.Query,
-                CategoryName(request.Category),
-                ModeName(request.Mode),
-                request.Genre,
-                false,
-                [],
-                []);
-        }
-
-        includeAniList &= animeEnabled || mangaEnabled || novelEnabled;
-        includeBooks &= bookEnabled;
-
-        var cacheKey = request.CacheKey(profileId)
-            + $"|anilist:{includeAniList}|books:{includeBooks}|tmdb:{tmdb.IsConfigured}"
-            + $"|modules:a{animeEnabled}:m{mangaEnabled}:n{novelEnabled}:b{bookEnabled}:movie{movieEnabled}:tv{tvEnabled}";
-        if (TryGetCached(cacheKey, out var cached))
-        {
-            return cached;
-        }
-
-        var status = AniListAccountStatus.Disconnected;
-        var warnings = new List<string>();
-        IReadOnlyList<DiscoveryItem> items;
-
-        if (request.RequiresPersonalAniListAccount)
-        {
-            if (!includeAniList)
+            var request = requests[index];
+            if (request.RequiresPersonalAniListAccount)
             {
-                return new DiscoveryResponse(
-                    request.Query,
-                    CategoryName(request.Category),
-                    ModeName(request.Mode),
-                    request.Genre,
-                    false,
-                    [],
-                    []);
+                personal[index] = await LoadMyListAsync(request, audience, instance, cancellationToken);
+                plans.Add((request, []));
+                continue;
             }
 
-            status = await aniListAccount.GetStatusAsync(cancellationToken);
-            if (!status.IsConnected)
+            var calls = CallsFor(request, audience, instance);
+            foreach (var call in calls)
             {
-                return new DiscoveryResponse(
-                    request.Query,
-                    CategoryName(request.Category),
-                    ModeName(request.Mode),
-                    request.Genre,
-                    false,
-                    [],
-                    ["Connect your AniList account in Settings to browse My AniList."]);
+                if (!started.ContainsKey(call.Key))
+                {
+                    started[call.Key] = flights.Start(call.Key, call.Freshness, wait.Refresh?.Contains(call.Source) == true, call.Fetch);
+                }
             }
 
-            items = await LoadMyListAsync(
-                request.Category,
-                isOwner,
-                warnings,
-                animeEnabled,
-                mangaEnabled,
-                novelEnabled,
-                cancellationToken);
+            plans.Add((request, calls));
         }
-        else
+
+        await WaitForSourcesAsync([.. started.Values], wait, cancellationToken);
+
+        var batches = new List<DiscoveryBatch>(requests.Count);
+        for (var index = 0; index < plans.Count; index++)
         {
-            items = await LoadProviderResultsAsync(
-                request,
-                isOwner,
-                warnings,
-                includeAniList,
-                includeBooks,
-                animeEnabled,
-                mangaEnabled,
-                novelEnabled,
-                bookEnabled,
-                movieEnabled,
-                tvEnabled,
-                cancellationToken);
+            var (request, calls) = plans[index];
+            batches.Add(personal.TryGetValue(index, out var mine) ? mine : ToBatch(request, calls, started, audience, instance));
         }
 
-        items = await ApplyLocalStateAsync(items, cancellationToken);
+        var settled = started.Values.Count(flight => flight.IsSettled);
+        return new DiscoveryLoad(batches, settled, started.Count - settled);
+    }
 
-        var response = new DiscoveryResponse(
-            request.Query,
-            CategoryName(request.Category),
-            ModeName(request.Mode),
-            request.Genre,
-            status.IsConnected,
-            items.Take(MaximumResultCount).ToArray(),
-            warnings.Distinct(StringComparer.Ordinal).ToArray());
-
-        PutCached(
-            cacheKey,
-            response,
-            request.Mode switch
+    private IReadOnlyList<SourceCall> CallsFor(DiscoveryRequest request, DiscoveryAudience audience, InstanceModuleSettings instance)
+    {
+        var calls = new List<SourceCall>();
+        foreach (var source in DiscoverySources.For(request.Category))
+        {
+            if (!SourceAvailable(source, audience, instance))
             {
-                DiscoveryMode.MyList => TimeSpan.FromSeconds(20),
-                DiscoveryMode.Search => TimeSpan.FromSeconds(45),
-                _ => TimeSpan.FromMinutes(3)
-            });
+                continue;
+            }
 
-        return response;
+            var key = $"{DiscoverySources.Name(source)}|{request.Mode}|{request.Genre}|{request.Query.ToLowerInvariant()}|{CultureInfo.CurrentUICulture.Name}"
+                + (source == DiscoverySource.Reading && audience.IsOwner ? "|owner" : "");
+            var freshness = request.Mode == DiscoveryMode.Search ? SearchFreshness : BrowseFreshness;
+            calls.Add(new SourceCall(source, key, freshness, FetchFor(source, request, audience.IsOwner)));
+        }
+
+        return calls;
     }
 
-    private async Task<IReadOnlyList<DiscoveryItem>> LoadProviderResultsAsync(
+    private bool SourceAvailable(DiscoverySource source, DiscoveryAudience audience, InstanceModuleSettings instance) =>
+        DiscoverySources.IsVisible(source, audience.VisibleMediaTypes)
+        && source switch
+        {
+            DiscoverySource.Anime => instance.IsEnabled(InstanceModule.Anime),
+            DiscoverySource.Movies => instance.IsEnabled(InstanceModule.Movie) && tmdb.IsConfigured,
+            DiscoverySource.Series => instance.IsEnabled(InstanceModule.Tv) && tmdb.IsConfigured,
+            DiscoverySource.Reading => instance.IsEnabled(InstanceModule.Manga) || instance.IsEnabled(InstanceModule.Novel),
+            _ => instance.IsEnabled(InstanceModule.Book)
+        };
+
+    private static SourceFetch FetchFor(DiscoverySource source, DiscoveryRequest request, bool isOwner) => source switch
+    {
+        DiscoverySource.Anime => async (services, cancellationToken) =>
+        {
+            var provider = services.GetRequiredService<AniListMetadataProvider>();
+            var rows = request.Mode == DiscoveryMode.Search
+                ? await provider.SearchAsync(request.Query, AnimeLimit, request.Genre, cancellationToken)
+                : await provider.BrowseAsync(request.Mode == DiscoveryMode.Trending, AnimeLimit, request.Genre, cancellationToken);
+            return rows.Select(MapAnime).ToArray();
+        },
+        DiscoverySource.Reading => async (services, cancellationToken) =>
+        {
+            var provider = services.GetRequiredService<NovelAniListProvider>();
+            var rows = request.Mode == DiscoveryMode.Search
+                ? await provider.SearchReadingMediaAsync(request.Query, ReadingLimit, true, true, request.Genre, cancellationToken)
+                : await provider.BrowseReadingMediaAsync(request.Mode == DiscoveryMode.Trending, ReadingLimit, true, true, request.Genre, cancellationToken);
+            return rows.Select(row => MapReading(row, isOwner)).ToArray();
+        },
+        DiscoverySource.Movies => (services, cancellationToken) => FetchTmdbAsync(services, TmdbDiscoveryMediaType.Movie, request, cancellationToken),
+        DiscoverySource.Series => (services, cancellationToken) => FetchTmdbAsync(services, TmdbDiscoveryMediaType.Series, request, cancellationToken),
+        _ => async (services, cancellationToken) =>
+        {
+            var books = services.GetRequiredService<BookCatalogService>();
+            var bookSearch = services.GetService<BookSearchCoordinator>();
+            var rows = request.Mode == DiscoveryMode.Search
+                ? bookSearch is null
+                    ? await books.SearchAsync(request.Query, cancellationToken)
+                    : (await bookSearch.SearchAsync(request.Query, cancellationToken)).Items.Select(result => result.Book).ToArray()
+                : await books.BrowseAsync(ToBookBrowseMode(request.Mode), cancellationToken);
+            return rows.Where(row => MatchesGenre(row, request.Genre)).Take(BookLimit).Select(MapBook).ToArray();
+        }
+    };
+
+    private static async Task<IReadOnlyList<DiscoveryItem>> FetchTmdbAsync(
+        IServiceProvider services,
+        TmdbDiscoveryMediaType mediaType,
         DiscoveryRequest request,
-        bool isOwner,
-        ICollection<string> warnings,
-        bool includeAniList,
-        bool includeBooks,
-        bool animeEnabled,
-        bool mangaEnabled,
-        bool novelEnabled,
-        bool bookEnabled,
-        bool movieEnabled,
-        bool tvEnabled,
         CancellationToken cancellationToken)
     {
-        var includeAnime = includeAniList && animeEnabled &&
-            (request.Category is DiscoveryCategory.All or DiscoveryCategory.Anime);
-        var includeNovel = includeAniList && novelEnabled &&
-            (request.Category is DiscoveryCategory.All or DiscoveryCategory.LightNovel or DiscoveryCategory.BooksAndLightNovels);
-        var includeManga = includeAniList && mangaEnabled &&
-            (request.Category is DiscoveryCategory.All or DiscoveryCategory.Manga);
-        var includeBook = includeBooks && bookEnabled &&
-            (request.Category is DiscoveryCategory.All or DiscoveryCategory.Book or DiscoveryCategory.BooksAndLightNovels);
-        var includeMovie = movieEnabled && tmdb.IsConfigured &&
-            (request.Category is DiscoveryCategory.All or DiscoveryCategory.Movie);
-        var includeSeries = tvEnabled && tmdb.IsConfigured &&
-            (request.Category is DiscoveryCategory.All or DiscoveryCategory.Series);
-
-        var animeTask = includeAnime
-            ? CaptureAsync(
-                async () =>
-                {
-                    var rows = request.Mode == DiscoveryMode.Search
-                        ? await animeProvider.SearchAsync(
-                            request.Query,
-                            AnimeLimit,
-                            request.Genre,
-                            cancellationToken)
-                        : await animeProvider.BrowseAsync(
-                            request.Mode == DiscoveryMode.Trending,
-                            AnimeLimit,
-                            request.Genre,
-                            cancellationToken);
-
-                    return rows
-                        .Select(MapAnime)
-                        .ToArray();
-                },
-                "AniList anime search is temporarily unavailable.",
-                warnings,
-                cancellationToken)
-            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
-
-        var readingTask = includeNovel || includeManga
-            ? CaptureAsync(
-                async () =>
-                {
-                    var rows = request.Mode == DiscoveryMode.Search
-                        ? await readingProvider.SearchReadingMediaAsync(
-                            request.Query,
-                            ReadingLimit,
-                            includeNovel,
-                            includeManga,
-                            request.Genre,
-                            cancellationToken)
-                        : await readingProvider.BrowseReadingMediaAsync(
-                            request.Mode == DiscoveryMode.Trending,
-                            ReadingLimit,
-                            includeNovel,
-                            includeManga,
-                            request.Genre,
-                            cancellationToken);
-
-                    return rows
-                        .Select(x => MapReading(x, isOwner))
-                        .ToArray();
-                },
-                "AniList novel/manga search is temporarily unavailable.",
-                warnings,
-                cancellationToken)
-            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
-
-        var movieTask = includeMovie
-            ? CaptureAsync(
-                async () =>
-                {
-                    var rows = request.Mode == DiscoveryMode.Search
-                        ? await tmdb.SearchAsync(
-                            TmdbDiscoveryMediaType.Movie,
-                            request.Query,
-                            TmdbLimit,
-                            request.Genre,
-                            cancellationToken)
-                        : await tmdb.BrowseAsync(
-                            TmdbDiscoveryMediaType.Movie,
-                            request.Mode,
-                            TmdbLimit,
-                            request.Genre,
-                            cancellationToken);
-
-                    return rows.Select(MapTmdb).ToArray();
-                },
-                "TMDB movie discovery is temporarily unavailable.",
-                warnings,
-                cancellationToken)
-            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
-
-        var seriesTask = includeSeries
-            ? CaptureAsync(
-                async () =>
-                {
-                    var rows = request.Mode == DiscoveryMode.Search
-                        ? await tmdb.SearchAsync(
-                            TmdbDiscoveryMediaType.Series,
-                            request.Query,
-                            TmdbLimit,
-                            request.Genre,
-                            cancellationToken)
-                        : await tmdb.BrowseAsync(
-                            TmdbDiscoveryMediaType.Series,
-                            request.Mode,
-                            TmdbLimit,
-                            request.Genre,
-                            cancellationToken);
-
-                    return rows.Select(MapTmdb).ToArray();
-                },
-                "TMDB TV discovery is temporarily unavailable.",
-                warnings,
-                cancellationToken)
-            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
-
-        var bookTask = includeBook
-            ? CaptureAsync(
-                async () =>
-                {
-                    var rows = request.Mode == DiscoveryMode.Search
-                        ? bookSearch is null
-                            ? await books.SearchAsync(request.Query, cancellationToken)
-                            : (await bookSearch.SearchAsync(request.Query, cancellationToken))
-                                .Items
-                                .Select(result => result.Book)
-                                .ToArray()
-                        : await books.BrowseAsync(ToBookBrowseMode(request.Mode), cancellationToken);
-
-                    return rows
-                        .Where(row => MatchesGenre(row, request.Genre))
-                        .Take(BookLimit)
-                        .Select(MapBook)
-                        .ToArray();
-                },
-                "Book search is temporarily unavailable.",
-                warnings,
-                cancellationToken)
-            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
-
-        await Task.WhenAll(animeTask, movieTask, seriesTask, readingTask, bookTask);
-
-        return Interleave(
-            animeTask.Result,
-            movieTask.Result,
-            seriesTask.Result,
-            readingTask.Result,
-            bookTask.Result);
+        var provider = services.GetRequiredService<TmdbDiscoveryProvider>();
+        var rows = request.Mode == DiscoveryMode.Search
+            ? await provider.SearchAsync(mediaType, request.Query, TmdbLimit, request.Genre, cancellationToken)
+            : await provider.BrowseAsync(mediaType, request.Mode, TmdbLimit, request.Genre, cancellationToken);
+        return rows.Select(MapTmdb).ToArray();
     }
 
-    private async Task<IReadOnlyList<DiscoveryItem>> LoadMyListAsync(
-        DiscoveryCategory category,
-        bool isOwner,
-        ICollection<string> warnings,
-        bool animeEnabled,
-        bool mangaEnabled,
-        bool novelEnabled,
-        CancellationToken cancellationToken)
+    /// <summary>Waits for the pending sources until the budget is spent, every source settled or, for a follow-up load, one more source settled than the caller already knows.</summary>
+    private static async Task WaitForSourcesAsync(IReadOnlyList<DiscoverySourceFlight> started, DiscoveryWait wait, CancellationToken cancellationToken)
     {
-        var includeAnime = animeEnabled
-            && (category is DiscoveryCategory.All or DiscoveryCategory.Anime);
-        var includeReading = (mangaEnabled || novelEnabled)
-            && (category is DiscoveryCategory.All or
-                DiscoveryCategory.LightNovel or DiscoveryCategory.Manga or DiscoveryCategory.BooksAndLightNovels);
+        if (wait.Budget <= TimeSpan.Zero)
+        {
+            return;
+        }
 
-        var animeTask = includeAnime
-            ? CaptureAsync(
-                async () =>
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var expired = Task.Delay(wait.Budget, budget.Token);
+        try
+        {
+            while (true)
+            {
+                var open = started.Where(flight => !flight.IsSettled).Select(flight => (Task)flight.Completion).ToList();
+                if (open.Count == 0 || (wait.SettledBefore is { } known && started.Count - open.Count > known))
                 {
-                    var rows = await aniListAccount.GetLibraryAsync(
-                        AniListLibraryMediaType.Anime,
-                        cancellationToken);
-                    return rows.Select(x => MapLibrary(x, isOwner)).ToArray();
-                },
-                "Your AniList anime list could not be loaded.",
-                warnings,
-                cancellationToken)
-            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
+                    return;
+                }
 
-        var readingTask = includeReading
-            ? CaptureAsync(
-                async () =>
+                open.Add(expired);
+                if (await Task.WhenAny(open) == expired)
                 {
-                    var rows = await aniListAccount.GetLibraryAsync(
-                        AniListLibraryMediaType.Manga,
-                        cancellationToken);
+                    return;
+                }
+            }
+        }
+        finally
+        {
+            await budget.CancelAsync();
+        }
+    }
 
-                    return rows
-                        .Where(x => x.IsNovel ? novelEnabled : mangaEnabled)
-                        .Where(x => category switch
-                        {
-                            DiscoveryCategory.LightNovel or DiscoveryCategory.BooksAndLightNovels => x.IsNovel,
-                            DiscoveryCategory.Manga => !x.IsNovel,
-                            _ => true
-                        })
-                        .Select(x => MapLibrary(x, isOwner))
-                        .ToArray();
-                },
-                "Your AniList novel/manga list could not be loaded.",
-                warnings,
-                cancellationToken)
-            : Task.FromResult<IReadOnlyList<DiscoveryItem>>([]);
+    private static DiscoveryBatch ToBatch(
+        DiscoveryRequest request,
+        IReadOnlyList<SourceCall> calls,
+        IReadOnlyDictionary<string, DiscoverySourceFlight> started,
+        DiscoveryAudience audience,
+        InstanceModuleSettings instance)
+    {
+        var results = new List<DiscoverySourceResult>(calls.Count);
+        foreach (var call in calls)
+        {
+            var flight = started[call.Key];
+            if (!flight.IsSettled)
+            {
+                results.Add(new DiscoverySourceResult(call.Source, DiscoverySourceState.Pending, []));
+                continue;
+            }
 
-        await Task.WhenAll(animeTask, readingTask);
-        return Interleave(animeTask.Result, readingTask.Result);
+            var outcome = flight.Completion.Result;
+            IReadOnlyList<DiscoveryItem> items = [.. outcome.Items.Where(item => Includes(request.Category, item.Category) && Allowed(item.Category, audience, instance))];
+            results.Add(new DiscoverySourceResult(call.Source, outcome.State, items));
+        }
+
+        return new DiscoveryBatch(request, false, results);
+    }
+
+    /// <summary>Whether a title of <paramref name="itemCategory"/> belongs to the scope the viewer picked; the reading source answers manga and light novels together.</summary>
+    private static bool Includes(DiscoveryCategory scope, string itemCategory) => scope switch
+    {
+        DiscoveryCategory.All => true,
+        DiscoveryCategory.Anime => itemCategory == "anime",
+        DiscoveryCategory.Movie => itemCategory == "movie",
+        DiscoveryCategory.Series => itemCategory == "tv",
+        DiscoveryCategory.Manga => itemCategory == "manga",
+        DiscoveryCategory.LightNovel => itemCategory == "light-novel",
+        DiscoveryCategory.Book => itemCategory == "book",
+        _ => itemCategory is "book" or "light-novel"
+    };
+
+    private static bool Allowed(string itemCategory, DiscoveryAudience audience, InstanceModuleSettings instance) => itemCategory switch
+    {
+        "manga" => instance.IsEnabled(InstanceModule.Manga) && audience.VisibleMediaTypes.Contains(WorkMediaType.Manga),
+        "light-novel" => instance.IsEnabled(InstanceModule.Novel) && audience.VisibleMediaTypes.Contains(WorkMediaType.LightNovel),
+        _ => true
+    };
+
+    /// <summary>My AniList is private to the account: it is read inline for this viewer and never shared through the source flights.</summary>
+    private async Task<DiscoveryBatch> LoadMyListAsync(DiscoveryRequest request, DiscoveryAudience audience, InstanceModuleSettings instance, CancellationToken cancellationToken)
+    {
+        var animeEnabled = instance.IsEnabled(InstanceModule.Anime) && audience.VisibleMediaTypes.Contains(WorkMediaType.Anime);
+        var mangaEnabled = instance.IsEnabled(InstanceModule.Manga) && audience.VisibleMediaTypes.Contains(WorkMediaType.Manga);
+        var novelEnabled = instance.IsEnabled(InstanceModule.Novel) && audience.VisibleMediaTypes.Contains(WorkMediaType.LightNovel);
+        if (!animeEnabled && !mangaEnabled && !novelEnabled)
+        {
+            return new DiscoveryBatch(request, false, []);
+        }
+
+        var status = await aniListAccount.GetStatusAsync(cancellationToken);
+        if (!status.IsConnected)
+        {
+            return new DiscoveryBatch(request, false, []);
+        }
+
+        var category = request.Category;
+        var results = new List<DiscoverySourceResult>(2);
+        if (animeEnabled && category is DiscoveryCategory.All or DiscoveryCategory.Anime)
+        {
+            results.Add(await CaptureMyListAsync(
+                DiscoverySource.Anime,
+                async () => (await aniListAccount.GetLibraryAsync(AniListLibraryMediaType.Anime, cancellationToken)).Select(row => MapLibrary(row, audience.IsOwner)).ToArray(),
+                cancellationToken));
+        }
+
+        if ((mangaEnabled || novelEnabled) && category is DiscoveryCategory.All or DiscoveryCategory.LightNovel or DiscoveryCategory.Manga or DiscoveryCategory.BooksAndLightNovels)
+        {
+            results.Add(await CaptureMyListAsync(
+                DiscoverySource.Reading,
+                async () => (await aniListAccount.GetLibraryAsync(AniListLibraryMediaType.Manga, cancellationToken))
+                    .Where(row => row.IsNovel ? novelEnabled : mangaEnabled)
+                    .Where(row => category switch
+                    {
+                        DiscoveryCategory.LightNovel or DiscoveryCategory.BooksAndLightNovels => row.IsNovel,
+                        DiscoveryCategory.Manga => !row.IsNovel,
+                        _ => true
+                    })
+                    .Select(row => MapLibrary(row, audience.IsOwner))
+                    .ToArray(),
+                cancellationToken));
+        }
+
+        return new DiscoveryBatch(request, true, results);
+    }
+
+    private async Task<DiscoverySourceResult> CaptureMyListAsync(DiscoverySource source, Func<Task<IReadOnlyList<DiscoveryItem>>> read, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return new DiscoverySourceResult(source, DiscoverySourceState.Ready, await read());
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is AniListAccountException or HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            logger.LogWarning(exception, "The AniList list of {Source} could not be loaded.", source);
+            return new DiscoverySourceResult(source, DiscoverySourceState.Unavailable, []);
+        }
+    }
+
+    /// <summary>
+    /// Overlays what the library knows onto the titles (local, matched work, local media id), once for every title of a page and keyed by
+    /// <see cref="DiscoveryItem.Id"/>, so a landing of many rows reads the library in one batch instead of once per row. A title that is already a
+    /// durable Work shows its persisted title and poster in the profile's metadata language instead of the provider's transient ones.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, DiscoveryItem>> OverlayLocalStateAsync(IEnumerable<DiscoveryItem> items, string profileId, CancellationToken cancellationToken)
+    {
+        var distinct = items.GroupBy(item => item.Id, StringComparer.Ordinal).Select(group => group.First()).ToArray();
+        var overlaid = await ApplyLocalStateAsync(distinct, profileId, cancellationToken);
+        return overlaid.ToDictionary(item => item.Id, StringComparer.Ordinal);
     }
 
     private async Task<IReadOnlyList<DiscoveryItem>> ApplyLocalStateAsync(
         IReadOnlyList<DiscoveryItem> items,
+        string profileId,
         CancellationToken cancellationToken)
     {
         if (items.Count == 0)
@@ -439,6 +369,13 @@ public sealed class DiscoveryCoordinator(
                 .ToListAsync(cancellationToken))
                 .GroupBy(x => (x.MediaType, x.ExternalId))
                 .ToDictionary(x => x.Key, x => x.First().WorkId);
+
+        IReadOnlyDictionary<Guid, WorkCardMetadata> persisted = new Dictionary<Guid, WorkCardMetadata>();
+        if (tmdbMatches.Count > 0)
+        {
+            var rows = await new WorkMetadataStore(db).LoadCardMetadataAsync([.. tmdbMatches.Values.Distinct()], cancellationToken);
+            persisted = WorkMetadataPresentation.ResolveCards(rows, await WorkMetadataLocales.ForProfileAsync(db, profileId, cancellationToken));
+        }
 
         var animeMatches = new Dictionary<string, Guid>(StringComparer.Ordinal);
         if (animeIds.Length > 0)
@@ -536,10 +473,13 @@ public sealed class DiscoveryCoordinator(
                     && tmdbType is { } mediaType
                     && tmdbMatches.TryGetValue((mediaType, item.ExternalId), out var canonicalWorkId))
                 {
+                    persisted.TryGetValue(canonicalWorkId, out var metadata);
                     return item with
                     {
                         IsLocal = true,
-                        LocalMediaId = canonicalWorkId
+                        LocalMediaId = canonicalWorkId,
+                        Title = metadata?.Title ?? item.Title,
+                        CoverImageUrl = metadata?.PosterUrl ?? item.CoverImageUrl
                     };
                 }
 
@@ -707,173 +647,9 @@ public sealed class DiscoveryCoordinator(
             isOwner && category == "light-novel");
     }
 
-    public static void InvalidateCache() =>
-        Cache.Clear();
-
     public static string BuildMangaImportUrl(
         string externalId,
         string title) =>
         $"/Discover/MangaImport?anilistId={Uri.EscapeDataString(externalId)}" +
         $"&title={Uri.EscapeDataString(title)}";
-
-    private async Task<IReadOnlyList<DiscoveryItem>> CaptureAsync(
-        Func<Task<IReadOnlyList<DiscoveryItem>>> action,
-        string warning,
-        ICollection<string> warnings,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await action();
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception) when (
-            exception is MetadataProviderException or
-            NovelMetadataProviderException or
-            AniListAccountException or
-            HttpRequestException or
-            TaskCanceledException or
-            InvalidOperationException)
-        {
-            // The page only shows a generic warning; the cause belongs in the log.
-            logger.LogWarning(exception, "Discovery provider failed: {Warning}", warning);
-
-            lock (warnings)
-            {
-                warnings.Add(warning);
-            }
-
-            return [];
-        }
-    }
-
-    private static IReadOnlyList<DiscoveryItem> Interleave(
-        params IReadOnlyList<DiscoveryItem>[] groups)
-    {
-        var result = new List<DiscoveryItem>();
-        var index = 0;
-
-        while (result.Count < MaximumResultCount)
-        {
-            var added = false;
-            foreach (var group in groups)
-            {
-                if (index >= group.Count)
-                {
-                    continue;
-                }
-
-                result.Add(group[index]);
-                added = true;
-
-                if (result.Count >= MaximumResultCount)
-                {
-                    break;
-                }
-            }
-
-            if (!added)
-            {
-                break;
-            }
-
-            index++;
-        }
-
-        return result;
-    }
-
-    private static bool TryGetCached(
-        string key,
-        out DiscoveryResponse response)
-    {
-        if (Cache.TryGetValue(key, out var entry))
-        {
-            if (entry.ExpiresAt > DateTimeOffset.UtcNow)
-            {
-                response = entry.Response;
-                return true;
-            }
-
-            Cache.TryRemove(key, out _);
-        }
-
-        response = null!;
-        return false;
-    }
-
-    private static void PutCached(
-        string key,
-        DiscoveryResponse response,
-        TimeSpan lifetime)
-    {
-        if (Cache.Count > 256)
-        {
-            var now = DateTimeOffset.UtcNow;
-            foreach (var item in Cache)
-            {
-                if (item.Value.ExpiresAt <= now)
-                {
-                    Cache.TryRemove(item.Key, out _);
-                }
-            }
-        }
-
-        Cache[key] = new CacheEntry(
-            response,
-            DateTimeOffset.UtcNow.Add(lifetime));
-    }
-
-    private bool CategoryAvailable(
-        DiscoveryCategory category,
-        bool animeEnabled,
-        bool mangaEnabled,
-        bool novelEnabled,
-        bool bookEnabled,
-        bool movieEnabled,
-        bool tvEnabled) =>
-        category switch
-        {
-            DiscoveryCategory.Anime => animeEnabled,
-            DiscoveryCategory.Movie => movieEnabled && tmdb.IsConfigured,
-            DiscoveryCategory.Series => tvEnabled && tmdb.IsConfigured,
-            DiscoveryCategory.Manga => mangaEnabled,
-            DiscoveryCategory.LightNovel => novelEnabled,
-            DiscoveryCategory.Book => bookEnabled,
-            DiscoveryCategory.BooksAndLightNovels => bookEnabled || novelEnabled,
-            _ => animeEnabled || mangaEnabled || novelEnabled || bookEnabled
-                || (movieEnabled && tmdb.IsConfigured)
-                || (tvEnabled && tmdb.IsConfigured)
-        };
-
-    private static string CategoryName(DiscoveryCategory category) =>
-        category switch
-        {
-            DiscoveryCategory.Anime => "anime",
-            DiscoveryCategory.Movie => "movie",
-            DiscoveryCategory.Series => "tv",
-            DiscoveryCategory.LightNovel => "light-novel",
-            DiscoveryCategory.Manga => "manga",
-            DiscoveryCategory.Book => "book",
-            DiscoveryCategory.BooksAndLightNovels => "books-light-novels",
-            _ => "all"
-        };
-
-    private static string ModeName(DiscoveryMode mode) =>
-        mode switch
-        {
-            DiscoveryMode.Top => "top",
-            DiscoveryMode.MyList => "my-list",
-            DiscoveryMode.Search => "search",
-            DiscoveryMode.New => "new",
-            DiscoveryMode.Upcoming => "upcoming",
-            _ => "trending"
-        };
-
-    private sealed record CacheEntry(
-        DiscoveryResponse Response,
-        DateTimeOffset ExpiresAt);
 }

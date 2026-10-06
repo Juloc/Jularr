@@ -200,7 +200,7 @@
     </form>
 
     <nav class="dc-tabs" aria-label="@ui["discover.categories.aria"]">
-        @foreach (var (category, labelKey) in DiscoverScopes.Tabs)
+        @foreach (var (category, labelKey) in Model.VisibleTabs)
         {
             var selected = DiscoverScopes.IsActive(category, query.Category);
             <a class="dc-tab@(selected ? " is-active" : "")"
@@ -219,10 +219,10 @@
         <p class="sr-only">@ui["discover.results.loading"]</p>
         <div class="dc-skeleton" aria-hidden="true">
             <span class="dc-skeleton-head"></span>
-            <ul class="dc-track">
-                @for (var i = 0; i < 8; i++)
+            <ul class="dc-track dc-ghosts">
+                @for (var i = 0; i < DiscoverSectionView.TrackGhosts; i++)
                 {
-                    <li class="dc-track-item"><span class="dc-skeleton-card"></span></li>
+                    <li class="dc-track-item"><span class="dc-ghost"><span class="dc-ghost-art"></span><span class="dc-ghost-body"><span class="dc-ghost-line"></span><span class="dc-ghost-line dc-ghost-short"></span></span></span></li>
                 }
             </ul>
         </div>
@@ -281,6 +281,7 @@
 </div>
 
 @section Scripts {
+    <script src="~/js/discover-staging.js" asp-append-version="true" defer></script>
     <script src="~/js/discover.js" asp-append-version="true" defer></script>
     <script src="~/js/discover-request.js" asp-append-version="true" defer></script>
 }

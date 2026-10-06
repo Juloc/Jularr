@@ -17,7 +17,8 @@ namespace Jularr.Web.Pages.Settings;
 public sealed class BooksModel(
     AppDbContext db,
     CurrentAccountContext account,
-    IDataProtectionProvider dataProtectionProvider) : PageModel
+    IDataProtectionProvider dataProtectionProvider,
+    DiscoverySourceFlights discoverySources) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public bool IsOwner => account.IsOwner;
@@ -50,7 +51,7 @@ public sealed class BooksModel(
         }
 
         await store.SaveAsync(HardcoverApiKey, cancellationToken);
-        DiscoveryCoordinator.InvalidateCache();
+        discoverySources.Clear();
         TempData["Status"] = Ui["settings.books.hardcover.saved"];
         return RedirectToPage();
     }
@@ -64,7 +65,7 @@ public sealed class BooksModel(
 
         Ui = await LoadBundleAsync(cancellationToken);
         await new BookDiscoverySettingsStore(dataProtectionProvider).ClearAsync(cancellationToken);
-        DiscoveryCoordinator.InvalidateCache();
+        discoverySources.Clear();
         TempData["Status"] = Ui["settings.books.hardcover.removed"];
         return RedirectToPage();
     }

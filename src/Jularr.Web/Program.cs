@@ -116,10 +116,7 @@ builder.Services.AddScoped<IMediaCapabilityService, MediaCapabilityService>();
 builder.Services.AddSingleton<IInstanceModuleService>(_ => new InstanceModuleStore("/data"));
 // Permission-derived app shell (#598): the profile's visible media types, resolved once per request.
 builder.Services.AddScoped<IAppShellService, AppShellService>();
-// Provider-driven discovery (#595): the coordinator behind browse/search + the shelf board it feeds.
-builder.Services.AddScoped<DiscoveryCoordinator>();
-builder.Services.AddScoped<IDiscoveryFeed>(sp => sp.GetRequiredService<DiscoveryCoordinator>());
-builder.Services.AddScoped<DiscoveryShelfService>();
+builder.Services.AddDiscovery();
 // Explainable cross-media recommendations & continuation shelves (#428): the media-neutral engine's
 // composition service, rendered on the shared shelf surface by /Recommendations and Discover.
 builder.Services.AddScoped<Jularr.Web.Features.Recommendations.MediaRecommendationService>();

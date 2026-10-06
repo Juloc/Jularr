@@ -524,12 +524,10 @@ public sealed class LocalFirstPageGetTests
                 new Jularr.Web.Features.MediaCore.LegacyWorkBridge(Db, works, structure),
                 new Jularr.Web.Features.Metadata.WorkMetadataRefreshQueue(new Jularr.Web.Features.MediaCore.WorkMetadataStore(Db), new Jularr.Web.Features.Metadata.WorkMetadataRefreshSignal(), TimeProvider.System));
             var coordinator = new Jularr.Web.Features.Discovery.DiscoveryCoordinator(
-                animeProvider,
-                readingProvider,
-                books,
                 tmdb,
                 AniListAccount(),
                 Db,
+                DiscoveryTestSupport.Flights(providers: [animeProvider, readingProvider, books, tmdb]),
                 NullLogger<Jularr.Web.Features.Discovery.DiscoveryCoordinator>.Instance);
             var shellService = new Jularr.Web.Features.Shell.AppShellService(
                 new MediaCapabilityService(new MediaCapabilityStore(root)));

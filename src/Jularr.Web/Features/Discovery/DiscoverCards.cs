@@ -95,12 +95,6 @@ public sealed record DiscoverCardView(
     bool CanFollowFranchise,
     bool CanImportSource);
 
-public sealed record DiscoverShelfView(
-    string Id,
-    string Heading,
-    string? SeeAllUrl,
-    IReadOnlyList<DiscoverCardView> Cards);
-
 /// <summary>Everything a card needs besides the title itself. All of it is read on the server; the browser never supplies library state.</summary>
 public sealed record DiscoverContext(
     UiTextBundle Ui,
@@ -141,11 +135,11 @@ public static partial class DiscoverCardFactory
         var importUrl = item.DetailsUrl.StartsWith("/Discover/MangaImport", StringComparison.Ordinal)
             ? item.DetailsUrl
             : null;
-        var href = item.IsLocal && item.LocalUrl is { Length: > 0 } target
+        var href = DiscoverUrls.Safe(item.IsLocal && item.LocalUrl is { Length: > 0 } target
             ? target
             : importUrl is not null
                 ? providerUrl ?? item.DetailsUrl
-                : item.DetailsUrl;
+                : item.DetailsUrl) ?? "#";
 
         var canFollow = WatchlistDraftInput.TryIdentity(item.Category, item.Provider, item.ExternalId, out var identity);
         var followedFranchise = canFollow && context.Followed.TryGetValue(identity.Key, out var franchiseId)
@@ -168,7 +162,7 @@ public static partial class DiscoverCardFactory
             item.Author,
             href,
             IsExternal(href),
-            string.IsNullOrWhiteSpace(item.CoverImageUrl) ? null : item.CoverImageUrl,
+            DiscoverUrls.Safe(item.CoverImageUrl),
             WatchlistLabels.Initial(item.Title),
             Meta(item.Category, kind, item.Year, ui),
             item.Year,
@@ -399,6 +393,27 @@ public static partial class DiscoverText
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
+}
+
+/// <summary>Provider text is untrusted: an address that comes from a provider is only used as an image or a link when it is a web address or a path of this application.</summary>
+public static class DiscoverUrls
+{
+    public static string? Safe(string? url)
+    {
+        var candidate = url?.Trim();
+        if (string.IsNullOrEmpty(candidate))
+        {
+            return null;
+        }
+
+        if (Uri.TryCreate(candidate, UriKind.Absolute, out var absolute))
+        {
+            return absolute.Scheme is "http" or "https" ? candidate : null;
+        }
+
+        // A path of this application; a protocol-relative address (//host) or a backslash variant would leave it.
+        return candidate.StartsWith('/') && !candidate.StartsWith("//", StringComparison.Ordinal) && !candidate.StartsWith("/\\", StringComparison.Ordinal) ? candidate : null;
+    }
 }
 
 public static class DiscoverCanonical

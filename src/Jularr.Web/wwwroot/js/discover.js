@@ -63,46 +63,248 @@
         if (browseGroup) browseGroup.hidden = q.length > 0;
     }
 
-    // ---- Body: rows or results, fetched after first paint --------------------------------------
+    // ---- Body: sections of titles, fetched after first paint and completed by later generations ----------------------------------------
+    //
+    // The first response holds what the sources had ready within the first paint budget; a source that was not ready leaves a ghost section
+    // of the final size. The page then asks for the next generation and the server answers as soon as one more source has settled. A
+    // generation that only fills ghosts is applied at once (nothing moves); every other change is staged until it is safe to apply it
+    // (discover-staging.js), and the scroll anchor keeps what the viewer looks at where it is.
+
+    const staging = window.JularrDiscoverStaging;
+    const interaction = { pointerDown: false, touchActive: false, lastScrollAt: 0, lastKeyAt: 0, x: -1, y: -1 };
+    const maxFollowUps = 8;
+
+    const bodyRoot = () => body.querySelector("[data-dc-state]");
+
+    // How far the sources had answered in the newest generation received, whether it was applied or is still staged: the next request waits from there.
+    let generation = { settled: 0, pending: 0 };
+    const generationOf = (element) => ({ settled: Number(element?.dataset.dcSettled) || 0, pending: Number(element?.dataset.dcPending) || 0 });
+
+    // The rows or groups of a generation: only what the viewer would notice changing is compared.
+    const viewOf = (element) => ({
+        state: element?.dataset.dcState || "",
+        sections: [...(element?.querySelectorAll(":scope > [data-dc-section]") || [])].map(section => ({
+            id: section.dataset.dcSection,
+            sig: section.dataset.dcSig,
+            state: section.dataset.dcSectionState
+        }))
+    });
+
+    const sectionAt = (x, y) => (x < 0 ? null : document.elementFromPoint(x, y)?.closest("[data-dc-section]")?.dataset.dcSection ?? null);
+
+    function interactionContext() {
+        return {
+            pointerDown: interaction.pointerDown,
+            touchActive: interaction.touchActive,
+            modalOpen: sheet.open,
+            lastScrollAt: interaction.lastScrollAt,
+            lastKeyAt: interaction.lastKeyAt,
+            pointerSection: sectionAt(interaction.x, interaction.y),
+            focusSection: document.activeElement?.closest?.("[data-dc-section]")?.dataset.dcSection ?? null
+        };
+    }
+
+    // The card the viewer is looking at or aiming at: the one under the pointer, else the first card in view.
+    function findAnchor() {
+        const hovered = interaction.x < 0 ? null : document.elementFromPoint(interaction.x, interaction.y)?.closest("[data-dc-card]");
+        const card = hovered || [...body.querySelectorAll("[data-dc-card]")].find(item => {
+            const rect = item.getBoundingClientRect();
+            return rect.bottom > 0 && rect.top < window.innerHeight;
+        });
+        return card ? { card, top: card.getBoundingClientRect().top } : null;
+    }
+
+    function restoreAnchor(anchor) {
+        if (!anchor?.card.isConnected) return;
+        const shift = anchor.card.getBoundingClientRect().top - anchor.top;
+        if (Math.abs(shift) >= 1) window.scrollBy(0, shift);
+    }
+
+    // Replaces one section by its next version without losing what the viewer set on it: a collapsed group stays collapsed and a row keeps its scroll position.
+    function swapSection(current, next) {
+        const open = current.querySelector(":scope > details");
+        const nextDetails = next.querySelector(":scope > details");
+        if (open && nextDetails) nextDetails.open = open.open;
+        const track = current.querySelector(".dc-track");
+        const nextTrack = next.querySelector(".dc-track");
+        const scrolled = track ? track.scrollLeft : 0;
+        current.replaceWith(next);
+        if (nextTrack && scrolled) nextTrack.scrollLeft = scrolled;
+    }
+
+    const sectionIn = (container, id) => container.querySelector(`:scope > [data-dc-section="${CSS.escape(id)}"]`);
+
+    function applyOperations(operations, payload) {
+        const anchor = findAnchor();
+        hideHover();
+        const root = bodyRoot();
+        const next = payload.querySelector("[data-dc-state]");
+
+        if (operations.some(operation => operation.kind === "replace-all")) {
+            body.replaceChildren(document.importNode(next, true));
+            activateLiveRequests(body);
+        } else {
+            const nextIds = [...next.querySelectorAll(":scope > [data-dc-section]")].map(section => section.dataset.dcSection);
+            operations.forEach(operation => {
+                const present = sectionIn(root, operation.id);
+                if (operation.kind === "remove") {
+                    present?.remove();
+                    return;
+                }
+
+                const fresh = document.importNode(sectionIn(next, operation.id), true);
+                if (present) {
+                    swapSection(present, fresh);
+                } else {
+                    const before = nextIds.slice(0, nextIds.indexOf(operation.id)).reverse().map(id => sectionIn(root, id)).find(Boolean);
+                    if (before) before.after(fresh); else root.prepend(fresh);
+                }
+
+                activateLiveRequests(fresh);
+            });
+
+            root.dataset.dcSettled = next.dataset.dcSettled;
+            root.dataset.dcPending = next.dataset.dcPending;
+        }
+
+        restoreAnchor(anchor);
+        return viewOf(bodyRoot());
+    }
+
+    // The ghost hint: a section that has a change waiting is marked; the stylesheet draws a faint mark in the spacing between its cards.
+    function showStaged(operations) {
+        const waiting = new Set(operations.filter(operation => !operation.neutral && operation.id !== "*").map(operation => operation.id));
+        body.querySelectorAll("[data-dc-section]").forEach(section => {
+            section.toggleAttribute("data-dc-staged", waiting.has(section.dataset.dcSection));
+        });
+    }
+
+    const controller = staging.createController({
+        timers: window,
+        getContext: interactionContext,
+        commit: applyOperations,
+        show: showStaged
+    });
+
+    async function fetchBody(extra, signal) {
+        const params = new URLSearchParams(window.location.search);
+        params.set("handler", "Body");
+        Object.entries(extra).forEach(([name, value]) => params.set(name, String(value)));
+        const response = await fetch(`${window.location.pathname}?${params}`, {
+            signal,
+            cache: "no-store",
+            headers: { "X-Requested-With": "fetch" }
+        });
+        const html = await response.text();
+        // A failed body still renders its own unavailable state; anything else is a plain failure.
+        if (!response.ok && !html.includes("data-dc-state")) {
+            throw new Error(String(response.status));
+        }
+
+        return html;
+    }
 
     async function loadBody() {
         clearTimeout(debounceTimer);
         abortController?.abort();
         abortController = new AbortController();
         const version = ++requestVersion;
-        const params = new URLSearchParams(window.location.search);
-        params.set("handler", "Body");
 
         body.setAttribute("aria-busy", "true");
         errorBox.hidden = true;
         try {
-            const response = await fetch(`${window.location.pathname}?${params}`, {
-                signal: abortController.signal,
-                cache: "no-store",
-                headers: { "X-Requested-With": "fetch" }
-            });
+            const html = await fetchBody({}, abortController.signal);
             if (version !== requestVersion) return;
-
-            const html = await response.text();
-            // A failed body still renders its own unavailable state; anything else is a plain failure.
-            if (!response.ok && !html.includes("data-dc-state")) {
-                throw new Error(String(response.status));
-            }
 
             hideHover();
             // Same-origin, server-rendered and HTML-encoded by Razor; injected as the page body.
             body.innerHTML = html;
             activateLiveRequests(body);
+            controller.reset(viewOf(bodyRoot()));
+            generation = generationOf(bodyRoot());
             loadFailed = false;
+            body.setAttribute("aria-busy", "false");
+            void followUp(version);
         } catch (error) {
             if (error?.name === "AbortError" || version !== requestVersion) return;
-            loadFailed = true;
-            body.replaceChildren();
-            errorBox.hidden = false;
-        } finally {
-            if (version === requestVersion) body.setAttribute("aria-busy", "false");
+            showLoadFailure();
         }
     }
+
+    function showLoadFailure() {
+        loadFailed = true;
+        body.replaceChildren();
+        errorBox.hidden = false;
+        body.setAttribute("aria-busy", "false");
+    }
+
+    // Asks for the next generation while sources are still pending: the server holds each request open until one more source has answered.
+    async function followUp(version) {
+        for (let round = 0; round < maxFollowUps; round++) {
+            if (version !== requestVersion || generation.pending === 0) return;
+
+            try {
+                const html = await fetchBody({ after: generation.settled }, abortController.signal);
+                if (version !== requestVersion) return;
+                stageGeneration(html, false);
+            } catch (error) {
+                if (error?.name === "AbortError" || version !== requestVersion) return;
+                showLoadFailure();
+                return;
+            }
+        }
+    }
+
+    function stageGeneration(html, explicit) {
+        const payload = new DOMParser().parseFromString(html, "text/html");
+        const next = payload.querySelector("[data-dc-state]");
+        if (!next) return;
+        generation = generationOf(next);
+        controller.stage(viewOf(next), payload, explicit);
+    }
+
+    // A retry the viewer asked for: the server fetches the failed sources again and the answer is applied as soon as it arrives.
+    async function retrySources(button) {
+        const section = button.closest("[data-dc-section]");
+        button.disabled = true;
+        section?.setAttribute("aria-busy", "true");
+        const version = requestVersion;
+        try {
+            const html = await fetchBody({ retry: button.dataset.dcRetrySources }, abortController?.signal);
+            if (version !== requestVersion) return;
+            stageGeneration(html, true);
+            void followUp(version);
+        } catch (error) {
+            if (error?.name === "AbortError" || version !== requestVersion) return;
+            button.disabled = false;
+            section?.removeAttribute("aria-busy");
+        }
+    }
+
+    // What the viewer is doing right now, read by the staging rules before any staged change is applied.
+    ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel"].forEach(type => {
+        window.addEventListener(type, event => {
+            if (type.startsWith("pointer")) interaction.pointerDown = type === "pointerdown";
+            else interaction.touchActive = type === "touchstart";
+            if (type === "pointerdown" && event.pointerType === "mouse") {
+                interaction.x = event.clientX;
+                interaction.y = event.clientY;
+            }
+        }, { passive: true, capture: true });
+    });
+    window.addEventListener("pointermove", event => {
+        if (event.pointerType === "mouse") {
+            interaction.x = event.clientX;
+            interaction.y = event.clientY;
+        }
+    }, { passive: true });
+    document.documentElement.addEventListener("mouseleave", () => { interaction.x = -1; interaction.y = -1; });
+    ["scroll", "wheel"].forEach(type => window.addEventListener(type, () => { interaction.lastScrollAt = Date.now(); }, { passive: true, capture: true }));
+    window.addEventListener("keydown", event => {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+            interaction.lastKeyAt = Date.now();
+        }
+    }, { capture: true });
 
     function scheduleSearch() {
         clearTimeout(debounceTimer);
@@ -129,6 +331,12 @@
 
         if (target.closest("[data-dc-retry]")) {
             loadBody();
+            return;
+        }
+
+        const retrySource = target.closest("[data-dc-retry-sources]");
+        if (retrySource) {
+            void retrySources(retrySource);
             return;
         }
 
@@ -402,6 +610,8 @@
     }
 
     function activateLiveRequests(scope) {
+        // A card shows the progress of its request in its indicator, so it only needs to be watched.
+        scope.querySelectorAll("[data-dc-watch-request]").forEach(card => pollRequest(card.dataset.dcWatchRequest));
         scope.querySelectorAll("[data-dc-live-request]").forEach(slot => {
             const requestId = slot.dataset.dcLiveRequest;
             if (!requestId) return;
@@ -444,13 +654,7 @@
 
         card.dataset.dcRequestId = payload.requestId;
         card.dataset.dcRequestStatus = payload.status;
-        const slot = card.querySelector("[data-dc-card-request-slot]");
-        if (slot) {
-            slot.dataset.dcLiveRequest = payload.requestId;
-            slot.dataset.dcLiveStatus = payload.status;
-            renderRequestSlot(slot, payload);
-        }
-
+        card.querySelector("[data-dc-card-request]")?.remove();
         showRequested(card, requestProgressLabel(payload));
         const key = keyOf(card);
         overrides.set(key, { ...(overrides.get(key) || {}), ...payload });

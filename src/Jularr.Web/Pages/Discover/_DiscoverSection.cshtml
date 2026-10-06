@@ -1,0 +1,88 @@
+@using Jularr.Web.Features.Discovery
+@using Jularr.Web.Features.Localization
+@model (DiscoverSectionView Block, UiTextBundle Ui)
+@* One replaceable part of the Discover body: a row of the landing, a media group of a search or the grid of one scope. A section that waits for
+   its titles keeps its place with ghost cards the size of real ones; the browser replaces a section as a whole when its signature changes
+   (wwwroot/js/discover-staging.js). A media group of a search can be collapsed. Styles: wwwroot/css/discover-browse.css. *@
+@{
+    var block = Model.Block;
+    var ui = Model.Ui;
+    var pending = block.State == DiscoverySectionState.Pending;
+    var layoutClass = block.Layout == DiscoverSectionLayout.Grid ? "dc-grid" : "dc-track";
+    var itemClass = block.Layout == DiscoverSectionLayout.Grid ? "" : "dc-track-item";
+    var heading = block.Heading;
+
+    Func<object?, Microsoft.AspNetCore.Html.IHtmlContent> head = @<text>
+        <h2 id="dc-section-@block.Id">@heading</h2>
+        @if (block.SeeAllUrl is { Length: > 0 } seeAll && !pending)
+        {
+            <a class="dc-shelf-more" href="@seeAll">@ui["discover.shelf.seeAll"]</a>
+        }
+    </text>;
+
+    Func<object?, Microsoft.AspNetCore.Html.IHtmlContent> content = @<text>
+        @if (pending)
+        {
+            <p class="sr-only">@ui["discover.results.loading"]</p>
+        }
+
+        @if (block.Message is not null)
+        {
+            <p class="dc-section-note" role="status">
+                <partial name="_DiscoverIcon" model='"warning"' />
+                <span>@block.Message</span>
+                @if (block.Retry.Count > 0)
+                {
+                    <button type="button" class="dc-link" data-dc-retry-sources="@string.Join(',', block.Retry.Select(DiscoverySources.Name))">@ui["library.browse.error.retry"]</button>
+                }
+            </p>
+        }
+
+        @if (pending)
+        {
+            <ul class="@layoutClass dc-ghosts" aria-hidden="true">
+                @for (var index = 0; index < block.Ghosts; index++)
+                {
+                    <li class="@itemClass"><span class="dc-ghost"><span class="dc-ghost-art"></span><span class="dc-ghost-body"><span class="dc-ghost-line"></span><span class="dc-ghost-line dc-ghost-short"></span></span></span></li>
+                }
+            </ul>
+        }
+        else if (block.Cards.Count > 0)
+        {
+            <ul class="@layoutClass">
+                @foreach (var card in block.Cards)
+                {
+                    <li class="@itemClass"><partial name="_DiscoverCard" model="(card, ui)" /></li>
+                }
+            </ul>
+        }
+    </text>;
+}
+<section class="dc-section"
+         data-dc-section="@block.Id"
+         data-dc-section-state="@block.State.ToString().ToLowerInvariant()"
+         data-dc-sig="@block.Signature"
+         aria-labelledby="@(heading is null ? null : "dc-section-" + block.Id)"
+         aria-label="@(heading is null ? block.Count : null)"
+         aria-busy="@(pending ? "true" : null)">
+    @if (block.Collapsible && heading is not null)
+    {
+        <details class="dc-collapse" open>
+            <summary class="dc-shelf-head">@head(null)</summary>
+            @content(null)
+        </details>
+    }
+    else
+    {
+        if (heading is not null)
+        {
+            <div class="dc-shelf-head">@head(null)</div>
+        }
+        else if (block.Count is not null)
+        {
+            <p class="dc-count">@block.Count</p>
+        }
+
+        @content(null)
+    }
+</section>

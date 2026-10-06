@@ -4,7 +4,9 @@
    and as a bottom sheet on touch. Surfaces use the shared theme tokens, so light, dark and every accent work
    unchanged. State is shown with icon, text, tint and weight, never a coloured left edge (CssAccentStripeTests). */
 
-.dc-page { display: grid; gap: 16px; min-width: 0; margin-bottom: 20px; }
+/* --dc-card-body-h is the height of everything under a poster (two title lines, the type line and the indicator); real cards
+   and ghost cards both use it, so a ghost has the exact size of the card that replaces it. */
+.dc-page { --dc-card-body-h: 82px; display: grid; gap: 16px; min-width: 0; margin-bottom: 20px; }
 .dc-page :is(a, button, summary, select, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dc-icon { flex: none; }
 .dc-page [hidden] { display: none !important; }
@@ -119,18 +121,24 @@
     background-repeat: no-repeat; animation: dc-loading 1s linear infinite;
 }
 @keyframes dc-loading { from { background-position: -40% 0; } to { background-position: 140% 0; } }
-.dc-skeleton { display: grid; gap: 12px; }
-.dc-skeleton-head { display: block; width: 180px; height: 22px; border-radius: 8px; background: var(--surface-2); }
-.dc-skeleton-card { display: block; aspect-ratio: 2 / 3; border-radius: 12px; background: var(--surface-2); animation: dc-pulse 1.4s ease-in-out infinite; }
+.dc-skeleton-head { display: block; width: 180px; height: 22px; margin-bottom: 10px; border-radius: 8px; background: var(--surface-2); }
 @keyframes dc-pulse { 50% { opacity: .55; } }
 
 /* Rows and grid ------------------------------------------------------------------------------------ */
-.dc-shelf { display: grid; gap: 10px; min-width: 0; margin-bottom: 26px; }
+.dc-section { position: relative; display: grid; gap: 10px; min-width: 0; margin-bottom: 26px; }
 .dc-shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .dc-shelf-head h2 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: -.01em; }
+.dc-collapse > summary { cursor: pointer; list-style: none; }
+.dc-collapse[open] > summary { margin-bottom: 10px; }
+.dc-collapse > summary::-webkit-details-marker { display: none; }
+.dc-collapse > summary h2::after {
+    content: ""; display: inline-block; width: 7px; height: 7px; margin-inline-start: 10px; vertical-align: 3px;
+    border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .15s;
+}
+.dc-collapse:not([open]) > summary h2::after { transform: rotate(-45deg); }
 .dc-shelf-more { color: var(--accent-text); font-size: 13px; font-weight: 700; white-space: nowrap; }
 .dc-track {
-    display: flex; gap: 16px; margin: 0; padding: 4px 2px 12px; list-style: none;
+    display: flex; gap: 16px; margin: 0; padding: 4px 8px 12px 2px; list-style: none;
     overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin;
 }
 .dc-track-item { flex: 0 0 auto; width: 158px; scroll-snap-align: start; }
@@ -139,6 +147,24 @@
     margin: 0; padding: 0; list-style: none;
 }
 .dc-grid > li { min-width: 0; }
+
+/* A section that waits for its source keeps its place: ghost cards have the size of a real card, so the arrival of the titles moves nothing. */
+.dc-ghost { display: grid; gap: 10px; }
+.dc-ghost-body { display: block; height: var(--dc-card-body-h); }
+.dc-ghost-art { display: block; aspect-ratio: 2 / 3; border-radius: 12px; background: var(--surface-2); animation: dc-pulse 1.4s ease-in-out infinite; }
+.dc-ghost-line { display: block; width: 78%; height: 14px; margin-top: 4px; border-radius: 6px; background: var(--surface-2); }
+.dc-ghost-short { width: 48%; margin-top: 8px; }
+.dc-ghosts { pointer-events: none; overflow-x: hidden; }
+.dc-section-note {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; color: var(--muted); font-size: 13px; font-weight: 600;
+}
+.dc-section-note .dc-icon { width: 16px; height: 16px; color: var(--warning-text); }
+/* The ghost hint of a staged change: a faint mark in the gutter at the end of the section. It is positioned inside space the section already has
+   (the track's end padding), takes no layout space, ignores the pointer and is never focusable. */
+.dc-section[data-dc-staged]::after {
+    content: ""; position: absolute; inset-inline-end: 0; top: 96px; width: 4px; height: 56px; border-radius: 4px;
+    background: var(--muted); opacity: .35; pointer-events: none; animation: dc-pulse 1.6s ease-in-out infinite;
+}
 
 /* Card ---------------------------------------------------------------------------------------------- */
 /* The card fills its row item and pins the Request action to the bottom, so the actions of one row line up whatever the title length. */
@@ -153,20 +179,21 @@
     background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--accent-text);
     font-size: 44px; font-weight: 800;
 }
-.dc-card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
-.dc-card-title { margin: 0; font-size: 14px; line-height: 1.3; font-weight: 700; }
+.dc-card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; min-height: var(--dc-card-body-h); }
+.dc-card-title { margin: 0; min-height: 36px; font-size: 14px; line-height: 18px; font-weight: 700; }
 .dc-card-title a {
     display: -webkit-box; overflow: hidden; color: var(--text); overflow-wrap: anywhere;
     -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 .dc-card-title a::after { content: ""; position: absolute; inset: 0; z-index: 1; }
 .dc-card:hover .dc-card-title a, .dc-card-title a:focus-visible { color: var(--accent-text); }
-.dc-card-meta { margin: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
-.dc-card-action {
-    position: relative; z-index: 2; display: flex; width: 100%; min-height: 42px; margin-top: auto; padding-top: 6px;
+.dc-card-meta { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
+.dc-card-media { position: relative; }
+.dc-card-request {
+    position: absolute; z-index: 2; inset-inline: 8px; bottom: 8px; width: auto; min-height: 34px; padding: 6px 10px; font-size: 12px;
+    opacity: 0; transition: opacity .15s;
 }
-.dc-card-action > :is(.button, .dc-request-live) { width: 100%; justify-content: center; }
-.dc-card-request { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+.dc-card:hover .dc-card-request, .dc-card:focus-within .dc-card-request { opacity: 1; }
 .dc-request-live {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     min-height: 36px; cursor: default; pointer-events: none;
@@ -193,9 +220,9 @@
 
 /* The one language / request indicator: icon and text, tinted. */
 .dc-state {
-    display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 9px 2px 6px;
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-height: 22px; padding: 2px 9px 2px 6px;
     border: 1px solid transparent; border-radius: 999px; background: var(--surface-2); color: var(--muted);
-    font-size: 11px; font-weight: 700; line-height: 1.5;
+    font-size: 11px; font-weight: 700; line-height: 16px;
 }
 .dc-state > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dc-state .dc-icon { width: 13px; height: 13px; }
@@ -304,12 +331,12 @@
 
 /* Touch has no hover: the preview opens from a tap on the card. */
 @media (hover: none), (pointer: coarse) {
-    .dc-card-preview { display: none; }
+    .dc-card-preview, .dc-card-request { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .dc-art img { transition: none; }
     .dc-results[aria-busy="true"]::before { animation: none; background-position: 30% 0; }
-    .dc-skeleton-card { animation: none; }
+    .dc-ghost-art, .dc-section[data-dc-staged]::after, .dc-collapse > summary h2::after { animation: none; transition: none; }
     .dc-hover { animation: none; }
 }

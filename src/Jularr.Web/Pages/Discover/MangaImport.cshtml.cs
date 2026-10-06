@@ -1,7 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Auth;
-using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.Operations;
@@ -240,8 +239,6 @@ public sealed class MangaImportModel(
                 "discover.mangaImport.matchFailed",
                 ("reason", exception.Message));
         }
-
-        DiscoveryCoordinator.InvalidateCache();
 
         return RedirectToPage(
             "/Manga/Series",

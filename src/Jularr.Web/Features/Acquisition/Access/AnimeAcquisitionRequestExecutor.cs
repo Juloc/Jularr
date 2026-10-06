@@ -4,7 +4,6 @@ using Jularr.Web.Features.Acquisition.Naming;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Calendar;
-using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
@@ -110,7 +109,6 @@ public sealed class AnimeAcquisitionRequestExecutor(
             return new AcquisitionExecution(AcquisitionRequestStatus.Failed, matched.Error, ResultUrl: $"/Library/Anime/{created.Id}");
         }
 
-        DiscoveryCoordinator.InvalidateCache();
         if (existing is null)
         {
             // Jularr created the series, so Jularr manages it. A series that was already on disk

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Ui;
 
 namespace Jularr.Web.Features.Discovery;
@@ -220,6 +221,19 @@ public static class DiscoverScopes
         tab == current
         || (tab == DiscoveryCategory.BooksAndLightNovels
             && current is DiscoveryCategory.Book or DiscoveryCategory.LightNovel);
+
+    /// <summary>Whether the profile may browse the media type of a scope; a hidden type has no tab, no row and no result.</summary>
+    public static bool IsVisible(DiscoveryCategory scope, IReadOnlySet<WorkMediaType> visible) => scope switch
+    {
+        DiscoveryCategory.All => true,
+        DiscoveryCategory.Anime => visible.Contains(WorkMediaType.Anime),
+        DiscoveryCategory.Movie => visible.Contains(WorkMediaType.Movie),
+        DiscoveryCategory.Series => visible.Contains(WorkMediaType.Series),
+        DiscoveryCategory.Manga => visible.Contains(WorkMediaType.Manga),
+        DiscoveryCategory.LightNovel => visible.Contains(WorkMediaType.LightNovel),
+        DiscoveryCategory.Book => visible.Contains(WorkMediaType.Book),
+        _ => visible.Contains(WorkMediaType.Book) || visible.Contains(WorkMediaType.LightNovel)
+    };
 
     /// <summary>Whether a shelf row about <paramref name="row"/> belongs to the scope the visitor picked.</summary>
     public static bool Includes(DiscoveryCategory scope, DiscoveryCategory row) => scope switch

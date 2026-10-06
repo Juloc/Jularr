@@ -17,10 +17,7 @@ public sealed class DiscoveryShelfTests
     [TestMethod]
     public void PlanBuildsProviderBackedRowsForEverySupportedType()
     {
-        var plans = DiscoveryShelfComposer.Plan(
-            [WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book],
-            includeAniList: true,
-            includeBooks: true);
+        var plans = DiscoveryShelfComposer.Plan([WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book]);
 
         CollectionAssert.AreEqual(
             new[]
@@ -56,7 +53,8 @@ public sealed class DiscoveryShelfTests
                 "",
                 mode == DiscoveryMode.Top ? "discover.tabs.top" : mode == DiscoveryMode.New ? "discover.tabs.new" : "discover.tabs.trending",
                 type == WorkMediaType.Book ? "nav.books" : "discover.categories.lightNovel",
-                items);
+                items,
+                [new DiscoverySourceResult(type == WorkMediaType.Book ? DiscoverySource.Books : DiscoverySource.Reading, DiscoverySourceState.Ready, items)]);
 
         var rows = new[]
         {
@@ -103,12 +101,9 @@ public sealed class DiscoveryShelfTests
     }
 
     [TestMethod]
-    public void PlanUsesTmdbForMovieAndSeriesIndependentlyOfAniList()
+    public void PlanOffersOnlyTheRowsOfTheVisibleTypes()
     {
-        var plans = DiscoveryShelfComposer.Plan(
-            [WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Anime],
-            includeAniList: false,
-            includeBooks: false);
+        var plans = DiscoveryShelfComposer.Plan([WorkMediaType.Movie, WorkMediaType.Series]);
 
         CollectionAssert.AreEqual(
             new[]
@@ -119,23 +114,7 @@ public sealed class DiscoveryShelfTests
                 "new-series", "upcoming-series"
             },
             plans.Select(plan => plan.Id).ToArray());
-        Assert.IsTrue(plans.All(plan => !plan.UsesAniList && !plan.UsesBooks));
-    }
-
-    [TestMethod]
-    public void PlanRespectsDisabledSources()
-    {
-        var booksOnly = DiscoveryShelfComposer.Plan(
-            [WorkMediaType.Anime, WorkMediaType.Book],
-            includeAniList: false,
-            includeBooks: true);
-        Assert.IsTrue(booksOnly.All(plan => plan.Category == DiscoveryCategory.Book));
-
-        var aniListOnly = DiscoveryShelfComposer.Plan(
-            [WorkMediaType.Anime, WorkMediaType.Book],
-            includeAniList: true,
-            includeBooks: false);
-        Assert.IsFalse(aniListOnly.Any(plan => plan.Category == DiscoveryCategory.Book));
+        Assert.AreEqual(0, DiscoveryShelfComposer.Plan([]).Count);
     }
 
     [TestMethod]
@@ -157,51 +136,54 @@ public sealed class DiscoveryShelfTests
     [TestMethod]
     public async Task BoardOnlyContainsRowsForVisibleMediaTypes()
     {
-        DiscoveryShelfService.InvalidateCache();
         var feed = new FakeFeed();
         var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Book));
 
-        var board = await service.GetBoardAsync(
-            null, "cap-filter", isOwner: false, includeAniList: true, includeBooks: true, CancellationToken.None);
+        var board = await service.GetBoardAsync(null, "cap-filter", isOwner: false, DiscoveryWait.None, CancellationToken.None);
 
         Assert.IsTrue(board.Rows.Count > 0);
-        Assert.IsTrue(
-            board.Rows.All(row => row.MediaType == WorkMediaType.Book),
-            "A Books-only profile must see book rows only.");
+        Assert.IsTrue(board.Rows.All(row => row.MediaType == WorkMediaType.Book), "A Books-only profile must see book rows only.");
         Assert.IsTrue(board.Rows.All(row => row.Items.Count > 0), "Empty rows must be dropped.");
     }
 
     [TestMethod]
     public async Task BoardContainsTmdbRowsForVisibleMovieAndSeriesTypes()
     {
-        DiscoveryShelfService.InvalidateCache();
         var feed = new FakeFeed();
         var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Movie, WorkMediaType.Series));
 
-        var board = await service.GetBoardAsync(
-            null, "tmdb-feed", isOwner: false, includeAniList: true, includeBooks: true, CancellationToken.None);
+        var board = await service.GetBoardAsync(null, "tmdb-feed", isOwner: false, DiscoveryWait.None, CancellationToken.None);
 
         Assert.IsFalse(board.IsEmpty);
         Assert.IsTrue(board.Rows.All(row => row.MediaType is WorkMediaType.Movie or WorkMediaType.Series));
-        Assert.IsTrue(feed.Calls > 0);
+        Assert.AreEqual(1, feed.Loads, "Every row of the board is requested in one load, so the provider calls run side by side.");
     }
 
     [TestMethod]
-    public async Task BoardIsCachedPerProfileWithinTtl()
+    public async Task ARowThatWaitsKeepsItsPlaceAndAFailedRowStaysVisibleWhileAnEmptyOneIsDropped()
     {
-        DiscoveryShelfService.InvalidateCache();
-        var feed = new FakeFeed();
-        var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Book));
+        var feed = new FakeFeed
+        {
+            StateOf = request => request.Category switch
+            {
+                DiscoveryCategory.Movie => DiscoverySourceState.Pending,
+                DiscoveryCategory.Series when request.Mode == DiscoveryMode.Top => DiscoverySourceState.Unavailable,
+                DiscoveryCategory.Series when request.Mode == DiscoveryMode.New => DiscoverySourceState.Ready,
+                _ => DiscoverySourceState.Ready
+            },
+            NoItemsFor = request => request.Category == DiscoveryCategory.Series && request.Mode == DiscoveryMode.New
+        };
+        var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Movie, WorkMediaType.Series));
 
-        await service.GetBoardAsync(null, "cache-a", false, true, true, CancellationToken.None);
-        var afterFirst = feed.Calls;
-        Assert.IsTrue(afterFirst > 0);
+        var board = await service.GetBoardAsync(null, "waiting", isOwner: false, DiscoveryWait.None, CancellationToken.None);
 
-        await service.GetBoardAsync(null, "cache-a", false, true, true, CancellationToken.None);
-        Assert.AreEqual(afterFirst, feed.Calls, "A repeat board request within TTL must be served from cache.");
-
-        await service.GetBoardAsync(null, "cache-b", false, true, true, CancellationToken.None);
-        Assert.AreEqual(afterFirst * 2, feed.Calls, "A different profile must not hit another profile's cached board.");
+        Assert.AreEqual(DiscoverySectionState.Pending, board.Rows.First(row => row.Id == "trending-movie").State);
+        Assert.AreEqual(DiscoverySectionState.Unavailable, board.Rows.Single(row => row.Id == "top-series").State);
+        Assert.IsFalse(board.Rows.Any(row => row.Id == "new-series"), "A row that every source answered with nothing is redundant chrome.");
+        CollectionAssert.AreEqual(
+            new[] { "trending-movie", "trending-series", "top-movie", "top-series", "new-movie", "upcoming-movie", "upcoming-series" },
+            board.Rows.Select(row => row.Id).ToArray(),
+            "The rows keep the order of the plan whatever their state.");
     }
 
     [TestMethod]
@@ -278,47 +260,47 @@ public sealed class DiscoveryShelfTests
 
     private sealed class FakeFeed : IDiscoveryFeed
     {
-        public int Calls { get; private set; }
+        public int Loads { get; private set; }
 
-        public Task<DiscoveryResponse> GetAsync(
-            DiscoveryRequest request,
-            string profileId,
-            bool isOwner,
-            bool includeAniList,
-            bool includeBooks,
+        public Func<DiscoveryRequest, DiscoverySourceState> StateOf { get; init; } = _ => DiscoverySourceState.Ready;
+
+        public Func<DiscoveryRequest, bool> NoItemsFor { get; init; } = _ => false;
+
+        public Task<DiscoveryLoad> LoadAsync(
+            IReadOnlyList<DiscoveryRequest> requests,
+            DiscoveryAudience audience,
+            DiscoveryWait wait,
             CancellationToken cancellationToken)
         {
-            Calls++;
-            var category = request.Category switch
+            Loads++;
+            var batches = requests.Select(request =>
             {
-                DiscoveryCategory.Anime => "anime",
-                DiscoveryCategory.Movie => "movie",
-                DiscoveryCategory.Series => "tv",
-                DiscoveryCategory.Manga => "manga",
-                DiscoveryCategory.LightNovel => "light-novel",
-                DiscoveryCategory.Book => "book",
-                _ => "all"
-            };
-            var provider = category switch
-            {
-                "book" => "openlibrary",
-                "movie" or "tv" => "tmdb",
-                _ => "anilist"
-            };
-            IReadOnlyList<DiscoveryItem> items =
-            [
-                Item(category, provider, $"{category}-1", $"{category} one"),
-                Item(category, provider, $"{category}-2", $"{category} two")
-            ];
-
-            return Task.FromResult(new DiscoveryResponse(
-                request.Query,
-                category,
-                request.Mode.ToString().ToLowerInvariant(),
-                request.Genre,
-                AniListConnected: false,
-                items,
-                []));
+                var category = request.Category switch
+                {
+                    DiscoveryCategory.Anime => "anime",
+                    DiscoveryCategory.Movie => "movie",
+                    DiscoveryCategory.Series => "tv",
+                    DiscoveryCategory.Manga => "manga",
+                    DiscoveryCategory.LightNovel => "light-novel",
+                    DiscoveryCategory.Book => "book",
+                    _ => "all"
+                };
+                var provider = category switch
+                {
+                    "book" => "openlibrary",
+                    "movie" or "tv" => "tmdb",
+                    _ => "anilist"
+                };
+                var state = StateOf(request);
+                IReadOnlyList<DiscoveryItem> items = state != DiscoverySourceState.Ready || NoItemsFor(request)
+                    ? []
+                    : [Item(category, provider, $"{category}-1", $"{category} one"), Item(category, provider, $"{category}-2", $"{category} two")];
+                return new DiscoveryBatch(request, false, [new DiscoverySourceResult(DiscoverySources.For(request.Category)[0], state, items)]);
+            }).ToArray();
+            return Task.FromResult(new DiscoveryLoad(batches, batches.Count(batch => !batch.HasPending), batches.Count(batch => batch.HasPending)));
         }
+
+        public Task<IReadOnlyDictionary<string, DiscoveryItem>> OverlayLocalStateAsync(IEnumerable<DiscoveryItem> items, string profileId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<string, DiscoveryItem>>(items.DistinctBy(item => item.Id).ToDictionary(item => item.Id));
     }
 }

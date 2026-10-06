@@ -38,7 +38,18 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
     /// format, when the title was added and last watched, how many units are playable or missing). A failing open-request
     /// lookup only drops the requested state and flags the result as degraded.
     /// </summary>
-    public async Task<LibraryEntries> GetEntriesAsync(string profileId, IReadOnlyCollection<WorkMediaType> mediaTypes, CancellationToken cancellationToken)
+    public Task<LibraryEntries> GetEntriesAsync(string profileId, IReadOnlyCollection<WorkMediaType> mediaTypes, CancellationToken cancellationToken) =>
+        LoadEntriesAsync(profileId, mediaTypes, null, cancellationToken);
+
+    /// <summary>The same entries, restricted to the Anime Works that link to the given legacy anime records: a page that looks at a few titles does not read the whole Anime library.</summary>
+    public Task<LibraryEntries> GetAnimeEntriesAsync(string profileId, IReadOnlyCollection<Guid> legacyAnimeIds, CancellationToken cancellationToken) =>
+        LoadEntriesAsync(profileId, [WorkMediaType.Anime], legacyAnimeIds, cancellationToken);
+
+    private async Task<LibraryEntries> LoadEntriesAsync(
+        string profileId,
+        IReadOnlyCollection<WorkMediaType> mediaTypes,
+        IReadOnlyCollection<Guid>? onlyLegacyAnimeIds,
+        CancellationToken cancellationToken)
     {
         var scope = LibraryBrowse.VideoMediaTypes.Where(mediaTypes.Contains).ToArray();
         if (scope.Length == 0)
@@ -79,6 +90,8 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
         var works = await db.Works
             .AsNoTracking()
             .Where(work => scope.Contains(work.MediaType)
+                && (onlyLegacyAnimeIds == null
+                    || db.WorkSourceLinks.Any(link => link.WorkId == work.Id && link.SourceKind == WorkSourceKind.Anime && onlyLegacyAnimeIds.Contains(link.SourceId)))
                 && (requestedWorkIds.Contains(work.Id)
                     || db.WorkSourceLinks.Any(link => link.WorkId == work.Id
                         && (link.SourceKind == WorkSourceKind.Anime || link.SourceKind == WorkSourceKind.Movie || link.SourceKind == WorkSourceKind.Series))

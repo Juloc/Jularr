@@ -162,15 +162,6 @@ public sealed record DiscoveryItem(
     string? Author = null,
     double? Rating = null);
 
-public sealed record DiscoveryResponse(
-    string Query,
-    string Category,
-    string Mode,
-    string Genre,
-    bool AniListConnected,
-    IReadOnlyList<DiscoveryItem> Items,
-    IReadOnlyList<string> Warnings);
-
 internal static class DiscoveryStringExtensions
 {
     public static string Truncate(this string value, int maxLength) =>

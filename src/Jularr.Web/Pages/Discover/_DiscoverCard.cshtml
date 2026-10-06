@@ -21,46 +21,38 @@
          data-dc-author="@card.Author"
          data-dc-cover="@card.PosterUrl"
          data-dc-request-id="@card.RequestId"
+         data-dc-watch-request="@(card.IsLocal ? null : card.RequestId)"
          data-dc-request-status="@card.RequestStatus">
-    @* The whole card opens the title through the stretched title link; the artwork link is only for pointers. *@
-    <a class="dc-art" href="@card.Href" target="@linkTarget" rel="@linkRel" tabindex="-1" aria-hidden="true">
-        @if (card.PosterUrl is { } poster)
+    @* The whole card opens the title through the stretched title link; the artwork link is only for pointers. The Quick View and Request
+       buttons sit on the artwork and appear on hover and focus, so the resting card stays as quiet as the mockup. *@
+    <div class="dc-card-media">
+        <a class="dc-art" href="@card.Href" target="@linkTarget" rel="@linkRel" tabindex="-1" aria-hidden="true">
+            @if (card.PosterUrl is { } poster)
+            {
+                <img src="@poster" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+            }
+            else
+            {
+                <span class="dc-initial">@card.Initial</span>
+            }
+        </a>
+
+        <button type="button" class="dc-card-preview" data-dc-preview
+                aria-label="@ui.Format("discover.preview.show", ("title", card.Title))">
+            <partial name="_DiscoverIcon" model='"preview"' />
+        </button>
+
+        @if (!card.IsLocal && card.RequestId is null && card.CanRequest)
         {
-            <img src="@poster" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+            <button type="button" class="button button-primary dc-card-request" data-dc-card-request>@ui["discover.card.request"]</button>
         }
-        else
-        {
-            <span class="dc-initial">@card.Initial</span>
-        }
-    </a>
+    </div>
 
     <div class="dc-card-body">
         <h3 class="dc-card-title"><a href="@card.Href" target="@linkTarget" rel="@linkRel" data-dc-title-link>@card.Title</a></h3>
         <p class="dc-card-meta">@card.Meta</p>
         <partial name="_DiscoverState" model="card.State" />
-
-        @if (!card.IsLocal && card.RequestId is { } cardRequestId)
-        {
-            <span class="dc-card-action"
-                  data-dc-card-request-slot
-                  data-dc-live-request="@cardRequestId"
-                  data-dc-live-status="@card.RequestStatus">
-            </span>
-        }
-        else if (!card.IsLocal && card.CanRequest)
-        {
-            <span class="dc-card-action" data-dc-card-request-slot>
-                <button type="button" class="button button-primary dc-card-request" data-dc-card-request>
-                    @ui["discover.card.request"]
-                </button>
-            </span>
-        }
     </div>
-
-    <button type="button" class="dc-card-preview" data-dc-preview
-            aria-label="@ui.Format("discover.preview.show", ("title", card.Title))">
-        <partial name="_DiscoverIcon" model='"preview"' />
-    </button>
 
     <template data-dc-template>
         <div class="dc-pv"
