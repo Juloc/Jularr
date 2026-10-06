@@ -167,7 +167,7 @@ with `MetadataFieldSources`. `WorkArtworkCache` (Features/Artwork) owns the loca
   neutral (highest voted), then the viewer's language. The spool keeps, per slot and locale, the best image in the locale's language
   and the best neutral one (else the best of any language). Ties break by votes, vote count, width, file identity.
 - Artwork is untrusted input: the adapter accepts only single-segment `/[A-Za-z0-9_-]+.(jpg|jpeg|png|webp)` TMDB paths and builds
-  `https://image.tmdb.org/t/p/{size}{path}`; the cache fetches only HTTPS on allow-listed hosts (checked again after redirects),
+  `https://image.tmdb.org/t/p/{size}{path}`; the cache fetches only HTTPS on allow-listed hosts with a client that follows no redirects,
   requires an image content type, at most 20 MB and decodable JPEG/PNG/WebP, and writes `/data/cache/artwork/work/{key[..2]}/{key}.webp`
   where the key is a SHA-256 of the variant identity; no provider or user text becomes part of a path.
 - Retention: metadata lives as long as the Work; artwork is bounded by the unique key (a replaced variant's file is deleted when the
@@ -176,14 +176,14 @@ with `MetadataFieldSources`. `WorkArtworkCache` (Features/Artwork) owns the loca
 **Spool.** `WorkMetadataRefreshService` is a hosted worker following the durable due-list pattern of the franchise refresh
 (`BackgroundWakeSignal` + due rows read from the database; a wake only shortens the wait). One entry runs at a time, bulk entries
 are spaced, claims are leased (`FOR UPDATE SKIP LOCKED`, 10 min lease) so a crash only delays an entry. Outcomes: success → `Fresh`,
-due again after 30 days (`Stale` priority); network/5xx/timeouts/download failures → `Queued` with exponential backoff (1 min doubling
-to 6 h); 404/unusable answers → `Failed`, re-probed after 7 days (negative result); 429 / open circuit / refused credentials pause the
+due again after 30 days (`Stale` priority); network/5xx/timeouts and busy-CDN (408/429/5xx) artwork downloads → `Queued` with exponential backoff (1 min doubling
+to 6 h; the worker wakes when a backoff ends); 400/404/422/unusable answers → `Failed`, re-probed after 7 days (negative result); 429 / open circuit / refused credentials pause the
 whole pass without penalizing the entry. Nothing runs on startup; the first pass waits a minute. Works of a disabled Movie/TV module
 are not claimed.
 
 **Entry points.** `TmdbDiscoveryProvider.EnsureCanonicalWorkAsync` (the Request materialization) queues the Work at `Requested`
 priority; it never fetches durable metadata inline. `WorkMetadataRefreshQueue.RequestMetadataRefreshAsync(workId, interactive)` is the
-narrow call a detail page makes when a Work is opened: it promotes a missing or queued entry to `Interactive` without waiting and
+narrow call for a detail page when a Work is opened (wiring it into the pages belongs to the UI slice): it promotes a missing or queued entry to `Interactive` without waiting and
 never refetches fresh data or bypasses a failure's backoff. The reconcile (start + every 6 h) is the idempotent backfill:
 TMDB-identified Movie/Series Works without an entry are queued as `Imported` (file or progress), `Requested` (no legacy library
 record) or `Library`.
@@ -203,7 +203,8 @@ additional locales, no schema change); provider capability memory and a separate
 machine-translation provenance columns (provider/model/version) when translation lands; Admin coverage/queue view with
 pause/resume/retry and explicit refresh; open-time promotion wired into the detail pages (UI slice); person artwork and "More like
 this"; Anime metadata/artwork migration into these tables and retirement of the Anime-specific stores; Discover preferring persisted
-metadata for already durable Works.
+metadata for already durable Works; per-field merge of facts (a merge keeps the survivor's facts row whole, so a manual fact value of the
+absorbed Work is not carried over yet).
 
 ## Follow-ups
 

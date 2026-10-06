@@ -49,9 +49,6 @@ public sealed class WorkMetadataRefreshService(
     /// <summary>Upper bound of runs per pass, so one wake cannot spin forever.</summary>
     public const int MaxRunsPerPass = 100;
 
-    /// <summary>Artwork files a sweep looks at; an orphan beyond it is reclaimed by a later sweep.</summary>
-    public const int MaxSweptFiles = 50_000;
-
     private const int SweepBatchSize = 500;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -89,8 +86,9 @@ public sealed class WorkMetadataRefreshService(
 
     /// <summary>
     /// Runs due entries, most urgent first, until none is due or <paramref name="maxRuns"/> ran. Returns how long to wait before the
-    /// next pass when the provider asked for a pause, <see cref="TimeSpan.Zero"/> when the pass stopped at its bound with work left,
-    /// and null when nothing is due (or no provider is configured / no Movie or TV module is enabled).
+    /// next pass: the provider's pause, <see cref="TimeSpan.Zero"/> when the pass stopped at its bound with work left, or the time until
+    /// the next entry falls due (a backoff) when that is sooner than <see cref="Interval"/>. Null when nothing falls due before then (or
+    /// no provider is configured / no Movie or TV module is enabled).
     /// </summary>
     public static async Task<TimeSpan?> ProcessDueAsync(IServiceProvider services, int maxRuns, CancellationToken cancellationToken)
     {
@@ -119,7 +117,13 @@ public sealed class WorkMetadataRefreshService(
             var now = clock.GetUtcNow().UtcDateTime;
             if (await store.ClaimNextDueAsync(mediaTypes, now, now + Lease, cancellationToken) is not { } claim)
             {
-                return null;
+                // A backoff shorter than the regular interval wakes the worker when it ends, not a whole interval later.
+                if (await store.FindNextDueAtAsync(mediaTypes, cancellationToken) is not { } due || due - now >= Interval)
+                {
+                    return null;
+                }
+
+                return due > now ? due - now : TimeSpan.Zero;
             }
 
             var outcome = await refresher.RunAsync(claim, cancellationToken);
@@ -149,7 +153,7 @@ public sealed class WorkMetadataRefreshService(
         var now = clock.GetUtcNow().UtcDateTime;
         await store.EnqueueDurableWorksAsync(WorkMetadataLocales.InstanceDefault, now, cancellationToken);
 
-        foreach (var batch in cache.ListCachedKeys(now - Lease, MaxSweptFiles).Chunk(SweepBatchSize))
+        foreach (var batch in cache.ListCachedKeys(now - Lease).Chunk(SweepBatchSize))
         {
             var referenced = await store.FindReferencedCacheKeysAsync(batch, cancellationToken);
             foreach (var orphan in batch.Where(key => !referenced.Contains(key)))

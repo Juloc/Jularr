@@ -110,9 +110,11 @@ public sealed partial class WorkMetadataRefresher(
             await RecordAsync(claim, claim.Status, claim.Priority, claim.Attempts, CredentialsPause, exception, cancellationToken);
             return new WorkMetadataRunOutcome(claim.Status, CredentialsPause);
         }
-        catch (Exception exception) when (exception is HttpRequestException { StatusCode: HttpStatusCode.NotFound } or JsonException or InvalidDataException)
+        catch (Exception exception) when (exception is HttpRequestException { StatusCode: HttpStatusCode.NotFound or HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity }
+            or JsonException or InvalidDataException or ArgumentException)
         {
-            // The provider answered: the title is gone or its answer is unusable. A valid negative result, not an outage.
+            // The provider answered (or the stored id cannot be asked about): the title is gone, the request is invalid or the answer is
+            // unusable. A valid negative result, not an outage.
             await RecordAsync(claim, WorkMetadataRefreshStatus.Failed, WorkMetadataRefreshPriority.Library, claim.Attempts + 1, PermanentFailureRecheck, exception, cancellationToken);
             return new WorkMetadataRunOutcome(WorkMetadataRefreshStatus.Failed, null);
         }
@@ -209,7 +211,7 @@ public sealed partial class WorkMetadataRefresher(
             var current = stored.Where(x => x.Field == field).ToArray();
             if (current.All(x => MetadataFieldSources.ShouldReplace(x.Source, x.IsManualOverride, source, incomingIsManualOverride: false, preferredProvider: source)))
             {
-                await store.ReplaceLocalizedFieldAsync(workId, snapshot.Locale, field, [.. values.Select(Bounded)], source, snapshot.ProviderExternalId, priority, now, cancellationToken);
+                await store.ReplaceLocalizedFieldAsync(workId, snapshot.Locale, field, values, source, snapshot.ProviderExternalId, priority, now, cancellationToken);
             }
         }
 
@@ -296,8 +298,6 @@ public sealed partial class WorkMetadataRefresher(
         var text = Secrets().Replace(string.Join(" -> ", parts), "$1=[redacted]");
         return text.Length <= MaxErrorLength ? text : text[..MaxErrorLength];
     }
-
-    private static string Bounded(string value) => value.Length <= 4000 ? value : value[..4000];
 
     [GeneratedRegex("(api_key|access_token|Bearer)[=: ]+[^&\\s]+", RegexOptions.IgnoreCase)]
     private static partial Regex Secrets();

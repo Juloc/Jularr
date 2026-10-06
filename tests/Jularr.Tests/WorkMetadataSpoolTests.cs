@@ -69,6 +69,21 @@ public sealed class WorkMetadataSpoolTests
     }
 
     [TestMethod]
+    public async Task OversizedProviderTextIsClippedInsteadOfFailingTheRefresh()
+    {
+        await using var fixture = await WorkMetadataFixture.CreateAsync();
+        var work = await fixture.AddMovieAsync();
+        await fixture.Queue.RequestMetadataRefreshAsync(work.Id, interactive: false, CancellationToken.None);
+        var longCharacter = new string('x', 900);
+        fixture.Tmdb = _ => WorkMetadataFixture.Json(WorkMetadataFixture.MovieJson().Replace("\"Narrator\"", $"\"{longCharacter}\"", StringComparison.Ordinal));
+
+        await fixture.RunSpoolAsync();
+
+        Assert.AreEqual(WorkMetadataRefreshStatus.Fresh, (await fixture.RefreshEntryAsync(work.Id)).Status);
+        Assert.AreEqual(300, (await fixture.Db.Set<WorkCredit>().AsNoTracking().SingleAsync(x => x.Name == "Edward Norton")).Role!.Length);
+    }
+
+    [TestMethod]
     public async Task FreshMetadataIsNotRefetchedWhenAWorkIsOpenedAgain()
     {
         await using var fixture = await WorkMetadataFixture.CreateAsync();
@@ -122,7 +137,7 @@ public sealed class WorkMetadataSpoolTests
 
         fixture.Tmdb = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
         await fixture.MakeDueAsync();
-        Assert.IsNull(await fixture.RunSpoolAsync());
+        Assert.AreEqual(WorkMetadataRefresher.Backoff(1), await fixture.RunSpoolAsync(), "The worker wakes when the backoff ends, not a whole interval later.");
 
         var entry = await fixture.RefreshEntryAsync(work.Id);
         Assert.AreEqual(WorkMetadataRefreshStatus.Queued, entry.Status, "A transient failure is retried.");

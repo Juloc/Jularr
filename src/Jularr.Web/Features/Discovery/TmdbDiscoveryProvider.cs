@@ -378,13 +378,13 @@ public sealed partial class TmdbDiscoveryProvider(
             Trimmed(details.Tagline),
             DistinctTexts((details.Genres ?? []).Select(x => x.Name), 10),
             TrailerKeys(details.Videos?.Results),
-            Trimmed(movie ? details.OriginalTitle : details.OriginalName),
+            Trimmed(movie ? details.OriginalTitle : details.OriginalName, 1000),
             IsLanguageCode(details.OriginalLanguage) ? details.OriginalLanguage : null,
             ParseDateOnly(movie ? details.ReleaseDate : details.FirstAirDate),
             runtime is > 0 ? runtime : null,
             details.VoteCount is > 0 && details.VoteAverage is >= 0 and <= 10 ? Math.Round(details.VoteAverage.Value, 1) : null,
             details.VoteCount is >= 0 ? details.VoteCount : null,
-            string.IsNullOrEmpty(certification) || country is null ? null : certification,
+            string.IsNullOrEmpty(certification) || country is null ? null : Trimmed(certification, 32),
             string.IsNullOrEmpty(certification) ? null : country,
             DistinctTexts(studios, 10),
             DistinctTexts(countries.Where(x => x is { Length: 2 } && x.All(char.IsAsciiLetterUpper)), 10),
@@ -424,12 +424,12 @@ public sealed partial class TmdbDiscoveryProvider(
             .Where(x => !string.IsNullOrWhiteSpace(x.Name))
             .OrderBy(x => x.Order)
             .Take(MaxCast)
-            .Select(x => new WorkCreditCandidate(WorkCreditKind.Cast, x.Name!.Trim(), Trimmed(x.Character), PersonId(x.Id)));
-        var creators = movie ? [] : (details.CreatedBy ?? []).Where(x => !string.IsNullOrWhiteSpace(x.Name)).Select(x => new WorkCreditCandidate(WorkCreditKind.Crew, x.Name!.Trim(), "Creator", PersonId(x.Id)));
+            .Select(x => new WorkCreditCandidate(WorkCreditKind.Cast, Trimmed(x.Name, 300)!, Trimmed(x.Character, 300), PersonId(x.Id)));
+        var creators = movie ? [] : (details.CreatedBy ?? []).Where(x => !string.IsNullOrWhiteSpace(x.Name)).Select(x => new WorkCreditCandidate(WorkCreditKind.Crew, Trimmed(x.Name, 300)!, "Creator", PersonId(x.Id)));
         var crew = (details.Credits?.Crew ?? [])
             .Where(x => !string.IsNullOrWhiteSpace(x.Name) && KeyCrewJobs.Contains(x.Job, StringComparer.Ordinal))
             .OrderBy(x => Array.IndexOf(KeyCrewJobs, x.Job))
-            .Select(x => new WorkCreditCandidate(WorkCreditKind.Crew, x.Name!.Trim(), x.Job, PersonId(x.Id)));
+            .Select(x => new WorkCreditCandidate(WorkCreditKind.Crew, Trimmed(x.Name, 300)!, x.Job, PersonId(x.Id)));
         return [.. cast, .. creators.Concat(crew).DistinctBy(x => (x.Name, x.Role)).Take(MaxCrew)];
     }
 
@@ -469,11 +469,21 @@ public sealed partial class TmdbDiscoveryProvider(
     }
 
     private static IReadOnlyList<string> DistinctTexts(IEnumerable<string?> values, int limit) =>
-        [.. values.Select(Trimmed).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Take(limit)];
+        [.. values.Select(value => Trimmed(value, 300)).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Take(limit)];
 
     private static bool IsLanguageCode(string? value) => value is { Length: 2 } && value.All(char.IsAsciiLetterLower);
 
-    private static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    // Provider text is untrusted in length too: clip it to the column it lands in, so one oversized value cannot fail the whole refresh.
+    private static string? Trimmed(string? value, int maxLength = 4000)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength].TrimEnd();
+    }
 
     private static DateOnly? ParseDateOnly(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;

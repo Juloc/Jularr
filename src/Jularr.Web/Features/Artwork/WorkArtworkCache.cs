@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Jularr.Web.Features.MediaCore;
@@ -14,6 +15,9 @@ namespace Jularr.Web.Features.Artwork;
 public sealed class WorkArtworkCache(string rootPath, IReadOnlyCollection<string> allowedHosts, IHttpClientFactory httpClients)
 {
     public const string DefaultRootPath = "/data/cache/artwork/work";
+
+    /// <summary>The named client of the downloads; it must not follow redirects, so a redirect off the CDN is refused, not fetched.</summary>
+    public const string HttpClientName = "work-artwork";
 
     // Part of every key: bumping it re-derives all variants instead of serving derivatives of an older encoding.
     private const string DerivativeVersion = "v1:webp82:poster512:wide1600";
@@ -54,8 +58,14 @@ public sealed class WorkArtworkCache(string rootPath, IReadOnlyCollection<string
             return false;
         }
 
-        using var client = httpClients.CreateClient(AnimeArtworkLibrary.HttpClientName);
+        using var client = httpClients.CreateClient(HttpClientName);
         using var response = await client.GetAsync(source, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (response.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || (int)response.StatusCode >= 500)
+        {
+            // The CDN is busy or failing, not the image: the caller retries with backoff instead of keeping the slot empty.
+            throw new HttpRequestException($"The image CDN answered {(int)response.StatusCode}.", null, response.StatusCode);
+        }
+
         if (!response.IsSuccessStatusCode
             || response.RequestMessage?.RequestUri is not { } finalUri
             || !IsHostAllowed(finalUri)
@@ -94,24 +104,20 @@ public sealed class WorkArtworkCache(string rootPath, IReadOnlyCollection<string
     }
 
     /// <summary>
-    /// Up to <paramref name="limit"/> cache keys whose derivative was written before <paramref name="olderThanUtc"/>, for the orphan
-    /// sweep. The age guard keeps a file that was just downloaded but whose variant row is not committed yet out of the sweep.
+    /// Every cache key whose derivative was written before <paramref name="olderThanUtc"/>, streamed for the orphan sweep. The age guard
+    /// keeps a file that was just downloaded but whose variant row is not committed yet out of the sweep.
     /// </summary>
-    public IReadOnlyList<string> ListCachedKeys(DateTime olderThanUtc, int limit)
+    public IEnumerable<string> ListCachedKeys(DateTime olderThanUtc)
     {
         if (!Directory.Exists(RootPath))
         {
             return [];
         }
 
-        return
-        [
-            .. Directory.EnumerateFiles(RootPath, "*.webp", SearchOption.AllDirectories)
-                .Where(file => File.GetLastWriteTimeUtc(file) < olderThanUtc)
-                .Select(Path.GetFileNameWithoutExtension)
-                .Where(IsCacheKey)
-                .Select(key => key!)
-                .Take(limit)
-        ];
+        return Directory.EnumerateFiles(RootPath, "*.webp", SearchOption.AllDirectories)
+            .Where(file => File.GetLastWriteTimeUtc(file) < olderThanUtc)
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(IsCacheKey)
+            .Select(key => key!);
     }
 }

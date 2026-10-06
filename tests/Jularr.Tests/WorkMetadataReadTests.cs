@@ -112,6 +112,14 @@ public sealed class WorkMetadataReadTests
             };
             Assert.IsFalse(await cache.EnsureAsync(new Uri("https://image.tmdb.org/t/p/w780/a.jpg"), WorkArtworkSlot.Poster, key, CancellationToken.None), "A redirect off the CDN is refused.");
 
+            respond = _ => new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://internal.example/a.jpg") } };
+            Assert.IsFalse(await cache.EnsureAsync(new Uri("https://image.tmdb.org/t/p/w780/a.jpg"), WorkArtworkSlot.Poster, key, CancellationToken.None), "A redirect is not followed.");
+
+            respond = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(() => cache.EnsureAsync(new Uri("https://image.tmdb.org/t/p/w780/a.jpg"), WorkArtworkSlot.Poster, key, CancellationToken.None));
+            respond = _ => new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(() => cache.EnsureAsync(new Uri("https://image.tmdb.org/t/p/w780/a.jpg"), WorkArtworkSlot.Poster, key, CancellationToken.None));
+
             respond = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<html>not an image</html>", System.Text.Encoding.UTF8, "text/html") };
             Assert.IsFalse(await cache.EnsureAsync(new Uri("https://image.tmdb.org/t/p/w780/a.jpg"), WorkArtworkSlot.Poster, key, CancellationToken.None));
 

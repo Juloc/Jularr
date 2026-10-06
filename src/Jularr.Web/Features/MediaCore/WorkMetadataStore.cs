@@ -50,7 +50,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
             WHERE work."Id" = {workId} AND work."MediaType" IN ({(int)WorkMediaType.Movie}, {(int)WorkMediaType.Series})
             ON CONFLICT ("WorkId", "Locale") DO UPDATE SET
                 "Priority" = LEAST(refresh."Priority", excluded."Priority"),
-                "NextAttemptAt" = CASE WHEN refresh."Attempts" = 0 THEN LEAST(refresh."NextAttemptAt", excluded."NextAttemptAt") ELSE refresh."NextAttemptAt" END,
+                "NextAttemptAt" = CASE WHEN refresh."LastAttemptAt" IS NULL THEN LEAST(refresh."NextAttemptAt", excluded."NextAttemptAt") ELSE refresh."NextAttemptAt" END,
                 "UpdatedAt" = excluded."UpdatedAt"
             WHERE refresh."Status" = {(int)WorkMetadataRefreshStatus.Queued} OR refresh."NextAttemptAt" <= excluded."NextAttemptAt"
             """,
@@ -120,6 +120,21 @@ public sealed class WorkMetadataStore(AppDbContext db)
         return rows.Count == 0
             ? null
             : rows.Select(x => new WorkMetadataRefreshClaim(x.Id, x.WorkId, x.Locale, (WorkMetadataRefreshPriority)x.Priority, (WorkMetadataRefreshStatus)x.Status, x.Attempts, (WorkMediaType)x.MediaType)).Single();
+    }
+
+    /// <summary>When the earliest entry of an enabled media type falls due; null when the spool has none.</summary>
+    public async Task<DateTime?> FindNextDueAtAsync(IReadOnlyCollection<WorkMediaType> mediaTypes, CancellationToken cancellationToken)
+    {
+        var types = mediaTypes.Select(x => (int)x).ToArray();
+        return (await db.Database.SqlQuery<DateTime?>(
+                $"""
+                SELECT MIN(refresh."NextAttemptAt") AS "Value"
+                FROM "WorkMetadataRefreshes" AS refresh
+                INNER JOIN "Works" AS work ON work."Id" = refresh."WorkId"
+                WHERE work."MediaType" = ANY({types})
+                """)
+            .ToListAsync(cancellationToken))
+            .SingleOrDefault();
     }
 
     /// <summary>Records the outcome of a run and when the entry is due next.</summary>
@@ -371,6 +386,9 @@ public sealed class WorkMetadataStore(AppDbContext db)
     /// </summary>
     public async Task MoveForMergeAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
     {
+        // A refresh writing rows for the absorbed Work holds a key-share lock on it: wait for it to commit so its rows are moved too,
+        // and make every later refresh write for that Work wait for the merge (and then fail on the deleted Work, not the merge).
+        await db.Database.ExecuteSqlAsync($"""SELECT 1 FROM "Works" WHERE "Id" = {sourceWorkId} FOR UPDATE""", cancellationToken);
         await db.Database.ExecuteSqlAsync(
             $"""
             DELETE FROM "WorkLocalizedValues" AS source
