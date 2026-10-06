@@ -533,7 +533,6 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         var integrations = new DirectoryInfo(Path.Combine(DataRoot, "integrations"));
         collection.AddSingleton(new SabnzbdSettingsStore(Protection, acquisition));
         collection.AddSingleton(new SabnzbdAcquisitionStore(Protection, acquisition));
-        collection.AddSingleton(new ProwlarrSettingsStore(Protection, acquisition));
         collection.AddSingleton(new IndexerStore(Protection, acquisition));
         collection.AddSingleton(new DownloadClientStore(Protection, acquisition));
         collection.AddSingleton(new AcquisitionHealthStore(acquisition));
