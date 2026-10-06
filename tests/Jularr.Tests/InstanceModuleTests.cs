@@ -173,7 +173,7 @@ public sealed class InstanceModuleTests
             can: _ => true,
             enabledInstanceModules: enabled);
 
-        Assert.IsFalse(shell.Primary.Any(item => item.Id == "learn"));
+        Assert.IsFalse(shell.Primary.Concat(shell.Unfinished).Any(item => item.Id is "learn" or "settings-learning"));
 
         var settings = UiShellNavigation.BuildSection(
             "settings",

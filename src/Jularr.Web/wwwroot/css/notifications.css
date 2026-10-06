@@ -1,20 +1,8 @@
 /* Notification inbox and bell (#429). Unread state is a tinted background, bold text and a
    small round dot — never a coloured left-edge stripe (see CssAccentStripeTests). */
 
-.notification-bell {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    margin: -6px 0 10px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--surface-2);
-    color: var(--muted);
-}
-.notification-bell:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+/* The bell is a header button (site.css .app-header-button); this only anchors the unread badge. */
+.notification-bell { position: relative; }
 .notification-bell .app-icon { width: 18px; height: 18px; }
 .notification-bell-badge {
     position: absolute;
@@ -33,7 +21,6 @@
     font-weight: 800;
     line-height: 1;
 }
-.mobile-topbar .notification-bell { margin: 0; }
 
 .notification-tabs {
     display: flex; gap: 5px; margin: 0 0 12px; overflow-x: auto;

@@ -11,9 +11,10 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace Jularr.Web.Pages.Profile;
 
 /// <summary>
-/// Profile: the signed-in user's account, activity, downloads, settings and (for the owner)
-/// admin, plus the destinations the phone bottom bar has no room for. <c>/Profile/settings</c>
-/// and <c>/Profile/admin</c> are the drill-in lists of those sections. All lists come from
+/// Profile: the signed-in user's account, activity, settings and (for the owner) admin, plus the
+/// destinations the phone bottom bar has no room for. <c>/Profile/settings</c>, <c>/Profile/admin</c>
+/// and <c>/Profile/unfinished</c> are the drill-in lists of those sections; Unfinished (#870) is
+/// how a phone reaches destinations whose feature is still incomplete. All lists come from
 /// <see cref="UiNavigationCatalog"/>.
 /// </summary>
 public sealed class IndexModel(
@@ -40,17 +41,18 @@ public sealed class IndexModel(
             .Select(pair => pair.Key)
             .ToHashSet();
 
-        if (section is not null)
-        {
-            // Admin needs admin.media; for everyone else the drill-in does not exist.
-            Section = UiShellNavigation.BuildSection(section, account.Can, enabledModules);
-            return Section is null ? NotFound() : Page();
-        }
-
         var learningVisible = instanceSettings.IsEnabled(InstanceModule.Learning)
             && await new LearningConfigurationStore(db)
                 .HasAnyLearningEnabledAsync(account.ProfileId, cancellationToken);
         var media = await appShell.GetMediaAccessAsync(User, cancellationToken);
+
+        if (section is not null)
+        {
+            // Admin needs admin.media; for everyone else the drill-in does not exist.
+            Section = UiShellNavigation.BuildSection(section, account.Can, enabledModules, learningVisible, media.VisibleMediaTypes);
+            return Section is null ? NotFound() : Page();
+        }
+
         (Links, Elsewhere) = UiShellNavigation.BuildProfile(
             learningVisible,
             account.Can,

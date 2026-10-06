@@ -13,4 +13,8 @@
    aria-current="@(Model.IsCurrentPage ? "page" : null)">
     <partial name="_AppIcon" model="Model.Icon" />
     <span class="nav-label">@ui[Model.LabelKey]</span>
+    @if (Model.AreaKey is not null)
+    {
+        <span class="nav-area">@ui[Model.AreaKey]</span>
+    }
 </a>

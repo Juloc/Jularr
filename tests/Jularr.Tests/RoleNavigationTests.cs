@@ -25,6 +25,12 @@ public sealed class RoleNavigationTests
     public static Func<string, bool> As(AccountRole role) =>
         policy => JularrPolicies.Roles[policy].Contains(role);
 
+    /// <summary>
+    /// Admin -> Providers is listed before its page exists: the page is built on its own branch (#872) and this entry only reserves its
+    /// place and label. Remove this exemption together with that page's merge.
+    /// </summary>
+    private const string PendingProvidersPageId = "admin-providers";
+
     private static IEnumerable<UiNavigationEntry> AdminEntries =>
         UiNavigationCatalog.Admin.SelectMany(section => section.Entries);
 
@@ -49,7 +55,7 @@ public sealed class RoleNavigationTests
         Assert.AreEqual("admin", nav.Expanded?.Id);
         CollectionAssert.AreEquivalent(
             MediaManagerAdminIds,
-            nav.Expanded!.Groups!.SelectMany(group => group.Items).Select(item => item.Id).ToArray());
+            nav.Expanded!.Groups!.SelectMany(group => group.Items).Concat(nav.Unfinished).Select(item => item.Id).Where(id => id.StartsWith("admin", StringComparison.Ordinal)).ToArray());
         Assert.AreEqual(
             "admin-operations",
             nav.Expanded.Groups!.SelectMany(group => group.Items).Single(item => item.IsActive).Id);
@@ -72,7 +78,7 @@ public sealed class RoleNavigationTests
     {
         var can = As(role);
         var section = UiShellNavigation.BuildSection("admin", can);
-        var expected = AdminEntries.Where(entry => can(entry.Policy!)).Select(entry => entry.Id).ToArray();
+        var expected = AdminEntries.Where(entry => can(entry.Policy!)).OrderBy(entry => entry.Unfinished).Select(entry => entry.Id).ToArray();
 
         if (role == AccountRole.User)
         {
@@ -94,7 +100,7 @@ public sealed class RoleNavigationTests
         var section = UiShellNavigation.BuildSection("admin", As(AccountRole.Owner));
 
         CollectionAssert.AreEqual(
-            AdminEntries.Select(entry => entry.Id).ToArray(),
+            AdminEntries.OrderBy(entry => entry.Unfinished).Select(entry => entry.Id).ToArray(),
             section!.Groups!.SelectMany(group => group.Items).Select(item => item.Id).ToArray());
     }
 
@@ -105,7 +111,7 @@ public sealed class RoleNavigationTests
             .Where(type => typeof(Microsoft.AspNetCore.Mvc.RazorPages.PageModel).IsAssignableFrom(type))
             .ToArray();
 
-        foreach (var entry in AdminEntries)
+        foreach (var entry in AdminEntries.Where(entry => entry.Id != PendingProvidersPageId))
         {
             var model = PageModelFor(pages, entry.Href);
             Assert.IsNotNull(model, $"No page model for {entry.Href}.");

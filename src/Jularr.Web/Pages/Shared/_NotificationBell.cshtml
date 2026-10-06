@@ -9,7 +9,7 @@
         ? 0
         : await new NotificationStore(NotificationBellDb).CountUnreadAsync(profileId, Context.RequestAborted);
 }
-<a class="notification-bell" href="/Notifications"
+<a class="notification-bell app-header-button" href="/Notifications"
    aria-label="@(unread > 0 ? ui.Format("notifications.bell.aria", ("count", unread)) : ui["notifications.bell.ariaNone"])">
     <partial name="_AppIcon" model="@("bell")" />
     @if (unread > 0)

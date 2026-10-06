@@ -18,8 +18,12 @@
 
     @foreach (var group in section.Groups!)
     {
-        <section class="profile-group" aria-labelledby="profile-group-@group.TitleKey.Replace('.', '-')">
-            <h2 class="profile-group-title" id="profile-group-@group.TitleKey.Replace('.', '-')">@ui[group.TitleKey]</h2>
+        @* The Unfinished list is one group under its own page title, so it needs no second heading. *@
+        <section class="profile-group" aria-labelledby="@(section.Groups!.Count > 1 ? "profile-group-" + group.TitleKey.Replace('.', '-') : null)">
+            @if (section.Groups!.Count > 1)
+            {
+                <h2 class="profile-group-title" id="profile-group-@group.TitleKey.Replace('.', '-')">@ui[group.TitleKey]</h2>
+            }
             <ul class="profile-list">
                 @foreach (var item in group.Items)
                 {

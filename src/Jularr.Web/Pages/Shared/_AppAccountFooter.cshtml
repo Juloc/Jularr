@@ -5,24 +5,19 @@
     var appVersion = ViewData["AppBuildVersion"] as string ?? AppBuildInfo.Version;
     var isOwner = User.IsInRole(Jularr.Web.Features.Auth.AccountRoles.Owner);
 }
-@* Shared by the desktop sidebar footer and the phone Profile page. *@
-<partial name="_AppThemeControl" />
+@* Phone Profile page footer: the header account menu and theme button are not shown on phones, so these actions live here. *@
+<partial name="_AppThemeControl" model="@("labelled")" />
 @if (User.Identity?.IsAuthenticated == true)
 {
     @* Compact global offline-download indicator (#221): hidden by default, shown by
        offline-library-ui.js only while something is downloading. *@
-    <a class="sidebar-offline-indicator" href="/Settings/Offline" data-offline-download-indicator hidden></a>
+    <a class="user-menu-offline" href="/Settings/Offline" data-offline-download-indicator hidden></a>
 }
-<div class="sidebar-account">
-    <span class="sidebar-user">@User.Identity?.Name</span>
-    <form method="post" asp-page="/Account/Logout" data-offline-logout>
-        <button class="sidebar-logout" type="submit">
-            <partial name="_AppIcon" model="@("signOut")" />
-            <span>@ui["nav.signOut"]</span>
-        </button>
-    </form>
+<div class="app-account-row">
+    <span class="app-account-name">@User.Identity?.Name</span>
+    <partial name="_AppSignOut" model="@("app-signout")" />
 </div>
 @if (isOwner)
 {
-    <span class="sidebar-version" title="@appVersion">@ui["shell.version"] @appVersion</span>
+    <span class="app-account-version" title="@appVersion">@ui["shell.version"] @appVersion</span>
 }

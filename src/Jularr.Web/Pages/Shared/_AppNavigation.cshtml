@@ -34,7 +34,7 @@
         media.VisibleMediaTypes,
         enabledModules);
 
-    // Discover has its own search field; the shell search would repeat it.
+    // Discover owns a prominent search of its own (docs/mockups/discover): the header leaves it the focus instead of showing two equal fields.
     var showSearch = !Context.Request.Path.StartsWithSegments("/Discover", StringComparison.OrdinalIgnoreCase);
 
     // Inside a reader the sidebar shows the work that is open, never another one.
@@ -50,17 +50,9 @@
         current = recent.FirstOrDefault(item => item.ChapterId == chapterId || (workId is { } id && item.WorkId == id));
     }
 }
+<partial name="_AppHeader" model="(nav.Expanded?.LabelKey, showSearch)" />
+
 <aside class="sidebar">
-    <a class="brand" href="/">
-        <partial name="_AppBrandMark" />
-    </a>
-
-    @if (showSearch)
-    {
-        <partial name="_AppSearch" />
-    }
-    <partial name="_NotificationBell" />
-
     <nav class="nav-list" aria-label="@ui["nav.primaryAria"]">
         @foreach (var item in nav.Primary)
         {
@@ -73,47 +65,51 @@
         <partial name="_AppCurrentReading" model="current" />
     }
 
-    <nav class="nav-list nav-list-secondary @(nav.Expanded is not null ? "nav-list-expanded" : "")" aria-label="@ui["nav.secondaryAria"]">
-        @foreach (var item in nav.Secondary)
-        {
-            @if (item.Groups is { } groups)
+    <div class="nav-bottom">
+        <nav class="nav-list nav-list-secondary @(nav.Expanded is not null ? "nav-list-expanded" : "")" aria-label="@ui["nav.secondaryAria"]">
+            @foreach (var item in nav.Secondary)
             {
-                <div class="nav-section" data-nav-section="@item.Id">
-                    <partial name="_AppNavLink" model="item" />
-                    <div class="nav-children" role="group" aria-label="@ui[item.LabelKey]">
-                        @foreach (var group in groups)
-                        {
-                            <p class="nav-group-title">@ui[group.TitleKey]</p>
-                            @foreach (var child in group.Items)
+                @if (item.Groups is { } groups)
+                {
+                    <div class="nav-section" data-nav-section="@item.Id">
+                        <partial name="_AppNavLink" model="item" />
+                        <div class="nav-children" role="group" aria-label="@ui[item.LabelKey]">
+                            @foreach (var group in groups)
                             {
-                                <partial name="_AppNavLink" model="child" />
+                                <p class="nav-group-title">@ui[group.TitleKey]</p>
+                                @foreach (var child in group.Items)
+                                {
+                                    <partial name="_AppNavLink" model="child" />
+                                }
                             }
-                        }
+                        </div>
                     </div>
-                </div>
+                }
+                @if (item.Groups is null)
+                {
+                    <partial name="_AppNavLink" model="item" />
+                }
             }
-            @if (item.Groups is null)
-            {
-                <partial name="_AppNavLink" model="item" />
-            }
-        }
-    </nav>
+        </nav>
 
-    <div class="sidebar-footer">
-        <partial name="_AppAccountFooter" />
+        @* The one Unfinished section (#870): last, collapsed unless the current page is inside it. *@
+        @if (nav.Unfinished.Count > 0)
+        {
+            <details class="nav-unfinished" open="@nav.Unfinished.Any(item => item.IsActive)">
+                <summary class="nav-unfinished-summary">
+                    <span class="nav-label">@ui["nav.unfinished"]</span>
+                    <partial name="_AppIcon" model="@("chevronDown")" />
+                </summary>
+                <nav class="nav-list nav-list-secondary" aria-label="@ui["nav.unfinished"]">
+                    @foreach (var item in nav.Unfinished)
+                    {
+                        <partial name="_AppNavLink" model="item" />
+                    }
+                </nav>
+            </details>
+        }
     </div>
 </aside>
-
-@if (showSearch)
-{
-    <header class="mobile-topbar">
-        <a class="mobile-topbar-brand" href="/" aria-label="@ui["nav.home"]">
-            <partial name="_AppBrandMark" />
-        </a>
-        <partial name="_AppSearch" />
-        <partial name="_NotificationBell" />
-    </header>
-}
 
 <nav class="mobile-nav" aria-label="@ui["nav.primaryAria"]">
     @foreach (var item in nav.MobilePrimary)

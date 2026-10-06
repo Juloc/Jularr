@@ -77,7 +77,7 @@
 .appearance-note { margin: 10px 0 0; font-size: 12px; }
 
 /* Live preview: a miniature Jularr shell built from the real components */
-.appearance-preview { position: sticky; top: calc(20px + var(--safe-top, 0px)); }
+.appearance-preview { position: sticky; top: calc(20px + var(--app-header-offset, 0px) + var(--safe-top, 0px)); }
 .preview-shell {
     display: grid; grid-template-columns: 132px minmax(0, 1fr); overflow: hidden;
     border: 1px solid var(--border); border-radius: 14px; background: var(--bg);

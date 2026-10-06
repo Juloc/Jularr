@@ -4,8 +4,8 @@
     --paper-texture: none;
     --paper-opacity: 0;
     --blossom-opacity: 0;
-    --radius-card: 18px;
-    --shadow-card: 0 12px 32px rgba(41, 91, 153, .10);
+    --radius-card: 14px;
+    --shadow-card: 0 1px 2px rgba(31, 41, 90, .05), 0 2px 8px rgba(31, 41, 90, .04);
     --clean-tint: #eaf3ff;
     --clean-control-bg: color-mix(in srgb, var(--surface) 92%, var(--clean-tint));
     --clean-control-hover: color-mix(in srgb, var(--surface-2) 84%, var(--accent-soft));
@@ -20,7 +20,7 @@
     background: color-mix(in srgb, var(--bg) 94%, var(--clean-tint));
 }
 
-:root[data-app-theme-id^="clean-"] .sidebar {
+:root[data-app-theme-id^="clean-"] :is(.sidebar, .app-header) {
     background: color-mix(in srgb, var(--sidebar-bg) 92%, var(--clean-tint));
     border-inline-end-color: var(--clean-border);
     backdrop-filter: none;
@@ -34,13 +34,13 @@
     filter: none;
 }
 
-:root[data-app-theme-id^="clean-"] :is(.sidebar-footer, .theme-cycle-button, .mobile-nav, .mobile-topbar) {
+:root[data-app-theme-id^="clean-"] :is(.theme-cycle-button, .mobile-nav) {
     background: var(--clean-control-bg);
     border-color: var(--clean-border);
     backdrop-filter: none;
 }
 
-:root[data-app-theme-id^="clean-"] :is(.nav-item, .theme-cycle-button, .mobile-nav-item):hover {
+:root[data-app-theme-id^="clean-"] :is(.nav-item, .theme-cycle-button, .mobile-nav-item, .app-header-button, .user-menu-item):hover {
     background: var(--clean-control-hover);
 }
 

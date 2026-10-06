@@ -4,6 +4,10 @@
     <a class="profile-row" href="@Model.Item.Href">
         <partial name="_AppIcon" model="Model.Item.Icon" />
         <span class="profile-row-label">@Model.Ui[Model.Item.LabelKey]</span>
+        @if (Model.Item.AreaKey is not null)
+        {
+            <span class="profile-row-area">@Model.Ui[Model.Item.AreaKey]</span>
+        }
         <span class="profile-row-chevron" aria-hidden="true">›</span>
     </a>
 </li>
