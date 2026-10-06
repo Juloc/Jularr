@@ -111,6 +111,7 @@ jobs:
           PY
           )"
 
+          # A release retry may change only this workflow; product/source content must remain unchanged.
           if [[ "${RETRY}" == "true" ]]; then
             SOURCE_SHA="$(git rev-parse HEAD^)"
             if ! git diff --quiet "${SOURCE_SHA}" HEAD -- . ':(exclude).github/workflows/ci.yml'; then
