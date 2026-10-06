@@ -1,36 +1,47 @@
 # Deployment
 
-Jularr is Docker-first and currently uses PostgreSQL as its single canonical database.
+Jularr is Docker-first and uses PostgreSQL as its canonical database.
 
-## Current deployment contract
+## Compose
 
-A production deployment must provide:
+The repository-root `compose.yaml` is the canonical generic deployment example.
 
-- an immutable Jularr image tag such as `ghcr.io/juloc/jularr:<release-version>`; do not use `latest` as the canonical deployment path;
-- PostgreSQL and a persistent database volume;
-- `ConnectionStrings__Default` pointing Jularr at that PostgreSQL instance;
-- persistent Jularr application data under `/data`;
-- media/library mounts appropriate to the installation, normally read-only unless a feature explicitly requires managed writes;
-- health/dependency handling that does not start normal application work against an unavailable database.
+1. Copy `.env.example` to `.env`.
+2. Set `JULARR_VERSION` to an immutable published Jularr release tag.
+3. Replace `JULARR_DB_PASSWORD` with a long random password.
+4. Validate and start:
 
-Published versions are listed under [GitHub Releases](https://github.com/Juloc/Jularr/releases).
+```bash
+docker compose config
+docker compose up -d
+```
 
-The repository-root `compose.yaml` is being aligned with this contract under [issue #863](https://github.com/Juloc/Jularr/issues/863). Until that issue is completed and `docker compose config` plus a fresh deployment have been verified, do not treat older SQLite-only or mutable-`latest` examples as production guidance.
+Open `http://localhost:8097` and create the owner account.
 
-## Persistence and upgrades
+## Persistent data
 
-PostgreSQL is the runtime source of truth. The legacy SQLite reader exists only for the supported one-time import path into an empty PostgreSQL target; it is not a normal runtime fallback.
+The default Compose stack keeps three named volumes:
 
-See [PERSISTENCE.md](PERSISTENCE.md) for the persistence epoch, importer constraints and database architecture.
+- `jularr-data` for Jularr application state under `/data`;
+- `jularr-postgres` for PostgreSQL;
+- `translategemma-models` only when the optional TranslateGemma profile is used.
 
-## Operations
+Media libraries are separate mounts and should normally be mounted read-only unless a feature explicitly owns managed writes to that library.
 
-See [ADMIN_OPERATIONS.md](ADMIN_OPERATIONS.md) for administration, storage, scans, integrations, health and operational behavior.
+## Configuration
 
-For Android and Android TV clients, see [ANDROID_CLIENTS.md](ANDROID_CLIENTS.md).
+The application requires `ConnectionStrings__Default`. The repository Compose file supplies it from the PostgreSQL service and `JULARR_DB_PASSWORD`.
+
+Published application images should use immutable version tags. Do not use `latest` as the normal deployment pin.
 
 ## Reverse proxy
 
-Internet-facing installations should terminate HTTPS at a trusted reverse proxy and keep Jularr and PostgreSQL on private networks. Do not expose the database publicly.
+Internet-facing installations should terminate HTTPS at a trusted reverse proxy and keep Jularr and PostgreSQL on private networks. Do not expose PostgreSQL publicly.
 
-Exact proxy, Compose and migration commands must be validated against the current release before being promoted into the root README.
+## Operations
+
+See [ADMIN_OPERATIONS.md](ADMIN_OPERATIONS.md) for server administration, storage, scans, integrations and health.
+
+See [PERSISTENCE.md](PERSISTENCE.md) for the database architecture.
+
+For Android and Android TV clients, see [ANDROID_CLIENTS.md](ANDROID_CLIENTS.md).
