@@ -74,6 +74,12 @@ public sealed record SelectionCandidate(
     public string? SafetyRejection { get; init; }
 
     public ReleaseReliability? Reliability { get; init; }
+
+    /// <summary>
+    /// Preference points the media type resolves from the request rather than from the profile (a preferred language, an exact volume), added to
+    /// the profile's preference score. They only order eligible candidates and never repair identity or a gate.
+    /// </summary>
+    public int ContextScore { get; init; }
 }
 
 public enum SelectionDecision
@@ -113,7 +119,7 @@ public sealed record CandidateEvaluation(
 
     public int QualityRank => Score?.QualityRank ?? int.MaxValue;
 
-    public int PreferenceScore => Score?.Score ?? 0;
+    public int PreferenceScore => (Score?.Score ?? 0) + Candidate.ContextScore;
 }
 
 /// <summary>What a whole search came to, which drives how Wanted retries: an indexer problem is not "nothing exists", and an identity or profile rejection is not a failure of the indexers.</summary>

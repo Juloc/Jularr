@@ -2,6 +2,7 @@ using System.Text.Json;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
+using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.ReadingDiscovery;
@@ -26,7 +27,8 @@ public sealed class ReadingAcquisitionEngine(
     IndexerSearchCoordinator indexers,
     DownloadClientStore downloadClients,
     DownloadClientSubmissionService downloads,
-    ReleaseRequestTracker tracker)
+    ReleaseRequestTracker tracker,
+    QualityProfileStore? profiles = null)
 {
     public const string OperationKind = "reading-usenet-download";
 
@@ -60,10 +62,8 @@ public sealed class ReadingAcquisitionEngine(
                 "SABnzbd is not configured.");
         }
 
-        var search = await ReadingUsenetSearch.SearchAsync(
-            indexers,
-            target,
-            cancellationToken);
+        var profile = profiles is null ? null : await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile);
 
         return await tracker.ContinueAsync(
             request,
