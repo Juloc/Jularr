@@ -318,17 +318,21 @@ public sealed class IndexModel(
         IReadOnlyList<DiscoveryItem> items,
         CancellationToken cancellationToken)
     {
-        Guid[] animeIds = [.. items.Where(item => item.IsLocal && item.Category == "anime" && item.LocalMediaId is not null).Select(item => item.LocalMediaId!.Value).Distinct()];
-        if (animeIds.Length == 0)
+        // Only the titles on the page are read: a few anime by their legacy record, a few movies and series by their Work.
+        Guid[] animeIds = [.. LocalIds(items, "anime")];
+        Guid[] videoIds = [.. LocalIds(items, "movie").Concat(LocalIds(items, "tv"))];
+        if (animeIds.Length == 0 && videoIds.Length == 0)
         {
             return new Dictionary<string, DiscoverLocalFacts>();
         }
 
         try
         {
-            var entries = await new LibraryMediaCardQuery(db).GetAnimeEntriesAsync(account.ProfileId, animeIds, cancellationToken);
+            var query = new LibraryMediaCardQuery(db);
+            var entries = (animeIds.Length == 0 ? [] : (await query.GetAnimeEntriesAsync(account.ProfileId, animeIds, cancellationToken)).Entries)
+                .Concat(videoIds.Length == 0 ? [] : (await query.GetVideoWorkEntriesAsync(account.ProfileId, videoIds, cancellationToken)).Entries);
             var playbackEnabled = await modules.IsEnabledAsync(InstanceModule.Playback, cancellationToken);
-            return entries.Entries
+            return entries
                 .GroupBy(entry => entry.Card.Href, StringComparer.Ordinal)
                 .ToDictionary(
                     group => group.Key,
@@ -342,6 +346,9 @@ public sealed class IndexModel(
             return new Dictionary<string, DiscoverLocalFacts>();
         }
     }
+
+    private static IEnumerable<Guid> LocalIds(IEnumerable<DiscoveryItem> items, string category) =>
+        items.Where(item => item.IsLocal && item.Category == category && item.LocalMediaId is not null).Select(item => item.LocalMediaId!.Value).Distinct();
 
     /// <summary>Follows or unfollows one work for this profile. Library state is never taken from the browser.</summary>
     public async Task<IActionResult> OnPostWatchlistAsync(

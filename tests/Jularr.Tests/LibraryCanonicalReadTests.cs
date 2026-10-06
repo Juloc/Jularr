@@ -52,6 +52,30 @@ public sealed class LibraryCanonicalReadTests
     }
 
     [TestMethod]
+    public async Task APageThatLooksAtFewTitlesReadsOnlyThoseAnimeAndTheirVideoWorks()
+    {
+        await using var fixture = await EpisodeFlowFixture.CreateAsync();
+        var seed = new LibraryCanonicalSeed(fixture.Db);
+        var wanted = await seed.AddAnimeAsync("Akatsuki", [(1, 1, true)], audio: ["ja"]);
+        var other = await seed.AddAnimeAsync("Other Anime", [(1, 1, true)]);
+        var movie = await seed.AddWorkAsync(WorkMediaType.Movie, "Moon Empire", 2024);
+        await seed.AddVideoAsync(movie, null, audio: ["de"]);
+        var otherMovie = await seed.AddWorkAsync(WorkMediaType.Movie, "Other Movie", 2023);
+        await seed.AddVideoAsync(otherMovie, null);
+        var query = new LibraryMediaCardQuery(fixture.Db);
+
+        var anime = await query.GetAnimeEntriesAsync(Alice, [wanted.Anime.Id], CancellationToken.None);
+        var video = await query.GetVideoWorkEntriesAsync(Alice, [movie.Id], CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { wanted.Work.Id }, anime.Entries.Select(x => x.WorkId).ToArray(), "Only the Anime of the page, never the whole Anime library.");
+        CollectionAssert.AreEqual(new[] { movie.Id }, video.Entries.Select(x => x.WorkId).ToArray());
+        CollectionAssert.AreEqual(new[] { "de" }, video.Entries.Single().Card.AudioLanguages!.ToArray());
+        Assert.AreEqual(0, (await query.GetAnimeEntriesAsync(Alice, [Guid.NewGuid()], CancellationToken.None)).Entries.Count);
+        Assert.AreEqual(4, (await query.GetEntriesAsync(Alice, AllVideo, CancellationToken.None)).Entries.Count, "The unrestricted read is unchanged.");
+        _ = other;
+    }
+
+    [TestMethod]
     public async Task OnlyTheRequestedMediaTypesAreRead()
     {
         await using var fixture = await EpisodeFlowFixture.CreateAsync();

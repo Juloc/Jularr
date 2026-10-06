@@ -477,6 +477,7 @@ public sealed class DiscoveryCoordinator(
                     return item with
                     {
                         IsLocal = true,
+                        LocalUrl = LibraryBrowse.DetailHref(mediaType, canonicalWorkId),
                         LocalMediaId = canonicalWorkId,
                         Title = metadata?.Title ?? item.Title,
                         CoverImageUrl = metadata?.PosterUrl ?? item.CoverImageUrl

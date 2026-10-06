@@ -263,7 +263,8 @@
         controller.stage(viewOf(next), payload, explicit);
     }
 
-    // A retry the viewer asked for: the server fetches the failed sources again and the answer is applied as soon as it arrives.
+    // A retry the viewer asked for: the server fetches the failed sources again and the answer is applied as soon as it arrives. A source that
+    // fails again leaves its section as it was, so the button only becomes available again.
     async function retrySources(button) {
         const section = button.closest("[data-dc-section]");
         button.disabled = true;
@@ -276,9 +277,10 @@
             void followUp(version);
         } catch (error) {
             if (error?.name === "AbortError" || version !== requestVersion) return;
-            button.disabled = false;
-            section?.removeAttribute("aria-busy");
         }
+
+        button.disabled = false;
+        section?.removeAttribute("aria-busy");
     }
 
     // What the viewer is doing right now, read by the staging rules before any staged change is applied.

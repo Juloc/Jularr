@@ -4,9 +4,9 @@
    and as a bottom sheet on touch. Surfaces use the shared theme tokens, so light, dark and every accent work
    unchanged. State is shown with icon, text, tint and weight, never a coloured left edge (CssAccentStripeTests). */
 
-/* --dc-card-body-h is the height of everything under a poster (two title lines, the type line and the indicator); real cards
+/* --dc-card-body-h is the height of everything under a poster (the title line, the type line and the indicator); real cards
    and ghost cards both use it, so a ghost has the exact size of the card that replaces it. */
-.dc-page { --dc-card-body-h: 82px; display: grid; gap: 16px; min-width: 0; margin-bottom: 20px; }
+.dc-page { --dc-card-body-h: 64px; display: grid; gap: 16px; min-width: 0; margin-bottom: 20px; }
 .dc-page :is(a, button, summary, select, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dc-icon { flex: none; }
 .dc-page [hidden] { display: none !important; }
@@ -15,19 +15,18 @@
 /* Heading and search ---------------------------------------------------------------------------- */
 .dc-head h1 { margin: 0; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.1; letter-spacing: -.02em; }
 .dc-searchbar { display: flex; align-items: center; gap: 10px; }
-.dc-search {
-    flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 48px; padding: 0 14px;
-    border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--muted);
-}
-.dc-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.dc-search .dc-icon { width: 20px; height: 20px; color: var(--accent-text); }
+/* The input is the field, with the icon and the key hint laid over it, so the shared control surface of the theme applies to it like to every other field. */
+.dc-search { position: relative; flex: 1; display: flex; align-items: center; min-width: 0; color: var(--muted); }
 .dc-search input {
-    flex: 1; min-width: 0; padding: 12px 0; border: 0; outline: 0; background: transparent;
-    color: var(--text); font: inherit; font-size: 15px;
+    width: 100%; min-width: 0; min-height: 48px; padding: 0 56px 0 46px; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--surface); color: var(--text); font: inherit; font-size: 15px;
 }
+.dc-search input::placeholder { color: var(--muted); }
+.dc-search input:focus-visible { border-color: var(--accent); }
+.dc-search .dc-icon { position: absolute; inset-inline-start: 14px; width: 20px; height: 20px; color: var(--accent-text); pointer-events: none; }
 .dc-search kbd {
-    padding: 1px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2);
-    color: var(--muted); font: inherit; font-size: 12px; font-weight: 700;
+    position: absolute; inset-inline-end: 12px; padding: 1px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2);
+    color: var(--muted); font: inherit; font-size: 12px; font-weight: 700; pointer-events: none;
 }
 
 /* Media-type switch ------------------------------------------------------------------------------ */
@@ -72,12 +71,11 @@
 .dc-pop-head .dc-icon-btn { width: 32px; min-height: 32px; border-color: transparent; background: transparent; }
 .dc-reset { color: var(--accent-text); font-size: 13px; font-weight: 700; }
 .dc-groups { display: grid; padding: 0 16px 8px; }
-.dc-group {
-    display: grid; gap: 2px; min-width: 0; margin: 0; padding: 10px 0 8px;
-    border: 0; border-top: 1px solid var(--border);
-}
+.dc-group { display: block; min-width: 0; margin: 0; padding: 10px 0 8px; border: 0; border-top: 1px solid var(--border); }
 .dc-group:first-child, .dc-group[hidden] + .dc-group { border-top: 0; padding-top: 2px; }
-.dc-group legend { padding: 0; margin-bottom: 4px; color: var(--text); font-size: 13px; font-weight: 800; }
+/* A floated legend is laid out inside the fieldset like any heading; an ordinary one is drawn on the border, where the divider would run through it. */
+.dc-group legend { float: left; width: 100%; padding: 0; margin-bottom: 4px; color: var(--text); font-size: 13px; font-weight: 800; }
+.dc-group legend + * { clear: both; }
 .dc-check { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; cursor: pointer; }
 .dc-check input { flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
 .dc-select { display: grid; gap: 4px; padding: 4px 0; color: var(--muted); font-size: 12px; font-weight: 700; }
@@ -180,10 +178,10 @@
     font-size: 44px; font-weight: 800;
 }
 .dc-card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; min-height: var(--dc-card-body-h); }
-.dc-card-title { margin: 0; min-height: 36px; font-size: 14px; line-height: 18px; font-weight: 700; }
+.dc-card-title { margin: 0; font-size: 14px; line-height: 18px; font-weight: 700; }
 .dc-card-title a {
     display: -webkit-box; overflow: hidden; color: var(--text); overflow-wrap: anywhere;
-    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1; -webkit-box-orient: vertical;
 }
 .dc-card-title a::after { content: ""; position: absolute; inset: 0; z-index: 1; }
 .dc-card:hover .dc-card-title a, .dc-card-title a:focus-visible { color: var(--accent-text); }
@@ -306,6 +304,7 @@
 @media (max-width: 760px) {
     .dc-searchbar { gap: 8px; }
     .dc-search kbd { display: none; }
+    .dc-search input { padding-inline-end: 14px; }
     .dc-btn { width: 48px; padding: 0; position: relative; }
     .dc-btn-label { display: none; }
     .dc-btn .dc-badge { position: absolute; top: -6px; inset-inline-end: -6px; }

@@ -83,6 +83,21 @@ public sealed class DiscoverPageTests
     }
 
     [TestMethod]
+    public void AMediaTypeTheProfileMayNotBrowseHasNoTabAndNoScope()
+    {
+        var series = new HashSet<Jularr.Web.Features.MediaCore.WorkMediaType> { Jularr.Web.Features.MediaCore.WorkMediaType.Series };
+        var books = new HashSet<Jularr.Web.Features.MediaCore.WorkMediaType> { Jularr.Web.Features.MediaCore.WorkMediaType.LightNovel };
+
+        CollectionAssert.AreEqual(
+            new[] { DiscoveryCategory.All, DiscoveryCategory.Series },
+            DiscoverScopes.Tabs.Select(tab => tab.Category).Where(category => DiscoverScopes.IsVisible(category, series)).ToArray());
+        Assert.IsTrue(DiscoverScopes.IsVisible(DiscoveryCategory.BooksAndLightNovels, books), "One of the two types is enough for the combined tab.");
+        Assert.IsFalse(DiscoverScopes.IsVisible(DiscoveryCategory.Book, books));
+        Assert.IsFalse(DiscoverScopes.IsVisible(DiscoveryCategory.Anime, series));
+        Assert.IsTrue(DiscoverScopes.IsVisible(DiscoveryCategory.All, new HashSet<Jularr.Web.Features.MediaCore.WorkMediaType>()));
+    }
+
+    [TestMethod]
     public void MyAniListCountsAsAFilterOnlyWithoutASearchText()
     {
         Assert.AreEqual(1, Parse("mode=my-list").ActiveFilterCount);

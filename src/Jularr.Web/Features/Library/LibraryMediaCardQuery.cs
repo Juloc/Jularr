@@ -39,16 +39,21 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
     /// lookup only drops the requested state and flags the result as degraded.
     /// </summary>
     public Task<LibraryEntries> GetEntriesAsync(string profileId, IReadOnlyCollection<WorkMediaType> mediaTypes, CancellationToken cancellationToken) =>
-        LoadEntriesAsync(profileId, mediaTypes, null, cancellationToken);
+        LoadEntriesAsync(profileId, mediaTypes, null, null, cancellationToken);
 
     /// <summary>The same entries, restricted to the Anime Works that link to the given legacy anime records: a page that looks at a few titles does not read the whole Anime library.</summary>
     public Task<LibraryEntries> GetAnimeEntriesAsync(string profileId, IReadOnlyCollection<Guid> legacyAnimeIds, CancellationToken cancellationToken) =>
-        LoadEntriesAsync(profileId, [WorkMediaType.Anime], legacyAnimeIds, cancellationToken);
+        LoadEntriesAsync(profileId, [WorkMediaType.Anime], legacyAnimeIds, null, cancellationToken);
+
+    /// <summary>The same entries, restricted to the given Movie and Series Works.</summary>
+    public Task<LibraryEntries> GetVideoWorkEntriesAsync(string profileId, IReadOnlyCollection<Guid> workIds, CancellationToken cancellationToken) =>
+        LoadEntriesAsync(profileId, [WorkMediaType.Movie, WorkMediaType.Series], null, workIds, cancellationToken);
 
     private async Task<LibraryEntries> LoadEntriesAsync(
         string profileId,
         IReadOnlyCollection<WorkMediaType> mediaTypes,
         IReadOnlyCollection<Guid>? onlyLegacyAnimeIds,
+        IReadOnlyCollection<Guid>? onlyWorkIds,
         CancellationToken cancellationToken)
     {
         var scope = LibraryBrowse.VideoMediaTypes.Where(mediaTypes.Contains).ToArray();
@@ -90,6 +95,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
         var works = await db.Works
             .AsNoTracking()
             .Where(work => scope.Contains(work.MediaType)
+                && (onlyWorkIds == null || onlyWorkIds.Contains(work.Id))
                 && (onlyLegacyAnimeIds == null
                     || db.WorkSourceLinks.Any(link => link.WorkId == work.Id && link.SourceKind == WorkSourceKind.Anime && onlyLegacyAnimeIds.Contains(link.SourceId)))
                 && (requestedWorkIds.Contains(work.Id)
