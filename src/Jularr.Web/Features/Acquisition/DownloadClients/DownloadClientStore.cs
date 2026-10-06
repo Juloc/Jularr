@@ -207,8 +207,6 @@ public sealed class DownloadClientStore
                     pair => AcquisitionAccessNames.Kind(pair.Key),
                     pair => pair.Value,
                     StringComparer.OrdinalIgnoreCase),
-                null,
-                null,
                 entry.Secret is null ? null : protector.Protect(entry.Secret)))
             .ToArray();
 
@@ -272,18 +270,6 @@ public sealed class DownloadClientStore
             }
         }
 
-        // One-time shape migration for pre-#389 client settings. Writing this entry next persists
-        // the canonical map and removes these legacy fields; no runtime fallback is retained.
-        if (!categories.ContainsKey(MediaAcquisitionKind.Book))
-        {
-            categories[MediaAcquisitionKind.Book] = persisted.BooksCategory;
-        }
-
-        if (!categories.ContainsKey(MediaAcquisitionKind.Anime))
-        {
-            categories[MediaAcquisitionKind.Anime] = persisted.AnimeCategory;
-        }
-
         return categories;
     }
 
@@ -295,7 +281,5 @@ public sealed class DownloadClientStore
         int Priority,
         string BaseUrl,
         Dictionary<string, string?>? Categories,
-        string? BooksCategory,
-        string? AnimeCategory,
         string? ProtectedSecret);
 }
