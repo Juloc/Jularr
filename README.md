@@ -26,7 +26,7 @@ Detailed operational behavior belongs in the focused documentation below rather 
 
 The current runtime uses **PostgreSQL** as its canonical database.
 
-The repository-root Compose path is being aligned and validated under [issue #863](https://github.com/Juloc/Jularr/issues/863). Until that work is complete, do not rely on older SQLite-only instructions or a mutable `latest` image as production guidance.
+Use the repository-root [compose.yaml](compose.yaml) with an immutable release tag and PostgreSQL.
 
 Start here:
 
@@ -39,7 +39,7 @@ Start here:
 | Area | Canonical document |
 | --- | --- |
 | Deployment | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
-| Persistence / PostgreSQL / migration | [docs/PERSISTENCE.md](docs/PERSISTENCE.md) |
+| Persistence / PostgreSQL | [docs/PERSISTENCE.md](docs/PERSISTENCE.md) |
 | Administration and operations | [docs/ADMIN_OPERATIONS.md](docs/ADMIN_OPERATIONS.md) |
 | Playback and media inventory | [docs/PLAYBACK.md](docs/PLAYBACK.md) |
 | Android and Android TV clients | [docs/ANDROID_CLIENTS.md](docs/ANDROID_CLIENTS.md) |
@@ -71,4 +71,4 @@ The test and persistence paths use PostgreSQL-compatible behavior; see [docs/PER
 
 The README intentionally stays short. Detailed behavior belongs in the canonical document for that area and is linked from here.
 
-Current documentation uses the **Jularr** product name. Historical names are retained only where a concrete migration or compatibility identifier requires them, and those details belong in focused migration/compatibility documentation rather than normal product copy.
+Current documentation uses the **Jularr** product name. Documentation and runtime identifiers use the Jularr name.
