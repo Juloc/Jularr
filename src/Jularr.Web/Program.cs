@@ -516,7 +516,6 @@ builder.Services.AddHttpClient<ISabnzbdClient, SabnzbdClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
-builder.Services.AddSingleton<ProwlarrSettingsStore>();
 builder.Services.AddHttpClient<IProwlarrClient, ProwlarrClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(60);
