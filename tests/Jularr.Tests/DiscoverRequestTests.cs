@@ -383,6 +383,47 @@ public sealed class DiscoverRequestTests
     }
 
     [TestMethod]
+    public async Task TheLiveRequestCardIsGivenAPercentageOnlyFromATrustworthyTransferAndNeverATechnicalMessage()
+    {
+        await using var host = await RequestHost.CreateAsync();
+        var operations = new Jularr.Web.Features.Operations.OperationStore(host.Fixture.Db);
+        var sized = await operations.CreateAsync(new Jularr.Web.Features.Operations.OperationDescriptor("video-usenet-download", "External downloads", "Title", IsDownload: true, BytesTotal: 1_000));
+        await operations.MarkRunningAsync(sized);
+        await operations.ReportProgressAsync(sized, 90, "SABnzbd: Downloading.", bytesCompleted: 420, bytesTotal: 1_000);
+        var bare = await operations.CreateAsync(new Jularr.Web.Features.Operations.OperationDescriptor("video-usenet-download", "External downloads", "Title", IsDownload: true));
+        await operations.MarkRunningAsync(bare);
+        await operations.ReportProgressAsync(bare, 55, "SABnzbd: Downloading.");
+        var cases = new (AcquisitionRequestStatus Status, Guid? Operation, int? Expected)[]
+        {
+            (AcquisitionRequestStatus.Pending, null, null),
+            (AcquisitionRequestStatus.Approved, null, null),
+            (AcquisitionRequestStatus.Searching, null, null),
+            (AcquisitionRequestStatus.Importing, bare, null),
+            (AcquisitionRequestStatus.Downloading, bare, null),
+            (AcquisitionRequestStatus.Downloading, sized, 42)
+        };
+
+        foreach (var (status, operation, expected) in cases)
+        {
+            var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", $"{(int)status}{operation?.ToString("N")[..4]}", "Title", null, null);
+            var request = await host.Fixture.Store.CreateAsync(draft, Alice, status, "owner", CancellationToken.None);
+            await host.Fixture.Store.UpdateStatusAsync(request.Id, status, "No release found (Some Indexer: timeout).", operation, null, null, CancellationToken.None);
+
+            var result = (JsonResult)await host.Page(Alice).OnGetRequestStatusAsync(request.Id, CancellationToken.None);
+
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(result.Value));
+            var progress = json.RootElement.GetProperty("progress");
+            Assert.AreEqual(expected is null ? JsonValueKind.Null : JsonValueKind.Number, progress.ValueKind, $"{status}: a status never stands for a percentage.");
+            if (expected is { } percent)
+            {
+                Assert.AreEqual(percent, progress.GetInt32());
+            }
+
+            Assert.IsFalse(json.RootElement.TryGetProperty("message", out _), $"{status}: the request or operation message is technical and not for the consumer card.");
+        }
+    }
+
+    [TestMethod]
     public void NoConsumerSurfaceOffersAddAsAnAcquisitionAction()
     {
         var web = Path.Combine(FindRepositoryRoot(), "src", "Jularr.Web");

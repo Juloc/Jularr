@@ -138,7 +138,7 @@ public sealed class RequestToPlayTvTests
         RequestToPlayAssert.Contains(Section(pending, "S01 E01", "</article>"), "ad-state-downloading");
         RequestToPlayAssert.Contains(Section(pending, "S01 E02", "</article>"), "ad-state-requested");
         RequestToPlayAssert.Contains(Section(pending, "<section class=\"ad-hero", "</section>"), "href=\"/Requests\"");
-        Assert.IsFalse(pending.Contains("/Library/Watch/", StringComparison.Ordinal));
+        Assert.IsFalse(pending.Contains(" href=\"/Library/Watch/", StringComparison.Ordinal), "Nothing plays yet: no link opens the player (the Watch now data of a missing episode is not a link).");
 
         // Import E1: the next pass also searches and grabs E2 for the same open request.
         await ImportAsync(world, request.Id, 1);

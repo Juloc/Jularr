@@ -34,6 +34,9 @@
     border-color: transparent; background: rgb(255 255 255 / .92); color: #15121c; box-shadow: 0 8px 22px rgb(0 0 0 / .28);
 }
 .ip-action[data-ip-state="notice-error"] .ip-button { background: #fde8e8; color: #8f1d1d; }
+/* Ready while the viewer was away: the media can be played now (docs/mockups/instant-play, section 19: green only for ready). */
+.ip-action[data-ip-state="ready"] .ip-button { border-color: #1f7a4d; background: #1f7a4d; color: #fff; }
+.ip-action[data-ip-state="ready"] .ip-button:hover { background: #196a41; }
 .ip-action[data-ip-state="notice-waiting"] .ip-button { background: #fff3d6; color: #6b4a00; }
 
 /* Reliable progress: a thin line on the lower edge of the button, hidden while no percentage is trustworthy. */
@@ -73,7 +76,9 @@
 
 /* The status pill of an existing request beside the action follows the server's projection; the morphing action says the same
    while it works, so the pill steps aside until the action is back to its normal state. */
-.ip-observe[data-ip-state="ready_to_watch"] { background: rgb(255 255 255 / .92); color: #15121c; }
+.ip-observe[data-ip-state="ready_to_watch"] { border-color: #1f7a4d; background: #1f7a4d; color: #fff; }
+.ip-observe[data-ip-state="ready_to_watch"] .ad-icon,
+.ip-observe[data-ip-state="available"] .ad-icon { display: none; }
 .ip-action[data-ip-phase]:not([data-ip-phase="idle"]) ~ .ip-observe { display: none; }
 
 /* Episode rows: the same control, compact, on page surfaces. */

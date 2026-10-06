@@ -52,6 +52,9 @@ public sealed partial class InstantPlayPageMarkupTests
         return Whitespace().Replace(Tags().Replace(withoutCode, " "), " ");
     }
 
+    private static string MoviePayload(Guid workId, string extra = "") =>
+        $$"""{"workId":"{{workId}}","title":"Film","year":2024,"scope":0,"selectedEpisodeIds":[],"monitorFuture":false{{extra}} }""";
+
     private static Task<AcquisitionRequest> OpenRequestAsync(VideoDetailPageTestHost host, MediaAcquisitionKind kind, string tmdbId, AcquisitionRequestStatus status, string? payload = null) =>
         new AcquisitionAccessStore(host.Db).CreateAsync(new AcquisitionRequestDraft(kind, "tmdb", tmdbId, "Title", null, null, payload), "someone-else", status, "owner", CancellationToken.None);
 
@@ -154,18 +157,20 @@ public sealed partial class InstantPlayPageMarkupTests
     public async Task AnOpenRequestIsShownInConsumerWordsAndOnlyWorkingStatesAreFollowedLive()
     {
         await using var host = await ReadyHostAsync();
-        var cases = new (string TmdbId, AcquisitionRequestStatus Status, string? Payload, string Text, bool Live)[]
+        // A search that found nothing and is scheduled again reads "Not available yet"; every other open state is working or waiting.
+        var cases = new (string TmdbId, AcquisitionRequestStatus Status, bool BackedOff, string Text, bool Live)[]
         {
-            ("1", AcquisitionRequestStatus.Pending, null, "Waiting for approval", false),
-            ("2", AcquisitionRequestStatus.Approved, null, "Looking for media", true),
-            ("3", AcquisitionRequestStatus.Searching, null, "Looking for media", true),
-            ("4", AcquisitionRequestStatus.Importing, null, "Preparing", true),
-            ("5", AcquisitionRequestStatus.Approved, """{"searches":3,"nextSearchUtc":"2099-01-01T00:00:00Z"}""", "Not available yet", false)
+            ("1", AcquisitionRequestStatus.Pending, false, "Waiting for approval", false),
+            ("2", AcquisitionRequestStatus.Approved, false, "Looking for media", true),
+            ("3", AcquisitionRequestStatus.Searching, false, "Looking for media", true),
+            ("4", AcquisitionRequestStatus.Importing, false, "Preparing", true),
+            ("5", AcquisitionRequestStatus.Approved, true, "Not available yet", false)
         };
         foreach (var item in cases)
         {
             var movie = await AddTitleAsync(host, WorkMediaType.Movie, $"Film {item.TmdbId}", item.TmdbId);
-            var request = await OpenRequestAsync(host, MediaAcquisitionKind.Movie, item.TmdbId, item.Status, item.Payload is null ? null : item.Payload.Replace("{", $"{{\"workId\":\"{movie.Id}\",\"title\":\"Film\",\"year\":2024,\"scope\":0,\"selectedEpisodeIds\":[],\"monitorFuture\":false,", StringComparison.Ordinal));
+            var payload = MoviePayload(movie.Id, item.BackedOff ? ",\"searches\":3,\"nextSearchUtc\":\"2099-01-01T00:00:00Z\"" : "");
+            var request = await OpenRequestAsync(host, MediaAcquisitionKind.Movie, item.TmdbId, item.Status, payload);
 
             var html = await host.GetOkAsync($"/Library/Movie/{movie.Id}", asOwner: true);
 
@@ -197,9 +202,8 @@ public sealed partial class InstantPlayPageMarkupTests
         await store.ReportProgressAsync(bare, 55);
         foreach (var (title, tmdb, operation) in new[] { (movie, "603", sized), (other, "700", bare) })
         {
-            var request = await OpenRequestAsync(host, MediaAcquisitionKind.Movie, tmdb, AcquisitionRequestStatus.Downloading);
+            var request = await OpenRequestAsync(host, MediaAcquisitionKind.Movie, tmdb, AcquisitionRequestStatus.Downloading, MoviePayload(title.Id));
             await host.Db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"AcquisitionRequests\" SET \"OperationId\" = {operation.ToString()} WHERE \"Id\" = {request.Id.ToString()}");
-            await host.Db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"AcquisitionRequests\" SET \"PayloadJson\" = {$$"""{"workId":"{{title.Id}}","title":"Film","year":2024,"scope":0,"selectedEpisodeIds":[],"monitorFuture":false}"""} WHERE \"Id\" = {request.Id.ToString()}");
         }
 
         var withPercent = VisibleText(Hero(await host.GetOkAsync($"/Library/Movie/{movie.Id}", asOwner: true)));
@@ -257,7 +261,7 @@ public sealed partial class InstantPlayPageMarkupTests
         await using var host = await ReadyHostAsync();
         var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", "603");
         await new LibraryCanonicalSeed(host.Db).AddVideoAsync(movie, null);
-        var payload = $$"""{"workId":"{{movie.Id}}","title":"Moon Empire","year":2024,"scope":0,"selectedEpisodeIds":[],"monitorFuture":true,"nextSearchUtc":"2099-01-01T00:00:00Z"}""";
+        var payload = MoviePayload(movie.Id, ",\"nextSearchUtc\":\"2099-01-01T00:00:00Z\"").Replace("\"monitorFuture\":false", "\"monitorFuture\":true", StringComparison.Ordinal);
         await OpenRequestAsync(host, MediaAcquisitionKind.Movie, "603", AcquisitionRequestStatus.Approved, payload);
         await host.Modules.SetAsync(InstanceModule.Playback, false);
 
@@ -300,7 +304,8 @@ public sealed partial class InstantPlayPageMarkupTests
         var source = File.ReadAllText(Path.Combine(PlayerControlsTests.RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "instant-play.js"));
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var view = new ConsumerAcquisitionView(ConsumerAcquisitionState.GettingMedia, ConsumerMediaUnit.Episode, 42, true);
-        var intent = JsonDocument.Parse(JsonSerializer.Serialize(new ClientPlaybackIntentResponse(PlaybackIntentOutcome.Acquiring, new ClientVideoTarget(Guid.NewGuid(), Guid.NewGuid()), Guid.NewGuid(), view), options)).RootElement;
+        var target = new ClientVideoTarget(Guid.NewGuid(), Guid.NewGuid());
+        var intent = JsonDocument.Parse(JsonSerializer.Serialize(new ClientPlaybackIntentResponse(PlaybackIntentOutcome.Acquiring, target, Guid.NewGuid(), view), options)).RootElement;
         var status = JsonDocument.Parse(JsonSerializer.Serialize(new ClientRequestStatusResponse(Guid.NewGuid(), new ClientVideoTarget(Guid.NewGuid(), null), view), options)).RootElement;
 
         CollectionAssert.AreEquivalent(new[] { "outcome", "target", "requestId", "acquisition" }, intent.EnumerateObject().Select(x => x.Name).ToArray());

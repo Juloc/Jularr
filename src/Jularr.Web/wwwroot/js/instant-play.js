@@ -495,7 +495,8 @@
             const replacesAction = noticeInfo !== null && noticeInfo.title !== "";
             const unit = snapshot.view?.mediaUnit ?? mediaUnit;
             root.dataset.ipPhase = snapshot.phase;
-            root.dataset.ipState = replacesAction ? `notice-${noticeInfo.tone}` : working ? "working" : "idle";
+            const isReady = snapshot.phase === "ended" && snapshot.view?.state === readyState;
+            root.dataset.ipState = replacesAction ? `notice-${noticeInfo.tone}` : working ? "working" : isReady ? "ready" : "idle";
 
             if (snapshot.phase === "handingOver") {
                 labelNode.textContent = label("acquisition.instant.working", { state: label("acquisition.playback.starting") });
