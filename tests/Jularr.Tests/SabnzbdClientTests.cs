@@ -53,9 +53,7 @@ public sealed class SabnzbdClientTests
                 SabnzbdTestSupport.Configuration(new Dictionary<string, string?>
                 {
                     [SabnzbdConfigurationKeys.ApiKey] = "env-key",
-                    [SabnzbdConfigurationKeys.AnimeCategory] = "tv-anime",
-                    // Retired Books-only keys are no longer read.
-                    ["Books:SABnzbd:BaseUrl"] = "http://retired:8080"
+                    [SabnzbdConfigurationKeys.AnimeCategory] = "tv-anime"
                 }));
 
             var resolved = await resolver.ResolveAsync();
