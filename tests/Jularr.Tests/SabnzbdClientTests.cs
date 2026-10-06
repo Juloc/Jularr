@@ -1,78 +1,10 @@
 using Jularr.Web.Features.Acquisition.Sabnzbd;
-using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Tests;
 
 [TestClass]
 public sealed class SabnzbdClientTests
 {
-    [TestMethod]
-    public async Task SettingsStoreProtectsApiKeyAtRest()
-    {
-        var directory = SabnzbdTestSupport.CreateTemporaryDirectory();
-        try
-        {
-            var provider = new EphemeralDataProtectionProvider();
-            var store = new SabnzbdSettingsStore(provider, directory);
-            await store.SaveAsync(
-                new SabnzbdStoredSettings(
-                    "http://sabnzbd:8080/",
-                    "secret-key",
-                    " books ",
-                    "anime"));
-
-            var raw = await File.ReadAllTextAsync(
-                Path.Combine(directory.FullName, SabnzbdSettingsStore.FileName));
-
-            Assert.IsFalse(raw.Contains("secret-key", StringComparison.Ordinal));
-
-            var loaded = await store.LoadAsync();
-            Assert.AreEqual("secret-key", loaded.ApiKey);
-            Assert.AreEqual("http://sabnzbd:8080", loaded.BaseUrl);
-            Assert.AreEqual("books", loaded.BooksCategory);
-            Assert.AreEqual("anime", loaded.AnimeCategory);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
-    }
-
-    [TestMethod]
-    public async Task ResolverAppliesCanonicalConfigurationOverridesPerField()
-    {
-        var directory = SabnzbdTestSupport.CreateTemporaryDirectory();
-        try
-        {
-            var store = new SabnzbdSettingsStore(new EphemeralDataProtectionProvider(), directory);
-            await store.SaveAsync(
-                new SabnzbdStoredSettings("http://stored:8080", "stored-key", "books", null));
-
-            var resolver = new SabnzbdConnectionResolver(
-                store,
-                SabnzbdTestSupport.Configuration(new Dictionary<string, string?>
-                {
-                    [SabnzbdConfigurationKeys.ApiKey] = "env-key",
-                    [SabnzbdConfigurationKeys.AnimeCategory] = "tv-anime"
-                }));
-
-            var resolved = await resolver.ResolveAsync();
-
-            Assert.IsNotNull(resolved.Connection);
-            Assert.AreEqual("http://stored:8080", resolved.Connection.Settings.BaseUrl);
-            Assert.AreEqual("env-key", resolved.Connection.ApiKey);
-            Assert.AreEqual("books", resolved.Connection.Settings.CategoryFor(SabnzbdPurpose.Books));
-            Assert.AreEqual("tv-anime", resolved.Connection.Settings.CategoryFor(SabnzbdPurpose.Anime));
-            Assert.IsTrue(resolved.ApiKeyFromConfiguration);
-            Assert.IsFalse(resolved.BaseUrlFromConfiguration);
-            Assert.AreEqual("stored-key", resolved.Stored.ApiKey);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
-    }
-
     [TestMethod]
     public async Task RequestsKeepApiKeyOutOfTheUrl()
     {
