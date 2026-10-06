@@ -17,14 +17,16 @@
 
 .ip-icon { position: relative; display: inline-grid; flex: none; place-items: center; inline-size: 16px; block-size: 16px; }
 .ip-icon > * { grid-area: 1 / 1; }
-.ip-ring { display: none; }
+.ip-ring, .ip-alert { display: none; }
 .ip-action[data-ip-state="working"] .ip-icon .ad-icon { display: none; }
 .ip-action[data-ip-state="working"] .ip-ring {
     display: block; color: var(--accent); stroke-dasharray: 34 20; animation: ip-spin 1s linear infinite;
 }
 .ip-action[data-ip-state="working"] .ip-code { display: none; }
-/* A notice is not playable: no play glyph on it. */
-.ip-action[data-ip-state^="notice"] .ip-icon { display: none; }
+/* A notice is not playable: no play glyph on it; a failure carries a warning glyph instead. */
+.ip-action[data-ip-state^="notice"] .ip-icon .ad-icon { display: none; }
+.ip-action[data-ip-state="notice-error"] .ip-alert { display: block; }
+.ip-action[data-ip-state^="notice"]:not([data-ip-state="notice-error"]) .ip-icon { display: none; }
 
 /* Working and notice states: the same pill, now a light status surface with dark text. */
 .ip-action[data-ip-state="working"] .ip-button,

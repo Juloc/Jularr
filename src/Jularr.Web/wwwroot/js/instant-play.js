@@ -406,7 +406,8 @@
             case "stopped":
                 return notice(label("acquisition.instant.stopped"), label("acquisition.instant.stoppedHint"), "neutral", ["back"]);
             case "limit_reached":
-                return notice(label("acquisition.playback.limitReached"), "", "neutral", ["back"]);
+                // Message only: the action stays as it was, nothing was started.
+                return notice("", label("acquisition.playback.limitReached"), "neutral", []);
             case "not_available":
                 return notice(label("acquisition.state.notAvailable"), "", "neutral", ["back"]);
             case "unavailable":
@@ -432,7 +433,12 @@
         }
     };
 
-    const announcementText = (announcement, mediaUnit) => {
+    const announcementText = (announcement, mediaUnit, noticeInfo) => {
+        // An ended wait speaks the notice the viewer reads, not the raw state behind it.
+        if (noticeInfo) {
+            return [noticeInfo.title, noticeInfo.hint].filter((part) => part !== "").join(". ");
+        }
+
         if (announcement.phase === "handingOver") {
             return label("acquisition.playback.starting");
         }
@@ -449,7 +455,7 @@
             return stateText(announcement.state, announcement.mediaUnit ?? mediaUnit);
         }
 
-        return announcement.notice === "stopped" ? label("acquisition.instant.stopped") : "";
+        return "";
     };
 
     const isWorking = (snapshot) => snapshot.phase === "starting" || snapshot.phase === "handingOver" || (snapshot.view !== null && workingStates.has(snapshot.view.state) && snapshot.phase !== "ended");
@@ -485,9 +491,11 @@
 
             const working = isWorking(snapshot);
             const noticeInfo = snapshot.phase === "ended" ? noticeOf(snapshot, mediaUnit) : null;
+            // A notice with a title replaces the action's state; one without only adds a message beside the unchanged action.
+            const replacesAction = noticeInfo !== null && noticeInfo.title !== "";
             const unit = snapshot.view?.mediaUnit ?? mediaUnit;
             root.dataset.ipPhase = snapshot.phase;
-            root.dataset.ipState = noticeInfo ? `notice-${noticeInfo.tone}` : working ? "working" : "idle";
+            root.dataset.ipState = replacesAction ? `notice-${noticeInfo.tone}` : working ? "working" : "idle";
 
             if (snapshot.phase === "handingOver") {
                 labelNode.textContent = label("acquisition.instant.working", { state: label("acquisition.playback.starting") });
@@ -495,13 +503,13 @@
                 labelNode.textContent = workingText("looking_for_media", mediaUnit, null);
             } else if (working) {
                 labelNode.textContent = workingText(snapshot.view.state, unit, snapshot.percent);
-            } else if (noticeInfo) {
+            } else if (replacesAction) {
                 labelNode.textContent = noticeInfo.title;
             } else {
                 labelNode.textContent = snapshot.phase !== "idle" && snapshot.view ? stateText(snapshot.view.state, unit) : idleText;
             }
 
-            button.setAttribute("aria-disabled", working || noticeInfo !== null ? "true" : "false");
+            button.setAttribute("aria-disabled", working || replacesAction ? "true" : "false");
             button.setAttribute("aria-busy", working ? "true" : "false");
             if (progress) {
                 progress.hidden = snapshot.percent === null || !working;
@@ -513,7 +521,7 @@
             }
 
             if (details && milestoneList) {
-                details.hidden = snapshot.milestones.length === 0;
+                details.hidden = snapshot.milestones.length === 0 || noticeInfo !== null;
                 if (details.hidden) {
                     details.open = false;
                 }
@@ -548,7 +556,7 @@
 
             if (live && snapshot.announcement && snapshot.announcement.id !== lastAnnouncement) {
                 lastAnnouncement = snapshot.announcement.id;
-                live.textContent = announcementText(snapshot.announcement, mediaUnit);
+                live.textContent = announcementText(snapshot.announcement, mediaUnit, noticeInfo);
             }
         };
 
@@ -579,7 +587,11 @@
                 begin();
             }
         });
-        stopButton?.addEventListener("click", () => wait.stop());
+        stopButton?.addEventListener("click", () => {
+            wait.stop();
+            // The button that was pressed is gone: keep the keyboard where it was, on the action that now says Stopped waiting.
+            button.focus();
+        });
         for (const name of ["retry", "keep"]) {
             root.querySelector(`[data-ip-action=${name}]`)?.addEventListener("click", () => {
                 wait.reset();
