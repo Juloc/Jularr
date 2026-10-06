@@ -185,7 +185,7 @@ public sealed class LibraryModel(
                 id,
                 cancellationToken);
             TempData["Status"] = ui["books.library.removed"];
-            return RedirectToPage("/Books");
+            return RedirectToPage("/Books/Index");
         }
         catch (InvalidOperationException exception)
         {
