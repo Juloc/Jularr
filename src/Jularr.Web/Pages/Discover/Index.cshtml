@@ -51,56 +51,18 @@
     <link rel="stylesheet" href="~/css/discover-request.css" asp-append-version="true" />
 }
 
-<div class="dc-page"
-     data-discover
-     data-is-owner="@Model.IsOwner.ToString().ToLowerInvariant()"
-     data-resolve-url="@Url.Page("/Discover/Index", "Resolve")"
-     data-open-url="@Url.Page("/Discover/Index", "Open")"
-     data-request-url="@Url.Page("/Discover/Index", "Request")"
-     data-request-status-url="@Url.Page("/Discover/Index", "RequestStatus")"
-     data-watchlist-url="@Url.Page("/Discover/Index", "Watchlist")"
-     data-franchise-url="@Url.Page("/Discover/Index", "FollowFranchise")"
-     data-text-action-failed="@ui["discover.card.actionFailed"]"
-     data-text-follow="@ui["discover.card.follow"]"
-     data-text-followed="@ui["discover.card.followed"]"
-     data-text-unfollow="@ui["discover.card.unfollow"]"
-     data-text-franchise-followed="@ui["discover.card.franchiseFollowed"]"
-     data-text-open="@ui["requests.open"]"
-     data-text-source-for="@ui["discover.import.sourceFor"]"
-     data-text-source-url="@ui["discover.import.sourceUrlHeading"]"
-     data-status-pending="@ui[ConsumerAcquisitionLabels.StatusKey("pending")]"
-     data-status-approved="@ui[ConsumerAcquisitionLabels.StatusKey("approved")]"
-     data-status-searching="@ui[ConsumerAcquisitionLabels.StatusKey("searching")]"
-     data-status-downloading="@ui[ConsumerAcquisitionLabels.StatusKey("downloading")]"
-     data-status-importing="@ui[ConsumerAcquisitionLabels.StatusKey("importing")]"
-     data-status-completed="@ui[ConsumerAcquisitionLabels.StatusKey("completed")]"
-     data-status-failed="@ui[ConsumerAcquisitionLabels.StatusKey("failed")]"
-     data-status-rejected="@ui[ConsumerAcquisitionLabels.StatusKey("rejected")]">
-    @Html.AntiForgeryToken()
-
-    <header class="dc-head">
-        <h1>@ui["discover.index.title"]</h1>
-    </header>
-
-    <form class="dc-searchbar" method="get" action="@DiscoverBrowseQuery.BasePath" role="search" data-dc-form>
+<div class="dc-page" data-discover @DiscoverFeedMarkup.Attributes(Url, ui, Model.IsOwner)>
+    @* The title and the search field are gone on purpose: the header search is the one search of the app and submits to this page. *@
+    <form class="dc-searchbar" method="get" action="@DiscoverBrowseQuery.BasePath" data-dc-form>
         @if (query.Category != DiscoveryCategory.All)
         {
             <input type="hidden" name="category" value="@DiscoverBrowseQuery.CategoryName(query.Category)" />
         }
 
-        <label class="dc-search">
-            <span class="sr-only">@ui["discover.search.srLabel"]</span>
-            <partial name="_DiscoverIcon" model='"compass"' />
-            <input type="search"
-                   name="q"
-                   value="@query.Text"
-                   maxlength="120"
-                   autocomplete="off"
-                   spellcheck="false"
-                   data-dc-search
-                   placeholder="@ui["discover.search.placeholder"]" />
-            <kbd aria-hidden="true">/</kbd>
-        </label>
+        @if (query.IsSearch)
+        {
+            <input type="hidden" name="q" value="@query.Text" />
+        }
 
         <details class="dc-pop" data-dc-pop>
             <summary class="dc-btn@(active > 0 ? " is-active" : "")"
@@ -203,7 +165,7 @@
     <nav class="dc-tabs" aria-label="@ui["discover.categories.aria"]">
         @foreach (var (category, labelKey) in Model.VisibleTabs)
         {
-            var selected = DiscoverScopes.IsActive(category, query.Category);
+            var selected = category == query.Category;
             <a class="dc-tab@(selected ? " is-active" : "")"
                href="@((query with { Category = category }).Href)"
                aria-current="@(selected ? "page" : null)"
@@ -211,39 +173,7 @@
         }
     </nav>
 
-    <p class="dc-notice" data-dc-offline hidden role="status">
-        <partial name="_DiscoverIcon" model='"offline"' />
-        <span>@ui["discover.offline"]</span>
-    </p>
-
-    <p class="dc-notice dc-notice-warning" data-dc-sync hidden role="status">
-        <partial name="_DiscoverIcon" model='"warning"' />
-        <span>@ui["discover.results.updateFailed"]</span>
-        <button type="button" class="dc-link" data-dc-sync-retry>@ui["library.browse.error.retry"]</button>
-    </p>
-
-    <noscript><p class="dc-message">@ui["discover.noscript"]</p></noscript>
-
-    <div class="dc-results" data-dc-body aria-busy="true">
-        <p class="sr-only">@ui["discover.results.loading"]</p>
-        <div class="dc-skeleton" aria-hidden="true">
-            <span class="dc-skeleton-head"></span>
-            <ul class="dc-track dc-ghosts">
-                @for (var i = 0; i < DiscoverSectionView.TrackGhosts; i++)
-                {
-                    <li class="dc-track-item"><partial name="_DiscoverGhost" /></li>
-                }
-            </ul>
-        </div>
-    </div>
-
-    <div class="dc-message" role="alert" data-dc-error hidden>
-        <div>
-            <p><strong>@ui["discover.results.unavailableTitle"]</strong></p>
-            <p>@ui["discover.results.unavailableBody"]</p>
-        </div>
-        <button type="button" class="button" data-dc-retry>@ui["library.browse.error.retry"]</button>
-    </div>
+    <partial name="_DiscoverFeed" model="ui" />
 
     @if (Model.IsOwner)
     {
@@ -276,17 +206,6 @@
             </form>
         </details>
     }
-
-    @* The rich preview: a popover next to the hovered card on a pointer, a modal sheet on touch and from the
-       preview button. Its content is cloned from the card's template when it opens. *@
-    <div class="dc-hover" data-dc-hover role="dialog" hidden></div>
-    <dialog class="dc-sheet" data-dc-sheet>
-        <button type="button" class="dc-icon-btn dc-sheet-close" data-dc-sheet-close aria-label="@ui["library.browse.close"]">
-            <partial name="_DiscoverIcon" model='"close"' />
-        </button>
-        <div class="dc-sheet-content" data-dc-sheet-content></div>
-    </dialog>
-    <partial name="_DiscoverRequestDialog" model="ui" />
 </div>
 
 @section Scripts {

@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/Jularr.Web/wwwroot/css/discover-browse.css"
+        ],
+        "createdAt": "2026-10-06T15:25:44.018Z",
+        "reason": "assistant triage: the only match is the full-width 3px loading bar at the top of .dc-results (inset: 0 0 auto), not a side stripe on a card; pre-existing code, not confirmed by the user"
+      }
+    ]
+  }
+}

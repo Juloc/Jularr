@@ -91,8 +91,8 @@ public sealed class DiscoverPageTests
         CollectionAssert.AreEqual(
             new[] { DiscoveryCategory.All, DiscoveryCategory.Series },
             DiscoverScopes.Tabs.Select(tab => tab.Category).Where(category => DiscoverScopes.IsVisible(category, series)).ToArray());
-        Assert.IsTrue(DiscoverScopes.IsVisible(DiscoveryCategory.BooksAndLightNovels, books), "One of the two types is enough for the combined tab.");
-        Assert.IsFalse(DiscoverScopes.IsVisible(DiscoveryCategory.Book, books));
+        Assert.IsTrue(DiscoverScopes.IsVisible(DiscoveryCategory.LightNovel, books), "Light novels have a tab of their own.");
+        Assert.IsFalse(DiscoverScopes.IsVisible(DiscoveryCategory.Book, books), "A profile that sees light novels does not see books by that.");
         Assert.IsFalse(DiscoverScopes.IsVisible(DiscoveryCategory.Anime, series));
         Assert.IsTrue(DiscoverScopes.IsVisible(DiscoveryCategory.All, new HashSet<Jularr.Web.Features.MediaCore.WorkMediaType>()));
     }
@@ -134,22 +134,22 @@ public sealed class DiscoverPageTests
     public void TheMediaTypeSwitchOffersOnlyTypesWithADiscoverySource()
     {
         CollectionAssert.AreEqual(
-            new[] { DiscoveryCategory.All, DiscoveryCategory.Anime, DiscoveryCategory.Movie, DiscoveryCategory.Series, DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.Manga },
+            new[] { DiscoveryCategory.All, DiscoveryCategory.Anime, DiscoveryCategory.Movie, DiscoveryCategory.Series, DiscoveryCategory.LightNovel, DiscoveryCategory.Book, DiscoveryCategory.Manga },
             DiscoverScopes.Tabs.Select(tab => tab.Category).ToArray());
 
-        Assert.IsTrue(DiscoverScopes.IsActive(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.Book));
-        Assert.IsTrue(DiscoverScopes.IsActive(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.LightNovel));
-        Assert.IsFalse(DiscoverScopes.IsActive(DiscoveryCategory.Manga, DiscoveryCategory.Book));
-        Assert.IsTrue(DiscoverScopes.Includes(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.LightNovel));
-        Assert.IsTrue(DiscoverScopes.Includes(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.BooksAndLightNovels));
+        // Light novels (the AniList novels) and books (the book catalogs) are separate scopes: neither includes the other.
+        Assert.IsTrue(DiscoverScopes.Includes(DiscoveryCategory.LightNovel, DiscoveryCategory.LightNovel));
+        Assert.IsFalse(DiscoverScopes.Includes(DiscoveryCategory.LightNovel, DiscoveryCategory.Book));
+        Assert.IsFalse(DiscoverScopes.Includes(DiscoveryCategory.Book, DiscoveryCategory.LightNovel));
         Assert.IsFalse(DiscoverScopes.Includes(DiscoveryCategory.Anime, DiscoveryCategory.Manga));
         Assert.AreEqual(DiscoveryCategory.Movie, Parse("category=movies").Category);
         Assert.AreEqual(DiscoveryCategory.Series, Parse("category=tv").Category);
-        Assert.AreEqual(DiscoveryCategory.BooksAndLightNovels, Parse("category=books-light-novels").Category);
-        Assert.AreEqual("/Discover?category=books-light-novels", Parse("category=books-light-novels").Href);
+        Assert.AreEqual(DiscoveryCategory.LightNovel, Parse("category=light-novel").Category);
+        Assert.AreEqual(DiscoveryCategory.Book, Parse("category=book").Category);
+        Assert.AreEqual(DiscoveryCategory.All, Parse("category=books-light-novels").Category, "The retired combined scope is the all-types page, not a scope of its own.");
         Assert.AreEqual(
-            "/Discover?category=books-light-novels&mode=top",
-            DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.BooksAndLightNovels, DiscoveryMode.Top, ""));
+            "/Discover?category=light-novel&mode=top",
+            DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.LightNovel, DiscoveryMode.Top, ""));
     }
 
     // ---- The one language and request indicator ---------------------------------------------------
@@ -355,6 +355,24 @@ public sealed class DiscoverPageTests
         Assert.AreEqual(DiscoverStateKind.NotAvailable, locked.State.Kind);
         Assert.AreEqual("Not available", locked.State.Label);
         Assert.IsFalse(locked.CanRequest);
+    }
+
+    [TestMethod]
+    public void AMissingMovieOrSeriesOffersThePlaybackIntentOnlyWhereInstantAcquisitionIsPermitted()
+    {
+        var tmdb = TmdbDiscoveryProvider.ProviderKey;
+        var requestable = new[] { "movie", "tv", "anime" };
+        var instant = Context(requestable: requestable) with { InstantPlayCategories = new HashSet<string>(["movie", "tv", "anime"], StringComparer.Ordinal) };
+        var requestOnly = Context(requestable: requestable);
+
+        var movie = DiscoverCardFactory.Create(Item("movie", provider: tmdb), instant);
+        var series = DiscoverCardFactory.Create(Item("tv", provider: tmdb), instant);
+
+        Assert.AreEqual(Ui["library.video.watchNow"], movie.InstantPlayLabel);
+        Assert.AreEqual(Ui["library.mediaCard.startWatching"], series.InstantPlayLabel);
+        Assert.IsNull(DiscoverCardFactory.Create(Item("movie", provider: tmdb), requestOnly).InstantPlayLabel, "Without instant acquisition the card keeps the explicit Request.");
+        Assert.IsNull(DiscoverCardFactory.Create(Item(), instant).InstantPlayLabel, "The playback intent runs on the Work of a Movie or Series; other kinds only request.");
+        Assert.IsNull(DiscoverCardFactory.Create(Item("movie", provider: tmdb), instant with { RequestableCategories = new HashSet<string>() }).InstantPlayLabel, "A profile that may not request has no playback intent either.");
     }
 
     // ---- Card content ----------------------------------------------------------------------------------

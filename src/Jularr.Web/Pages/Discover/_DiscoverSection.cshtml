@@ -67,7 +67,7 @@
                 }
             </ul>
         }
-        else if (block.Cards.Count > 0)
+        else if (block.Cards.Count > 0 && block.Layout == DiscoverSectionLayout.Grid)
         {
             <ul class="@layoutClass">
                 @foreach (var card in block.Cards)
@@ -75,6 +75,18 @@
                     <li class="@itemClass"><partial name="_DiscoverCard" model="(card, ui)" /></li>
                 }
             </ul>
+        }
+        else if (block.Cards.Count > 0)
+        {
+            <div class="dc-row" data-dc-row>
+                <ul class="@layoutClass" data-dc-row-track>
+                    @foreach (var card in block.Cards)
+                    {
+                        <li class="@itemClass"><partial name="_DiscoverCard" model="(card, ui)" /></li>
+                    }
+                </ul>
+                <partial name="_DiscoverRowArrows" model="ui" />
+            </div>
         }
     </text>;
 }

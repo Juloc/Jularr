@@ -324,7 +324,7 @@ public sealed class DiscoveryTests
     }
 
     [TestMethod]
-    public void DiscoveryClientUsesDebounceAndCancelsStaleRequests()
+    public void DiscoveryClientCancelsStaleRequests()
     {
         var root = FindRepositoryRoot();
         var script = File.ReadAllText(Path.Combine(
@@ -335,10 +335,9 @@ public sealed class DiscoveryTests
             "js",
             "discover.js"));
 
-        StringAssert.Contains(script, "const SEARCH_DELAY = 250");
         StringAssert.Contains(script, "AbortController");
         StringAssert.Contains(script, "requestVersion");
-        StringAssert.Contains(script, "history.replaceState");
+        Assert.IsFalse(script.Contains("SEARCH_DELAY", StringComparison.Ordinal), "The search is the header's: Discover has no typing-triggered reload.");
     }
 
     [TestMethod]

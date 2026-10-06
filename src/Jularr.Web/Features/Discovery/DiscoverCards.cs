@@ -96,7 +96,8 @@ public sealed record DiscoverCardView(
     bool IsFollowed,
     Guid? FollowedFranchiseId,
     bool CanFollowFranchise,
-    bool CanImportSource);
+    bool CanImportSource,
+    string? InstantPlayLabel = null);
 
 /// <summary>Everything a card needs besides the title itself. All of it is read on the server; the browser never supplies library state.</summary>
 public sealed record DiscoverContext(
@@ -106,7 +107,8 @@ public sealed record DiscoverContext(
     IReadOnlyDictionary<string, DiscoverLocalFacts> Local,
     IReadOnlyDictionary<string, Guid?> Followed,
     IReadOnlySet<string> RequestableCategories,
-    bool CanConfigureProviders = false);
+    bool CanConfigureProviders = false,
+    IReadOnlySet<string>? InstantPlayCategories = null);
 
 public static partial class DiscoverCardFactory
 {
@@ -142,6 +144,12 @@ public static partial class DiscoverCardFactory
 
         // A title the library does not know yet gets its canonical Work when it is opened, and only a profile that may request it may create one (docs/mockups/discover/SPEC.md).
         var resolvesDetail = detailUrl is null && canRequest && item.Provider == TmdbDiscoveryProvider.ProviderKey && item.Category is "movie" or "tv";
+
+        // A missing Movie or Series that the profile's policy may acquire instantly offers the playback intent instead of Request
+        // (docs/mockups/instant-play, section 3); the intent runs on the Work that opening the title creates, so only a resolving card has it.
+        var instantPlayLabel = resolvesDetail && context.InstantPlayCategories?.Contains(item.Category) == true
+            ? ui[item.Category == "movie" ? "library.video.watchNow" : "library.mediaCard.startWatching"]
+            : null;
 
         var canFollow = WatchlistDraftInput.TryIdentity(item.Category, item.Provider, item.ExternalId, out var identity);
         var followedFranchise = canFollow && context.Followed.TryGetValue(identity.Key, out var franchiseId)
@@ -196,7 +204,8 @@ public static partial class DiscoverCardFactory
             isFollowed,
             followedFranchise ?? item.FollowedFranchiseId,
             canFollow && !item.IsLocal && FranchiseService.CanSeed(identity),
-            item.CanImportSource && !item.IsLocal);
+            item.CanImportSource && !item.IsLocal,
+            instantPlayLabel);
     }
 
     public static MediaBannerKind KindOf(string category) => category switch

@@ -5,6 +5,7 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
@@ -41,7 +42,8 @@ public sealed class IndexModel(
     MediaRecommendationService recommendations,
     IInstanceModuleService modules,
     ILogger<IndexModel> logger,
-    IAppShellService? shell = null) : PageModel
+    IAppShellService? shell = null,
+    InstantPlayPolicyService? instantPlay = null) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public bool IsOwner => account.IsOwner;
@@ -205,10 +207,7 @@ public sealed class IndexModel(
             logger.LogWarning(exception, "The personalized rows could not be loaded for Discover.");
         }
 
-        var providerRows = Query.Category is DiscoveryCategory.All or DiscoveryCategory.BooksAndLightNovels
-            ? DiscoveryShelfComposer.CombineBooksAndLightNovels(board.Rows)
-            : board.Rows;
-        foreach (var row in providerRows.Where(row => DiscoverScopes.Includes(Query.Category, row.Category)))
+        foreach (var row in board.Rows.Where(row => DiscoverScopes.Includes(Query.Category, row.Category)))
         {
             rows.Add(new DiscoverLandingRow(row.Id, ShelfHeading(row), row.DeepLinkUrl, row.Items, row.Sources, row.MediaLabelKey is { Length: > 0 } labelKey ? Ui[labelKey] : null));
         }
@@ -317,7 +316,39 @@ public sealed class IndexModel(
             await LoadLocalFactsAsync(list, cancellationToken),
             followed,
             RequestableCategories,
-            account.IsOwner);
+            account.IsOwner,
+            await LoadInstantPlayCategoriesAsync(cancellationToken));
+    }
+
+    /// <summary>
+    /// The video categories whose missing titles this profile may play at once: it may request them and the policy permits instant
+    /// acquisition (docs/mockups/instant-play, section 2). Anything else keeps the explicit Request action.
+    /// </summary>
+    private async Task<IReadOnlySet<string>> LoadInstantPlayCategoriesAsync(CancellationToken cancellationToken)
+    {
+        var categories = new HashSet<string>(StringComparer.Ordinal);
+        if (instantPlay is null)
+        {
+            return categories;
+        }
+
+        try
+        {
+            foreach (var (category, mediaType) in new[] { ("movie", WorkMediaType.Movie), ("tv", WorkMediaType.Series) })
+            {
+                if (RequestableCategories.Contains(category) && (await instantPlay.ResolveAsync(mediaType, cancellationToken)).AllowsInstantAcquisition)
+                {
+                    categories.Add(category);
+                }
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Only the play action is lost: the cards keep the explicit Request.
+            logger.LogWarning(exception, "The instant play policy could not be resolved for Discover.");
+        }
+
+        return categories;
     }
 
     private async Task<IReadOnlyDictionary<string, DiscoverLocalFacts>> LoadLocalFactsAsync(

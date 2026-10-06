@@ -1,4 +1,6 @@
 @page
+@using Jularr.Web.Features.Auth
+@using Jularr.Web.Features.Discovery
 @using Jularr.Web.Features.MediaCore
 @using Jularr.Web.Features.Progress
 @model IndexModel
@@ -8,10 +10,13 @@
 
 @section Head {
     <link rel="stylesheet" href="~/css/home.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-browse.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-request.css" asp-append-version="true" />
 }
 
 @* Layout and hierarchy follow docs/mockups/home/SPEC.md (binding): hero → Continue → For you →
-   recently discovered. No stat tiles and no filter chips; ?type= still narrows the rows server-side. *@
+   recently discovered, then the Discover feed (trending and new titles of the providers, the same rows and cards as Discover
+   with one shared body handler). No stat tiles and no filter chips; ?type= still narrows the rows server-side. *@
 
 @if (Model.Hero.Count > 0)
 {
@@ -221,6 +226,12 @@
     </section>
 }
 
+<section class="home-discover">
+    <div class="dc-page" data-discover @DiscoverFeedMarkup.Attributes(Url, Model.Ui, User.IsInRole(AccountRoles.Owner), "/Discover")>
+        <partial name="~/Pages/Discover/_DiscoverFeed.cshtml" model="Model.Ui" />
+    </div>
+</section>
+
 @if (Model.PlaybackHistory.Count > 0)
 {
     <details class="panel playback-history" data-playback-history>
@@ -262,4 +273,8 @@
 
 @section Scripts {
     <script src="~/js/home-spotlight.js" asp-append-version="true" defer></script>
+    <script src="~/js/work-metadata.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-staging.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-request.js" asp-append-version="true" defer></script>
 }

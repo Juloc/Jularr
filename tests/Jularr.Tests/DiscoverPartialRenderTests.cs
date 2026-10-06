@@ -286,7 +286,7 @@ public sealed class DiscoverPartialRenderTests
     [TestMethod]
     public async Task ASectionWithTitlesAndAFailedSourceNamesItInOneSentenceWithItsOwnRetry()
     {
-        var partial = Section("group-books-light-novels", "Books & Light Novels", [Card()], message: "Some titles are missing.", retry: [DiscoverySource.Books, DiscoverySource.Reading]);
+        var partial = Section("group-light-novel", "Light novels", [Card()], message: "Some titles are missing.", retry: [DiscoverySource.Books, DiscoverySource.Reading]);
         var failed = Section("results", null, [], DiscoverSectionLayout.Grid, DiscoverySectionState.Unavailable, message: "Couldn't load this section right now.", retry: [DiscoverySource.Anime]);
 
         var withTitles = await RenderAsync(BodyView, Body(DiscoverBodyState.Sections, sections: [partial]));
@@ -349,19 +349,44 @@ public sealed class DiscoverPartialRenderTests
         var page = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Jularr.Web", "Pages", "Discover", "Index.cshtml"));
 
-        StringAssert.Contains(page, "role=\"search\"");
+        var feed = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Discover", "_DiscoverFeed.cshtml"));
+
+        // The search is the application header's; the page keeps the query it was opened with so filters apply to it.
+        Assert.IsFalse(page.Contains("data-dc-search", StringComparison.Ordinal));
+        Assert.IsFalse(page.Contains("type=\"search\"", StringComparison.Ordinal));
         StringAssert.Contains(page, "name=\"q\"");
         StringAssert.Contains(page, "Model.VisibleTabs");
         StringAssert.Contains(page, "<details class=\"dc-pop\" data-dc-pop>");
         StringAssert.Contains(page, "library.browse.filtersActiveAria");
-        StringAssert.Contains(page, "data-dc-offline");
-        StringAssert.Contains(page, "data-dc-error");
-        StringAssert.Contains(page, "data-dc-sync", "A failed follow-up is reported without touching the titles that are shown.");
-        StringAssert.Contains(page, "<noscript>", "Without scripts the placeholders never fill, so a message stands instead.");
-        StringAssert.Contains(page, "<dialog class=\"dc-sheet\" data-dc-sheet>");
+        StringAssert.Contains(page, "<partial name=\"_DiscoverFeed\" model=\"ui\" />");
+
+        // The feed is shared with Home: notices, body, failure message and overlays.
+        StringAssert.Contains(feed, "data-dc-offline");
+        StringAssert.Contains(feed, "data-dc-error");
+        StringAssert.Contains(feed, "data-dc-sync", "A failed follow-up is reported without touching the titles that are shown.");
+        StringAssert.Contains(feed, "<noscript>", "Without scripts the placeholders never fill, so a message stands instead.");
+        StringAssert.Contains(feed, "<dialog class=\"dc-sheet\" data-dc-sheet>");
         Assert.IsFalse(page.Contains("discover-genre-row", StringComparison.Ordinal), "Genres live in the Filters panel, not in a second chip row.");
         Assert.IsFalse(page.Contains("discover-collections-link", StringComparison.Ordinal));
-        Assert.AreEqual(1, Regex.Matches(page, "<h1>").Count);
+        Assert.AreEqual(0, Regex.Matches(page, "<h1>").Count, "The title is gone: the active media-type tab and the rows name the page.");
+    }
+
+    [TestMethod]
+    public void HomeHostsTheDiscoverFeedThroughTheSharedPartialAndTheDiscoverBodyHandler()
+    {
+        var pages = Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages");
+        var home = File.ReadAllText(Path.Combine(pages, "Index.cshtml"));
+        var discover = File.ReadAllText(Path.Combine(pages, "Discover", "Index.cshtml"));
+
+        StringAssert.Contains(home, "~/Pages/Discover/_DiscoverFeed.cshtml");
+        StringAssert.Contains(home, "DiscoverFeedMarkup.Attributes(Url, Model.Ui, User.IsInRole(AccountRoles.Owner), \"/Discover\")");
+        StringAssert.Contains(home, "~/js/discover.js");
+        Assert.IsFalse(home.Contains("OnGetBody", StringComparison.Ordinal), "Home owns no second feed: the body is Discover's handler.");
+
+        // One attribute contract for both hosts: Discover uses the same markup helper instead of a copy of it.
+        StringAssert.Contains(discover, "DiscoverFeedMarkup.Attributes(Url, ui, Model.IsOwner)");
+        Assert.IsFalse(discover.Contains("data-resolve-url", StringComparison.Ordinal));
     }
 
     [TestMethod]

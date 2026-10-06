@@ -2,11 +2,10 @@
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
 }
-@* Global search in the header. Discover reads ?q= and runs the search on load; Ctrl/Cmd+K focuses it (pwa.js). *@
+@* Global search in the header. Discover reads ?q= and runs the search on load; Ctrl/Cmd+K focuses it (pwa.js) without a visible hint. *@
 <form class="app-search" role="search" method="get" action="/Discover">
     <partial name="_AppIcon" model="@("search")" />
     <input type="search" name="q" autocomplete="off" spellcheck="false" enterkeyhint="search" data-app-search
            aria-label="@ui["nav.search"]"
            placeholder="@ui["nav.searchPlaceholder"]" />
-    <kbd class="app-search-hint" aria-hidden="true">@ui["nav.searchShortcut"]</kbd>
 </form>

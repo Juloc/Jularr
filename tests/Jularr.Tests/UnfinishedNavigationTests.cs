@@ -69,16 +69,57 @@ public sealed partial class UnfinishedNavigationTests
     }
 
     [TestMethod]
-    public void AdminProvidersSitsInTheMediaGroupNextToTheDownloader()
+    public void AdminProvidersSitsInTheAcquisitionGroupNextToTheDownloader()
     {
-        var media = UiNavigationCatalog.Admin.Single(section => section.TitleKey == "nav.group.adminMedia").Entries.Select(entry => entry.Id).ToArray();
+        var acquisition = UiNavigationCatalog.Admin.Single(section => section.TitleKey == "nav.group.adminAcquisition").Entries.Select(entry => entry.Id).ToArray();
         var providers = UiNavigationCatalog.Admin.SelectMany(section => section.Entries).Single(entry => entry.Id == "admin-providers");
 
         Assert.AreEqual("/Admin/Providers", providers.Href);
-        Assert.AreEqual(Array.IndexOf(media, "admin-usenet") + 1, Array.IndexOf(media, "admin-providers"));
+        Assert.AreEqual(Array.IndexOf(acquisition, "admin-usenet") + 1, Array.IndexOf(acquisition, "admin-providers"));
         Assert.IsFalse(providers.Unfinished);
         Assert.IsFalse(UiShellNavigation.BuildSection("admin", Manager)!.Groups!.SelectMany(group => group.Items).Any(item => item.Id == "admin-providers"));
         Assert.IsTrue(UiShellNavigation.BuildSection("admin", Owner)!.Groups!.SelectMany(group => group.Items).Any(item => item.Id == "admin-providers"));
+    }
+
+    [TestMethod]
+    public void TheAdminGroupsFollowTheTargetAreasAndTheOldPagesFormTheLegacyGroupBeforeUnfinished()
+    {
+        CollectionAssert.AreEqual(
+            new[] { "nav.group.adminOverview", "nav.group.adminMedia", "nav.group.adminAcquisition", "nav.group.adminAdministration", "nav.group.adminLegacy" },
+            UiNavigationCatalog.Admin.Select(section => section.TitleKey).ToArray());
+
+        var legacy = UiNavigationCatalog.Admin.Single(section => section.TitleKey == "nav.group.adminLegacy").Entries.Select(entry => entry.Id).ToArray();
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                "admin-anime-acquisition", "admin-import", "admin-mapping", "admin-sonarr", "admin-sessions", "admin-scans",
+                "admin-logs", "admin-health", "admin-transcoding", "admin-localization", "admin-api-keys"
+            },
+            legacy);
+
+        // Each page is listed once: an area destination never also sits in Legacy.
+        var ids = UiNavigationCatalog.Admin.SelectMany(section => section.Entries).Select(entry => entry.Id).ToArray();
+        Assert.AreEqual(ids.Length, ids.Distinct().Count());
+        Assert.IsTrue(UiNavigationCatalog.Admin.First(section => section.TitleKey == "nav.group.adminAdministration").Entries.Any(entry => entry.Id == "admin-storage"));
+
+        var groups = UiShellNavigation.BuildSection("admin", Owner)!.Groups!;
+        Assert.AreEqual("nav.group.adminLegacy", groups[^2].TitleKey, "Legacy closes the area groups; the Unfinished group comes after it.");
+        Assert.AreEqual(UiShellNavigation.UnfinishedGroupTitleKey, groups[^1].TitleKey);
+    }
+
+    [TestMethod]
+    [DataRow("/Admin/History", "admin-operations")]
+    [DataRow("/Admin/Resources", "admin-system")]
+    [DataRow("/Admin/Media/3fa85f64-5717-4562-b3fc-2c963f66afa6", "admin-wanted")]
+    [DataRow("/Admin/Reconciliation", "admin-wanted")]
+    [DataRow("/Admin/Storage", "admin-storage")]
+    public void AnAdminPageOutsideTheSidebarKeepsAdminOpenUnderItsOwningArea(string path, string expectedActiveId)
+    {
+        var nav = UiShellNavigation.Build(path, learningVisible: true, Owner);
+        var children = nav.Expanded?.Groups?.SelectMany(group => group.Items).ToArray();
+
+        Assert.IsNotNull(children, "Admin stays expanded on " + path);
+        Assert.AreEqual(expectedActiveId, children.Single(item => item.IsActive).Id);
     }
 
     [TestMethod]
@@ -174,13 +215,19 @@ public sealed partial class UnfinishedNavigationTests
     }
 
     [TestMethod]
-    public void DiscoverLeavesTheSearchFocusToItsOwnField()
+    public void TheHeaderSearchIsOnEveryPageIncludingDiscover()
     {
-        var navigation = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Shared", "_AppNavigation.cshtml"));
+        var shared = Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Shared");
+        var navigation = File.ReadAllText(Path.Combine(shared, "_AppNavigation.cshtml"));
+        var header = File.ReadAllText(Path.Combine(shared, "_AppHeader.cshtml"));
         var pwa = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "pwa.js"));
+        var discover = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Discover", "Index.cshtml"));
 
-        StringAssert.Contains(navigation, "StartsWithSegments(\"/Discover\"");
-        StringAssert.Contains(pwa, "[data-dc-search], [data-app-search]");
+        Assert.IsFalse(navigation.Contains("StartsWithSegments(\"/Discover\"", StringComparison.Ordinal), "No page leaves the header search out.");
+        Assert.IsFalse(header.Contains("ShowSearch", StringComparison.Ordinal));
+        StringAssert.Contains(header, "<partial name=\"_AppSearch\" />");
+        StringAssert.Contains(pwa, "querySelectorAll(\"[data-app-search]\")");
+        Assert.IsFalse(discover.Contains("data-dc-search", StringComparison.Ordinal), "Discover has no search field of its own; the header search submits to it.");
     }
 
     [TestMethod]

@@ -34,8 +34,9 @@
         media.VisibleMediaTypes,
         enabledModules);
 
-    // Discover owns a prominent search of its own (docs/mockups/discover): the header leaves it the focus instead of showing two equal fields.
-    var showSearch = !Context.Request.Path.StartsWithSegments("/Discover", StringComparison.OrdinalIgnoreCase);
+    // Profile and Settings live in the header account menu (docs/UX.md): the sidebar is navigation only. Settings stays in the sidebar
+    // only while it is the open section, where it carries the settings groups.
+    var sidebarSecondary = nav.Secondary.Where(item => item.Id != "profile" && (item.Id != "settings" || item.Groups is not null)).ToArray();
 
     // Inside a reader the sidebar shows the work that is open, never another one.
     Jularr.Web.Features.Reading.ContinueReadingItem? current = null;
@@ -50,7 +51,7 @@
         current = recent.FirstOrDefault(item => item.ChapterId == chapterId || (workId is { } id && item.WorkId == id));
     }
 }
-<partial name="_AppHeader" model="(nav.Expanded?.LabelKey, showSearch)" />
+<partial name="_AppHeader" model="nav.Expanded?.LabelKey" />
 
 <aside class="sidebar">
     <nav class="nav-list" aria-label="@ui["nav.primaryAria"]">
@@ -67,7 +68,7 @@
 
     <div class="nav-bottom">
         <nav class="nav-list nav-list-secondary @(nav.Expanded is not null ? "nav-list-expanded" : "")" aria-label="@ui["nav.secondaryAria"]">
-            @foreach (var item in nav.Secondary)
+            @foreach (var item in sidebarSecondary)
             {
                 @if (item.Groups is { } groups)
                 {

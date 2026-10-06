@@ -88,7 +88,6 @@ public static class DiscoverySources
         DiscoveryCategory.Manga => [DiscoverySource.Reading],
         DiscoveryCategory.LightNovel => [DiscoverySource.Reading],
         DiscoveryCategory.Book => [DiscoverySource.Books],
-        DiscoveryCategory.BooksAndLightNovels => [DiscoverySource.Reading, DiscoverySource.Books],
         _ => [DiscoverySource.Anime, DiscoverySource.Movies, DiscoverySource.Series, DiscoverySource.Reading, DiscoverySource.Books]
     };
 

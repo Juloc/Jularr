@@ -125,7 +125,6 @@ public sealed record DiscoverBrowseQuery
         DiscoveryCategory.LightNovel => "light-novel",
         DiscoveryCategory.Manga => "manga",
         DiscoveryCategory.Book => "book",
-        DiscoveryCategory.BooksAndLightNovels => "books-light-novels",
         _ => "all"
     };
 
@@ -212,15 +211,10 @@ public static class DiscoverScopes
         (DiscoveryCategory.Anime, "discover.categories.anime"),
         (DiscoveryCategory.Movie, "search.type.movie"),
         (DiscoveryCategory.Series, "search.type.series"),
-        (DiscoveryCategory.BooksAndLightNovels, "discover.categories.booksLightNovels"),
+        (DiscoveryCategory.LightNovel, "discover.categories.lightNovel"),
+        (DiscoveryCategory.Book, "nav.books"),
         (DiscoveryCategory.Manga, "reading.manga.title")
     ];
-
-    /// <summary>Whether a tab is the active one; the single-type scopes reached from a shelf link belong to the combined tab.</summary>
-    public static bool IsActive(DiscoveryCategory tab, DiscoveryCategory current) =>
-        tab == current
-        || (tab == DiscoveryCategory.BooksAndLightNovels
-            && current is DiscoveryCategory.Book or DiscoveryCategory.LightNovel);
 
     /// <summary>Whether the profile may browse the media type of a scope; a hidden type has no tab, no row and no result.</summary>
     public static bool IsVisible(DiscoveryCategory scope, IReadOnlySet<WorkMediaType> visible) => scope switch
@@ -232,16 +226,13 @@ public static class DiscoverScopes
         DiscoveryCategory.Manga => visible.Contains(WorkMediaType.Manga),
         DiscoveryCategory.LightNovel => visible.Contains(WorkMediaType.LightNovel),
         DiscoveryCategory.Book => visible.Contains(WorkMediaType.Book),
-        _ => visible.Contains(WorkMediaType.Book) || visible.Contains(WorkMediaType.LightNovel)
+        _ => false
     };
 
     /// <summary>Whether a shelf row about <paramref name="row"/> belongs to the scope the visitor picked.</summary>
     public static bool Includes(DiscoveryCategory scope, DiscoveryCategory row) => scope switch
     {
         DiscoveryCategory.All => true,
-        DiscoveryCategory.BooksAndLightNovels => row is DiscoveryCategory.Book
-            or DiscoveryCategory.LightNovel
-            or DiscoveryCategory.BooksAndLightNovels,
         _ => scope == row
     };
 }

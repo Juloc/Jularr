@@ -35,72 +35,6 @@ public sealed class DiscoveryShelfTests
     }
 
     [TestMethod]
-    public void BooksAndLightNovelsBecomeOneInterleavedDiscoverShelfPerMode()
-    {
-        DiscoveryShelfRow Row(
-            string id,
-            DiscoveryShelfKind kind,
-            WorkMediaType type,
-            DiscoveryCategory category,
-            DiscoveryMode mode,
-            params DiscoveryItem[] items) =>
-            new(
-                id,
-                kind,
-                type,
-                category,
-                mode,
-                "",
-                mode == DiscoveryMode.Top ? "discover.tabs.top" : mode == DiscoveryMode.New ? "discover.tabs.new" : "discover.tabs.trending",
-                type == WorkMediaType.Book ? "nav.books" : "discover.categories.lightNovel",
-                items,
-                [new DiscoverySourceResult(type == WorkMediaType.Book ? DiscoverySource.Books : DiscoverySource.Reading, DiscoverySourceState.Ready, items)]);
-
-        var rows = new[]
-        {
-            Row("trending-anime", DiscoveryShelfKind.Trending, WorkMediaType.Anime, DiscoveryCategory.Anime, DiscoveryMode.Trending,
-                Item("anime", "anilist", "a1", "Anime")),
-            Row("trending-lightnovel", DiscoveryShelfKind.Trending, WorkMediaType.LightNovel, DiscoveryCategory.LightNovel, DiscoveryMode.Trending,
-                Item("light-novel", "anilist", "ln1", "LN 1"),
-                Item("light-novel", "anilist", "ln2", "LN 2")),
-            Row("trending-book", DiscoveryShelfKind.Trending, WorkMediaType.Book, DiscoveryCategory.Book, DiscoveryMode.Trending,
-                Item("book", "openlibrary", "b1", "Book 1"),
-                Item("book", "openlibrary", "b2", "Book 2")),
-            Row("top-lightnovel", DiscoveryShelfKind.Top, WorkMediaType.LightNovel, DiscoveryCategory.LightNovel, DiscoveryMode.Top,
-                Item("light-novel", "anilist", "ln3", "LN 3")),
-            Row("top-book", DiscoveryShelfKind.Top, WorkMediaType.Book, DiscoveryCategory.Book, DiscoveryMode.Top,
-                Item("book", "openlibrary", "b3", "Book 3")),
-            Row("new-book", DiscoveryShelfKind.NewlyPublished, WorkMediaType.Book, DiscoveryCategory.Book, DiscoveryMode.New,
-                Item("book", "openlibrary", "b4", "Book 4"))
-        };
-
-        var combined = DiscoveryShelfComposer.CombineBooksAndLightNovels(rows);
-
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "trending-anime",
-                "trending-books-light-novels",
-                "top-books-light-novels",
-                "new-book"
-            },
-            combined.Select(row => row.Id).ToArray());
-
-        var trending = combined.Single(row => row.Id == "trending-books-light-novels");
-        Assert.IsNull(trending.MediaType);
-        Assert.AreEqual(DiscoveryCategory.BooksAndLightNovels, trending.Category);
-        CollectionAssert.AreEqual(
-            new[] { "LN 1", "Book 1", "LN 2", "Book 2" },
-            trending.Items.Select(item => item.Title).ToArray());
-        Assert.AreEqual(
-            "/Discover?category=books-light-novels",
-            trending.DeepLinkUrl);
-
-        var newBooks = combined.Single(row => row.Id == "new-book");
-        Assert.AreEqual(DiscoveryCategory.Book, newBooks.Category);
-    }
-
-    [TestMethod]
     public void PlanOffersOnlyTheRowsOfTheVisibleTypes()
     {
         var plans = DiscoveryShelfComposer.Plan([WorkMediaType.Movie, WorkMediaType.Series]);
@@ -166,12 +100,15 @@ public sealed class DiscoveryShelfTests
         var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Book, WorkMediaType.LightNovel));
 
         var anime = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.Anime, DiscoveryWait.None, CancellationToken.None);
-        var booksAndNovels = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.BooksAndLightNovels, DiscoveryWait.None, CancellationToken.None);
+        var novels = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.LightNovel, DiscoveryWait.None, CancellationToken.None);
+        var books = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.Book, DiscoveryWait.None, CancellationToken.None);
 
         Assert.IsTrue(anime.Rows.All(row => row.Category == DiscoveryCategory.Anime));
         Assert.IsTrue(feed.Requested[0].All(request => request.Category == DiscoveryCategory.Anime), "The Anime tab starts no TMDB, books or reading call.");
-        Assert.IsTrue(booksAndNovels.Rows.All(row => row.Category is DiscoveryCategory.Book or DiscoveryCategory.LightNovel));
-        Assert.IsTrue(feed.Requested[1].All(request => request.Category is DiscoveryCategory.Book or DiscoveryCategory.LightNovel));
+        Assert.IsTrue(novels.Rows.Count > 0 && novels.Rows.All(row => row.Category == DiscoveryCategory.LightNovel), "The Light Novels tab shows the AniList novels only.");
+        Assert.IsTrue(feed.Requested[1].All(request => request.Category == DiscoveryCategory.LightNovel));
+        Assert.IsTrue(books.Rows.Count > 0 && books.Rows.All(row => row.Category == DiscoveryCategory.Book), "The Books tab shows the book catalogs only.");
+        Assert.IsTrue(feed.Requested[2].All(request => request.Category == DiscoveryCategory.Book));
     }
 
     [TestMethod]
@@ -223,8 +160,8 @@ public sealed class DiscoveryShelfTests
         StringAssert.Contains(script, "data-dc-body");
         StringAssert.Contains(script, "params.set(\"handler\", \"Body\")");
         Assert.IsFalse(script.Contains("handler=Results", StringComparison.Ordinal), "The JSON Results handler is gone.");
-        // The debounce and stale-request guards must survive.
-        StringAssert.Contains(script, "const SEARCH_DELAY = 250");
+        // The stale-request guards must survive; a host such as Home names the page that serves the body.
+        StringAssert.Contains(script, "bodyUrl || window.location.pathname");
         StringAssert.Contains(script, "abortController?.abort()");
         StringAssert.Contains(script, "requestVersion");
     }

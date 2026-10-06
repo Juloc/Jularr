@@ -55,7 +55,14 @@
 
         @if (!card.IsLocal && card.RequestId is null && card.CanRequest)
         {
-            <button type="button" class="button button-primary dc-card-request" data-dc-card-request>@ui["discover.card.request"]</button>
+            @if (card.InstantPlayLabel is { } cardPlayLabel)
+            {
+                <button type="button" class="button button-primary dc-card-request" data-dc-card-play>@cardPlayLabel</button>
+            }
+            else
+            {
+                <button type="button" class="button button-primary dc-card-request" data-dc-card-request>@ui["discover.card.request"]</button>
+            }
         }
     </div>
 
@@ -186,9 +193,21 @@
                     else if (card.CanRequest)
                     {
                         <span class="dc-pv-request" data-dc-request-slot>
-                            <button type="button" class="button button-primary" data-dc-request>
-                                @ui["discover.card.request"]
-                            </button>
+                            @if (card.InstantPlayLabel is { } previewPlayLabel)
+                            {
+                                @* The playback intent leads; the explicit Request stays available next to it (docs/mockups/instant-play, section 3). *@
+                                <button type="button" class="button button-primary" data-dc-play>
+                                    <partial name="_DiscoverIcon" model='"play"' />
+                                    <span>@previewPlayLabel</span>
+                                </button>
+                                <button type="button" class="button" data-dc-request>@ui["discover.card.request"]</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="button button-primary" data-dc-request>
+                                    @ui["discover.card.request"]
+                                </button>
+                            }
                         </span>
                     }
                     else if (card.ImportMangaUrl is { } importUrl)

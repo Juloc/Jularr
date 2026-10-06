@@ -559,14 +559,13 @@
   window.addEventListener("online", () =>
     showToast(shellLabel("pwa.online")));
 
-  // Ctrl/Cmd+K focuses the global search. Discover owns a search of its own and leaves the header
-  // field out, so the shortcut lands there instead; a hidden field (a phone without it) is skipped.
+  // Ctrl/Cmd+K focuses the global search in the header, which is on every page; a hidden field is skipped.
   document.addEventListener("keydown", event => {
     if (event.key.toLowerCase() !== "k" || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
       return;
     }
 
-    const target = [...document.querySelectorAll("[data-dc-search], [data-app-search]")]
+    const target = [...document.querySelectorAll("[data-app-search]")]
       .find(field => field.getClientRects().length > 0);
     if (target) {
       event.preventDefault();

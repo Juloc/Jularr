@@ -4,8 +4,10 @@
     const root = document.querySelector("[data-discover]");
     if (!root) return;
 
+    // Discover owns the address and its filter form; a host such as Home only shows the landing feed and has neither, with the body
+    // served by the page named in data-body-url.
     const form = root.querySelector("[data-dc-form]");
-    const searchInput = root.querySelector("[data-dc-search]");
+    const bodyUrl = root.dataset.bodyUrl || "";
     const body = root.querySelector("[data-dc-body]");
     const errorBox = root.querySelector("[data-dc-error]");
     const offlineNotice = root.querySelector("[data-dc-offline]");
@@ -19,11 +21,9 @@
         root.dataset[`status${status.charAt(0).toUpperCase()}${status.slice(1)}`] || status;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const SEARCH_DELAY = 250;
 
     let abortController = null;
     let requestVersion = 0;
-    let debounceTimer = null;
     let loadFailed = false;
     // Changes the visitor made in a preview (follow, request), applied again when a card's preview reopens.
     const overrides = new Map();
@@ -32,7 +32,7 @@
 
     // The canonical address of the form: defaults and empty fields are left out, so a bookmark stays short.
     function currentParams() {
-        const data = new FormData(form);
+        const data = form ? new FormData(form) : new FormData();
         const params = new URLSearchParams();
         const value = name => String(data.get(name) || "").trim();
         if (value("q")) params.set("q", value("q"));
@@ -53,7 +53,7 @@
     // Keeps the media-type links on the text that is being typed, since the links were built for the address
     // the page was opened with.
     function syncTabs() {
-        const q = searchInput.value.trim();
+        const q = currentParams().get("q") || "";
         root.querySelectorAll("[data-dc-tab]").forEach(link => {
             const url = new URL(link.getAttribute("href"), window.location.origin);
             if (q) url.searchParams.set("q", q); else url.searchParams.delete("q");
@@ -217,10 +217,10 @@
 
     // A failed request is reported with what the server said about waiting (a 429 carries Retry-After), so the page never retries sooner than that.
     async function fetchBody(extra, signal) {
-        const params = new URLSearchParams(window.location.search);
+        const params = new URLSearchParams(bodyUrl ? "" : window.location.search);
         params.set("handler", "Body");
         Object.entries(extra).forEach(([name, value]) => params.set(name, String(value)));
-        const response = await fetch(`${window.location.pathname}?${params}`, {
+        const response = await fetch(`${bodyUrl || window.location.pathname}?${params}`, {
             signal,
             cache: "no-store",
             headers: { "X-Requested-With": "fetch" }
@@ -278,7 +278,6 @@
     });
 
     async function loadBody() {
-        clearTimeout(debounceTimer);
         clearTimeout(resumeTimer);
         abortController?.abort();
         abortController = new AbortController();
@@ -361,21 +360,7 @@
         }
     }, { capture: true });
 
-    function scheduleSearch() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            window.history.replaceState({}, "", addressOf(currentParams()));
-            syncTabs();
-            loadBody();
-        }, SEARCH_DELAY);
-    }
-
-    searchInput.addEventListener("input", () => {
-        syncTabs();
-        scheduleSearch();
-    });
-
-    form.addEventListener("submit", event => {
+    form?.addEventListener("submit", event => {
         event.preventDefault();
         window.location.assign(addressOf(currentParams()));
     });
@@ -444,7 +429,7 @@
             !(event.ctrlKey || event.metaKey || event.altKey) &&
             !/input|textarea|select/i.test(document.activeElement?.tagName || "")) {
             event.preventDefault();
-            searchInput.focus();
+            document.querySelector("[data-app-search]")?.focus();
         }
     });
 
@@ -521,6 +506,12 @@
             return;
         }
 
+        const play = target.closest("[data-dc-card-play]");
+        if (play) {
+            void startPlayback(card.dataset.dcCategory, card.dataset.dcProvider, card.dataset.dcExternalId, play, () => openSheet(card));
+            return;
+        }
+
         const activate = target.closest("[data-dc-activate]");
         if (!activate) return;
         if (activate.dataset.dcActivate === "preview") {
@@ -538,6 +529,30 @@
         try {
             const payload = await postForm(root.dataset.openUrl, { category, provider, externalId });
             window.location.assign(payload.url);
+        } catch {
+            busy.removeAttribute("aria-busy");
+            onFailure();
+        }
+    }
+
+    // The playback intent of a missing title (docs/mockups/instant-play): the server resolves the Work, then its Detail page takes the intent
+    // with its own Start handler, which plays a local target or attaches to the request and comes back with the saved state. A refusal leaves
+    // the card as it was.
+    async function startPlayback(category, provider, externalId, busy, onFailure) {
+        if (busy.getAttribute("aria-busy") === "true") return;
+        busy.setAttribute("aria-busy", "true");
+        try {
+            const payload = await postForm(root.dataset.openUrl, { category, provider, externalId });
+            const form = document.createElement("form");
+            form.method = "post";
+            form.action = `${payload.url}?handler=Start`;
+            const field = document.createElement("input");
+            field.type = "hidden";
+            field.name = "__RequestVerificationToken";
+            field.value = token;
+            form.append(field);
+            document.body.append(form);
+            form.submit();
         } catch {
             busy.removeAttribute("aria-busy");
             onFailure();
@@ -753,7 +768,7 @@
 
         card.dataset.dcRequestId = payload.requestId;
         card.dataset.dcRequestStatus = payload.status;
-        card.querySelector("[data-dc-card-request]")?.remove();
+        card.querySelector("[data-dc-card-request], [data-dc-card-play]")?.remove();
         showRequested(card, requestProgressLabel(payload));
         const key = keyOf(card);
         overrides.set(key, { ...(overrides.get(key) || {}), ...payload });
@@ -792,6 +807,12 @@
             } finally {
                 follow.disabled = false;
             }
+            return;
+        }
+
+        const play = target.closest("[data-dc-play]");
+        if (play) {
+            void startPlayback(data.category, data.provider, data.externalId, play, () => { play.title = text("textActionFailed"); });
             return;
         }
 
@@ -846,6 +867,45 @@
         importDetails.querySelector("[data-import-title]").textContent = text("textSourceUrl");
         importDetails.querySelector("[data-import-url]")?.focus();
     });
+
+    // ---- Row arrows: a row has no scrollbar; each arrow shows only while there is more to scroll in its direction ------------------
+
+    const rowTrackOf = element => element.closest("[data-dc-row]")?.querySelector("[data-dc-row-track]");
+
+    function updateRowArrows(row) {
+        const track = row.querySelector("[data-dc-row-track]");
+        if (!track) return;
+        const max = track.scrollWidth - track.clientWidth;
+        // Scroll offsets are negative in a right-to-left row.
+        const offset = Math.abs(track.scrollLeft);
+        const previous = row.querySelector("[data-dc-row-prev]");
+        const next = row.querySelector("[data-dc-row-next]");
+        if (previous) previous.hidden = offset <= 4;
+        if (next) next.hidden = offset >= max - 4;
+    }
+
+    const refreshRowArrows = () => root.querySelectorAll("[data-dc-row]").forEach(updateRowArrows);
+
+    // The scroll event does not bubble, so the capture phase on the root reaches the rows that a later generation replaces.
+    root.addEventListener("scroll", event => {
+        const row = event.target instanceof Element ? event.target.closest("[data-dc-row]") : null;
+        if (row) updateRowArrows(row);
+    }, { capture: true, passive: true });
+
+    root.addEventListener("click", event => {
+        const arrow = event.target instanceof Element ? event.target.closest("[data-dc-row-prev], [data-dc-row-next]") : null;
+        const track = arrow ? rowTrackOf(arrow) : null;
+        if (!arrow || !track) return;
+        const direction = (arrow.hasAttribute("data-dc-row-next") ? 1 : -1) * (getComputedStyle(track).direction === "rtl" ? -1 : 1);
+        track.scrollBy({ left: direction * Math.max(track.clientWidth * 0.85, 200), behavior: reducedMotion.matches ? "auto" : "smooth" });
+    });
+
+    let rowArrowFrame = 0;
+    new MutationObserver(() => {
+        cancelAnimationFrame(rowArrowFrame);
+        rowArrowFrame = requestAnimationFrame(refreshRowArrows);
+    }).observe(body, { childList: true, subtree: true });
+    window.addEventListener("resize", refreshRowArrows);
 
     // ---- Offline -----------------------------------------------------------------------------------
 

@@ -1,26 +1,23 @@
 @using Jularr.Web.Features.Localization
-@model (string? ContextKey, bool ShowSearch)
+@model string?
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
 }
 @* The one application header, over the sidebar and the page: brand and mode (Admin, Settings) on the left, the global search in the
-   centre, theme, notifications and the account menu on the right. Phones keep the brand, the search and the bell; theme and account
-   actions live on Profile there. Discover leaves its own search the focus, so the field is omitted there. *@
+   centre on every page, theme, notifications and the account menu on the right. Phones keep the brand, the search and the bell; theme
+   and account actions live on Profile there. *@
 <header class="app-header">
     <div class="app-header-lead">
         <a class="brand" href="/" aria-label="@ui["nav.home"]">
             <partial name="_AppBrandMark" />
         </a>
-        @if (Model.ContextKey is not null)
+        @if (Model is not null)
         {
-            <span class="app-header-context">@ui[Model.ContextKey]</span>
+            <span class="app-header-context">@ui[Model]</span>
         }
     </div>
     <div class="app-header-search">
-        @if (Model.ShowSearch)
-        {
-            <partial name="_AppSearch" />
-        }
+        <partial name="_AppSearch" />
     </div>
     <div class="app-header-actions">
         <partial name="_AppThemeControl" model="@("header")" />

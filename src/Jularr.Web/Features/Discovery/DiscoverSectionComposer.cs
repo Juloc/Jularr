@@ -25,7 +25,8 @@ public static class DiscoverSectionComposer
         DiscoveryCategory.Anime,
         DiscoveryCategory.Movie,
         DiscoveryCategory.Series,
-        DiscoveryCategory.BooksAndLightNovels,
+        DiscoveryCategory.LightNovel,
+        DiscoveryCategory.Book,
         DiscoveryCategory.Manga
     ];
 
@@ -144,7 +145,8 @@ public static class DiscoverSectionComposer
         DiscoveryCategory.Movie => itemCategory == "movie",
         DiscoveryCategory.Series => itemCategory == "tv",
         DiscoveryCategory.Manga => itemCategory == "manga",
-        _ => itemCategory is "book" or "light-novel"
+        DiscoveryCategory.LightNovel => itemCategory == "light-novel",
+        _ => itemCategory == "book"
     };
 
     private static IReadOnlyList<DiscoverCardView> Cards(IEnumerable<DiscoveryItem> items, DiscoverContext context) =>

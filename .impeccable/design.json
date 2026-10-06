@@ -1,0 +1,348 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-06T13:28:54.925Z",
+  "title": "Design System: Jularr",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Jularr Lila",
+        "canonical": "#7c3aed",
+        "tonalRamp": [
+          "#130038",
+          "#360089",
+          "#4b00ab",
+          "#6407cd",
+          "#8749fb",
+          "#aa73ff",
+          "#ce9bff",
+          "#f1dfff"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Lila Deepened",
+        "canonical": "#6f24db",
+        "tonalRamp": [
+          "#130038",
+          "#360088",
+          "#4c00aa",
+          "#6407cd",
+          "#8749fa",
+          "#aa73ff",
+          "#cf9bff",
+          "#f2dfff"
+        ]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Lila Mist",
+        "canonical": "#eae5ff",
+        "tonalRamp": [
+          "#0c0a12",
+          "#231e31",
+          "#3b374b",
+          "#565267",
+          "#7b778e",
+          "#9f9bb3",
+          "#c5c0d9",
+          "#efecfa"
+        ]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Lila Ink",
+        "canonical": "#6d3bcc",
+        "tonalRamp": [
+          "#110032",
+          "#310079",
+          "#47009a",
+          "#6029bb",
+          "#8356e8",
+          "#a77dff",
+          "#cca4ff",
+          "#f1e2ff"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Rice Paper",
+        "canonical": "#f2f2f7",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#212125",
+          "#3a3a3e",
+          "#555559",
+          "#7a7a7e",
+          "#9e9ea2",
+          "#c3c3c8",
+          "#eeeef1"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Clean Sheet",
+        "canonical": "#fcfcff",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#212123",
+          "#3a3a3c",
+          "#555557",
+          "#7a7a7d",
+          "#9e9ea1",
+          "#c4c4c6",
+          "#eeeef0"
+        ]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Pressed Sheet",
+        "canonical": "#eeedf2",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#222125",
+          "#3b3a3e",
+          "#555559",
+          "#7a797e",
+          "#9e9ea2",
+          "#c4c3c8",
+          "#eeeef0"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#d6d5da",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#222125",
+          "#3b3a3e",
+          "#555559",
+          "#7a797e",
+          "#9e9ea2",
+          "#c4c3c8",
+          "#eeeef0"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Sumi Ink",
+        "canonical": "#18181c",
+        "tonalRamp": [
+          "#0b0b0d",
+          "#212125",
+          "#3a3a3f",
+          "#55555a",
+          "#7a7a7f",
+          "#9e9ea3",
+          "#c3c3c9",
+          "#eeeef1"
+        ]
+      },
+      "jularr-red": {
+        "role": "tertiary",
+        "displayName": "Ink-Seal Red",
+        "canonical": "#c8102e",
+        "tonalRamp": [
+          "#290000",
+          "#640000",
+          "#870000",
+          "#ab0015",
+          "#da2c3d",
+          "#ff5a60",
+          "#ff8384",
+          "#ffd3cf"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles and the home hero."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Panel headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Navigation, list and card titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Working text size of the app."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons, chips and compact metadata."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "0 1px 2px rgba(20,16,12,.05), 0 8px 24px rgba(20,16,12,.06)",
+        "purpose": "Resting depth for panels, hero and raised cards (--shadow-card)."
+      },
+      {
+        "name": "card-dark",
+        "value": "0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.28)",
+        "purpose": "Dark and system-dark counterpart of the card shadow."
+      },
+      {
+        "name": "accent-glow",
+        "value": "0 6px 16px -8px var(--accent-glow)",
+        "purpose": "Under primary buttons and the active nav item."
+      },
+      {
+        "name": "overlay",
+        "value": "0 30px 80px rgba(0,0,0,.35)",
+        "purpose": "Dialogs and drawers only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "ease",
+        "purpose": "Default for state transitions."
+      },
+      {
+        "name": "ease-emphasized",
+        "value": "cubic-bezier(.2, .72, .22, 1)",
+        "purpose": "Panels and drawers entering."
+      },
+      {
+        "name": "duration-fast",
+        "value": ".15s",
+        "purpose": "Hover and focus transitions."
+      },
+      {
+        "name": "duration-base",
+        "value": ".22s",
+        "purpose": "Disclosure and layout-neutral reveals."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "520px"
+      },
+      {
+        "name": "mobile",
+        "value": "720px"
+      },
+      {
+        "name": "tablet",
+        "value": "820px"
+      },
+      {
+        "name": "wide",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Secondary action on a pressed-sheet fill.",
+      "html": "<button class=\"ds-btn\">Cancel</button>",
+      "css": ".ds-btn{border:1px solid #d6d5da;background:#eeedf2;color:#18181c;border-radius:9px;padding:9px 14px;cursor:pointer;font:700 13px system-ui,sans-serif;transition:background .15s}.ds-btn:hover{background:#e4e3e8}.ds-btn:focus-visible{outline:2px solid #6d3bcc;outline-offset:2px}.ds-btn:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action on a surface, filled with the profile accent.",
+      "html": "<button class=\"ds-btn-primary\">Request</button>",
+      "css": ".ds-btn-primary{border:1px solid color-mix(in srgb,#7c3aed 82%,#18181c);background:#7c3aed;color:#fff;border-radius:9px;padding:9px 14px;cursor:pointer;font:700 13px system-ui,sans-serif;box-shadow:0 6px 16px -8px rgba(124,58,237,.35);transition:background .15s}.ds-btn-primary:hover{background:#6f24db}.ds-btn-primary:focus-visible{outline:2px solid #6d3bcc;outline-offset:2px}"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Pill filter that fills with the accent when selected.",
+      "html": "<button class=\"ds-chip\">Anime</button> <button class=\"ds-chip ds-chip-on\">Manga</button>",
+      "css": ".ds-chip{border:1px solid #d6d5da;border-radius:999px;background:transparent;color:#636267;padding:6px 10px;cursor:pointer;font:12px system-ui,sans-serif}.ds-chip:hover{border-color:#c0b2f8;background:#eae5ff;color:#6d3bcc}.ds-chip:focus-visible{outline:2px solid #6d3bcc;outline-offset:2px}.ds-chip-on{border-color:color-mix(in srgb,#7c3aed 82%,#18181c);background:#7c3aed;color:#fff}"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Clean-sheet container with a hairline and the single soft card shadow.",
+      "html": "<section class=\"ds-panel\"><h2>Continue watching</h2><p>Episode 4 of 12</p></section>",
+      "css": ".ds-panel{background:#fcfcff;border:1px solid #d6d5da;border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(20,16,12,.05),0 8px 24px rgba(20,16,12,.06);font-family:system-ui,sans-serif;color:#18181c}.ds-panel h2{margin:0 0 14px;font-size:17px}.ds-panel p{margin:0;color:#636267;font-size:13px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "panel",
+      "description": "Field-fill input with a hairline that shifts toward the accent on focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search\" />",
+      "css": ".ds-input{background:#fdfdff;border:1px solid #d6d5da;border-radius:8px;padding:9px 10px;color:#18181c;font:13px system-ui,sans-serif;outline:none;min-width:200px}.ds-input:focus{border-color:color-mix(in srgb,#7c3aed 50%,transparent)}.ds-input:focus-visible{outline:2px solid #6d3bcc;outline-offset:2px}"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Sidebar entry: muted at rest, solid accent when active.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item\">Home</a><a class=\"ds-nav-item ds-nav-active\">Library</a></nav>",
+      "css": ".ds-nav{display:grid;gap:4px;width:200px;font-family:system-ui,sans-serif}.ds-nav-item{display:flex;align-items:center;gap:12px;padding:10px 11px;border-radius:9px;color:#636267;font-size:14px;font-weight:600;cursor:pointer}.ds-nav-item:hover{background:#eeedf2;color:#18181c}.ds-nav-item:focus-visible{outline:2px solid #6d3bcc;outline-offset:2px}.ds-nav-active{background:#7c3aed;color:#fff;box-shadow:inset 0 0 0 1px color-mix(in srgb,#7c3aed 82%,#18181c),0 8px 18px -10px rgba(124,58,237,.35)}.ds-nav-active:hover{background:#6f24db;color:#fff}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Ink & Paper Library",
+    "overview": "Jularr looks like a well-kept shelf in a quiet room. The ground is a faintly tinted paper (a washi texture sits behind everything at low opacity), surfaces are thin-ruled and softly lifted, and the cover artwork of the media is always the loudest thing on screen. The interface steps back: it is calm and restrained, warm and slightly handmade, never a dashboard and never a streaming-service showroom.",
+    "keyCharacteristics": [
+      "Tinted paper neutrals, a single derived accent, thin 1px rules.",
+      "Soft layered cards, never hard edges and never glass or neon.",
+      "Media artwork is the visual focus; the interface recedes.",
+      "Light, Dark and System are all designed, not inverted.",
+      "System font stack throughout. There are no web fonts.",
+      "Optional decorative layer (washi, ink, blossom, mascot) that skins can switch off without changing layout."
+    ],
+    "rules": [
+      {
+        "name": "The Derived Accent Rule",
+        "body": "Never hard-code an accent or a tinted neutral. Consume the semantic tokens so the profile's seed reaches every surface.",
+        "section": "colors"
+      },
+      {
+        "name": "The Accent Is Rare Rule",
+        "body": "The solid accent marks what is active or primary on a screen and nothing else. Cards, rows and status tags stay neutral with borders and light tints.",
+        "section": "colors"
+      },
+      {
+        "name": "The Dark Media Stage Rule",
+        "body": "Hero, video and poster surfaces stay deliberately dark in both themes, with their own light text tokens, so artwork keeps its contrast.",
+        "section": "colors"
+      },
+      {
+        "name": "The Weight Over Size Rule",
+        "body": "The scale is tight (11 to 18px for most of the UI). Create emphasis with weight and tint, not with another size.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Soft Shadow Rule",
+        "body": "Use --shadow-card for resting depth. A heavier shadow is reserved for floating overlays.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do read colours from semantic tokens (--accent, --surface, --muted, --border) so the profile accent and both themes work.",
+      "Do keep the accent for active, selected and primary states, and let neutral surfaces carry everything else.",
+      "Do let media artwork lead and keep the interface quiet around it.",
+      "Do design Light, Dark and System together, and give every screen its loading, empty, partial, error, forbidden and offline state.",
+      "Do keep touch targets at least 44px on consumer and TV surfaces and give every interactive element a visible focus.",
+      "Do use logical CSS properties so layouts mirror under RTL."
+    ],
+    "donts": [
+      "Don't hard-code accent or neutral hex values in components.",
+      "Don't add left or one-sided accent stripes to cards and rows, and don't add decorative eyebrow labels above headings.",
+      "Don't use glass, neon or saturated status pills. Status uses light tints and a border.",
+      "Don't add copy that repeats a heading or states the obvious, such as welcome text, marketing lines and numbered setup steps.",
+      "Don't animate layout properties such as width and height. Use transform and opacity, and honour prefers-reduced-motion.",
+      "Don't add fake console or hardware frames to game players, or change the layout between the Clean and Original skins."
+    ]
+  }
+}

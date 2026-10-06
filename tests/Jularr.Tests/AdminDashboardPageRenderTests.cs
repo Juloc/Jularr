@@ -222,7 +222,7 @@ public sealed class AdminDashboardPageRenderTests
         StringAssert.Contains(html, "Test media");
         StringAssert.Contains(html, "data-resource-gpu");
         Assert.IsFalse(html.Contains("Host CPU", StringComparison.Ordinal));
-        Assert.IsTrue(Regex.IsMatch(html, "<a class=\"admin-nav-item active\"[^>]*href=\"/Admin/Resources\""));
+        Assert.IsTrue(Regex.IsMatch(html, "<a class=\"admin-nav-item active\"[^>]*href=\"/Admin/System\""), "Resources belongs to System & Diagnostics, whose tab is the active one.");
     }
 
     [TestMethod]

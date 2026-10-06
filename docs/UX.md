@@ -539,6 +539,8 @@ Entering Admin expands/replaces navigation with explicit admin destinations whil
 
 The target Admin shell uses **one permanent navigation destination per owning area**. Tabs, editors, repair dialogs and compatibility routes do not become duplicate sidebar entries.
 
+Old pages that have no owning area in this architecture yet form one subordinate **Legacy** group after the area groups (before Unfinished): today the anime Acquisition page, Import settings (naming), Mapping, Sonarr, Sessions, Scans, Logs, Health, Transcoding, Localization and API Keys. A page leaves Legacy when its owning area replaces it or its route redirects there. `UiNavigationCatalog.Admin` is the one table behind the sidebar and the phone/tablet tab row; an area gets its entry there, in the group named for it, when its page is built (Storage, Notifications, Backup & Restore, Migration, General Settings and Acquisition Profiles are not built yet).
+
 ### Overview
 - Dashboard
 - Activity / To-Do

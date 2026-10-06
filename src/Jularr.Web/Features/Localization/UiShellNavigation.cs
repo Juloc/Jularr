@@ -119,39 +119,58 @@ public static class UiNavigationCatalog
     public static IEnumerable<UiMediaRoute> MediaRoutes =>
         LibraryTabs.SelectMany(tab => tab.MediaRoutes ?? []);
 
+    /// <summary>
+    /// The Admin groups of the target information architecture (docs/UX.md section 17): one permanent destination per owning area, then the
+    /// Legacy group. An area whose page does not exist yet (Storage, Notifications, Backup &amp; Restore, Migration, General Settings,
+    /// Acquisition Profiles) gets its entry here when its page is built, in the group named for it. Legacy collects the old pages that have no
+    /// owning area of their own in that architecture: they stay reachable until the owning area replaces them, and each leaves the group when
+    /// it is rebuilt or redirected (docs/INFORMATION_ARCHITECTURE.md section 4).
+    /// </summary>
     public static readonly UiNavigationSection[] Admin =
     [
-        new("nav.group.adminPeople",
+        new("nav.group.adminOverview",
         [
             new("admin-overview", "admin.nav.overview", "/Admin", "admin", Exact: true, Policy: JularrPolicies.AdminMedia),
-            new("admin-users", "admin.nav.users", "/Admin/Users", "users", ["/Admin/Users", "/Admin/User", "/Admin/Roles", "/Admin/Capabilities"], Policy: JularrPolicies.AdminSystem),
-            new("admin-requests", "admin.nav.requests", "/Admin/Requests", "requests", Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition),
-            new("admin-wanted", "admin.nav.wanted", "/Admin/Wanted", "download", Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition)
+            // History is the third tab of Activity / To-Do, not a destination of its own.
+            new("admin-operations", "admin.nav.operations", "/Admin/Operations", "activity", ["/Admin/Operations", "/Admin/Operation", "/Admin/History"], Policy: JularrPolicies.AdminMedia)
         ]),
         new("nav.group.adminMedia",
         [
+            new("admin-requests", "admin.nav.requests", "/Admin/Requests", "requests", Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition),
+            // Media Detail, Manual Search, Reconciliation and Merge Review are contextual flows of this area: they keep Admin open, not a sidebar entry.
+            new("admin-wanted", "admin.nav.wanted", "/Admin/Wanted", "download",
+                ["/Admin/Wanted", "/Admin/Media", "/Admin/ManualSearch", "/Admin/BookManualSearch", "/Admin/Reconciliation", "/Admin/MergeReview"],
+                Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition)
+        ]),
+        new("nav.group.adminAcquisition",
+        [
             new("admin-usenet", "admin.nav.usenet", "/Admin/Usenet", "download", ["/Admin/Usenet", "/Settings/Indexers", "/Settings/DownloadClients"], Policy: JularrPolicies.AcquisitionSettings, Module: InstanceModule.Acquisition),
             new("admin-providers", "admin.nav.providers", "/Admin/Providers", "providers", Policy: JularrPolicies.AdminSystem),
+            new("admin-subtitles", "admin.nav.subtitles", "/Admin/Subtitles", "subtitles", ["/Admin/Subtitles", "/Settings/Subtitles"], Policy: JularrPolicies.AdminMedia, Unfinished: true)
+        ]),
+        new("nav.group.adminAdministration",
+        [
+            new("admin-storage", "admin.nav.storage", "/Admin/Storage", "folder", Policy: JularrPolicies.AdminMedia),
+            new("admin-ai", "admin.nav.ai", "/Admin/Ai", "spark", Policy: JularrPolicies.AdminSystem, Unfinished: true),
+            new("admin-users", "admin.nav.users", "/Admin/Users", "users", ["/Admin/Users", "/Admin/User", "/Admin/Roles", "/Admin/Capabilities"], Policy: JularrPolicies.AdminSystem),
+            new("admin-devices", "admin.devices.navLabel", "/Admin/Devices", "devices", Policy: JularrPolicies.AdminSystem),
+            new("admin-system", "admin.nav.system", "/Admin/System", "server", ["/Admin/System", "/Admin/Resources"], Policy: JularrPolicies.AdminSystem),
+            new("admin-instance", "admin.nav.instance", "/Admin/Instance", "settings", Policy: JularrPolicies.AdminSystem),
+            new("admin-appearance", "admin.nav.appearance", "/Admin/Appearance", "palette", Policy: JularrPolicies.AdminSystem)
+        ]),
+        new("nav.group.adminLegacy",
+        [
             new("admin-anime-acquisition", "admin.nav.animeAcquisition", "/Acquisition", "library", ["/Acquisition"], Policy: JularrPolicies.AdminMedia, Modules: [InstanceModule.Anime, InstanceModule.Acquisition]),
             new("admin-import", "admin.nav.importSettings", "/Settings/Acquisition", "folder", ["/Settings/Acquisition", "/Settings/Naming", "/Settings/ReadingNaming"], Policy: JularrPolicies.AcquisitionSettings, Module: InstanceModule.Acquisition),
             new("admin-mapping", "admin.nav.mapping", "/Settings/MappingReview", "link", ["/Settings/MappingReview", "/Settings/MappingSegments"], Policy: JularrPolicies.MappingEdit),
-            new("admin-subtitles", "admin.nav.subtitles", "/Admin/Subtitles", "subtitles", ["/Admin/Subtitles", "/Settings/Subtitles"], Policy: JularrPolicies.AdminMedia, Unfinished: true),
-            new("admin-sonarr", "admin.nav.sonarr", "/Admin/Sonarr", "sync", ["/Admin/Sonarr", "/Settings/Sonarr", "/Settings/SonarrMigration"], Policy: JularrPolicies.AdminSystem, Module: InstanceModule.Acquisition)
-        ]),
-        new("nav.group.adminSystem",
-        [
-            new("admin-operations", "admin.nav.operations", "/Admin/Operations", "activity", ["/Admin/Operations", "/Admin/Operation"], Policy: JularrPolicies.AdminMedia),
+            new("admin-sonarr", "admin.nav.sonarr", "/Admin/Sonarr", "sync", ["/Admin/Sonarr", "/Settings/Sonarr", "/Settings/SonarrMigration"], Policy: JularrPolicies.AdminSystem, Module: InstanceModule.Acquisition),
             new("admin-sessions", "admin.nav.sessions", "/Admin/Sessions", "activity", Policy: JularrPolicies.SessionsStopOthers),
-            new("admin-devices", "admin.devices.navLabel", "/Admin/Devices", "devices", Policy: JularrPolicies.AdminSystem),
             new("admin-scans", "admin.nav.scans", "/Admin/Scans", "scan", Policy: JularrPolicies.AdminMedia),
             new("admin-logs", "admin.nav.logs", "/Admin/Logs", "logs", Policy: JularrPolicies.AdminMedia),
-            new("admin-ai", "admin.nav.ai", "/Admin/Ai", "spark", Policy: JularrPolicies.AdminSystem, Unfinished: true),
-            new("admin-localization", "admin.nav.localization", "/LocalizationAdmin", "globe", Policy: JularrPolicies.AdminSystem),
-            new("admin-api-keys", "admin.nav.apiKeys", "/Settings/ApiKeys", "key", Policy: JularrPolicies.AdminSystem),
-            new("admin-instance", "admin.nav.instance", "/Admin/Instance", "settings", Policy: JularrPolicies.AdminSystem),
-            new("admin-system", "admin.nav.system", "/Admin/System", "server", Policy: JularrPolicies.AdminSystem),
+            new("admin-health", "admin.nav.health", "/Admin/Health", "pulse", Policy: JularrPolicies.AdminSystem),
             new("admin-transcoding", "admin.nav.transcoding", "/Admin/Transcoding", "server", Policy: JularrPolicies.AdminSystem),
-            new("admin-health", "admin.nav.health", "/Admin/Health", "pulse", Policy: JularrPolicies.AdminSystem)
+            new("admin-localization", "admin.nav.localization", "/LocalizationAdmin", "globe", Policy: JularrPolicies.AdminSystem),
+            new("admin-api-keys", "admin.nav.apiKeys", "/Settings/ApiKeys", "key", Policy: JularrPolicies.AdminSystem)
         ])
     ];
 
