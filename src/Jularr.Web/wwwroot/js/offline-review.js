@@ -1,8 +1,7 @@
 (() => {
-  // Legacy storage names kept after the Jularr rename: they hold queued offline reviews.
-  const DB_NAME = "anilingo-review-v1";
+    const DB_NAME = "jularr-review-v1";
   const DB_VERSION = 1;
-  const ACTIVE_PROFILE_KEY = "anilingo.activeProfile";
+  const ACTIVE_PROFILE_KEY = "jularr.activeProfile";
 
   const ratingValue = {
     Again: 1,
