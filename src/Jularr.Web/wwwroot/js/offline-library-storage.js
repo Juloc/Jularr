@@ -33,8 +33,7 @@
 
   const currentProfileId = () => document.body?.dataset?.profileId || "";
 
-  // Legacy IndexedDB name kept after the Jularr rename: it holds downloaded chapters.
-  const dbNameFor = (profileId) => `anilingo-offline-library:${profileId}`;
+    const dbNameFor = (profileId) => `jularr-offline-library:${profileId}`;
 
   const openDatabase = (profileId) => new Promise((resolve, reject) => {
     if (!profileId) {
