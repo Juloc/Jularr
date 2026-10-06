@@ -33,7 +33,7 @@ public sealed class ProfileScopedBrowserPreferenceTests
 
         StringAssert.Contains(
             script,
-            "anilingo.profile.${profileId}.playbackMode");
+            "jularr.profile.${profileId}.playbackMode");
         Assert.IsFalse(
             script.Contains(
                 "\"jularr.playbackMode\"",
@@ -54,7 +54,7 @@ public sealed class ProfileScopedBrowserPreferenceTests
 
         StringAssert.Contains(
             script,
-            "anilingo.profile.${profileId}.novel");
+            "jularr.profile.${profileId}.novel");
         Assert.IsFalse(
             script.Contains(
                 "\"jularr.novel.view\"",
