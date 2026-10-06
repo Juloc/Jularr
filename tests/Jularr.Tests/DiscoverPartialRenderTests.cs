@@ -225,6 +225,8 @@ public sealed class DiscoverPartialRenderTests
         var wholeGrid = await RenderAsync(BodyView, Body(DiscoverBodyState.Sections, sections: [grid], pending: 1));
 
         StringAssert.Contains(row, "data-dc-section-state=\"pending\"");
+        StringAssert.Contains(row, "data-dc-layout=\"track\"");
+        StringAssert.Contains(wholeGrid, "data-dc-layout=\"grid\"");
         StringAssert.Contains(row, "aria-busy=\"true\"");
         StringAssert.Contains(row, "data-dc-pending=\"1\"");
         Assert.AreEqual(DiscoverSectionView.TrackGhosts, Regex.Matches(row, "class=\"dc-ghost\"").Count);
@@ -245,6 +247,7 @@ public sealed class DiscoverPartialRenderTests
         var withoutTitles = await RenderAsync(BodyView, Body(DiscoverBodyState.Sections, sections: [failed]));
 
         StringAssert.Contains(withTitles, "Some titles are missing.");
+        StringAssert.Contains(withTitles, "data-dc-note=\"true\"");
         StringAssert.Contains(withTitles, "data-dc-retry-sources=\"books,reading\"");
         StringAssert.Contains(withTitles, "<article class=\"dc-card");
         StringAssert.Contains(withoutTitles, "Couldn't load this section right now.");
@@ -307,6 +310,8 @@ public sealed class DiscoverPartialRenderTests
         StringAssert.Contains(page, "library.browse.filtersActiveAria");
         StringAssert.Contains(page, "data-dc-offline");
         StringAssert.Contains(page, "data-dc-error");
+        StringAssert.Contains(page, "data-dc-sync", "A failed follow-up is reported without touching the titles that are shown.");
+        StringAssert.Contains(page, "<noscript>", "Without scripts the placeholders never fill, so a message stands instead.");
         StringAssert.Contains(page, "<dialog class=\"dc-sheet\" data-dc-sheet>");
         Assert.IsFalse(page.Contains("discover-genre-row", StringComparison.Ordinal), "Genres live in the Filters panel, not in a second chip row.");
         Assert.IsFalse(page.Contains("discover-collections-link", StringComparison.Ordinal));

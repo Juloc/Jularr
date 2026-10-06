@@ -97,6 +97,7 @@
     border-color: color-mix(in srgb, var(--warning-text) 40%, var(--border));
     background: color-mix(in srgb, var(--warning-text) 9%, transparent); color: var(--warning-text);
 }
+.dc-link[aria-disabled="true"] { opacity: .5; cursor: progress; }
 .dc-link { padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-weight: 700; cursor: pointer; }
 .dc-message {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
@@ -119,6 +120,8 @@
     background-repeat: no-repeat; animation: dc-loading 1s linear infinite;
 }
 @keyframes dc-loading { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+/* Without scripts nothing replaces the placeholders, so they are not shown and the noscript message stands alone. */
+@media (scripting: none) { .dc-skeleton { display: none; } .dc-results::before { display: none; } }
 .dc-skeleton-head { display: block; width: 180px; height: 22px; margin-bottom: 10px; border-radius: 8px; background: var(--surface-2); }
 @keyframes dc-pulse { 50% { opacity: .55; } }
 
@@ -162,11 +165,12 @@
     display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; color: var(--muted); font-size: 13px; font-weight: 600;
 }
 .dc-section-note .dc-icon { width: 16px; height: 16px; color: var(--warning-text); }
-/* The ghost hint of a staged change: a faint mark in the gutter at the end of the section. It is positioned inside space the section already has
-   (the track's end padding), takes no layout space, ignores the pointer and is never focusable. */
-.dc-section[data-dc-staged]::after {
-    content: ""; position: absolute; inset-inline-end: 0; top: 96px; width: 4px; height: 56px; border-radius: 4px;
-    background: var(--muted); opacity: .35; pointer-events: none; animation: dc-pulse 1.6s ease-in-out infinite;
+/* The ghost hint of a staged change: a faint mark in the gap between the first two covers. It sits inside spacing that already exists, takes no layout
+   space, ignores the pointer and is never focusable. */
+.dc-section[data-dc-staged] :is(.dc-track, .dc-grid) > li:first-child { position: relative; }
+.dc-section[data-dc-staged] :is(.dc-track, .dc-grid) > li:first-child::after {
+    content: ""; position: absolute; top: 80px; inset-inline-end: -10px; width: 4px; height: 56px; border-radius: 4px;
+    background: var(--muted); opacity: .4; pointer-events: none; animation: dc-pulse 1.6s ease-in-out infinite;
 }
 
 /* Card ---------------------------------------------------------------------------------------------- */
@@ -341,6 +345,6 @@
 @media (prefers-reduced-motion: reduce) {
     .dc-art img { transition: none; }
     .dc-results[aria-busy="true"]::before { animation: none; background-position: 30% 0; }
-    .dc-ghost-art, .dc-section[data-dc-staged]::after, .dc-collapse > summary h2::after { animation: none; transition: none; }
+    .dc-ghost-art, .dc-section[data-dc-staged] li:first-child::after, .dc-collapse > summary h2::after { animation: none; transition: none; }
     .dc-hover { animation: none; }
 }

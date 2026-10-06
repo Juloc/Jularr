@@ -62,6 +62,8 @@
          data-dc-section="@block.Id"
          data-dc-section-state="@block.State.ToString().ToLowerInvariant()"
          data-dc-sig="@block.Signature"
+         data-dc-layout="@(block.Layout == DiscoverSectionLayout.Grid ? "grid" : "track")"
+         data-dc-note="@(block.Message is not null ? "true" : null)"
          aria-labelledby="@(heading is null ? null : "dc-section-" + block.Id)"
          aria-label="@(heading is null ? block.Count : null)"
          aria-busy="@(pending ? "true" : null)">

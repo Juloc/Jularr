@@ -29,7 +29,7 @@ public sealed class DiscoverStagingTests
         };
         const idle = () => ({ pointerDown: false, touchActive: false, modalOpen: false, lastScrollAt: -100000, lastKeyAt: -100000, pointerSection: null, focusSection: null });
         let context = idle();
-        const section = (id, sig, state = 'ready') => ({ id, sig, state });
+        const section = (id, sig, state = 'ready', extra = {}) => ({ id, sig, state, ...extra });
         const view = (...sections) => ({ state: 'sections', sections });
         const committed = [];
         const shown = [];
@@ -168,19 +168,43 @@ public sealed class DiscoverStagingTests
     }
 
     [TestMethod]
-    public void ANewerGenerationReplacesAStagedOneAndAViewersOwnRetryIsAppliedAtOnce()
+    public void ANewerGenerationReplacesAStagedOneAndAViewersRetryAppliesOnlyWhatItAskedFor()
     {
         var result = Json("""
-            const controller = make(view(section('a', '1')));
-            context = { ...idle(), focusSection: 'a' };
-            arrive(controller, view(section('a', '2')));
-            arrive(controller, view(section('a', '3')));
-            const staged = committed.length;
-            arrive(controller, view(section('a', '4')), true);
-            return { staged, committed: committed.slice(), current: controller.current.sections[0].sig };
+            const controller = make(view(section('a', '1'), section('failed', 'f', 'unavailable'), section('c', '1')));
+            context = { ...idle(), focusSection: 'a', pointerSection: 'failed' };
+            arrive(controller, view(section('a', '2'), section('failed', 'f2', 'unavailable'), section('c', '2')));
+            const first = committed.slice();
+            arrive(controller, view(section('a', '3'), section('failed', 'f3'), section('c', '2')), true);
+            return { first, committed: committed.slice(), waiting: shown[shown.length - 1] };
             """);
 
-        Assert.AreEqual("{\"staged\":0,\"committed\":[[\"replace:a\"]],\"current\":\"4\"}", result);
+        Assert.AreEqual("{\"first\":[[\"replace:c\"]],\"committed\":[[\"replace:c\"],[\"replace:failed\"]],\"waiting\":[\"a\"]}", result);
+    }
+
+    [TestMethod]
+    public void ARetryReplacesTheSentenceOfSeveralFailedRowsByTheirRowsButNothingUnrelated()
+    {
+        var result = Json("""
+            const current = view(section('trending-anime', 'a'), section('notice-unavailable-movies', 'n', 'unavailable'), section('top-anime', 'b'));
+            const next = view(section('trending-anime', 'a2'), section('trending-movie', 'm'), section('top-movie', 'tm'), section('top-anime', 'b'));
+            const operations = staging.reconcile(current, next);
+            return [...staging.askedFor(operations, current)].sort();
+            """);
+
+        Assert.AreEqual("[\"notice-unavailable-movies\",\"top-movie\",\"trending-movie\"]", result);
+    }
+
+    [TestMethod]
+    public void AGridRowThatGainsANoteOrAFilledRowWithAPartialFailureIsStagedBecauseItsHeightIsNotTheGhosts()
+    {
+        var result = Json("""
+            const current = view(section('row', 'g', 'pending'), section('grid', 'g', 'pending'), section('noted', 'g', 'pending'));
+            const next = view(section('row', 'r', 'ready', { layout: 'track' }), section('grid', 'x', 'ready', { layout: 'grid' }), section('noted', 'n', 'ready', { layout: 'track', note: true }));
+            return ids(staging.reconcile(current, next));
+            """);
+
+        Assert.AreEqual("[\"fill:row!\",\"replace:grid\",\"replace:noted\"]", result);
     }
 
     [TestMethod]
@@ -216,11 +240,158 @@ public sealed class DiscoverStagingTests
         Assert.AreEqual("{\"early\":0,\"late\":1}", result);
     }
 
+    // The document, as discover.js presents it to the staging rules: every call is recorded, so the order the rules use is the order that is asserted.
+    private const string DocumentHarness = """
+        const log = [];
+        const sections = new Set(['a', 'b', 'c']);
+        const makeDom = (focus = null) => ({
+            captureAnchor: () => { log.push('anchor'); return 'anchor-token'; },
+            restoreAnchor: (token) => log.push('restore:' + token),
+            captureFocus: () => { log.push('focus'); return focus; },
+            restoreFocus: (token) => log.push('restoreFocus:' + (token ? token.control : 'none')),
+            hideHover: () => log.push('hover'),
+            replaceAll: () => log.push('replaceAll'),
+            has: (id) => sections.has(id),
+            swap: (id) => log.push('swap:' + id),
+            insertAfter: (before, id) => { log.push('insert:' + id + '<-' + before); sections.add(id); },
+            remove: (id) => { log.push('remove:' + id); sections.delete(id); },
+            updateGeneration: () => log.push('generation'),
+            view: () => ({ state: 'sections', sections: [...sections].map((id) => ({ id, sig: '1', state: 'ready' })) })
+        });
+        """;
+
+    [TestMethod]
+    public void OperationsAreAppliedBetweenTakingAndPuttingBackTheAnchorAndTheFocusAndAnInsertGoesAfterItsPredecessor()
+    {
+        var result = Json(DocumentHarness + """
+            const applier = staging.createApplier(makeDom({ control: 'retry-button' }));
+            const after = applier.apply(
+                [{ id: 'a', kind: 'replace' }, { id: 'new', kind: 'insert' }, { id: 'c', kind: 'remove' }],
+                ['a', 'b', 'new']);
+            return { log, ids: after.sections.map((s) => s.id) };
+            """);
+
+        Assert.AreEqual(
+            "{\"log\":[\"anchor\",\"focus\",\"hover\",\"swap:a\",\"insert:new<-b\",\"remove:c\",\"generation\",\"restore:anchor-token\",\"restoreFocus:retry-button\"],\"ids\":[\"a\",\"b\",\"new\"]}",
+            result);
+    }
+
+    [TestMethod]
+    public void ASectionThatLeadsTheNewGenerationIsInsertedAtTheTopAndAWholeBodyIsReplacedWithoutTouchingSections()
+    {
+        var result = Json(DocumentHarness + """
+            const applier = staging.createApplier(makeDom());
+            applier.apply([{ id: 'first', kind: 'insert' }], ['first', 'a', 'b', 'c']);
+            const top = log.filter((entry) => entry.startsWith('insert'));
+            log.length = 0;
+            applier.apply([{ id: '*', kind: 'replace-all' }], []);
+            return { top, whole: log };
+            """);
+
+        Assert.AreEqual("{\"top\":[\"insert:first<-null\"],\"whole\":[\"anchor\",\"focus\",\"hover\",\"replaceAll\",\"restore:anchor-token\",\"restoreFocus:none\"]}", result);
+    }
+
+    // The follow-up loop with a fake network the test answers one request at a time.
+    private const string FollowUpHarness = """
+        let page = { settled: 1, pending: 2 };
+        let version = 1;
+        const requests = [];
+        const staged = [];
+        const failures = [];
+        const makeLoop = () => staging.createFollowUp({
+            fetchNext: (settled) => new Promise((resolve, reject) => requests.push({ settled, resolve, reject })),
+            stage: (answer) => { staged.push(answer.html); page = answer.page; },
+            generation: () => page,
+            isCurrent: (v) => v === version,
+            onFailure: (error) => failures.push(error.status),
+            maxRounds: 3
+        });
+        const settle = async () => { for (let i = 0; i < 12; i++) await null; };
+        """;
+
+    [TestMethod]
+    public void TheFollowUpAsksFromWhatThePageKnowsOneRequestAtATimeAndEndsWhenNothingIsPending()
+    {
+        var result = JsonAsync(FollowUpHarness + """
+            const loop = makeLoop();
+            loop.run(1); loop.run(1);
+            const concurrent = requests.length;
+            requests[0].resolve({ html: 'one', page: { settled: 2, pending: 1 } });
+            await settle();
+            requests[1].resolve({ html: 'two', page: { settled: 3, pending: 0 } });
+            await settle();
+            return { concurrent, asked: requests.map((r) => r.settled), staged, running: loop.running, failures };
+            """);
+
+        Assert.AreEqual("{\"concurrent\":1,\"asked\":[1,2],\"staged\":[\"one\",\"two\"],\"running\":false,\"failures\":[]}", result);
+    }
+
+    [TestMethod]
+    public void AFailedFollowUpAfterATooManyRequestsAnswerStagesNothingSoWhatIsOnThePageStaysAndTheViewerCanAskAgain()
+    {
+        var result = JsonAsync(FollowUpHarness + """
+            const loop = makeLoop();
+            loop.run(1);
+            requests[0].reject({ status: '429' });
+            await settle();
+            const afterFailure = { staged: staged.length, failures: failures.slice(), running: loop.running };
+            loop.run(1);
+            requests[1].resolve({ html: 'late', page: { settled: 3, pending: 0 } });
+            await settle();
+            return { afterFailure, staged, failures };
+            """);
+
+        Assert.AreEqual("{\"afterFailure\":{\"staged\":0,\"failures\":[\"429\"],\"running\":false},\"staged\":[\"late\"],\"failures\":[\"429\"]}", result);
+    }
+
+    [TestMethod]
+    public void ALoopOfAnOldAddressStopsSilentlyAndTheNumberOfRoundsIsBounded()
+    {
+        var result = JsonAsync(FollowUpHarness + """
+            const stale = makeLoop();
+            stale.run(1);
+            version = 2;
+            requests[0].reject({ status: 'aborted' });
+            await settle();
+            const silent = failures.length;
+            version = 3;
+            const bounded = makeLoop();
+            bounded.run(3);
+            for (let i = 0; i < 5; i++) { if (requests.length > 1 + i) requests[1 + i].resolve({ html: 'same', page: { settled: 1, pending: 2 } }); await settle(); }
+            return { silent, rounds: requests.length - 1, staged: staged.length };
+            """);
+
+        Assert.AreEqual("{\"silent\":0,\"rounds\":3,\"staged\":3}", result);
+    }
+
+    [TestMethod]
+    public void TheStatusOfARequestedTitleIsReadSoonAfterAChangeSlowerWhileItStaysAndNeverSoonerThanAServerAsked()
+    {
+        var result = Json("""
+            const delays = [];
+            let previous = 0;
+            for (const changed of [true, false, false, false, false, false, true]) { previous = staging.nextPollDelay(previous, changed); delays.push(previous); }
+            return { delays, rateLimited: staging.nextPollDelay(1500, false, 20000), unaskedFor: staging.nextPollDelay(1500, false, 0) };
+            """);
+
+        Assert.AreEqual("{\"delays\":[1500,2250,3375,5000,5000,5000,1500],\"rateLimited\":20000,\"unaskedFor\":2250}", result);
+    }
+
     private static string Json(string script)
     {
         var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(10)));
         engine.Execute("var window = globalThis;");
         engine.Execute(File.ReadAllText(Path.Combine(PlayerControlsTests.RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "discover-staging.js")));
         return engine.Evaluate($"JSON.stringify((() => {{ {Harness} {script} }})())").AsString();
+    }
+
+    /// <summary>The same, for scripts that await: the engine settles the promises between the steps of the script, so no network or timer is involved.</summary>
+    private static string JsonAsync(string script)
+    {
+        var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(10)));
+        engine.Execute("var window = globalThis;");
+        engine.Execute(File.ReadAllText(Path.Combine(PlayerControlsTests.RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "discover-staging.js")));
+        var promise = engine.Evaluate($"(async () => {{ {Harness} {script} }})().then((value) => JSON.stringify(value))");
+        return promise.UnwrapIfPromise().AsString();
     }
 }

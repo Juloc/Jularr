@@ -215,6 +215,14 @@
         <span>@ui["discover.offline"]</span>
     </p>
 
+    <p class="dc-notice dc-notice-warning" data-dc-sync hidden role="status">
+        <partial name="_DiscoverIcon" model='"warning"' />
+        <span>@ui["discover.results.updateFailed"]</span>
+        <button type="button" class="dc-link" data-dc-sync-retry>@ui["library.browse.error.retry"]</button>
+    </p>
+
+    <noscript><p class="dc-message">@ui["discover.noscript"]</p></noscript>
+
     <div class="dc-results" data-dc-body aria-busy="true">
         <p class="sr-only">@ui["discover.results.loading"]</p>
         <div class="dc-skeleton" aria-hidden="true">

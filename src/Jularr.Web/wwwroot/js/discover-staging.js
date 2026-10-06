@@ -1,9 +1,9 @@
 // Staged generations of the Discover body (docs/mockups/discover/SPEC.md, "Staged late results and zero-shift ghost hints").
 // The server renders a generation of the body from the sources that have answered. A source that has not answered leaves a reserved
-// ghost section; when the next generation arrives, a ghost is filled in place (the same height, so nothing moves) and every other change
-// is staged: it waits for a safe moment, so a card is never replaced, inserted or removed under a pointer, a focus, a touch, a scroll
-// or a key press that is still in progress. The rules are DOM-free (time and interaction state are passed in), so they are testable
-// without a page; wwwroot/js/discover.js applies the resulting operations to the document.
+// ghost section; when the next generation arrives, a ghost row is filled in place (the same height, so nothing moves) and every other change is
+// staged: it waits for a safe moment, so a card is never replaced, inserted or removed under a pointer, a focus, a touch, a scroll or a key
+// press that is still in progress. The rules are DOM-free (time, interaction state, network and the document are passed in), so they are
+// testable without a page; wwwroot/js/discover.js connects them to the real document and the real network.
 (() => {
     "use strict";
 
@@ -13,10 +13,13 @@
     const keyQuietMs = 1200;
     const evaluateEveryMs = 300;
 
+    const failedStates = new Set(["unavailable", "busy"]);
+
     /**
-     * What changes between the body the viewer sees and the next generation. A section that is kept as it is needs nothing. A ghost that
-     * becomes a section with titles is a fill and neutral: the ghost already has the height of the row. Everything else (a changed
-     * section, one that appears or goes away, a ghost that becomes a message) can move content and is staged.
+     * What changes between the body the viewer sees and the next generation. A section that is kept as it is needs nothing. A ghost row that
+     * becomes a row of titles is a neutral fill: the ghost already has the height of the row. Everything else (a changed section, one that
+     * appears or goes away, a ghost that becomes a message, a filled row that gains a note line, a grid, whose height depends on its titles)
+     * can move content and is staged.
      */
     const reconcile = (current, next) => {
         if (current.state !== "sections" || next.state !== "sections") {
@@ -37,7 +40,7 @@
             if (!existing) {
                 operations.push({ id: section.id, kind: "insert", index: nextIndex, neutral: false });
             } else if (existing.section.sig !== section.sig) {
-                const fill = existing.section.state === "pending" && section.state === "ready";
+                const fill = existing.section.state === "pending" && section.state === "ready" && section.layout !== "grid" && !section.note;
                 operations.push({ id: section.id, kind: fill ? "fill" : "replace", index: existing.index, neutral: fill });
             }
         });
@@ -52,12 +55,22 @@
     };
 
     /**
-     * Whether one staged change may be applied now. A neutral fill always may. A change the viewer asked for (a retry) may. Otherwise it waits
-     * while a pointer button or a touch is down, a sheet is open, a scroll or a key press is recent, or the pointer or the focus is inside the
-     * section the change would replace. Moving the pointer alone does not freeze the page: only a pointer that rests on the affected section does.
+     * The changes a viewer asked for by pressing a retry: the sections that are failed now, and the sections that appear where a failed row stood
+     * (several failed rows are one sentence, which the retry replaces by their rows). Nothing else: an unrelated change keeps waiting.
      */
-    const canCommit = (operation, context, now, explicit = false) => {
-        if (operation.neutral || explicit) {
+    const askedFor = (operations, current) => {
+        const failed = new Set(current.sections.filter((section) => failedStates.has(section.state)).map((section) => section.id));
+        const replacesFailure = operations.some((operation) => failed.has(operation.id));
+        return new Set(operations.filter((operation) => failed.has(operation.id) || (replacesFailure && operation.kind === "insert")).map((operation) => operation.id));
+    };
+
+    /**
+     * Whether one staged change may be applied now. A neutral fill always may. A change the viewer asked for may. Otherwise it waits while a
+     * pointer button or a touch is down, a sheet is open, a scroll or a key press is recent, or the pointer (over something to click) or the
+     * focus is inside the section the change would replace. Moving the pointer alone does not freeze the page.
+     */
+    const canCommit = (operation, context, now, asked = false) => {
+        if (operation.neutral || asked) {
             return true;
         }
 
@@ -107,7 +120,8 @@
             }
 
             const context = getContext();
-            const allowed = operations.filter((operation) => canCommit(operation, context, now(), staged.explicit));
+            const asked = staged.explicit ? askedFor(operations, current) : new Set();
+            const allowed = operations.filter((operation) => canCommit(operation, context, now(), asked.has(operation.id)));
             if (allowed.length > 0) {
                 current = commit(allowed, staged.payload);
             }
@@ -130,7 +144,7 @@
                 current = view;
                 show([]);
             },
-            /** The next generation. A newer one replaces a staged one that was not applied. */
+            /** The next generation. A newer one replaces a staged one that was not applied. <c>explicit</c>: the viewer asked for it by a retry. */
             stage(next, payload, explicit = false) {
                 staged = { next, payload, explicit };
                 evaluate();
@@ -145,5 +159,92 @@
         };
     };
 
-    window.JularrDiscoverStaging = { reconcile, canCommit, createController, scrollQuietMs, keyQuietMs, evaluateEveryMs };
+    /**
+     * Applies operations to the document through <c>dom</c>: sections are replaced, inserted after the section that precedes them in the new
+     * generation or removed, then the scroll anchor and the focus are put back, so what the viewer looks at and where the keyboard is stay where
+     * they were. Returns the view of the document afterwards (<c>dom.view</c>).
+     */
+    const createApplier = (dom) => ({
+        apply(operations, nextIds) {
+            const anchor = dom.captureAnchor();
+            const focus = dom.captureFocus();
+            dom.hideHover();
+            if (operations.some((operation) => operation.kind === "replace-all")) {
+                dom.replaceAll();
+            } else {
+                for (const operation of operations) {
+                    if (operation.kind === "remove") {
+                        dom.remove(operation.id);
+                    } else if (dom.has(operation.id)) {
+                        dom.swap(operation.id);
+                    } else {
+                        const before = nextIds.slice(0, nextIds.indexOf(operation.id)).reverse().find((id) => dom.has(id)) ?? null;
+                        dom.insertAfter(before, operation.id);
+                    }
+                }
+
+                dom.updateGeneration();
+            }
+
+            dom.restoreAnchor(anchor);
+            dom.restoreFocus(focus);
+            return dom.view();
+        }
+    });
+
+    /**
+     * The asking for the next generation while sources are pending: one loop at a time, however often it is started (a retry while the loop runs
+     * does not start a second one), a bounded number of rounds, and a failure ends the loop without touching what is on the page: <c>onFailure</c>
+     * tells the viewer, and <c>run</c> starts it again. <c>fetchNext</c> receives the number of settled sources the page already knows.
+     */
+    const createFollowUp = ({ fetchNext, stage, generation, isCurrent, onFailure, maxRounds = 8 }) => {
+        let running = false;
+        return {
+            get running() {
+                return running;
+            },
+            async run(version) {
+                if (running) {
+                    return;
+                }
+
+                running = true;
+                try {
+                    for (let round = 0; round < maxRounds; round++) {
+                        if (!isCurrent(version) || generation().pending === 0) {
+                            return;
+                        }
+
+                        const answer = await fetchNext(generation().settled);
+                        if (!isCurrent(version)) {
+                            return;
+                        }
+
+                        stage(answer);
+                    }
+                } catch (error) {
+                    if (isCurrent(version)) {
+                        onFailure(error);
+                    }
+                } finally {
+                    running = false;
+                }
+            }
+        };
+    };
+
+    const firstPollMs = 1500;
+    const maxPollMs = 5000;
+    const pollBackoff = 1.5;
+
+    /**
+     * When to read the live state of a requested title again: soon after it changed, slower while it does not, and never sooner than a server that
+     * asked to be left alone (<c>retryAfterMs</c>, from a 429) allows.
+     */
+    const nextPollDelay = (previousMs, changed, retryAfterMs = 0) => {
+        const base = changed || !previousMs ? firstPollMs : Math.min(maxPollMs, Math.round(previousMs * pollBackoff));
+        return Math.max(base, retryAfterMs);
+    };
+
+    window.JularrDiscoverStaging = { reconcile, askedFor, canCommit, createController, createApplier, createFollowUp, nextPollDelay, scrollQuietMs, keyQuietMs, evaluateEveryMs };
 })();
