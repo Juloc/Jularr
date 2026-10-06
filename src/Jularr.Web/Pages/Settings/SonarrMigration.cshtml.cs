@@ -136,7 +136,7 @@ public sealed class SonarrMigrationModel(
     {
         AnimeManagementMode.ReadOnlyCoexistence => Ui["settings.sonarrMigration.mode.readOnlyCoexistence"],
         AnimeManagementMode.ParallelAcquisition => Ui["settings.sonarrMigration.mode.parallelAcquisition"],
-        AnimeManagementMode.JularrManaged => Ui["settings.sonarrMigration.mode.aniLingoManaged"],
+        AnimeManagementMode.JularrManaged => Ui["settings.sonarrMigration.mode.jularrManaged"],
         _ => mode.ToString()
     };
 
