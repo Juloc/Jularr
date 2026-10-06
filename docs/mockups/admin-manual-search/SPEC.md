@@ -441,3 +441,69 @@ Selection and download are distinct actions.
 - No solid-circle tag icons.
 - No large success/error color blocks.
 - No desktop-only hover dependency.
+
+
+## 2026-10-06 Search Planner and automatic-selection diagnostics
+
+Binding generic behavior:
+- `docs/ACQUISITION_SEARCH_PLANNER.md` / #864
+- `docs/AUTOMATIC_RELEASE_SELECTION.md` / #865
+
+Manual Search remains a view/controller over the same Auto pipeline, not a second search/scoring implementation.
+
+### Search depth
+
+Manual Search may offer:
+- Fast
+- Normal
+- Deep
+
+Normal matches normal automatic query planning. Deep explicitly expands aliases/fallback queries/pagination within bounded provider budgets. Changing depth is temporary to this search and never mutates the Work/profile.
+
+### Search provenance
+
+Candidate details may show:
+- query stage that found it;
+- structured provider ID vs title/alias fallback;
+- numbering form used;
+- indexer/category/search mode;
+- equivalent source/indexers merged into the logical candidate.
+
+A compact example is `Found via TVDB + S01E03 · Indexer A`.
+
+A deeper Search Trace may show raw-vs-deduplicated counts, partial provider failures, backoff/rate-limit reasons and query-stage progression, with credentials and secret-bearing URLs always redacted.
+
+### Deduplicated candidates
+
+Equivalent releases from several indexers should normally appear as one logical candidate with multiple source options rather than duplicate rows.
+
+Candidate details show the available sources and the source Jularr would prefer/grab. Conservative dedupe must never hide materially different releases.
+
+### Automatic-selection diagnostics
+
+Candidate state now also exposes where applicable:
+- identity confidence: Exact / Strong / Ambiguous / Conflict;
+- Require/Reject gate result;
+- active fallback tier;
+- Temporary vs Final acceptance;
+- canonical coverage utility for pack/multi-unit releases;
+- upgrade-benefit decision;
+- bounded reliability/source tiebreak contribution.
+
+### Why not automatic?
+
+Every normalized candidate should be able to explain why Auto would or would not choose it.
+
+Where useful, show a diagnostic `What would need to change?` explanation, for example:
+- minimum score threshold;
+- permanent language requirement;
+- fallback tier not active yet;
+- identity ambiguity that scoring cannot fix.
+
+This explanation never mutates the profile.
+
+### Winner comparison
+
+When several candidates are eligible, details may explain why candidate A ranks above B using the canonical hierarchy rather than only showing a total score.
+
+Network response order must never determine the winner.
