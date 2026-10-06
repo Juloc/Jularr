@@ -78,24 +78,6 @@ public sealed class AnimeImportSettingsStore
                 MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries ?? [])
             };
 
-            if (!RemotePathMappingMigration.IsNeeded(state))
-            {
-                return state;
-            }
-
-            // A file from before remote path mappings belonged to a media type: move the global
-            // list into the per-media-type shape once and write it back, so the legacy list
-            // never survives a read.
-            state = RemotePathMappingMigration.Migrate(state);
-            try
-            {
-                await SaveUnlockedAsync(state, cancellationToken);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // The migrated state is complete in memory; the next read migrates again.
-            }
-
             return state;
         }
         catch (JsonException exception)
