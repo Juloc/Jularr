@@ -71,12 +71,18 @@ AniList/TMDB/OpenLibrary/etc. are adapters behind this module.
 ### Acquisition
 Owns the universal Wanted-to-Import pipeline:
 - WantedItem
-- search orchestration
-- ReleaseCandidate
-- scoring/profiles
+- canonical Search Planner / SearchIntent / QueryPlan
+- provider/indexer search orchestration and budgets
+- normalized/deduplicated ReleaseCandidate + query/source provenance
+- canonical identity/safety/profile selection evaluator
+- Acquisition Profiles / preference scoring / fallback / upgrade policy
 - DownloadJob
 - ImportJob
 - AcquisitionEvent/history
+
+Binding semantics:
+- `docs/ACQUISITION_SEARCH_PLANNER.md`
+- `docs/AUTOMATIC_RELEASE_SELECTION.md`
 
 Anime, TV, Movies, Manga, Books and Light Novels use this module rather than independent pipelines.
 
@@ -441,7 +447,7 @@ User/automation
  -> Progress/Library immediately sees canonical content
 ```
 
-Every step is inspectable in Admin UI. Manual Search uses the same candidates/scoring data rather than a separate path.
+Every step is inspectable in Admin UI. Manual Search uses the same Search Planner, normalized candidates and selection/scoring evaluator rather than a separate path.
 
 ## 11. Metadata flow
 
