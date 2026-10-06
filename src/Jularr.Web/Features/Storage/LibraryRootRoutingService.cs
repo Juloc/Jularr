@@ -1,4 +1,6 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Library;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +14,31 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
     /// still read their legacy per-media library folder until their importer is migrated.
     /// </summary>
     public static readonly LibraryContentType[] ImporterRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music];
+
+    /// <summary>
+    /// The reading and audiobook types whose importers still read a per-media library folder from the import settings. Storage's default root of
+    /// the type replaces that folder once the owner chooses one (<see cref="WithRoutedLibrariesAsync"/>); until then the settings folder stays
+    /// the fallback, so an existing installation keeps importing where it did.
+    /// </summary>
+    public static readonly LibraryContentType[] SettingsFallbackTypes = [LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook];
+
+    /// <summary>Every content type the Admin Storage page lets the owner route.</summary>
+    public static IReadOnlyList<LibraryContentType> ManagedTypes { get; } = [.. ImporterRoutedTypes, .. SettingsFallbackTypes];
+
+    /// <summary>The acquisition kind whose importer serves a content type, or null for a type without one.</summary>
+    public static MediaAcquisitionKind? KindOf(LibraryContentType contentType) =>
+        contentType switch
+        {
+            LibraryContentType.Anime => MediaAcquisitionKind.Anime,
+            LibraryContentType.Manga => MediaAcquisitionKind.Manga,
+            LibraryContentType.LightNovel => MediaAcquisitionKind.LightNovel,
+            LibraryContentType.Book => MediaAcquisitionKind.Book,
+            LibraryContentType.Movie => MediaAcquisitionKind.Movie,
+            LibraryContentType.Tv => MediaAcquisitionKind.Tv,
+            LibraryContentType.Audiobook => MediaAcquisitionKind.Audiobook,
+            LibraryContentType.Music => MediaAcquisitionKind.Music,
+            _ => null
+        };
 
     /// <summary>The video types: a root serving Anime cannot also serve them, because the Anime scanner would read their folders as anime.</summary>
     private static readonly LibraryContentType[] VideoRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv];
@@ -27,6 +54,41 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             where assignment.ContentType == contentType && assignment.IsDefault && root.IsEnabled
             select new LibraryRootRoute(root.Id, root.Name, root.Path, root.PlacementPolicy, true, true))
         .SingleOrDefaultAsync(cancellationToken);
+
+    /// <summary>
+    /// Applies Storage's default roots to import settings: for every reading or audiobook type with an enabled default root, that root and its
+    /// placement policy replace the per-media library folder and import mode; the folder's inbox and remote path mappings are kept. A type
+    /// without a default root keeps what the settings say. This is the one place where the canonical owner and the legacy folder meet.
+    /// </summary>
+    public async Task<AnimeImportSettingsState> WithRoutedLibrariesAsync(AnimeImportSettingsState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        var types = SettingsFallbackTypes;
+        var defaults = await (
+                from assignment in db.LibraryRootContentAssignments.AsNoTracking()
+                join root in db.LibraryRoots.AsNoTracking() on assignment.LibraryRootId equals root.Id
+                where assignment.IsDefault && root.IsEnabled && types.Contains(assignment.ContentType)
+                select new { assignment.ContentType, root.Path, root.PlacementPolicy })
+            .ToListAsync(cancellationToken);
+        if (defaults.Count == 0)
+        {
+            return state;
+        }
+
+        var libraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries ?? []);
+        foreach (var route in defaults)
+        {
+            if (KindOf(route.ContentType) is not { } kind)
+            {
+                continue;
+            }
+
+            libraries[kind] = libraries.GetValueOrDefault(kind, new MediaLibraryTarget()) with { LibraryRoot = route.Path, ImportMode = ImportFileTransfer.ModeFor(route.PlacementPolicy) };
+        }
+
+        return state with { MediaLibraries = libraries };
+    }
 
     public async Task<IReadOnlyList<LibraryRootRoute>> ListAsync(LibraryContentType contentType, CancellationToken cancellationToken = default) =>
         await (

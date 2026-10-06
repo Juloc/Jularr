@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Storage;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
@@ -105,7 +106,8 @@ public sealed partial class BookCatalogService(
     // Resolves the configured Books NAS library root (#389/#545); null (the default for tests
     // that do not exercise artwork placement) behaves exactly like no root being configured, so
     // covers keep using CoversPath -- no regression when nothing is set up.
-    AnimeImportSettingsStore? importSettings = null)
+    AnimeImportSettingsStore? importSettings = null,
+    LibraryRootRoutingService? routing = null)
 {
     public const string ImportedBookProvider = "book-epub";
     public const int TranslationPromptVersion = 5;
@@ -2830,8 +2832,13 @@ public sealed partial class BookCatalogService(
             return null;
         }
 
-        var libraryRoot = (await importSettings.LoadAsync(cancellationToken))
-            .LibraryFor(MediaAcquisitionKind.Book)?.LibraryRoot;
+        var settings = await importSettings.LoadAsync(cancellationToken);
+        if (routing is not null)
+        {
+            settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
+        }
+
+        var libraryRoot = settings.LibraryFor(MediaAcquisitionKind.Book)?.LibraryRoot;
         if (string.IsNullOrWhiteSpace(libraryRoot))
         {
             return null;

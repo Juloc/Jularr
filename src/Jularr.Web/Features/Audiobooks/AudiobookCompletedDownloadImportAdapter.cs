@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Storage;
 
 namespace Jularr.Web.Features.Audiobooks;
 
@@ -20,7 +21,8 @@ public sealed partial class AudiobookCompletedDownloadImportAdapter(
     MediaAcquisitionRegistry registry,
     AnimeImportSettingsStore importSettings,
     IHardLinkCreator hardLinks,
-    ILogger<AudiobookCompletedDownloadImportAdapter> logger)
+    ILogger<AudiobookCompletedDownloadImportAdapter> logger,
+    LibraryRootRoutingService? routing = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     /// <summary>Why a finished download did not become an audiobook; the next release is tried.</summary>
@@ -61,6 +63,11 @@ public sealed partial class AudiobookCompletedDownloadImportAdapter(
         try
         {
             var settings = await importSettings.LoadAsync(cancellationToken);
+            if (routing is not null)
+            {
+                settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
+            }
+
             var library = settings.LibraryFor(MediaAcquisitionKind.Audiobook);
             string? libraryPath;
             CompletedDownloadPlacement? placement = null;

@@ -68,7 +68,7 @@
                                     </select>
                                     @if (current is null)
                                     {
-                                        <small>@ui["admin.storage.destinations.waiting"]</small>
+                                        <small>@ui[IndexModel.WaitsForDefault(destination.ContentType) ? "admin.storage.destinations.waiting" : "admin.storage.destinations.fallback"]</small>
                                     }
                                 </td>
                                 <td data-label="@ui["admin.storage.destinations.column.placement"]">

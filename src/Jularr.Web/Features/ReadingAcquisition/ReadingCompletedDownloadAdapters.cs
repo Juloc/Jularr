@@ -29,7 +29,8 @@ public sealed class MangaCompletedDownloadImportAdapter(
     ILogger<MangaCompletedDownloadImportAdapter> logger,
     string? mangaCacheRoot = null,
     ReadingNamingProfileStore? namingStore = null,
-    ReadingCoverArtwork? coverArtwork = null)
+    ReadingCoverArtwork? coverArtwork = null,
+    LibraryRootRoutingService? routing = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     public MediaAcquisitionKind Kind =>
@@ -68,6 +69,11 @@ public sealed class MangaCompletedDownloadImportAdapter(
                             : releaseName);
 
             var settings = await importSettings.LoadAsync(cancellationToken);
+            if (routing is not null)
+            {
+                settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
+            }
+
             var library = settings.LibraryFor(MediaAcquisitionKind.Manga);
             var sourceExists = File.Exists(request.SourcePath) || Directory.Exists(request.SourcePath);
             var namingProfile = namingStore is null
@@ -286,7 +292,8 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
     AnimeImportSettingsStore importSettings,
     IHardLinkCreator hardLinks,
     ILogger<LightNovelCompletedDownloadImportAdapter> logger,
-    ReadingNamingProfileStore? namingStore = null)
+    ReadingNamingProfileStore? namingStore = null,
+    LibraryRootRoutingService? routing = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     private static readonly CompletedDownloadPlacement Placement =
@@ -310,6 +317,11 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
         try
         {
             var settings = await importSettings.LoadAsync(cancellationToken);
+            if (routing is not null)
+            {
+                settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
+            }
+
             var library = settings.LibraryFor(MediaAcquisitionKind.LightNovel);
             var importSource = request.SourcePath;
             if (library is not null)

@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.ReadingAcquisition;
+using Jularr.Web.Features.Storage;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Books;
@@ -18,7 +19,8 @@ public sealed class BookCompletedDownloadImportAdapter(
     AppDbContext db,
     AnimeImportSettingsStore importSettings,
     IHardLinkCreator hardLinks,
-    ILogger<BookCompletedDownloadImportAdapter> logger)
+    ILogger<BookCompletedDownloadImportAdapter> logger,
+    LibraryRootRoutingService? routing = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     /// <summary>Why a finished download did not become a book; the next release is tried.</summary>
@@ -47,6 +49,11 @@ public sealed class BookCompletedDownloadImportAdapter(
         try
         {
             var settings = await importSettings.LoadAsync(cancellationToken);
+            if (routing is not null)
+            {
+                settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
+            }
+
             var library = settings.LibraryFor(MediaAcquisitionKind.Book);
             var importSource = request.SourcePath;
             var preserveSourceFiles = false;
