@@ -126,6 +126,8 @@
 .dc-section { position: relative; display: grid; gap: 10px; min-width: 0; margin-bottom: 26px; }
 .dc-shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .dc-shelf-head h2 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: -.01em; }
+/* The group is the one child of its section: without a minimum width of zero a long row would stretch the whole page. */
+.dc-collapse { min-width: 0; }
 .dc-collapse > summary { cursor: pointer; list-style: none; }
 .dc-collapse[open] > summary { margin-bottom: 10px; }
 .dc-collapse > summary::-webkit-details-marker { display: none; }
@@ -149,7 +151,10 @@
 /* A section that waits for its source keeps its place: ghost cards have the size of a real card, so the arrival of the titles moves nothing. */
 .dc-ghost { display: grid; gap: 10px; }
 .dc-ghost-body { display: block; height: var(--dc-card-body-h); }
-.dc-ghost-art { display: block; aspect-ratio: 2 / 3; border-radius: 12px; background: var(--surface-2); animation: dc-pulse 1.4s ease-in-out infinite; }
+.dc-ghost-art {
+    display: block; aspect-ratio: 2 / 3; border-radius: 12px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border);
+    animation: dc-pulse 1.4s ease-in-out infinite;
+}
 .dc-ghost-line { display: block; width: 78%; height: 14px; margin-top: 4px; border-radius: 6px; background: var(--surface-2); }
 .dc-ghost-short { width: 48%; margin-top: 8px; }
 .dc-ghosts { pointer-events: none; overflow-x: hidden; }
