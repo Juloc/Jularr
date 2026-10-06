@@ -19,11 +19,14 @@ public sealed class DiscoverPartialRenderTests
         string state = "preferred",
         DiscoverStateKind kind = DiscoverStateKind.PreferredAvailable,
         string label = "DE available",
-        string href = "https://anilist.co/anime/1",
+        string? detailUrl = null,
+        bool resolvesDetail = false,
         bool isLocal = false,
         bool canRequest = true,
         string? poster = "https://img.example/cover.jpg",
-        string? playUrl = null) =>
+        string? playUrl = null,
+        string? backdrop = null,
+        string? trailerKey = null) =>
         new(
             "anilist:anime:1",
             "anime",
@@ -32,9 +35,11 @@ public sealed class DiscoverPartialRenderTests
             title,
             null,
             null,
-            href,
-            href.StartsWith("http", StringComparison.Ordinal),
+            detailUrl,
+            resolvesDetail,
             poster,
+            backdrop,
+            trailerKey,
             "F",
             "Anime · 2023",
             2023,
@@ -97,7 +102,7 @@ public sealed class DiscoverPartialRenderTests
         var visible = html[..html.IndexOf("<template", StringComparison.Ordinal)];
         StringAssert.Contains(visible, "class=\"dc-art\"");
         StringAssert.Contains(visible, "src=\"https://img.example/cover.jpg\"");
-        StringAssert.Contains(visible, ">Frieren</a></h3>");
+        StringAssert.Contains(visible, ">Frieren</button>");
         StringAssert.Contains(visible, "Anime · 2023");
         Assert.AreEqual(1, Regex.Matches(visible, "class=\"dc-state ").Count, "One language/request indicator.");
         StringAssert.Contains(visible, "dc-state-preferred");
@@ -107,12 +112,54 @@ public sealed class DiscoverPartialRenderTests
     }
 
     [TestMethod]
-    public async Task ATitleOutsideTheLibraryOpensTheProviderInANewTabAndAPosterlessOneShowsItsInitial()
+    public async Task ATitleThatOnlyExistsAtAProviderOpensTheQuickViewAndNeverLeavesTheApplication()
     {
         var html = await RenderAsync(CardView, (Card(poster: null), Ui));
+        var visible = html[..html.IndexOf("<template", StringComparison.Ordinal)];
 
-        StringAssert.Contains(html, "href=\"https://anilist.co/anime/1\" target=\"_blank\" rel=\"noopener noreferrer\"");
-        StringAssert.Contains(html, "<span class=\"dc-initial\">F</span>");
+        StringAssert.Contains(visible, "data-dc-title-link data-dc-activate=\"preview\">Frieren</button>");
+        Assert.IsTrue(Regex.IsMatch(visible, "<span class=\"dc-art\" aria-hidden=\"true\">\\s*<span class=\"dc-initial\">F</span>\\s*</span>"), "A posterless title shows its initial and the artwork is not a link.");
+        Assert.IsFalse(html.Contains("target=\"_blank\"", StringComparison.Ordinal), "No card or preview control opens a provider page in a new tab.");
+        Assert.IsFalse(html.Contains("anilist.co", StringComparison.Ordinal));
+        Assert.IsFalse(html.Contains(">Details<", StringComparison.Ordinal), "Without a page here the preview has no Details action.");
+    }
+
+    [TestMethod]
+    public async Task ATitleWithAPageHereLinksItsTitleAndArtworkAndItsPreviewOffersDetails()
+    {
+        var html = await RenderAsync(CardView, (Card(detailUrl: "/Library/Series/s1"), Ui));
+        var visible = html[..html.IndexOf("<template", StringComparison.Ordinal)];
+
+        StringAssert.Contains(visible, "<a class=\"dc-art\" href=\"/Library/Series/s1\" tabindex=\"-1\" aria-hidden=\"true\">");
+        StringAssert.Contains(visible, "<a href=\"/Library/Series/s1\" title=\"Frieren\" data-dc-title-link>Frieren</a>");
+        StringAssert.Contains(html, "<a class=\"button\" href=\"/Library/Series/s1\">Details</a>");
+        Assert.IsFalse(html.Contains("data-dc-activate=\"open\"", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task AMovieOrSeriesWithoutAWorkYetCreatesItWhenOpenedFromItsTitleAndFromDetails()
+    {
+        var html = await RenderAsync(CardView, (Card(resolvesDetail: true), Ui));
+        var visible = html[..html.IndexOf("<template", StringComparison.Ordinal)];
+
+        StringAssert.Contains(visible, "data-dc-title-link data-dc-activate=\"open\">Frieren</button>");
+        StringAssert.Contains(html, "<button type=\"button\" class=\"button\" data-dc-activate=\"open\">Details</button>");
+        Assert.IsFalse(html.Contains("href=\"http", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task ThePreviewHeroIsTheBackdropElseTheBlurredCoverAndTheTrailerStartsFromAFacade()
+    {
+        var withBackdrop = await RenderAsync(CardView, (Card(backdrop: "https://img.example/backdrop.jpg", trailerKey: "dQw4w9WgXcQ"), Ui));
+        var derived = await RenderAsync(CardView, (Card(), Ui));
+
+        StringAssert.Contains(withBackdrop, "<img class=\"dc-pv-backdrop\" src=\"https://img.example/backdrop.jpg\"");
+        Assert.IsFalse(withBackdrop.Contains("is-derived", StringComparison.Ordinal));
+        StringAssert.Contains(withBackdrop, "data-vd-trailer data-key=\"dQw4w9WgXcQ\"");
+        StringAssert.Contains(withBackdrop, "aria-label=\"Play trailer: Frieren\"");
+        Assert.IsFalse(withBackdrop.Contains("<iframe", StringComparison.Ordinal), "Nothing of the trailer provider is requested before the preview is open.");
+        StringAssert.Contains(derived, "<img class=\"dc-pv-backdrop is-derived\" src=\"https://img.example/cover.jpg\"");
+        Assert.IsFalse(derived.Contains("data-vd-trailer", StringComparison.Ordinal), "A title without a trailer shows none.");
     }
 
     [TestMethod]
@@ -139,7 +186,7 @@ public sealed class DiscoverPartialRenderTests
     }
 
     [TestMethod]
-    public async Task APreviewOffersRequestFollowAndDetailsWithoutAnyLibraryStateSuppliedByTheBrowser()
+    public async Task APreviewOffersRequestAndFollowWithoutAnyLibraryStateSuppliedByTheBrowser()
     {
         var html = await RenderAsync(CardView, (Card(), Ui));
 
@@ -151,7 +198,6 @@ public sealed class DiscoverPartialRenderTests
         Assert.IsTrue(Regex.IsMatch(preview, @">\s*Request\s*</button>"));
         StringAssert.Contains(preview, "data-dc-follow ");
         StringAssert.Contains(preview, "Follow franchise");
-        StringAssert.Contains(preview, "<span>Details</span>");
         Assert.IsFalse(preview.Contains("data-local", StringComparison.Ordinal));
         Assert.IsFalse(preview.Contains("Continue watching", StringComparison.Ordinal));
     }
@@ -163,7 +209,7 @@ public sealed class DiscoverPartialRenderTests
             kind: DiscoverStateKind.InLibrary,
             state: "library",
             label: "In library",
-            href: "/Library/Anime/a",
+            detailUrl: "/Library/Anime/a",
             isLocal: true,
             canRequest: false,
             playUrl: "/Library/Episode/e");

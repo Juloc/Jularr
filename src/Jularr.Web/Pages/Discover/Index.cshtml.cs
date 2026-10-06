@@ -62,6 +62,9 @@ public sealed class IndexModel(
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+
+        // The Quick View of a title with a trailer adds one sandboxed frame once it is open; no other page content may be framed.
+        Response.Headers.ContentSecurityPolicy = $"frame-src 'self' {WorkTrailerView.EmbedOrigin}";
         var audience = await LoadAudienceAsync(cancellationToken);
         Query = ParseQuery(audience);
         VisibleTabs = [.. DiscoverScopes.Tabs.Where(tab => DiscoverScopes.IsVisible(tab.Category, audience.VisibleMediaTypes))];
@@ -450,6 +453,26 @@ public sealed class IndexModel(
             : [];
         var preference = await LoadPreferenceAsync(cancellationToken);
         return Partial("_DiscoverRequestSettings", new DiscoverRequestSettingsView(Ui, target.Kind, existing, seasons, OfferedLanguage(preference.Audio), OfferedLanguage(preference.Subtitle)));
+    }
+
+    /// <summary>
+    /// Opens a Movie or Series that has no Work yet: the TMDB identity is resolved to its canonical Work (created once, never duplicated) and the
+    /// Detail of that Work is returned. Creating the Work is a durable change, so it is a POST and a card never does it by being displayed.
+    /// </summary>
+    public async Task<IActionResult> OnPostOpenAsync(string? category, string? provider, string? externalId, CancellationToken cancellationToken)
+    {
+        var (target, refusal) = await ResolveRequestTargetAsync(category, provider, externalId, cancellationToken);
+        if (target is null)
+        {
+            return refusal!;
+        }
+
+        if (target.Work is not { } work)
+        {
+            return BadRequest();
+        }
+
+        return new JsonResult(new { url = LibraryBrowse.DetailHref(work.MediaType, work.Id) });
     }
 
     /// <summary>

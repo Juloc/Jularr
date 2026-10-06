@@ -54,7 +54,8 @@ public sealed record WorkMetadataView(
 }
 
 /// <summary>The card-sized metadata of one Work: what a Library card shows from the persisted metadata, resolved for the viewer.</summary>
-public sealed record WorkCardMetadata(string? Title, string? PosterUrl, string? BackdropUrl, double? Rating);
+/// <param name="TrailerKey">The YouTube id of the first trailer of the resolved locale when it has the shape of one; the Discover Preview is the only card surface that uses it.</param>
+public sealed record WorkCardMetadata(string? Title, string? PosterUrl, string? BackdropUrl, double? Rating, string? TrailerKey = null);
 
 /// <summary>
 /// Turns persisted metadata rows into what pages show, applying <see cref="WorkMetadataLocales"/> and <see cref="WorkArtworkSelection"/>.
@@ -125,6 +126,7 @@ public static class WorkMetadataPresentation
         var artwork = rows.Artwork.ToLookup(x => x.WorkId);
         var titles = rows.Titles.ToLookup(x => x.WorkId);
         var facts = rows.Facts.ToDictionary(x => x.WorkId);
+        var trailers = rows.Trailers.ToLookup(x => x.WorkId);
         return rows.Artwork.Select(x => x.WorkId)
             .Concat(rows.Titles.Select(x => x.WorkId))
             .Concat(facts.Keys)
@@ -140,7 +142,14 @@ public static class WorkMetadataPresentation
                         WorkArtworkSelection.Pick(artwork[workId].Where(x => x.Slot == slot), slot, artworkLanguages, x => x.Language, x => x.VoteAverage) is { } chosen
                             ? ArtworkUrl(workId, chosen.ArtworkId, chosen.CacheKey)
                             : null;
-                    return new WorkCardMetadata(titles[workId].FirstOrDefault(x => x.Locale == locale)?.Value, Url(WorkArtworkSlot.Poster), Url(WorkArtworkSlot.Backdrop), workFacts?.Rating);
+                    var trailerLocale = WorkMetadataLocales.Pick([.. trailers[workId].Select(x => x.Locale).Distinct(StringComparer.Ordinal)], order);
+                    var trailerKey = trailers[workId].FirstOrDefault(x => x.Locale == trailerLocale)?.Key;
+                    return new WorkCardMetadata(
+                        titles[workId].FirstOrDefault(x => x.Locale == locale)?.Value,
+                        Url(WorkArtworkSlot.Poster),
+                        Url(WorkArtworkSlot.Backdrop),
+                        workFacts?.Rating,
+                        WorkTrailerView.IsYouTubeKey(trailerKey) ? trailerKey : null);
                 });
     }
 }

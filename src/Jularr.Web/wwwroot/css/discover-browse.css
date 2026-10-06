@@ -188,12 +188,16 @@
 }
 .dc-card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; min-height: var(--dc-card-body-h); }
 .dc-card-title { margin: 0; font-size: 14px; line-height: 18px; font-weight: 700; }
-.dc-card-title a {
+.dc-card-title :is(a, button) {
     display: -webkit-box; overflow: hidden; color: var(--text); overflow-wrap: anywhere;
     -webkit-line-clamp: 1; -webkit-box-orient: vertical;
 }
-.dc-card-title a::after { content: ""; position: absolute; inset: 0; z-index: 1; }
-.dc-card:hover .dc-card-title a, .dc-card-title a:focus-visible { color: var(--accent-text); }
+/* A title that has no page here is a button with the look of the link: it opens the Quick View, or the Detail once its Work is created. */
+.dc-card-title button { padding: 0; border: 0; background: none; font: inherit; text-align: start; cursor: pointer; }
+.dc-card[aria-busy="true"] { cursor: progress; }
+.dc-card[aria-busy="true"] .dc-art { opacity: .6; }
+.dc-card-title :is(a, button)::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+.dc-card:hover .dc-card-title :is(a, button), .dc-card-title :is(a, button):focus-visible { color: var(--accent-text); }
 .dc-card-meta { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
 .dc-card-media { position: relative; }
 .dc-card-request {
@@ -240,20 +244,35 @@
 .dc-state-library { color: var(--text); }
 .dc-state-none, .dc-state-unavailable { border-color: var(--border); border-style: dashed; background: transparent; }
 
-/* Preview: shared by the hover popover and the sheet -------------------------------------------------- */
-.dc-pv { display: grid; min-width: 0; }
-.dc-pv-media { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
-.dc-pv-backdrop {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-    filter: blur(22px) saturate(1.2) brightness(.7); transform: scale(1.25);
+/* Preview (Quick View): a wide hero of backdrop or trailer, the cover anchoring the identity below it, then title, facts and actions
+   (docs/mockups/media-preview). Without a backdrop the hero is the cover blurred into one. -------------------------------------- */
+.dc-pv { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.dc-pv-media { position: relative; grid-column: 1 / -1; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
+.dc-pv-media::after {
+    content: ""; position: absolute; inset: auto 0 0; height: 38%; pointer-events: none;
+    background: linear-gradient(0deg, color-mix(in srgb, var(--surface) 70%, transparent), transparent);
 }
+.dc-pv-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dc-pv-backdrop.is-derived { filter: blur(22px) saturate(1.2) brightness(.7); transform: scale(1.25); }
+.dc-pv-trailer { position: absolute; inset: 0; z-index: 1; }
+.dc-pv-trailer-play { position: absolute; inset: 0; display: grid; place-items: center; color: #15121c; }
+.dc-pv-trailer-button {
+    display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
+    background: rgb(255 255 255 / .92); box-shadow: 0 8px 22px rgb(0 0 0 / .32);
+}
+.dc-pv-trailer-button .dc-icon { width: 28px; height: 28px; margin-inline-start: 3px; }
+.dc-pv-trailer-play:hover .dc-pv-trailer-button { background: #fff; }
+.dc-pv-trailer-play:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
+.dc-pv-trailer-play:focus-visible .dc-pv-trailer-button { box-shadow: 0 0 0 4px var(--accent), 0 8px 22px rgb(0 0 0 / .32); }
+.dc-pv-trailer .vd-trailer-embed { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+/* The cover overlaps the hero on a wide screen; a phone has no room for it, so its sheet goes from the hero straight to the title. */
 .dc-pv-poster {
-    position: absolute; top: 7%; height: 86%; aspect-ratio: 2 / 3; inset-inline-start: 50%; translate: -50% 0;
-    border-radius: 8px; object-fit: cover; box-shadow: 0 10px 30px rgb(0 0 0 / .45);
+    display: none; position: relative; z-index: 2; grid-column: 1; align-self: start; width: 156px; aspect-ratio: 2 / 3;
+    margin: -72px 0 24px 24px; overflow: hidden; border-radius: 10px; background: var(--surface-2); box-shadow: 0 12px 32px rgb(0 0 0 / .4);
 }
-:dir(rtl) .dc-pv-poster { translate: 50% 0; }
-.dc-pv-media .dc-initial { height: 100%; }
-.dc-pv-main { display: grid; gap: 8px; justify-items: start; padding: 14px 16px 16px; }
+.dc-pv-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.dc-pv-poster .dc-initial { height: 100%; }
+.dc-pv-main { display: grid; grid-column: 1 / -1; gap: 8px; justify-items: start; min-width: 0; padding: 14px 16px 16px; }
 .dc-pv-title { margin: 0; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
 .dc-pv-native, .dc-pv-meta { margin: 0; color: var(--muted); font-size: 13px; }
 .dc-pv-genres { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
@@ -287,7 +306,7 @@
 @keyframes dc-pop-in { from { opacity: 0; transform: scale(.97); } }
 
 .dc-sheet {
-    width: min(520px, 94vw); max-height: 90vh; padding: 0; overflow: auto; overscroll-behavior: contain;
+    width: min(780px, 94vw); max-height: 92vh; padding: 0; overflow: auto; overscroll-behavior: contain;
     border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text);
     box-shadow: 0 30px 80px rgb(0 0 0 / .4);
 }
@@ -337,9 +356,22 @@
     }
 }
 
-/* Touch has no hover: the preview opens from a tap on the card. */
+/* A tablet held upright gets the sheet from the bottom with the wide layout inside it; held sideways it is the centred dialog (docs/mockups/media-preview, section 16). */
+@media (min-width: 761px) and (max-width: 1024px) and (orientation: portrait) {
+    .dc-sheet { width: 100%; max-width: none; margin: auto 0 0; border-width: 1px 0 0; border-radius: 18px 18px 0 0; }
+}
+
+@media (min-width: 761px) {
+    .dc-pv { grid-template-columns: 180px minmax(0, 1fr); column-gap: 20px; }
+    .dc-pv-poster { display: block; }
+    .dc-pv-main { grid-column: 2; padding: 18px 24px 24px 0; }
+    .dc-pv-title { font-size: 22px; }
+}
+
+/* Touch has no hover: a tap opens the Detail, so the secondary Quick View action stays visible on the artwork (docs/mockups/media-preview, section 3) and Request is made from there. */
 @media (hover: none), (pointer: coarse) {
-    .dc-card-preview, .dc-card-request { display: none; }
+    .dc-card-request { display: none; }
+    .dc-card-preview { opacity: 1; width: 40px; height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

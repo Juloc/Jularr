@@ -158,6 +158,31 @@ public sealed class DiscoveryTests
     }
 
     [TestMethod]
+    public void TheBannerAndOnlyAYouTubeTrailerOfAnAnimeReachThePreview()
+    {
+        const string json = """
+        {
+          "data": {
+            "Page": {
+              "media": [
+                { "id": 1, "title": { "romaji": "Has Both" }, "bannerImage": "https://s4.anilist.co/banner/1.jpg", "trailer": { "id": "dQw4w9WgXcQ", "site": "youtube" } },
+                { "id": 2, "title": { "romaji": "Other Site" }, "bannerImage": null, "trailer": { "id": "x9", "site": "dailymotion" } },
+                { "id": 3, "title": { "romaji": "No Trailer" }, "trailer": null }
+              ]
+            }
+          }
+        }
+        """;
+
+        var rows = AniListMetadataProvider.ParseSearchResponse(json);
+
+        Assert.AreEqual("https://s4.anilist.co/banner/1.jpg", rows[0].BannerImageUrl);
+        Assert.AreEqual("dQw4w9WgXcQ", rows[0].TrailerKey);
+        Assert.IsNull(rows[1].TrailerKey, "Only a YouTube trailer can be embedded.");
+        Assert.IsNull(rows[2].TrailerKey);
+    }
+
+    [TestMethod]
     public void OngoingReadingMediaWithNullCountsStillParses()
     {
         const string json = """

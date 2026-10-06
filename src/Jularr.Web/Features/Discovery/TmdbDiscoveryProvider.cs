@@ -25,7 +25,8 @@ public sealed record TmdbDiscoveryCandidate(
     string? CoverImageUrl,
     int? Year,
     IReadOnlyList<int> GenreIds,
-    double? Rating)
+    double? Rating,
+    string? BackdropUrl = null)
 {
     public string Category => MediaType == TmdbDiscoveryMediaType.Movie ? "movie" : "tv";
     public string DetailsUrl => MediaType == TmdbDiscoveryMediaType.Movie
@@ -590,7 +591,8 @@ public sealed partial class TmdbDiscoveryProvider(
                     CoverUrl(x.PosterPath),
                     Year(x.ReleaseDate ?? x.FirstAirDate),
                     x.GenreIds ?? [],
-                    x.VoteAverage))
+                    x.VoteAverage,
+                    BackdropUrl(x.BackdropPath)))
                 .ToArray());
     }
 
@@ -746,6 +748,9 @@ public sealed partial class TmdbDiscoveryProvider(
     private static string? CoverUrl(string? path) =>
         string.IsNullOrWhiteSpace(path) ? null : $"https://image.tmdb.org/t/p/w500{path}";
 
+    private static string? BackdropUrl(string? path) =>
+        string.IsNullOrWhiteSpace(path) ? null : $"https://image.tmdb.org/t/p/w780{path}";
+
     private static int? Year(string? value) =>
         DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
             ? date.Year
@@ -786,6 +791,9 @@ public sealed partial class TmdbDiscoveryProvider(
 
         [JsonPropertyName("poster_path")]
         public string? PosterPath { get; set; }
+
+        [JsonPropertyName("backdrop_path")]
+        public string? BackdropPath { get; set; }
 
         [JsonPropertyName("release_date")]
         public string? ReleaseDate { get; set; }

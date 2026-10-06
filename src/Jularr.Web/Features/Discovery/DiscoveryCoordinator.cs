@@ -347,28 +347,36 @@ public sealed class DiscoveryCoordinator(
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-        var tmdbMatches = tmdbIds.Length == 0
+        // A TMDB title is a durable Work as soon as one exists (for example after a Request); it is in the library only once it has a video file.
+        var tmdbWorks = tmdbIds.Length == 0
             ? new Dictionary<(WorkMediaType MediaType, string ExternalId), Guid>()
-            : (await (
-                    from identity in db.WorkExternalIdentities.AsNoTracking()
-                    join asset in db.MediaAssets.AsNoTracking()
-                        on identity.WorkId equals asset.WorkId
-                    join file in db.StoredFiles.AsNoTracking()
-                        on (Guid?)asset.Id equals file.MediaAssetId
-                    where identity.Provider == TmdbDiscoveryProvider.ProviderKey
-                          && (identity.MediaType == WorkMediaType.Movie || identity.MediaType == WorkMediaType.Series)
-                          && tmdbIds.Contains(identity.ExternalId)
-                          && asset.Kind == MediaAssetKind.Video
-                    select new { identity.MediaType, identity.ExternalId, identity.WorkId })
-                .Distinct()
+            : (await db.WorkExternalIdentities
+                .AsNoTracking()
+                .Where(identity => identity.Provider == TmdbDiscoveryProvider.ProviderKey
+                    && (identity.MediaType == WorkMediaType.Movie || identity.MediaType == WorkMediaType.Series)
+                    && tmdbIds.Contains(identity.ExternalId))
+                .Select(identity => new { identity.MediaType, identity.ExternalId, identity.WorkId })
                 .ToListAsync(cancellationToken))
                 .GroupBy(x => (x.MediaType, x.ExternalId))
                 .ToDictionary(x => x.Key, x => x.First().WorkId);
 
+        var tmdbWorkIds = tmdbWorks.Values.Distinct().ToArray();
+        var tmdbWorksInLibrary = tmdbWorkIds.Length == 0
+            ? new HashSet<Guid>()
+            : (await (
+                    from asset in db.MediaAssets.AsNoTracking()
+                    join file in db.StoredFiles.AsNoTracking()
+                        on (Guid?)asset.Id equals file.MediaAssetId
+                    where tmdbWorkIds.Contains(asset.WorkId) && asset.Kind == MediaAssetKind.Video
+                    select asset.WorkId)
+                .Distinct()
+                .ToListAsync(cancellationToken))
+                .ToHashSet();
+
         IReadOnlyDictionary<Guid, WorkCardMetadata> persisted = new Dictionary<Guid, WorkCardMetadata>();
-        if (tmdbMatches.Count > 0)
+        if (tmdbWorkIds.Length > 0)
         {
-            var rows = await new WorkMetadataStore(db).LoadCardMetadataAsync([.. tmdbMatches.Values.Distinct()], cancellationToken);
+            var rows = await new WorkMetadataStore(db).LoadCardMetadataAsync(tmdbWorkIds, cancellationToken);
             persisted = WorkMetadataPresentation.ResolveCards(rows, await WorkMetadataLocales.ForProfileAsync(db, profileId, cancellationToken));
         }
 
@@ -466,16 +474,21 @@ public sealed class DiscoveryCoordinator(
                 };
                 if (item.Provider == TmdbDiscoveryProvider.ProviderKey
                     && tmdbType is { } mediaType
-                    && tmdbMatches.TryGetValue((mediaType, item.ExternalId), out var canonicalWorkId))
+                    && tmdbWorks.TryGetValue((mediaType, item.ExternalId), out var canonicalWorkId))
                 {
                     persisted.TryGetValue(canonicalWorkId, out var metadata);
+                    var detailUrl = LibraryBrowse.DetailHref(mediaType, canonicalWorkId);
+                    var inLibrary = tmdbWorksInLibrary.Contains(canonicalWorkId);
                     return item with
                     {
-                        IsLocal = true,
-                        LocalUrl = LibraryBrowse.DetailHref(mediaType, canonicalWorkId),
-                        LocalMediaId = canonicalWorkId,
+                        IsLocal = inLibrary,
+                        LocalUrl = inLibrary ? detailUrl : null,
+                        LocalMediaId = inLibrary ? canonicalWorkId : null,
+                        WorkUrl = detailUrl,
                         Title = metadata?.Title ?? item.Title,
-                        CoverImageUrl = metadata?.PosterUrl ?? item.CoverImageUrl
+                        CoverImageUrl = metadata?.PosterUrl ?? item.CoverImageUrl,
+                        BackdropUrl = metadata?.BackdropUrl ?? item.BackdropUrl,
+                        TrailerKey = metadata?.TrailerKey
                     };
                 }
 
@@ -506,7 +519,8 @@ public sealed class DiscoveryCoordinator(
             null,
             row.DetailsUrl,
             false,
-            Rating: row.Rating);
+            Rating: row.Rating,
+            BackdropUrl: row.BackdropUrl);
 
     private static DiscoveryItem MapAnime(AnimeMetadataCandidate row) =>
         new(
@@ -529,7 +543,9 @@ public sealed class DiscoveryCoordinator(
             false,
             null,
             $"https://anilist.co/anime/{row.ExternalId}",
-            false);
+            false,
+            BackdropUrl: row.BannerImageUrl,
+            TrailerKey: row.TrailerKey);
 
     private static DiscoveryItem MapReading(
         AniListReadingMediaCandidate row,
@@ -556,7 +572,8 @@ public sealed class DiscoveryCoordinator(
             !row.IsNovel && isOwner
                 ? BuildMangaImportUrl(row.ExternalId, row.PreferredTitle)
                 : $"https://anilist.co/manga/{row.ExternalId}",
-            isOwner && row.IsNovel);
+            isOwner && row.IsNovel,
+            BackdropUrl: row.BannerImageUrl);
 
     // Only Open Library editions carry subject tags; the other book sources
     // (Google Books, Wikisource, Gutenberg) never populate Subjects here. A

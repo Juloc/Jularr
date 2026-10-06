@@ -1,7 +1,7 @@
-// Persisted Work metadata on the Movie and Series pages (docs/mockups/movie-detail, anime-series-detail): the trailer facade, the
-// expandable description and artwork that is gone. The trailer is a click-to-load facade: nothing of YouTube is requested until the
-// viewer starts it, and then exactly one sandboxed privacy-enhanced frame is added, built only from a key with the shape of a YouTube
-// id. The rules are DOM-free where they can be (the frame description, the expand state), so they are testable without a page; the
+// Persisted Work metadata on the Movie and Series pages (docs/mockups/movie-detail, anime-series-detail) and the trailer of the Discover
+// Quick View (docs/mockups/media-preview): the trailer facade, the expandable description and artwork that is gone. The trailer is a
+// click-to-load facade: nothing of YouTube is requested until the viewer starts it (or, in the Quick View, until it is open), and then
+// exactly one sandboxed privacy-enhanced frame is added, built only from a key with the shape of a YouTube id. The rules are DOM-free where they can be (the frame description, the expand state), so they are testable without a page; the
 // link of the facade opens the video on YouTube by itself when this script does not run.
 (() => {
     "use strict";
@@ -11,15 +11,15 @@
 
     /**
      * The attributes of the one frame the facade adds, or null for a key that is not a YouTube id. The sandbox gives the player what
-     * it needs to run and nothing that reaches this page: no top navigation, no popups, no forms.
+     * it needs to run and nothing that reaches this page: no top navigation, no popups, no forms. A trailer that starts by itself is muted.
      */
-    const trailerFrame = (key, title) => {
+    const trailerFrame = (key, title, muted = false) => {
         if (typeof key !== "string" || !youTubeKey.test(key)) {
             return null;
         }
 
         return {
-            src: `${embedOrigin}/embed/${key}?autoplay=1&rel=0&playsinline=1`,
+            src: `${embedOrigin}/embed/${key}?autoplay=1${muted ? "&mute=1" : ""}&rel=0&playsinline=1`,
             title: title ?? "",
             sandbox: "allow-scripts allow-same-origin allow-presentation",
             allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
@@ -27,9 +27,12 @@
         };
     };
 
-    /** Replaces the facade with the trailer frame; false (and nothing changes) when the facade does not carry a valid key. */
-    const startTrailer = (facade, doc) => {
-        const attributes = trailerFrame(facade.dataset.key, facade.dataset.frameTitle);
+    /**
+     * Replaces the facade with the trailer frame; false (and nothing changes) when the facade does not carry a valid key. A trailer the viewer
+     * did not ask for (muted) leaves the keyboard focus where it is.
+     */
+    const startTrailer = (facade, doc, { muted = false } = {}) => {
+        const attributes = trailerFrame(facade.dataset.key, facade.dataset.frameTitle, muted);
         if (attributes === null) {
             return false;
         }
@@ -42,7 +45,7 @@
         frame.className = "vd-trailer-embed";
         facade.replaceChildren(frame);
         facade.dataset.started = "true";
-        frame.focus();
+        if (!muted) frame.focus();
         return true;
     };
 

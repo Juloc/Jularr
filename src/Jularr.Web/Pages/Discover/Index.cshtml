@@ -55,6 +55,7 @@
      data-discover
      data-is-owner="@Model.IsOwner.ToString().ToLowerInvariant()"
      data-resolve-url="@Url.Page("/Discover/Index", "Resolve")"
+     data-open-url="@Url.Page("/Discover/Index", "Open")"
      data-request-url="@Url.Page("/Discover/Index", "Request")"
      data-request-status-url="@Url.Page("/Discover/Index", "RequestStatus")"
      data-watchlist-url="@Url.Page("/Discover/Index", "Watchlist")"
@@ -289,6 +290,7 @@
 </div>
 
 @section Scripts {
+    <script src="~/js/work-metadata.js" asp-append-version="true" defer></script>
     <script src="~/js/discover-staging.js" asp-append-version="true" defer></script>
     <script src="~/js/discover.js" asp-append-version="true" defer></script>
     <script src="~/js/discover-request.js" asp-append-version="true" defer></script>

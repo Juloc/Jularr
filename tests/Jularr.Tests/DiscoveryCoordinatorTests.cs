@@ -313,6 +313,34 @@ public sealed class DiscoveryCoordinatorTests
     }
 
     [TestMethod]
+    public async Task ATitleThatIsAWorkWithoutFilesIsNotLocalButOpensItsDetailWithItsPersistedBackdropAndTrailer()
+    {
+        var (coordinator, db) = await CoordinatorAsync(_ => Answer(Results("Provider", 2, movie: true)));
+        await using var database = db;
+        var seed = new LibraryCanonicalSeed(db);
+        var work = await seed.AddWorkAsync(WorkMediaType.Movie, "Provider 1", 2024);
+        await new WorkService(db).LinkExternalIdentityAsync(work.Id, WorkMediaType.Movie, "tmdb", "101", 1.0, "test", true, false, MappingReviewState.Confirmed, CancellationToken.None);
+        var store = new WorkMetadataStore(db);
+        await store.ReplaceLocalizedFieldAsync(work.Id, "en", WorkLocalizedField.Trailer, ["dQw4w9WgXcQ"], "tmdb", "101", 10, DateTime.UtcNow, CancellationToken.None);
+        var key = Jularr.Web.Features.Artwork.WorkArtworkCache.CacheKey(work.Id, WorkArtworkSlot.Backdrop, "", "tmdb", "/b.jpg");
+        await store.UpsertArtworkAsync(work.Id, new WorkArtworkCandidate(WorkArtworkSlot.Backdrop, "", "/b.jpg", new Uri("https://image.tmdb.org/t/p/w780/b.jpg"), 2, 3, 5, 1), "tmdb", key, DateTime.UtcNow, CancellationToken.None);
+        var load = await coordinator.LoadAsync([Request(DiscoveryCategory.Movie)], Audience(), new DiscoveryWait(TimeSpan.FromSeconds(10)), CancellationToken.None);
+
+        var overlay = await coordinator.OverlayLocalStateAsync(load.Batches[0].Items, "viewer", CancellationToken.None);
+
+        var known = overlay["tmdb:movie:101"];
+        Assert.IsFalse(known.IsLocal, "Without a video file the title is not in the library.");
+        Assert.IsNull(known.LocalUrl);
+        Assert.AreEqual($"/Library/Movie/{work.Id}", known.WorkUrl, "The canonical Work it already has is its Detail.");
+        StringAssert.StartsWith(known.BackdropUrl, $"/works/{work.Id:D}/artwork/");
+        Assert.AreEqual("dQw4w9WgXcQ", known.TrailerKey);
+        var unknown = overlay["tmdb:movie:102"];
+        Assert.IsNull(unknown.WorkUrl);
+        Assert.IsNull(unknown.TrailerKey, "A title without a Work has no trailer: the Preview makes no further provider call for one.");
+        Assert.AreEqual(1, await db.Works.CountAsync(), "Showing a candidate never creates a Work.");
+    }
+
+    [TestMethod]
     public void ABookSearchWhoseCatalogsDidNotAnswerAndFoundNothingFailsAndAnyOtherAnswerIsKept()
     {
         var book = new BookCatalogItem("ol-1", "Dune", "Frank Herbert", null, null, [], 1965, null, null, "https://openlibrary.org/works/1", "Open Library", null);

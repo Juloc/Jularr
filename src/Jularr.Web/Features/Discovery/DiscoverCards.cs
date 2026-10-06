@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Watchlist;
 using Jularr.Web.Ui;
@@ -66,9 +67,11 @@ public sealed record DiscoverCardView(
     string Title,
     string? NativeTitle,
     string? Author,
-    string Href,
-    bool HrefIsExternal,
+    string? DetailUrl,
+    bool ResolvesDetail,
     string? PosterUrl,
+    string? BackdropUrl,
+    string? TrailerKey,
     string Initial,
     string Meta,
     int? Year,
@@ -131,15 +134,13 @@ public static partial class DiscoverCardFactory
         var canRequest = !item.IsLocal && open is null && context.RequestableCategories.Contains(item.Category);
         var state = DiscoverStates.Resolve(item, open, local, context.Preference, canRequest, ui);
 
-        var providerUrl = ProviderUrl(item);
         var importUrl = item.DetailsUrl.StartsWith("/Discover/MangaImport", StringComparison.Ordinal)
             ? item.DetailsUrl
             : null;
-        var href = DiscoverUrls.Safe(item.IsLocal && item.LocalUrl is { Length: > 0 } target
-            ? target
-            : importUrl is not null
-                ? providerUrl ?? item.DetailsUrl
-                : item.DetailsUrl) ?? "#";
+        var detailUrl = DetailUrlOf(item);
+
+        // A title the library does not know yet gets its canonical Work when it is opened, and only a profile that may request it may create one (docs/mockups/discover/SPEC.md).
+        var resolvesDetail = detailUrl is null && canRequest && item.Provider == TmdbDiscoveryProvider.ProviderKey && item.Category is "movie" or "tv";
 
         var canFollow = WatchlistDraftInput.TryIdentity(item.Category, item.Provider, item.ExternalId, out var identity);
         var followedFranchise = canFollow && context.Followed.TryGetValue(identity.Key, out var franchiseId)
@@ -160,9 +161,11 @@ public static partial class DiscoverCardFactory
             item.Title,
             string.IsNullOrWhiteSpace(item.NativeTitle) || item.NativeTitle == item.Title ? null : item.NativeTitle,
             item.Author,
-            href,
-            IsExternal(href),
+            detailUrl,
+            resolvesDetail,
             DiscoverUrls.Safe(item.CoverImageUrl),
+            DiscoverUrls.Safe(item.BackdropUrl),
+            WorkTrailerView.IsYouTubeKey(item.TrailerKey) ? item.TrailerKey : null,
             WatchlistLabels.Initial(item.Title),
             Meta(item.Category, kind, item.Year, ui),
             item.Year,
@@ -271,14 +274,17 @@ public static partial class DiscoverCardFactory
         return facts;
     }
 
-    private static string? ProviderUrl(DiscoveryItem item) =>
-        item.Provider == "anilist" && item.ExternalId.All(char.IsAsciiDigit) && item.ExternalId.Length > 0
-            ? $"https://anilist.co/{(item.Category == "anime" ? "anime" : "manga")}/{item.ExternalId}"
-            : null;
-
-    private static bool IsExternal(string url) =>
-        url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-        || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// The page of this application that opens the title: its library page, the Detail of the canonical Work it already has, or the catalog page of a book.
+    /// A title that only exists at a provider has none, and a provider page is never the card's destination (docs/mockups/media-preview, section 21).
+    /// </summary>
+    private static string? DetailUrlOf(DiscoveryItem item)
+    {
+        var candidate = item.IsLocal && item.LocalUrl is { Length: > 0 } localUrl
+            ? localUrl
+            : item.WorkUrl ?? (item.DetailsUrl.StartsWith("/Books/", StringComparison.Ordinal) ? item.DetailsUrl : null);
+        return DiscoverUrls.Safe(candidate) is { } safe && safe.StartsWith('/') ? safe : null;
+    }
 
     internal static string CodeList(IReadOnlyList<string> codes) =>
         string.Join('/', codes.Take(MaxLanguageCodes).Select(code => code.ToUpperInvariant()));

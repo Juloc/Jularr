@@ -23,6 +23,7 @@ public sealed class AniListMetadataProvider(
               description(asHtml: false)
               coverImage { extraLarge large }
               bannerImage
+              trailer { id site }
               format
               status
               season
@@ -45,6 +46,7 @@ public sealed class AniListMetadataProvider(
               description(asHtml: false)
               coverImage { extraLarge large }
               bannerImage
+              trailer { id site }
               format
               status
               season
@@ -669,8 +671,17 @@ public sealed class AniListMetadataProvider(
             ReadInt(media, "seasonYear"),
             ReadInt(media, "episodes"),
             ReadInt(media, "duration"),
-            ReadInt(media, "averageScore"));
+            ReadInt(media, "averageScore"),
+            ReadYouTubeTrailerKey(media));
     }
+
+    /// <summary>AniList names a trailer by site and id; only a YouTube video id is ever used, because that is the only embed the Preview offers.</summary>
+    private static string? ReadYouTubeTrailerKey(JsonElement media) =>
+        media.TryGetProperty("trailer", out var trailer)
+        && trailer.ValueKind == JsonValueKind.Object
+        && string.Equals(ReadString(trailer, "site"), "youtube", StringComparison.OrdinalIgnoreCase)
+            ? ReadString(trailer, "id")
+            : null;
 
     private static string? ReadString(JsonElement element, string propertyName)
     {

@@ -165,11 +165,15 @@ public sealed class DiscoverPageTests
         string? status = "FINISHED",
         string details = "https://anilist.co/anime/1",
         string? description = null,
-        bool canImportSource = false) =>
+        bool canImportSource = false,
+        string provider = "anilist",
+        string? workUrl = null,
+        string? backdrop = null,
+        string? trailerKey = null) =>
         new(
-            $"anilist:{category}:{externalId}",
+            $"{provider}:{category}:{externalId}",
             category,
-            "anilist",
+            provider,
             externalId,
             title,
             null,
@@ -187,7 +191,10 @@ public sealed class DiscoverPageTests
             localUrl,
             details,
             canImportSource,
-            LocalMediaId: localMediaId);
+            LocalMediaId: localMediaId,
+            BackdropUrl: backdrop,
+            TrailerKey: trailerKey,
+            WorkUrl: workUrl);
 
     private static AcquisitionRequest Request(
         string? audio,
@@ -240,7 +247,8 @@ public sealed class DiscoverPageTests
         Assert.AreEqual("DE available", card.State.Label);
         Assert.AreEqual("/Library/Episode/e", card.PlayUrl);
         Assert.AreEqual("Continue watching", card.PlayLabel);
-        Assert.AreEqual("/Library/Anime/a", card.Href);
+        Assert.AreEqual("/Library/Anime/a", card.DetailUrl);
+        Assert.IsFalse(card.ResolvesDetail);
     }
 
     [TestMethod]
@@ -364,7 +372,56 @@ public sealed class DiscoverPageTests
         Assert.AreEqual("F", card.Initial);
         Assert.IsTrue(card.CanFollow);
         Assert.IsTrue(card.CanFollowFranchise);
-        Assert.IsTrue(card.HrefIsExternal, "An anime that is not in the library has only the provider page.");
+        Assert.IsNull(card.DetailUrl, "An anime that only exists at AniList has no page here, and the provider page is never the destination.");
+        Assert.IsFalse(card.ResolvesDetail, "AniList identities get no Work from opening a card.");
+    }
+
+    [TestMethod]
+    public void AMovieOrSeriesWithoutAWorkResolvesItsDetailOnlyForAProfileThatMayRequestIt()
+    {
+        var tmdbMovie = Item("movie", "603", "The Matrix", provider: "tmdb", details: "https://www.themoviedb.org/movie/603");
+
+        var requestable = DiscoverCardFactory.Create(tmdbMovie, Context(null, null, null, "movie"));
+        var notRequestable = DiscoverCardFactory.Create(tmdbMovie, Context(null, null, null, "anime"));
+
+        Assert.IsNull(requestable.DetailUrl);
+        Assert.IsTrue(requestable.ResolvesDetail);
+        Assert.IsFalse(notRequestable.ResolvesDetail, "Opening creates the canonical Work, so it needs the capability to request.");
+        Assert.IsNull(notRequestable.DetailUrl);
+    }
+
+    [TestMethod]
+    public void ATitleThatAlreadyHasACanonicalWorkOpensItsDetailWithoutBeingInTheLibrary()
+    {
+        var item = Item("tv", "1399", "Severance", provider: "tmdb", details: "https://www.themoviedb.org/tv/1399", workUrl: "/Library/Series/5d0f6a38-0000-0000-0000-000000000001");
+
+        var card = DiscoverCardFactory.Create(item, Context(null, null, null, "tv"));
+
+        Assert.IsFalse(card.IsLocal);
+        Assert.AreEqual("/Library/Series/5d0f6a38-0000-0000-0000-000000000001", card.DetailUrl);
+        Assert.IsFalse(card.ResolvesDetail);
+    }
+
+    [TestMethod]
+    public void ABookOpensItsCatalogPageAndAProviderPageOrAnUnsafeAddressNeverBecomesTheDestination()
+    {
+        var book = DiscoverCardFactory.Create(Item("book", "ol-1", "Dune", provider: "openlibrary", details: "/Books/ol-1"), Context(null, null, null, "book"));
+        var foreign = DiscoverCardFactory.Create(Item("book", "x", "X", provider: "openlibrary", details: "https://example.com/Books/x", workUrl: "//evil.example/x"), Context(null, null, null, "book"));
+
+        Assert.AreEqual("/Books/ol-1", book.DetailUrl);
+        Assert.IsNull(foreign.DetailUrl);
+    }
+
+    [TestMethod]
+    public void ThePreviewKeepsOnlyASafeBackdropAndAYouTubeShapedTrailerKey()
+    {
+        var good = DiscoverCardFactory.Create(Item(backdrop: "https://img.example/b.jpg", trailerKey: "dQw4w9WgXcQ"), Context());
+        var bad = DiscoverCardFactory.Create(Item(backdrop: "javascript:alert(1)", trailerKey: "x\" onload=\"1"), Context());
+
+        Assert.AreEqual("https://img.example/b.jpg", good.BackdropUrl);
+        Assert.AreEqual("dQw4w9WgXcQ", good.TrailerKey);
+        Assert.IsNull(bad.BackdropUrl);
+        Assert.IsNull(bad.TrailerKey);
     }
 
     [TestMethod]
@@ -380,14 +437,15 @@ public sealed class DiscoverPageTests
     }
 
     [TestMethod]
-    public void TheOwnersMangaImportStaysAnActionAndTheTitleLinksToTheProvider()
+    public void TheOwnersMangaImportStaysAnActionAndTheTitleHasNoProviderLink()
     {
         var card = DiscoverCardFactory.Create(
             Item("manga", "7", details: DiscoveryCoordinator.BuildMangaImportUrl("7", "Berserk")),
             Context());
 
         Assert.AreEqual(DiscoveryCoordinator.BuildMangaImportUrl("7", "Berserk"), card.ImportMangaUrl);
-        Assert.AreEqual("https://anilist.co/manga/7", card.Href);
+        Assert.IsNull(card.DetailUrl);
+        Assert.IsFalse(card.ResolvesDetail);
     }
 
     [TestMethod]
@@ -399,7 +457,7 @@ public sealed class DiscoverPageTests
 
         Assert.IsFalse(card.CanFollow);
         Assert.IsFalse(card.CanFollowFranchise);
-        Assert.AreEqual("/Library/Anime/x", card.Href);
+        Assert.AreEqual("/Library/Anime/x", card.DetailUrl);
         Assert.IsTrue(card.IsLocal);
     }
 

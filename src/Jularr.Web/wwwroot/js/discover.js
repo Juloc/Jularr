@@ -18,7 +18,7 @@
     const statusText = status =>
         root.dataset[`status${status.charAt(0).toUpperCase()}${status.slice(1)}`] || status;
 
-    const touchFirst = window.matchMedia("(hover: none), (pointer: coarse)");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const SEARCH_DELAY = 250;
 
     let abortController = null;
@@ -490,6 +490,11 @@
         } else {
             sheet.setAttribute("open", "");
         }
+
+        // The one trailer starts only now that the sheet is open and visible, muted and without taking the focus; closing the sheet removes its frame.
+        // Reduced motion keeps the facade, so the viewer starts it on purpose.
+        const facade = sheetContent.querySelector("[data-vd-trailer]");
+        if (facade && !reducedMotion.matches) window.JularrWorkMetadata?.startTrailer(facade, document, { muted: true });
         return true;
     }
 
@@ -504,8 +509,8 @@
         if (event.target === sheet) closeSheet();
     });
 
-    // Click: the preview button always opens the sheet. A card that is not in the library opens it too, since
-    // its only page is the provider's; a library card opens its page, except on touch where the sheet comes first.
+    // Click: a card opens the canonical Detail on every pointer, so a link just navigates. A title whose Work is created when it is opened asks the
+    // server for it first; a title that only exists at a provider has no page here and opens the Quick View, as does the Quick View button itself.
     body.addEventListener("click", event => {
         const target = event.target instanceof Element ? event.target : null;
         const card = target?.closest("[data-dc-card]");
@@ -516,12 +521,28 @@
             return;
         }
 
-        const link = target.closest("a");
-        if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        if (link.closest(".dc-card-body, .dc-art") && (touchFirst.matches || !card.classList.contains("is-local"))) {
-            if (openSheet(card)) event.preventDefault();
+        const activate = target.closest("[data-dc-activate]");
+        if (!activate) return;
+        if (activate.dataset.dcActivate === "preview") {
+            openSheet(card);
+        } else {
+            void openDetail(card.dataset.dcCategory, card.dataset.dcProvider, card.dataset.dcExternalId, card, () => openSheet(card));
         }
     });
+
+    // The server resolves the identity to its canonical Work (creating it once) and names its Detail. A refusal or a failure is never a dead end:
+    // the card falls back to its Quick View, the Details button of the Quick View reports it.
+    async function openDetail(category, provider, externalId, busy, onFailure) {
+        if (busy.getAttribute("aria-busy") === "true") return;
+        busy.setAttribute("aria-busy", "true");
+        try {
+            const payload = await postForm(root.dataset.openUrl, { category, provider, externalId });
+            window.location.assign(payload.url);
+        } catch {
+            busy.removeAttribute("aria-busy");
+            onFailure();
+        }
+    }
 
     // ---- Preview actions ---------------------------------------------------------------------------
 
@@ -771,6 +792,12 @@
             } finally {
                 follow.disabled = false;
             }
+            return;
+        }
+
+        const open = target.closest("[data-dc-activate='open']");
+        if (open) {
+            void openDetail(data.category, data.provider, data.externalId, open, () => { open.title = text("textActionFailed"); });
             return;
         }
 

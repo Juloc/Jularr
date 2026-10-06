@@ -54,6 +54,22 @@ public sealed class WorkMetadataScriptTests
     }
 
     [TestMethod]
+    public void ATrailerThatStartsByItselfIsMutedAndLeavesTheKeyboardFocusWhereItIs()
+    {
+        var result = Json("""
+            const page = doc(); const box = facade({ key: 'BdJKm16Co6M', frameTitle: 'Trailer of Moon' });
+            const started = window.JularrWorkMetadata.startTrailer(box, page, { muted: true });
+            const frame = box.children[0];
+            return { started, focused: frame.focused, src: frame.attrs.src, asked: window.JularrWorkMetadata.trailerFrame('BdJKm16Co6M', 'x').src };
+            """);
+
+        Assert.AreEqual(
+            "{\"started\":true,\"focused\":false,\"src\":\"https://www.youtube-nocookie.com/embed/BdJKm16Co6M?autoplay=1&mute=1&rel=0&playsinline=1\","
+            + "\"asked\":\"https://www.youtube-nocookie.com/embed/BdJKm16Co6M?autoplay=1&rel=0&playsinline=1\"}",
+            result);
+    }
+
+    [TestMethod]
     public void AFacadeWithoutAValidKeyStaysAsItIsSoTheLinkStillWorks()
     {
         var result = Json("""

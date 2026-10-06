@@ -24,13 +24,15 @@ public sealed record WorkMetadataRows(
     DateTime? LastSucceededAt);
 
 /// <summary>The card-sized metadata of the Works of a Library page: cached poster/backdrop variants, localized titles and facts.</summary>
-public sealed record WorkCardMetadataRows(IReadOnlyList<WorkCardArtwork> Artwork, IReadOnlyList<WorkCardTitle> Titles, IReadOnlyList<WorkCardFacts> Facts);
+public sealed record WorkCardMetadataRows(IReadOnlyList<WorkCardArtwork> Artwork, IReadOnlyList<WorkCardTitle> Titles, IReadOnlyList<WorkCardFacts> Facts, IReadOnlyList<WorkCardTrailer> Trailers);
 
 public sealed record WorkCardArtwork(Guid WorkId, long ArtworkId, WorkArtworkSlot Slot, string Language, string CacheKey, double? VoteAverage);
 
 public sealed record WorkCardTitle(Guid WorkId, string Locale, string Value);
 
 public sealed record WorkCardFacts(Guid WorkId, string? OriginalLanguage, double? Rating);
+
+public sealed record WorkCardTrailer(Guid WorkId, string Locale, string Key);
 
 /// <summary>
 /// The persistence owner of Work metadata and artwork (#820): explicit, parameterized PostgreSQL for the localized values, the
@@ -354,7 +356,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     {
         if (workIds.Count == 0)
         {
-            return new WorkCardMetadataRows([], [], []);
+            return new WorkCardMetadataRows([], [], [], []);
         }
 
         var ids = workIds.ToArray();
@@ -373,12 +375,17 @@ public sealed class WorkMetadataStore(AppDbContext db)
                 SELECT facts."WorkId", 2, NULL, NULL, facts."OriginalLanguage", NULL, facts."Rating"
                 FROM "WorkMetadataFacts" AS facts
                 WHERE facts."WorkId" = ANY({ids})
+                UNION ALL
+                SELECT trailer."WorkId", 3, NULL, NULL, trailer."Locale", trailer."Value", NULL
+                FROM "WorkLocalizedValues" AS trailer
+                WHERE trailer."WorkId" = ANY({ids}) AND trailer."Field" = {(int)WorkLocalizedField.Trailer} AND trailer."Position" = 0
                 """)
             .ToListAsync(cancellationToken);
         return new WorkCardMetadataRows(
             [.. rows.Where(x => x.Kind == 0).Select(x => new WorkCardArtwork(x.WorkId, x.ArtworkId!.Value, (WorkArtworkSlot)x.Slot!.Value, x.Locale!, x.Text!, x.Number))],
             [.. rows.Where(x => x.Kind == 1).Select(x => new WorkCardTitle(x.WorkId, x.Locale!, x.Text!))],
-            [.. rows.Where(x => x.Kind == 2).Select(x => new WorkCardFacts(x.WorkId, x.Locale, x.Number))]);
+            [.. rows.Where(x => x.Kind == 2).Select(x => new WorkCardFacts(x.WorkId, x.Locale, x.Number))],
+            [.. rows.Where(x => x.Kind == 3).Select(x => new WorkCardTrailer(x.WorkId, x.Locale!, x.Text!))]);
     }
 
     /// <summary>

@@ -150,7 +150,12 @@ public sealed record DiscoveryItem(
     Guid? FollowedFranchiseId = null,
     // Books only (#371): the source never fabricates either when it does not supply one.
     string? Author = null,
-    double? Rating = null);
+    double? Rating = null,
+    // The wide artwork and the YouTube trailer id of the Preview (docs/mockups/media-preview, section 7); only what the source already returned, never a further call.
+    string? BackdropUrl = null,
+    string? TrailerKey = null,
+    // The Detail of the canonical Work this title already has without being in the library (for example after a Request); set per response, never cached.
+    string? WorkUrl = null);
 
 internal static class DiscoveryStringExtensions
 {

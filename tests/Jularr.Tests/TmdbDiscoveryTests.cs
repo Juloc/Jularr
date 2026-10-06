@@ -32,6 +32,7 @@ public sealed class TmdbDiscoveryTests
                       "original_title": "Fight Club",
                       "overview": "An insomniac meets a soap maker.",
                       "poster_path": "/poster.jpg",
+                      "backdrop_path": "/backdrop.jpg",
                       "release_date": "1999-10-15",
                       "genre_ids": [18],
                       "vote_average": 8.4
@@ -51,6 +52,7 @@ public sealed class TmdbDiscoveryTests
         Assert.AreEqual(1, first.Count);
         Assert.AreEqual("550", first[0].ExternalId);
         Assert.AreEqual("movie", first[0].Category);
+        Assert.AreEqual("https://image.tmdb.org/t/p/w780/backdrop.jpg", first[0].BackdropUrl, "The Preview hero comes from the list answer, with no further call.");
         Assert.AreEqual(first[0], second[0]);
         Assert.AreEqual(0, await db.Works.CountAsync(), "Browsing a provider feed must not become a second durable catalog.");
     }
