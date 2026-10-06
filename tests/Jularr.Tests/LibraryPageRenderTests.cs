@@ -283,7 +283,7 @@ public sealed class LibraryPageRenderTests
     }
 
     [TestMethod]
-    public async Task MovieAndSeriesCardsShowTheLocalPosterSizedAndLazyWithAFallbackAndTheRatingChipWhileAnimeStaysQuiet()
+    public async Task MovieAndSeriesCardsShowTheLocalPosterSizedAndLazyWithAFallbackAndNoRatingBadge()
     {
         var (host, _, _) = await SeedAsync();
         await using var _host = host;
@@ -304,17 +304,13 @@ public sealed class LibraryPageRenderTests
         var movieCard = cards.Single(x => x.Contains("Moon Empire", StringComparison.Ordinal));
         var posterAttributes = @"alt="""" width=""300"" height=""450"" loading=""lazy"" decoding=""async"" referrerpolicy=""no-referrer"" data-lib-poster data-initial=""M""";
         StringAssert.Matches(movieCard, new Regex($@"<img src=""/works/{movie.Id:D}/artwork/[0-9]+\?v=[0-9a-f]{{12}}"" {posterAttributes}"));
-        StringAssert.Matches(movieCard, new Regex(@"<span class=""lib-score"">[\s\S]*lib-score-label"">Rating </span>7\.7"));
+        Assert.IsFalse(movieCard.Contains("lib-score", StringComparison.Ordinal), "The MediaCard grammar of the Library SPEC has no rating badge.");
         Assert.IsFalse(movieCard.Contains("lib-card-initial", StringComparison.Ordinal), "A title with a poster has no placeholder.");
         Assert.IsFalse(movieCard.Contains("image.tmdb.org", StringComparison.Ordinal), "The CDN is never hot-linked.");
 
         var plainCard = cards.Single(x => x.Contains("Plain Film", StringComparison.Ordinal));
         StringAssert.Contains(plainCard, "lib-card-initial");
-        Assert.IsFalse(plainCard.Contains("lib-score", StringComparison.Ordinal), "No rating, no chip.");
         Assert.IsFalse(plainCard.Contains("<img", StringComparison.Ordinal));
-
-        var starfallCard = cards.Single(x => x.Contains("Starfall Chronicle", StringComparison.Ordinal));
-        Assert.IsFalse(starfallCard.Contains("lib-score", StringComparison.Ordinal), "Anime cards carry no rating chip.");
     }
 
     [TestMethod]

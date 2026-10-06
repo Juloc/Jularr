@@ -191,7 +191,6 @@ public sealed record LibraryCardView(
     string Href,
     string? PosterUrl,
     string Initial,
-    string? ScoreText,
     string? StatusText,
     int? ProgressPercent,
     string? ProgressAria,
@@ -225,7 +224,7 @@ public sealed record LibraryCardView(
         var yearText = card.Year is > 0 ? card.Year.Value.ToString(culture) : null;
 
         // A Movie has no next unit: it shows what it is (year and runtime) until it is resumed or finished.
-        var movieFacts = string.Join(" · ", new[] { yearText, entry.RuntimeMinutes is > 0 ? VideoDetailView.RuntimeText(entry.RuntimeMinutes.Value) : null }.Where(fact => fact is not null));
+        var movieFacts = string.Join(" · ", new[] { yearText, entry.RuntimeMinutes is > 0 ? VideoDetailView.RuntimeText(entry.RuntimeMinutes.Value, ui) : null }.Where(fact => fact is not null));
         string? movieStatus = movieFacts.Length > 0 ? movieFacts : null;
 
         if (progress is null)
@@ -272,15 +271,11 @@ public sealed record LibraryCardView(
         var audio = AnimeDetailView.Chips(ToSet(card.AudioLanguages), preference.Audio);
         var subtitles = AnimeDetailView.Chips(ToSet(card.SubtitleLanguages), preference.Subtitle);
 
-        // The provider rating of the persisted Work metadata: a chip on Movie and Series posters (the card carries it on the 0-100 scale of AniList).
-        var scoreText = entry.MediaType is WorkMediaType.Movie or WorkMediaType.Series && card.AverageScore is > 0 ? VideoDetailView.RatingText(card.AverageScore.Value / 10d) : null;
-
         return new LibraryCardView(
             card.Title,
             card.Href,
             entry.PosterUrl,
             InitialOf(card.Title),
-            scoreText,
             statusText,
             percent,
             progressAria,

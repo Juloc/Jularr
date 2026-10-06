@@ -46,9 +46,11 @@ public sealed class WorkMetadataStore(AppDbContext db)
     /// Puts one <c>(Work, locale)</c> on the spool, or promotes it. A queued entry takes the higher priority; one that never ran is
     /// also made due now. A fresh or permanently failed entry is left alone until its own time comes, so opening a Work never refetches
     /// fresh data and never bypasses a failure's backoff. Only Movie and Series Works are spooled (the media types with a metadata
-    /// provider); for any other Work, or an unknown id, nothing is written.
+    /// provider); for any other Work, or an unknown id, nothing is written. A call that would change nothing (the entry already has this
+    /// priority or a higher one, or its time to run is already due) writes nothing either, so repeated opens of a Work cause no write churn.
     /// </summary>
-    public Task EnqueueAsync(Guid workId, string locale, WorkMetadataRefreshPriority priority, DateTime nowUtc, CancellationToken cancellationToken) =>
+    /// <returns>How many entries were added or changed; 0 for a no-op.</returns>
+    public Task<int> EnqueueAsync(Guid workId, string locale, WorkMetadataRefreshPriority priority, DateTime nowUtc, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlAsync(
             $"""
             INSERT INTO "WorkMetadataRefreshes" AS refresh ("WorkId", "Locale", "Priority", "Status", "Attempts", "NextAttemptAt", "CreatedAt", "UpdatedAt")
@@ -59,7 +61,8 @@ public sealed class WorkMetadataStore(AppDbContext db)
                 "Priority" = LEAST(refresh."Priority", excluded."Priority"),
                 "NextAttemptAt" = CASE WHEN refresh."LastAttemptAt" IS NULL THEN LEAST(refresh."NextAttemptAt", excluded."NextAttemptAt") ELSE refresh."NextAttemptAt" END,
                 "UpdatedAt" = excluded."UpdatedAt"
-            WHERE refresh."Status" = {(int)WorkMetadataRefreshStatus.Queued} OR refresh."NextAttemptAt" <= excluded."NextAttemptAt"
+            WHERE (refresh."Status" = {(int)WorkMetadataRefreshStatus.Queued} OR refresh."NextAttemptAt" <= excluded."NextAttemptAt")
+              AND (refresh."Priority" > excluded."Priority" OR (refresh."LastAttemptAt" IS NULL AND refresh."NextAttemptAt" > excluded."NextAttemptAt"))
             """,
             cancellationToken);
 

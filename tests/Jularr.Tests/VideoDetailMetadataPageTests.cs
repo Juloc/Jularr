@@ -30,6 +30,8 @@ public sealed class VideoDetailMetadataPageTests
         bool Poster = false,
         bool Facts = false,
         bool Credits = false,
+        bool HostileCredits = false,
+        string[]? Countries = null,
         bool Refreshed = true,
         string[]? Studios = null,
         string? OriginalTitle = null);
@@ -80,17 +82,20 @@ public sealed class VideoDetailMetadataPageTests
                     Certification = seed.Facts ? "PG-13" : null,
                     CertificationCountry = seed.Facts ? "US" : null,
                     Studios = seed.Studios ?? (seed.Facts ? ["Northlight Pictures", "Orbital Films"] : []),
-                    ProductionCountries = seed.Facts ? ["US", "GB"] : [],
+                    ProductionCountries = seed.Countries ?? (seed.Facts ? ["US", "GB"] : []),
                     UpdatedAt = now
                 },
                 CancellationToken.None);
         }
 
-        if (seed.Credits)
+        if (seed.Credits || seed.HostileCredits)
         {
+            WorkCreditCandidate[] credits = seed.HostileCredits
+                ? [new(WorkCreditKind.Cast, "<b>Eve</b> O'Brien", "\"><img src=x onerror=alert(6)>", null), new(WorkCreditKind.Crew, "<script>alert(7)</script>", "<Director>", null)]
+                : [new(WorkCreditKind.Cast, "Mara Elling", "Ines Calder", null), new(WorkCreditKind.Cast, "Yuki Tanabe", null, null), new(WorkCreditKind.Crew, "Marta Lindqvist", "Director", null)];
             await store.ReplaceCreditsAsync(
                 work.Id,
-                [new(WorkCreditKind.Cast, "Mara Elling", "Ines Calder", null), new(WorkCreditKind.Cast, "Yuki Tanabe", null, null), new(WorkCreditKind.Crew, "Marta Lindqvist", "Director", null)],
+                credits,
                 "tmdb",
                 now,
                 CancellationToken.None);
@@ -296,7 +301,8 @@ public sealed class VideoDetailMetadataPageTests
                 Trailers: ["x\" onload=\"alert(4)", "https://evil.example/watch?v=1", "short"],
                 Facts: true,
                 Studios: ["\"><img src=x onerror=alert(5)>"],
-                Credits: true,
+                HostileCredits: true,
+                Countries: ["<US>", "\"><svg onload=alert(8)>"],
                 OriginalTitle: "<b>Orig</b>"));
 
         var (status, html, _) = await host.GetRawAsync($"/Library/Movie/{movie.Id}");
@@ -313,6 +319,12 @@ public sealed class VideoDetailMetadataPageTests
         StringAssert.Contains(html, "&lt;img src=x onerror=alert(1)&gt;");
         Assert.IsFalse(html.Contains("data-vd-trailer", StringComparison.Ordinal), "A key that is not a YouTube id never builds a trailer, a link or a frame.");
         Assert.IsFalse(html.Contains("evil.example", StringComparison.Ordinal));
+        foreach (var encoded in new[] { "&lt;b&gt;Eve&lt;/b&gt; O&#x27;Brien", "&lt;script&gt;alert(7)&lt;/script&gt;", "&lt;Director&gt;", "&lt;US&gt;", "&lt;svg onload=alert(8)&gt;" })
+        {
+            StringAssert.Contains(html, encoded);
+        }
+
+        StringAssert.Contains(html, ">EO</span>", "The portrait initial skips markup-like text.");
     }
 
     [TestMethod]
@@ -426,23 +438,115 @@ public sealed class VideoDetailMetadataPageTests
     }
 
     [TestMethod]
-    public void TheValueFormattersWriteRuntimesRatingsCountsAndInitialsOneWay()
+    public async Task TheFramingHeaderExistsOnlyForAMovieWithAPlayableTrailer()
     {
-        Assert.AreEqual("2h 46m", VideoDetailView.RuntimeText(166));
-        Assert.AreEqual("1h 05m", VideoDetailView.RuntimeText(65));
-        Assert.AreEqual("48m", VideoDetailView.RuntimeText(48));
-        Assert.AreEqual("8.1", VideoDetailView.RatingText(8.1));
-        Assert.AreEqual("7.0", VideoDetailView.RatingText(7));
-        Assert.AreEqual("7.7", VideoDetailView.RatingText(7.65), "Halves round up, like the card rating.");
-        Assert.AreEqual("812", VideoDetailView.CompactCount(812));
-        Assert.AreEqual("12.3K", VideoDetailView.CompactCount(12_345));
-        Assert.AreEqual("621.3K", VideoDetailView.CompactCount(621_345));
-        Assert.AreEqual("1.2M", VideoDetailView.CompactCount(1_234_000));
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var withTrailer = await AddTitleAsync(host, WorkMediaType.Movie, "With Trailer", 2024, "801");
+        await SeedMetadataAsync(host, withTrailer, Full());
+        var withoutTrailer = await AddTitleAsync(host, WorkMediaType.Movie, "Without Trailer", 2024, "802");
+        await SeedMetadataAsync(host, withoutTrailer, Full() with { Trailers = null });
+        var badKeyOnly = await AddTitleAsync(host, WorkMediaType.Movie, "Bad Key", 2024, "803");
+        await SeedMetadataAsync(host, badKeyOnly, Full() with { Trailers = ["not a key"] });
+        var bare = await AddTitleAsync(host, WorkMediaType.Movie, "Bare", 2024, "804");
+        var series = await AddTitleAsync(host, WorkMediaType.Series, "A Series", 2024, "805");
+        await SeedMetadataAsync(host, series, Full());
+
+        Assert.IsTrue((await host.GetRawAsync($"/Library/Movie/{withTrailer.Id}")).Headers.Contains("Content-Security-Policy"));
+        foreach (var path in new[] { $"/Library/Movie/{withoutTrailer.Id}", $"/Library/Movie/{badKeyOnly.Id}", $"/Library/Movie/{bare.Id}", $"/Library/Series/{series.Id}" })
+        {
+            var (status, _, headers) = await host.GetRawAsync(path);
+            Assert.AreEqual(HttpStatusCode.OK, status, path);
+            Assert.IsFalse(headers.Contains("Content-Security-Policy"), $"{path} frames nothing and sends no framing header.");
+        }
+    }
+
+    [TestMethod]
+    public async Task TheTrailerOnlySharesItsRowWithAVersionsCardThatExists()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var local = await AddTitleAsync(host, WorkMediaType.Movie, "Local", 2024, "801");
+        await SeedMetadataAsync(host, local, Full());
+        var missing = await AddTitleAsync(host, WorkMediaType.Movie, "Missing", 2024, "802", withFile: false);
+        await SeedMetadataAsync(host, missing, Full());
+
+        var shared = await host.GetOkAsync($"/Library/Movie/{local.Id}");
+        var alone = await host.GetOkAsync($"/Library/Movie/{missing.Id}");
+
+        StringAssert.Contains(shared, "<div class=\"vd-top has-trailer\">");
+        StringAssert.Contains(shared, "class=\"vd-card\"");
+        StringAssert.Contains(alone, "<div class=\"vd-top\">", "A trailer without a Versions card takes the whole row, no empty column.");
+        StringAssert.Contains(alone, "class=\"vd-trailer\"");
+        Assert.IsFalse(alone.Contains("vd-versions-title", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task TheHeroMetaLineReadsYearKindRuntimeGenres()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Ordered", 2024);
+        await SeedMetadataAsync(host, movie, Full());
+
+        var meta = Between(await host.GetOkAsync($"/Library/Movie/{movie.Id}"), "<ul class=\"ad-hero-meta\">", "</ul>");
+
+        var texts = Regex.Matches(meta, "<li>([^<]+)</li>").Select(x => x.Groups[1].Value).ToArray();
+        CollectionAssert.AreEqual(new[] { "2024", "Movie", "1h 40m", "Science Fiction", "Adventure", "Drama" }, texts);
+    }
+
+    [TestMethod]
+    public async Task OpeningAQueuedWorkAgainWritesNothingAndDoesNotReorderTheSpool()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var first = await AddTitleAsync(host, WorkMediaType.Movie, "First", 2023, "801");
+        var requested = await AddTitleAsync(host, WorkMediaType.Movie, "Requested", 2023, "802");
+        var store = new WorkMetadataStore(host.Db);
+        var now = DateTime.UtcNow;
+        await store.EnqueueAsync(requested.Id, "en", WorkMetadataRefreshPriority.Requested, now, CancellationToken.None);
+
+        await host.GetOkAsync($"/Library/Movie/{first.Id}");
+        var queued = await host.Db.Set<WorkMetadataRefresh>().AsNoTracking().SingleAsync(x => x.WorkId == first.Id);
+        await host.GetOkAsync($"/Library/Movie/{first.Id}");
+        await host.GetOkAsync($"/Library/Movie/{first.Id}");
+        var again = await host.Db.Set<WorkMetadataRefresh>().AsNoTracking().SingleAsync(x => x.WorkId == first.Id);
+
+        Assert.AreEqual(queued.UpdatedAt, again.UpdatedAt, "A repeated open of a queued Work is a no-op write.");
+        Assert.AreEqual(1, await store.EnqueueAsync(requested.Id, "en", WorkMetadataRefreshPriority.Interactive, now, CancellationToken.None), "A real promotion is a change.");
+        Assert.AreEqual(0, await store.EnqueueAsync(requested.Id, "en", WorkMetadataRefreshPriority.Interactive, now, CancellationToken.None), "The same promotion again changes nothing.");
+        Assert.AreEqual(0, await store.EnqueueAsync(requested.Id, "en", WorkMetadataRefreshPriority.Requested, now, CancellationToken.None), "A lower priority never demotes.");
+        Assert.AreEqual(0, await store.EnqueueAsync(Guid.NewGuid(), "en", WorkMetadataRefreshPriority.Interactive, now, CancellationToken.None), "An unknown Work is not spooled.");
+    }
+
+    [TestMethod]
+    public void TheValueFormattersWriteRuntimesRatingsCountsAndInitialsInTheViewersLanguage()
+    {
+        var english = Jularr.Web.Features.Localization.UiTextBundle.English;
+        var german = new Jularr.Web.Features.Localization.UiTextBundle(
+            "de",
+            "ltr",
+            new Dictionary<string, string> { ["library.video.runtimeHoursMinutes"] = "{hours} Std. {minutes} Min.", ["library.video.runtimeMinutes"] = "{minutes} Min." });
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        var de = VideoDetailView.CultureOf("de-DE");
+
+        Assert.AreEqual("2h 46m", VideoDetailView.RuntimeText(166, english));
+        Assert.AreEqual("1h 05m", VideoDetailView.RuntimeText(65, english));
+        Assert.AreEqual("48m", VideoDetailView.RuntimeText(48, english));
+        Assert.AreEqual("2 Std. 04 Min.", VideoDetailView.RuntimeText(124, german), "The runtime comes from the catalog, not from the code.");
+        Assert.AreEqual("48 Min.", VideoDetailView.RuntimeText(48, german));
+        Assert.AreEqual("8.1", VideoDetailView.RatingText(8.1, invariant));
+        Assert.AreEqual("7.0", VideoDetailView.RatingText(7, invariant));
+        Assert.AreEqual("7.7", VideoDetailView.RatingText(7.65, invariant), "Halves round up, like the card rating.");
+        Assert.AreEqual("8,1", VideoDetailView.RatingText(8.1, de), "The decimal separator follows the viewer, like the About date.");
+        Assert.AreEqual("812", VideoDetailView.CompactCount(812, invariant));
+        Assert.AreEqual("12.3K", VideoDetailView.CompactCount(12_345, invariant));
+        Assert.AreEqual("621.3K", VideoDetailView.CompactCount(621_345, invariant));
+        Assert.AreEqual("1,2M", VideoDetailView.CompactCount(1_234_000, de));
         Assert.AreEqual("ME", VideoDetailView.Initials("Mara Elling"));
         Assert.AreEqual("ZV", VideoDetailView.Initials("Zoe van der Veen"));
         Assert.AreEqual("Y", VideoDetailView.Initials("Yuki"));
-        Assert.AreEqual("<", VideoDetailView.Initials("<b>Eve</b>"));
+        Assert.AreEqual("E", VideoDetailView.Initials("<b>Eve</b>"));
+        Assert.AreEqual("EO", VideoDetailView.Initials("<b>Eve</b> O'Brien"));
+        Assert.AreEqual("É", VideoDetailView.Initials("\"'-- Émile"));
         Assert.AreEqual("·", VideoDetailView.Initials("  "));
+        Assert.AreEqual("·", VideoDetailView.Initials("<><> --"));
     }
 
     [TestMethod]

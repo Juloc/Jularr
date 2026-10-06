@@ -20,7 +20,8 @@
     var hasHdr = detail.Versions.Any(x => x.IsHdr);
     var hasDolbyVision = detail.Versions.Any(x => x.IsDolbyVision);
     var preferredAvailable = detail.Preference.IsAvailableIn(audio, subtitles);
-    var hasTrailer = detail.Metadata?.PlayableTrailer is not null;
+    // A trailer beside the Versions card shares the row; alone either one takes the whole width.
+    var sharesRow = Model.HasTrailer && detail.Versions.Count > 0;
     string Codes(IEnumerable<string> languages) => string.Join(" · ", languages.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()));
     string VersionLabel(VideoDetailVersion version, int number)
     {
@@ -34,7 +35,7 @@
 <partial name="_VideoDetailHero" model="Model" />
 
 <div class="vd-body">
-    <div class="vd-top@(hasTrailer ? " has-trailer" : "")">
+    <div class="vd-top@(sharesRow ? " has-trailer" : "")">
         <partial name="_VideoDetailTrailer" model="Model" />
         @if (detail.Versions.Count > 0)
         {

@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Jularr.Web.Features.InstantPlay;
+using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
 
 namespace Jularr.Web.Features.Library;
@@ -25,31 +27,54 @@ public static class VideoDetailView
         }
     }
 
-    /// <summary>A Movie runtime the way Library cards and the Movie hero write it: "1h 52m", "48m".</summary>
-    public static string RuntimeText(int minutes) => minutes >= 60 ? $"{minutes / 60}h {minutes % 60:00}m" : $"{minutes}m";
+    /// <summary>A Movie runtime the way Library cards and the Movie hero write it in the viewer's language: "1h 52m", "48m".</summary>
+    public static string RuntimeText(int minutes, UiTextBundle ui) => minutes >= 60
+        ? ui.Format("library.video.runtimeHoursMinutes", ("hours", minutes / 60), ("minutes", (minutes % 60).ToString("00", CultureInfo.InvariantCulture)))
+        : ui.Format("library.video.runtimeMinutes", ("minutes", minutes));
 
-    /// <summary>A provider rating on the 0-10 scale with one decimal, as every rating chip writes it.</summary>
-    public static string RatingText(double rating) => Math.Round(rating, 1, MidpointRounding.AwayFromZero).ToString("0.0", CultureInfo.InvariantCulture);
+    /// <summary>A provider rating on the 0-10 scale with one decimal in the viewer's number format.</summary>
+    public static string RatingText(double rating, CultureInfo culture) => Math.Round(rating, 1, MidpointRounding.AwayFromZero).ToString("0.0", culture);
 
-    /// <summary>A vote count in the short form of a rating fact: 640, 12K, 1.2M.</summary>
-    public static string CompactCount(int count) => count switch
+    /// <summary>A vote count in the short form of a rating fact in the viewer's number format: 640, 12K, 1.2M.</summary>
+    public static string CompactCount(int count, CultureInfo culture) => count switch
     {
-        >= 1_000_000 => $"{(count / 1_000_000d).ToString("0.#", CultureInfo.InvariantCulture)}M",
-        >= 1_000 => $"{(count / 1_000d).ToString("0.#", CultureInfo.InvariantCulture)}K",
-        _ => count.ToString(CultureInfo.InvariantCulture)
+        >= 1_000_000 => $"{(count / 1_000_000d).ToString("0.#", culture)}M",
+        >= 1_000 => $"{(count / 1_000d).ToString("0.#", culture)}K",
+        _ => count.ToString(culture)
     };
 
-    /// <summary>The initials of a person for the portrait placeholder: the first letters of the first and the last word, or one letter for a single word.</summary>
+    /// <summary>
+    /// The initials of a person for the portrait placeholder: the first letter or digit of the first and of the last word, or one for a
+    /// single word. Markup-like text of a provider and characters that are not letters are skipped, never shown.
+    /// </summary>
     public static string Initials(string name)
     {
-        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (words.Length == 0)
+        var initials = Regex.Replace(name, "<[^>]*>", " ")
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(FirstLetterOrDigit)
+            .OfType<string>()
+            .ToArray();
+        return initials.Length switch
         {
-            return "·";
+            0 => "·",
+            1 => initials[0].ToUpperInvariant(),
+            _ => (initials[0] + initials[^1]).ToUpperInvariant()
+        };
+    }
+
+    private static string? FirstLetterOrDigit(string word)
+    {
+        var elements = StringInfo.GetTextElementEnumerator(word);
+        while (elements.MoveNext())
+        {
+            var element = (string)elements.Current;
+            if (char.IsLetterOrDigit(element, 0))
+            {
+                return element;
+            }
         }
 
-        var first = StringInfo.GetNextTextElement(words[0]);
-        return (words.Length == 1 ? first : first + StringInfo.GetNextTextElement(words[^1])).ToUpperInvariant();
+        return null;
     }
 
     /// <summary>The canonical web player of a Movie (a Work) or one episode (a WorkEpisode).</summary>

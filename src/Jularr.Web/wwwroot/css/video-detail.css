@@ -22,10 +22,12 @@
     [data-work-hero] .ad-hero-bg::after { background: linear-gradient(0deg, rgb(8 7 14 / .88) 0%, rgb(8 7 14 / .74) 100%); }
 }
 
-/* The description is cut to a few lines; work-metadata.js shows the button only while text is actually hidden. */
+/* The description is cut to a few lines only once work-metadata.js runs (.is-clamped), because the script also provides the button that
+   shows the rest and shows it only while text is actually hidden; without script the whole description is there. */
 .vd-overview { display: grid; justify-items: start; gap: 2px; max-width: 58ch; }
-.vd-overview .ad-hero-description { max-width: none; }
-.vd-overview.is-expanded .ad-hero-description { display: block; overflow: visible; -webkit-line-clamp: unset; }
+.vd-overview .ad-hero-description { display: block; max-width: none; overflow: visible; -webkit-line-clamp: unset; }
+.vd-overview.is-clamped:not(.is-expanded) .ad-hero-description { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 4; }
+@media (max-width: 900px) { .vd-overview.is-clamped:not(.is-expanded) .ad-hero-description { -webkit-line-clamp: 3; } }
 .vd-expand {
     min-height: 28px; padding: 0; border: 0; background: none; color: var(--hero-on-scrim);
     font: inherit; font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer;
@@ -36,6 +38,8 @@
 @media (pointer: coarse) { .vd-expand { min-height: 44px; } }
 
 /* Hero facts that are values rather than counts: the vote count beside the rating and the age rating as a small outlined mark. */
+/* A very long studio name is cut with an ellipsis (its full name is the tooltip of the item) instead of pushing the other facts away. */
+.ad-strip-studio { min-width: 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ad-strip-sub { opacity: .78; font-size: 12px; font-weight: 600; }
 .ad-strip-cert { padding: 2px 8px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .55); font-size: 12px; font-weight: 800; letter-spacing: .03em; }
 
@@ -44,6 +48,7 @@
 .vd-top { display: grid; gap: 20px; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
 .vd-top:not(:has(*)) { display: none; }
 .vd-top.has-trailer { grid-template-columns: minmax(0, 1fr); }
+.vd-top:not(.has-trailer) .vd-trailer { max-width: 880px; }
 @media (min-width: 900px) { .vd-top.has-trailer { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); } }
 
 /* Trailer facade: the Work's backdrop with a play button; the frame is added only after the click (work-metadata.js). */

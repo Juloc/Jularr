@@ -42,6 +42,9 @@ public abstract class VideoDetailPageModel(
 
     public VideoDetail Detail { get; private set; } = null!;
 
+    /// <summary>Whether this page shows the trailer facade: a Movie with a playable trailer. The one place that decides it; the view and the framing header follow it.</summary>
+    public bool HasTrailer { get; private set; }
+
     public PrimaryAction PrimaryAction { get; private set; } = null!;
 
     /// <summary>The episode the action targets, when it targets one.</summary>
@@ -137,7 +140,8 @@ public abstract class VideoDetailPageModel(
 
         Detail = detail;
         await PromoteMetadataRefreshAsync(workId, detail.Metadata, cancellationToken);
-        if (MediaType == WorkMediaType.Movie && detail.Metadata?.PlayableTrailer is not null)
+        HasTrailer = MediaType == WorkMediaType.Movie && detail.Metadata?.PlayableTrailer is not null;
+        if (HasTrailer)
         {
             // The trailer facade adds one frame after the viewer clicks; no other page content may be framed.
             Response.Headers.ContentSecurityPolicy = $"frame-src 'self' {WorkTrailerView.EmbedOrigin}";

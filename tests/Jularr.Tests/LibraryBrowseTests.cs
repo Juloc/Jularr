@@ -130,17 +130,6 @@ public sealed class LibraryBrowseTests
     }
 
     [TestMethod]
-    public void OnlyMovieAndSeriesCardsCarryTheProviderRatingAsOneDecimal()
-    {
-        Assert.AreEqual("7.7", Card(Entry("Moon", mediaType: WorkMediaType.Movie, score: 77), LibraryLanguagePreference.None, Ui).ScoreText);
-        Assert.AreEqual("8.0", Card(Entry("Show", mediaType: WorkMediaType.Series, score: 80), LibraryLanguagePreference.None, Ui).ScoreText);
-        Assert.AreEqual("0.5", Card(Entry("Low", mediaType: WorkMediaType.Movie, score: 5), LibraryLanguagePreference.None, Ui).ScoreText);
-        Assert.IsNull(Card(Entry("Moon", mediaType: WorkMediaType.Movie), LibraryLanguagePreference.None, Ui).ScoreText, "No rating persisted yet.");
-        Assert.IsNull(Card(Entry("Moon", mediaType: WorkMediaType.Movie, score: 0), LibraryLanguagePreference.None, Ui).ScoreText, "A zero rating is no rating.");
-        Assert.IsNull(Card(Entry("Anime", score: 88), LibraryLanguagePreference.None, Ui).ScoreText, "Anime cards keep their quiet look.");
-    }
-
-    [TestMethod]
     public void EveryVideoTypeHasADetailPageSoItsCardIsALink()
     {
         var id = Guid.NewGuid();

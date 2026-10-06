@@ -181,16 +181,10 @@
 .lib-lang.is-preferred { background: var(--accent-soft); color: var(--accent-text); }
 .lib-langs.is-fallback .lib-lang { border: 1px dashed var(--border-strong); background: transparent; }
 
-/* Markers on the poster: the availability marker (only for titles that are not complete) and the provider rating. They share one row
-   and the rating wraps below the marker when the poster is too narrow for both; the list layout turns them into its own cells. */
-.lib-card-marks {
-    position: absolute; z-index: 2; top: 8px; inset-inline: 8px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px;
-    pointer-events: none;
-}
-.lib-list .lib-card-marks { display: contents; }
+/* Availability marker: only for titles that are not complete. */
 .lib-state {
-    display: inline-flex; align-items: center; gap: 5px;
-    max-width: 100%; padding: 3px 9px 3px 7px; border-radius: 999px; overflow: hidden;
+    position: absolute; z-index: 2; top: 8px; inset-inline-start: 8px; display: inline-flex; align-items: center; gap: 5px;
+    max-width: calc(100% - 16px); padding: 3px 9px 3px 7px; border-radius: 999px; overflow: hidden;
     background: rgb(12 10 18 / .74); backdrop-filter: blur(6px); color: #fff;
     font-size: 11px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; pointer-events: none;
 }
@@ -198,16 +192,6 @@
 .lib-state-partial .lib-icon { color: #f4d98b; }
 .lib-state-requested .lib-icon { color: #a9c0ff; }
 .lib-state-missing .lib-icon { color: #ffb4b4; }
-
-/* Provider rating of a Movie or Series: a small chip on the poster, a plain value in its own column of the list row. The star is
-   gold on the dark chip in both themes, like the availability marker, and the number carries the meaning. */
-.lib-score {
-    display: inline-flex; align-items: center; gap: 4px; margin-inline-start: auto;
-    padding: 3px 8px 3px 6px; border-radius: 999px; background: rgb(12 10 18 / .74); backdrop-filter: blur(6px); color: #fff;
-    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
-}
-.lib-score .lib-icon { width: 12px; height: 12px; color: #f4d98b; }
-.lib-score-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Card overflow menu */
 .lib-menu { position: relative; z-index: 2; flex: none; }
@@ -238,26 +222,23 @@
 /* Fixed columns so state, status, progress and languages line up from row to row; a part a title lacks leaves its cell empty. */
 .lib-list .lib-card-body {
     display: grid; flex: 1; align-items: center; gap: 6px 18px;
-    grid-template-columns: minmax(0, 1fr) 56px 150px 130px 170px 240px 32px;
-    grid-template-areas: "title score state status progress langs menu";
+    grid-template-columns: minmax(0, 1fr) 150px 130px 170px 240px 32px;
+    grid-template-areas: "title state status progress langs menu";
 }
 .lib-list .lib-card-head { display: contents; }
 .lib-list .lib-card-title { grid-area: title; }
-.lib-list .lib-score { grid-area: score; }
 .lib-list .lib-state { grid-area: state; }
 .lib-list .lib-card-status { grid-area: status; }
 .lib-list .lib-card-progress { grid-area: progress; }
 .lib-list .lib-langs { grid-area: langs; }
 .lib-list .lib-menu { grid-area: menu; }
-.lib-list :is(.lib-state, .lib-score) {
-    background: transparent; backdrop-filter: none;
+.lib-list .lib-state {
+    position: static; background: transparent; backdrop-filter: none;
     padding: 0; color: var(--muted); overflow: visible; max-width: none;
 }
-.lib-list .lib-score { justify-self: start; margin-inline-start: 0; }
-.lib-list .lib-score .lib-icon { color: var(--warning-text); }
 @media (max-width: 1100px) {
-    .lib-list .lib-card-body { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title menu" "score score" "state state" "status status" "progress progress" "langs langs"; row-gap: 0; }
-    .lib-list :is(.lib-score, .lib-state, .lib-card-status, .lib-card-progress, .lib-langs) { margin-top: 6px; }
+    .lib-list .lib-card-body { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title menu" "state state" "status status" "progress progress" "langs langs"; row-gap: 0; }
+    .lib-list :is(.lib-state, .lib-card-status, .lib-card-progress, .lib-langs) { margin-top: 6px; }
 }
 .lib-list .lib-state-partial .lib-icon { color: var(--warning-text); }
 .lib-list .lib-state-requested .lib-icon { color: var(--accent-text); }

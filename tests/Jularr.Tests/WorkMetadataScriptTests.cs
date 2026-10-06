@@ -73,18 +73,37 @@ public sealed class WorkMetadataScriptTests
             const api = window.JularrWorkMetadata;
             api.syncOverview(view, text, more); const cutOff = more.hidden;
             const expanded = api.toggleOverview(view, more); api.syncOverview(view, text, more);
-            const open = { expanded, label: more.textContent, hidden: more.hidden, classes: view.classList.list() };
+            const open = { expanded, aria: more.attrs['aria-expanded'], label: more.textContent, hidden: more.hidden, classes: view.classList.list() };
             text.scrollHeight = 88; api.syncOverview(view, text, more); const stillThere = more.hidden;
             const collapsed = api.toggleOverview(view, more); api.syncOverview(view, text, more);
-            const closed = { collapsed, label: more.textContent, hidden: more.hidden, classes: view.classList.list() };
+            const closed = { collapsed, aria: more.attrs['aria-expanded'], label: more.textContent, hidden: more.hidden, classes: view.classList.list() };
             const fits = root(); const fitsButton = button(); api.syncOverview(fits, { scrollHeight: 66, clientHeight: 66 }, fitsButton);
             return { cutOff, open, stillThere, closed, fitsHidden: fitsButton.hidden };
             """);
 
         Assert.AreEqual(
-            "{\"cutOff\":false,\"open\":{\"expanded\":true,\"label\":\"Show less\",\"hidden\":false,\"classes\":[\"is-expanded\"]},\"stillThere\":false,"
-            + "\"closed\":{\"collapsed\":false,\"label\":\"Read more\",\"hidden\":true,\"classes\":[]},\"fitsHidden\":true}",
+            "{\"cutOff\":false,\"open\":{\"expanded\":true,\"aria\":\"true\",\"label\":\"Show less\",\"hidden\":false,\"classes\":[\"is-expanded\"]},\"stillThere\":false,"
+            + "\"closed\":{\"collapsed\":false,\"aria\":\"false\",\"label\":\"Read more\",\"hidden\":true,\"classes\":[]},\"fitsHidden\":true}",
             result);
+    }
+
+    [TestMethod]
+    public void OnlyAPlainPrimaryClickIsTakenOverSoNewTabsAndMiddleClicksFollowTheLink()
+    {
+        var result = Json("""
+            const plain = window.JularrWorkMetadata.isPlainPrimaryClick;
+            return {
+                primary: plain({ button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false }),
+                middle: plain({ button: 1, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false }),
+                right: plain({ button: 2, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false }),
+                meta: plain({ button: 0, metaKey: true, ctrlKey: false, shiftKey: false, altKey: false }),
+                ctrl: plain({ button: 0, metaKey: false, ctrlKey: true, shiftKey: false, altKey: false }),
+                shift: plain({ button: 0, metaKey: false, ctrlKey: false, shiftKey: true, altKey: false }),
+                alt: plain({ button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: true })
+            };
+            """);
+
+        Assert.AreEqual("{\"primary\":true,\"middle\":false,\"right\":false,\"meta\":false,\"ctrl\":false,\"shift\":false,\"alt\":false}", result);
     }
 
     [TestMethod]

@@ -16,6 +16,7 @@
     var action = Model.PrimaryAction;
     var isMovie = detail.MediaType == WorkMediaType.Movie;
     var culture = CultureInfo.InvariantCulture;
+    var viewerCulture = VideoDetailView.CultureOf(ui.Locale);
     var knownEpisodes = detail.Episodes.Count;
     var availableEpisodes = detail.Episodes.Count(x => x.HasFile);
     var regularSeasons = detail.Episodes.Where(x => x.SeasonNumber > 0).Select(x => x.SeasonNumber).Distinct().Count();
@@ -36,7 +37,7 @@
         .ToArray();
     var heroGenres = metadata?.Genres.Take(VideoDetailView.HeroGenreCount).ToArray() ?? [];
     var rating = metadata?.Rating is > 0 ? metadata.Rating : null;
-    var ratingVotes = metadata?.RatingCount is int votes and > 0 ? VideoDetailView.CompactCount(votes) : null;
+    var ratingVotes = metadata?.RatingCount is int votes and > 0 ? VideoDetailView.CompactCount(votes, viewerCulture) : null;
     var studio = metadata?.Studios.FirstOrDefault();
     var certification = metadata?.Certification;
     var audio = AnimeDetailView.Chips(detail.Audio, detail.Preference.Audio);
@@ -91,11 +92,11 @@
             {
                 <li>@year.ToString(culture)</li>
             }
+            <li>@ui[VideoDetailView.KindKey(detail.MediaType)]</li>
             @if (runtime is int movieMinutes)
             {
-                <li>@VideoDetailView.RuntimeText(movieMinutes)</li>
+                <li>@VideoDetailView.RuntimeText(movieMinutes, ui)</li>
             }
-            <li>@ui[VideoDetailView.KindKey(detail.MediaType)]</li>
             @if (structure.Length > 0)
             {
                 <li>@structure</li>
@@ -110,7 +111,7 @@
         {
             <div class="vd-overview" data-vd-overview>
                 <p class="ad-hero-description" id="vd-overview-text">@overview</p>
-                <button type="button" class="vd-expand" data-vd-expand aria-controls="vd-overview-text"
+                <button type="button" class="vd-expand" data-vd-expand aria-expanded="false" aria-controls="vd-overview-text"
                         data-more="@ui["library.video.readMore"]" data-less="@ui["library.video.readLess"]" hidden>@ui["library.video.readMore"]</button>
             </div>
         }
@@ -203,7 +204,7 @@
                 <li title="@ui["library.mediaCard.rating"]">
                     <partial name="_AnimeDetailIcon" model='"star"' />
                     <span>
-                        <span class="sr-only">@ui["library.mediaCard.rating"] </span>@VideoDetailView.RatingText(ratingValue)
+                        <span class="sr-only">@ui["library.mediaCard.rating"] </span>@VideoDetailView.RatingText(ratingValue, viewerCulture)
                         @if (ratingVotes is not null)
                         {
                             <small class="ad-strip-sub">(@ratingVotes)</small>
@@ -215,7 +216,7 @@
             {
                 <li title="@ui["library.video.studio"]">
                     <partial name="_AnimeDetailIcon" model='"studio"' />
-                    <span><span class="sr-only">@ui["library.video.studio"] </span>@studio</span>
+                    <span class="ad-strip-studio"><span class="sr-only">@ui["library.video.studio"] </span>@studio</span>
                 </li>
             }
             @if (certification is not null)

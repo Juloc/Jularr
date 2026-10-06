@@ -46,10 +46,14 @@
         return true;
     };
 
-    /** Expands or collapses the description of a hero; the button's words say what it does next, so it carries no separate expanded state. */
+    /** A click the facade takes over: the primary button without a modifier. Anything else (new tab, new window, middle click) follows the link. */
+    const isPlainPrimaryClick = (event) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+
+    /** Expands or collapses the description of a hero; the button keeps aria-expanded in step and its words say what it does next. */
     const toggleOverview = (root, button) => {
         const expanded = !root.classList.contains("is-expanded");
         root.classList.toggle("is-expanded", expanded);
+        button.setAttribute("aria-expanded", expanded ? "true" : "false");
         button.textContent = expanded ? button.dataset.less : button.dataset.more;
         return expanded;
     };
@@ -68,7 +72,7 @@
         }
     };
 
-    window.JularrWorkMetadata = Object.freeze({ trailerFrame, startTrailer, toggleOverview, syncOverview, dropFailedArt });
+    window.JularrWorkMetadata = Object.freeze({ trailerFrame, startTrailer, isPlainPrimaryClick, toggleOverview, syncOverview, dropFailedArt });
 
     if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") {
         return;
@@ -77,7 +81,7 @@
     document.addEventListener("click", (event) => {
         const target = event.target instanceof Element ? event.target : null;
         const facade = target?.closest("[data-vd-trailer]");
-        if (facade && target.closest("a") && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && startTrailer(facade, document)) {
+        if (facade && target.closest("a") && isPlainPrimaryClick(event) && startTrailer(facade, document)) {
             event.preventDefault();
         }
     });
@@ -89,6 +93,7 @@
             continue;
         }
 
+        root.classList.add("is-clamped");
         const sync = () => syncOverview(root, text, button);
         button.addEventListener("click", () => {
             toggleOverview(root, button);

@@ -21,8 +21,11 @@ public sealed class WorkMetadataRefreshQueue(WorkMetadataStore store, WorkMetada
     public async Task RequestMetadataRefreshAsync(Guid workId, bool interactive, CancellationToken cancellationToken)
     {
         var priority = interactive ? WorkMetadataRefreshPriority.Interactive : WorkMetadataRefreshPriority.Requested;
-        await store.EnqueueAsync(workId, WorkMetadataLocales.InstanceDefault, priority, clock.GetUtcNow().UtcDateTime, cancellationToken);
-        signal.Wake();
+        var changed = await store.EnqueueAsync(workId, WorkMetadataLocales.InstanceDefault, priority, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        if (changed > 0)
+        {
+            signal.Wake();
+        }
     }
 }
 
@@ -48,6 +51,9 @@ public sealed class WorkMetadataRefreshService(
 
     /// <summary>Spacing between bulk entries, so a large backfill trickles instead of bursting.</summary>
     public static readonly TimeSpan BulkSpacing = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>Spacing between interactive and requested entries: short enough to feel immediate, long enough that opening many Works cannot hit the provider back to back.</summary>
+    public static readonly TimeSpan InteractiveSpacing = TimeSpan.FromMilliseconds(250);
 
     /// <summary>Upper bound of runs per pass, so one wake cannot spin forever.</summary>
     public const int MaxRunsPerPass = 100;
@@ -145,10 +151,7 @@ public sealed class WorkMetadataRefreshService(
                 return new WorkMetadataPass(pause, null);
             }
 
-            if (claim.Priority >= WorkMetadataRefreshPriority.Imported)
-            {
-                await Task.Delay(BulkSpacing, clock, cancellationToken);
-            }
+            await Task.Delay(claim.Priority >= WorkMetadataRefreshPriority.Imported ? BulkSpacing : InteractiveSpacing, clock, cancellationToken);
         }
 
         return new WorkMetadataPass(null, TimeSpan.Zero);

@@ -31,26 +31,13 @@
             }
         </div>
 
-        @if (card.Availability is not null || card.ScoreText is not null)
+        @if (card.Availability is { } availability)
         {
-            @* Two small markers on the poster in the grid, plain cells of the row in the list layout. *@
-            <div class="lib-card-marks">
-                @if (card.Availability is { } availability)
-                {
-                    <span class="lib-state lib-state-@availability.CssModifier">
-                        <partial name="_LibraryIcon" model="availability.CssModifier" />
-                        @availability.Label
-                    </span>
-                }
-
-                @if (card.ScoreText is { } score)
-                {
-                    <span class="lib-score">
-                        <partial name="_LibraryIcon" model='"star"' />
-                        <span class="lib-score-label">@ui["library.mediaCard.rating"] </span>@score
-                    </span>
-                }
-            </div>
+            @* On the poster in the grid, a plain label in the list row. *@
+            <span class="lib-state lib-state-@availability.CssModifier">
+                <partial name="_LibraryIcon" model="availability.CssModifier" />
+                @availability.Label
+            </span>
         }
 
         @if (!string.IsNullOrWhiteSpace(card.StatusText))
