@@ -850,6 +850,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasIndex(x => x.CreatedAt);
         });
 
+        ConfigureWorkMetadata(modelBuilder);
+
         modelBuilder.Entity<Movie>(entity =>
         {
             entity.HasKey(x => x.Id);
@@ -928,6 +930,95 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             // A work appears at most once per collection, and membership reads are ordered by position.
             entity.HasIndex(x => new { x.CollectionId, x.WorkId }).IsUnique();
             entity.HasIndex(x => new { x.CollectionId, x.Position });
+        });
+    }
+
+    // Persisted Work metadata and artwork (#820). Read and written through WorkMetadataStore's SQL; modelled here so the migration and
+    // snapshot own the schema. Every Work reference is Restrict: merging or removing a Work moves or deletes these rows explicitly.
+    private static void ConfigureWorkMetadata(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<WorkMetadataFacts>(entity =>
+        {
+            entity.ToTable("WorkMetadataFacts", table =>
+            {
+                table.HasCheckConstraint("CK_WorkMetadataFacts_RuntimeMinutes", "\"RuntimeMinutes\" IS NULL OR \"RuntimeMinutes\" > 0");
+                table.HasCheckConstraint("CK_WorkMetadataFacts_Rating", "\"Rating\" IS NULL OR (\"Rating\" >= 0 AND \"Rating\" <= 10)");
+                table.HasCheckConstraint("CK_WorkMetadataFacts_RatingCount", "\"RatingCount\" IS NULL OR \"RatingCount\" >= 0");
+            });
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OriginalTitle).HasMaxLength(1000);
+            entity.Property(x => x.OriginalLanguage).HasMaxLength(16);
+            entity.Property(x => x.Certification).HasMaxLength(32);
+            entity.Property(x => x.CertificationCountry).HasMaxLength(2);
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => x.WorkId).IsUnique();
+        });
+
+        modelBuilder.Entity<WorkLocalizedValue>(entity =>
+        {
+            entity.ToTable("WorkLocalizedValues", table =>
+            {
+                table.HasCheckConstraint("CK_WorkLocalizedValues_Position", "\"Position\" >= 0");
+                table.HasCheckConstraint("CK_WorkLocalizedValues_Locale", "length(\"Locale\") > 0");
+            });
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Locale).HasMaxLength(35);
+            entity.Property(x => x.Field).HasConversion<int>();
+            entity.Property(x => x.Value).HasMaxLength(4000);
+            entity.Property(x => x.Origin).HasConversion<int>();
+            entity.Property(x => x.Source).HasMaxLength(80);
+            entity.Property(x => x.SourceLocale).HasMaxLength(35);
+            entity.Property(x => x.ProviderExternalId).HasMaxLength(200);
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.WorkId, x.Locale, x.Field, x.Position }).IsUnique();
+        });
+
+        modelBuilder.Entity<WorkCredit>(entity =>
+        {
+            entity.ToTable("WorkCredits", table => table.HasCheckConstraint("CK_WorkCredits_Position", "\"Position\" >= 0"));
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Kind).HasConversion<int>();
+            entity.Property(x => x.Name).HasMaxLength(300);
+            entity.Property(x => x.Role).HasMaxLength(300);
+            entity.Property(x => x.Source).HasMaxLength(80);
+            entity.Property(x => x.ProviderPersonId).HasMaxLength(64);
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.WorkId, x.Kind, x.Position }).IsUnique();
+        });
+
+        modelBuilder.Entity<WorkArtwork>(entity =>
+        {
+            entity.ToTable("WorkArtwork", table =>
+            {
+                table.HasCheckConstraint("CK_WorkArtwork_Dimensions", "(\"Width\" IS NULL OR \"Width\" > 0) AND (\"Height\" IS NULL OR \"Height\" > 0)");
+                table.HasCheckConstraint("CK_WorkArtwork_CacheKey", "\"CacheKey\" IS NULL OR \"CacheKey\" ~ '^[0-9a-f]{32}$'");
+            });
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Slot).HasConversion<int>();
+            entity.Property(x => x.Language).HasMaxLength(8);
+            entity.Property(x => x.Source).HasMaxLength(80);
+            entity.Property(x => x.ProviderFilePath).HasMaxLength(200);
+            entity.Property(x => x.CacheKey).HasMaxLength(32);
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.WorkId, x.Slot, x.Language }).IsUnique();
+        });
+
+        modelBuilder.Entity<WorkMetadataRefresh>(entity =>
+        {
+            entity.ToTable("WorkMetadataRefreshes", table =>
+            {
+                table.HasCheckConstraint("CK_WorkMetadataRefreshes_Attempts", "\"Attempts\" >= 0");
+                table.HasCheckConstraint("CK_WorkMetadataRefreshes_Locale", "length(\"Locale\") > 0");
+            });
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Locale).HasMaxLength(35);
+            entity.Property(x => x.Priority).HasConversion<int>();
+            entity.Property(x => x.Status).HasConversion<int>();
+            entity.Property(x => x.LastError).HasMaxLength(2000);
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.WorkId, x.Locale }).IsUnique();
+            // The worker's due-list: only rows whose time has come are read, then ordered by priority.
+            entity.HasIndex(x => x.NextAttemptAt);
         });
     }
 }

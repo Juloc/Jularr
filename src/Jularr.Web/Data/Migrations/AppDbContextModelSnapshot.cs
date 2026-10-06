@@ -359,6 +359,365 @@ namespace Jularr.Web.Data.Migrations
                     b.HasOne("Jularr.Web.Features.Library.MediaAsset", null)
                         .WithMany().HasForeignKey("MediaAssetId").OnDelete(DeleteBehavior.Restrict);
                 });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkArtwork", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("CacheKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("CachedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("FetchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsManualOverride")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<string>("ProviderFilePath")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("VoteAverage")
+                        .HasColumnType("double precision");
+
+                    b.Property<int?>("VoteCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WorkId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkId", "Slot", "Language")
+                        .IsUnique();
+
+                    b.ToTable("WorkArtwork", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkArtwork_CacheKey", "\"CacheKey\" IS NULL OR \"CacheKey\" ~ '^[0-9a-f]{32}$'");
+
+                            t.HasCheckConstraint("CK_WorkArtwork_Dimensions", "(\"Width\" IS NULL OR \"Width\" > 0) AND (\"Height\" IS NULL OR \"Height\" > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkCredit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("FetchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProviderPersonId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("WorkId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkId", "Kind", "Position")
+                        .IsUnique();
+
+                    b.ToTable("WorkCredits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkCredits_Position", "\"Position\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkLocalizedValue", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("FallbackPriority")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("FetchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Field")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsManualOverride")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .HasMaxLength(35)
+                        .HasColumnType("character varying(35)");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProviderExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("SourceLocale")
+                        .HasMaxLength(35)
+                        .HasColumnType("character varying(35)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid>("WorkId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkId", "Locale", "Field", "Position")
+                        .IsUnique();
+
+                    b.ToTable("WorkLocalizedValues", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkLocalizedValues_Locale", "length(\"Locale\") > 0");
+
+                            t.HasCheckConstraint("CK_WorkLocalizedValues_Position", "\"Position\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkMetadataFacts", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Certification")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("CertificationCountry")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<string>("OriginalLanguage")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("OriginalTitle")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.PrimitiveCollection<string[]>("ProductionCountries")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<double?>("Rating")
+                        .HasColumnType("double precision");
+
+                    b.Property<int?>("RatingCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("ReleaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("RuntimeMinutes")
+                        .HasColumnType("integer");
+
+                    b.PrimitiveCollection<string[]>("Studios")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorkId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkId")
+                        .IsUnique();
+
+                    b.ToTable("WorkMetadataFacts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkMetadataFacts_Rating", "\"Rating\" IS NULL OR (\"Rating\" >= 0 AND \"Rating\" <= 10)");
+
+                            t.HasCheckConstraint("CK_WorkMetadataFacts_RatingCount", "\"RatingCount\" IS NULL OR \"RatingCount\" >= 0");
+
+                            t.HasCheckConstraint("CK_WorkMetadataFacts_RuntimeMinutes", "\"RuntimeMinutes\" IS NULL OR \"RuntimeMinutes\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkMetadataRefresh", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("LastSucceededAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .HasMaxLength(35)
+                        .HasColumnType("character varying(35)");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorkId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAttemptAt");
+
+                    b.HasIndex("WorkId", "Locale")
+                        .IsUnique();
+
+                    b.ToTable("WorkMetadataRefreshes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkMetadataRefreshes_Attempts", "\"Attempts\" >= 0");
+
+                            t.HasCheckConstraint("CK_WorkMetadataRefreshes_Locale", "length(\"Locale\") > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkArtwork", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
+                        .WithMany()
+                        .HasForeignKey("WorkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkCredit", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
+                        .WithMany()
+                        .HasForeignKey("WorkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkLocalizedValue", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
+                        .WithMany()
+                        .HasForeignKey("WorkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkMetadataFacts", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
+                        .WithMany()
+                        .HasForeignKey("WorkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkMetadataRefresh", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
+                        .WithMany()
+                        .HasForeignKey("WorkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
 #pragma warning restore 612, 618
         }
 
