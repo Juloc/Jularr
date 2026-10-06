@@ -14,8 +14,8 @@
      data-progress="@Model.Progress"
      data-done="@(Model.IsDone ? "true" : "false")"
      data-result-url="@request.ResultUrl">
-    <span class="dc-rq-check@(Model.AlreadyRequested ? " is-existing" : "")" aria-hidden="true"><partial name="_DiscoverIcon" model='Model.AlreadyRequested ? "requested" : "library"' /></span>
-    <h3 id="dc-rq-result-title" tabindex="-1">@ui[Model.AlreadyRequested ? "discover.request.exists" : "discover.request.created"]</h3>
+    <span class="dc-rq-check@(Model.AlreadyRequested ? " is-existing" : "")" aria-hidden="true"><partial name="~/Pages/Discover/_DiscoverIcon.cshtml" model='Model.AlreadyRequested ? "requested" : "library"' /></span>
+    <h3 id="dc-rq-result-title" tabindex="-1">@ui[Model.Updated ? "discover.request.updated" : Model.AlreadyRequested ? "discover.request.exists" : "discover.request.created"]</h3>
     <ul class="dc-rq-summary">
         @foreach (var line in Model.Summary)
         {
@@ -28,7 +28,11 @@
         <p class="dc-rq-hint">@hint</p>
     }
     <div class="dc-rq-result-actions">
-        <a class="button" href="@AcquisitionRequestService.HistoryPath">@ui["discover.request.viewStatus"]</a>
+        @if (!Model.Updated)
+        {
+            @* Only the requester has a status page of the request; for a title somebody else asked for first the list is the place. *@
+            <a class="button" href="@(Model.IsOwn ? AcquisitionRequestService.StatusPath(request.Id) : AcquisitionRequestService.HistoryPath)">@ui["discover.request.viewStatus"]</a>
+        }
         <button type="button" class="button button-primary" data-dc-rq-close>@ui["discover.request.done"]</button>
     </div>
 </div>

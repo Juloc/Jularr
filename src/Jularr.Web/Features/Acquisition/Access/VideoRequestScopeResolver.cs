@@ -58,6 +58,10 @@ public sealed class VideoRequestScopeResolver(AppDbContext db)
         ];
     }
 
+    /// <summary>The same for a request that only knows the id of its Work; null when that Work is gone.</summary>
+    public async Task<VideoRequestPayload?> BuildTvPayloadAsync(Guid workId, VideoRequestScopeChoice choice, CancellationToken cancellationToken) =>
+        await db.Works.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workId, cancellationToken) is { } work ? await BuildTvPayloadAsync(work, choice, cancellationToken) : null;
+
     /// <summary>
     /// Validates the choice against the Work's own structure and returns the request payload. Throws
     /// <see cref="ArgumentException"/> for an unknown id, an empty custom selection or ids sent with a scope that has none.

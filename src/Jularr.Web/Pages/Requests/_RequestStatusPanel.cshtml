@@ -1,0 +1,157 @@
+@model Jularr.Web.Pages.Requests.RequestStatusPanel
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Watchlist
+@* The status of one request (docs/mockups/request-status-details): a compact identity header, the current state as the focus, the saved
+   request details, a collapsed timeline and the actions the request allows. Rendered in the dialog of My requests and on the deep link
+   page; request-status.js replaces it in place after an action. The words come from RequestStatusText and the state from the one
+   consumer projection, so this never names a download, an indexer or a job. *@
+@{
+    var ui = Model.Ui;
+    var view = Model.View;
+    var request = view.Request;
+    var state = view.State;
+    var tone = RequestStatusText.Tone(request, state).ToString().ToLowerInvariant();
+    var headline = view.StatusUnavailable ? ui["requests.detail.unavailable"] : RequestStatusText.Headline(ui, request, state);
+    var hint = view.StatusUnavailable ? null : RequestStatusText.Hint(ui, request, state);
+    var intent = RequestStatusText.Intent(ui, request);
+    var meta = RequestStatusText.Identity(ui, request);
+    var id = request.Id;
+    var monitoringHeadline = state.State == ConsumerAcquisitionState.MonitoringFutureReleases;
+    var monitoring = request.Status != AcquisitionRequestStatus.Pending && (state.IsMonitoring || monitoringHeadline);
+    string Iso(DateTime value) => value.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
+}
+<section class="rqs" data-rqs-panel data-request-id="@id" data-panel-url="@Url.Page("/Requests/Details", "Panel", new { id })" data-state="@state.State" data-tone="@tone" aria-labelledby="rqs-title-@id">
+    <header class="dc-rq-head rqs-head">
+        <span class="dc-rq-cover" aria-hidden="true">
+            @if (!string.IsNullOrWhiteSpace(view.PosterUrl))
+            {
+                <img src="@view.PosterUrl" alt="" decoding="async" referrerpolicy="no-referrer" />
+            }
+            else
+            {
+                <span class="dc-rq-initial">@WatchlistLabels.Initial(request.Title)</span>
+            }
+        </span>
+        <div class="dc-rq-identity">
+            <h2 id="rqs-title-@id" tabindex="-1" data-rqs-title>@request.Title</h2>
+            <p>@meta</p>
+        </div>
+        @if (Model.Embedded)
+        {
+            <button type="button" class="dc-icon-btn" data-rqs-close aria-label="@ui["library.browse.close"]">
+                <partial name="~/Pages/Discover/_DiscoverIcon.cshtml" model='"close"' />
+            </button>
+        }
+    </header>
+
+    <div class="dc-rq-body rqs-body" aria-live="polite">
+        @if (Model.Notice is { } notice)
+        {
+            <p class="dc-rq-error" role="alert">@ui[notice]</p>
+        }
+
+        <div class="rqs-state rqs-tone-@tone">
+            <span class="rqs-state-icon"><partial name="_RequestStateIcon" model="tone" /></span>
+            <div class="rqs-state-copy">
+                <h3 class="rqs-state-label">@headline</h3>
+                @if (hint is not null)
+                {
+                    <p>@hint</p>
+                }
+            </div>
+        </div>
+
+        @if (state.ProgressPercent is { } percent && !view.StatusUnavailable)
+        {
+            <progress class="rqs-progress" max="100" value="@percent" aria-label="@headline">@percent%</progress>
+        }
+
+        @if (monitoring)
+        {
+            <div class="rqs-card rqs-next">
+                @if (!monitoringHeadline)
+                {
+                    <span>@ui["acquisition.state.monitoringFutureReleases"]</span>
+                }
+                <strong>@(view.NextReleaseUtc is { } next ? ui.Format("requests.detail.nextRelease", ("date", RequestStatusText.ShortDate(ui, next))) : ui["requests.detail.noUpcomingRelease"])</strong>
+            </div>
+        }
+
+        <details class="rqs-card rqs-details" data-rqs-details open>
+            <summary>@ui["requests.detail.section.details"]</summary>
+            <dl>
+                @foreach (var (label, value) in intent)
+                {
+                    <div><dt>@label</dt><dd>@value</dd></div>
+                }
+                <div>
+                    <dt>@ui["requests.detail.requestedAt"]</dt>
+                    <dd><time datetime="@Iso(request.CreatedAt)" data-local-time="stamp">@RequestStatusText.Stamp(ui, request.CreatedAt)</time></dd>
+                </div>
+            </dl>
+        </details>
+
+        <details class="rqs-card rqs-timeline">
+            <summary>@ui.Format("requests.detail.timeline", ("count", view.Timeline.Count))</summary>
+            <ol>
+                @foreach (var entry in view.Timeline)
+                {
+                    <li>
+                        <span>@RequestStatusText.Milestone(ui, entry.Milestone)</span>
+                        <time datetime="@Iso(entry.AtUtc)" data-local-time="stamp">@RequestStatusText.Stamp(ui, entry.AtUtc)</time>
+                    </li>
+                }
+            </ol>
+        </details>
+    </div>
+
+    <footer class="dc-rq-foot rqs-foot">
+        @if (request.CanBeCancelled)
+        {
+            <button type="button" class="button button-danger" data-rqs-cancel>@ui["requests.detail.cancel"]</button>
+        }
+        @if (request.CanBeEdited)
+        {
+            <button type="button"
+                    class="button"
+                    data-dc-request-edit
+                    data-dc-edit-url="@Url.Page("/Requests/Details", "Edit", new { id })"
+                    data-dc-save-url="@Url.Page("/Requests/Details", "Edit", new { id })"
+                    data-dc-title="@request.Title"
+                    data-dc-cover="@view.PosterUrl"
+                    data-dc-meta="@meta">@ui["requests.detail.edit"]</button>
+        }
+        @if (request.CanBeRetried)
+        {
+            <form method="post" asp-page="/Requests/Details" asp-page-handler="Retry" asp-route-id="@id" data-rqs-action>
+                <button type="submit" class="button button-primary">@ui["requests.detail.retry"]</button>
+            </form>
+        }
+        @if (view.OpenUrl is { } openUrl)
+        {
+            <a class="button button-primary" href="@openUrl">@ui["requests.detail.openDetails"]</a>
+        }
+        @if (Model.Embedded)
+        {
+            <button type="button" class="button" data-rqs-close>@ui["library.browse.close"]</button>
+        }
+        else
+        {
+            <a class="button" href="@AcquisitionRequestService.HistoryPath">@ui["requests.title"]</a>
+        }
+    </footer>
+
+    @if (request.CanBeCancelled)
+    {
+        <dialog class="rqs-confirm" data-rqs-confirm aria-labelledby="rqs-confirm-title-@id">
+            <form method="post" asp-page="/Requests/Details" asp-page-handler="Cancel" asp-route-id="@id" data-rqs-action>
+                <h3 id="rqs-confirm-title-@id" tabindex="-1">@ui["requests.cancel.title"]</h3>
+                <p>@ui["requests.cancel.body"]</p>
+                <div class="rqs-confirm-actions">
+                    <button type="button" class="button" data-rqs-confirm-close>@ui["requests.cancel.keep"]</button>
+                    <button type="submit" class="button button-danger">@ui["requests.cancel.confirm"]</button>
+                </div>
+            </form>
+        </dialog>
+    }
+</section>

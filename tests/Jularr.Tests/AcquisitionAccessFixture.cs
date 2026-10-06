@@ -3,6 +3,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Events;
+using Jularr.Web.Features.Instance;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,6 +33,14 @@ internal sealed class AcquisitionAccessFixture : IAsyncDisposable
     public AcquisitionRequestSettingsStore Settings { get; }
     public RecordingEventPublisher Events { get; } = new();
     public AcquisitionAccessStore Store => new(Db);
+
+    /// <summary>The read side of the request status surface over this database; instance modules are all enabled.</summary>
+    public RequestStatusQuery StatusQuery(TimeProvider? clock = null)
+    {
+        clock ??= TimeProvider.System;
+        var works = new VideoRequestWorkResolver(Db);
+        return new RequestStatusQuery(Store, new ConsumerAcquisitionQuery(Db, Store, works, clock), new RequestArtworkResolver(Db, works), new InstanceModuleStore(directory), Db, clock, NullLogger<RequestStatusQuery>.Instance);
+    }
 
     public static async Task<AcquisitionAccessFixture> CreateAsync()
     {

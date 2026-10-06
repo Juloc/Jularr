@@ -89,6 +89,16 @@ public sealed record VideoRequestPayload(
     /// <summary>Whether a profile is waiting for the unit (<paramref name="workEpisodeId"/> null is the Movie itself).</summary>
     public bool IsPlaybackUnit(Guid? workEpisodeId, DateTime nowUtc) => ActivePlaybackMarkers(nowUtc).Any(marker => marker.WorkEpisodeId == workEpisodeId);
 
+    /// <summary>The payload with the scope a requester chose when editing a request that still waits; the change counts as a scope revision, so a search that started before it can tell.</summary>
+    public VideoRequestPayload WithRequesterScope(VideoRequestPayload edited) => this with
+    {
+        Scope = edited.Scope,
+        SelectedSeasonIds = edited.SelectedSeasonIds,
+        SelectedEpisodeIds = edited.SelectedEpisodeIds,
+        MonitorFuture = edited.MonitorFuture,
+        ScopeRevision = ScopeRevision + 1
+    };
+
     /// <summary>The payload once nobody is waiting for a unit any more.</summary>
     public VideoRequestPayload WithoutPlaybackIntent() => this with { PlaybackMarkers = null, PlaybackResetUtc = null };
 

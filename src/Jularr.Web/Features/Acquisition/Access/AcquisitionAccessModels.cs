@@ -146,6 +146,27 @@ public sealed record AcquisitionRequest(
     /// <summary>Whether an auto-approval rule (not a person) approved this request.</summary>
     public bool WasAutoApproved => AcquisitionAutoApproval.TryParseRuleId(DecidedByProfileId, out _);
 
+    /// <summary>The address of the finished title on this server; a request can carry any result address, only a path of this server is followed.</summary>
+    public string? LocalResultPath => ResultUrl is { Length: > 0 } url && url.StartsWith('/') && !url.StartsWith("//", StringComparison.Ordinal) && !url.StartsWith("/\\", StringComparison.Ordinal) ? url : null;
+
+    /// <summary>The message a request carries once it was cancelled; a cancelled request is stored as rejected with exactly this message.</summary>
+    public const string CancelledMessage = "Withdrawn.";
+
+    /// <summary>Whether the request ended because it was cancelled rather than rejected by an approver.</summary>
+    public bool IsCancelled => Status == AcquisitionRequestStatus.Rejected && StatusMessage == CancelledMessage;
+
+    /// <summary>Only a request that still waits for approval can be cancelled; once approved the acquisition is shared state of the title.</summary>
+    public bool CanBeCancelled => Status == AcquisitionRequestStatus.Pending;
+
+    /// <summary>
+    /// Only a request that still waits for approval can change its scope or languages: afterwards the executor has copied them into the
+    /// acquisition. Only media types whose Request dialog has settings (series scope, anime languages) can be edited.
+    /// </summary>
+    public bool CanBeEdited => Status == AcquisitionRequestStatus.Pending && Kind is MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime;
+
+    /// <summary>A request that failed after approval can run again with the same intent.</summary>
+    public bool CanBeRetried => Status == AcquisitionRequestStatus.Failed;
+
     /// <summary>The richer options the requester chose (anime only); the default options when none were chosen.</summary>
     public AcquisitionRequestOptions Options => Kind == MediaAcquisitionKind.Anime
         ? AcquisitionRequestOptions.FromPayload(PayloadJson)
@@ -226,6 +247,37 @@ public enum MonitoredFollowOutcome
 
     /// <summary>The request is approved but its executor has not run for it (its series does not exist), so there is no pipeline state to follow.</summary>
     NotExecuted
+}
+
+/// <summary>What cancelling a request came to; a request that is no longer pending is reported, never overwritten.</summary>
+public enum RequestCancelOutcome
+{
+    Cancelled,
+
+    /// <summary>It was cancelled already (a second tab, a repeated post); nothing changed.</summary>
+    AlreadyCancelled,
+
+    /// <summary>Somebody decided it first, so it can no longer be cancelled.</summary>
+    NoLongerPending
+}
+
+public enum RequestEditOutcome
+{
+    Saved,
+
+    /// <summary>The request is no longer pending, or its media type has nothing to edit.</summary>
+    NotEditable
+}
+
+public enum RequestRetryOutcome
+{
+    Retried,
+
+    /// <summary>It runs already (a second tab, a repeated post); nothing changed.</summary>
+    AlreadyRetried,
+
+    /// <summary>It is not failed (any more), the profile may not request this media type, or the title has another open request.</summary>
+    NotRetryable
 }
 
 public sealed class AcquisitionAccessDeniedException(string message) : Exception(message);

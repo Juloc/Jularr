@@ -438,7 +438,12 @@ public sealed class DiscoverRequestTests
         StringAssert.Contains(created, "<li>Future only</li>");
         StringAssert.Contains(created, ">Waiting for approval</strong>");
         StringAssert.Contains(created, "data-status=\"pending\"");
-        StringAssert.Contains(created, "href=\"/Requests\"");
+        StringAssert.Contains(created, $"href=\"/Requests/{request.Id:D}\"");
+        var elsewhere = WebUtility.HtmlDecode(await renderer.RenderAsync(
+            "/Pages/Discover/_DiscoverRequestResult.cshtml",
+            new DiscoverRequestResultView(UiTextBundle.English, request, true, [], 0, IsOwn: false)));
+        StringAssert.Contains(elsewhere, "href=\"/Requests\"");
+        Assert.IsFalse(elsewhere.Contains($"/Requests/{request.Id:D}", StringComparison.Ordinal), "Only the requester has a status page; for another profile's request it would be a dead link.");
         StringAssert.Contains(existing, ">Already requested</h3>");
         StringAssert.Contains(created, "waiting for approval.</p>");
 

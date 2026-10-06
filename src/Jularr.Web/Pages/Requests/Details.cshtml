@@ -1,0 +1,23 @@
+@page "/Requests/{id:guid}/{handler?}"
+@model Jularr.Web.Pages.Requests.DetailsModel
+@{
+    var ui = Model.Panel.Ui;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/acquisition.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/request-status.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-browse.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-request.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/local-time.js" asp-append-version="true" defer></script>
+    <script src="~/js/request-status.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-request.js" asp-append-version="true" defer></script>
+}
+
+@* The deep link of one request's status: the panel of the My requests dialog on a page of its own, with the shared Request dialog for Edit request. *@
+<div class="rqs-page" data-request-host data-text-failed="@ui["requests.detail.error.failed"]">
+    @Html.AntiForgeryToken()
+    <partial name="_RequestStatusPanel" model="Model.Panel" />
+    <partial name="~/Pages/Discover/_DiscoverRequestDialog.cshtml" model="ui" />
+</div>

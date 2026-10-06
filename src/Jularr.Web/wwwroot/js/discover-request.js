@@ -3,7 +3,9 @@
 // kind has (Scope + Included content for series, Language & Edition for series and anime). Submitting shows the success state in place and
 // tells the host (dc:request-created) so the card or page behind the dialog shows the persisted request. The host is the
 // Discover page or a media detail page ([data-request-host]); a detail page names its one title with data-dc-* attributes
-// on the host and can preselect episodes of a series with data-dc-preselect on the Request trigger.
+// on the host and can preselect episodes of a series with data-dc-preselect on the Request trigger. The same dialog edits a request that
+// still waits for approval: an Edit request trigger ([data-dc-request-edit], on the request status panel) names the title and the two
+// addresses that read and save the saved settings, so there is no second form.
 (() => {
     "use strict";
 
@@ -18,6 +20,7 @@
     const body = dialog.querySelector("[data-dc-rq-body]");
     const foot = dialog.querySelector("[data-dc-rq-foot]");
     const submit = dialog.querySelector("[data-dc-rq-submit]");
+    const requestLabel = submit.textContent;
     const token = root.querySelector("input[name='__RequestVerificationToken']")?.value || "";
     const text = name => dialog.dataset[`text${name.charAt(0).toUpperCase()}${name.slice(1)}`] || "";
 
@@ -36,6 +39,12 @@
     };
 
     function identityOf(trigger) {
+        const edit = trigger.closest("[data-dc-request-edit]");
+        if (edit) {
+            const data = edit.dataset;
+            return { title: data.dcTitle, cover: data.dcCover, meta: data.dcMeta, edit: { settingsUrl: data.dcEditUrl, saveUrl: data.dcSaveUrl } };
+        }
+
         const preview = trigger.closest(".dc-pv");
         if (preview) {
             const data = preview.dataset;
@@ -68,6 +77,12 @@
 
     function identityFields() {
         const data = new FormData();
+        if (identity.edit) {
+            // An edit names its request by the address it posts to; only the form token travels with the settings.
+            data.set("__RequestVerificationToken", token);
+            return data;
+        }
+
         for (const [name, value] of Object.entries({
             category: identity.category,
             provider: identity.provider,
@@ -89,7 +104,8 @@
         meta.textContent = identity.meta || "";
         dialog.setAttribute("aria-label", text("label").replace("{title}", () => identity.title));
         cover.replaceChildren();
-        if (/^https?:\/\//i.test(identity.cover || "")) {
+        // A title's poster is a local artwork address; a card of a title that is not on the server carries the provider's address.
+        if (/^(https?:\/\/|\/(?!\/))/i.test(identity.cover || "")) {
             const image = document.createElement("img");
             image.alt = "";
             image.decoding = "async";
@@ -132,15 +148,22 @@
         submit.disabled = true;
 
         try {
-            const response = await fetch(root.dataset.resolveUrl, {
-                method: "POST",
-                body: identityFields(),
-                credentials: "same-origin",
-                headers: { Accept: "text/html" },
-                signal
-            });
+            const response = identity.edit
+                ? await fetch(identity.edit.settingsUrl, { credentials: "same-origin", headers: { Accept: "text/html" }, signal })
+                : await fetch(root.dataset.resolveUrl, {
+                    method: "POST",
+                    body: identityFields(),
+                    credentials: "same-origin",
+                    headers: { Accept: "text/html" },
+                    signal
+                });
             if (response.status === 403 || response.status === 404) {
                 showMessage(text("forbidden"), false);
+                return;
+            }
+
+            if (response.status === 409) {
+                showMessage(text("changed"), false);
                 return;
             }
 
@@ -376,12 +399,17 @@
         submit.disabled = true;
         body.querySelector(".dc-rq-error")?.remove();
         try {
-            const response = await fetch(root.dataset.requestUrl, {
+            const response = await fetch(current.edit?.saveUrl ?? root.dataset.requestUrl, {
                 method: "POST",
                 body: submissionFields(),
                 credentials: "same-origin",
                 headers: { Accept: "text/html" }
             });
+            if (response.status === 409) {
+                if (identity === current) showSubmitError(text("changed"));
+                return;
+            }
+
             if (response.status === 403 || response.status === 404) {
                 if (identity === current) {
                     showMessage(text("forbidden"), false);
@@ -420,7 +448,7 @@
     // ---- Open and close -------------------------------------------------------------------------------------
 
     root.addEventListener("click", event => {
-        const trigger = event.target instanceof Element ? event.target.closest("[data-dc-card-request], [data-dc-request]") : null;
+        const trigger = event.target instanceof Element ? event.target.closest("[data-dc-card-request], [data-dc-request], [data-dc-request-edit]") : null;
         if (!trigger) return;
 
         event.preventDefault();
@@ -431,6 +459,7 @@
         root.querySelector("[data-dc-sheet]")?.close();
         foot.hidden = false;
         submit.hidden = false;
+        submit.textContent = identity.edit ? text("save") : requestLabel;
         showIdentity();
         dialog.showModal();
         title.focus();
@@ -455,5 +484,7 @@
         const target = opener?.isConnected ? opener : card?.querySelector("[data-dc-title-link]");
         target?.focus();
         opener = null;
+        // The host decides where focus goes when the control that opened the dialog is gone (a request status panel that was refreshed).
+        root.dispatchEvent(new CustomEvent("dc:request-dialog-closed", { detail: { identity } }));
     });
 })();

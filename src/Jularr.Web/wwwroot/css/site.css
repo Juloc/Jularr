@@ -1297,9 +1297,9 @@ main > :is(.panel, .settings-grid) + :is(.panel, .settings-grid) { margin-top: 1
 /* Client-side library filters (offline-library-ui.js and page filters) combine through classes. */
 .is-offline-hidden, .is-filter-hidden { display: none !important; }
 
-/* Acquisition request states, shared by Books, Discover and Admin → Requests. */
-.request-status-pending, .request-status-approved { background: var(--accent-soft); color: var(--accent-text); }
-.request-status-searching, .request-status-downloading { background: color-mix(in srgb, var(--info-text) 15%, transparent); color: var(--info-text); }
+/* Acquisition request states, shared by Books, Discover and Activity. Approved and Searching share one colour because the consumer calls both "Looking for media". */
+.request-status-pending { background: var(--accent-soft); color: var(--accent-text); }
+.request-status-approved, .request-status-searching, .request-status-downloading { background: color-mix(in srgb, var(--info-text) 15%, transparent); color: var(--info-text); }
 .request-status-completed { background: color-mix(in srgb, var(--success-text) 15%, transparent); color: var(--success-text); }
 .request-status-failed, .request-status-rejected { background: color-mix(in srgb, var(--danger-text) 14%, transparent); color: var(--danger-text); }
 

@@ -30,14 +30,19 @@ public sealed class DiscoverRequestForm
     public bool HasLanguage => !string.IsNullOrWhiteSpace(Audio) || !string.IsNullOrWhiteSpace(Subtitles);
 }
 
-/// <summary>The settings the Request dialog shows for one resolved title: only the groups that apply to its media kind. <see cref="Existing"/> is the open request that makes a new one unnecessary.</summary>
+/// <summary>
+/// The settings the Request dialog shows for one resolved title: only the groups that apply to its media kind. <see cref="Existing"/> is the
+/// open request that makes a new one unnecessary; <see cref="SavedScope"/> is the scope of the request being edited, which the dialog preselects.
+/// </summary>
 public sealed record DiscoverRequestSettingsView(
     UiTextBundle Ui,
     MediaAcquisitionKind Kind,
     AcquisitionRequest? Existing,
     IReadOnlyList<VideoRequestSeason> Seasons,
     string? DefaultAudio,
-    string? DefaultSubtitles)
+    string? DefaultSubtitles,
+    VideoRequestPayload? SavedScope = null,
+    string? ProfileId = null)
 {
     public bool OffersScope => Existing is null && Kind == MediaAcquisitionKind.Tv;
 
@@ -80,7 +85,9 @@ public sealed record DiscoverRequestResultView(
     AcquisitionRequest Request,
     bool AlreadyRequested,
     IReadOnlyList<string> Summary,
-    int? Progress)
+    int? Progress,
+    bool Updated = false,
+    bool IsOwn = true)
 {
     public bool IsDone => Request.Status is AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed;
 

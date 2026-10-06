@@ -452,7 +452,7 @@ public sealed class IndexModel(
             ? await scopes.LoadStructureAsync(work.Id, cancellationToken)
             : [];
         var preference = await LoadPreferenceAsync(cancellationToken);
-        return Partial("_DiscoverRequestSettings", new DiscoverRequestSettingsView(Ui, target.Kind, existing, seasons, OfferedLanguage(preference.Audio), OfferedLanguage(preference.Subtitle)));
+        return Partial("_DiscoverRequestSettings", new DiscoverRequestSettingsView(Ui, target.Kind, existing, seasons, OfferedLanguage(preference.Audio), OfferedLanguage(preference.Subtitle), ProfileId: account.ProfileId));
     }
 
     /// <summary>
@@ -538,7 +538,8 @@ public sealed class IndexModel(
 
             var submission = await requests.SubmitWithOutcomeAsync(draft, cancellationToken);
             var progress = await RequestProgressAsync(submission.Request, cancellationToken);
-            return Partial("_DiscoverRequestResult", new DiscoverRequestResultView(Ui, submission.Request, submission.AlreadyRequested, submission.AlreadyRequested ? [] : summary, progress));
+            var isOwn = submission.Request.RequestedByProfileId == account.ProfileId;
+            return Partial("_DiscoverRequestResult", new DiscoverRequestResultView(Ui, submission.Request, submission.AlreadyRequested, submission.AlreadyRequested ? [] : summary, progress, IsOwn: isOwn));
         }
         catch (AcquisitionAccessDeniedException)
         {

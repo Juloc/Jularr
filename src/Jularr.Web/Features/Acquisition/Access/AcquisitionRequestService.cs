@@ -24,6 +24,9 @@ public sealed class AcquisitionRequestService(
     /// <summary>Where a profile finds the state of its requests; decision notifications open it.</summary>
     public const string HistoryPath = "/Requests";
 
+    /// <summary>The status surface of one request: its current state, saved settings and the actions that are allowed.</summary>
+    public static string StatusPath(Guid requestId) => $"{HistoryPath}/{requestId:D}";
+
     public async Task<AcquisitionCapabilities> GetCapabilitiesAsync(
         MediaAcquisitionKind kind,
         CancellationToken cancellationToken)
@@ -110,7 +113,13 @@ public sealed class AcquisitionRequestService(
             await store.PatchPayloadAsync(id, stored => VideoRequestPayload.Parse(stored) is { PlaybackMarkers: not null } current ? current.WithoutPlaybackIntent().Serialize() : stored, cancellationToken);
         }
 
-        await store.UpdateStatusAsync(id, AcquisitionRequestStatus.Approved, null, null, null, account.ProfileId, cancellationToken);
+        // Conditional on the status read above: a requester's cancel that landed meanwhile keeps the request cancelled.
+        var decided = await store.TryTransitionStatusAsync(id, [request.Status], AcquisitionRequestStatus.Approved, null, null, null, false, account.ProfileId, cancellationToken);
+        if (decided is null)
+        {
+            return await RequireAsync(id, cancellationToken);
+        }
+
         await PublishDecisionAsync(request, JularrEventCategory.RequestApproved, cancellationToken);
         return await ExecuteAsync(await RequireAsync(id, cancellationToken), cancellationToken);
     }
@@ -186,15 +195,13 @@ public sealed class AcquisitionRequestService(
             return;
         }
 
-        await store.UpdateStatusAsync(
-            id,
-            AcquisitionRequestStatus.Rejected,
-            string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
-            null,
-            null,
-            account.ProfileId,
-            cancellationToken);
-        await PublishDecisionAsync(request, JularrEventCategory.RequestDenied, cancellationToken);
+        // A note that equals the cancellation marker would read as a requester's cancel, so it is not kept.
+        var reason = string.IsNullOrWhiteSpace(note) || note.Trim() == AcquisitionRequest.CancelledMessage ? null : note.Trim();
+        var rejected = await store.TryTransitionStatusAsync(id, [AcquisitionRequestStatus.Pending], AcquisitionRequestStatus.Rejected, reason, null, null, false, account.ProfileId, cancellationToken);
+        if (rejected is not null)
+        {
+            await PublishDecisionAsync(request, JularrEventCategory.RequestDenied, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -228,21 +235,85 @@ public sealed class AcquisitionRequestService(
         await store.UpdateStatusAsync(id, AcquisitionRequestStatus.Completed, null, null, null, account.ProfileId, cancellationToken);
     }
 
-    /// <summary>A requester may withdraw their own pending request; the owner may withdraw any.</summary>
-    public async Task CancelAsync(Guid id, CancellationToken cancellationToken)
+    /// <summary>
+    /// Cancels a request that still waits for approval; the requester, the owner and media managers may. The request is left as it is when
+    /// somebody decided it first (an approver, or the requester in another tab), so cancelling twice is not an error and never undoes a
+    /// decision. A cancelled request never touches the acquisition of its title: nothing was approved, so nothing runs.
+    /// </summary>
+    public async Task<RequestCancelOutcome> CancelAsync(Guid id, CancellationToken cancellationToken)
     {
         var request = await RequireAsync(id, cancellationToken);
-        if (request.Status != AcquisitionRequestStatus.Pending)
+        RequireRequesterOrManager(request);
+        if (request.IsCancelled)
         {
-            return;
+            return RequestCancelOutcome.AlreadyCancelled;
         }
 
-        if (!account.Can(JularrPolicies.AdminMedia) && request.RequestedByProfileId != account.ProfileId)
+        if (!request.CanBeCancelled)
         {
-            throw new AcquisitionAccessDeniedException("Only the requester, the owner or a media manager can withdraw a request.");
+            return RequestCancelOutcome.NoLongerPending;
         }
 
-        await store.UpdateStatusAsync(id, AcquisitionRequestStatus.Rejected, "Withdrawn.", null, null, account.ProfileId, cancellationToken);
+        // A manager cancelling for somebody else is recorded; a requester cancelling their own request decided nothing.
+        var actor = request.RequestedByProfileId == account.ProfileId ? null : account.ProfileId;
+        var moved = await store.TryTransitionStatusAsync(id, [AcquisitionRequestStatus.Pending], AcquisitionRequestStatus.Rejected, AcquisitionRequest.CancelledMessage, null, null, false, actor, cancellationToken);
+        return moved is null ? RequestCancelOutcome.NoLongerPending : RequestCancelOutcome.Cancelled;
+    }
+
+    /// <summary>
+    /// Runs a failed request again with the intent it was saved with, through the same execution path as an approval: the requester (or a
+    /// manager) retries, nobody has to decide again. Compare-and-set on the failed status, so two retries start one run, and a title that
+    /// meanwhile has another open request is not opened a second time.
+    /// </summary>
+    public async Task<RequestRetryOutcome> RetryAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var request = await RequireAsync(id, cancellationToken);
+        RequireRequesterOrManager(request);
+        if (request.IsOpen && request.Status != AcquisitionRequestStatus.Pending)
+        {
+            return RequestRetryOutcome.AlreadyRetried;
+        }
+
+        if (!request.CanBeRetried || !(await GetCapabilitiesAsync(request.Kind, cancellationToken)).CanRequest)
+        {
+            return RequestRetryOutcome.NotRetryable;
+        }
+
+        // Nobody is still waiting on the profile's playback intent from before it failed, exactly as when a failed request is approved again.
+        Func<string?, string?> dropPlaybackIntent = stored => VideoRequestPayload.Parse(stored) is { PlaybackMarkers: not null } current ? current.WithoutPlaybackIntent().Serialize() : stored;
+        if (!await store.PatchPayloadAsync(id, dropPlaybackIntent, AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Approved, null, cancellationToken))
+        {
+            // Another retry (second tab, double submit) won the race: the request is running already.
+            return (await RequireAsync(id, cancellationToken)).Status is AcquisitionRequestStatus.Failed or AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Completed
+                ? RequestRetryOutcome.NotRetryable
+                : RequestRetryOutcome.AlreadyRetried;
+        }
+
+        await ExecuteAsync(await RequireAsync(id, cancellationToken), cancellationToken);
+        return RequestRetryOutcome.Retried;
+    }
+
+    /// <summary>
+    /// Saves new settings of a request that still waits for approval: the series scope of a Tv request, or the audio and subtitle language of
+    /// an anime request (its scope and quality profile stay as the request was made). Both are validated by the caller against the title.
+    /// The write only lands while the request is still pending, so an approval that wins the race keeps the intent it executed.
+    /// </summary>
+    public async Task<RequestEditOutcome> EditAsync(Guid id, VideoRequestPayload? tvScope, AcquisitionRequestOptions? animeLanguages, CancellationToken cancellationToken)
+    {
+        var request = await RequireAsync(id, cancellationToken);
+        RequireRequesterOrManager(request);
+        var matchesKind = request.Kind == MediaAcquisitionKind.Tv ? tvScope is not null && animeLanguages is null : tvScope is null && animeLanguages is not null;
+        if (!request.CanBeEdited || !matchesKind)
+        {
+            return RequestEditOutcome.NotEditable;
+        }
+
+        Func<string?, string?> patch = tvScope is { } scope
+            ? stored => VideoRequestPayload.Parse(stored) is { } current ? current.WithRequesterScope(scope).Serialize() : scope.Serialize()
+            : stored => (AcquisitionRequestOptions.FromPayload(stored) with { AudioLanguage = animeLanguages!.AudioLanguage, SubtitleLanguage = animeLanguages.SubtitleLanguage }).Validate().ToPayloadJson();
+        return await store.PatchPayloadAsync(id, patch, AcquisitionRequestStatus.Pending, AcquisitionRequestStatus.Pending, null, cancellationToken)
+            ? RequestEditOutcome.Saved
+            : RequestEditOutcome.NotEditable;
     }
 
     /// <summary>
@@ -413,7 +484,7 @@ public sealed class AcquisitionRequestService(
                 mediaType: AcquisitionAccessNames.Kind(request.Kind),
                 subjectId: request.Id.ToString(),
                 messageParams: new Dictionary<string, string> { ["title"] = request.Title },
-                deepLink: request.ResultUrl ?? HistoryPath,
+                deepLink: StatusPath(request.Id),
                 dedupKey: $"acquisition-request:{request.Id}:{category}"),
             cancellationToken);
 
@@ -444,6 +515,14 @@ public sealed class AcquisitionRequestService(
         if (!account.Can(JularrPolicies.AdminMedia))
         {
             throw new AcquisitionAccessDeniedException("Only the owner or a media manager can decide requests.");
+        }
+    }
+
+    private void RequireRequesterOrManager(AcquisitionRequest request)
+    {
+        if (request.RequestedByProfileId != account.ProfileId && !account.Can(JularrPolicies.AdminMedia))
+        {
+            throw new AcquisitionAccessDeniedException("Only the requester, the owner or a media manager can change a request.");
         }
     }
 }

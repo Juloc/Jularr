@@ -117,6 +117,49 @@ public sealed class OperationStore(AppDbContext db, IJularrEventPublisher? event
             },
             cancellationToken);
 
+    /// <summary>The given operations in one query, by id; unknown ids are left out.</summary>
+    public async Task<IReadOnlyDictionary<Guid, OperationSnapshot>> GetManyAsync(
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, OperationSnapshot>();
+        }
+
+        return await WithConnectionAsync(
+            async connection =>
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    """
+                    SELECT "Id", "Kind", "Category", "Lane", "Status", "ProfileId", "Title", "Subject",
+                           "ProgressPercent", "Message", "Error", "IsDownload", "BytesTotal",
+                           "BytesCompleted", "BytesPerSecond", "EtaUtc", "Attempt", "Retryable",
+                           "ExternalProvider", "ExternalId",
+                           "CreatedAtUtc", "StartedAtUtc", "FinishedAtUtc", "UpdatedAtUtc", "Details", "ActorProfileId", "Priority"
+                    FROM "Operations"
+                    WHERE "Id" = ANY(@ids);
+                    """;
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = "@ids";
+                parameter.Value = ids.Select(id => id.ToString("D")).ToArray();
+                command.Parameters.Add(parameter);
+
+                var result = new Dictionary<Guid, OperationSnapshot>();
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    var operation = ReadOperation(reader);
+                    result[operation.Id] = operation;
+                }
+
+                return (IReadOnlyDictionary<Guid, OperationSnapshot>)result;
+            },
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<OperationSnapshot>> ListAsync(
         OperationListFilter filter,
         CancellationToken cancellationToken = default)

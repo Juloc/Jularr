@@ -117,24 +117,24 @@ public sealed class RequestHistoryTests
     }
 
     [TestMethod]
-    public async Task HistoryPageShowsTheSignedInProfilesRequestsAndLetsThemWithdrawAPendingOne()
+    public async Task HistoryPageShowsTheSignedInProfilesRequestsWithTheirConsumerState()
     {
         await using var fixture = await AcquisitionAccessFixture.CreateAsync();
         var store = fixture.Store;
-        var mine = await store.CreateAsync(Draft("mine"), "alice", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
-        var theirs = await store.CreateAsync(Draft("theirs"), "bob", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        await store.CreateAsync(Draft("mine"), "alice", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        await store.CreateAsync(Draft("theirs"), "bob", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        var cancelled = await store.CreateAsync(Draft("cancelled"), "alice", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        await fixture.Service("alice", AccountRole.User).CancelAsync(cancelled.Id, CancellationToken.None);
 
         var page = Page(fixture, "alice");
         await page.OnGetAsync("open", 1, CancellationToken.None);
 
         CollectionAssert.AreEqual(new[] { "mine" }, page.History.Items.Select(request => request.ExternalId).ToArray());
         Assert.AreEqual(RequestHistoryFilter.Open, page.History.Filter);
+        Assert.AreEqual(ConsumerAcquisitionState.WaitingForApproval, page.Rows.Single().State.State);
 
-        Assert.IsInstanceOfType<RedirectToPageResult>(await page.OnPostWithdrawAsync(mine.Id, "open", 1, CancellationToken.None));
-        Assert.AreEqual(AcquisitionRequestStatus.Rejected, (await store.GetAsync(mine.Id, CancellationToken.None))!.Status);
-
-        Assert.IsInstanceOfType<ForbidResult>(await page.OnPostWithdrawAsync(theirs.Id, "open", 1, CancellationToken.None), "Someone else's request cannot be withdrawn.");
-        Assert.AreEqual(AcquisitionRequestStatus.Pending, (await store.GetAsync(theirs.Id, CancellationToken.None))!.Status);
+        await page.OnGetAsync("finished", 1, CancellationToken.None);
+        Assert.IsTrue(page.Rows.Single().Request.IsCancelled, "A cancelled request is finished and says so.");
     }
 
     [TestMethod]
@@ -157,8 +157,9 @@ public sealed class RequestHistoryTests
             fixture.Db,
             account,
             new RequestHistoryQuery(fixture.Store),
-            fixture.Service(profileId, AccountRole.User),
-            profiles);
+            fixture.StatusQuery(),
+            profiles,
+            TimeProvider.System);
         page.PageContext = new PageContext
         {
             HttpContext = new DefaultHttpContext { User = AcquisitionAccessFixture.Principal(profileId, AccountRole.User) },

@@ -558,6 +558,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Library.AdminMediaDetailService>(
 builder.Services.AddSingleton(_ => new Jularr.Web.Features.Acquisition.Access.AcquisitionRequestSettingsStore("/data"));
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestHistoryQuery>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestArtworkResolver>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestStatusQuery>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Books.BookAcquisitionExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());

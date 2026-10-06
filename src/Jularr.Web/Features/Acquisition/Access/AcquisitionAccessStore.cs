@@ -559,6 +559,22 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
         string? resultUrl,
         bool clearOperation,
         CancellationToken cancellationToken) =>
+        TryTransitionStatusAsync(id, expected, status, message, operationId, resultUrl, clearOperation, decidedByProfileId: null, cancellationToken);
+
+    /// <summary>
+    /// The same transition for a decision of a person: the profile that decided and the moment are recorded in the same statement, so an
+    /// approval or rejection can only land on a request that is still in one of <paramref name="expected"/> and never overwrites a cancel.
+    /// </summary>
+    public Task<AcquisitionStatusTransition?> TryTransitionStatusAsync(
+        Guid id,
+        IReadOnlyCollection<AcquisitionRequestStatus> expected,
+        AcquisitionRequestStatus status,
+        string? message,
+        Guid? operationId,
+        string? resultUrl,
+        bool clearOperation,
+        string? decidedByProfileId,
+        CancellationToken cancellationToken) =>
         WithConnectionAsync(async connection =>
         {
             await using var command = connection.CreateCommand();
@@ -569,6 +585,8 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                     "StatusMessage" = @message,
                     "OperationId" = CASE WHEN @clearOperation THEN NULL ELSE COALESCE(@operationId, current."OperationId") END,
                     "ResultUrl" = COALESCE(@resultUrl, current."ResultUrl"),
+                    "DecidedByProfileId" = COALESCE(@decidedBy, current."DecidedByProfileId"),
+                    "DecidedAt" = CASE WHEN @decidedBy::text IS NULL THEN current."DecidedAt" ELSE @now END,
                     "UpdatedAt" = @now
                 FROM (SELECT "Status" AS "PreviousStatus", "StatusMessage" AS "PreviousMessage" FROM "AcquisitionRequests" WHERE "Id" = @id) AS previous
                 WHERE current."Id" = @id AND current."Status" = ANY(@expected)
@@ -580,6 +598,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             Add(command, "@operationId", operationId?.ToString());
             Add(command, "@resultUrl", resultUrl);
             Add(command, "@clearOperation", clearOperation);
+            Add(command, "@decidedBy", decidedByProfileId);
             Add(command, "@now", DateTime.UtcNow);
             var parameter = command.CreateParameter();
             parameter.ParameterName = "@expected";

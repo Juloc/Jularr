@@ -99,7 +99,7 @@ public sealed class RequestCapabilityTests
     }
 
     [TestMethod]
-    public async Task DecisionNotificationsOpenTheRequestHistory()
+    public async Task DecisionNotificationsOpenTheRequestsStatus()
     {
         await using var fixture = await AcquisitionAccessFixture.CreateAsync();
         var alice = fixture.Service("alice", AccountRole.User);
@@ -109,7 +109,7 @@ public sealed class RequestCapabilityTests
         await owner.RejectAsync(request.Id, "Not now.", CancellationToken.None);
 
         var denied = fixture.Events.Published.Single(item => item.Category == Jularr.Web.Features.Events.JularrEventCategory.RequestDenied);
-        Assert.AreEqual(AcquisitionRequestService.HistoryPath, denied.DeepLink);
+        Assert.AreEqual(AcquisitionRequestService.StatusPath(request.Id), denied.DeepLink);
     }
 
     private static AcquisitionRequestDraft Draft(string id, MediaAcquisitionKind kind = MediaAcquisitionKind.Book) =>

@@ -6,6 +6,25 @@
 .request-count { margin-inline-start: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .request-title { font-weight: 700; }
 .request-history-row time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* A row is one target: the title link covers it, so the whole row opens the request's status. */
+.request-history-row { position: relative; }
+.request-history-row:hover { background: var(--surface-2); }
+.request-history-row:has(.request-title:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.request-history-row .request-title { color: var(--text); text-decoration: none; }
+.request-history-row .request-title:focus-visible { outline: none; }
+.request-history-row .request-title::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.request-cover-initial {
+    display: grid; place-items: center; width: 100%; height: 100%;
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--accent-text); font-size: 18px; font-weight: 800;
+}
+
+/* One chip tone per consumer state, from RequestStatusText.Tone: the same label always has the same colour. */
+.request-tone-waiting { background: var(--accent-soft); color: var(--accent-text); }
+.request-tone-working { background: color-mix(in srgb, var(--info-text) 15%, transparent); color: var(--info-text); }
+.request-tone-done { background: color-mix(in srgb, var(--success-text) 15%, transparent); color: var(--success-text); }
+.request-tone-monitoring { background: color-mix(in srgb, var(--accent-text) 10%, transparent); color: var(--accent-text); }
+.request-tone-problem { background: color-mix(in srgb, var(--danger-text) 14%, transparent); color: var(--danger-text); }
+.request-tone-neutral { background: var(--soft-fill); color: var(--muted); }
 .request-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; color: var(--muted); font-size: 13px; }
 
 /* Request with options */
@@ -58,3 +77,4 @@
     .auto-rule-row { grid-template-columns: minmax(0, 1fr); }
     .request-field-episodes { grid-template-columns: minmax(0, 1fr); }
 }
+.request-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

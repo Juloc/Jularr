@@ -10,6 +10,8 @@
 }
 .dc-rq::backdrop { background: rgb(0 0 0 / .55); }
 .dc-rq[open] { display: flex; }
+/* The dialog is hosted by pages other than Discover (detail pages, My requests), so its own hidden parts do not rely on a page rule. */
+.dc-rq [hidden] { display: none !important; }
 .dc-rq-panel { display: flex; flex-direction: column; width: 100%; min-height: 0; max-height: inherit; }
 
 .dc-rq-head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 16px 12px; }

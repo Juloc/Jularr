@@ -82,7 +82,9 @@ public static class ConsumerAcquisitionProjector
             AcquisitionRequestStatus.Searching => ConsumerAcquisitionState.LookingForMedia,
             AcquisitionRequestStatus.Downloading => DownloadingState(download),
             AcquisitionRequestStatus.Importing => ConsumerAcquisitionState.Preparing,
-            AcquisitionRequestStatus.Completed => ConsumerAcquisitionState.NotAvailable,
+            // For Movie and Series a completed request without playable media ended without finding any (monitoring turned off); every other media type has no Work to look
+            // into, so its completed request is the imported title.
+            AcquisitionRequestStatus.Completed => request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv ? ConsumerAcquisitionState.NotAvailable : ConsumerAcquisitionState.Available,
             AcquisitionRequestStatus.Rejected => ConsumerAcquisitionState.Rejected,
             _ => ConsumerAcquisitionState.NeedsAttention
         };
@@ -168,25 +170,72 @@ public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessS
     /// <param name="workEpisodeId">The episode of a Series the consumer waits for; null for a Movie or when the request as a whole is meant.</param>
     public async Task<ConsumerAcquisitionView> ProjectAsync(AcquisitionRequest request, Guid? workEpisodeId, bool playbackEnabled, CancellationToken cancellationToken)
     {
+        if (workEpisodeId is not { } episodeId)
+        {
+            return (await ProjectManyAsync([request], playbackEnabled, cancellationToken))[request.Id];
+        }
+
         var operation = request.OperationId is { } operationId ? await new OperationStore(db).GetAsync(operationId, cancellationToken) : null;
         var work = (await works.ResolveAsync([request], cancellationToken)).GetValueOrDefault(request.Id);
-        var local = request.Kind == MediaAcquisitionKind.Movie
-            ? work is not null && await HasFileAsync(work.WorkId, null, cancellationToken)
-            : workEpisodeId is { } episodeId
-                ? work is not null && await HasFileAsync(work.WorkId, episodeId, cancellationToken)
-                : request.Status == AcquisitionRequestStatus.Completed && work is not null && await HasAnyEpisodeFileAsync(work.WorkId, cancellationToken);
+        var local = work is not null && await HasFileAsync(work.WorkId, episodeId, cancellationToken);
         return ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), operation, local, workEpisodeId, playbackEnabled, clock.GetUtcNow().UtcDateTime);
+    }
+
+    /// <summary>
+    /// The consumer state of every request as a whole (not of one episode), in a fixed number of queries however many requests there are:
+    /// the Works of the video requests, the operations of the downloads and which Works have a playable file. Used by the request history
+    /// and the request status surface, so both always say the same thing about a request.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, ConsumerAcquisitionView>> ProjectManyAsync(IReadOnlyCollection<AcquisitionRequest> requests, bool playbackEnabled, CancellationToken cancellationToken)
+    {
+        if (requests.Count == 0)
+        {
+            return new Dictionary<Guid, ConsumerAcquisitionView>();
+        }
+
+        var workByRequest = await works.ResolveAsync(requests, cancellationToken);
+        var downloadIds = requests.Where(request => request.Status == AcquisitionRequestStatus.Downloading && request.OperationId is not null).Select(request => request.OperationId!.Value).ToArray();
+        var downloads = await new OperationStore(db).GetManyAsync(downloadIds, cancellationToken);
+        Guid[] WorkIdsOf(MediaAcquisitionKind kind) => [.. requests.Where(request => request.Kind == kind && workByRequest.ContainsKey(request.Id)).Select(request => workByRequest[request.Id].WorkId).Distinct()];
+        var movieWorkIds = WorkIdsOf(MediaAcquisitionKind.Movie);
+        var seriesWorkIds = WorkIdsOf(MediaAcquisitionKind.Tv);
+        var moviesWithFile = movieWorkIds.Length == 0
+            ? []
+            : (await db.MediaAssets.AsNoTracking()
+                .Where(asset => movieWorkIds.Contains(asset.WorkId) && asset.WorkEpisodeId == null && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
+                .Select(asset => asset.WorkId)
+                .Distinct()
+                .ToListAsync(cancellationToken)).ToHashSet();
+        var seriesWithFile = seriesWorkIds.Length == 0
+            ? []
+            : (await db.MediaAssets.AsNoTracking()
+                .Where(asset => seriesWorkIds.Contains(asset.WorkId) && asset.WorkEpisodeId != null && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
+                .Select(asset => asset.WorkId)
+                .Distinct()
+                .ToListAsync(cancellationToken)).ToHashSet();
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var views = new Dictionary<Guid, ConsumerAcquisitionView>(requests.Count);
+        foreach (var request in requests)
+        {
+            workByRequest.TryGetValue(request.Id, out var work);
+            // A completed request is only available when something of the Series is actually playable; one that ended by monitoring being turned off is not.
+            var local = work is not null && request.Kind switch
+            {
+                MediaAcquisitionKind.Movie => moviesWithFile.Contains(work.WorkId),
+                MediaAcquisitionKind.Tv => request.Status == AcquisitionRequestStatus.Completed && seriesWithFile.Contains(work.WorkId),
+                _ => false
+            };
+            var download = request.OperationId is { } operationId ? downloads.GetValueOrDefault(operationId) : null;
+            views[request.Id] = ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), download, local, null, playbackEnabled, now);
+        }
+
+        return views;
     }
 
     private Task<bool> HasFileAsync(Guid workId, Guid? workEpisodeId, CancellationToken cancellationToken) =>
         db.MediaAssets.AsNoTracking().AnyAsync(
             asset => asset.WorkId == workId && asset.WorkEpisodeId == workEpisodeId && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id),
-            cancellationToken);
-
-    /// <summary>A completed request is only available when something of the Series is actually playable; one that ended by monitoring being turned off is not.</summary>
-    private Task<bool> HasAnyEpisodeFileAsync(Guid workId, CancellationToken cancellationToken) =>
-        db.MediaAssets.AsNoTracking().AnyAsync(
-            asset => asset.WorkId == workId && asset.WorkEpisodeId != null && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id),
             cancellationToken);
 }
 

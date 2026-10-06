@@ -32,7 +32,7 @@ namespace Jularr.Tests;
 public sealed class RequestPagesRenderTests
 {
     [TestMethod]
-    public async Task HistoryShowsTheSignedInProfilesRequestsWithTheirStateOptionsAndWithdrawAction()
+    public async Task HistoryShowsTheSignedInProfilesRequestsWithTheirStateAndOptionsAndOpensTheirStatus()
     {
         await using var host = await RequestPagesHost.CreateAsync();
         var store = new AcquisitionAccessStore(host.Db);
@@ -67,10 +67,12 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(all, "Audio: 日本語");
         StringAssert.Contains(all, "Subtitles: Deutsch");
         StringAssert.Contains(all, "Approved automatically");
-        StringAssert.Contains(all, "Withdraw");
-        StringAssert.Contains(all, "request-status-pending");
-        StringAssert.Contains(all, "request-status-completed");
-        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "class=\"button\" type=\"submit\">Withdraw").Count, "Only the pending request can be withdrawn.");
+        Assert.IsFalse(all.Contains("Withdraw", StringComparison.Ordinal), "Cancelling a request lives on its status, not in the list.");
+        StringAssert.Contains(all, "request-tone-waiting");
+        StringAssert.Contains(all, "request-tone-done");
+        Assert.AreEqual(2, System.Text.RegularExpressions.Regex.Matches(all, "data-rqs-open").Count, "Every request of the profile opens its status.");
+        StringAssert.Contains(all, "request-sr-only", "The exact time is there for assistive technology; the visible time is relative.");
+        Assert.IsFalse(all.Contains(" UTC</time>", StringComparison.Ordinal), "No raw UTC timestamp is the visible time of a row.");
 
         var finished = await host.GetHtmlAsync("/Requests?show=finished", asOwner: false);
         StringAssert.Contains(finished, "Dungeon Meshi");
@@ -181,6 +183,47 @@ public sealed class RequestPagesRenderTests
 
         var none = await host.GetHtmlAsync("/Admin/Requests?q=zzz", asOwner: true);
         StringAssert.Contains(none, "No requests match these filters.");
+    }
+
+    [TestMethod]
+    public async Task TheStatusPageShowsTheCurrentStateTheSavedIntentAndOnlyTheActionsTheRequestAllows()
+    {
+        await using var host = await RequestPagesHost.CreateAsync();
+        var store = new AcquisitionAccessStore(host.Db);
+        var german = new AcquisitionRequestOptions { AudioLanguage = "de", SubtitleLanguage = "en" }.Validate();
+        var waiting = await store.CreateAsync(Anime("1", "Frieren", german), RequestPagesHost.Profile, AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        var failed = await store.CreateAsync(Anime("2", "Dungeon Meshi"), RequestPagesHost.Profile, AcquisitionRequestStatus.Failed, "owner", CancellationToken.None);
+        var others = await store.CreateAsync(Anime("3", "Someone Elses Show"), "another-profile", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+
+        var pending = await host.GetHtmlAsync($"/Requests/{waiting.Id}", asOwner: false);
+
+        StringAssert.Contains(pending, "Frieren");
+        StringAssert.Contains(pending, "Waiting for approval");
+        StringAssert.Contains(pending, "Your request has been submitted and is waiting for approval.");
+        StringAssert.Contains(pending, "Request details");
+        StringAssert.Contains(pending, "Audio");
+        StringAssert.Contains(pending, "Deutsch");
+        StringAssert.Contains(pending, "Timeline · 1");
+        StringAssert.Contains(pending, ">Cancel request<");
+        StringAssert.Contains(pending, ">Edit request<");
+        StringAssert.Contains(pending, "Cancel this request?");
+        Assert.IsFalse(pending.Contains("Retry request", StringComparison.Ordinal));
+        var panel = System.Text.RegularExpressions.Regex.Match(pending, "<section class=\"rqs\".*?</section>", System.Text.RegularExpressions.RegexOptions.Singleline).Value;
+        Assert.IsTrue(panel.Length > 0);
+        var forbidden = System.Text.RegularExpressions.Regex.Match(panel, "Downloading|Importing|Searching|indexer|usenet|NZB|grab", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        Assert.IsFalse(forbidden.Success, $"The consumer surface uses consumer words, found '{forbidden.Value}'.");
+
+        var broken = await host.GetHtmlAsync($"/Requests/{failed.Id}", asOwner: false);
+
+        StringAssert.Contains(broken, "Could not complete request");
+        StringAssert.Contains(broken, ">Retry request<");
+        Assert.IsFalse(broken.Contains("Cancel request", StringComparison.Ordinal), "Only a request that waits for approval can be cancelled.");
+        Assert.IsFalse(broken.Contains("Edit request", StringComparison.Ordinal));
+        Assert.IsFalse(broken.Contains("No release", StringComparison.Ordinal), "The stored technical message is never shown.");
+
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync($"/Requests/{others.Id}", asOwner: false), "Another profile's request does not exist here.");
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync($"/Requests/{waiting.Id}", asOwner: true), "The owner reads it in Admin, not on the consumer surface.");
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync($"/Requests/{Guid.NewGuid()}", asOwner: false));
     }
 
     [TestMethod]
@@ -302,7 +345,11 @@ public sealed class RequestPagesRenderTests
                         services.AddScoped<Jularr.Web.Features.Franchises.FranchiseStore>();
                         services.AddCollections();
                         services.AddScoped<RequestHistoryQuery>();
+                        services.AddSingleton(TimeProvider.System);
+                        services.AddScoped<ConsumerAcquisitionQuery>();
                         services.AddScoped<RequestArtworkResolver>();
+                        services.AddScoped<RequestStatusQuery>();
+                        services.AddScoped<VideoRequestScopeResolver>();
                         services.AddScoped<AcquisitionRequestService>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                     })
