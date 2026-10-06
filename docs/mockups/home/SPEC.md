@@ -36,9 +36,10 @@ The Clean design is the canonical UX/layout baseline. Original Jularr is the sup
 - Library
 - Games
 - Calendar
-- Learning
-- global Search at the top
-- Profile and Settings at the bottom
+- Learning, once it is no longer Unfinished (#870)
+- global Search in the top header, not in the sidebar
+- Profile and Settings at the bottom; the account menu (Profile, Settings, sign out) and theme sit in the header
+- Unfinished: one subordinate collapsible section closing the sidebar
 - Admin is a separate explicit mode entry for authorized users
 
 Do not expose Downloads, Imports, Wanted/Missing or other admin/operations destinations in normal user navigation.
@@ -48,7 +49,7 @@ Bottom navigation is fixed to:
 - Home
 - Library
 - Calendar
-- Learning
+- Learning, once it is no longer Unfinished (#870; until then it is listed under Profile -> Unfinished)
 - Profile
 
 Games does **not** occupy a permanent Mobile bottom-navigation slot.

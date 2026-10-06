@@ -40,19 +40,22 @@ Consumer and Admin use the same design system but remain structurally distinct.
 
 ### Desktop / wide Tablet
 
+A top header carries the brand, the global Search (centre) and theme, notifications and the account menu; the sidebar is navigation only.
+
 Persistent consumer navigation:
 
 - Home;
 - Library;
 - Games;
 - Calendar;
-- Learning;
-- global Search/Discover access.
+- Learning, while it is finished (it is Unfinished today);
+- global Search/Discover access in the header.
 
 Bottom/account area:
 - Profile;
 - Settings;
-- Admin only when authorized.
+- Admin only when authorized;
+- Unfinished: the one subordinate section for destinations whose feature is still incomplete (#870; see `docs/UX.md` section 2).
 
 Do not create permanent top-level destinations for:
 - individual media types;
@@ -71,10 +74,10 @@ Primary bottom navigation:
 - Home;
 - Library;
 - Calendar;
-- Learning;
+- Learning, once it is no longer Unfinished (until then Profile -> Unfinished);
 - Profile.
 
-Search remains globally accessible from the top/app bar.
+Search remains globally accessible from the top/app bar and never takes a bottom-navigation slot; neither does Unfinished.
 
 Library is a real destination and is not merged into Home.
 

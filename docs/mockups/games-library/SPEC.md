@@ -188,7 +188,7 @@ Do not squeeze Desktop filters into the TV layout.
 ### Mobile navigation entry
 
 The fixed Mobile bottom navigation remains:
-`Home · Library · Calendar · Learning · Profile`.
+`Home · Library · Calendar · Learning · Profile` (Learning joins it once it is no longer Unfinished, #870).
 
 Games is a dedicated route, but not a permanent bottom-nav slot.
 

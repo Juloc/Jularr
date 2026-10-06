@@ -26,18 +26,27 @@ Status: planning baseline. This document defines information architecture, navig
 ## 2. Global user navigation
 
 ### Desktop/tablet wide
+A top header spans the page over a persistent left navigation:
+- header left: Jularr brand and, inside Admin or Settings, the mode name; centre: the **global Search**; right: theme, notifications and the account menu (Profile, Settings, sign out);
+- Global Search lives only in the header, never in the sidebar. Discover owns a prominent search of its own, so the header field is omitted there and Ctrl/Cmd+K focuses Discover's field;
+- the sidebar is navigation only: no account, theme or offline utilities.
+
 Persistent left navigation:
 - Home
 - Library
 - Games
 - Calendar
-- Learning
-- Search/Discover is globally available at the top rather than a redundant permanent destination where possible.
+- Learning, while it is finished; today it sits in the Unfinished section (below)
+- Search/Discover is globally available in the header rather than a redundant permanent destination.
 
 Bottom/profile area:
 - Profile
 - Settings
 - Admin, only when authorized
+- **Unfinished**: one subordinate, collapsible section that closes the sidebar (#870)
+
+### Unfinished destinations (prerelease)
+Destinations whose core feature is still incomplete or deferred are grouped in one `Unfinished` section instead of looking finished beside the core pages. It is the last, visually subordinate section of the sidebar and of the Admin and Settings lists, without warning colours. The set is one flag in `UiNavigationCatalog`: the Learning destination and Learning settings (#441), Offline settings (#839, #861), personal AI settings and Admin AI (#638), and Admin Subtitles (external provider search is partial, sync is missing; see INFORMATION_ARCHITECTURE.md Bazarr table). Finished destinations stay in normal navigation. Permission and instance-module gating still apply; routes never change for regrouping. On Mobile the section is reached through Profile -> Unfinished, never from a bottom-navigation slot.
 
 Library contains normal watch/read/listen media rather than giving every media type a permanent top-level sidebar entry. Games is the deliberate exception because its platform browsing, saves, runtimes and controller/play model require a distinct consumer surface while still reusing shared Jularr infrastructure.
 
@@ -46,10 +55,10 @@ Bottom navigation optimized for frequent use:
 - Home
 - Library
 - Calendar
-- Learning
+- Learning, once it is no longer Unfinished (it is reached through Profile -> Unfinished until then)
 - Profile
 
-Search is globally accessible from the top/app bar. Activity belongs under Profile rather than occupying bottom navigation.
+Search is globally accessible from the top/app bar; it never takes a bottom-navigation slot, and neither does Unfinished. Activity belongs under Profile rather than occupying bottom navigation.
 
 Games does not consume a Mobile bottom-navigation slot. When Games is available, its dedicated route is reached contextually from Home Games/Continue Playing content, global Search/Discover Games context, Game Detail/back-navigation or deep links. Home must keep Games discoverable even when the profile has no recent Game activity.
 
@@ -526,7 +535,7 @@ Status/details behavior is owned by `docs/mockups/request-status-details/SPEC.md
 
 ## 17. Admin mode/navigation
 
-Entering Admin expands/replaces navigation with explicit admin destinations while preserving a clear way back to normal Jularr.
+Entering Admin expands/replaces navigation with explicit admin destinations while preserving a clear way back to normal Jularr. Admin pages whose feature is incomplete (today AI and Subtitles) form the last, subordinate `Unfinished` group.
 
 The target Admin shell uses **one permanent navigation destination per owning area**. Tabs, editors, repair dialogs and compatibility routes do not become duplicate sidebar entries.
 

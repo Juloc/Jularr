@@ -115,7 +115,7 @@ Some Admin specs are approved visual directions while others are planning baseli
 
 There is **no longer a generic missing core consumer page category** from the earlier audit list.
 
-Mobile primary navigation is now locked to `Home · Library · Calendar · Learning · Profile`. Games remains a dedicated route reached contextually on Mobile and does not consume a bottom-navigation slot.
+Mobile primary navigation is now locked to `Home · Library · Calendar · Learning · Profile` (Learning joins it once it is no longer Unfinished, #870). Games remains a dedicated route reached contextually on Mobile and does not consume a bottom-navigation slot.
 
 The next work should therefore not invent additional pages merely to continue planning.
 

@@ -112,8 +112,8 @@ already free-form strings, so this needed no schema change (#374).
   `manager.listBooks()`; it never asks the server what is downloaded, since
   that is profile-and-device-local browser state the server never sees.
 - A compact **global download indicator** (`data-offline-download-indicator`,
-  `Pages/Shared/_AppAccountFooter.cshtml`, rendered on every authenticated
-  page) shows a small "N downloading" label via `manager.onChange`, hidden
+  `Pages/Shared/_AppUserMenu.cshtml` in the header account menu and the phone
+  Profile footer, rendered on every authenticated page) shows a small "N downloading" label via `manager.onChange`, hidden
   entirely when nothing is in progress.
 
 ### Localization

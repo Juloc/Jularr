@@ -14,6 +14,8 @@ Discover and Search are one coherent surface.
 
 ## Global search bar
 
+The shell header carries the global Search everywhere except Discover: Discover owns the prominent search below, so the header field is omitted there (Ctrl/Cmd+K focuses Discover's field) and two equally dominant fields never appear.
+
 At the top of Discover on every platform:
 
 - very wide search bar

@@ -20,13 +20,14 @@ The Settings landing page keeps the same shared profile chrome as the other acco
 Settings must not create a second account shell.
 
 Desktop entry:
-- bottom sidebar account control: avatar/initials + nickname + `…`
-- clicking avatar/name opens the Profile/Account page
-- `…` opens a small account popover with direct links to Activity, Stats, Ratings, Friends, Settings and Logout
+- header account menu (avatar/initials), replacing the former sidebar account control (#870): name, Profile, Settings and Logout; the sidebar stays navigation only
+- Activity, Stats, Ratings and Friends stay reachable as Profile tabs
+- Offline settings, personal AI and Learning settings are listed under the Unfinished group while their features are incomplete
 
 Mobile entry:
 - Profile remains the account destination in bottom navigation
 - Settings is a tab/section inside Profile
+- Profile -> Unfinished lists the incomplete destinations (never a bottom-navigation slot)
 
 ## 2. Settings landing page
 
