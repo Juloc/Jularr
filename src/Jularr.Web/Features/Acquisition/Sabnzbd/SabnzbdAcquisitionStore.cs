@@ -122,7 +122,7 @@ public sealed class SabnzbdAcquisitionStore
         ArgumentNullException.ThrowIfNull(directory);
 
         protector = dataProtectionProvider.CreateProtector(
-            "AniLingo.Acquisition.Sabnzbd.CandidateUrl.v1");
+            "Jularr.Acquisition.Sabnzbd.CandidateUrl.v1");
         storePath = Path.Combine(directory.FullName, FileName);
     }
 
