@@ -338,9 +338,9 @@ public sealed class SettingsAcquisitionPathMappingPageTests
         await using var host = await ManageSheetPageTestHost.CreateAsync();
 
         var waiting = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: true);
-        Assert.AreEqual(2, Occurrences(waiting, "No default library root: imports of this type wait until one is chosen in Storage."), "Movies and TV each say their imports wait.");
+        Assert.AreEqual(3, Occurrences(waiting, "No default library root: imports of this type wait until one is chosen in Storage."), "Movies, TV and Music each say their imports wait.");
         Assert.AreEqual(3, Occurrences(waiting, "name=\"libraryRoot\""), "Only the reading types still have a library folder field here.");
-        Assert.AreEqual(2, Occurrences(waiting, "Change in Storage"));
+        Assert.AreEqual(3, Occurrences(waiting, "Change in Storage"));
         StringAssert.Contains(waiting, "/Admin/Storage#destinations");
 
         var root = new LibraryRoot { Name = "Cinema", Path = "/srv/cinema", PlacementPolicy = LibraryPlacementPolicy.Hardlink };
@@ -358,7 +358,7 @@ public sealed class SettingsAcquisitionPathMappingPageTests
         Assert.IsFalse(manager.Contains("/srv/cinema", StringComparison.Ordinal), "The host path of the root is for the owner only.");
         StringAssert.Contains(manager, "Cinema");
         StringAssert.Contains(owner, "Set in Storage", "A routed root's placement policy belongs to Storage, not to the import mode table.");
-        Assert.AreEqual(1, Occurrences(owner, "No default library root: imports of this type wait until one is chosen in Storage."), "Only TV is still waiting.");
+        Assert.AreEqual(2, Occurrences(owner, "No default library root: imports of this type wait until one is chosen in Storage."), "Only TV and Music are still waiting.");
     }
 
     [TestMethod]
@@ -388,11 +388,11 @@ public sealed class SettingsAcquisitionPathMappingPageTests
         var owner = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: true);
         var manager = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: false, asMediaManager: true);
 
-        // Library and inbox of Manga, Light Novels and Books, the inbox of Movies and TV, and the local side of a mapping.
+        // Library and inbox of Manga, Light Novels and Books, the inbox of Movies, TV and Music, and the local side of a mapping.
         Assert.AreEqual(3, Occurrences(owner, "name=\"libraryRoot\""));
-        Assert.AreEqual(5, Occurrences(owner, "name=\"inboxRoot\""));
+        Assert.AreEqual(6, Occurrences(owner, "name=\"inboxRoot\""));
         Assert.AreEqual(1, Occurrences(owner, "name=\"localPrefix\""));
-        Assert.AreEqual(9, Occurrences(owner, "data-path-browse"), "Every one of them has the Browse button.");
+        Assert.AreEqual(10, Occurrences(owner, "data-path-browse"), "Every one of them has the Browse button.");
         Assert.AreEqual(1, Occurrences(owner, "<dialog class=\"folder-browser\""), "One shared browser, not one per field.");
         StringAssert.Contains(owner, "/js/folder-browser.js");
         StringAssert.Contains(owner, "/css/storage-paths.css");
