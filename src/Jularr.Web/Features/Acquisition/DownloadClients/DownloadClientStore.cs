@@ -34,7 +34,7 @@ public sealed class DownloadClientStore
         ArgumentNullException.ThrowIfNull(directory);
 
         protector = dataProtectionProvider.CreateProtector(
-            "AniLingo.Acquisition.DownloadClients.Secret.v1");
+            "Jularr.Acquisition.DownloadClients.Secret.v1");
         storePath = Path.Combine(directory.FullName, FileName);
     }
 
