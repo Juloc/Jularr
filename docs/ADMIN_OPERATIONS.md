@@ -28,8 +28,6 @@ Owner-only administration:
 - `/Acquisition` — anime acquisition overview: schedule, wanted episodes, downloads, imports that need a decision, interactive search and recent decisions (linked from Admin → System and each anime page; see [ANIME_ACQUISITION.md](ANIME_ACQUISITION.md))
 - `/Library/AnimeRepair/{animeId}` — per-anime repair tools (linked from each anime page)
 
-Legacy owner routes under `/Settings` redirect to their `/Admin` counterparts.
-
 ## Canonical operation state
 
 The PostgreSQL tables `Operations` and `OperationLogs` are the canonical durable operational history.
@@ -102,7 +100,7 @@ Every library scan — startup, the **Queue library scan** button, filesystem-ch
 
 `Details` of a scan run carries the root ID, the scanned folders (`null` for the whole root), the trigger (`Manual`, `Startup`, `Watch`, `Periodic`, `Retry`), the current phase (`Enumerating`, `Reconciling`, `Metadata`, `Artwork`, `Analyzing`, `Subtitles`, `Completed`), files processed/total and, once finished, the counters: media files, added, changed, removed, skipped, subtitle files, artwork imported, NFO files ignored, media analysed, media analyses failed, errors and warnings. Progress percent and the message are written through the normal operation progress at most once per second; phase changes are always written.
 
-The `Artwork` phase runs `AnimeArtworkLibrary.ReconcileAsync` for every scanned anime folder. Canonical artwork is the file beside the media (series folder; season folder for season posters). The user's own files win over provider artwork Jularr persisted there (Sonarr over copies migrated from `/data/artwork/anime` over AniList); the remote AniList URL is only a page fallback until the image is persisted. Files Jularr wrote are recorded in `MediaArtworkAssets` by file name, size and last write; any other file, or a recorded file that changed, is the user's and is never replaced. Writes go through a temporary file in the target folder and are verified before the row is recorded, and a replaced image never leaves a stale extension behind. A missing media folder (unavailable NAS) is skipped without touching files, rows or derivatives. The legacy store is migrated per anime: a copy is written only where the media folder has no artwork of that kind, verified byte for byte, recorded, and only then is the local copy deleted; folders whose anime is not found stay in place and are counted in the log after a full scan. `/data/cache/artwork/anime` holds the WebP derivatives the pages serve and is rebuilt by the next scan when deleted.
+The `Artwork` phase runs `AnimeArtworkLibrary.ReconcileAsync` for every scanned anime folder. Canonical artwork is the file beside the media (series folder; season folder for season posters). The user's own files win over provider artwork Jularr persisted there (Sonarr over copies migrated from `/data/artwork/anime` over AniList); the remote AniList URL is only a page fallback until the image is persisted. Files Jularr wrote are recorded in `MediaArtworkAssets` by file name, size and last write; any other file, or a recorded file that changed, is the user's and is never replaced. Writes go through a temporary file in the target folder and are verified before the row is recorded, and a replaced image never leaves a stale extension behind. A missing media folder (unavailable NAS) is skipped without touching files, rows or derivatives. `/data/cache/artwork/anime` holds the WebP derivatives the pages serve and is rebuilt by the next scan when deleted.
 
 Light Novel and Manga covers (#581) follow the same rule outside the scan. When AniList metadata is matched to a series (`NovelMetadataService.MatchAsync` and `MangaAniListService.MatchAsync`, which the automatic match, the manual match and a request's completed-download import all go through) and the series lives on that media type's library root, `ReadingCoverArtwork` stores the provider cover as `cover.*` in the series folder: the first folder below the Light Novel or Manga library root, taken from the EPUB volume paths (`NovelVolumes.SourceStoragePath`) or the Manga series' source path. Writes use the shared `BesideMediaArtworkStore` (`MediaArtworkAssets` scopes `light-novel` and `manga`), so a `cover.*` the user placed there, or one that changed since Jularr wrote it, is never replaced. The series then carries `/Novels/Cover/{id}` or `/Manga/Cover/{id}` as its cover URL, served as a cached WebP thumbnail from `/data/cache/artwork/beside` (`?w=` picks the width, default 512), which keeps working while the NAS is asleep or the library root was removed. Without a configured library root, for a series read in place outside it (or a Manga series that is a folder of loose page images, where a `cover.*` would become a page), or while the NAS folder is unavailable, nothing is written and the series keeps its AniList cover URL. A series matched before this change keeps its AniList URL until it is matched again.
 
@@ -276,15 +274,7 @@ Data Protection. **Test** on each entry checks reachability and authentication a
 result for the periodic health check (see [ANIME_ACQUISITION.md](ANIME_ACQUISITION.md)) — use the
 full API key rather than the NZB-only key so Jularr can also track progress.
 
-On startup, a SABnzbd connection from the earlier single-connection settings
-(`/data/acquisition/sabnzbd.json`, including the environment-variable overrides below and the
-still-earlier Books-only settings) is moved once into the canonical download client list; the
-legacy file is then removed. The previously supported `Sabnzbd:*` / `Books:SABnzbd:*` environment
-keys are only read by that one-time migration, not afterward. A one-time startup cleanup also
-removes any qBittorrent (torrent) download client entry an earlier build may have persisted, and
-any Torznab (torrent) indexer entry from `/data/acquisition/indexers.json`, logging what was
-removed; usenet entries are never touched and the cleanup is a no-op once nothing is left to
-remove.
+The canonical download-client list is the only supported configuration path. Torrent download clients and Torznab indexers are not supported.
 
 ### Jobs and state
 
@@ -338,7 +328,7 @@ volumes:
 
 Prefer a dedicated stable host parent when practical so the container does not see unrelated host mounts. The mapped media tree must have the normal read/write permissions required by Jularr.
 
-The legacy direct bind `/path/to/media:/media` remains supported for storage that is guaranteed to be available when Docker creates the container. Do not combine that direct bind with `JULARR_MEDIA_ROOT`.
+A direct bind such as `/path/to/media:/media` is suitable for storage that is guaranteed to be available when Docker creates the container. Do not combine that direct bind with `JULARR_MEDIA_ROOT`.
 
 ### Startup ownership check
 
@@ -352,43 +342,14 @@ A new, empty named volume is initialized from the image with `1654:1654` ownersh
 sudo chown -R 1654:1654 /srv/jularr-data
 ```
 
-### Upgrading from a root-based image
-
-Images released before the non-root runtime, including all AniLingo images, wrote `/data` as root. After upgrading, Jularr refuses to start and `docker logs` shows `Jularr startup aborted: ... is not readable and writable by the Jularr runtime user.` Hand the existing data over once, with Jularr stopped.
-
-For a named volume:
-
-```bash
-docker compose stop jularr
-docker volume ls   # find the data volume, e.g. <project>_anilingo-data
-docker run --rm --user 0:0 --entrypoint chown -v <project>_anilingo-data:/data ghcr.io/juloc/jularr:latest -R 1654:1654 /data
-docker compose up -d
-```
-
-For a bind mount, run the equivalent `chown` directly on the host path instead of through a throwaway container:
-
-```bash
-docker compose stop jularr
-sudo chown -R 1654:1654 /path/on/host/jularr-data
-docker compose up -d
-```
-
-The command only changes ownership, not data. Rolling back to an older root-based image keeps working, but files it creates are root-owned again, so repeat the command before returning to the current image.
-
 ### Custom runtime user
 
 If the deployment sets `user: "<uid>:<gid>"` in Compose (for example to match NAS permissions), `/data` and the writable media paths must be owned by that UID/GID instead of `1654:1654`. The startup check and its fix command use the effective UID/GID of the container, whatever that is set to.
 
-## PostgreSQL database and one-time SQLite import
+## PostgreSQL database
 
-Jularr's canonical database is PostgreSQL (issue #570). The connection string comes from `ConnectionStrings__Default`; the app applies its migrations at startup and refuses to start if the database is unavailable (the Compose stack waits for the `db` service to be healthy). No credentials live in the repository; the database password is provided through the deployment's `.env`. See `docs/PERSISTENCE.md` for the schema, search and artwork design, and `.agent/upgrade-policy.yaml` for the supported upgrade window.
+PostgreSQL is Jularr's canonical database. The connection string comes from `ConnectionStrings__Default`; Jularr applies pending PostgreSQL migrations at startup and refuses to start when the database is unavailable.
 
-Upgrading an existing SQLite installation is a one-time step:
+There is no built-in SQLite import or pre-Jularr upgrade path. The supported persistence boundary is the current epoch in `.agent/upgrade-policy.yaml`.
 
-1. Take a backup of the existing `/data` (which held `jularr.db`) and start from an empty PostgreSQL database.
-2. Point `ConnectionStrings__Default` at PostgreSQL and deploy the #570 (or later) image. On first start, when the PostgreSQL database is still empty and a legacy SQLite file is present under `/data` (`jularr.db`, or the pre-rename `anilingo.db`, or the path in `Import:LegacySqlitePath`), `SqliteToPostgresImporter` copies every table into PostgreSQL in foreign-key order, converting SQLite's text/integer values to the native PostgreSQL types, all in one transaction.
-3. On success the legacy file is renamed to `<name>.imported-<timestamp>` so it is never imported again; the PostgreSQL database is now canonical. If the target already contains data the import is skipped and logged.
-
-Only the Epoch 3 SQLite schema (the last SQLite epoch) is imported directly. An older Epoch 2 database must first be upgraded to Epoch 3 on a pre-#570 SQLite build, then imported.
-
-Back up PostgreSQL with a logical dump (`pg_dump -Fc`) or a stopped-volume snapshot, in addition to `/data` for the non-database state.
+Back up PostgreSQL with a logical dump such as `pg_dump -Fc` or a stopped-volume snapshot. Back up `/data` separately for non-database state.
