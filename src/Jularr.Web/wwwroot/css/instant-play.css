@@ -103,7 +103,8 @@
 .ip-action.is-compact .ip-notice-hint { color: var(--muted); font-size: 12px; }
 
 .ip-action :is(a, button, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.ip-action[data-ip-state="working"] .ip-button:focus-visible { outline-color: #fff; }
+/* On the dark hero scrim the accent ring alone is faint: a white ring with an accent halo reads in both themes. */
+.ip-action:not(.is-compact) :is(a, button, summary):focus-visible { outline-color: #fff; box-shadow: 0 0 0 5px var(--accent); }
 
 /* Phone: a large touch action; Details opens as a disclosure under the actions instead of a popover. */
 @media (max-width: 620px) {

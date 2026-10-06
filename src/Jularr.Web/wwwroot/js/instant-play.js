@@ -522,7 +522,7 @@
             }
 
             if (details && milestoneList) {
-                details.hidden = snapshot.milestones.length === 0 || noticeInfo !== null;
+                details.hidden = snapshot.milestones.length === 0 || noticeInfo !== null || snapshot.phase === "handingOver";
                 if (details.hidden) {
                     details.open = false;
                 }
