@@ -358,6 +358,7 @@ Answers:
 
 Examples:
 
+- Erfordern
 - Bevorzugen +50
 - Benachteiligen -25
 - Ablehnen
@@ -398,14 +399,15 @@ One rule per row.
 
 Supported effects:
 
-- **Bevorzugen** — positive score
-- **Benachteiligen** — negative score
-- **Ablehnen** — hard rejection independent of an arbitrary giant negative score
-- **Nur Information** — match visible in diagnostics but no score/reject effect
+- **Erfordern / Require** — hard eligibility requirement
+- **Bevorzugen / Prefer** — positive score
+- **Benachteiligen / Avoid** — negative score
+- **Ablehnen / Reject** — hard rejection independent of an arbitrary giant negative score
+- **Nur Information / Info** — match visible in diagnostics but no score/reject effect
 
-The backend must implement `Reject` explicitly before the UI exposes it.
+The backend must implement `Require` and `Reject` explicitly before the UI exposes them.
 
-Do not emulate hard reject only through magic values such as `-10000`.
+Do not emulate hard requirements/rejections through magic score values such as `+10000` or `-10000`.
 
 ### Conditions
 
@@ -710,16 +712,18 @@ Manual Search may add identity confidence/rejection context around the same prof
 
 ## Candidate decision order
 
-The target decision order is conceptually:
+The target decision order follows `docs/AUTOMATIC_RELEASE_SELECTION.md`:
 
-`Target/Identity → Hard Reject → Quality Eligibility → Rule Score → Minimum Score → Wait Policy → Upgrade Decision`
+`Target/Identity → Safety + Require/Reject → Quality Tier → Fallback Tier → Preference Score → Coverage Utility → bounded Reliability/Source Tiebreak → Wait Policy → Upgrade Decision`
 
 Important:
 
 - identity mismatch cannot be repaired by a high score;
-- hard reject cannot be overridden by a high positive score unless a future explicit override policy is designed;
+- Require/Reject and hard safety cannot be overridden by positive preference score;
 - quality/rules are independent dimensions;
-- waiting does not make an otherwise rejected release acceptable.
+- fallback relaxation must be explicit;
+- waiting does not make an otherwise rejected release acceptable;
+- network response order is never a tiebreak.
 
 ## Import / Export
 
