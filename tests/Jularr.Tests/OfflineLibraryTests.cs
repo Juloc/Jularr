@@ -600,11 +600,11 @@ public sealed class OfflineLibraryTests
     };
 
     private static string TempDatabasePath() =>
-        Path.Combine(Path.GetTempPath(), $"anilingo-offline-library-{Guid.NewGuid():N}.db");
+        Path.Combine(Path.GetTempPath(), $"jularr-offline-library-{Guid.NewGuid():N}.db");
 
     private static string TempAssetDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), $"anilingo-offline-library-assets-{Guid.NewGuid():N}");
+        var directory = Path.Combine(Path.GetTempPath(), $"jularr-offline-library-assets-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         return directory;
     }
