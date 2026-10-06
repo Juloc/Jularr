@@ -266,6 +266,24 @@ public sealed class VideoDetailPageTests
     }
 
     [TestMethod]
+    public async Task AnEpisodeInProgressKeepsEveryLanguageGroupItsFileHasAndItsAvailabilityInTheSameCard()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var series = await SeedSeriesAsync(host);
+
+        var html = await host.GetOkAsync($"/Library/Series/{series.Work.Id}");
+
+        var episodes = Between(html, "<section class=\"ad-episodes\"", "</section>");
+        var started = Between(episodes, "S01 E02", "</article>");
+        StringAssert.Contains(started, "aria-valuenow=\"42\"");
+        StringAssert.Contains(started, "aria-label=\"Audio languages\"");
+        StringAssert.Contains(started, "aria-label=\"Subtitle languages\"");
+        StringAssert.Contains(started, ">DE<");
+        StringAssert.Contains(started, ">EN<");
+        StringAssert.Contains(started, "ad-state-available");
+    }
+
+    [TestMethod]
     public async Task TheSelectedSeasonComesFromTheAddressAndFallsBackToTheOneOfTheNextEpisode()
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();

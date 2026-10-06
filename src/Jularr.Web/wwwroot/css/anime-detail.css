@@ -363,6 +363,13 @@
     .ad-hero h1 { font-size: 28px; }
     .ad-hero-alt { font-size: 14px; }
     .ad-primary { flex: 1 1 100%; }
+    /* The action row spans the hero copy: the primary action takes a row of its own and the personal actions share the next one, the
+       watchlist button taking what the menu button (44px and one gap) leaves, so nothing else joins that row and the menu button
+       does not wrap onto a row of its own. */
+    .ad-hero-actions { justify-self: stretch; }
+    .ad-watchlist { flex: 1 1 100%; min-width: 0; }
+    .ad-watchlist:has(~ .ad-menu) { flex-basis: calc(100% - 54px); }
+    .ad-watchlist .ad-secondary { inline-size: 100%; }
     /* One column: the card is a row (thumbnail beside the text) instead of a tall block. */
     .ad-episode-list.is-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .ad-episode-list .ad-ep { flex-direction: row; align-items: stretch; box-shadow: none; }

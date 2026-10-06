@@ -6,6 +6,7 @@ using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Shell;
+using Jularr.Web.Features.Watchlist;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Web.Pages.Library;
@@ -19,7 +20,8 @@ public sealed class MovieDetailModel(
     PlaybackIntentService intents,
     ConsumerAcquisitionQuery acquisition,
     WorkMetadataRefreshQueue metadataRefresh,
-    ILogger<VideoDetailPageModel> logger) : VideoDetailPageModel(db, account, appShell, query, policies, intents, acquisition, metadataRefresh, logger)
+    WatchlistStore watchlist,
+    ILogger<VideoDetailPageModel> logger) : VideoDetailPageModel(db, account, appShell, query, policies, intents, acquisition, metadataRefresh, watchlist, logger)
 {
     protected override WorkMediaType MediaType => WorkMediaType.Movie;
 

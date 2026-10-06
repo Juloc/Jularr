@@ -7,6 +7,7 @@ using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Shell;
+using Jularr.Web.Features.Watchlist;
 using Jularr.Web.Ui;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -28,6 +29,7 @@ public abstract class VideoDetailPageModel(
     PlaybackIntentService intents,
     ConsumerAcquisitionQuery acquisition,
     WorkMetadataRefreshQueue metadataRefresh,
+    WatchlistStore watchlist,
     ILogger<VideoDetailPageModel> logger) : PageModel
 {
     private static readonly HashSet<string> PlayingWords = new(
@@ -37,6 +39,9 @@ public abstract class VideoDetailPageModel(
     private InstantPlayPolicy? policy;
 
     protected abstract WorkMediaType MediaType { get; }
+
+    /// <summary>The query keys of the view state this page keeps when a personal-state action returns to it (a Series: season, sort and layout).</summary>
+    protected virtual IReadOnlyList<string> ViewStateKeys => [];
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -55,10 +60,28 @@ public abstract class VideoDetailPageModel(
 
     /// <summary>
     /// Whether the page offers a Request now: the profile may request this title through the shared Request flow, nothing is
-    /// requested yet, and there is something to ask for (the action acquires or requests, or a Series misses episodes). Only then
-    /// does the page carry the Request dialog.
+    /// requested yet, and there is something to ask for (the action requests, a playback intent has Request as its alternative, or a
+    /// Series misses episodes). Only then does the page carry the Request dialog.
     /// </summary>
     public bool OffersRequest { get; private set; }
+
+    /// <summary>Whether the title is on the profile's watchlist ("My List"); null when the provider does not identify it, so there is nothing to follow.</summary>
+    public bool? IsOnWatchlist { get; private set; }
+
+    /// <summary>The route of this page with the view state the viewer chose (season, sort, layout), so a personal-state action returns to the same view.</summary>
+    public IDictionary<string, string> PageRoute(Guid workId)
+    {
+        var route = new Dictionary<string, string> { ["workId"] = workId.ToString() };
+        foreach (var key in ViewStateKeys)
+        {
+            if (Request.Query[key].ToString() is { Length: > 0 } value)
+            {
+                route[key] = value;
+            }
+        }
+
+        return route;
+    }
 
     /// <summary>False on a manager-only instance: no page element links into the player.</summary>
     public bool PlaybackEnabled { get; private set; }
@@ -127,6 +150,34 @@ public abstract class VideoDetailPageModel(
         return RedirectToPage(new { workId });
     }
 
+    /// <summary>Puts the title on the profile's watchlist. Idempotent: following it again changes nothing.</summary>
+    public async Task<IActionResult> OnPostFollowAsync(Guid workId, CancellationToken cancellationToken) => await SetFollowAsync(workId, follow: true, cancellationToken);
+
+    /// <summary>Takes the title off the profile's watchlist. Idempotent: a title that is not on it stays off.</summary>
+    public async Task<IActionResult> OnPostUnfollowAsync(Guid workId, CancellationToken cancellationToken) => await SetFollowAsync(workId, follow: false, cancellationToken);
+
+    // The follow is built from the stored title and provider identity, never from what the browser sends, and only for a Work of this page's media type that the profile may open.
+    private async Task<IActionResult> SetFollowAsync(Guid workId, bool follow, CancellationToken cancellationToken)
+    {
+        var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
+        var detail = await query.GetAsync(account.ProfileId, workId, MediaType, access.VisibleMediaTypes, cancellationToken);
+        if (detail?.Request is not { } identity || !WatchlistDraftInput.TryCreate(identity.Category, identity.Provider, identity.ExternalId, detail.Title, detail.NativeTitle, null, null, null, detail.Year, out var draft))
+        {
+            return NotFound();
+        }
+
+        if (follow)
+        {
+            await watchlist.FollowAsync(account.ProfileId, draft, cancellationToken);
+        }
+        else
+        {
+            await watchlist.UnfollowAsync(account.ProfileId, draft.Identity, cancellationToken);
+        }
+
+        return RedirectToPage(PageRoute(workId));
+    }
+
     /// <returns>False when there is no such Work of this page's media type.</returns>
     protected async Task<bool> LoadAsync(Guid workId, CancellationToken cancellationToken)
     {
@@ -152,7 +203,13 @@ public abstract class VideoDetailPageModel(
         PrimaryAction = PrimaryActionResolver.Resolve(detail.Playback, policy);
         ActionEpisode = PrimaryAction.WorkEpisodeId is { } episodeId ? detail.Episodes.FirstOrDefault(x => x.Id == episodeId) : null;
         PlayHref = PrimaryAction.TargetIsLocal && PrimaryAction.Kind is not (PrimaryActionKind.Available or PrimaryActionKind.None) ? VideoDetailView.WatchHref(PrimaryAction.WorkId, PrimaryAction.WorkEpisodeId) : null;
-        OffersRequest = policy.AllowsRequest && detail.Request is { Open: null } && (PrimaryAction.Kind == PrimaryActionKind.Request || VideoDetailView.RequestableEpisodes(detail.Episodes).Count > 0);
+        var hasRequestableTarget = PrimaryAction.Kind == PrimaryActionKind.Request || PrimaryAction.RequestIsAlternative || VideoDetailView.RequestableEpisodes(detail.Episodes).Count > 0;
+        OffersRequest = policy.AllowsRequest && detail.Request is { Open: null } && hasRequestableTarget;
+        if (detail.Request is { } identity && WatchlistDraftInput.TryIdentity(identity.Category, identity.Provider, identity.ExternalId, out var followed))
+        {
+            IsOnWatchlist = (await watchlist.GetEffectiveKeysAsync(account.ProfileId, cancellationToken)).Contains(followed.Key);
+        }
+
         if (detail.Request?.Open is { } open && ConsumerAcquisitionQuery.MayRead(open, account.ProfileId, policy.CanRequest, account.Can(JularrPolicies.AdminMedia)))
         {
             // A local target has no state of its own to show, so the request as a whole is projected: it still says whether monitoring continues.

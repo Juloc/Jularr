@@ -182,14 +182,27 @@
                 }
             }
 
-            @if (offersRequest && !isMovie && missing.Count > 0 && action.Kind != PrimaryActionKind.Request)
+            @if (Model.IsOnWatchlist is bool onWatchlist)
+            {
+                <partial name="_WatchlistAction" model="new WatchlistActionView(onWatchlist, Model.PageRoute(detail.WorkId), ui)" />
+            }
+
+            @* A playback intent is the primary action of a missing target; the explicit Request stays one step away (instant-play SPEC, section 12). *@
+            @if (offersRequest && action.Kind != PrimaryActionKind.Request && (missing.Count > 0 || action.RequestIsAlternative))
             {
                 <details class="ad-menu" data-ad-menu>
                     <summary class="ad-secondary ad-icon-button" aria-label="@ui["library.anime.moreActions"]">
                         <partial name="_AnimeDetailIcon" model='"more"' />
                     </summary>
                     <div class="ad-menu-panel">
-                        <button type="button" data-dc-card-request data-dc-preselect="@string.Join(',', missing.Select(x => x.Id))">@ui["library.video.requestMissingAll"]</button>
+                        @if (isMovie)
+                        {
+                            <button type="button" data-dc-card-request>@ui["discover.card.request"]</button>
+                        }
+                        else
+                        {
+                            <button type="button" data-dc-card-request data-dc-preselect="@string.Join(',', missing.Select(x => x.Id))">@ui["library.video.requestMissingAll"]</button>
+                        }
                     </div>
                 </details>
             }

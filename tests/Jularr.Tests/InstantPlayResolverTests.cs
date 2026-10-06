@@ -172,6 +172,23 @@ public sealed class InstantPlayResolverTests
     }
 
     [TestMethod]
+    public void AMissingTargetKeepsTheExplicitRequestAsAnAlternativeToThePlaybackIntentOnlyWhileNothingIsRequested()
+    {
+        var units = new[] { Unit(1, 1, local: false) };
+
+        Assert.IsTrue(PrimaryActionResolver.Resolve(Movie(false), Everything).RequestIsAlternative, "Watch now does not take the explicit Request away.");
+        Assert.IsTrue(PrimaryActionResolver.Resolve(Series(units), Everything).RequestIsAlternative);
+        Assert.IsTrue(PrimaryActionResolver.Resolve(Series(units), Everything, units[0].Id).RequestIsAlternative);
+
+        Assert.IsFalse(PrimaryActionResolver.Resolve(Movie(false), ApprovalNeeded).RequestIsAlternative, "Request is already the primary action.");
+        Assert.IsFalse(PrimaryActionResolver.Resolve(Movie(false), ManagerOnly).RequestIsAlternative);
+        Assert.IsFalse(PrimaryActionResolver.Resolve(Movie(true), Everything).RequestIsAlternative, "Local media plays.");
+        Assert.IsFalse(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Approved, prioritized: false)), Everything).RequestIsAlternative, "An open request is never asked for again.");
+        Assert.IsFalse(PrimaryActionResolver.Resolve(Movie(false, identity: false), Everything).RequestIsAlternative);
+        Assert.IsFalse(PrimaryActionResolver.Resolve(Movie(false), Everything with { CanRequest = false }).RequestIsAlternative);
+    }
+
+    [TestMethod]
     public void WhenApprovalIsRequiredOrAcquisitionIsNotReadyTheActionIsRequest()
     {
         var units = new[] { Unit(1, 1, local: false) };

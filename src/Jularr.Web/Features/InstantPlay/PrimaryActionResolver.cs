@@ -57,9 +57,10 @@ public enum PrimaryActionReason
 /// <summary>
 /// The resolved action. <see cref="WorkEpisodeId"/> is the target episode of a Series (null for a Movie, or when no single episode is
 /// the target); <see cref="TargetIsLocal"/> says whether it can be played right now, so a client opens the player for it or sends the
-/// playback intent.
+/// playback intent. <see cref="RequestIsAlternative"/> is set while a playback intent is the primary action of a missing target and the
+/// profile may still ask for it through the explicit Request action instead, which stays the one consumer acquisition action (section 12).
 /// </summary>
-public sealed record PrimaryAction(PrimaryActionKind Kind, PrimaryActionReason Reason, Guid WorkId, Guid? WorkEpisodeId, bool TargetIsLocal = false, bool IsRewatch = false);
+public sealed record PrimaryAction(PrimaryActionKind Kind, PrimaryActionReason Reason, Guid WorkId, Guid? WorkEpisodeId, bool TargetIsLocal = false, bool IsRewatch = false, bool RequestIsAlternative = false);
 
 /// <summary>
 /// What the instance, the profile and the policy allow for one media type: the capability chain of the Instant Play contract
@@ -275,7 +276,7 @@ public static class PrimaryActionResolver
 
         if (policy.AllowsInstantAcquisition && hasTarget && released)
         {
-            return new PrimaryAction(instantKind, PrimaryActionReason.InstantAcquisition, facts.WorkId, episodeId);
+            return new PrimaryAction(instantKind, PrimaryActionReason.InstantAcquisition, facts.WorkId, episodeId, RequestIsAlternative: true);
         }
 
         var reason = !policy.PlaybackEnabled ? PrimaryActionReason.PlaybackDisabled

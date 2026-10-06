@@ -154,14 +154,7 @@
 
             @if (Model.IsOnWatchlist is bool onList)
             {
-                <form method="post" asp-page-handler="@(onList ? "Unfollow" : "Follow")" asp-route-id="@Model.AnimeId" class="ad-inline-form">
-                    <button class="ad-secondary@(onList ? " is-on" : "")" type="submit"
-                            aria-pressed="@(onList ? "true" : "false")"
-                            title="@(onList ? ui["library.anime.watchlistRemoveAria"] : null)">
-                        <partial name="_AnimeDetailIcon" model='onList ? "check" : "plus"' />
-                        <span>@(onList ? ui["library.anime.watchlistOn"] : ui["library.anime.watchlistAdd"])</span>
-                    </button>
-                </form>
+                <partial name="_WatchlistAction" model='new WatchlistActionView(onList, new Dictionary<string, string> { ["id"] = Model.AnimeId.ToString() }, ui)' />
             }
 
             <details class="ad-menu" data-ad-menu>

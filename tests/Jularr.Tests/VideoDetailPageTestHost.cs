@@ -27,6 +27,7 @@ using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Storage;
 using Jularr.Web.Features.Subtitles;
 using Jularr.Web.Features.Vocabulary;
+using Jularr.Web.Features.Watchlist;
 using Jularr.Web.Infrastructure;
 using Jularr.Web.Frontend;
 using Jularr.Web.Pages.Library;
@@ -130,6 +131,7 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddScoped<AcquisitionRequestService>();
                     services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                     services.AddScoped<VideoProgressService>();
+                    services.AddScoped<WatchlistStore>();
                     services.AddScoped<VideoDetailQuery>();
                     services.AddScoped<WorkMetadataStore>();
                     services.AddSingleton<WorkMetadataRefreshSignal>();

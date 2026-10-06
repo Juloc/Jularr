@@ -90,6 +90,68 @@ public sealed partial class InstantPlayPageMarkupTests
     }
 
     [TestMethod]
+    public async Task AMissingMovieThatMayBeWatchedNowStillOffersTheExplicitRequestInTheOverflowMenu()
+    {
+        await using var host = await ReadyHostAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", "603");
+
+        var html = await host.GetOkAsync($"/Library/Movie/{movie.Id}", asOwner: true);
+
+        var hero = Hero(html);
+        StringAssert.Contains(hero, ">Watch now<");
+        var menu = Regex.Match(hero, "<details class=\"ad-menu\" data-ad-menu>\\s*<summary[^>]*aria-label=\"More actions\".*?</details>", RegexOptions.Singleline).Value;
+        StringAssert.Contains(menu, "data-dc-card-request");
+        StringAssert.Contains(VisibleText(menu), "Request");
+        Assert.IsFalse(menu.Contains("data-dc-preselect", StringComparison.Ordinal), "A Movie has no episodes to preselect.");
+        StringAssert.Contains(html, "data-request-host", "The page carries the shared Request dialog the menu entry opens.");
+        StringAssert.Contains(html, "data-dc-external-id=\"603\"");
+    }
+
+    [TestMethod]
+    public async Task ARequestedMovieOffersNeitherARequestEntryNorADuplicate()
+    {
+        await using var host = await ReadyHostAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", "603");
+        await OpenRequestAsync(host, MediaAcquisitionKind.Movie, "603", AcquisitionRequestStatus.Pending, MoviePayload(movie.Id));
+
+        var html = await host.GetOkAsync($"/Library/Movie/{movie.Id}", asOwner: true);
+
+        Assert.IsFalse(html.Contains("data-dc-card-request", StringComparison.Ordinal), "An open request is shown, never requested again.");
+        Assert.IsFalse(html.Contains("data-request-host", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task ANoticeSaysItsHintInsideTheStatusAndOffersOnlyActionsThatAddSomething()
+    {
+        await using var host = await ReadyHostAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", "603");
+
+        var html = await host.GetOkAsync($"/Library/Movie/{movie.Id}", asOwner: true);
+
+        var hero = Hero(html);
+        StringAssert.Contains(hero, "data-ip-pill-hint hidden", "The hint of a notice sits under its title in the status itself, so the status keeps its size.");
+        var actions = Regex.Matches(hero, "data-ip-action=\"([a-z]+)\"").Select(match => match.Groups[1].Value).ToArray();
+        CollectionAssert.AreEquivalent(new[] { "retry", "view", "back" }, actions, "Retry, View details and Back: \"We'll keep looking\" is a hint, not a second button.");
+        Assert.IsFalse(html.Contains("Keep looking", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task AMovieThatNeedsApprovalOrIsOnAManagerOnlyInstanceOffersRequestAsItsPrimaryActionWithoutAnOverflowEntry()
+    {
+        await using var host = await ReadyHostAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", "603");
+        await host.Modules.SetAsync(InstanceModule.Playback, false);
+
+        var hero = Hero(await host.GetOkAsync($"/Library/Movie/{movie.Id}", asOwner: true));
+
+        Assert.AreEqual(1, Regex.Matches(hero, "data-dc-card-request").Count, "The primary Request action alone opens the dialog.");
+        StringAssert.Contains(VisibleText(hero), "Request");
+        Assert.IsFalse(hero.Contains("data-instant-play", StringComparison.Ordinal));
+        Assert.IsFalse(hero.Contains("Watch now", StringComparison.Ordinal));
+        Assert.IsFalse(hero.Contains("/Library/Watch/", StringComparison.Ordinal), "No Player anywhere on a manager-only instance.");
+    }
+
+    [TestMethod]
     public async Task TheMorphControlIsAccessibleByConstruction()
     {
         await using var host = await ReadyHostAsync();
