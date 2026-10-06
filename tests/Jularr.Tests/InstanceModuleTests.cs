@@ -225,6 +225,7 @@ public sealed class InstanceModuleTests
             .ToArray();
 
         CollectionAssert.DoesNotContain(ids, "admin-requests");
+        CollectionAssert.DoesNotContain(ids, "admin-wanted");
         CollectionAssert.DoesNotContain(ids, "admin-usenet");
         CollectionAssert.DoesNotContain(ids, "admin-anime-acquisition");
         CollectionAssert.DoesNotContain(ids, "admin-import");

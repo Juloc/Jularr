@@ -13,7 +13,7 @@ public sealed partial class UnfinishedNavigationTests
 
     private static readonly string[] CoreIds =
     [
-        "home", "library", "watchlist", "calendar", "activity", "profile", "admin-overview", "admin-users", "admin-requests", "admin-operations",
+        "home", "library", "watchlist", "calendar", "activity", "profile", "admin-overview", "admin-users", "admin-requests", "admin-wanted", "admin-operations",
         "admin-sessions", "admin-devices", "admin-scans", "admin-logs", "admin-instance", "admin-system", "admin-transcoding", "admin-health",
         "settings-account", "settings-appearance", "settings-language", "profile-devices"
     ];

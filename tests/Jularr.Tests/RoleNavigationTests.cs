@@ -10,6 +10,7 @@ public sealed class RoleNavigationTests
     [
         "admin-overview",
         "admin-requests",
+        "admin-wanted",
         "admin-usenet",
         "admin-anime-acquisition",
         "admin-import",
