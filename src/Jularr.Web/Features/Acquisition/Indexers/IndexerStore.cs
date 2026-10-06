@@ -33,7 +33,7 @@ public sealed class IndexerStore
         ArgumentNullException.ThrowIfNull(directory);
 
         protector = dataProtectionProvider.CreateProtector(
-            "AniLingo.Acquisition.Indexers.ApiKey.v1");
+            "Jularr.Acquisition.Indexers.ApiKey.v1");
         storePath = Path.Combine(directory.FullName, FileName);
     }
 
