@@ -1,7 +1,7 @@
 /* Instant Play on the Movie and Series pages (docs/mockups/instant-play/SPEC.md, sections 6, 7, 10, 16 and 19): the playback
    action morphs in place, so the button keeps its size through every state. The hero copy sits on the dark scrim of
-   anime-detail.css in both themes, so working and notice states there are light pills built from the --hero-* tokens defined
-   with that hero; episode rows sit on page surfaces and use the theme tokens. Progress is a thin line at the button's lower
+   anime-detail.css in both themes, so its working and notice states are built from the --hero-* tokens defined with that hero;
+   episode rows sit on page surfaces and use the theme tokens. Progress is a thin line at the button's lower
    edge that only appears with a trustworthy percentage, nothing like the player timeline. State is never colour alone (the
    label always says it) and never a coloured edge stripe (CssAccentStripeTests). */
 
@@ -10,17 +10,20 @@
 .ip-action [hidden] { display: none; }
 .ip-form { margin: 0; }
 
-.ip-button { position: relative; overflow: hidden; min-inline-size: 15.5rem; }
-.ip-button.has-context { justify-content: flex-start; min-block-size: 52px; padding-inline: 22px; }
+/* One height for the action and for every state it morphs into (a status with a hint under its title is two lines), so nothing moves. */
+.ip-button { position: relative; overflow: hidden; min-inline-size: 15.5rem; min-block-size: 52px; }
+.ip-button.has-context,
+.ip-action[data-ip-state^="notice"] .ip-button { justify-content: flex-start; padding-inline: 22px; }
 .ip-button[aria-disabled="true"] { cursor: default; }
 .ip-button[aria-disabled="true"]:hover { background: inherit; }
 .ip-text { display: grid; justify-items: start; min-width: 0; line-height: 1.2; text-align: start; }
 .ip-label { min-width: 0; }
 .ip-code { font-size: 11px; font-weight: 700; opacity: .82; letter-spacing: .03em; }
+.ip-hint { font-size: 11px; font-weight: 600; opacity: .85; }
 
 .ip-icon { position: relative; display: inline-grid; flex: none; place-items: center; inline-size: 16px; block-size: 16px; }
 .ip-icon > * { grid-area: 1 / 1; }
-.ip-ring, .ip-alert { display: none; }
+.ip-ring, .ip-alert, .ip-wait { display: none; }
 .ip-action[data-ip-state="working"] .ip-icon .ad-icon { display: none; }
 .ip-action[data-ip-state="working"] .ip-ring {
     display: block; color: var(--accent); stroke-dasharray: 34 20; animation: ip-spin 1s linear infinite;
@@ -28,16 +31,22 @@
 .ip-action[data-ip-state="working"] .ip-code { display: none; }
 /* A notice is not playable: no play glyph on it; a failure carries a warning glyph instead. */
 .ip-action[data-ip-state^="notice"] .ip-icon > .ad-icon { display: none; }
-.ip-action[data-ip-state="notice-error"] .ip-alert { display: grid; }
+.ip-action[data-ip-state="notice-error"] .ip-alert,
+.ip-action[data-ip-state="notice-waiting"] .ip-wait { display: grid; }
 .ip-action[data-ip-state^="notice"] .ip-code { display: none; }
+.ip-action[data-ip-state="notice-neutral"] .ip-icon { display: none; }
 
-/* Working and notice states: the same pill, now a light status surface with dark text. */
-.ip-action[data-ip-state="working"] .ip-button,
-.ip-action[data-ip-state^="notice"] .ip-button {
+/* Working: the same pill as a light status surface with dark text. A notice that is only information (stopped, not available) is the
+   glass of the secondary actions, never a washed-out copy of the primary; waiting (including "Not available yet", which Jularr keeps
+   looking for) and failure carry their semantic tint. */
+.ip-action[data-ip-state="working"] .ip-button {
     border-color: transparent; background: var(--hero-pill); color: var(--hero-ink); box-shadow: var(--hero-shadow);
 }
-.ip-action[data-ip-state="notice-error"] .ip-button { background: var(--hero-danger); color: var(--hero-on-danger); }
-.ip-action[data-ip-state="notice-waiting"] .ip-button { background: var(--hero-warning); color: var(--hero-on-warning); }
+.ip-action[data-ip-state^="notice"] .ip-button {
+    border-color: var(--hero-glass-edge); background: var(--hero-glass); color: var(--hero-on-scrim); box-shadow: none; backdrop-filter: blur(8px);
+}
+.ip-action[data-ip-state="notice-error"] .ip-button { border-color: transparent; background: var(--hero-danger); color: var(--hero-on-danger); backdrop-filter: none; }
+.ip-action[data-ip-state="notice-waiting"] .ip-button { border-color: transparent; background: var(--hero-warning); color: var(--hero-on-warning); backdrop-filter: none; }
 /* Ready while the viewer was away: the media can be played now (docs/mockups/instant-play, section 19: green only for ready). */
 .ip-action[data-ip-state="ready"] .ip-button { border-color: var(--hero-success); background: var(--hero-success); color: var(--hero-on-scrim); }
 .ip-action[data-ip-state="ready"] .ip-button:hover { background: var(--hero-success-hover); }
@@ -97,6 +106,7 @@
 .ip-button-compact:hover { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); }
 .ip-action.is-compact[data-ip-state="working"] .ip-button-compact,
 .ip-action.is-compact[data-ip-state^="notice"] .ip-button-compact { border-color: var(--border); background: var(--surface-2); color: var(--text); box-shadow: none; }
+.ip-action.is-compact[data-ip-state="notice-waiting"] .ip-button-compact { border-color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 12%, var(--surface)); color: var(--warning-text); }
 .ip-action.is-compact[data-ip-state="notice-error"] .ip-button-compact { background: color-mix(in srgb, var(--danger-text) 12%, var(--surface)); color: var(--danger-text); }
 .ip-action.is-compact[data-ip-state="ready"] .ip-button-compact { border-color: var(--success-text); background: color-mix(in srgb, var(--success-text) 14%, var(--surface)); color: var(--success-text); }
 .ip-action.is-compact .ip-progress { background: var(--soft-fill); }
@@ -112,16 +122,21 @@
 /* On the dark hero scrim the accent ring alone is faint: a white ring with an accent halo reads in both themes. */
 .ip-action:not(.is-compact) :is(a, button, summary):focus-visible { outline-color: var(--hero-on-scrim); box-shadow: 0 0 0 5px var(--accent); }
 
-/* Tablet and phone: the hero keeps one extra row for whatever the wait adds (Stop waiting, Details, a notice) so nothing moves when
-   it appears, and Details opens as a disclosure under the actions instead of a popover. */
+/* Tablet and phone: whatever the wait adds (Stop waiting, Details, the actions of a notice) comes after the action and the personal
+   actions, in a row the hero keeps free, so nothing moves when it appears. Details opens as a disclosure under the actions instead of a
+   popover. */
 @media (max-width: 860px) {
-    .ad-hero-actions:has(> .ip-action:not(.is-compact)) { align-content: flex-start; min-block-size: calc(44px + 10px + 44px); }
+    .ad-hero-actions:has(> .ip-action:not(.is-compact)) { align-content: flex-start; min-block-size: calc(52px + 10px + 44px); }
     .ip-action:not(.is-compact) .ip-notice:not([hidden]) { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
     .ip-action:not(.is-compact) .ip-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    /* Only the visual order moves: the markup keeps the status controls right after the action they belong to, which is the order a
+       keyboard or screen reader meets them in. */
+    .ip-action:not(.is-compact) :is(.ip-stop, .ip-details, .ip-notice) { order: 1; }
 }
 
+/* On a phone the personal actions take a row of their own under the action, so the extra row is a second one. */
 @media (max-width: 620px) {
-    .ad-hero-actions:has(> .ip-action:not(.is-compact)) { min-block-size: calc(44px + 10px + 64px); }
+    .ad-hero-actions:has(> .ip-action:not(.is-compact)):has(> .ad-watchlist) { min-block-size: calc(52px + 10px + 44px + 10px + 44px); }
     .ip-form { flex: 1 1 100%; }
     .ip-button { inline-size: 100%; min-inline-size: 0; }
     .ip-details[open] { flex: 1 1 100%; }

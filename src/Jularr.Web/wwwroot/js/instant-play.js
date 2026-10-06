@@ -555,15 +555,16 @@
             case "not_available":
                 return notice(label("acquisition.state.notAvailable"), "", "neutral", ["back"]);
             case "unavailable":
-                return notice(label("acquisition.instant.unavailable"), label("acquisition.instant.unavailableHint"), "neutral", ["retry", "view", "back"]);
+                return notice(label("acquisition.instant.unavailable"), label("acquisition.instant.unavailableHint"), "neutral", ["retry", "view"]);
             default:
         }
 
         switch (snapshot.view?.state) {
             case "needs_attention":
-                return notice(label(failureKeys[mediaUnit] ?? failureKeys.media), label("acquisition.instant.failed.hint"), "error", ["retry", "view", "back"]);
+                return notice(label(failureKeys[mediaUnit] ?? failureKeys.media), label("acquisition.instant.failed.hint"), "error", ["retry", "view"]);
             case "not_available_yet":
-                return notice(label("acquisition.state.notAvailableYet"), label("acquisition.state.notAvailableYetHint"), "neutral", ["keep", "view", "back"]);
+                // The hint already says Jularr keeps looking, so Retry is the only action that adds anything: it asks for a search now.
+                return notice(label("acquisition.state.notAvailableYet"), label("acquisition.state.notAvailableYetHint"), "waiting", ["retry", "view"]);
             case "not_available":
                 return notice(label("acquisition.state.notAvailable"), "", "neutral", ["view", "back"]);
             case "rejected":
@@ -619,6 +620,7 @@
         const milestoneList = root.querySelector("[data-ip-milestones]");
         const icons = root.querySelector("[data-ip-icons]");
         const noticeBox = root.querySelector("[data-ip-notice]");
+        const pillHint = root.querySelector("[data-ip-pill-hint]");
         const live = root.querySelector("[data-ip-live]");
         const idleText = labelNode.textContent;
         const mediaUnit = root.dataset.ipUnit || "media";
@@ -690,13 +692,20 @@
                 }));
             }
 
+            // A notice that replaces the action says its hint under the title inside the same pill, so the pill keeps its place; a message
+            // without a title of its own stands beside the unchanged action instead.
+            if (pillHint) {
+                pillHint.hidden = !replacesAction || noticeInfo.hint === "";
+                pillHint.textContent = pillHint.hidden ? "" : noticeInfo.hint;
+            }
+
             if (noticeBox) {
                 noticeBox.hidden = noticeInfo === null;
                 if (noticeInfo) {
                     noticeBox.dataset.tone = noticeInfo.tone;
                     const hint = noticeBox.querySelector("[data-ip-notice-hint]");
                     hint.textContent = noticeInfo.hint;
-                    hint.hidden = noticeInfo.hint === "";
+                    hint.hidden = replacesAction || noticeInfo.hint === "";
                     for (const action of noticeBox.querySelectorAll("[data-ip-action]")) {
                         action.hidden = !noticeInfo.actions.includes(action.dataset.ipAction);
                     }
@@ -734,14 +743,12 @@
             // The button that was pressed is gone: keep the keyboard where it was, on the action that now says Stopped waiting.
             button.focus();
         });
-        for (const name of ["retry", "keep"]) {
-            root.querySelector(`[data-ip-action=${name}]`)?.addEventListener("click", () => {
-                wait.reset();
-                begin();
-                // The control that was pressed is hidden by now: the keyboard stays on the action.
-                button.focus();
-            });
-        }
+        root.querySelector("[data-ip-action=retry]")?.addEventListener("click", () => {
+            wait.reset();
+            begin();
+            // The control that was pressed is hidden by now: the keyboard stays on the action.
+            button.focus();
+        });
 
         root.querySelector("[data-ip-action=back]")?.addEventListener("click", () => {
             wait.reset();
