@@ -381,3 +381,8 @@
     .dc-ghost-art, .dc-section[data-dc-staged] li:first-child::after, .dc-collapse > summary h2::after { animation: none; transition: none; }
     .dc-hover { animation: none; }
 }
+
+/* The global search in the content header drives Discover (it submits ?q=); the page keeps this field only to carry the query through its
+   filters, so it is not shown as a second search field. */
+.dc-search { display: none; }
+.dc-searchbar { justify-content: flex-end; }

@@ -33,6 +33,9 @@ public sealed record UiNavigationItem(
         IsActive && !CurrentPageListedElsewhere && !(Groups?.SelectMany(group => group.Items).Any(item => item.IsActive) ?? false);
 }
 
+/// <summary>The back link and current page of the content header: the owning area and, inside it, the page that is open.</summary>
+public sealed record UiBreadcrumb(UiNavigationItem Parent, UiNavigationItem? Current);
+
 /// <summary>A titled group of child pages inside Admin or Settings.</summary>
 public sealed record UiNavigationGroup(string TitleKey, IReadOnlyList<UiNavigationItem> Items);
 
@@ -181,18 +184,17 @@ public static class UiNavigationCatalog
     public static readonly UiNavigationEntry[] App =
     [
         new("home", "nav.home", "/", "home", Exact: true),
-        new("library", "nav.library", "/Library", "library", Tabs: LibraryTabs),
         new("watchlist", "nav.watchlist", "/Watchlist", "watchlist", ["/Watchlist", "/Franchises"]),
         new("calendar", "nav.calendar", "/Calendar", "calendar"),
-        new("learn", "nav.learn", "/Learn", "learn", ["/Learn", "/Statistics", "/Kana"], RequiresLearning: true, Module: InstanceModule.Learning, Unfinished: true),
-        new("activity", "nav.activity", "/Activity", "history")
+        new("library", "nav.library", "/Library", "library", Tabs: LibraryTabs),
+        new("learn", "nav.learn", "/Learn", "learn", ["/Learn", "/Statistics", "/Kana"], RequiresLearning: true, Module: InstanceModule.Learning, Unfinished: true)
     ];
 
     public static readonly UiNavigationEntry[] Secondary =
     [
         new("admin", "nav.admin", "/Admin", "admin", Policy: JularrPolicies.AdminMedia, Sections: Admin),
         new("settings", "nav.settings", "/Settings", "settings", Sections: Settings),
-        new("profile", "nav.profile", "/Profile", "profile")
+        new("profile", "nav.profile", "/Profile", "profile", ["/Profile", "/Activity"])
     ];
 
     /// <summary>
@@ -203,6 +205,9 @@ public static class UiNavigationCatalog
 
     public static readonly UiNavigationEntry ProfileDevices =
         new("profile-devices", "nav.devices", "/Profile/Devices", "devices");
+
+    /// <summary>Activity is a Profile tab (docs/mockups/profile-activity): it has no sidebar entry and is listed in the account menu.</summary>
+    public static readonly UiNavigationEntry ProfileActivity = new("activity", "nav.activity", "/Activity", "history");
 
     /// <summary>The Profile page list, in order, by catalog id. The Unfinished entry closes it when the account has any unfinished destination.</summary>
     public static readonly string[] ProfileLinkIds = ["settings-account", "activity", "profile-devices", "settings", "admin"];
@@ -239,7 +244,8 @@ public static class UiNavigationCatalog
     public static IEnumerable<UiNavigationEntry> All =>
         App.Concat(Secondary)
             .Concat(Admin.Concat(Settings).SelectMany(section => section.Entries))
-            .Append(ProfileDevices);
+            .Append(ProfileDevices)
+            .Append(ProfileActivity);
 
     /// <summary>Every path root of a set of entries, used to decide which section a page belongs to.</summary>
     public static IEnumerable<string> Roots(IEnumerable<UiNavigationEntry> entries) =>
@@ -292,6 +298,9 @@ public sealed record UiShellNavigation(
     /// <summary>Title key of the Unfinished group that closes the Admin and Settings drill-in lists.</summary>
     public const string UnfinishedGroupTitleKey = "nav.group.unfinished";
 
+    /// <summary>Where the page sits inside Admin, Settings or Profile, for the back link in the content header; null on a top-level page.</summary>
+    public UiBreadcrumb? Breadcrumb { get; init; }
+
     /// <summary>The section expanded in the sidebar, if any. Never more than one.</summary>
     public UiNavigationItem? Expanded => Secondary.FirstOrDefault(item => item.IsExpanded);
 
@@ -341,7 +350,16 @@ public sealed record UiShellNavigation(
             .ToArray();
 
         var showCurrentReading = !inAdmin && !inSettings && IsUnder(path, UiNavigationCatalog.CurrentReadingRoots);
-        return new UiShellNavigation(primary, secondary, mobilePrimary, unfinished, showCurrentReading);
+        var profile = secondary.FirstOrDefault(item => item.Id == "profile");
+        var expanded = secondary.FirstOrDefault(item => item.IsExpanded);
+        var breadcrumb = expanded is not null
+            ? new UiBreadcrumb(expanded with { Groups = null }, expanded.Groups!.SelectMany(group => group.Items).FirstOrDefault(item => item.IsActive))
+            : profile is not null && IsUnder(path, [UiNavigationCatalog.PathOf(UiNavigationCatalog.ProfileActivity.Href)])
+                ? new UiBreadcrumb(profile, ToItem(UiNavigationCatalog.ProfileActivity, true, media))
+                : profile is not null && path.StartsWithSegments("/Profile") && path.Value?.TrimEnd('/').Length > "/Profile".Length
+                    ? new UiBreadcrumb(profile, null)
+                    : null;
+        return new UiShellNavigation(primary, secondary, mobilePrimary, unfinished, showCurrentReading) { Breadcrumb = breadcrumb };
     }
 
     /// <summary>

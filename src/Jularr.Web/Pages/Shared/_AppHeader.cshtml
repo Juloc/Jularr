@@ -1,19 +1,30 @@
 @using Jularr.Web.Features.Localization
-@model (string? ContextKey, bool ShowSearch)
+@model (UiBreadcrumb? Breadcrumb, bool ShowSearch)
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
+    var crumb = Model.Breadcrumb;
 }
-@* The one application header, over the sidebar and the page: brand and mode (Admin, Settings) on the left, the global search in the
-   centre, theme, notifications and the account menu on the right. Phones keep the brand, the search and the bell; theme and account
-   actions live on Profile there. Discover leaves its own search the focus, so the field is omitted there. *@
+@* The content header, to the right of the sidebar: the back link with the place inside Admin, Settings or Profile on the left, the global
+   search in the middle and the notification bell on the right. The brand lives in the sidebar; phones have no sidebar, so the header
+   carries the brand mark there. *@
 <header class="app-header">
     <div class="app-header-lead">
-        <a class="brand" href="/" aria-label="@ui["nav.home"]">
+        <a class="brand app-header-brand" href="/" aria-label="@ui["nav.home"]">
             <partial name="_AppBrandMark" />
         </a>
-        @if (Model.ContextKey is not null)
+        @if (crumb is not null)
         {
-            <span class="app-header-context">@ui[Model.ContextKey]</span>
+            <nav class="app-breadcrumb" aria-label="@ui.Format("nav.breadcrumbBack", ("area", ui[crumb.Parent.LabelKey]))">
+                <a class="app-breadcrumb-back" href="@crumb.Parent.Href">
+                    <partial name="_AppIcon" model="@("chevronLeft")" />
+                    <span>@ui[crumb.Parent.LabelKey]</span>
+                </a>
+                @if (crumb.Current is not null)
+                {
+                    <span class="app-breadcrumb-sep" aria-hidden="true">/</span>
+                    <span class="app-breadcrumb-current" aria-current="page">@ui[crumb.Current.LabelKey]</span>
+                }
+            </nav>
         }
     </div>
     <div class="app-header-search">
@@ -23,8 +34,6 @@
         }
     </div>
     <div class="app-header-actions">
-        <partial name="_AppThemeControl" model="@("header")" />
         <partial name="_NotificationBell" />
-        <partial name="_AppUserMenu" />
     </div>
 </header>

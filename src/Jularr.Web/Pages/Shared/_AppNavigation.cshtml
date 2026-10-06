@@ -34,8 +34,12 @@
         media.VisibleMediaTypes,
         enabledModules);
 
-    // Discover owns a prominent search of its own (docs/mockups/discover): the header leaves it the focus instead of showing two equal fields.
-    var showSearch = !Context.Request.Path.StartsWithSegments("/Discover", StringComparison.OrdinalIgnoreCase);
+    // The sidebar shows Admin as a permanent shortcut unless the profile turned it off; it always stays in the account menu, and the
+    // section opens in the sidebar whenever an Admin page is open. Settings only opens as the section of the current page.
+    var adminShortcut = ViewData["ShowAdminShortcut"] as bool? ?? true;
+    var sidebarSecondary = nav.Secondary
+        .Where(item => (item.Id == "admin" && (adminShortcut || item.IsExpanded)) || (item.Id == "settings" && item.IsExpanded))
+        .ToArray();
 
     // Inside a reader the sidebar shows the work that is open, never another one.
     Jularr.Web.Features.Reading.ContinueReadingItem? current = null;
@@ -50,65 +54,76 @@
         current = recent.FirstOrDefault(item => item.ChapterId == chapterId || (workId is { } id && item.WorkId == id));
     }
 }
-<partial name="_AppHeader" model="(nav.Expanded?.LabelKey, showSearch)" />
+<partial name="_AppHeader" model="(nav.Breadcrumb, true)" />
 
 <aside class="sidebar">
-    <nav class="nav-list" aria-label="@ui["nav.primaryAria"]">
-        @foreach (var item in nav.Primary)
-        {
-            <partial name="_AppNavLink" model="item" />
-        }
-    </nav>
+    <a class="brand sidebar-brand" href="/" aria-label="@ui["nav.home"]">
+        <partial name="_AppBrandMark" />
+    </a>
 
-    @if (current is not null)
-    {
-        <partial name="_AppCurrentReading" model="current" />
-    }
-
-    <div class="nav-bottom">
-        <nav class="nav-list nav-list-secondary @(nav.Expanded is not null ? "nav-list-expanded" : "")" aria-label="@ui["nav.secondaryAria"]">
-            @foreach (var item in nav.Secondary)
+    <div class="sidebar-scroll">
+        <nav class="nav-list" aria-label="@ui["nav.primaryAria"]">
+            @foreach (var item in nav.Primary)
             {
-                @if (item.Groups is { } groups)
-                {
-                    <div class="nav-section" data-nav-section="@item.Id">
-                        <partial name="_AppNavLink" model="item" />
-                        <div class="nav-children" role="group" aria-label="@ui[item.LabelKey]">
-                            @foreach (var group in groups)
-                            {
-                                <p class="nav-group-title">@ui[group.TitleKey]</p>
-                                @foreach (var child in group.Items)
-                                {
-                                    <partial name="_AppNavLink" model="child" />
-                                }
-                            }
-                        </div>
-                    </div>
-                }
-                @if (item.Groups is null)
-                {
-                    <partial name="_AppNavLink" model="item" />
-                }
+                <partial name="_AppNavLink" model="item" />
             }
         </nav>
 
-        @* The one Unfinished section (#870): last, collapsed unless the current page is inside it. *@
-        @if (nav.Unfinished.Count > 0)
+        @if (current is not null)
         {
-            <details class="nav-unfinished" open="@nav.Unfinished.Any(item => item.IsActive)">
-                <summary class="nav-unfinished-summary">
-                    <span class="nav-label">@ui["nav.unfinished"]</span>
-                    <partial name="_AppIcon" model="@("chevronDown")" />
-                </summary>
-                <nav class="nav-list nav-list-secondary" aria-label="@ui["nav.unfinished"]">
-                    @foreach (var item in nav.Unfinished)
+            <partial name="_AppCurrentReading" model="current" />
+        }
+
+        <div class="nav-bottom">
+            @* The one Unfinished section (#870): above the Admin shortcut, collapsed unless the current page is inside it. *@
+            @if (nav.Unfinished.Count > 0)
+            {
+                <details class="nav-unfinished" open="@nav.Unfinished.Any(item => item.IsActive)">
+                    <summary class="nav-unfinished-summary">
+                        <span class="nav-label">@ui["nav.unfinished"]</span>
+                        <partial name="_AppIcon" model="@("chevronDown")" />
+                    </summary>
+                    <nav class="nav-list nav-list-secondary" aria-label="@ui["nav.unfinished"]">
+                        @foreach (var item in nav.Unfinished)
+                        {
+                            <partial name="_AppNavLink" model="item" />
+                        }
+                    </nav>
+                </details>
+            }
+
+            @if (sidebarSecondary.Length > 0)
+            {
+                <nav class="nav-list nav-list-secondary @(nav.Expanded is not null ? "nav-list-expanded" : "")" aria-label="@ui["nav.secondaryAria"]">
+                    @foreach (var item in sidebarSecondary)
                     {
-                        <partial name="_AppNavLink" model="item" />
+                        @if (item.Groups is { } groups)
+                        {
+                            <div class="nav-section" data-nav-section="@item.Id">
+                                <partial name="_AppNavLink" model="item" />
+                                <div class="nav-children" role="group" aria-label="@ui[item.LabelKey]">
+                                    @foreach (var group in groups)
+                                    {
+                                        <p class="nav-group-title">@ui[group.TitleKey]</p>
+                                        @foreach (var child in group.Items)
+                                        {
+                                            <partial name="_AppNavLink" model="child" />
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+                        @if (item.Groups is null)
+                        {
+                            <partial name="_AppNavLink" model="item" />
+                        }
                     }
                 </nav>
-            </details>
-        }
+            }
+        </div>
     </div>
+
+    <partial name="_AppUserMenu" />
 </aside>
 
 <nav class="mobile-nav" aria-label="@ui["nav.primaryAria"]">

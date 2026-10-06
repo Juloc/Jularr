@@ -18,12 +18,12 @@ public sealed partial class AppShellNavigationTests
     {
         var owner = UiShellNavigation.Build("/", learningVisible: true, can: Owner);
         CollectionAssert.AreEqual(
-            new[] { "home", "library", "watchlist", "calendar", "activity", "admin", "settings", "profile" },
+            new[] { "home", "watchlist", "calendar", "library", "admin", "settings", "profile" },
             owner.Primary.Concat(owner.Secondary).Select(item => item.Id).ToArray());
 
         var user = UiShellNavigation.Build("/", learningVisible: false, can: User);
         CollectionAssert.AreEqual(
-            new[] { "home", "library", "watchlist", "calendar", "activity", "settings", "profile" },
+            new[] { "home", "watchlist", "calendar", "library", "settings", "profile" },
             user.Primary.Concat(user.Secondary).Select(item => item.Id).ToArray());
     }
 
@@ -152,7 +152,7 @@ public sealed partial class AppShellNavigationTests
     [DataRow("/Books/Read/7a4c", "library", "library")]
     [DataRow("/Franchises/7", "watchlist", "profile")]
     [DataRow("/Calendar", "calendar", "calendar")]
-    [DataRow("/Activity", "activity", "profile")]
+    [DataRow("/Activity", "profile", "profile")]
     [DataRow("/Learn/Kana", "learn", "profile")]
     [DataRow("/Statistics", "learn", "profile")]
     [DataRow("/Profile", "profile", "profile")]
@@ -169,6 +169,30 @@ public sealed partial class AppShellNavigationTests
         Assert.AreEqual(1, active.Length, path);
         Assert.AreEqual(expectedId, active[0].Id);
         Assert.AreEqual(expectedMobileId, nav.MobilePrimary.Single(item => item.IsActive).Id);
+    }
+
+    [TestMethod]
+    [DataRow("/", null, null)]
+    [DataRow("/Library", null, null)]
+    [DataRow("/Admin/Providers", "admin", "admin-providers")]
+    [DataRow("/Settings/Appearance", "settings", "settings-appearance")]
+    [DataRow("/Activity", "profile", "activity")]
+    [DataRow("/Profile", null, null)]
+    public void BreadcrumbNamesTheAreaAndThePageInsideIt(string path, string? parentId, string? currentId)
+    {
+        var crumb = UiShellNavigation.Build(path, learningVisible: true, can: Owner).Breadcrumb;
+
+        Assert.AreEqual(parentId, crumb?.Parent.Id);
+        Assert.AreEqual(currentId, crumb?.Current?.Id);
+    }
+
+    [TestMethod]
+    public void ActivityIsAProfilePageNotASidebarDestination()
+    {
+        var nav = UiShellNavigation.Build("/", learningVisible: true, can: Owner);
+
+        CollectionAssert.DoesNotContain(nav.Primary.Select(item => item.Id).ToArray(), "activity");
+        CollectionAssert.AreEqual(new[] { "home", "watchlist", "calendar", "library" }, nav.Primary.Select(item => item.Id).ToArray());
     }
 
     [TestMethod]
@@ -201,7 +225,7 @@ public sealed partial class AppShellNavigationTests
         Assert.IsFalse(nav.Expanded.IsCurrentPage, "The child page is current, not the section anchor.");
 
         CollectionAssert.AreEqual(
-            new[] { "home", "library", "watchlist", "calendar", "activity" },
+            new[] { "home", "watchlist", "calendar", "library" },
             nav.Primary.Select(item => item.Id).ToArray(),
             "The base navigation stays visible inside Admin.");
         Assert.IsFalse(nav.ShowCurrentReading);
@@ -222,7 +246,7 @@ public sealed partial class AppShellNavigationTests
             Assert.AreEqual("settings", nav.Expanded?.Id, path);
             Assert.AreEqual(1, nav.Secondary.Count(item => item.IsExpanded));
             Assert.AreEqual(expectedId, nav.Expanded!.Groups!.SelectMany(group => group.Items).Single(item => item.IsActive).Id);
-            Assert.AreEqual(isOwner ? 8 : 7, nav.Primary.Count + nav.Secondary.Count, "The base navigation stays visible inside Settings.");
+            Assert.AreEqual(isOwner ? 7 : 6, nav.Primary.Count + nav.Secondary.Count, "The base navigation stays visible inside Settings.");
         }
     }
 

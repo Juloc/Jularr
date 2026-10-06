@@ -3,8 +3,8 @@
    derives them from the profile's accent seed and the layout renders them inline in <head> for the
    light, dark and system modes. This file only consumes them. */
 :root {
-    --sidebar: 236px;
-    --app-header-h: 56px;
+    --sidebar: 248px;
+    --app-header-h: 72px;
     /* Space the header takes above sticky page elements; phones scroll the header away. */
     --app-header-offset: var(--app-header-h);
     --radius-card: 14px;
@@ -67,27 +67,25 @@ button, input { font: inherit; }
 .skip-link:focus { top: calc(12px + env(safe-area-inset-top, 0px)); }
 #main-content:focus { outline: none; }
 .app-icon { flex: none; width: 20px; height: 20px; }
-/* Application header: brand and mode on the left over the sidebar column, the global search in the centre,
-   theme, notifications and the account menu on the right. It stays at the top on desktop; on phones it scrolls
-   with the page and the bottom bar carries navigation. */
+/* Content header, to the right of the sidebar: back link and place on the left, the global search in the middle (fluid, pill) and the
+   notification bell on the right. It stays at the top on desktop; on phones it scrolls with the page and the bottom bar carries navigation. */
 .app-header {
     position: sticky; top: 0; z-index: 30;
-    display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr) auto; align-items: center;
-    min-height: var(--app-header-h);
-    padding-inline: 0 calc(18px + var(--safe-right, 0px));
-    background: var(--sidebar-bg); border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr) minmax(0, 1fr); align-items: center; column-gap: 20px;
+    min-height: var(--app-header-h); margin-inline-start: var(--sidebar);
+    padding-inline: calc(36px + var(--safe-left, 0px)) calc(36px + var(--safe-right, 0px));
+    background: var(--bg); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
-.app-header-lead { min-width: 0; display: flex; align-items: center; gap: 10px; padding-inline: calc(18px + var(--safe-left, 0px)) 12px; }
-.brand { flex: none; display: flex; align-items: center; gap: 8px; font-size: 21px; font-weight: 800; letter-spacing: -.03em; }
-.brand-name { line-height: 1; }
-.brand-mark { flex: none; display: block; width: 32px; height: 32px; overflow: visible; }
-.app-header-context {
-    min-width: 0; overflow: hidden; color: var(--muted); font-size: 14px; font-weight: 600;
-    text-overflow: ellipsis; white-space: nowrap;
-}
-.app-header-context::before { content: "/"; margin-inline-end: 10px; color: var(--border-strong, var(--border)); }
-.app-header-search { min-width: 0; display: flex; justify-content: center; padding-inline: 12px; }
-.app-header-actions { display: flex; align-items: center; gap: 6px; }
+.app-header-lead { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.app-header-brand { display: none; }
+.app-breadcrumb { min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.app-breadcrumb-back { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 6px 10px 6px 4px; border-radius: 999px; color: var(--text); }
+.app-breadcrumb-back:hover { background: var(--surface-2); }
+.app-breadcrumb-back .app-icon { width: 18px; height: 18px; color: var(--muted); }
+.app-breadcrumb-sep { color: var(--border-strong, var(--border)); }
+.app-breadcrumb-current { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.app-header-search { min-width: 0; display: flex; justify-content: center; }
+.app-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .app-header-button {
     position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center;
     width: 38px; height: 38px; padding: 0; border: 0; border-radius: 10px;
@@ -107,17 +105,27 @@ button, input { font: inherit; }
 }
 .app-avatar:hover { background: var(--accent-hover); }
 
-/* Account menu: a native popover under the avatar. */
+/* Account card at the foot of the sidebar; its menu is a native popover that opens upward. */
+.sidebar-account { flex: none; padding-top: 10px; }
+.account-card {
+    width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--surface); color: var(--text); font: inherit; text-align: start; cursor: pointer;
+}
+.account-card:hover { background: var(--surface-2); }
+.account-card-name { min-width: 0; flex: 1; overflow: hidden; font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.account-card-more { flex: none; display: inline-flex; gap: 3px; color: var(--muted); }
+.account-card-more i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.app-avatar {
+    flex: none; display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0;
+    border-radius: 50%; background: var(--accent); color: var(--on-accent);
+    font-size: 14px; font-weight: 800;
+}
 .user-menu {
-    inset: calc(var(--app-header-h) - 4px) calc(14px + var(--safe-right, 0px)) auto auto; margin: 0; width: min(260px, calc(100vw - 24px));
-    padding: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text);
+    inset: auto auto calc(var(--safe-bottom, 0px) + 78px) calc(12px + var(--safe-left, 0px)); margin: 0; width: calc(var(--sidebar) - 24px);
+    padding: 6px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text);
     box-shadow: var(--shadow-card), 0 18px 44px rgba(0, 0, 0, .16);
 }
 .user-menu:popover-open { display: grid; gap: 2px; }
-.user-menu-name {
-    margin: 0; padding: 8px 10px 10px; overflow: hidden; border-bottom: 1px solid var(--border);
-    font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap;
-}
 .user-menu-links { display: grid; gap: 2px; margin-top: 4px; }
 .user-menu-item {
     width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: 8px;
@@ -137,18 +145,20 @@ button, input { font: inherit; }
 
 .sidebar {
     position: fixed;
-    inset-block: calc(var(--app-header-h) + var(--safe-top, 0px)) 0;
+    inset-block: 0;
     inset-inline-start: 0;
     width: var(--sidebar);
-    padding: 14px 12px;
+    padding: calc(18px + var(--safe-top, 0px)) 14px 14px;
     background: var(--sidebar-bg);
     border-inline-end: 1px solid var(--border);
     display: flex;
     isolation: isolate;
     flex-direction: column;
-    overflow-y: auto;
-    z-index: 10;
+    z-index: 40;
 }
+.sidebar-brand { flex: none; padding: 4px 10px 22px; }
+/* Navigation scrolls inside the sidebar so the account card stays in reach. */
+.sidebar-scroll { min-height: 0; flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
 .nav-list { display: grid; gap: 2px; }
 .nav-item {
     display: flex; align-items: center; gap: 11px; padding: 9px 10px;
@@ -1385,42 +1395,33 @@ main > :is(.panel, .settings-grid) + :is(.panel, .settings-grid) { margin-top: 1
 /* Long section lists run over the blossom art; keep the labels readable. */
 .sidebar:has(.nav-list-expanded)::after { opacity: calc(var(--blossom-opacity) * .3); }
 
-/* Global search in the header; it opens Discover. */
+/* Global search in the content header; it opens Discover. Fluid: it takes the useful header width up to about a thousand pixels. */
 .app-search {
-    width: min(100%, 640px); display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px;
-    border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--muted);
+    width: 100%; max-width: 1040px; display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 20px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted);
 }
 .app-search:focus-within {
-    border-color: var(--accent); background: var(--surface); color: var(--text);
+    border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .app-search .app-icon { width: 18px; height: 18px; }
 .app-search input {
-    flex: 1; min-width: 0; padding: 9px 0; border: 0; outline: none;
-    background: transparent; color: var(--text); font: inherit; font-size: 14px;
+    flex: 1; min-width: 0; padding: 10px 0; border: 0; outline: none;
+    background: transparent; color: var(--text); font: inherit; font-size: 15px; text-overflow: ellipsis;
 }
 .app-search input::placeholder { color: var(--muted); }
-.app-search input { text-overflow: ellipsis; }
-.app-search-hint {
-    flex: none; padding: 2px 7px; border: 1px solid var(--border); border-radius: 6px;
-    color: var(--muted); font: inherit; font-size: 11px; font-weight: 600;
-}
 @media (max-width: 820px) {
     :root { --app-header-offset: 0px; }
     .app-header {
-        position: relative; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px;
-        padding: calc(10px + var(--safe-top)) calc(14px + var(--safe-right)) 4px calc(14px + var(--safe-left));
+        position: relative; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; min-height: 0; margin-inline-start: 0;
+        padding: calc(10px + var(--safe-top)) calc(14px + var(--safe-right)) 4px calc(14px + var(--safe-left)); background: transparent; border-bottom: 0;
     }
     .app-header-lead { padding-inline: 0; }
-    .app-header-context, .theme-icon-button, .app-avatar, .user-menu { display: none; }
-    .app-header-search { padding-inline: 0; }
-    .app-search { width: 100%; min-height: 42px; }
-    .app-search-hint { display: none; }
+    .app-header-brand { display: flex; }
+    .app-breadcrumb { display: none; }
+    .app-search { min-height: 42px; padding: 0 16px; }
     /* The wordmark stays available to assistive technology; the phone header shows the mark only. */
     .brand-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-}
-@media (pointer: coarse) {
-    .app-search-hint { display: none; }
 }
 html { scroll-padding-top: var(--app-header-offset); }
 

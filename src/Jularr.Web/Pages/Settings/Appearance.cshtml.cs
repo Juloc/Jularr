@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Appearance;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Localization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Jularr.Web.Pages.Settings;
@@ -23,6 +24,20 @@ public sealed class AppearanceModel(
     public string SelectedThemeId => Appearance.ThemeId is null
         ? string.Empty
         : ThemeCatalog.NormalizeOrOriginal(Appearance.ThemeId);
+
+    /// <summary>Whether the account may reach Admin, so the page offers the sidebar shortcut switch.</summary>
+    public bool CanUseAdmin => JularrPolicies.Allows(User, JularrPolicies.AdminMedia);
+
+    public async Task<IActionResult> OnPostAdminShortcutAsync(bool show, CancellationToken cancellationToken)
+    {
+        if (!CanUseAdmin || string.IsNullOrWhiteSpace(currentAccount.ProfileId))
+        {
+            return Forbid();
+        }
+
+        await new ProfileAppearanceStore(db).SetAdminShortcutAsync(currentAccount.ProfileId, show, cancellationToken);
+        return RedirectToPage();
+    }
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
