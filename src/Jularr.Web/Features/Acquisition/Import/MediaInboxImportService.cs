@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Storage;
 
 namespace Jularr.Web.Features.Acquisition.Import;
 
@@ -14,16 +17,29 @@ public sealed class MediaInboxImportService(
     AnimeImportSettingsStore settings,
     IEnumerable<IMediaInboxImportAdapter> adapters,
     OperationRunner operations,
+    LibraryRootRoutingService routing,
     IInstanceModuleService? instanceModules = null)
 {
     public const string OperationKind = "media-inbox-import";
+
+    private static readonly ConcurrentDictionary<MediaAcquisitionKind, byte> RunningScans = new();
 
     public static readonly MediaAcquisitionKind[] InboxKinds =
     [
         MediaAcquisitionKind.Manga,
         MediaAcquisitionKind.LightNovel,
-        MediaAcquisitionKind.Book
+        MediaAcquisitionKind.Book,
+        MediaAcquisitionKind.Movie,
+        MediaAcquisitionKind.Tv
     ];
+
+    /// <summary>The LibraryRoot content type whose default root receives this media type's imports, or null while its importer still reads a per-media library folder.</summary>
+    public static LibraryContentType? RoutedContentType(MediaAcquisitionKind kind) => kind switch
+    {
+        MediaAcquisitionKind.Movie => LibraryContentType.Movie,
+        MediaAcquisitionKind.Tv => LibraryContentType.Tv,
+        _ => null
+    };
 
     public async Task<string?> InboxAsync(
         MediaAcquisitionKind kind,
@@ -58,6 +74,12 @@ public sealed class MediaInboxImportService(
             throw new InvalidOperationException($"The {Label(kind)} inbox '{root}' is not available.");
         }
 
+        // An inbox that is, contains or sits inside any LibraryRoot would import library files onto themselves (or another type's library).
+        if (RoutedContentType(kind) is not null && await routing.FindOverlappingRootAsync(root, cancellationToken) is { } overlapping)
+        {
+            throw new InvalidOperationException($"The {Label(kind)} inbox overlaps the library root '{overlapping.Name}'. Choose an inbox outside every library root.");
+        }
+
         // An older layout keeps the Light Novel inbox inside the Books inbox; a scan never
         // imports another media type's inbox.
         var excluded = InboxKinds
@@ -65,27 +87,40 @@ public sealed class MediaInboxImportService(
             .Select(state.InboxFor)
             .OfType<string>()
             .Select(Path.GetFullPath)
-            .Where(other => IsBelow(other, root))
+            .Where(other => StoragePaths.IsBelow(other, root))
             .ToArray();
 
-        return await operations.RunAsync(
-            new OperationDescriptor(
-                OperationKind,
-                Label(kind),
-                $"Import {Label(kind)} inbox",
-                root,
-                profileId,
-                OperationLane.Normal,
-                Retryable: false),
-            async (operation, token) =>
-            {
-                await operation.ReportAsync(10, $"Scanning {root}.", cancellationToken: token);
-                var result = await adapter.ImportInboxAsync(root, excluded, token);
-                await operation.LogAsync(OperationLogLevel.Information, "Import", result.Message, token);
-                return result;
-            },
-            "Inbox scan completed.",
-            cancellationToken);
+        // One scan per media type at a time: a second click while the first still imports would race it for the same files.
+        if (!RunningScans.TryAdd(kind, 0))
+        {
+            throw new InvalidOperationException($"A {Label(kind)} inbox scan is already running.");
+        }
+
+        try
+        {
+            return await operations.RunAsync(
+                new OperationDescriptor(
+                    OperationKind,
+                    Label(kind),
+                    $"Import {Label(kind)} inbox",
+                    root,
+                    profileId,
+                    OperationLane.Normal,
+                    Retryable: false),
+                async (operation, token) =>
+                {
+                    await operation.ReportAsync(10, $"Scanning {root}.", cancellationToken: token);
+                    var result = await adapter.ImportInboxAsync(root, excluded, token);
+                    await operation.LogAsync(OperationLogLevel.Information, "Import", result.Message, token);
+                    return result;
+                },
+                "Inbox scan completed.",
+                cancellationToken);
+        }
+        finally
+        {
+            RunningScans.TryRemove(kind, out _);
+        }
     }
 
     public static string Label(MediaAcquisitionKind kind) => kind switch
@@ -99,12 +134,4 @@ public sealed class MediaInboxImportService(
         MediaAcquisitionKind.Audiobook => "Audiobooks",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
-
-    public static bool IsBelow(string path, string root)
-    {
-        var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var parent = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return full.StartsWith(parent + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
-               full.StartsWith(parent + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
-    }
 }

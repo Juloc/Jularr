@@ -3,6 +3,7 @@ using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Playback;
+using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Speech;
 using Jularr.Web.Features.Storage;
@@ -12,8 +13,14 @@ namespace Jularr.Web.Features.ClientApi;
 
 public static class ClientApiContract
 {
-    public const int ApiVersion = 1;
-    public const int MinimumSupportedApiVersion = 1;
+    /// <summary>
+    /// Version 2: playback checkpoints (<c>PUT episodes/{id}/progress</c>, <c>PUT video/progress</c>, offline progress
+    /// replay) carry a client-declared <c>completed</c> flag and the server no longer infers completion from a
+    /// position. A version 1 client never declares threshold completion, so it must update.
+    /// </summary>
+    public const int ApiVersion = 2;
+
+    public const int MinimumSupportedApiVersion = 2;
     public const string BasePath = "/api/client/v1";
 
     public static ClientCapabilitiesResponse Capabilities(
@@ -21,6 +28,8 @@ public static class ClientApiContract
     {
         var learningEnabled =
             instanceSettings?.IsEnabled(InstanceModule.Learning) ?? true;
+        var playbackEnabled =
+            instanceSettings?.IsEnabled(InstanceModule.Playback) ?? true;
 
         var assembly = typeof(ClientApiContract).Assembly;
         var informational = assembly
@@ -63,7 +72,11 @@ public static class ClientApiContract
                 TtsPreferences: true,
                 PlaybackPlan: true,
                 Watchlist: true,
-                DevicePairing: true));
+                DevicePairing: true,
+                OfflinePackages: true,
+                PlaybackTelemetry: true,
+                PlaybackEnabled: playbackEnabled,
+                PlaybackIntents: playbackEnabled && (instanceSettings?.IsEnabled(InstanceModule.Acquisition) ?? true)));
     }
 }
 
@@ -176,11 +189,19 @@ public static class ClientApiRoutes
     public static string VideoProgress =>
         $"{ClientApiContract.BasePath}/video/progress";
 
+    /// <summary>The cues of an embedded text subtitle stream of a canonical video target, addressed by the target, not by a legacy episode.</summary>
+    public static string VideoSubtitleTrackCues(PlaybackVideoTarget target, string trackId) =>
+        $"{ClientApiContract.BasePath}/video/subtitle-tracks/{Uri.EscapeDataString(trackId)}/cues?workId={target.WorkId:D}"
+        + (target.WorkEpisodeId is { } episodeId ? $"&workEpisodeId={episodeId:D}" : "");
+
     public static string StreamSession(Guid sessionId) =>
         $"{ClientApiContract.BasePath}/stream-sessions/{sessionId:D}";
 
     public static string StreamSessionStream(Guid sessionId) =>
         $"{StreamSession(sessionId)}/stream";
+
+    public static string StreamSessionTelemetry(Guid sessionId) =>
+        $"{StreamSession(sessionId)}/telemetry";
 
     public static string StreamSessionHls(Guid sessionId) =>
         $"{StreamSession(sessionId)}/hls";
@@ -252,7 +273,14 @@ public sealed record ClientFeatureFlags(
     bool PlaybackPlan = false,
     bool Watchlist = false,
     // TV device-code pairing, "/api/client/v1/pairing/*" (#489).
-    bool DevicePairing = false);
+    bool DevicePairing = false,
+    bool OfflinePackages = false,
+    // PUT "/stream-sessions/{id}/telemetry": ephemeral buffer, throughput and stall reports of a playing client (#403).
+    bool PlaybackTelemetry = false,
+    // False on a manager-only instance: every player, plan, progress, stream and media-content route answers 404 and clients show no play action.
+    bool PlaybackEnabled = false,
+    // Explicit playback intents (POST video/playback-intents): playback enabled and acquisition on.
+    bool PlaybackIntents = false);
 
 public sealed record ClientErrorResponse(
     string Code,

@@ -1,0 +1,152 @@
+/* Instant Play on the Movie and Series pages (docs/mockups/instant-play/SPEC.md, sections 6, 7, 10, 16 and 19): the playback
+   action morphs in place, so the button keeps its size through every state. The hero copy sits on the dark scrim of
+   anime-detail.css in both themes, so its working and notice states are built from the --hero-* tokens defined with that hero;
+   episode rows sit on page surfaces and use the theme tokens. Progress is a thin line at the button's lower
+   edge that only appears with a trustworthy percentage, nothing like the player timeline. State is never colour alone (the
+   label always says it) and never a coloured edge stripe (CssAccentStripeTests). */
+
+/* The hero: the pieces join the action row of the hero. */
+.ip-action { display: contents; }
+.ip-action [hidden] { display: none; }
+.ip-form { margin: 0; }
+
+/* One height for the action and for every state it morphs into (a status with a hint under its title is two lines), so nothing moves. */
+.ip-button { position: relative; overflow: hidden; min-inline-size: 15.5rem; min-block-size: 52px; }
+.ip-button.has-context,
+.ip-action[data-ip-state^="notice"] .ip-button { justify-content: flex-start; padding-inline: 22px; }
+.ip-button[aria-disabled="true"] { cursor: default; }
+.ip-button[aria-disabled="true"]:hover { background: inherit; }
+.ip-text { display: grid; justify-items: start; min-width: 0; line-height: 1.2; text-align: start; }
+.ip-label { min-width: 0; }
+.ip-code { font-size: 11px; font-weight: 700; opacity: .82; letter-spacing: .03em; }
+.ip-hint { font-size: 11px; font-weight: 600; opacity: .85; }
+
+.ip-icon { position: relative; display: inline-grid; flex: none; place-items: center; inline-size: 16px; block-size: 16px; }
+.ip-icon > * { grid-area: 1 / 1; }
+.ip-ring, .ip-alert, .ip-wait { display: none; }
+.ip-action[data-ip-state="working"] .ip-icon .ad-icon { display: none; }
+.ip-action[data-ip-state="working"] .ip-ring {
+    display: block; color: var(--accent); stroke-dasharray: 34 20; animation: ip-spin 1s linear infinite;
+}
+.ip-action[data-ip-state="working"] .ip-code { display: none; }
+/* A notice is not playable: no play glyph on it; a failure carries a warning glyph instead. */
+.ip-action[data-ip-state^="notice"] .ip-icon > .ad-icon { display: none; }
+.ip-action[data-ip-state="notice-error"] .ip-alert,
+.ip-action[data-ip-state="notice-waiting"] .ip-wait { display: grid; }
+.ip-action[data-ip-state^="notice"] .ip-code { display: none; }
+.ip-action[data-ip-state="notice-neutral"] .ip-icon { display: none; }
+
+/* Working: the same pill as a light status surface with dark text. A notice that is only information (stopped, not available) is the
+   glass of the secondary actions, never a washed-out copy of the primary; waiting (including "Not available yet", which Jularr keeps
+   looking for) and failure carry their semantic tint. */
+.ip-action[data-ip-state="working"] .ip-button {
+    border-color: transparent; background: var(--hero-pill); color: var(--hero-ink); box-shadow: var(--hero-shadow);
+}
+.ip-action[data-ip-state^="notice"] .ip-button {
+    border-color: var(--hero-glass-edge); background: var(--hero-glass); color: var(--hero-on-scrim); box-shadow: none; backdrop-filter: blur(8px);
+}
+.ip-action[data-ip-state="notice-error"] .ip-button { border-color: transparent; background: var(--hero-danger); color: var(--hero-on-danger); backdrop-filter: none; }
+.ip-action[data-ip-state="notice-waiting"] .ip-button { border-color: transparent; background: var(--hero-warning); color: var(--hero-on-warning); backdrop-filter: none; }
+/* Ready while the viewer was away: the media can be played now (docs/mockups/instant-play, section 19: green only for ready). */
+.ip-action[data-ip-state="ready"] .ip-button { border-color: var(--hero-success); background: var(--hero-success); color: var(--hero-on-scrim); }
+.ip-action[data-ip-state="ready"] .ip-button:hover { background: var(--hero-success-hover); }
+
+/* Reliable progress: a thin line on the lower edge of the button, hidden while no percentage is trustworthy. */
+.ip-progress { position: absolute; inset-inline: 0; inset-block-end: 0; block-size: 3px; background: color-mix(in srgb, var(--hero-ink) 14%, transparent); }
+.ip-progress::after {
+    content: ""; display: block; block-size: 100%; inline-size: var(--ip-progress, 0%);
+    background: var(--accent); transition: inline-size .6s ease;
+}
+
+.ip-stop, .ip-notice-action {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 44px; padding: 0 18px; border: 1px solid var(--hero-glass-edge); border-radius: 999px;
+    background: var(--hero-glass); color: var(--hero-on-scrim); font: inherit; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer;
+    backdrop-filter: blur(8px);
+}
+.ip-stop:hover, .ip-notice-action:hover { background: var(--hero-glass-hover); }
+
+.ip-details > summary .ad-icon { transition: transform .15s ease; transform: rotate(90deg); }
+.ip-details[open] > summary .ad-icon { transform: rotate(-90deg); }
+.ip-panel { min-width: 260px; gap: 10px; padding: 14px; }
+.ip-milestones { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.ip-milestones li { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 13px; font-weight: 600; }
+.ip-milestones li > span:first-child:not(:only-child) { display: grid; flex: none; place-items: center; color: var(--success-text); }
+.ip-milestones li[data-status="current"] { font-weight: 700; }
+.ip-milestones li[data-status="current"] > span:first-child:not(:only-child) { color: var(--accent-text); }
+.ip-milestones .ad-icon { inline-size: 16px; block-size: 16px; }
+.ip-facts { margin: 0; padding-top: 10px; border-top: 1px solid var(--border); }
+.ip-facts dt { color: var(--muted); font-size: 12px; font-weight: 700; }
+.ip-facts dd { margin: 2px 0 0; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+
+/* A notice sits in the action row beside the action, so showing it moves nothing (the copy column is wide enough for it); narrow
+   screens give it the reserved row below. */
+.ad-hero-copy:has(.ip-action:not(.is-compact)) { max-width: 860px; }
+.ip-notice, .ip-notice-actions { display: contents; }
+.ip-notice-hint { margin: 0; color: var(--hero-on-scrim); font-size: 13px; font-weight: 600; }
+.ip-notice-action { min-height: 36px; padding: 0 14px; font-size: 13px; }
+
+/* The status pill of an existing request beside the action follows the server's projection; the morphing action says the same
+   while it works, so the pill steps aside until the action is back to its normal state. */
+.ip-observe[data-ip-state="ready_to_watch"] { border-color: var(--hero-success); background: var(--hero-success); color: var(--hero-on-scrim); }
+.ip-observe[data-ip-state="ready_to_watch"] .ad-icon,
+.ip-observe[data-ip-state="available"] .ad-icon { display: none; }
+.ip-action[data-ip-phase]:not([data-ip-phase="idle"]) ~ .ip-observe { display: none; }
+
+/* Episode rows: the same control, compact, on page surfaces. */
+.ip-action.is-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.ip-action.is-compact .ip-form { flex: 1 1 auto; min-width: 0; }
+.ip-action.is-compact .ip-notice:not([hidden]) { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.ip-action.is-compact .ip-notice-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ip-button-compact {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; inline-size: 100%; min-inline-size: 0;
+    min-block-size: 36px; padding: 6px 12px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-text); font: inherit; font-size: 12px; font-weight: 700; line-height: 1.25; text-align: center; cursor: pointer;
+}
+.ip-button-compact:hover { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); }
+.ip-action.is-compact[data-ip-state="working"] .ip-button-compact,
+.ip-action.is-compact[data-ip-state^="notice"] .ip-button-compact { border-color: var(--border); background: var(--surface-2); color: var(--text); box-shadow: none; }
+.ip-action.is-compact[data-ip-state="notice-waiting"] .ip-button-compact { border-color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 12%, var(--surface)); color: var(--warning-text); }
+.ip-action.is-compact[data-ip-state="notice-error"] .ip-button-compact { background: color-mix(in srgb, var(--danger-text) 12%, var(--surface)); color: var(--danger-text); }
+.ip-action.is-compact[data-ip-state="ready"] .ip-button-compact { border-color: var(--success-text); background: color-mix(in srgb, var(--success-text) 14%, var(--surface)); color: var(--success-text); }
+.ip-action.is-compact .ip-progress { background: var(--soft-fill); }
+.ip-action.is-compact .ip-stop,
+.ip-action.is-compact .ip-notice-action {
+    min-height: 32px; padding: 0 10px; border-color: var(--border); background: transparent; color: var(--accent-text); font-size: 12px; backdrop-filter: none;
+}
+.ip-action.is-compact .ip-stop:hover,
+.ip-action.is-compact .ip-notice-action:hover { background: var(--surface-2); }
+.ip-action.is-compact .ip-notice-hint { color: var(--muted); font-size: 12px; }
+
+.ip-action :is(a, button, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* On the dark hero scrim the accent ring alone is faint: a white ring with an accent halo reads in both themes. */
+.ip-action:not(.is-compact) :is(a, button, summary):focus-visible { outline-color: var(--hero-on-scrim); box-shadow: 0 0 0 5px var(--accent); }
+
+/* Tablet and phone: whatever the wait adds (Stop waiting, Details, the actions of a notice) comes after the action and the personal
+   actions, in a row the hero keeps free, so nothing moves when it appears. Details opens as a disclosure under the actions instead of a
+   popover. */
+@media (max-width: 860px) {
+    .ad-hero-actions:has(> .ip-action:not(.is-compact)) { align-content: flex-start; min-block-size: calc(52px + 10px + 44px); }
+    .ip-action:not(.is-compact) .ip-notice:not([hidden]) { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+    .ip-action:not(.is-compact) .ip-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    /* Only the visual order moves: the markup keeps the status controls right after the action they belong to, which is the order a
+       keyboard or screen reader meets them in. */
+    .ip-action:not(.is-compact) :is(.ip-stop, .ip-details, .ip-notice) { order: 1; }
+}
+
+/* On a phone the personal actions take a row of their own under the action, so the extra row is a second one. */
+@media (max-width: 620px) {
+    .ad-hero-actions:has(> .ip-action:not(.is-compact)):has(> .ad-watchlist) { min-block-size: calc(52px + 10px + 44px + 10px + 44px); }
+    .ip-form { flex: 1 1 100%; }
+    .ip-button { inline-size: 100%; min-inline-size: 0; }
+    .ip-details[open] { flex: 1 1 100%; }
+    .ip-details .ip-panel { position: static; margin-top: 8px; inline-size: 100%; box-shadow: none; }
+}
+
+@keyframes ip-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .ip-action[data-ip-state="working"] .ip-ring { animation: none; }
+    .ip-progress::after { transition: none; }
+    .ip-details > summary .ad-icon { transition: none; }
+}

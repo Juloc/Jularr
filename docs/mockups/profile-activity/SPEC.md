@@ -1,6 +1,6 @@
 # Profile / Activity — Clean Design
 
-Status: **planned UX baseline; ready for Light-mode mockup review**.
+Status: **binding planning specification; approved Profile/Activity visual direction.**
 
 This is the binding consumer specification for the signed-in user's own Profile and media Activity surface. Personal Devices/Sessions are owned by Settings > Devices & Sessions and are only linked from Profile.
 
@@ -292,6 +292,6 @@ Opening media from Activity and returning should preserve Activity filter, scrol
 
 First review:
 
-Existing rough Profile mockups are sufficient as planning references. No dedicated Settings mockup is required; `user-settings/SPEC.md` defines the standard component/layout contract. Additional mockups are only needed later when implementation review finds a visual problem or a non-standard interaction needs approval.
+The existing Profile/Activity mockups in this folder are approved planning references. No dedicated Settings mockup is required; `user-settings/SPEC.md` defines the standard component/layout contract. Additional mockups are only needed later when implementation review finds a visual problem or a non-standard interaction needs approval.
 
 Text specification wins over images on conflict.

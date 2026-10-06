@@ -25,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -82,6 +82,7 @@ fun TvPlayerScreen(
     onSelectSubtitleTrack: (String?) -> Unit = {},
     onPositionChanged: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onSeeked: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
+    onPlaybackEnded: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
     onPlaybackFailure: (positionMs: Long) -> Unit = {},
     canOpenOnPhone: Boolean = false,
     remoteCommand: PlaybackCommand? = null,
@@ -116,6 +117,9 @@ fun TvPlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 positionMs = player.player.currentPosition.coerceAtLeast(0)
                 durationMs = player.player.duration.takeIf { it > 0 } ?: durationMs
+                if (playbackState == Player.STATE_ENDED) {
+                    onPlaybackEnded(positionMs, durationMs)
+                }
             }
 
             override fun onPositionDiscontinuity(
@@ -195,13 +199,13 @@ fun TvPlayerScreen(
             "seekBack10" -> apply(
                 TvPlayerTransition(
                     uiState,
-                    listOf(TvPlayerEffect.SeekBy(-10_000)),
+                    listOf(TvPlayerEffect.SeekBy(-design.seek.backMs)),
                 ),
             )
             "seekForward10" -> apply(
                 TvPlayerTransition(
                     uiState,
-                    listOf(TvPlayerEffect.SeekBy(10_000)),
+                    listOf(TvPlayerEffect.SeekBy(design.seek.forwardMs)),
                 ),
             )
             "seekTo" -> command.payload["positionMs"]
@@ -328,6 +332,7 @@ fun TvPlayerScreen(
                         TvPlayerInteraction.left(
                             uiState,
                             currentCue?.tokens?.size ?: 0,
+                            design.seek,
                         )
                     }
 
@@ -340,6 +345,7 @@ fun TvPlayerScreen(
                         TvPlayerInteraction.right(
                             uiState,
                             currentCue?.tokens?.size ?: 0,
+                            design.seek,
                         )
                     }
 
@@ -390,7 +396,7 @@ fun TvPlayerScreen(
                     onSelectSubtitleTrack = onSelectSubtitleTrack,
                     onBackTen = {
                         player.player.seekTo(
-                            (player.player.currentPosition - 10_000).coerceAtLeast(0),
+                            (player.player.currentPosition - design.seek.backMs).coerceAtLeast(0),
                         )
                     },
                     onPlayPause = {
@@ -398,7 +404,7 @@ fun TvPlayerScreen(
                     },
                     onForwardTen = {
                         val duration = player.player.duration
-                        val target = player.player.currentPosition + 10_000
+                        val target = player.player.currentPosition + design.seek.forwardMs
                         player.player.seekTo(
                             if (duration > 0) target.coerceAtMost(duration) else target,
                         )
@@ -594,7 +600,7 @@ private fun PlayerControls(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Replay10,
-                    contentDescription = "Back 10 seconds",
+                    contentDescription = "Back ${design.seek.backSeconds} seconds",
                     tint = Color.White,
                     modifier = Modifier.size(28.dp),
                 )
@@ -632,8 +638,8 @@ private fun PlayerControls(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Forward10,
-                    contentDescription = "Forward 10 seconds",
+                    imageVector = Icons.Filled.Forward30,
+                    contentDescription = "Forward ${design.seek.forwardSeconds} seconds",
                     tint = Color.White,
                     modifier = Modifier.size(28.dp),
                 )

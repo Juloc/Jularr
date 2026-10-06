@@ -406,21 +406,22 @@
 
     setHandler("play", () => void video.play().catch(() => {}));
     setHandler("pause", () => video.pause());
-    // System controls reuse the player's own ±10 s actions when available so
-    // restarted live streams seek on the absolute media timeline.
+    // System controls reuse the player's own seek actions (10 s back, 30 s forward) when available so
+    // restarted live streams seek on the absolute media timeline. The increments never come from the
+    // system's own seekOffset: every client seeks by the same canonical steps.
     const playerSeek = (action, fallbackDelta) => {
       const design = window.JularrPlayerDesign;
-      if (design &&root.querySelector("[data-player-controls]")) {
+      if (design && root.querySelector("[data-player-controls]")) {
         design.dispatch(root, action);
       } else {
         seekBy(fallbackDelta);
       }
     };
 
-    setHandler("seekbackward", details =>
-      playerSeek("seekBack10", -(details?.seekOffset || 10)));
-    setHandler("seekforward", details =>
-      playerSeek("seekForward10", details?.seekOffset || 10));
+    setHandler("seekbackward", () =>
+      playerSeek("seekBack10", -Number(root.dataset.seekBackSeconds)));
+    setHandler("seekforward", () =>
+      playerSeek("seekForward10", Number(root.dataset.seekForwardSeconds)));
     setHandler("seekto", details => {
       const target = Number(details?.seekTime);
       if (!Number.isFinite(target)) {

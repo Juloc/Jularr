@@ -1,0 +1,26 @@
+@using Jularr.Web.Features.Library
+@model VideoDetailPageModel
+@* Cast & Crew of a Movie (docs/mockups/movie-detail, section 4): one horizontally scrolling row of the persisted cast in billing order
+   followed by the key crew. No profile photos are persisted, so every person has the portrait placeholder with their initials. The row is
+   a keyboard-reachable scrollable region named by its heading. The section does not exist without people. *@
+@if (Model.Detail.Metadata is { } metadata && metadata.Cast.Concat(metadata.Crew).ToArray() is { Length: > 0 } people)
+{
+    <section class="vd-cast" aria-labelledby="vd-cast-title">
+        <h2 id="vd-cast-title">@Model.Ui["library.video.castHeading"]</h2>
+        <div class="vd-people" role="region" aria-labelledby="vd-cast-title" tabindex="0">
+            <ul role="list">
+                @foreach (var person in people)
+                {
+                    <li class="vd-person">
+                        <span class="vd-person-art" aria-hidden="true">@VideoDetailView.Initials(person.Name)</span>
+                        <strong title="@person.Name">@person.Name</strong>
+                        @if (!string.IsNullOrWhiteSpace(person.Role))
+                        {
+                            <small>@person.Role</small>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    </section>
+}

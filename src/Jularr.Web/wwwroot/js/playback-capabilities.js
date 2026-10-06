@@ -5,7 +5,7 @@
 (() => {
     const schemaVersion = 1;
     // Bumped whenever the probe itself changes, so cached results are measured again.
-    const probeVersion = 1;
+    const probeVersion = 2;
     const cacheKey = "jularr.playback.capabilities";
     const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
 
@@ -215,17 +215,43 @@
 
     const presence = (value) => value ? "confirmed" : "unsupported";
 
-    const probeFeatures = (env, element) => ({
-        pictureInPicture: presence(
-            (env.document.pictureInPictureEnabled === true && typeof element.requestPictureInPicture === "function") ||
-            typeof element.webkitSetPresentationMode === "function"),
-        mediaSession: presence("mediaSession" in env.navigator),
-        fullscreen: presence(env.document.fullscreenEnabled === true || typeof element.webkitEnterFullscreen === "function"),
-        orientationLock: typeof env.window.screen?.orientation?.lock === "function" ? "inferred" : "unsupported",
-        wakeLock: presence("wakeLock" in env.navigator),
-        // The web player renders one audio track per stream; switching needs a remux.
-        audioTrackSelection: "unsupported"
-    });
+    // What this page can do with one player stage and its <video>: the facts the player's presentation resolver
+    // starts from (player-presentation.js). Element fullscreen needs a callable request on the stage AND the
+    // document's matching enabled flag and state property (a bare method is not proof; iPhone WebKit exposes none
+    // of them for elements). Native fullscreen is the WebKit-only video surface. Picture-in-picture lists every
+    // usable route in the order the player tries them: the standard API first, then WebKit's presentation mode.
+    const probePresentation = (doc, stage, video) => {
+        const elementFullscreen =
+            typeof stage?.requestFullscreen === "function" && doc.fullscreenEnabled === true && "fullscreenElement" in doc
+                ? "standard"
+                : typeof stage?.webkitRequestFullscreen === "function" && doc.webkitFullscreenEnabled === true && "webkitFullscreenElement" in doc
+                    ? "webkit"
+                    : null;
+        const pictureInPicture = [];
+        if (doc.pictureInPictureEnabled === true && typeof video.requestPictureInPicture === "function" && video.disablePictureInPicture !== true) {
+            pictureInPicture.push("standard");
+        }
+
+        if (typeof video.webkitSetPresentationMode === "function" &&
+            (typeof video.webkitSupportsPresentationMode !== "function" || video.webkitSupportsPresentationMode("picture-in-picture"))) {
+            pictureInPicture.push("webkit");
+        }
+
+        return { elementFullscreen, nativeFullscreen: typeof video.webkitEnterFullscreen === "function", pictureInPicture };
+    };
+
+    const probeFeatures = (env, element) => {
+        const presentation = probePresentation(env.document, env.document.documentElement, element);
+        return {
+            pictureInPicture: presence(presentation.pictureInPicture.length > 0),
+            mediaSession: presence("mediaSession" in env.navigator),
+            fullscreen: presence(presentation.elementFullscreen !== null || presentation.nativeFullscreen),
+            orientationLock: typeof env.window.screen?.orientation?.lock === "function" ? "inferred" : "unsupported",
+            wakeLock: presence("wakeLock" in env.navigator),
+            // The web player renders one audio track per stream; switching needs a remux.
+            audioTrackSelection: "unsupported"
+        };
+    };
 
     const clientKind = (env) =>
         media(env, "(display-mode: standalone)") || env.navigator.standalone === true ? "pwa" : "web";
@@ -339,5 +365,5 @@
         }
     };
 
-    window.JularrPlaybackCapabilities = { detect, networkReport, clear, supportFromCanPlay, fingerprint, schemaVersion };
+    window.JularrPlaybackCapabilities = { detect, networkReport, clear, supportFromCanPlay, fingerprint, probePresentation, schemaVersion };
 })();

@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Playback.Transcoding;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Storage.Insights;
@@ -85,6 +86,12 @@ public sealed class StorageCleanupService(
         var target = FullPath(candidate.Path);
         var areaRoot = FullPath(layout.RootOf(candidate.Area));
         if (target is null || areaRoot is null || !IsStrictlyInside(target, areaRoot))
+        {
+            return false;
+        }
+
+        // HLS session directories are deleted by one policy everywhere (see PlaybackCacheOwnership).
+        if (candidate.Area == StorageCacheAreaKind.HlsSessions && !PlaybackCacheOwnership.IsDeletableSession(areaRoot, target))
         {
             return false;
         }

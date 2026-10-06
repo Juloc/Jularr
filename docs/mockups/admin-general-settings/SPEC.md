@@ -57,6 +57,27 @@ Sibling instance-level surfaces may include:
 
 Storage, Downloader, Provider, AI, Users, System/Diagnostics, Backup and Migration remain separate Admin destinations.
 
+## Language & localization ownership
+
+General Settings owns the instance-level language/locale defaults. Personal language remains User Settings and Translation provider configuration remains Admin Providers.
+
+UI translation catalog management is a **contextual child surface** of instance language/localization:
+
+`Admin → General Settings → Language & Localization → UI translations`
+
+The current `/Admin/Languages` route may remain as the implementation/deep-link route, but it is not a separate permanent top-level Admin destination once General Settings has parity.
+
+UI translation management owns:
+- enabled UI locales/catalog coverage;
+- manual UI message translation/review;
+- generation/regeneration workflow for UI strings where supported.
+
+It does not own:
+- per-profile language choice;
+- media metadata language policy beyond the instance defaults defined here;
+- Translation provider credentials/capabilities;
+- media subtitle/translation jobs.
+
 ## Visual structure
 
 This is a **normal settings page**, not a wizard.

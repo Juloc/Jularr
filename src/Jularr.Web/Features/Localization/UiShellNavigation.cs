@@ -68,15 +68,31 @@ public sealed record UiNavigationSection(string TitleKey, UiNavigationEntry[] En
 /// </summary>
 public static class UiNavigationCatalog
 {
+    /// <summary>Id of the Library tab that serves every video type; the Library page renders its scopes itself.</summary>
+    public const string LibraryVideoTabId = "library-video";
+
     /// <summary>
-    /// Media types inside Library. The Library destination is active on all of them. Movies and
-    /// series have no consumer pages yet; a tab for them is one more entry here, and the sidebar,
-    /// tabs and route gate follow.
+    /// Media types inside Library. The Library destination is active on all of them. The video tab is one
+    /// destination: Anime, Series and Movies are scopes of the same page, not separate routes. The Anime,
+    /// Movie and Series pages under /Library are narrower roots of their own, so a profile that cannot browse the type
+    /// does not reach them through the shared Library hub. The Watch player serves Movies and Series; it also checks
+    /// the media type of the Work it opens.
     /// </summary>
     public static readonly UiNavigationEntry[] LibraryTabs =
     [
-        new("library-anime", "nav.libraryTab.anime", "/Library", "library",
-            MediaRoutes: [new("/Library", [WorkMediaType.Anime])]),
+        new(LibraryVideoTabId, "nav.libraryTab.video", "/Library", "library",
+            MediaRoutes:
+            [
+                new("/Library", [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie]),
+                new("/Library/Anime", [WorkMediaType.Anime]),
+                new("/Library/AnimeRepair", [WorkMediaType.Anime]),
+                new("/Library/Episode", [WorkMediaType.Anime]),
+                new("/Library/Movie", [WorkMediaType.Movie]),
+                new("/Library/Series", [WorkMediaType.Series]),
+                new("/Library/Watch", [WorkMediaType.Movie, WorkMediaType.Series]),
+                new("/Library/PresentationGroups", [WorkMediaType.Anime]),
+                new("/Library/Rename", [WorkMediaType.Anime])
+            ]),
         new("library-reading", "nav.libraryTab.reading", "/Reading", "reading",
             MediaRoutes:
             [
@@ -121,6 +137,7 @@ public static class UiNavigationCatalog
             new("admin-api-keys", "admin.nav.apiKeys", "/Settings/ApiKeys", "key", Policy: JularrPolicies.AdminSystem),
             new("admin-instance", "admin.nav.instance", "/Admin/Instance", "settings", Policy: JularrPolicies.AdminSystem),
             new("admin-system", "admin.nav.system", "/Admin/System", "server", Policy: JularrPolicies.AdminSystem),
+            new("admin-transcoding", "admin.nav.transcoding", "/Admin/Transcoding", "server", Policy: JularrPolicies.AdminSystem),
             new("admin-health", "admin.nav.health", "/Admin/Health", "pulse", Policy: JularrPolicies.AdminSystem)
         ])
     ];
@@ -178,8 +195,11 @@ public static class UiNavigationCatalog
     public static readonly string[] ProfileLinkIds =
         ["settings-account", "activity", "settings-offline", "profile-devices", "settings", "admin"];
 
-    /// <summary>Phone bottom bar, in order. Everything else is reached from Profile or search.</summary>
-    public static readonly string[] MobilePrimaryIds = ["home", "calendar", "watchlist", "profile"];
+    /// <summary>
+    /// Phone bottom bar, in order (docs/UX.md, INFORMATION_ARCHITECTURE.md, mockups/home): Home, Library, Calendar, Learning and
+    /// Profile; Learning is absent for a profile without it. Everything else is reached from Profile or search.
+    /// </summary>
+    public static readonly string[] MobilePrimaryIds = ["home", "library", "calendar", "learn", "profile"];
 
     /// <summary>Readers whose sidebar shows the open book, novel or manga with its progress.</summary>
     public static readonly string[] CurrentReadingRoots = ["/Books/Read", "/Novels/Read", "/Manga/Read"];
@@ -235,7 +255,7 @@ public sealed record UiShellNavigation(
     IReadOnlyList<UiNavigationItem> MobilePrimary,
     bool ShowCurrentReading = false)
 {
-    public const int MaxMobilePrimaryItems = 4;
+    public const int MaxMobilePrimaryItems = 5;
 
     /// <summary>The section expanded in the sidebar, if any. Never more than one.</summary>
     public UiNavigationItem? Expanded => Secondary.FirstOrDefault(item => item.IsExpanded);

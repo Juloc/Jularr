@@ -18,7 +18,9 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Collections;
 using Jularr.Web.Features.Franchises;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Operations;
@@ -58,26 +60,32 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
     private readonly IHost host;
     private readonly TestServer server;
 
-    private ManageSheetPageTestHost(string root, AppDbContext db, IHost host, TestServer server)
+    private ManageSheetPageTestHost(string root, AppDbContext db, IHost host, TestServer server, InstanceModuleStore modules)
     {
         this.root = root;
         Db = db;
         this.host = host;
         this.server = server;
+        Modules = modules;
     }
 
     public AppDbContext Db { get; }
 
+    /// <summary>The instance module switches the pages read.</summary>
+    public InstanceModuleStore Modules { get; }
+
     /// <summary>The host's services, to seed the stores a page reads.</summary>
     public IServiceProvider Services => host.Services;
 
-    public static async Task<ManageSheetPageTestHost> CreateAsync()
+    /// <param name="sharedDatabasePath">The database path of another test host: both then serve the same PostgreSQL database, as one install does.</param>
+    public static async Task<ManageSheetPageTestHost> CreateAsync(string? sharedDatabasePath = null)
     {
         var root = Path.Combine(Path.GetTempPath(), $"jularr-manage-sheet-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         var dataDirectory = new DirectoryInfo(Path.Combine(root, "data"));
         dataDirectory.Create();
-        var databasePath = Path.Combine(root, "jularr.db");
+        var modules = new InstanceModuleStore(dataDirectory.FullName);
+        var databasePath = sharedDatabasePath ?? Path.Combine(root, "jularr.db");
         var connectionString = $"Data Source={databasePath};Foreign Keys=True";
 
         var host = await new HostBuilder()
@@ -100,10 +108,16 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                         // The shell sidebar derives its media-type destinations from the profile's
                         // capabilities (#598); the policy defaults to "everything visible".
                         services.AddSingleton(new MediaCapabilityStore(dataDirectory.FullName));
+                        services.AddSingleton<IInstanceModuleService>(modules);
                         services.AddScoped<IMediaCapabilityService, MediaCapabilityService>();
                         services.AddScoped<IAppShellService, AppShellService>();
                         services.AddScoped<OperationRunner>();
                         services.AddScoped<EpisodeProgressService>();
+                        services.AddScoped<VideoProgressService>();
+                        services.AddScoped<CanonicalVideoTargetResolver>();
+                        services.AddScoped<LegacyWorkBridge>();
+                        services.AddScoped<WorkService>();
+                        services.AddScoped<WorkStructureService>();
                         services.AddScoped<FranchiseStore>();
                         services.AddScoped<MediaRelationStore>();
                         // The Library page's Collections view lists the profile's collections.
@@ -202,7 +216,22 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                             Path.Combine(dataDirectory.FullName, "anilist-auto-monitor")));
                         services.AddScoped(_ => new AcquisitionBackupService(
                             Path.Combine(dataDirectory.FullName, "acquisition-backup")));
+                        services.AddScoped<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
                         services.AddScoped<MediaInboxImportService>();
+                        // Admin → Storage: usage and cache cleanup read the same inventory and cache folders as in production.
+                        services.AddSingleton<Jularr.Web.Features.Storage.StorageAvailabilityCoordinator>();
+                        services.AddScoped<Jularr.Web.Features.Storage.StorageIntegrityService>();
+                        services.AddSingleton(new Jularr.Web.Features.Storage.Insights.StorageCacheLayout(
+                            Path.Combine(dataDirectory.FullName, "cache", "playback"),
+                            Path.Combine(dataDirectory.FullName, "cache", "hls"),
+                            Path.Combine(dataDirectory.FullName, "cache", "trickplay"),
+                            Path.Combine(dataDirectory.FullName, "cache", "artwork"),
+                            Path.Combine(dataDirectory.FullName, "cache", "fingerprints"),
+                            Path.Combine(dataDirectory.FullName, "cache", "manga")));
+                        services.AddScoped<Jularr.Web.Features.Storage.LibraryRootAvailabilityService>();
+                        services.AddScoped<Jularr.Web.Features.Storage.Insights.StorageUsageService>();
+                        services.AddScoped<Jularr.Web.Features.Storage.Insights.StorageCacheScanner>();
+                        services.AddScoped<Jularr.Web.Features.Storage.Insights.StorageCleanupService>();
                         // The same folder browser Program.cs registers; the page reads its checks.
                         services.AddFolderBrowse(dataDirectory.FullName);
                         services.AddHttpClient();
@@ -245,7 +274,7 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
             .Options);
         await DatabaseMigrationBridge.UpgradeAsync(db);
 
-        return new ManageSheetPageTestHost(root, db, host, server);
+        return new ManageSheetPageTestHost(root, db, host, server, modules);
     }
 
     /// <param name="asOwner">Adds the owner role claim to the simulated signed-in account.</param>

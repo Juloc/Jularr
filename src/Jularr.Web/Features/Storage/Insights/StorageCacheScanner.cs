@@ -4,6 +4,7 @@ using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Playback;
+using Jularr.Web.Features.Playback.Transcoding;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Storage.Insights;
@@ -20,7 +21,7 @@ public sealed record StorageCacheLayout(
 {
     public static StorageCacheLayout Default { get; } = new(
         PlaybackCache.RootPath,
-        HlsPlaybackSessionManager.RootPath,
+        PlaybackTranscodingSettings.DefaultHlsCachePath,
         TrickplayGenerator.DefaultRootPath,
         Path.GetDirectoryName(AnimeArtworkCache.DefaultRootPath)!,
         AudioFingerprintMediaSegmentDetector.DefaultCacheRoot,
@@ -235,7 +236,7 @@ public sealed partial class StorageCacheScanner(
         var found = new List<ReclaimCandidate>();
         foreach (var directory in Directory.EnumerateDirectories(root))
         {
-            if (!IsPlainDirectory(directory))
+            if (!PlaybackCacheOwnership.IsDeletableSession(root, directory))
             {
                 continue;
             }

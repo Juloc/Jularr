@@ -72,20 +72,22 @@ public static class MetadataFieldSources
         WorkFieldProvenance? current,
         string incomingSource,
         bool incomingIsManualOverride,
-        string? preferredProvider = null)
-    {
-        if (current is null)
-        {
-            return true;
-        }
+        string? preferredProvider = null) =>
+        current is null || ShouldReplace(current.Source, current.IsManualOverride, incomingSource, incomingIsManualOverride, preferredProvider);
 
-        if (current.IsManualOverride && !incomingIsManualOverride)
+    /// <summary>
+    /// The same ladder for a value whose provenance is stored beside it (a localized <c>(work, locale, field)</c> value or an
+    /// artwork variant) rather than in a <see cref="WorkFieldProvenance"/> row.
+    /// </summary>
+    public static bool ShouldReplace(string currentSource, bool currentIsManualOverride, string incomingSource, bool incomingIsManualOverride, string? preferredProvider = null)
+    {
+        if (currentIsManualOverride && !incomingIsManualOverride)
         {
             return false;
         }
 
         var incomingPriority = PriorityFor(incomingSource, incomingIsManualOverride, preferredProvider);
-        var currentPriority = PriorityFor(current.Source, current.IsManualOverride, preferredProvider);
+        var currentPriority = PriorityFor(currentSource, currentIsManualOverride, preferredProvider);
 
         if (incomingPriority != currentPriority)
         {
@@ -93,7 +95,7 @@ public static class MetadataFieldSources
         }
 
         // Same priority: only refresh when it is the same origin (keeps the winning source stable).
-        return Normalize(incomingSource) == Normalize(current.Source);
+        return Normalize(incomingSource) == Normalize(currentSource);
     }
 }
 

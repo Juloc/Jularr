@@ -4,22 +4,26 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Franchises;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Recommendations;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Watchlist;
 using Jularr.Web.Ui;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Pages.Discover;
 
+[EnableRateLimiting(DiscoveryRegistration.RateLimitPolicy)]
 public sealed class IndexModel(
     IDiscoveryFeed coordinator,
     DiscoveryShelfService shelves,
@@ -31,9 +35,11 @@ public sealed class IndexModel(
     OperationRunner operations,
     AcquisitionRequestService requests,
     AcquisitionAccessStore requestStore,
+    VideoRequestScopeResolver scopes,
     WatchlistStore watchlist,
     FranchiseService franchiseService,
     MediaRecommendationService recommendations,
+    IInstanceModuleService modules,
     ILogger<IndexModel> logger,
     IAppShellService? shell = null) : PageModel
 {
@@ -46,39 +52,51 @@ public sealed class IndexModel(
     /// <summary>The preferred audio and subtitle language of the profile, offered as a filter when set.</summary>
     public LibraryLanguagePreference Preference { get; private set; } = LibraryLanguagePreference.None;
 
-    /// <summary>The card action per AniList category: "add", "request" or "" (none).</summary>
-    public IReadOnlyDictionary<string, string> AddActions { get; private set; } = new Dictionary<string, string>();
+    /// <summary>The categories this profile may request. Request and Instant capabilities look the same here: auto-approval is policy, never another action.</summary>
+    public IReadOnlySet<string> RequestableCategories { get; private set; } = new HashSet<string>();
+
+    /// <summary>The media types of this profile that Discover offers as tabs; a type the profile may not browse does not exist for it.</summary>
+    public IReadOnlyList<(DiscoveryCategory Category, string LabelKey)> VisibleTabs { get; private set; } = DiscoverScopes.Tabs;
 
     /// <summary>The page itself reads local state only (#186); the titles come from <see cref="OnGetBodyAsync"/> after first paint.</summary>
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        Query = ParseQuery();
-        AddActions = await LoadAddActionsAsync(cancellationToken);
+
+        // The Quick View of a title with a trailer adds one sandboxed frame once it is open; no other page content may be framed.
+        Response.Headers.ContentSecurityPolicy = $"frame-src 'self' {WorkTrailerView.EmbedOrigin}";
+        var audience = await LoadAudienceAsync(cancellationToken);
+        Query = ParseQuery(audience);
+        VisibleTabs = [.. DiscoverScopes.Tabs.Where(tab => DiscoverScopes.IsVisible(tab.Category, audience.VisibleMediaTypes))];
+        RequestableCategories = await LoadRequestableCategoriesAsync(cancellationToken);
         Preference = await LoadPreferenceAsync(cancellationToken);
     }
 
-    // Discover has one acquisition action for every supported media kind. Capability policy decides
-    // whether the button means Request or Add; media-specific executors decide how acquisition happens.
-    public static string AddAction(MediaAcquisitionKind kind, AcquisitionCapabilities access) =>
-        !access.CanAdd
-            ? ""
-            : access.AddCreatesRequest
-                ? "request"
-                : "add";
-
-    private DiscoverBrowseQuery ParseQuery() =>
-        DiscoverBrowseQuery.Parse(key => Request.Query.TryGetValue(key, out var values) ? values.ToString() : null);
-
-    private async Task<IReadOnlyDictionary<string, string>> LoadAddActionsAsync(CancellationToken cancellationToken)
+    /// <summary>What the address asks for. A scope the profile may not browse falls back to all media: for this profile that type does not exist.</summary>
+    private DiscoverBrowseQuery ParseQuery(DiscoveryAudience audience)
     {
-        var actions = new Dictionary<string, string>(StringComparer.Ordinal);
+        var query = DiscoverBrowseQuery.Parse(key => Request.Query.TryGetValue(key, out var values) ? values.ToString() : null);
+        return DiscoverScopes.IsVisible(query.Category, audience.VisibleMediaTypes) ? query : query with { Category = DiscoveryCategory.All };
+    }
+
+    private async Task<DiscoveryAudience> LoadAudienceAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<WorkMediaType> visible = shell is null ? WorkMediaTypes.All : (await shell.GetMediaAccessAsync(User, cancellationToken)).VisibleMediaTypes;
+        return new DiscoveryAudience(account.ProfileId, account.IsOwner, visible.ToHashSet());
+    }
+
+    private async Task<IReadOnlySet<string>> LoadRequestableCategoriesAsync(CancellationToken cancellationToken)
+    {
+        var categories = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (category, kind) in Categories)
         {
-            actions[category] = AddAction(kind, await requests.GetCapabilitiesAsync(kind, cancellationToken));
+            if ((await requests.GetCapabilitiesAsync(kind, cancellationToken)).CanRequest)
+            {
+                categories.Add(category);
+            }
         }
 
-        return actions;
+        return categories;
     }
 
     private async Task<LibraryLanguagePreference> LoadPreferenceAsync(CancellationToken cancellationToken)
@@ -102,24 +120,35 @@ public sealed class IndexModel(
         }
     }
 
+    /// <summary>The first paint waits this long for the sources, so a cached or fast board arrives whole and a slow source never holds the page back.</summary>
+    private static readonly TimeSpan FirstPaintBudget = TimeSpan.FromMilliseconds(1200);
+
+    /// <summary>A follow-up request holds the connection this long for the next arrival, so the browser does not poll.</summary>
+    private static readonly TimeSpan FollowUpBudget = TimeSpan.FromSeconds(8);
+
     /// <summary>
-    /// The body of the page for one address (rows on the landing, one grid for a search or drill-down),
-    /// rendered on the server and fetched from the client after first paint so the page GET stays local
-    /// (#186). The provider board is TTL-cached by the shelf service and the feed.
+    /// The body of the page for one address (rows on the landing, one grid or one row per media group for a search or drill-down), rendered on
+    /// the server and fetched from the client after first paint so the page GET stays local (#186). A source that has not answered leaves a
+    /// reserved place; the browser asks again with <paramref name="after"/> (the sources it has seen settled) and receives the next generation
+    /// as soon as one more source has answered. <paramref name="retry"/> names the sources a viewer asked to fetch again.
     /// </summary>
-    public async Task<IActionResult> OnGetBodyAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetBodyAsync(int? after, string? retry, CancellationToken cancellationToken)
     {
         Response.Headers.CacheControl = "no-store";
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        Query = ParseQuery();
 
         try
         {
-            AddActions = await LoadAddActionsAsync(cancellationToken);
+            var audience = await LoadAudienceAsync(cancellationToken);
+            Query = ParseQuery(audience);
+            var wait = after is null && retry is null
+                ? new DiscoveryWait(FirstPaintBudget)
+                : new DiscoveryWait(FollowUpBudget, after, ParseSources(retry));
+            RequestableCategories = await LoadRequestableCategoriesAsync(cancellationToken);
             Preference = await LoadPreferenceAsync(cancellationToken);
             var body = Query.IsLanding
-                ? await BuildLandingAsync(cancellationToken)
-                : await BuildResultsAsync(cancellationToken);
+                ? await BuildLandingAsync(audience, wait, cancellationToken)
+                : await BuildResultsAsync(audience, wait, cancellationToken);
             return Partial("_DiscoverBody", body);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -130,17 +159,29 @@ public sealed class IndexModel(
         }
     }
 
-    private async Task<DiscoverBodyView> BuildLandingAsync(CancellationToken cancellationToken)
+    private static IReadOnlySet<DiscoverySource>? ParseSources(string? names)
     {
-        var board = await shelves.GetBoardAsync(
-            User,
-            account.ProfileId,
-            account.IsOwner,
-            includeAniList: true,
-            includeBooks: true,
-            cancellationToken);
+        if (string.IsNullOrWhiteSpace(names))
+        {
+            return null;
+        }
 
-        var rows = new List<(string Id, string Heading, string? SeeAll, IReadOnlyList<DiscoveryItem> Items)>();
+        var sources = new HashSet<DiscoverySource>();
+        foreach (var name in names.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(Enum.GetValues<DiscoverySource>().Length))
+        {
+            if (DiscoverySources.TryParse(name, out var source))
+            {
+                sources.Add(source);
+            }
+        }
+
+        return sources;
+    }
+
+    private async Task<DiscoverBodyView> BuildLandingAsync(DiscoveryAudience audience, DiscoveryWait wait, CancellationToken cancellationToken)
+    {
+        var board = await shelves.GetBoardAsync(User, audience.ProfileId, audience.IsOwner, Query.Category, wait, cancellationToken);
+        var rows = new List<DiscoverLandingRow>();
 
         // Personalized cross-media rows (#428) lead the board: explainable "Because you …" and
         // continuation shelves for this profile. They enrich the page, so a failure only drops them.
@@ -150,14 +191,12 @@ public sealed class IndexModel(
             foreach (var shelf in personalized.Shelves)
             {
                 var items = shelf.Items
-                    .Where(item => DiscoverScopes.Includes(
-                        Query.Category,
-                        DiscoverRecommendations.CategoryOf(item.Candidate.MediaType)))
+                    .Where(item => DiscoverScopes.Includes(Query.Category, DiscoverRecommendations.CategoryOf(item.Candidate.MediaType)))
                     .Select(item => DiscoverRecommendations.ToItem(item.Candidate))
                     .ToArray();
                 if (items.Length > 0)
                 {
-                    rows.Add((shelf.Id, RecommendationHeading(shelf), null, items));
+                    rows.Add(new DiscoverLandingRow(shelf.Id, RecommendationHeading(shelf), null, items, [], null));
                 }
             }
         }
@@ -169,72 +208,54 @@ public sealed class IndexModel(
         var providerRows = Query.Category is DiscoveryCategory.All or DiscoveryCategory.BooksAndLightNovels
             ? DiscoveryShelfComposer.CombineBooksAndLightNovels(board.Rows)
             : board.Rows;
-
         foreach (var row in providerRows.Where(row => DiscoverScopes.Includes(Query.Category, row.Category)))
         {
-            rows.Add((row.Id, ShelfHeading(row), row.DeepLinkUrl, row.Items));
+            rows.Add(new DiscoverLandingRow(row.Id, ShelfHeading(row), row.DeepLinkUrl, row.Items, row.Sources, row.MediaLabelKey is { Length: > 0 } labelKey ? Ui[labelKey] : null));
         }
 
-        var collapsed = rows
-            .Select(row => (row.Id, row.Heading, row.SeeAll, Items: DiscoverCanonical.Collapse(row.Items)))
-            .Where(row => row.Items.Count > 0)
-            .ToArray();
-
-        var context = await BuildContextAsync(collapsed.SelectMany(row => row.Items), cancellationToken);
-        var views = collapsed
-            .Select(row => new DiscoverShelfView(
-                row.Id,
-                row.Heading,
-                row.SeeAll,
-                [.. row.Items.Select(item => DiscoverCardFactory.Create(item, context))]))
-            .ToArray();
-
-        var degraded = board.Warnings.Count > 0;
-        return new DiscoverBodyView(
-            Ui,
-            Query,
-            views.Length > 0
-                ? DiscoverBodyState.Shelves
-                : degraded ? DiscoverBodyState.Unavailable : DiscoverBodyState.Empty,
-            views,
-            [],
-            views.Sum(shelf => shelf.Cards.Count),
-            degraded && views.Length > 0);
+        var context = await BuildContextAsync(rows.SelectMany(row => row.Items), cancellationToken);
+        var sections = DiscoverSectionComposer.Landing(rows, context);
+        var total = sections.Sum(section => section.Cards.Count);
+        return new DiscoverBodyView(Ui, Query, BodyStateOf(sections, total, false), sections, total, board.Settled, board.Pending);
     }
 
-    private async Task<DiscoverBodyView> BuildResultsAsync(CancellationToken cancellationToken)
+    private async Task<DiscoverBodyView> BuildResultsAsync(DiscoveryAudience audience, DiscoveryWait wait, CancellationToken cancellationToken)
     {
         if (!Query.IsSearch && Query.Mode == DiscoveryMode.MyList && Query.Category == DiscoveryCategory.Book)
         {
             return DiscoverBodyView.Of(Ui, Query, DiscoverBodyState.BooksNotInList);
         }
 
-        var response = await coordinator.GetAsync(
-            Query.ToRequest(),
-            account.ProfileId,
-            account.IsOwner,
-            includeAniList: true,
-            includeBooks: true,
-            cancellationToken);
-
-        if (!Query.IsSearch && Query.Mode == DiscoveryMode.MyList && !response.AniListConnected)
+        var load = await coordinator.LoadAsync([Query.ToRequest()], audience, wait, cancellationToken);
+        var batch = load.Batches[0];
+        if (!Query.IsSearch && Query.Mode == DiscoveryMode.MyList && !batch.AniListConnected)
         {
             return DiscoverBodyView.Of(Ui, Query, DiscoverBodyState.NotConnected);
         }
 
-        var items = DiscoverCanonical.Collapse(response.Items);
-        var context = await BuildContextAsync(items, cancellationToken);
-        var cards = items.Select(item => DiscoverCardFactory.Create(item, context)).ToArray();
-        var shown = DiscoverFilter.Apply(cards, Query);
-        var degraded = response.Warnings.Count > 0;
+        var overlay = await coordinator.OverlayLocalStateAsync(batch.Items, audience.ProfileId, cancellationToken);
+        batch = batch.Select(item => overlay[item.Id]);
+        var context = await BuildContextAsync(batch.Items, cancellationToken);
+        var (sections, total) = DiscoverSectionComposer.Results(batch, Query, context);
+        var failed = batch.Sources.Any(source => source.State is DiscoverySourceState.Unavailable or DiscoverySourceState.Busy);
+        return new DiscoverBodyView(Ui, Query, BodyStateOf(sections, total, failed), sections, total, load.Settled, load.Pending);
+    }
 
-        var state = shown.Count > 0
-            ? DiscoverBodyState.Results
-            : cards.Length > 0
-                ? DiscoverBodyState.NoResults
-                : degraded ? DiscoverBodyState.Unavailable : DiscoverBodyState.Empty;
+    /// <summary>Sections that hold titles or wait for them make the body; otherwise the body says why there is nothing: filtered away, not answered or nothing found.</summary>
+    private static DiscoverBodyState BodyStateOf(IReadOnlyList<DiscoverSectionView> sections, int total, bool failed)
+    {
+        var alive = sections.Any(section => section.State is DiscoverySectionState.Ready or DiscoverySectionState.Pending);
+        if (alive)
+        {
+            return DiscoverBodyState.Sections;
+        }
 
-        return new DiscoverBodyView(Ui, Query, state, [], shown, cards.Length, degraded && shown.Count > 0);
+        if (total > 0)
+        {
+            return DiscoverBodyState.NoResults;
+        }
+
+        return failed || sections.Count > 0 ? DiscoverBodyState.Unavailable : DiscoverBodyState.Empty;
     }
 
     private string RecommendationHeading(MediaRecommendationShelf shelf)
@@ -265,7 +286,9 @@ public sealed class IndexModel(
             new Dictionary<(MediaAcquisitionKind, string), AcquisitionRequest>();
         try
         {
-            open = (await requestStore.ListAsync(null, null, openOnly: true, limit: 500, cancellationToken))
+            var shown = list.Where(item => !item.IsLocal && DiscoverCardFactory.AcquisitionKindOf(item.Category) is not null).ToArray();
+            MediaAcquisitionKind[] kinds = [.. shown.Select(item => DiscoverCardFactory.AcquisitionKindOf(item.Category)!.Value).Distinct()];
+            open = (shown.Length == 0 ? [] : await requestStore.ListOpenForAsync(kinds, [.. shown.Select(item => item.ExternalId).Distinct()], limit: 500, cancellationToken))
                 .GroupBy(item => (item.Kind, item.ExternalId))
                 .ToDictionary(
                     group => group.Key,
@@ -293,35 +316,32 @@ public sealed class IndexModel(
             open,
             await LoadLocalFactsAsync(list, cancellationToken),
             followed,
-            AddActions);
+            RequestableCategories);
     }
 
     private async Task<IReadOnlyDictionary<string, DiscoverLocalFacts>> LoadLocalFactsAsync(
         IReadOnlyList<DiscoveryItem> items,
         CancellationToken cancellationToken)
     {
-        if (!items.Any(item => item.IsLocal && item.Category == "anime"))
+        // Only the titles on the page are read: a few anime by their legacy record, a few movies and series by their Work.
+        Guid[] animeIds = [.. LocalIds(items, "anime")];
+        Guid[] videoIds = [.. LocalIds(items, "movie").Concat(LocalIds(items, "tv"))];
+        if (animeIds.Length == 0 && videoIds.Length == 0)
         {
             return new Dictionary<string, DiscoverLocalFacts>();
         }
 
         try
         {
-            var entries = await new LibraryMediaCardQuery(db).GetAnimeEntriesAsync(account.ProfileId, cancellationToken);
-            return entries.Entries
+            var query = new LibraryMediaCardQuery(db);
+            var entries = (animeIds.Length == 0 ? [] : (await query.GetAnimeEntriesAsync(account.ProfileId, animeIds, cancellationToken)).Entries)
+                .Concat(videoIds.Length == 0 ? [] : (await query.GetVideoWorkEntriesAsync(account.ProfileId, videoIds, cancellationToken)).Entries);
+            var playbackEnabled = await modules.IsEnabledAsync(InstanceModule.Playback, cancellationToken);
+            return entries
                 .GroupBy(entry => entry.Card.Href, StringComparer.Ordinal)
                 .ToDictionary(
                     group => group.Key,
-                    group =>
-                    {
-                        var card = group.First().Card;
-                        var action = MediaBannerCardModel.Create(card, Ui).Action;
-                        return new DiscoverLocalFacts(
-                            card.AudioLanguages ?? [],
-                            card.SubtitleLanguages ?? [],
-                            action?.Url,
-                            action?.Label);
-                    },
+                    group => DiscoverLocalFacts.From(group.First().Card, Ui, playbackEnabled),
                     StringComparer.Ordinal);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -331,6 +351,9 @@ public sealed class IndexModel(
             return new Dictionary<string, DiscoverLocalFacts>();
         }
     }
+
+    private static IEnumerable<Guid> LocalIds(IEnumerable<DiscoveryItem> items, string category) =>
+        items.Where(item => item.IsLocal && item.Category == category && item.LocalMediaId is not null).Select(item => item.LocalMediaId!.Value).Distinct();
 
     /// <summary>Follows or unfollows one work for this profile. Library state is never taken from the browser.</summary>
     public async Task<IActionResult> OnPostWatchlistAsync(
@@ -407,107 +430,195 @@ public sealed class IndexModel(
     }
 
     /// <summary>
-    /// The one Discover add/request entry point. A profile submits the canonical provider identity shown
-    /// on the card; after policy approval the registered media executor owns search, download and import.
+    /// Opens the Request dialog for one card: the canonical identity is resolved first (a series gets its Work and
+    /// season/episode structure), then only the settings groups that apply to the media kind are returned. Resolving
+    /// can create the canonical Work, so it is a POST and never a GET.
     /// </summary>
-    public async Task<IActionResult> OnPostAddAsync(
+    public async Task<IActionResult> OnPostResolveAsync(
         string? category,
         string? provider,
         string? externalId,
-        string? title,
-        string? subtitle,
-        string? author,
-        string? coverImageUrl,
         CancellationToken cancellationToken)
     {
-        if (category is null
-            || !Categories.TryGetValue(category, out var kind)
-            || string.IsNullOrWhiteSpace(externalId)
-            || string.IsNullOrWhiteSpace(title))
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        var (target, refusal) = await ResolveRequestTargetAsync(category, provider, externalId, cancellationToken);
+        if (target is null)
+        {
+            return refusal!;
+        }
+
+        var existing = await requestStore.FindOpenAsync(target.Kind, target.Provider, target.ExternalId, cancellationToken);
+        var seasons = existing is null && target.Kind == MediaAcquisitionKind.Tv && target.Work is { } work
+            ? await scopes.LoadStructureAsync(work.Id, cancellationToken)
+            : [];
+        var preference = await LoadPreferenceAsync(cancellationToken);
+        return Partial("_DiscoverRequestSettings", new DiscoverRequestSettingsView(Ui, target.Kind, existing, seasons, OfferedLanguage(preference.Audio), OfferedLanguage(preference.Subtitle), ProfileId: account.ProfileId));
+    }
+
+    /// <summary>
+    /// Opens a Movie or Series that has no Work yet: the TMDB identity is resolved to its canonical Work (created once, never duplicated) and the
+    /// Detail of that Work is returned. Creating the Work is a durable change, so it is a POST and a card never does it by being displayed.
+    /// </summary>
+    public async Task<IActionResult> OnPostOpenAsync(string? category, string? provider, string? externalId, CancellationToken cancellationToken)
+    {
+        var (target, refusal) = await ResolveRequestTargetAsync(category, provider, externalId, cancellationToken);
+        if (target is null)
+        {
+            return refusal!;
+        }
+
+        if (target.Work is not { } work)
         {
             return BadRequest();
         }
 
-        if (!await IsVisibleAsync(AcquisitionAccessNames.WorkType(kind), cancellationToken))
+        return new JsonResult(new { url = LibraryBrowse.DetailHref(work.MediaType, work.Id) });
+    }
+
+    /// <summary>
+    /// The one Discover Request entry point, for every media kind and for Request and Instant capabilities alike. A
+    /// profile submits the canonical provider identity shown on the card plus the dialog settings; scope and language
+    /// are validated here against what the kind supports, after policy approval the registered media executor owns
+    /// search, download and import.
+    /// </summary>
+    public async Task<IActionResult> OnPostRequestAsync([FromForm] DiscoverRequestForm form, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (string.IsNullOrWhiteSpace(form.Title))
         {
-            return NotFound();
+            return BadRequest();
         }
 
-        var capabilities = await requests.GetCapabilitiesAsync(kind, cancellationToken);
-        if (!capabilities.CanAdd)
+        var (target, refusal) = await ResolveRequestTargetAsync(form.Category, form.Provider, form.ExternalId, cancellationToken);
+        if (target is null)
         {
-            return Forbid();
+            return refusal!;
         }
 
-        var canonicalProvider = kind switch
-        {
-            MediaAcquisitionKind.Book => Jularr.Web.Features.Books.BookCatalogService.CatalogRequestProvider,
-            MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv => TmdbDiscoveryProvider.ProviderKey,
-            _ => AniListMetadataProvider.ProviderKey
-        };
-        var canonicalExternalId = externalId.Trim();
-
-        if (kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv)
-        {
-            if (!string.Equals(provider, TmdbDiscoveryProvider.ProviderKey, StringComparison.Ordinal)
-                || !TmdbDiscoveryProvider.TryNormalizeExternalId(externalId, out canonicalExternalId))
-            {
-                return BadRequest();
-            }
-
-            try
-            {
-                await tmdb.EnsureCanonicalWorkAsync(
-                    kind == MediaAcquisitionKind.Movie
-                        ? TmdbDiscoveryMediaType.Movie
-                        : TmdbDiscoveryMediaType.Series,
-                    canonicalExternalId,
-                    cancellationToken);
-            }
-            catch (Exception exception) when (exception is HttpRequestException
-                                               or InvalidOperationException
-                                               or InvalidDataException)
-            {
-                logger.LogWarning(
-                    exception,
-                    "TMDB identity {Kind}/{ExternalId} could not be materialized before request.",
-                    kind,
-                    externalId);
-                return StatusCode(StatusCodes.Status503ServiceUnavailable);
-            }
-        }
-        else if (kind != MediaAcquisitionKind.Book)
-        {
-            if (!string.Equals(provider, AniListMetadataProvider.ProviderKey, StringComparison.Ordinal)
-                || !int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId)
-                || aniListId <= 0)
-            {
-                return BadRequest();
-            }
-
-            canonicalExternalId = aniListId.ToString(CultureInfo.InvariantCulture);
-        }
+        var draft = new AcquisitionRequestDraft(
+            target.Kind,
+            target.Provider,
+            target.ExternalId,
+            form.Title.Trim(),
+            target.Kind == MediaAcquisitionKind.Book ? Trimmed(form.Author) : Trimmed(form.Subtitle),
+            Trimmed(form.CoverImageUrl));
+        List<string> summary = [];
 
         try
         {
-            var request = await requests.SubmitAsync(
-                new AcquisitionRequestDraft(
-                    kind,
-                    canonicalProvider,
-                    canonicalExternalId,
-                    title.Trim(),
-                    kind == MediaAcquisitionKind.Book
-                        ? string.IsNullOrWhiteSpace(author) ? null : author.Trim()
-                        : string.IsNullOrWhiteSpace(subtitle) ? null : subtitle.Trim(),
-                    string.IsNullOrWhiteSpace(coverImageUrl) ? null : coverImageUrl.Trim()),
-                cancellationToken);
-            return new JsonResult(await RequestProgressAsync(request, cancellationToken));
+            if (target.Kind == MediaAcquisitionKind.Tv)
+            {
+                if (!VideoRequestScopeResolver.TryParseScope(form.Scope, out var scope) || target.Work is not { } work)
+                {
+                    return BadRequest();
+                }
+
+                var payload = await scopes.BuildTvPayloadAsync(work, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
+                var languages = new AcquisitionRequestOptions { AudioLanguage = form.Audio, SubtitleLanguage = form.Subtitles }.Validate();
+                draft = draft with { PayloadJson = (payload with { AudioLanguage = languages.AudioLanguage, SubtitleLanguage = languages.SubtitleLanguage }).Serialize() };
+                summary.Add(DiscoverRequestSummary.Scope(payload, Ui));
+                summary.AddRange(RequestOptionsSummary.Describe(languages, Ui));
+            }
+            else if (target.Kind == MediaAcquisitionKind.Anime)
+            {
+                if (form.HasScope)
+                {
+                    return BadRequest();
+                }
+
+                var options = new AcquisitionRequestOptions { AudioLanguage = form.Audio, SubtitleLanguage = form.Subtitles }.Validate();
+                draft = draft with { Options = options };
+                summary.Add(Ui["discover.request.scope.all"]);
+                summary.AddRange(RequestOptionsSummary.Describe(options, Ui));
+            }
+            else if (form.HasScope || form.HasLanguage)
+            {
+                return BadRequest();
+            }
+
+            var submission = await requests.SubmitWithOutcomeAsync(draft, cancellationToken);
+            var progress = await RequestProgressAsync(submission.Request, cancellationToken);
+            var isOwn = submission.Request.RequestedByProfileId == account.ProfileId;
+            return Partial("_DiscoverRequestResult", new DiscoverRequestResultView(Ui, submission.Request, submission.AlreadyRequested, submission.AlreadyRequested ? [] : summary, progress, IsOwn: isOwn));
         }
         catch (AcquisitionAccessDeniedException)
         {
             return Forbid();
         }
+        catch (ArgumentException)
+        {
+            return BadRequest();
+        }
     }
+
+    /// <summary>
+    /// Validates the card's identity on the server and resolves the canonical target a Request is about: the browser
+    /// only names a category and a provider id; visibility, capability and the provider/id shape are checked here and
+    /// Movie/TV identities are promoted to their canonical Work before any request exists.
+    /// </summary>
+    private async Task<(RequestTarget? Target, IActionResult? Refusal)> ResolveRequestTargetAsync(
+        string? category,
+        string? provider,
+        string? externalId,
+        CancellationToken cancellationToken)
+    {
+        if (category is null || !Categories.TryGetValue(category, out var kind) || string.IsNullOrWhiteSpace(externalId))
+        {
+            return (null, BadRequest());
+        }
+
+        if (!await IsVisibleAsync(AcquisitionAccessNames.WorkType(kind), cancellationToken))
+        {
+            return (null, NotFound());
+        }
+
+        if (!(await requests.GetCapabilitiesAsync(kind, cancellationToken)).CanRequest)
+        {
+            return (null, Forbid());
+        }
+
+        if (kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv)
+        {
+            if (!string.Equals(provider, TmdbDiscoveryProvider.ProviderKey, StringComparison.Ordinal)
+                || !TmdbDiscoveryProvider.TryNormalizeExternalId(externalId, out var tmdbId))
+            {
+                return (null, BadRequest());
+            }
+
+            try
+            {
+                var mediaType = kind == MediaAcquisitionKind.Movie ? TmdbDiscoveryMediaType.Movie : TmdbDiscoveryMediaType.Series;
+                var work = await tmdb.EnsureCanonicalWorkAsync(mediaType, tmdbId, cancellationToken);
+                return (new RequestTarget(kind, TmdbDiscoveryProvider.ProviderKey, tmdbId, work), null);
+            }
+            catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or InvalidDataException)
+            {
+                logger.LogWarning(exception, "TMDB identity {Kind}/{ExternalId} could not be materialized before request.", kind, externalId);
+                return (null, StatusCode(StatusCodes.Status503ServiceUnavailable));
+            }
+        }
+
+        if (kind == MediaAcquisitionKind.Book)
+        {
+            return (new RequestTarget(kind, Jularr.Web.Features.Books.BookCatalogService.CatalogRequestProvider, externalId.Trim(), null), null);
+        }
+
+        if (!string.Equals(provider, AniListMetadataProvider.ProviderKey, StringComparison.Ordinal)
+            || !int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId)
+            || aniListId <= 0)
+        {
+            return (null, BadRequest());
+        }
+
+        return (new RequestTarget(kind, AniListMetadataProvider.ProviderKey, aniListId.ToString(CultureInfo.InvariantCulture), null), null);
+    }
+
+    private sealed record RequestTarget(MediaAcquisitionKind Kind, string Provider, string ExternalId, Work? Work);
+
+    private static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? OfferedLanguage(string? tag) =>
+        tag is not null && (tag == PlaybackLanguages.SubtitlesOff || RequestLanguages.Choices.Any(choice => choice.Tag == tag)) ? tag : null;
 
     /// <summary>
     /// Live acquisition state for a title already visible in Discover. The payload deliberately contains
@@ -519,48 +630,33 @@ public sealed class IndexModel(
         CancellationToken cancellationToken)
     {
         var request = await requestStore.GetAsync(id, cancellationToken);
-        return request is null
-            ? NotFound()
-            : new JsonResult(await RequestProgressAsync(request, cancellationToken));
-    }
-
-    private async Task<object> RequestProgressAsync(
-        AcquisitionRequest request,
-        CancellationToken cancellationToken)
-    {
-        OperationSnapshot? operation = null;
-        if (request.OperationId is { } operationId)
+        if (request is null)
         {
-            operation = await new OperationStore(db).GetAsync(operationId, cancellationToken);
+            return NotFound();
         }
 
-        var status = AcquisitionAccessNames.Status(request.Status);
-        var percent = request.Status switch
-        {
-            AcquisitionRequestStatus.Pending => 0,
-            AcquisitionRequestStatus.Approved => 5,
-            AcquisitionRequestStatus.Searching => 15,
-            AcquisitionRequestStatus.Downloading => operation?.ProgressPercent ?? 35,
-            AcquisitionRequestStatus.Importing => operation?.ProgressPercent is { } importProgress
-                ? Math.Max(80, importProgress)
-                : 90,
-            AcquisitionRequestStatus.Completed => 100,
-            AcquisitionRequestStatus.Rejected => 100,
-            AcquisitionRequestStatus.Failed => 100,
-            _ => 0
-        };
-
-        return new
+        return new JsonResult(new
         {
             requestId = request.Id,
-            status,
-            progress = Math.Clamp(percent, 0, 100),
-            message = request.StatusMessage ?? operation?.Message,
+            status = AcquisitionAccessNames.Status(request.Status),
+            progress = await RequestProgressAsync(request, cancellationToken),
             resultUrl = request.ResultUrl,
-            done = request.Status is AcquisitionRequestStatus.Completed
-                or AcquisitionRequestStatus.Rejected
-                or AcquisitionRequestStatus.Failed
-        };
+            done = request.Status is AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed
+        });
+    }
+
+    /// <summary>
+    /// The whole percent of a request's transfer, only while the download reports a trustworthy size; null otherwise. A status never stands
+    /// for a percentage, and the message of an operation or request is a technical text a consumer is not shown.
+    /// </summary>
+    private async Task<int?> RequestProgressAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    {
+        if (request.Status != AcquisitionRequestStatus.Downloading || request.OperationId is not { } operationId)
+        {
+            return null;
+        }
+
+        return ConsumerAcquisitionProjector.ReliableProgress(await new OperationStore(db).GetAsync(operationId, cancellationToken));
     }
 
     private static readonly IReadOnlyDictionary<string, MediaAcquisitionKind> Categories =

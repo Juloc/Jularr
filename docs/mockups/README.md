@@ -6,6 +6,27 @@ Approved and work-in-progress UX mockups live here.
 
 Use one folder per substantial screen. `SPEC.md` is the binding screen-specific behavior/information hierarchy/state contract; images are visual references once approved. If text and image conflict, the text spec wins. Light and Dark are always first-class. `docs/UX.md` owns global/shared rules.
 
+### Mockup asset location
+
+When a screen/spec has mockup images, the image files MUST live in the **same feature folder as its `SPEC.md`**.
+
+Example:
+
+```text
+docs/mockups/admin-system-diagnostics/
+  SPEC.md
+  database-overview-light.png
+  database-overview-dark.png
+```
+
+Rules:
+- do not store a feature's approved mockup at the `docs/mockups/` root while its spec lives in a subfolder;
+- do not create a separate unrelated image folder for the same screen;
+- a spec may refer to an image by its local filename (for example `database-overview-light.png`) because the shared folder establishes ownership;
+- if several views/screens intentionally share one feature spec, their images still remain beside that `SPEC.md` with descriptive filenames;
+- when an older misplaced mockup is intentionally touched, move/rehome it into the owning spec folder instead of adding another parallel reference;
+- images remain visual references; `SPEC.md` remains binding when text and image differ.
+
 Agents must not redesign an approved screen during implementation without updating its spec and approval.
 
 ## Original Jularr mascot
@@ -39,6 +60,7 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 - `profile-activity/SPEC.md`
 - `add-request-flow/SPEC.md`
 - `request-status-details/SPEC.md` — consumer Request status/detail sheet
+- `instant-play/SPEC.md` — Start Watching / Watch now orchestration for missing media, including manager-only/no-Playback instances
 - `language-edition-selector/SPEC.md` — shared language/Edition dialog/sheet
 - `person-creator/SPEC.md` — secondary Person/Creator view
 - `login-profile-selection/SPEC.md` — account login, external identities and Profile selection

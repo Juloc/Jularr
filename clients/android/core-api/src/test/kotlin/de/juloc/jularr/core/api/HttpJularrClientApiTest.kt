@@ -112,6 +112,15 @@ class HttpJularrClientApiTest {
         assertTrue(parsed.devicePairing)
     }
 
+    @Test
+    fun offlinePackagesCapabilityIsOptionalAndParsed() {
+        val absent = ClientFeatureFlagParser.parse { name -> name == "library" }
+        assertFalse(absent.offlinePackages)
+
+        val advertised = ClientFeatureFlagParser.parse { name -> name == "offlinePackages" }
+        assertTrue(advertised.offlinePackages)
+    }
+
     private class RequestProbeComplete : RuntimeException()
 }
 

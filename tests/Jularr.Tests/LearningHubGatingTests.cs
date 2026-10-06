@@ -365,8 +365,7 @@ public sealed class LearningHubGatingTests
         // #233 player hook: Episode.cshtml renders the shared inspector partial
         // for its own anime/episode scope, using the same host factory as the
         // other surfaces (Books.Read, Learn.Sentences).
-        var pages = Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Library");
-        var view = File.ReadAllText(Path.Combine(pages, "Episode.cshtml"));
+        var view = EpisodePlayerSource.Read(RepositoryRoot());
 
         StringAssert.Contains(view, "@using Jularr.Web.Features.Learning.LanguageAssistance");
         StringAssert.Contains(

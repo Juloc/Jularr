@@ -102,7 +102,7 @@ public sealed class PlaybackCapabilityProbeTests
     {
         var root = PlayerControlsTests.RepositoryRoot();
         var player = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
-        var page = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+        var page = EpisodePlayerSource.Read(root);
 
         StringAssert.Contains(page, "data-playback-plan-url");
         StringAssert.Contains(page, "js/playback-capabilities.js");

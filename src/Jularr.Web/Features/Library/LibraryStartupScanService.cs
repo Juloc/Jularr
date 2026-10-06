@@ -36,6 +36,7 @@ public sealed class LibraryStartupScanService(
             roots = await db.LibraryRoots
                 .AsNoTracking()
                 .Where(x => x.IsEnabled)
+                .ServingAnime(db)
                 .OrderBy(x => x.CreatedAt)
                 .Select(x => x.Id)
                 .ToArrayAsync(stoppingToken);

@@ -1,51 +1,104 @@
 using System.Collections.Concurrent;
+using Jularr.Web.Features.Playback.Transcoding;
 
 namespace Jularr.Web.Features.Playback.Decision;
 
 /// <summary>
-/// Bounds concurrent server encodes. A lease is held for the lifetime of one live transcode
-/// (a progressive response or an HLS session) and released when it ends.
+/// Bounds concurrent server deliveries per <see cref="PlaybackCostClass"/>. A lease is held for
+/// the lifetime of one live delivery (a progressive response or an HLS session) and released
+/// when it ends. The limits are the Admin-editable settings, read on every acquisition, so a
+/// lowered limit only stops new deliveries and never kills a running one.
 /// </summary>
-public sealed class PlaybackTranscodeSlots(int capacity = PlaybackTranscodeSlots.DefaultCapacity)
+public sealed class PlaybackTranscodeSlots(PlaybackTranscodingSettingsStore settings)
 {
-    public const int DefaultCapacity = 2;
+    /// <summary>How many deliveries one profile may run at once across all cost classes (two HLS sessions plus a progressive stream or a seek restart in flight).</summary>
+    public const int MaxPerProfile = 3;
 
-    private int active;
+    private readonly Lock _gate = new();
+    private readonly int[] _active = new int[Enum.GetValues<PlaybackCostClass>().Length];
+    private readonly Dictionary<string, int> _perProfile = [];
 
-    public int Capacity { get; } = Math.Max(1, capacity);
+    public int Capacity(PlaybackCostClass costClass) => settings.Current.LimitFor(costClass);
 
-    public int Active => Volatile.Read(ref active);
-
-    public int Available => Math.Max(0, Capacity - Active);
-
-    public IDisposable? TryAcquire()
+    public int Active(PlaybackCostClass costClass)
     {
-        while (true)
+        lock (_gate)
         {
-            var current = Volatile.Read(ref active);
-            if (current >= Capacity)
+            return _active[(int)costClass];
+        }
+    }
+
+    public int Available(PlaybackCostClass costClass) => Math.Max(0, Capacity(costClass) - Active(costClass));
+
+    public int ActiveFor(string profileId)
+    {
+        lock (_gate)
+        {
+            return _perProfile.GetValueOrDefault(profileId);
+        }
+    }
+
+    /// <summary>
+    /// Whether <see cref="TryAcquire"/> would succeed right now; advisory, because the slot may be gone by the time it is taken.
+    /// <paramref name="takesOverSlot"/> is explained there.
+    /// </summary>
+    public bool CanAcquire(PlaybackCostClass costClass, string? profileId = null, bool takesOverSlot = false)
+    {
+        lock (_gate)
+        {
+            return takesOverSlot || (_active[(int)costClass] < Capacity(costClass) && (profileId is null || _perProfile.GetValueOrDefault(profileId) < MaxPerProfile));
+        }
+    }
+
+    /// <summary>
+    /// Takes a slot of the class, and one of the profile's <see cref="MaxPerProfile"/>; null when either is exhausted. A start that takes
+    /// over the slot of the conversion it replaces (which is retired right after) may exceed both limits for that moment, so a full class can
+    /// still swap one conversion for another.
+    /// </summary>
+    public IDisposable? TryAcquire(PlaybackCostClass costClass, string? profileId = null, bool takesOverSlot = false)
+    {
+        lock (_gate)
+        {
+            if (!takesOverSlot && (_active[(int)costClass] >= Capacity(costClass) || (profileId is not null && _perProfile.GetValueOrDefault(profileId) >= MaxPerProfile)))
             {
                 return null;
             }
 
-            if (Interlocked.CompareExchange(ref active, current + 1, current) == current)
+            _active[(int)costClass]++;
+            if (profileId is not null)
             {
-                return new Lease(this);
+                _perProfile[profileId] = _perProfile.GetValueOrDefault(profileId) + 1;
             }
+
+            return new Lease(this, costClass, profileId);
         }
     }
 
-    private void Release() => Interlocked.Decrement(ref active);
-
-    private sealed class Lease(PlaybackTranscodeSlots owner) : IDisposable
+    private sealed class Lease(PlaybackTranscodeSlots owner, PlaybackCostClass costClass, string? profileId) : IDisposable
     {
-        private int released;
+        private int _released;
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref released, 1) == 0)
+            if (Interlocked.Exchange(ref _released, 1) != 0)
             {
-                owner.Release();
+                return;
+            }
+
+            lock (owner._gate)
+            {
+                owner._active[(int)costClass]--;
+                if (profileId is not null && owner._perProfile.TryGetValue(profileId, out var count))
+                {
+                    if (count <= 1)
+                    {
+                        owner._perProfile.Remove(profileId);
+                    }
+                    else
+                    {
+                        owner._perProfile[profileId] = count - 1;
+                    }
+                }
             }
         }
     }
@@ -67,8 +120,14 @@ public sealed class PlaybackStreamSession(
     double? durationSeconds,
     PlaybackPlan plan,
     PlaybackStreamSelections selections,
-    DateTimeOffset createdAtUtc)
+    DateTimeOffset createdAtUtc,
+    TimeProvider time,
+    PlaybackAdaptationDirective adaptation,
+    PlaybackStreamSession? replaced,
+    bool deferRetirement)
 {
+    private PlaybackStreamSession? _replacing = deferRetirement ? replaced : null;
+
     private readonly object gate = new();
 
     public Guid Id { get; } = id;
@@ -94,6 +153,60 @@ public sealed class PlaybackStreamSession(
     public DateTimeOffset LastSeenUtc { get; private set; } = createdAtUtc;
     public Guid? HlsSessionId { get; private set; }
     public double? HlsStartSeconds { get; private set; }
+
+    /// <summary>What the player reported about this session's playback; ephemeral, never persisted.</summary>
+    public PlaybackSessionTelemetry Telemetry { get; } = new();
+
+    /// <summary>The measured speed of the video transcode behind this session; ephemeral like the telemetry.</summary>
+    public PlaybackTranscodeMeter Transcode { get; } = new(time);
+
+    /// <summary>What the session was planned under: what the replaced session asked for and the capacity limits learned for this title so far.</summary>
+    public PlaybackAdaptationDirective Adaptation { get; } = adaptation;
+
+    /// <summary>
+    /// Starts measuring one encode attempt of this session; the returned callback receives its progress. Null when the plan copies the
+    /// video, which has no speed worth measuring. Only an HLS encode (unthrottled, written to disk) is judged: a progressive encode blocks
+    /// whenever the player stops reading, so its speed is shown but never taken for a lack of encoder capacity.
+    /// </summary>
+    public Action<PlaybackTranscodeSample>? BeginTranscodeRun(PlaybackHardwareBackend backend) =>
+        Plan.TranscodesVideo ? Transcode.BeginRun(backend, judgesSpeed: Plan.Transport == PlaybackTransport.Hls).Record : null;
+
+    /// <summary>
+    /// The video bitrate and cost class of the conversion this session replaced, only when that conversion was really running (it showed
+    /// fresh progress when this session was planned): a session that never converted anything is no reason to wave a start through.
+    /// </summary>
+    public int? ReplacedTranscodeKbps { get; } = replaced is { Plan.TranscodesVideo: true } && replaced.Transcode.Read() is { State: not PlaybackTranscodeSpeedState.Unknown }
+        ? replaced.Plan.Quality.DeliveredBitrateKbps
+        : null;
+
+    public PlaybackCostClass? ReplacedCostClass { get; } = replaced is { Plan.TranscodesVideo: true } && replaced.Transcode.Read() is { State: not PlaybackTranscodeSpeedState.Unknown, Backend: { } backend }
+        ? backend == PlaybackHardwareBackend.Software ? PlaybackCostClass.SoftwareVideo : PlaybackCostClass.HardwareVideo
+        : null;
+
+    /// <summary>
+    /// The session this one will replace once its own delivery has started, for a re-plan the player requested while the old stream keeps
+    /// playing; null otherwise. The old session is retired by <see cref="TakeReplacing"/> after the first output of this one succeeded.
+    /// </summary>
+    public PlaybackStreamSession? Replacing => Volatile.Read(ref _replacing);
+
+    /// <summary>Hands the session being replaced to whoever retires it (once); null when there is none or it was already taken.</summary>
+    public PlaybackStreamSession? TakeReplacing() => Interlocked.Exchange(ref _replacing, null);
+
+    /// <summary>
+    /// Whether starting this session's delivery adds conversion load to the server. A seek or restart in a session whose encode is running,
+    /// and a re-plan that takes the place of a running conversion of at least the same bitrate, only replace what runs; a new conversion,
+    /// one that costs more than the one it replaces, and a replacement of an encode that never ran add to it.
+    /// </summary>
+    public bool AddsTranscodeLoad =>
+        Transcode.Read().State == PlaybackTranscodeSpeedState.Unknown &&
+        (ReplacedTranscodeKbps is not { } before || Plan.Quality.DeliveredBitrateKbps is not { } now || now > before);
+
+    /// <summary>
+    /// Whether this session's start may use the slot of the conversion it is about to replace: a re-plan of a running conversion of the same
+    /// cost class that adds no load. The old session holds its slot until this one's first output succeeded, so without this a full class
+    /// could never swap one conversion for another.
+    /// </summary>
+    public bool TakesOverSlotOf(PlaybackCostClass costClass) => Replacing is not null && !AddsTranscodeLoad && ReplacedCostClass == costClass;
 
     public void Touch(DateTimeOffset now)
     {
@@ -179,6 +292,9 @@ public sealed class PlaybackStreamSession(
     private readonly SemaphoreSlim hlsStartGate = new(1, 1);
 }
 
+/// <summary>The answer to a telemetry report: the quality advice and the measured transcode speed, both ephemeral session state.</summary>
+public sealed record PlaybackSessionAdvice(PlaybackAdaptationDecision Decision, PlaybackTranscodeReading Transcode);
+
 /// <summary>The session's selections, kept so a re-plan (fallback, quality change) starts from them.</summary>
 public sealed record PlaybackStreamSelections(
     int? AudioStreamIndex,
@@ -232,21 +348,29 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         PlaybackPlan plan,
         PlaybackStreamSelections selections,
         Guid? replaces = null,
-        Guid? legacyEpisodeId = null)
+        Guid? legacyEpisodeId = null,
+        PlaybackAdaptationDirective? adaptation = null,
+        bool deferRetirement = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
         ArgumentNullException.ThrowIfNull(target);
         var now = time.GetUtcNow();
         var removed = new List<PlaybackStreamSession>();
         PlaybackStreamSession session;
+        PlaybackStreamSession? replaced = null;
         lock (gate)
         {
             if (replaces is { } previousId &&
                 sessions.TryGetValue(previousId, out var previous) &&
-                previous.ProfileId == profileId &&
-                sessions.TryRemove(previousId, out _))
+                previous.ProfileId == profileId)
             {
-                removed.Add(previous);
+                // A re-plan the player asked for keeps playing the old stream until the new one delivered: the old session stays for now.
+                if (!deferRetirement && sessions.TryRemove(previousId, out _))
+                {
+                    removed.Add(previous);
+                }
+
+                replaced = previous;
             }
 
             removed.AddRange(RemoveExpired(now));
@@ -271,7 +395,11 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
                 durationSeconds,
                 plan,
                 selections,
-                now);
+                now,
+                time,
+                adaptation ?? PlaybackAdaptationDirective.None,
+                replaced,
+                deferRetirement);
             sessions[session.Id] = session;
         }
 
@@ -281,6 +409,152 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
         }
 
         return session;
+    }
+
+    /// <summary>
+    /// The session of the profile without counting as activity, so that polling a status never keeps an abandoned
+    /// session alive. Expired sessions are not returned (the cleanup removes them).
+    /// </summary>
+    public PlaybackStreamSession? Peek(Guid sessionId, string profileId) =>
+        sessions.TryGetValue(sessionId, out var session) &&
+        string.Equals(session.ProfileId, profileId, StringComparison.Ordinal) &&
+        time.GetUtcNow() - session.LastSeenUtc <= IdleLifetime
+            ? session
+            : null;
+
+    /// <summary>
+    /// Stores a telemetry report of the profile's session; false when the session is not the profile's or expired. A player that
+    /// plays on or keeps waiting for media is using the session, so a report showing that counts as activity like a stream request does.
+    /// A paused player, a repeated or older report and a report that shows no progress (see <see cref="PlaybackSessionTelemetry.Apply"/>) do not:
+    /// telemetry never keeps an abandoned session, its slot and its process alive.
+    /// </summary>
+    public bool ReportTelemetry(Guid sessionId, string profileId, PlaybackTelemetry report)
+    {
+        var session = Peek(sessionId, profileId);
+        if (session is null)
+        {
+            return false;
+        }
+
+        if (session.Telemetry.Apply(report) == PlaybackTelemetryOutcome.ShowsProgress)
+        {
+            session.Touch(time.GetUtcNow());
+        }
+
+        return true;
+    }
+
+    /// <summary>The runtime evidence the session's player reported, as of now; null when it never reported.</summary>
+    public PlaybackTelemetryEvidence? TelemetryEvidence(PlaybackStreamSession session) => session.Telemetry.Evidence(time.GetUtcNow());
+
+    /// <summary>
+    /// What the profile's player should do about quality right now and the measured speed of the transcode behind the session; null when the
+    /// session is not the profile's or expired. A pure read of the session's ephemeral state: asking changes nothing, so repeating it is safe.
+    /// </summary>
+    public PlaybackSessionAdvice? Advise(Guid sessionId, string profileId)
+    {
+        var session = Peek(sessionId, profileId);
+        if (session is null)
+        {
+            return null;
+        }
+
+        var reading = session.Transcode.Read();
+        return new PlaybackSessionAdvice(Decide(session, reading), reading);
+    }
+
+    /// <summary>
+    /// What the plan that replaces <paramref name="session"/> is made under; see <see cref="PlaybackAdaptation.NextDirective"/>. The server's own
+    /// capacity verdict (a too-slow transcode) always applies; any other advice only when the re-plan names it in <paramref name="followedAdvice"/>,
+    /// so a re-plan for another reason (an audio change, a recovery) never inherits a quality change the player did not ask for.
+    /// </summary>
+    public PlaybackAdaptationDirective NextDirective(PlaybackStreamSession session, PlaybackAdaptationAdvice followedAdvice)
+    {
+        var reading = session.Transcode.Read();
+        var decision = Decide(session, reading);
+        if (decision.Reason != PlaybackAdaptationReason.TranscodeTooSlow && decision.Advice != followedAdvice)
+        {
+            decision = PlaybackAdaptationDecision.None;
+        }
+
+        return PlaybackAdaptation.NextDirective(decision, session.Adaptation, session.Plan.Quality.DeliveredBitrateKbps, reading.Backend, time.GetUtcNow(), PlaybackAdaptationPolicy.Default);
+    }
+
+    /// <summary>
+    /// Retires the session <paramref name="session"/> replaces, after the first output of <paramref name="session"/> succeeded; the old
+    /// session's delivery stops with it. Returns the id of the session this call took over from (also when it had already expired), and
+    /// null when nothing was pending, so only one caller completes a replacement.
+    /// </summary>
+    public Guid? CompleteReplacement(PlaybackStreamSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (session.TakeReplacing() is not { } old)
+        {
+            return null;
+        }
+
+        if (sessions.TryRemove(old.Id, out _))
+        {
+            Removed?.Invoke(old);
+        }
+
+        return old.Id;
+    }
+
+    /// <summary>
+    /// Whether a running transcode on the same kind of encoder (hardware or software) is measured to stay under real time: the machine
+    /// cannot take another one, and admission refuses it instead of making every viewer worse. Only a session that was active recently
+    /// counts (an abandoned or paused one is not load a viewer waits on); the session that asks and the one it replaces are never part of
+    /// the load it asks about.
+    /// </summary>
+    public bool IsTranscodeOverloaded(bool hardwareEncoder, PlaybackStreamSession? requester = null)
+    {
+        var activeSince = time.GetUtcNow() - PlaybackAdaptationPolicy.Default.OverloadActivityWindow;
+        return sessions.Values.Any(x =>
+            x.Id != requester?.Id &&
+            x.Id != requester?.Replacing?.Id &&
+            x.LastSeenUtc >= activeSince &&
+            x.Transcode.Read() is { State: PlaybackTranscodeSpeedState.TooSlow, Backend: { } backend } &&
+            (backend != PlaybackHardwareBackend.Software) == hardwareEncoder);
+    }
+
+    /// <summary>
+    /// Ends the sessions whose conversion is too slow and whose player stopped using them (paused or gone): their encode ran on unthrottled
+    /// for nothing. Called by the playback sweeper; the ended session takes its HLS output with it.
+    /// </summary>
+    public int ReleaseAbandonedSlowEncodes()
+    {
+        var idleBefore = time.GetUtcNow() - PlaybackAdaptationPolicy.Default.OverloadActivityWindow;
+        var released = 0;
+        foreach (var session in sessions.Values)
+        {
+            if (session.LastSeenUtc < idleBefore && session.Transcode.Read().State == PlaybackTranscodeSpeedState.TooSlow && RemoveAny(session.Id))
+            {
+                released++;
+            }
+        }
+
+        return released;
+    }
+
+    private PlaybackAdaptationDecision Decide(PlaybackStreamSession session, PlaybackTranscodeReading reading)
+    {
+        var now = time.GetUtcNow();
+        var policy = PlaybackAdaptationPolicy.Default;
+        var decision = PlaybackAdaptation.Decide(new PlaybackAdaptationInput(
+            now,
+            session.CreatedAtUtc,
+            session.Plan,
+            session.Adaptation.Current(now, policy).CeilingKbps,
+            session.Telemetry.Recent(),
+            session.Telemetry.Evidence(now)?.RecentStalls ?? 0,
+            reading.State,
+            policy));
+
+        // Raising the quality adds load; a server that already struggles with a conversion of this kind is not asked for more.
+        return decision.Advice == PlaybackAdaptationAdvice.StepUp && IsTranscodeOverloaded(reading.Backend is { } backend && backend != PlaybackHardwareBackend.Software, session)
+            ? PlaybackAdaptationDecision.None
+            : decision;
     }
 
     /// <summary>Returns the session only to the profile that created it.</summary>

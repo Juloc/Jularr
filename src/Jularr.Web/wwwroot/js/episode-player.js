@@ -17,7 +17,14 @@
     const progressUrl = root.dataset.progressUrl || "";
     let offlineMediaUrl = "";
     const planUrl = root.dataset.playbackPlanUrl || "";
+    // A Movie or Series page plays a canonical target (a Work, or a WorkEpisode within it): the plan, progress and
+    // bootstrap routes then take that target in the request body instead of a legacy episode id in the address.
+    const videoTarget = root.dataset.videoTargetWork
+        ? { workId: root.dataset.videoTargetWork, workEpisodeId: root.dataset.videoTargetEpisode || null }
+        : null;
+    const targetBody = videoTarget ? { target: videoTarget } : {};
     const persistedResumeSeconds = Number(root.dataset.resumeSeconds);
+    const completionThreshold = Number(root.dataset.completionThreshold);
     const video = root.querySelector("[data-playback-video]");
     const stage = root.querySelector("[data-video-stage]");
     const placeholder = root.querySelector("[data-playback-placeholder]");
@@ -55,6 +62,10 @@
     const storageActions = root.querySelector("[data-storage-actions]");
     const storageRetry = root.querySelector("[data-storage-retry]");
     const storageWake = root.querySelector("[data-storage-wake]");
+    const failureActions = root.querySelector("[data-failure-actions]");
+    const failureRetry = root.querySelector("[data-failure-retry]");
+    // The failure text names what is being played: a movie is not an episode.
+    const failedKey = root.dataset.videoKind === "movie" ? "playback.status.failedMovie" : "playback.status.failed";
 
     const nextUrl = root.dataset.nextUrl || "";
     const preferencesUrl = root.dataset.playbackPreferencesUrl || "";
@@ -82,9 +93,7 @@
             return {};
         }
     })();
-    const seekStepSeconds = Number(controlsData.seekStepSeconds) > 0
-        ? Number(controlsData.seekStepSeconds)
-        : 10;
+    const seekSeconds = design.seekSeconds(root);
 
     if (!video || !stage || !placeholder || !playbackStatus ||
         !playbackSummary || !playbackBadge || !modeSelect || !overlay || !data ||
@@ -150,6 +159,20 @@
     let streamSessionId = null;
     let planGeneration = 0;
     const failedModes = new Set();
+    // The server ends a stream itself when it sits idle or the cache policy needs room. That says nothing against the mode,
+    // so the same mode is planned again (see player-recovery.js for the bounds).
+    const streamRecovery = window.JularrStreamRecovery;
+    // What this player observes about its buffer (ranges, stalls, receive rate) and reports to the server (player-buffering.js).
+    const buffering = window.JularrPlayerBuffering;
+    const stalls = buffering.createStallTracker();
+    const throughput = buffering.createThroughputEstimator();
+    // How often the player may follow the server's quality advice (player-recovery.js); the server paces its advice, this bounds a bad one.
+    const adviceGate = streamRecovery.createAdviceGate(JSON.parse(root.dataset.adviceGate || "{}"));
+    // What the server measured while converting this session's video, from the telemetry answers; shown in the diagnostics only.
+    let transcodeReading = null;
+    let sessionRecoveries = 0;
+    let playedSinceRecovery = 0;
+    let lastPlayedTime = 0;
     const streamIsLive = () => delivery !== null && delivery.transport !== "file";
 
     const readSceneStartSeconds = () => {
@@ -224,6 +247,29 @@
         return clampToDuration(absolute);
     };
 
+    // The buffered ranges of the element in absolute media time: a live stream's ranges start at the position it was started at.
+    const bufferedRanges = () => buffering.rangesOf(video.buffered, loadedStreamLive ? streamStartSeconds : 0);
+    const bufferAheadSeconds = () => buffering.bufferAhead(bufferedRanges(), absoluteCurrentTime());
+
+    // The buffered media as its own layer of the timeline, behind the played fill (player.css), and its end for assistive technology.
+    const renderBuffered = () => {
+        timeline.style.setProperty("--buffered-ranges", buffering.bufferedGradient(bufferedRanges(), hasKnownDuration ? durationSeconds : 0));
+    };
+
+    // The slider's spoken value: where it is and how far media is loaded; the same while scrubbing and while playing.
+    const describeTimeline = (position) => {
+        const loadedUntil = buffering.bufferedEnd(bufferedRanges(), position);
+        if (loadedUntil !== null && loadedUntil > position) {
+            timeline.setAttribute("aria-valuetext", format("playback.timeline.valueText", {
+                position: formatTime(position),
+                duration: formatTime(durationSeconds),
+                buffered: formatTime(loadedUntil)
+            }));
+        } else {
+            timeline.removeAttribute("aria-valuetext");
+        }
+    };
+
     const updateTimeline = () => {
         if (!hasKnownDuration) {
             timeline.disabled = true;
@@ -239,11 +285,50 @@
             const current = absoluteCurrentTime();
             timeline.value = String(current);
             timelineCurrent.textContent = formatTime(current);
+            describeTimeline(current);
         }
     };
 
     let lastProgressSentAt = Date.now();
     let lastProgressPositionMs = -1;
+
+    // The server never infers completion from a position, so a seek or scrub that lands at or beyond the threshold
+    // stays a resume point and only `ended` (or Mark watched) completes it. Threshold completion is declared only
+    // after playback itself crossed the threshold: naturalPositionMs follows the position while it advances in
+    // small playback steps, a jump (seek) clears it together with the crossing.
+    const naturalStepMs = 2500;
+    let naturalPositionMs = -1;
+    let lastClockPositionMs = -1;
+    let crossedThresholdByPlayback = false;
+
+    const trackNaturalPlayback = () => {
+        const positionMs = Math.round(absoluteCurrentTime() * 1000);
+        const stepMs = positionMs - lastClockPositionMs;
+        lastClockPositionMs = positionMs;
+        if (video.seeking || stepMs < 0 || stepMs > naturalStepMs * playbackSpeed) {
+            naturalPositionMs = -1;
+            crossedThresholdByPlayback = false;
+            return;
+        }
+
+        if (video.paused) {
+            return;
+        }
+
+        const thresholdMs = hasKnownDuration && Number.isFinite(completionThreshold)
+            ? durationSeconds * 1000 * completionThreshold
+            : Infinity;
+        if (naturalPositionMs >= 0 && naturalPositionMs < thresholdMs && positionMs >= thresholdMs) {
+            crossedThresholdByPlayback = true;
+        }
+
+        naturalPositionMs = positionMs;
+    };
+
+    const reachedCompletionNaturally = (positionMs) =>
+        crossedThresholdByPlayback &&
+        naturalPositionMs >= 0 &&
+        Math.abs(positionMs - naturalPositionMs) <= naturalStepMs * playbackSpeed;
 
     // Bounded checkpoints: at most one regular write per 15 seconds while
     // playing; pause, end, restart and page close flush immediately.
@@ -263,7 +348,7 @@
             return;
         }
 
-        sendProgress(positionMs, completed, force);
+        sendProgress(positionMs, completed || reachedCompletionNaturally(positionMs), force);
     };
 
     const sendProgress = (positionMs, completed, keepalive) => {
@@ -279,6 +364,7 @@
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+                ...targetBody,
                 positionMs,
                 durationMs,
                 completed
@@ -480,15 +566,26 @@
                 : text["playback.diagnostics.processingNone"]]);
 
         if (!video.hidden) {
-            const now = video.currentTime;
-            let ahead = 0;
-            for (let index = 0; index < video.buffered.length; index++) {
-                if (video.buffered.start(index) <= now + 0.25 && video.buffered.end(index) > now) {
-                    ahead = video.buffered.end(index) - now;
-                }
+            // What the player really has (buffer ahead, stalls, receive rate) next to what the plan asks for (buffer target).
+            const nowMs = performance.now();
+            rows.push(["buffer", format("playback.diagnostics.seconds", { value: Math.round(bufferAheadSeconds()) })]);
+            if (plan.buffer) {
+                rows.push(["bufferPolicy", format("playback.diagnostics.bufferPolicyValue", {
+                    preset: text[`playback.buffer.${plan.buffer.preset}`] || plan.buffer.preset,
+                    target: plan.buffer.targetAheadSeconds,
+                    low: plan.buffer.lowWaterSeconds,
+                    startup: plan.buffer.startupSeconds
+                })]);
             }
 
-            rows.push(["buffer", format("playback.diagnostics.seconds", { value: Math.round(ahead) })]);
+            const stallSummary = stalls.snapshot(nowMs);
+            rows.push(["stalls", format("playback.diagnostics.stallsValue", { count: stallSummary.count, seconds: (stallSummary.totalMs / 1000).toFixed(1) })]);
+            rows.push(["throughput", mbps(throughput.value(nowMs))]);
+            if (transcodeReading) {
+                rows.push(["transcodeSpeed", joined(
+                    format("playback.diagnostics.speedValue", { speed: transcodeReading.speed }),
+                    transcodeReading.fps ? format("playback.diagnostics.fpsValue", { fps: transcodeReading.fps }) : null)]);
+            }
             const frames = typeof video.getVideoPlaybackQuality === "function" ? video.getVideoPlaybackQuality() : null;
             if (frames && frames.totalVideoFrames > 0) {
                 rows.push(["droppedFrames", `${frames.droppedVideoFrames} / ${frames.totalVideoFrames}`]);
@@ -555,8 +652,26 @@
         renderReasons();
         renderDiagnostics();
         renderSubtitleHint();
+        renderQualityHint();
         // Not "playbackMode": data-playback-mode is the mode selector inside this root.
         root.dataset.playbackDelivery = plan?.mode || "";
+    };
+
+    // A fixed tier the server's encoder could not sustain: the selector keeps the viewer's choice, this note says what plays instead and why.
+    let qualityHintFromPlan = false;
+    const renderQualityHint = () => {
+        if (!qualityHint) {
+            return;
+        }
+
+        const hint = streamRecovery.speedLimitedHint(plan?.quality);
+        if (hint) {
+            qualityHint.textContent = format(`playback.reason.${hint.reason}`, { limit: mbps(hint.limitKbps) });
+            qualityHintFromPlan = true;
+        } else if (qualityHintFromPlan) {
+            qualityHint.textContent = "";
+            qualityHintFromPlan = false;
+        }
     };
 
     const hideVideo = () => {
@@ -595,6 +710,30 @@
 
         return url.toString();
     };
+
+    // The spinner is shown only while playback is genuinely waiting for media (the first data after Play, a stall, a seek that has not
+    // delivered data) and only after it lasted a moment. The element is never paused on purpose to wait: a paused element loads only a couple of seconds, so
+    // such a wait would delay the start without loading anything more.
+    const spinner = root.querySelector("[data-player-spinner]");
+    const waitingIndicator = buffering.createDelayedIndicator({
+        timers: window,
+        delayMs: buffering.waitingIndicatorDelayMs,
+        apply: (shown) => {
+            if (spinner) {
+                spinner.hidden = !shown;
+            }
+        }
+    });
+    // The system player and picture-in-picture own the picture while handed over; the presentation handler below keeps this current.
+    let presentationHandedOver = false;
+    const syncWaiting = () => waitingIndicator.set(buffering.isWaitingForMedia({
+        hidden: video.hidden,
+        paused: video.paused,
+        ended: video.ended,
+        failed: video.error !== null,
+        handedOver: presentationHandedOver,
+        readyState: video.readyState
+    }));
 
     const loadSource = (requestedStart = 0) => {
         if (!delivery) {
@@ -688,6 +827,10 @@
 
         storageRecoveryActive = true;
         hideVideo();
+        if (failureActions) {
+            failureActions.hidden = true;
+        }
+
         playbackBadge.classList.remove("status-ok", "status-warning", "status-error");
 
         const sleeping = storageSleeping();
@@ -779,10 +922,17 @@
         }
 
         try {
-            const response = await fetch(url, {
-                credentials: "same-origin",
-                headers: { "Accept": "application/json" }
-            });
+            const response = await fetch(url, videoTarget
+                ? {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+                    body: JSON.stringify(targetBody)
+                }
+                : {
+                    credentials: "same-origin",
+                    headers: { "Accept": "application/json" }
+                });
             if (!response.ok) {
                 return false;
             }
@@ -900,7 +1050,158 @@
         return option?.dataset.image === "true" ? option.value : null;
     };
 
-    const requestPlan = async () => {
+    // Runtime telemetry (#403): every few seconds the buffer, the smoothed receive rate and the stalls of this session go to the
+    // server, which keeps them in memory for the next plan and for diagnostics. Best effort: a lost report costs one sample and
+    // never playback. The rate is sampled once a second from how fast the buffered range grows, which says nothing while the
+    // browser is not fetching, so those samples are skipped.
+    const telemetryUrlTemplate = root.dataset.streamSessionTelemetryUrlTemplate || "";
+    let telemetrySequence = 0;
+    let lastReportedState = null;
+    let telemetryAvailable = false;
+
+    const beginTelemetrySession = () => {
+        stalls.resetSession();
+        throughput.reset();
+        transcodeReading = null;
+        telemetrySequence = 0;
+        lastReportedState = null;
+        telemetryAvailable = Boolean(streamSessionId && telemetryUrlTemplate);
+    };
+
+    const sampleThroughput = () => {
+        if (!telemetryAvailable || !streamSessionId || video.hidden || !plan) {
+            return;
+        }
+
+        const position = absoluteCurrentTime();
+        const end = buffering.bufferedEnd(bufferedRanges(), position);
+        const target = plan.buffer?.targetAheadSeconds ?? Infinity;
+        const idle = video.networkState === HTMLMediaElement.NETWORK_IDLE ||
+            (end !== null && (end - position >= target || (hasKnownDuration && end >= durationSeconds - 1)));
+        throughput.observe({
+            nowMs: performance.now(),
+            bufferedEndSeconds: end,
+            bitrateKbps: plan.quality?.deliveredBitrateKbps ?? plan.quality?.sourceBitrateKbps,
+            idle
+        });
+    };
+
+    // The server asked for another quality. The replacement plan is requested in the background while the current stream keeps playing; the
+    // source is only swapped once the new plan is confirmed playable, at the position of that moment and with the same selections. A failed or
+    // unavailable plan changes nothing and pauses following advice for a while. Unlike a choice of the viewer this keeps failedModes (a stall
+    // is no verdict on a mode), resets no recovery budget and shows no error; the new plan's reasons and the compact status say what changed.
+    let adviceInFlight = false;
+    const followQualityAdvice = async advice => {
+        const generation = planGeneration;
+        adviceInFlight = true;
+        try {
+            await streamRecovery.followAdvisedPlan({
+                advice,
+                requestPlan: followed => requestPlan({ followedAdvice: followed }),
+                // Another plan took over meanwhile (the viewer changed a selection).
+                isStale: () => generation !== planGeneration,
+                // Re-checked right before the swap: picture-in-picture may have started while the plan was requested.
+                isBlocked: () => presentationHandedOver,
+                discardOrphan: discardOrphanSession,
+                backOff: () => adviceGate.backOff(performance.now()),
+                warn: (message, detail) => console.warn(message, detail),
+                install: response => {
+                    planGeneration += 1;
+                    pendingResumeTime = absoluteCurrentTime();
+                    resumeShouldPlay = !video.paused && !video.ended;
+                    installPlan(response);
+                    showVideo();
+                }
+            });
+        } finally {
+            adviceInFlight = false;
+        }
+    };
+
+    const discardOrphanSession = sessionId => {
+        const template = root.dataset.streamSessionUrlTemplate;
+        if (sessionId && template) {
+            void fetch(template.replace("__session__", sessionId), { method: "DELETE", credentials: "same-origin", keepalive: true }).catch(() => {});
+        }
+    };
+
+    // The answer of a report: the server's conversion speed for the diagnostics and its advice, which is followed at most as often as the
+    // gate allows and never while a plan is being replaced. An answer for a session that was replaced meanwhile is stale.
+    const applyTelemetryAnswer = (answer, sessionAtSend) => {
+        if (!answer || sessionAtSend !== streamSessionId) {
+            return;
+        }
+
+        transcodeReading = Number.isFinite(answer.transcodeSpeed)
+            ? { speed: answer.transcodeSpeed, fps: Number.isFinite(answer.transcodeFps) ? answer.transcodeFps : null }
+            : null;
+        const busy = !plan || video.hidden || storageRecoveryActive || adviceInFlight;
+        const state = { paused: video.paused || video.ended, busy, handedOver: presentationHandedOver };
+        if (streamRecovery.followAdvice(adviceGate, answer.advice, state, performance.now())) {
+            void followQualityAdvice(answer.advice);
+        }
+    };
+
+    // force: the evidence goes out even when the state did not change, e.g. just before a new plan replaces this session.
+    const sendTelemetry = async (force = false) => {
+        if (!telemetryAvailable || !streamSessionId || video.hidden) {
+            return;
+        }
+
+        // A seek that has not delivered media yet is playback waiting for media, not a pause.
+        const state = video.paused || video.ended || video.error ? "paused" : stalls.isStalled() || video.seeking ? "buffering" : "playing";
+        if (!force && !buffering.shouldReport(state, lastReportedState)) {
+            return;
+        }
+
+        lastReportedState = state;
+        const sessionAtSend = streamSessionId;
+        const nowMs = performance.now();
+        const body = buffering.buildReport({
+            sequence: ++telemetrySequence,
+            state,
+            bufferAheadSeconds: bufferAheadSeconds(),
+            throughputKbps: throughput.value(nowMs),
+            stalls: stalls.snapshot(nowMs),
+            positionSeconds: absoluteCurrentTime()
+        });
+        try {
+            // A re-plan waits for the flush, so it is bounded tightly; a refusal (429, 400) never holds the re-plan back.
+            const response = await fetch(telemetryUrlTemplate.replace("__session__", streamSessionId), {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+                signal: AbortSignal.timeout ? AbortSignal.timeout(force ? 1000 : 4000) : undefined
+            });
+            if (response.status === 404) {
+                // The server no longer knows the session: the broken stream is handled by the error path, so reporting stops here.
+                telemetryAvailable = false;
+            } else if (!response.ok) {
+                console.warn("The playback telemetry was refused.", response.status);
+            } else if (!force) {
+                // The flush before a re-plan only delivers evidence; its answer must not start another re-plan.
+                let answer = null;
+                try {
+                    answer = await response.json();
+                } catch (error) {
+                    console.warn("The playback telemetry answer could not be read.", error);
+                }
+
+                applyTelemetryAnswer(answer, sessionAtSend);
+            }
+        } catch (error) {
+            console.warn("The playback telemetry could not be sent.", error);
+        }
+    };
+
+    window.setInterval(sampleThroughput, 1000);
+    window.setInterval(() => void sendTelemetry(), buffering.reportIntervalMs);
+
+    const requestPlan = async (options = {}) => {
+        // The replaced session's last evidence (buffer, stalls) must be on the server before it plans the replacement.
+        await sendTelemetry(true);
+
         let capabilities = null;
         try {
             capabilities = capabilityProbe ? await capabilityProbe.detect() : null;
@@ -916,6 +1217,7 @@
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
+                ...targetBody,
                 capabilities,
                 audioTrackId: selectedAudioTrackId,
                 subtitleTrackId: burnInSubtitleTrackId(),
@@ -924,6 +1226,7 @@
                 network: capabilityProbe?.networkReport() || null,
                 failedModes: [...failedModes],
                 replacesSessionId: streamSessionId,
+                followedAdvice: options.followedAdvice,
                 // Opening the page never wakes sleeping storage; pressing Play does.
                 wake: storageWakeRequested || playbackWasRequested
             })
@@ -943,6 +1246,26 @@
         }
     };
 
+    // The one final failure state: the centred status with Try again. A transient retry notice never stays above it, so the player
+    // never says "trying another way" and "cannot be played" at the same time.
+    const showFailure = (message) => {
+        hideVideo();
+        showPlayerError(null);
+        playbackStatus.textContent = message || "";
+        if (failureActions) {
+            failureActions.hidden = false;
+        }
+    };
+
+    const installPlan = response => {
+        plan = response.plan;
+        planCapabilitiesInferred = response.capabilitiesInferred === true;
+        streamSessionId = response.sessionId || null;
+        delivery = response.delivery || null;
+        beginTelemetrySession();
+        renderPlan();
+    };
+
     const applyPlayback = async () => {
         if (!storageIsAvailable()) {
             startStorageRetry(false);
@@ -952,15 +1275,16 @@
         const generation = ++planGeneration;
         plan = null;
         renderPlan();
+        if (failureActions) {
+            failureActions.hidden = true;
+        }
 
         let response;
         try {
             response = await requestPlan();
         } catch {
             if (generation === planGeneration) {
-                hideVideo();
-                playbackStatus.textContent = text["playback.status.planFailed"] || "";
-                showPlayerError(text["playback.status.planFailed"]);
+                showFailure(text["playback.status.planFailed"]);
             }
             return;
         }
@@ -970,11 +1294,7 @@
             return;
         }
 
-        plan = response.plan;
-        planCapabilitiesInferred = response.capabilitiesInferred === true;
-        streamSessionId = response.sessionId || null;
-        delivery = response.delivery || null;
-        renderPlan();
+        installPlan(response);
 
         if (plan.mode === "unavailable" || !delivery) {
             // Storage is not readable: the canonical storage flow (#411) takes over — asleep
@@ -990,8 +1310,7 @@
                 return;
             }
 
-            hideVideo();
-            playbackStatus.textContent = text["playback.status.failed"] || "";
+            showFailure(text[failedKey]);
             return;
         }
 
@@ -1250,10 +1569,10 @@
                 break;
             }
             case design.actions.seekBack10:
-                seekToAbsolute(seekBase() - seekStepSeconds, undefined, true);
+                seekToAbsolute(seekBase() - seekSeconds.back, undefined, true);
                 break;
             case design.actions.seekForward10:
-                seekToAbsolute(seekBase() + seekStepSeconds, undefined, true);
+                seekToAbsolute(seekBase() + seekSeconds.forward, undefined, true);
                 break;
             case design.actions.seekTo:
                 if (Number.isFinite(detail.seconds)) {
@@ -1463,6 +1782,7 @@
 
         timelinePreviewing = true;
         timelineCurrent.textContent = formatTime(Number(timeline.value));
+        describeTimeline(Number(timeline.value));
     });
 
     timeline.addEventListener("change", () => {
@@ -1598,6 +1918,7 @@
     });
 
     video.addEventListener("timeupdate", () => {
+        trackNaturalPlayback();
         updateTimeline();
         sync();
         persistProgress();
@@ -1635,7 +1956,30 @@
         startFrameSync();
     });
 
+    // Stalls: waiting for media after playback had started. The tracker ignores the initial start, seeks and paused time.
+    video.addEventListener("loadstart", () => {
+        stalls.sourceChanged(performance.now());
+        throughput.reset();
+    });
+    video.addEventListener("seeking", () => {
+        stalls.seeking(performance.now());
+        throughput.reset();
+    });
+    video.addEventListener("seeked", () => stalls.seeked(video.readyState));
+    video.addEventListener("waiting", () => stalls.waiting(performance.now(), video.paused));
+    video.addEventListener("playing", () => stalls.playing(performance.now()));
+    video.addEventListener("ended", () => stalls.paused(performance.now()));
+    video.addEventListener("emptied", () => stalls.sourceChanged(performance.now()));
+    for (const name of ["waiting", "playing", "seeking", "seeked", "loadeddata", "canplay", "play", "pause", "ended", "emptied", "error"]) {
+        video.addEventListener(name, syncWaiting);
+    }
+
+    for (const name of ["progress", "timeupdate", "seeked", "loadedmetadata", "durationchange", "emptied"]) {
+        video.addEventListener(name, renderBuffered);
+    }
+
     video.addEventListener("pause", () => {
+        stalls.paused(performance.now());
         if (!video.ended) {
             persistProgress(false, true);
         }
@@ -1654,7 +1998,40 @@
         showPostPlay();
     });
 
+    video.addEventListener("timeupdate", () => {
+        const now = absoluteCurrentTime();
+        playedSinceRecovery = streamRecovery.accumulatePlayed(playedSinceRecovery, lastPlayedTime, now);
+        lastPlayedTime = now;
+        sessionRecoveries = streamRecovery.recoveriesAfterProgress(sessionRecoveries, playedSinceRecovery);
+    });
+
+    // A failed video element carries no HTTP status, so the stream session is asked whether the server ended it.
+    // Null means the server could not be asked; the caller then takes the ordinary mode fallback.
+    const readStreamSessionStatus = async () => {
+        const template = root.dataset.streamSessionUrlTemplate;
+        if (!streamSessionId || !template || !streamIsLive()) {
+            return null;
+        }
+
+        try {
+            const response = await fetch(template.replace("__session__", streamSessionId), {
+                credentials: "same-origin",
+                cache: "no-store",
+                headers: { "Accept": "application/json" }
+            });
+            if (response.status === 404) {
+                return { gone: true };
+            }
+
+            return response.ok ? await response.json() : null;
+        } catch (error) {
+            console.warn("The stream session status could not be read.", error);
+            return null;
+        }
+    };
+
     video.addEventListener("error", async () => {
+        stalls.paused(performance.now());
         storageWakeRequested = storageWakeRequested || playbackWasRequested;
         const availability = await readStorageAvailability();
         if (availability && availability.state !== "available") {
@@ -1672,6 +2049,17 @@
             return;
         }
 
+        if (streamRecovery.shouldReplanSameMode(await readStreamSessionStatus(), sessionRecoveries)) {
+            sessionRecoveries += 1;
+            pendingResumeTime = absoluteCurrentTime();
+            playedSinceRecovery = 0;
+            lastPlayedTime = pendingResumeTime;
+            resumeShouldPlay = playbackWasRequested;
+            showPlayerError(text["playback.status.retrying"]);
+            void applyPlayback();
+            return;
+        }
+
         // Report the failed mode and let the server choose the next one (Direct Play →
         // Direct Stream → Transcode) instead of deciding a fallback here.
         if (plan && plan.mode !== "unavailable" && !failedModes.has(plan.mode)) {
@@ -1683,7 +2071,15 @@
             return;
         }
 
-        showPlayerError(text["playback.status.failed"]);
+        showFailure(text[failedKey]);
+    });
+
+    failureRetry?.addEventListener("click", () => {
+        failedModes.clear();
+        sessionRecoveries = 0;
+        pendingResumeTime = absoluteCurrentTime();
+        resumeShouldPlay = true;
+        void applyPlayback();
     });
 
     storageRetry?.addEventListener("click", () => {
@@ -1728,6 +2124,24 @@
                 credentials: "same-origin",
                 keepalive: true
             }).catch(() => {});
+        }
+    });
+
+    // Handing the video to the system player or picture-in-picture, and coming back, changes the surface and
+    // not the session: the position is flushed like a pause and nothing else is touched. Moving to the
+    // background is the last moment the page is guaranteed to run, so it flushes too.
+    const presentation = window.JularrPlayerPresentation;
+    const handedOverModes = new Set([presentation.modes.nativeFullscreen, presentation.modes.pictureInPicture]);
+    root.addEventListener(presentation.changeEvent, event => {
+        presentationHandedOver = handedOverModes.has(event.detail.mode);
+        syncWaiting();
+        if (absoluteCurrentTime() > 0 && (handedOverModes.has(event.detail.mode) || handedOverModes.has(event.detail.previousMode))) {
+            persistProgress(false, true);
+        }
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden" && absoluteCurrentTime() > 0) {
+            persistProgress(false, true);
         }
     });
 

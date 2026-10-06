@@ -31,6 +31,7 @@ public sealed class InstanceModel(
     [
         InstanceModule.Learning,
         InstanceModule.Acquisition,
+        InstanceModule.Playback,
         InstanceModule.Tracking
     ];
 
@@ -70,6 +71,33 @@ public sealed class InstanceModel(
 
     public string Name(InstanceModule module) =>
         Ui[$"admin.instance.module.{StorageName(module)}"];
+
+    public static string Icon(InstanceModule module) =>
+        module switch
+        {
+            InstanceModule.Anime => "screen-play",
+            InstanceModule.Movie => "film",
+            InstanceModule.Tv => "tv",
+            InstanceModule.Manga or InstanceModule.Book => "book",
+            InstanceModule.Novel => "document",
+            InstanceModule.Audiobook => "headphones",
+            InstanceModule.Learning => "cap",
+            InstanceModule.Acquisition => "download",
+            InstanceModule.Playback => "play",
+            _ => "chart"
+        };
+
+    // Only modules whose configuration has a dedicated Admin page link there; the others have nothing beyond the switch.
+    public static string? SettingsPage(InstanceModule module) =>
+        module switch
+        {
+            InstanceModule.Acquisition => "/Admin/Usenet",
+            InstanceModule.Playback => "/Admin/Transcoding",
+            _ => null
+        };
+
+    public string Description(InstanceModule module) =>
+        Ui[$"admin.instance.module.{StorageName(module)}.description"];
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {

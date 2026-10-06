@@ -2,6 +2,8 @@
 
 Status: **approved Desktop UX direction**.
 
+Binding missing-media playback intent: `docs/mockups/instant-play/SPEC.md`.
+
 ## Purpose
 
 This is the canonical user-facing detail page for episodic video works such as Anime and TV Series.
@@ -25,7 +27,9 @@ The Hero contains:
 - season/structure summary
 - a few important genres/themes only
 - short description
-- primary action is state-dependent: `Continue` / `Play` when a usable episode is available; `Request` when the selected Work/scope is unavailable and requestable; otherwise show the existing live Request state
+- primary action is state-dependent: `Continue` / `Play` when the next required episode is local; `Start watching` when that episode is missing but Playback + instant acquisition are permitted; `Request` when explicit acquisition/approval is required; otherwise show the existing live Request state
+- `Start watching` targets only the next required canonical episode and follows Looking for media -> Getting episode -> Preparing -> Starting playback; it does not implicitly request/download the whole Series
+- manager-only instances never show Start watching/Player actions: missing content uses Request and acquired content ends at Available/Monitoring
 - secondary personal-state action: Watchlist/Favorite where supported
 - optional Collection action/overflow for less common actions
 

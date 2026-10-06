@@ -1,9 +1,18 @@
 @page
 @using Jularr.Web.Features.Instance
 @model Jularr.Web.Pages.Admin.InstanceModel
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+}
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["admin.instance.title"];
+    var groups = new (string TitleKey, string DescriptionKey, IReadOnlyList<InstanceModule> Modules)[]
+    {
+        ("admin.instance.media", "admin.instance.mediaDescription", InstanceModel.ConfigurableMediaModules),
+        ("admin.instance.features", "admin.instance.featuresDescription", InstanceModel.ConfigurableFeatureModules)
+    };
 }
 
 <header class="page-header">
@@ -15,56 +24,44 @@
 
 <partial name="_AdminNavigation" model="ui" />
 
-<form method="post" class="form-stack">
-    <section class="panel">
-        <div class="panel-heading">
-            <div>
-                <h2>@ui["admin.instance.media"]</h2>
-                <p class="muted">@ui["admin.instance.mediaDescription"]</p>
+<form method="post" class="admset-sections">
+    @foreach (var group in groups)
+    {
+        var headingId = $"instance-{group.TitleKey}";
+        <section class="admset-section" aria-labelledby="@headingId">
+            <div class="admset-head">
+                <div>
+                    <h2 id="@headingId">@ui[group.TitleKey]</h2>
+                    <p>@ui[group.DescriptionKey]</p>
+                </div>
             </div>
-        </div>
 
-        <div class="form-stack">
-            @foreach (var module in InstanceModel.ConfigurableMediaModules)
-            {
-                var enabled = Model.Settings.IsEnabled(module);
-                <label class="checkbox-row">
-                    <input type="checkbox"
-                           name="@InstanceModel.FieldName(module)"
-                           value="true"
-                           checked="@enabled" />
-                    <span>@Model.Name(module)</span>
-                </label>
-            }
-        </div>
-    </section>
-
-    <section class="panel">
-        <div class="panel-heading">
-            <div>
-                <h2>@ui["admin.instance.features"]</h2>
-                <p class="muted">@ui["admin.instance.featuresDescription"]</p>
+            <div class="admin-module-grid">
+                @foreach (var module in group.Modules)
+                {
+                    var fieldName = InstanceModel.FieldName(module);
+                    var settingsPage = InstanceModel.SettingsPage(module);
+                    <div class="admin-module-card">
+                        <label class="admin-module-head" for="@fieldName">
+                            <span class="admset-tile"><partial name="_AdminIcon" model="InstanceModel.Icon(module)" /></span>
+                            <strong>@Model.Name(module)</strong>
+                            <input id="@fieldName" type="checkbox" class="admin-switch" role="switch" name="@fieldName" value="true"
+                                   checked="@Model.Settings.IsEnabled(module)" aria-describedby="@fieldName-description" />
+                        </label>
+                        <p id="@fieldName-description">@Model.Description(module)</p>
+                        @if (settingsPage is not null)
+                        {
+                            <a class="button" asp-page="@settingsPage">@ui["admin.instance.openSettings"]</a>
+                        }
+                    </div>
+                }
             </div>
-        </div>
+        </section>
+    }
 
-        <div class="form-stack">
-            @foreach (var module in InstanceModel.ConfigurableFeatureModules)
-            {
-                var enabled = Model.Settings.IsEnabled(module);
-                <label class="checkbox-row">
-                    <input type="checkbox"
-                           name="@InstanceModel.FieldName(module)"
-                           value="true"
-                           checked="@enabled" />
-                    <span>@Model.Name(module)</span>
-                </label>
-            }
-        </div>
-    </section>
+    <p class="admset-hint">@ui["admin.instance.retentionNote"]</p>
 
-    <p class="muted">@ui["admin.instance.retentionNote"]</p>
-
-    <div class="inline-actions">
+    <div class="admset-actions">
         <button class="button button-primary" type="submit">@ui["admin.instance.save"]</button>
     </div>
 </form>

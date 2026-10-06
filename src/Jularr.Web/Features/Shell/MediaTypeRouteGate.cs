@@ -1,5 +1,6 @@
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
@@ -30,6 +31,8 @@ public sealed class MediaTypeGateFilter(IReadOnlyList<WorkMediaType> mediaTypes)
 
 public static class MediaTypeRouteGateExtensions
 {
+    private const string RouteProperty = "Jularr.MediaRoute";
+
     /// <summary>
     /// Gates every page folder named in <see cref="UiNavigationCatalog.MediaRoutes"/> with a
     /// <see cref="MediaTypeGateFilter"/>. The navigation catalog is the one table that says which
@@ -38,13 +41,30 @@ public static class MediaTypeRouteGateExtensions
     /// </summary>
     public static PageConventionCollection AddMediaTypeGates(this PageConventionCollection conventions)
     {
-        foreach (var route in UiNavigationCatalog.MediaRoutes)
-        {
-            conventions.AddFolderApplicationModelConvention(
-                route.Root,
-                model => model.Filters.Add(new MediaTypeGateFilter(route.MediaTypes)));
-        }
-
+        // A root gates every page whose route lies under it, so a narrow root (the Anime pages) can sit inside
+        // a wider hub root (/Library); such a page carries both gates and needs both to pass. The route is only
+        // known on the route model, so it is carried to the application model as a property.
+        conventions.AddFolderRouteModelConvention(
+            "/",
+            model =>
+            {
+                if (model.Selectors.Select(selector => selector.AttributeRouteModel?.Template).FirstOrDefault(value => value is not null) is { } template)
+                {
+                    model.Properties[RouteProperty] = "/" + template.TrimStart('/');
+                }
+            });
+        conventions.AddFolderApplicationModelConvention(
+            "/",
+            model =>
+            {
+                if (model.Properties.TryGetValue(RouteProperty, out var value) && value is string path)
+                {
+                    foreach (var route in UiNavigationCatalog.MediaRoutes.Where(candidate => new PathString(path).StartsWithSegments(candidate.Root, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        model.Filters.Add(new MediaTypeGateFilter(route.MediaTypes));
+                    }
+                }
+            });
         return conventions;
     }
 }

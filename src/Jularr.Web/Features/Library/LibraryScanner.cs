@@ -58,7 +58,7 @@ public sealed class LibraryScanner(
         CancellationToken cancellationToken)
     {
         var root = await db.LibraryRoots.SingleAsync(x => x.Id == rootId, cancellationToken);
-        if (!root.IsEnabled)
+        if (!root.IsEnabled || !await db.LibraryRoots.ServingAnime(db).AnyAsync(x => x.Id == rootId, cancellationToken))
         {
             return new ScanResult(0, 0, 0, 0);
         }

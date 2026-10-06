@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Security.Claims;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Watchlist;
@@ -17,12 +16,7 @@ public sealed record DiscoveryShelfPlan(
     DiscoveryCategory Category,
     DiscoveryMode Mode,
     string TitleKey,
-    string MediaLabelKey)
-{
-    public bool UsesAniList => Category is DiscoveryCategory.Anime or DiscoveryCategory.Manga or DiscoveryCategory.LightNovel;
-
-    public bool UsesBooks => Category is DiscoveryCategory.Book;
-}
+    string MediaLabelKey);
 
 /// <summary>
 /// The pure taxonomy + normalisation behind the shelf board: which rows exist for a set of visible media
@@ -47,16 +41,12 @@ public static class DiscoveryShelfComposer
     /// whose source is enabled, produce rows — so a Books-only user gets book rows only. Trending rows
     /// lead (mixed media types), then Top rows, then the Books-only "newly published" row (#371).
     /// </summary>
-    public static IReadOnlyList<DiscoveryShelfPlan> Plan(
-        IReadOnlyList<WorkMediaType> visibleMediaTypes,
-        bool includeAniList,
-        bool includeBooks)
+    public static IReadOnlyList<DiscoveryShelfPlan> Plan(IReadOnlyList<WorkMediaType> visibleMediaTypes)
     {
         var visible = new HashSet<WorkMediaType>(visibleMediaTypes);
         var types = DisplayOrder
             .Where(visible.Contains)
             .Where(SupportedMediaTypes.Contains)
-            .Where(type => SourceEnabled(type, includeAniList, includeBooks))
             .ToArray();
 
         var plans = new List<DiscoveryShelfPlan>();
@@ -138,7 +128,8 @@ public static class DiscoveryShelfComposer
                 row.TitleKey,
                 "discover.categories.booksLightNovels",
                 Deduplicate(Interleave(
-                    matching.Select(entry => entry.candidate.Items).ToArray()))));
+                    matching.Select(entry => entry.candidate.Items).ToArray())),
+                [.. matching.SelectMany(entry => entry.candidate.Sources).DistinctBy(source => source.Source)]));
         }
 
         return result;
@@ -203,14 +194,6 @@ public static class DiscoveryShelfComposer
             ? identity.Key
             : item.Id;
 
-    private static bool SourceEnabled(WorkMediaType type, bool includeAniList, bool includeBooks) =>
-        type switch
-        {
-            WorkMediaType.Book => includeBooks,
-            WorkMediaType.Movie or WorkMediaType.Series => true,
-            _ => includeAniList
-        };
-
     private static DiscoveryShelfPlan Row(WorkMediaType type, DiscoveryShelfKind kind, DiscoveryMode mode)
     {
         var category = Category(type);
@@ -266,129 +249,42 @@ public static class DiscoveryShelfComposer
 }
 
 /// <summary>
-/// Assembles the provider-driven discovery board (#595): the rows a profile may see for the media types
-/// it may browse, each fetched through the shared <see cref="IDiscoveryFeed"/> (which already applies the
-/// TTL cache, local-state overlay and dedupe), identity-deduplicated across sources and cached as a whole
-/// so a landing paint is not re-orchestrated on every visit. This is the reusable shelf surface #427,
-/// #428 and #434 build on.
+/// Assembles the provider-driven discovery board (#595): the rows a profile may see for the media types it may browse, loaded through the
+/// shared <see cref="IDiscoveryFeed"/> in one call so every row's provider call runs side by side, identity-deduplicated across sources.
+/// A row whose source has not answered stays in its place as a pending row; the board never waits for the slowest source beyond the
+/// budget it is given. This is the reusable shelf surface #427, #428 and #434 build on.
 /// </summary>
 public sealed class DiscoveryShelfService(IDiscoveryFeed feed, IAppShellService shell)
 {
-    private static readonly ConcurrentDictionary<string, BoardCacheEntry> Cache =
-        new(StringComparer.Ordinal);
-
-    private static readonly TimeSpan BoardLifetime = TimeSpan.FromMinutes(2);
-
-    public async Task<DiscoveryShelfBoard> GetBoardAsync(
-        ClaimsPrincipal? user,
-        string profileId,
-        bool isOwner,
-        bool includeAniList,
-        bool includeBooks,
-        CancellationToken cancellationToken)
+    /// <param name="scope">The media types the viewer picked: only their rows are planned, so no other source is called or counted.</param>
+    public async Task<DiscoveryShelfBoard> GetBoardAsync(ClaimsPrincipal? user, string profileId, bool isOwner, DiscoveryCategory scope, DiscoveryWait wait, CancellationToken cancellationToken)
     {
         var access = await shell.GetMediaAccessAsync(user, cancellationToken);
-        var plans = DiscoveryShelfComposer.Plan(access.VisibleMediaTypes, includeAniList, includeBooks);
-        if (plans.Count == 0)
+        var plans = DiscoveryShelfComposer.Plan(access.VisibleMediaTypes).Where(plan => DiscoverScopes.Includes(scope, plan.Category)).ToArray();
+        if (plans.Length == 0)
         {
             return DiscoveryShelfBoard.Empty;
         }
 
-        var cacheKey = BuildCacheKey(profileId, isOwner, plans);
-        if (TryGetCached(cacheKey, out var cached))
+        var audience = new DiscoveryAudience(profileId, isOwner, access.VisibleMediaTypes.ToHashSet());
+        var load = await feed.LoadAsync([.. plans.Select(plan => new DiscoveryRequest("", plan.Category, plan.Mode))], audience, wait, cancellationToken);
+        var overlay = await feed.OverlayLocalStateAsync(load.Batches.SelectMany(batch => batch.Items), profileId, cancellationToken);
+
+        var rows = new List<DiscoveryShelfRow>(plans.Length);
+        for (var index = 0; index < plans.Length; index++)
         {
-            return cached;
-        }
+            var plan = plans[index];
+            var batch = load.Batches[index];
+            var items = DiscoveryShelfComposer.Deduplicate(batch.Items.Select(item => overlay[item.Id]));
+            var row = new DiscoveryShelfRow(plan.Id, plan.Kind, plan.MediaType, plan.Category, plan.Mode, "", plan.TitleKey, plan.MediaLabelKey, items, batch.Sources);
 
-        var warnings = new List<string>();
-        var rows = new List<DiscoveryShelfRow>(plans.Count);
-
-        // Sequential on purpose: the feed's coordinator uses one scoped DbContext for its local-state
-        // overlay, which must not be touched concurrently. Each request is individually TTL-cached, so
-        // repeat visits are cheap even without parallelism.
-        foreach (var plan in plans)
-        {
-            var response = await feed.GetAsync(
-                new DiscoveryRequest("", plan.Category, plan.Mode),
-                profileId,
-                isOwner,
-                plan.UsesAniList,
-                plan.UsesBooks,
-                cancellationToken);
-
-            warnings.AddRange(response.Warnings);
-
-            var items = DiscoveryShelfComposer.Deduplicate(response.Items);
-            if (items.Count == 0)
+            // A row that every source answered with nothing is redundant chrome; a row that waits or failed keeps its place.
+            if (row.State != DiscoverySectionState.Empty)
             {
-                // An empty row would be redundant chrome; skip it rather than render a hollow shelf.
-                continue;
-            }
-
-            rows.Add(new DiscoveryShelfRow(
-                plan.Id,
-                plan.Kind,
-                plan.MediaType,
-                plan.Category,
-                plan.Mode,
-                "",
-                plan.TitleKey,
-                plan.MediaLabelKey,
-                items));
-        }
-
-        var board = new DiscoveryShelfBoard(
-            rows,
-            warnings.Distinct(StringComparer.Ordinal).ToArray());
-        PutCached(cacheKey, board);
-        return board;
-    }
-
-    public static void InvalidateCache() => Cache.Clear();
-
-    private static string BuildCacheKey(
-        string profileId,
-        bool isOwner,
-        IReadOnlyList<DiscoveryShelfPlan> plans) =>
-        string.Join(
-            '|',
-            profileId,
-            isOwner ? "owner" : "user",
-            string.Join(',', plans.Select(plan => plan.Id)));
-
-    private static bool TryGetCached(string key, out DiscoveryShelfBoard board)
-    {
-        if (Cache.TryGetValue(key, out var entry))
-        {
-            if (entry.ExpiresAt > DateTimeOffset.UtcNow)
-            {
-                board = entry.Board;
-                return true;
-            }
-
-            Cache.TryRemove(key, out _);
-        }
-
-        board = null!;
-        return false;
-    }
-
-    private static void PutCached(string key, DiscoveryShelfBoard board)
-    {
-        if (Cache.Count > 128)
-        {
-            var now = DateTimeOffset.UtcNow;
-            foreach (var item in Cache)
-            {
-                if (item.Value.ExpiresAt <= now)
-                {
-                    Cache.TryRemove(item.Key, out _);
-                }
+                rows.Add(row);
             }
         }
 
-        Cache[key] = new BoardCacheEntry(board, DateTimeOffset.UtcNow.Add(BoardLifetime));
+        return new DiscoveryShelfBoard(rows, load.Settled, load.Pending);
     }
-
-    private sealed record BoardCacheEntry(DiscoveryShelfBoard Board, DateTimeOffset ExpiresAt);
 }

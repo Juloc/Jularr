@@ -39,7 +39,8 @@
             root.querySelector("[data-book-settings-form]");
         const settingsJson =
             root.querySelector("[data-reader-settings-json]") ||
-            root.querySelector("[data-book-settings-json]");
+            root.querySelector("[data-book-settings-json]") ||
+            root.querySelector("[data-manga-settings]");
         const topChrome =
             root.querySelector("[data-reader-chrome-primary]") ||
             root.querySelector(".novel-reader-toolbar") ||
@@ -79,6 +80,11 @@
             return value;
         };
         const compactQuery = window.matchMedia("(max-width: 720px)");
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const pageTransitionKinds = new Set(["curl", "slide", "fade", "none"]);
+        let activePageTransition = null;
+        let pageTransitionRun = 0;
+
         // Tablet landscape keeps Contents beside the page; below that it is a modal sheet.
         const inlineContentsQuery = window.matchMedia("(min-width: 1000px)");
         const detailPanel = document.querySelector("[data-language-inspector]");
@@ -137,11 +143,89 @@
             else hideChrome();
         };
 
-        const dispatchPage = direction => {
-            root.dispatchEvent(new CustomEvent("jularr:reader-page-edge", {
+        const pageDirection = () => {
+            const direction = (root.dataset.pageDirection || root.dataset.direction || "ltr")
+                .trim()
+                .toLowerCase();
+            return direction === "rtl" ? "rtl" : "ltr";
+        };
+
+        const pageTransitionKind = () => {
+            const value = String(root.dataset.pageTransition || settings.pageTransition || "none")
+                .trim()
+                .toLowerCase();
+            return pageTransitionKinds.has(value) ? value : "none";
+        };
+
+        const waitForReaderRender = action => new Promise(resolve => {
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                root.removeEventListener("jularr:reader-rendered", finish);
+                window.clearTimeout(timer);
+                resolve();
+            };
+            const timer = window.setTimeout(finish, 1400);
+            root.addEventListener("jularr:reader-rendered", finish, { once: true });
+            action();
+        });
+
+        const clearPageTransitionState = (run, previousViewTransitionName) => {
+            if (run !== pageTransitionRun) return;
+            delete root.dataset.readerTransitionActive;
+            if (surface) {
+                surface.style.viewTransitionName = previousViewTransitionName;
+                surface.removeAttribute("data-reader-page-transition-fallback");
+                surface.removeAttribute("data-reader-page-direction");
+            }
+            delete document.documentElement.dataset.readerPageTransition;
+            delete document.documentElement.dataset.readerPageDirection;
+            activePageTransition = null;
+        };
+
+        const dispatchPage = (direction, visualDirection = null) => {
+            direction = Number(direction) || 0;
+            if (!direction) return;
+
+            const kind = pageTransitionKind();
+            const physicalDirection = visualDirection == null
+                ? (pageDirection() === "rtl" ? -direction : direction)
+                : Number(visualDirection) || direction;
+            const dispatch = () => root.dispatchEvent(new CustomEvent("jularr:reader-page-edge", {
                 detail: { direction },
                 bubbles: false
             }));
+
+            if (!surface || readingMode() !== "paged" || kind === "none" || reduceMotion.matches) {
+                dispatch();
+                return;
+            }
+
+            activePageTransition?.skipTransition?.();
+            const run = ++pageTransitionRun;
+            const previousViewTransitionName = surface.style.viewTransitionName;
+            const visual = physicalDirection > 0 ? "next" : "prev";
+            root.dataset.readerTransitionActive = "true";
+
+            if (typeof document.startViewTransition === "function") {
+                surface.style.viewTransitionName = "jularr-reader-page";
+                document.documentElement.dataset.readerPageTransition = kind;
+                document.documentElement.dataset.readerPageDirection = visual;
+                activePageTransition = document.startViewTransition(() => waitForReaderRender(dispatch));
+                void activePageTransition.finished
+                    .catch(() => {})
+                    .finally(() => clearPageTransitionState(run, previousViewTransitionName));
+                return;
+            }
+
+            void waitForReaderRender(dispatch).finally(() => {
+                if (run !== pageTransitionRun || !surface) return;
+                surface.dataset.readerPageTransitionFallback = kind;
+                surface.dataset.readerPageDirection = visual;
+                void surface.offsetWidth;
+                window.setTimeout(() => clearPageTransitionState(run, previousViewTransitionName), 440);
+            });
         };
 
         const dispatchSeek = value => {
@@ -151,15 +235,8 @@
             }));
         };
 
-        const pageDirection = () => {
-            const direction = (root.dataset.pageDirection || root.dataset.direction || "ltr")
-                .trim()
-                .toLowerCase();
-            return direction === "rtl" ? "rtl" : "ltr";
-        };
-
         const dispatchPhysicalPage = direction =>
-            dispatchPage(pageDirection() === "rtl" ? -direction : direction);
+            dispatchPage(pageDirection() === "rtl" ? -direction : direction, direction);
 
         const updateModeVisibility = () => {
             const mode = readingMode();

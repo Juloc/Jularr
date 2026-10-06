@@ -1,12 +1,12 @@
 @page
 @model Jularr.Web.Pages.Requests.IndexModel
 @using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Watchlist
 @{
     var ui = Model.Ui;
     var history = Model.History;
     ViewData["Title"] = ui["requests.title"];
     static string Iso(DateTime value) => value.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
-    static string Shown(DateTime value) => value.ToString("yyyy-MM-dd HH:mm") + " UTC";
     var filters = new (RequestHistoryFilter Filter, string Label, int Count)[]
     {
         (RequestHistoryFilter.All, ui["requests.filter.all"], history.OpenCount + history.FinishedCount),
@@ -17,96 +17,98 @@
 @section Head {
     <link rel="stylesheet" href="~/css/acquisition.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/requests.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/request-status.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-browse.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-request.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/local-time.js" asp-append-version="true" defer></script>
+    <script src="~/js/request-status.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-request.js" asp-append-version="true" defer></script>
 }
 
-<header class="page-header">
-    <h1>@ui["requests.title"]</h1>
-</header>
+@* The host of the shared Request dialog (Edit request reopens it with the saved values) and of the status dialog a row opens. *@
+<div data-request-host data-text-failed="@ui["requests.detail.error.failed"]">
+    @Html.AntiForgeryToken()
 
-<nav class="library-type-tabs" aria-label="@ui["requests.title"]">
-    @foreach (var (filter, label, count) in filters)
-    {
-        var active = filter == history.Filter;
-        <a class="library-type-tab @(active ? "active" : "")"
-           href="/Requests?show=@RequestHistoryQuery.FilterName(filter)"
-           aria-current="@(active ? "page" : null)">@label <span class="request-count">@count</span></a>
-    }
-</nav>
+    <header class="page-header">
+        <h1>@ui["requests.title"]</h1>
+    </header>
 
-@if (history.Items.Count == 0)
-{
-    <p class="muted" data-request-history-empty>@ui["requests.empty"]</p>
-}
-else
-{
-    <ul class="request-list request-history" data-request-history>
-        @foreach (var request in history.Items)
+    <nav class="library-type-tabs" aria-label="@ui["requests.title"]">
+        @foreach (var (filter, label, count) in filters)
         {
-            var status = AcquisitionAccessNames.Status(request.Status);
-            var options = Model.OptionsOf(request);
-            <li class="request-row request-history-row">
-                <div class="request-cover">
-                    @if (!string.IsNullOrWhiteSpace(request.CoverImageUrl))
-                    {
-                        <img src="@request.CoverImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
-                    }
-                </div>
-                <div class="request-copy">
-                    @if (request.ResultUrl is { } resultUrl)
-                    {
-                        <a class="request-title" href="@resultUrl">@request.Title</a>
-                    }
-                    else
-                    {
-                        <strong class="request-title">@request.Title</strong>
-                    }
-                    <span>
-                        @ui["admin.requests.kind." + AcquisitionAccessNames.Kind(request.Kind)]
-                        @if (!string.IsNullOrWhiteSpace(request.Subtitle))
-                        {
-                            <text> · @request.Subtitle</text>
-                        }
-                    </span>
-                    @if (options.Count > 0)
-                    {
-                        <span>@string.Join(" · ", options)</span>
-                    }
-                    @if (request.WasAutoApproved)
-                    {
-                        <span>@ui["requests.autoApproved"]</span>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(request.StatusMessage))
-                    {
-                        <small>@request.StatusMessage</small>
-                    }
-                    <time datetime="@Iso(request.UpdatedAt)">@Shown(request.UpdatedAt)</time>
-                </div>
-                <span class="status-pill request-status-@status">@ui["requests.status." + status]</span>
-                <div class="request-actions">
-                    @if (request.Status == AcquisitionRequestStatus.Pending)
-                    {
-                        <form method="post" asp-page-handler="Withdraw" asp-route-id="@request.Id"
-                              asp-route-show="@RequestHistoryQuery.FilterName(history.Filter)" asp-route-p="@history.Page">
-                            <button class="button" type="submit">@ui["requests.withdraw"]</button>
-                        </form>
-                    }
-                </div>
-            </li>
+            var active = filter == history.Filter;
+            <a class="library-type-tab @(active ? "active" : "")"
+               href="/Requests?show=@RequestHistoryQuery.FilterName(filter)"
+               aria-current="@(active ? "page" : null)">@label <span class="request-count">@count</span></a>
         }
-    </ul>
+    </nav>
 
-    @if (history.PageCount > 1)
+    @if (Model.Rows.Count == 0)
     {
-        <nav class="request-pager" aria-label="@ui["requests.title"]">
-            @if (history.HasPrevious)
-            {
-                <a class="button" href="/Requests?show=@RequestHistoryQuery.FilterName(history.Filter)&p=@(history.Page - 1)">@ui["requests.page.previous"]</a>
-            }
-            <span>@ui.Format("requests.page.of", ("page", history.Page), ("pages", history.PageCount))</span>
-            @if (history.HasNext)
-            {
-                <a class="button" href="/Requests?show=@RequestHistoryQuery.FilterName(history.Filter)&p=@(history.Page + 1)">@ui["requests.page.next"]</a>
-            }
-        </nav>
+        <p class="muted" data-request-history-empty>@ui["requests.empty"]</p>
     }
-}
+    else
+    {
+        <ul class="request-list request-history" data-request-history>
+            @foreach (var row in Model.Rows)
+            {
+                var request = row.Request;
+                var options = Model.OptionsOf(request);
+                var tone = RequestStatusText.Tone(request, row.State).ToString().ToLowerInvariant();
+                <li class="request-row request-history-row">
+                    <div class="request-cover" aria-hidden="true">
+                        @if (!string.IsNullOrWhiteSpace(row.PosterUrl))
+                        {
+                            <img src="@row.PosterUrl" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                        }
+                        else
+                        {
+                            <span class="request-cover-initial">@WatchlistLabels.Initial(request.Title)</span>
+                        }
+                    </div>
+                    <div class="request-copy">
+                        <a class="request-title" href="@AcquisitionRequestService.StatusPath(request.Id)" data-rqs-open
+                           data-panel-url="@Url.Page("/Requests/Details", "Panel", new { id = request.Id })">@request.Title</a>
+                        <span>@RequestStatusText.Identity(ui, request)</span>
+                        @if (options.Count > 0)
+                        {
+                            <span>@string.Join(" · ", options)</span>
+                        }
+                        @if (request.WasAutoApproved)
+                        {
+                            <span>@ui["requests.autoApproved"]</span>
+                        }
+                        <time datetime="@Iso(request.UpdatedAt)" data-local-time>
+                            @RequestStatusText.Age(ui, request.UpdatedAt, Model.NowUtc)<span class="request-sr-only">, @RequestStatusText.Stamp(ui, request.UpdatedAt)</span>
+                        </time>
+                    </div>
+                    <span class="status-pill request-tone request-tone-@tone">@RequestStatusText.StateLabel(ui, request, row.State)</span>
+                </li>
+            }
+        </ul>
+
+        @if (history.PageCount > 1)
+        {
+            <nav class="request-pager" aria-label="@ui["requests.title"]">
+                @if (history.HasPrevious)
+                {
+                    <a class="button" href="/Requests?show=@RequestHistoryQuery.FilterName(history.Filter)&p=@(history.Page - 1)">@ui["requests.page.previous"]</a>
+                }
+                <span>@ui.Format("requests.page.of", ("page", history.Page), ("pages", history.PageCount))</span>
+                @if (history.HasNext)
+                {
+                    <a class="button" href="/Requests?show=@RequestHistoryQuery.FilterName(history.Filter)&p=@(history.Page + 1)">@ui["requests.page.next"]</a>
+                }
+            </nav>
+        }
+    }
+
+    <dialog class="dc-rq rqs-dialog" data-rqs-dialog aria-label="@ui["requests.detail.dialogLabel"]"
+            data-text-label="@ui["requests.detail.dialogLabel"]" data-text-load-failed="@ui["requests.detail.loadFailed"]"
+            data-text-retry="@ui["library.browse.error.retry"]" data-text-close="@ui["library.browse.close"]" data-text-loading="@ui["discover.request.loading"]">
+        <div class="rqs-dialog-body" data-rqs-dialog-body></div>
+    </dialog>
+    <partial name="~/Pages/Discover/_DiscoverRequestDialog.cshtml" model="ui" />
+</div>

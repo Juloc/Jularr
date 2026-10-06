@@ -2316,3 +2316,144 @@ html[data-reader-learning="off"] [data-language-lookup-selection] {
         opacity: .5;
     }
 }
+
+/* Canonical paged transition --------------------------------------------------
+   reader-shell.js owns Curl / Slide / Fade / None for every paged renderer.
+   View Transitions preserve the actual rendered pixels (including PDF canvas
+   output) while the renderer swaps its logical page underneath. */
+::view-transition-group(jularr-reader-page) {
+    animation-duration: .4s;
+    animation-timing-function: cubic-bezier(.2, .72, .22, 1);
+    perspective: 1600px;
+}
+
+::view-transition-image-pair(jularr-reader-page) {
+    isolation: isolate;
+    overflow: visible;
+    perspective: 1600px;
+}
+
+::view-transition-old(jularr-reader-page),
+::view-transition-new(jularr-reader-page) {
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+    mix-blend-mode: normal;
+}
+
+html[data-reader-page-transition="curl"][data-reader-page-direction="next"]::view-transition-old(jularr-reader-page) {
+    transform-origin: left center;
+    animation: reader-shared-page-curl-out-next .42s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+html[data-reader-page-transition="curl"][data-reader-page-direction="prev"]::view-transition-old(jularr-reader-page) {
+    transform-origin: right center;
+    animation: reader-shared-page-curl-out-prev .42s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+html[data-reader-page-transition="curl"]::view-transition-new(jularr-reader-page) {
+    animation: reader-shared-page-reveal .32s ease-out both;
+}
+
+html[data-reader-page-transition="slide"][data-reader-page-direction="next"]::view-transition-old(jularr-reader-page) {
+    animation: reader-shared-page-slide-out-next .3s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+html[data-reader-page-transition="slide"][data-reader-page-direction="next"]::view-transition-new(jularr-reader-page) {
+    animation: reader-shared-page-slide-in-next .3s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+html[data-reader-page-transition="slide"][data-reader-page-direction="prev"]::view-transition-old(jularr-reader-page) {
+    animation: reader-shared-page-slide-out-prev .3s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+html[data-reader-page-transition="slide"][data-reader-page-direction="prev"]::view-transition-new(jularr-reader-page) {
+    animation: reader-shared-page-slide-in-prev .3s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+html[data-reader-page-transition="fade"]::view-transition-old(jularr-reader-page) {
+    animation: reader-shared-page-fade-out .22s ease-in both;
+}
+
+html[data-reader-page-transition="fade"]::view-transition-new(jularr-reader-page) {
+    animation: reader-shared-page-fade-in .28s ease-out both;
+}
+
+[data-reader-page-transition-fallback="curl"][data-reader-page-direction="next"] {
+    transform-origin: left center;
+    animation: reader-shared-page-curl-in-next .38s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+[data-reader-page-transition-fallback="curl"][data-reader-page-direction="prev"] {
+    transform-origin: right center;
+    animation: reader-shared-page-curl-in-prev .38s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+[data-reader-page-transition-fallback="slide"][data-reader-page-direction="next"] {
+    animation: reader-shared-page-slide-in-next .28s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+[data-reader-page-transition-fallback="slide"][data-reader-page-direction="prev"] {
+    animation: reader-shared-page-slide-in-prev .28s cubic-bezier(.2, .72, .22, 1) both;
+}
+
+[data-reader-page-transition-fallback="fade"] {
+    animation: reader-shared-page-fade-in .24s ease-out both;
+}
+
+@keyframes reader-shared-page-curl-out-next {
+    0% { transform: perspective(1600px) rotateY(0); opacity: 1; filter: brightness(1); }
+    58% { transform: perspective(1600px) translateX(-3%) rotateY(-58deg); opacity: .96; filter: brightness(.92); }
+    100% { transform: perspective(1600px) translateX(-10%) rotateY(-92deg); opacity: .12; filter: brightness(.82); }
+}
+
+@keyframes reader-shared-page-curl-out-prev {
+    0% { transform: perspective(1600px) rotateY(0); opacity: 1; filter: brightness(1); }
+    58% { transform: perspective(1600px) translateX(3%) rotateY(58deg); opacity: .96; filter: brightness(.92); }
+    100% { transform: perspective(1600px) translateX(10%) rotateY(92deg); opacity: .12; filter: brightness(.82); }
+}
+
+@keyframes reader-shared-page-curl-in-next {
+    0% { transform: perspective(1600px) translateX(6%) rotateY(24deg); opacity: .55; }
+    100% { transform: perspective(1600px) translateX(0) rotateY(0); opacity: 1; }
+}
+
+@keyframes reader-shared-page-curl-in-prev {
+    0% { transform: perspective(1600px) translateX(-6%) rotateY(-24deg); opacity: .55; }
+    100% { transform: perspective(1600px) translateX(0) rotateY(0); opacity: 1; }
+}
+
+@keyframes reader-shared-page-reveal {
+    0% { opacity: .72; transform: scale(.992); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes reader-shared-page-slide-out-next {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(-12%); opacity: .35; }
+}
+
+@keyframes reader-shared-page-slide-in-next {
+    from { transform: translateX(12%); opacity: .35; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes reader-shared-page-slide-out-prev {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(12%); opacity: .35; }
+}
+
+@keyframes reader-shared-page-slide-in-prev {
+    from { transform: translateX(-12%); opacity: .35; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes reader-shared-page-fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes reader-shared-page-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+

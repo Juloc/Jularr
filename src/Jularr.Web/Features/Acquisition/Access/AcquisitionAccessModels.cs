@@ -75,23 +75,28 @@ public sealed record AcquisitionAccessPolicy(
         new(kind, ManualAddMode.OwnerOnly);
 }
 
-/// <summary>What the current profile may do for one media type — the only thing pages check.</summary>
+/// <summary>
+/// What the current profile may do for one media type — the only thing pages check. Every profile that
+/// <see cref="CanRequest"/> sees the same Request action; <see cref="AutoApproves"/> is approval policy
+/// only and must never change a label or a button.
+/// </summary>
 public sealed record AcquisitionCapabilities(
     MediaAcquisitionKind Kind,
-    bool CanAdd,
-    bool AddCreatesRequest,
+    bool CanRequest,
+    bool AutoApproves,
     bool CanAddManually,
     bool IsOwner)
 {
-    /// <summary>
-    /// A capability of <see cref="MediaCapability.Request"/> creates a request, <see cref="MediaCapability.Instant"/>
-    /// adds right away, anything below cannot add. Managers of media (the owner and media managers) may
-    /// always use the manual add tools; everyone else follows the media type's manual rule.
-    /// </summary>
     /// <summary>What a plain user gets from the built-in defaults: may request, no manual tools. Page models start from it until they resolve the real thing.</summary>
     public static AcquisitionCapabilities Default(MediaAcquisitionKind kind) =>
         Resolve(kind, MediaCapability.Request, AcquisitionAccessPolicy.Default(kind).Manual, isOwner: false);
 
+    /// <summary>
+    /// A capability of <see cref="MediaCapability.Request"/> or above may request; <see cref="MediaCapability.Instant"/>
+    /// approves that request right away, <see cref="MediaCapability.Request"/> waits for an approver or an
+    /// auto-approval rule. Managers of media (the owner and media managers) may always use the manual add tools;
+    /// everyone else follows the media type's manual rule.
+    /// </summary>
     public static AcquisitionCapabilities Resolve(
         MediaAcquisitionKind kind,
         MediaCapability capability,
@@ -99,8 +104,8 @@ public sealed record AcquisitionCapabilities(
         bool isOwner) =>
         new(
             kind,
-            CanAdd: capability >= MediaCapability.Request,
-            AddCreatesRequest: capability == MediaCapability.Request,
+            CanRequest: capability >= MediaCapability.Request,
+            AutoApproves: capability >= MediaCapability.Instant,
             CanAddManually: isOwner || manual == ManualAddMode.Users,
             IsOwner: isOwner);
 }
@@ -131,8 +136,36 @@ public sealed record AcquisitionRequest(
 {
     public bool IsOpen => AcquisitionAccessNames.IsOpen(Status);
 
+    /// <summary>
+    /// Whether a pass reads this request back from its media type's monitoring pipeline: an acquisition that is underway, or one that
+    /// failed on a download the owner had to resolve (it keeps that download linked), which can be resolved without a retry.
+    /// </summary>
+    public bool IsObservedFromMonitoring =>
+        AcquisitionAccessNames.UnderwayStatuses.Contains(Status) || (Status == AcquisitionRequestStatus.Failed && OperationId is not null);
+
     /// <summary>Whether an auto-approval rule (not a person) approved this request.</summary>
     public bool WasAutoApproved => AcquisitionAutoApproval.TryParseRuleId(DecidedByProfileId, out _);
+
+    /// <summary>The address of the finished title on this server; a request can carry any result address, only a path of this server is followed.</summary>
+    public string? LocalResultPath => ResultUrl is { Length: > 0 } url && url.StartsWith('/') && !url.StartsWith("//", StringComparison.Ordinal) && !url.StartsWith("/\\", StringComparison.Ordinal) ? url : null;
+
+    /// <summary>The message a request carries once it was cancelled; a cancelled request is stored as rejected with exactly this message.</summary>
+    public const string CancelledMessage = "Withdrawn.";
+
+    /// <summary>Whether the request ended because it was cancelled rather than rejected by an approver.</summary>
+    public bool IsCancelled => Status == AcquisitionRequestStatus.Rejected && StatusMessage == CancelledMessage;
+
+    /// <summary>Only a request that still waits for approval can be cancelled; once approved the acquisition is shared state of the title.</summary>
+    public bool CanBeCancelled => Status == AcquisitionRequestStatus.Pending;
+
+    /// <summary>
+    /// Only a request that still waits for approval can change its scope or languages: afterwards the executor has copied them into the
+    /// acquisition. Only media types whose Request dialog has settings (series scope, anime languages) can be edited.
+    /// </summary>
+    public bool CanBeEdited => Status == AcquisitionRequestStatus.Pending && Kind is MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime;
+
+    /// <summary>A request that failed after approval can run again with the same intent.</summary>
+    public bool CanBeRetried => Status == AcquisitionRequestStatus.Failed;
 
     /// <summary>The richer options the requester chose (anime only); the default options when none were chosen.</summary>
     public AcquisitionRequestOptions Options => Kind == MediaAcquisitionKind.Anime
@@ -155,11 +188,28 @@ public sealed record AcquisitionRequestDraft(
     string? PayloadJson = null,
     AcquisitionRequestOptions? Options = null);
 
+/// <summary>The request a submit ended with, and whether it was an open request for the title already.</summary>
+public sealed record AcquisitionSubmission(AcquisitionRequest Request, bool AlreadyRequested);
+
+/// <summary>The status and message a request had just before a conditional status change took it over.</summary>
+public sealed record AcquisitionStatusTransition(AcquisitionRequestStatus PreviousStatus, string? PreviousMessage);
+
+/// <summary>The status a request moves to, with its message and result address.</summary>
+public sealed record AcquisitionStatusOutcome(AcquisitionRequestStatus Status, string? Message, string? ResultUrl = null);
+
 public sealed record AcquisitionExecution(
     AcquisitionRequestStatus Status,
     string? Message,
     Guid? OperationId = null,
-    string? ResultUrl = null);
+    string? ResultUrl = null)
+{
+    /// <summary>
+    /// For a result that ends the request because of what the run read (monitoring off, everything available): given the payload stored when
+    /// the result is written, whether that is still true. When it is not, somebody changed the request meanwhile and the request goes back
+    /// to Approved to be looked at again instead of being ended by a stale result.
+    /// </summary>
+    public Func<string?, bool>? StillApplies { get; init; }
+}
 
 /// <summary>Starts the automatic acquisition for one media type.</summary>
 public interface IAcquisitionRequestExecutor
@@ -169,10 +219,75 @@ public interface IAcquisitionRequestExecutor
     Task<AcquisitionExecution> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// An executor of a media type that is searched, downloaded and imported by its own monitoring pipeline instead of by the request
+/// (Anime). Executing the request only puts the title under monitoring; an observation reads where that pipeline stands for a
+/// request, so a request is never reported further along than the media actually is. Observing only reads and never starts a search.
+/// </summary>
+public interface IMonitoredAcquisitionExecutor : IAcquisitionRequestExecutor
+{
+    /// <summary>Loads what every request of the media type shares once, as of <paramref name="nowUtc"/>; the observation answers many requests from it.</summary>
+    Task<IRequestObservation> BeginObservationAsync(DateTime nowUtc, CancellationToken cancellationToken);
+}
+
+/// <summary>Where the monitoring pipeline stands for one request, read against the state loaded when the observation began.</summary>
+public interface IRequestObservation
+{
+    /// <summary>The state to bring the request to, or null when its executor has not run for it yet, so the pipeline has nothing to report.</summary>
+    Task<AcquisitionExecution?> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken);
+}
+
+/// <summary>What following a request of a monitored media type did.</summary>
+public enum MonitoredFollowOutcome
+{
+    /// <summary>The request already is where its pipeline is, or somebody else moved it on meanwhile.</summary>
+    Unchanged,
+
+    Changed,
+
+    /// <summary>The request is approved but its executor has not run for it (its series does not exist), so there is no pipeline state to follow.</summary>
+    NotExecuted
+}
+
+/// <summary>What cancelling a request came to; a request that is no longer pending is reported, never overwritten.</summary>
+public enum RequestCancelOutcome
+{
+    Cancelled,
+
+    /// <summary>It was cancelled already (a second tab, a repeated post); nothing changed.</summary>
+    AlreadyCancelled,
+
+    /// <summary>Somebody decided it first, so it can no longer be cancelled.</summary>
+    NoLongerPending
+}
+
+public enum RequestEditOutcome
+{
+    Saved,
+
+    /// <summary>The request is no longer pending, or its media type has nothing to edit.</summary>
+    NotEditable
+}
+
+public enum RequestRetryOutcome
+{
+    Retried,
+
+    /// <summary>It runs already (a second tab, a repeated post); nothing changed.</summary>
+    AlreadyRetried,
+
+    /// <summary>It is not failed (any more), the profile may not request this media type, or the title has another open request.</summary>
+    NotRetryable
+}
+
 public sealed class AcquisitionAccessDeniedException(string message) : Exception(message);
 
 public static class AcquisitionAccessNames
 {
+    /// <summary>The statuses of an approved request whose acquisition is underway: the ones a worker may take over, or bring to the state of its download.</summary>
+    public static readonly IReadOnlyList<AcquisitionRequestStatus> UnderwayStatuses =
+        [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Importing];
+
     public static string Kind(MediaAcquisitionKind kind) => kind switch
     {
         MediaAcquisitionKind.Anime => "anime",

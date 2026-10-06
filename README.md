@@ -235,7 +235,7 @@ Playback is **device-first and instant**. Each browser stores its own preference
 - **Device only**: never video-transcode on the server. Compatible H.264 is remuxed to fragmented MP4 as it is watched, and HEVC/H.265 can be remuxed with `hvc1` tagging while keeping the video stream unchanged.
 - **Server**: stream a broadly compatible H.264 `yuv420p` MP4 directly from ffmpeg when video conversion is required. Compatible H.264 is still copied rather than wastefully encoded again.
 
-There is no prepare-playback step. Direct-play files retain HTTP range support; remux/transcode paths emit fragmented MP4 to the browser as ffmpeg produces it, so the whole episode is never encoded before playback starts. The NAS media stays read-only. The current server fallback uses software `libx264`; hardware acceleration can be added later without changing the device-first selection model.
+There is no prepare-playback step. Direct-play files retain HTTP range support; remux/transcode paths emit fragmented MP4 to the browser as ffmpeg produces it, so the whole episode is never encoded before playback starts. The NAS media stays read-only. The server encodes with the first working hardware encoder (NVENC, QSV, VAAPI, AMF; see `docs/ADMIN_OPERATIONS.md`) and otherwise with software `libx264`.
 
 Players show **Skip intro / recap / outro** only for canonical per-episode segment markers above the configured confidence (never automatically), and timeline seek previews once they have been generated in the background into a disposable `/data` cache. Markers come from owner corrections (**Edit skip segments** on the Episode page) or `*.segments.json` / `segments.json` sidecars read during library scans; see [docs/MEDIA_SEGMENTS.md](docs/MEDIA_SEGMENTS.md).
 
@@ -327,6 +327,8 @@ SQLite now uses an EF Core migration baseline. Existing epoch-2 pre-release data
 ## Dictionary data
 
 Japanese lexical data is derived from the JMdict project maintained by the Electronic Dictionary Research and Development Group (EDRDG), via the jmdict-simplified JSON distribution. Jularr pins the dictionary snapshot used for each image build and verifies the downloaded archives by SHA-256.
+
+Japanese word analysis uses the MeCab NAIST-jdic dictionary the image installs under `/var/lib/mecab/dic/open-jtalk/naist-jdic`. Outside the image, point `JapaneseMorphology:DictionaryPath` (environment variable `JapaneseMorphology__DictionaryPath`) at a NAIST-jdic directory. Without a loadable dictionary only Japanese analysis is off: the cause is logged and **Admin > Health** shows it.
 
 - JMdict project: https://www.edrdg.org/jmdict/j_jmdict.html
 - jmdict-simplified: https://github.com/scriptin/jmdict-simplified

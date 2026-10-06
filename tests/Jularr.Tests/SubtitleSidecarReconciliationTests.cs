@@ -216,6 +216,7 @@ public sealed class SubtitleSidecarReconciliationTests
 
             var root = new LibraryRoot { Name = "Anime", Path = libraryPath };
             db.LibraryRoots.Add(root);
+            db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             await db.SaveChangesAsync();
 
             var vocabulary = new VocabularyService(

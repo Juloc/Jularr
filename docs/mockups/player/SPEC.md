@@ -2,6 +2,8 @@
 
 Status: **binding planning specification for Player mockups**. This document refines the baseline in `UX.md` and issue #403. It does not authorize feature implementation before the canonical Playback/File/Track/Progress contracts are ready.
 
+Binding missing-media playback intent: `docs/mockups/instant-play/SPEC.md`.
+
 Architecture source of truth:
 - `Work -> Structure -> Edition -> Version -> Asset -> File -> Track`
 - `PlaybackPlan` decides Direct Play / Direct Stream or Remux / Transcode / Unavailable.
@@ -22,6 +24,160 @@ The Player must:
 - keep platform interaction deliberately different where touch, pointer/keyboard, remote and WebKit require it.
 
 The Player is not an Admin diagnostics page and does not choose its own media-processing strategy.
+
+## 1a. Best-in-class Player quality bar
+
+Jularr does not target parity with one competitor. The product goal is to combine the strongest relevant qualities of established iPhone/iPad media clients while retaining Jularr's own architecture and UI.
+
+Reference baselines:
+- **Plex** for server-aware Direct Play/Direct Stream/Transcode UX, quality selection, continuation/mini-player behavior, casting and skip-marker integration;
+- **Infuse** for broad local/container/codec/subtitle compatibility, precise playback controls, chapters, gestures, AirPlay/subtitle quality and polished HDR playback;
+- **Swiftfin** for the practical split between Apple-native playback and a broader compatibility engine;
+- **Stremio** for compatibility-player behavior, subtitle live-sync concepts, external-display handling, storage/download diagnostics and immediate control response.
+
+These are behavior/quality references, not UI templates. Jularr must not copy proprietary visual design or create product-specific compatibility hacks.
+
+### Responsiveness and first-frame quality
+
+The Player must feel immediate even when media startup is not immediate:
+- Play/Pause and control-visibility actions update their visible state without waiting for a network/server round trip;
+- seek gestures/buttons show immediate local feedback while the actual seek resolves;
+- a spinner appears only when playback is genuinely waiting, not as a generic transition animation;
+- PlaybackPlan acquisition, manifest/source opening, decoder startup and first decoded frame are measured separately so slow server planning is not confused with slow player UI;
+- startup, seek and rebuffer performance are compared on the same device/media/network against current reference clients during real-device qualification;
+- avoidable Jularr-controlled overhead must be investigated when the same source/device plays materially faster in a reference client.
+
+Do not define one fake universal startup-time promise across local Direct Play, remote HLS, remux and transcode. Keep p50/p95 measurements per delivery mode and device class instead.
+
+### Scrubbing and seeking
+
+The Player should provide:
+- frame/time preview while scrubbing when preview data is available;
+- chapter/segment labels during scrub;
+- immediate -10/+30 visual feedback;
+- accurate final position after seek with no cumulative drift;
+- robust repeated/rapid seek handling without queueing stale requests;
+- seek recovery that preserves the requested logical position when a delivery session/engine must restart.
+
+### Audio quality and synchronization
+
+Best-in-class playback requires:
+- fast in-session audio-track switching where the selected delivery engine permits it;
+- user/session audio-delay correction with explicit reset;
+- subtitle-delay correction independently from audio delay;
+- no cumulative offset drift across pause/resume, seek, quality change or engine/delivery switch;
+- playback-speed changes with pitch-preserving output where the active platform engine supports it;
+- correct handling of headphones/AirPods/Bluetooth/HomePod/AirPlay route changes and phone/system audio interruptions;
+- resuming only when platform semantics and the user's prior playing state make that appropriate;
+- clear diagnostics when the selected audio codec/layout forces remux/transcode or local compatibility-engine fallback.
+
+### Subtitle quality
+
+Jularr should exceed ordinary media-server playback here:
+- embedded and external subtitle tracks share canonical Track identity;
+- SRT/WebVTT/ASS/SSA/PGS and other supported formats preserve styling/positioning as far as the selected rendering engine can safely support them;
+- native-system/AirPlay delivery can use a compatible derived subtitle representation without changing subtitle identity;
+- subtitle offset can be adjusted live and reset instantly;
+- Learning rendering/word interaction remains an optional Jularr layer over the same canonical cues;
+- switching quality, version, engine or transcode mode should preserve the user's logical subtitle choice whenever an equivalent track exists;
+- missing fonts or unsupported styling must degrade deliberately rather than silently hiding subtitles.
+
+### Video fidelity
+
+The Player must prefer preserving source intent:
+- use hardware decoding where supported and efficient;
+- preserve original frame rate, resolution, bit depth and HDR metadata when the device/output path supports them;
+- prefer an Apple-native path for HDR/Dolby Vision/AirPlay/PiP when it gives materially better platform fidelity;
+- use compatibility-engine or server fallback when native playback would require avoidable content loss;
+- never tone-map, deinterlace, rescale or convert frame rate unless the source/output/client actually requires it or the user selected a different quality;
+- expose Fit/Fill/Zoom without permanently altering playback quality;
+- use platform spatial-audio capabilities only when the current route/content legitimately supports them.
+
+### Versions, tracks and quality changes
+
+Changing Version/Asset, quality, audio or subtitle during playback must preserve:
+- ActiveSession;
+- logical position;
+- playing/paused state where safe;
+- selected language/preferences where an equivalent track exists.
+
+A change may rebuild delivery/decoder state, but it must not look like starting an unrelated playback session.
+
+### Recovery ladder
+
+Playback recovery should be automatic but bounded and explainable.
+
+For a recoverable failure, prefer:
+1. retry/resume the current delivery/engine when the failure is plausibly transient;
+2. re-open the same plan/session if the media pipeline itself reset;
+3. on native clients, switch to the declared alternate local engine when its capability report says it can play the same selected media;
+4. request canonical remux/direct-stream fallback;
+5. request canonical server transcode;
+6. show a useful error with diagnostics/retry rather than loop forever.
+
+Every fallback preserves logical position and selected tracks where possible. Diagnostics record why the fallback happened. Never oscillate repeatedly between engines/plans.
+
+### Network and lifecycle resilience
+
+Playback must survive ordinary client changes:
+- Wi-Fi <-> cellular/network handover where the underlying delivery can recover;
+- foreground/background transitions supported by the platform;
+- audio-route changes;
+- orientation/window/Stage Manager changes;
+- temporary server reconnects;
+- app/PWA navigation into and out of the mini-player.
+
+The client must not mark content completed or reset position merely because a media surface was recreated.
+
+### Next-item warmup
+
+When Auto Play/Up Next is enabled, the client/server may pre-resolve the next canonical target and its likely PlaybackPlan near the end of the current item so the transition is fast.
+
+Warmup may fetch lightweight metadata/manifest/initial delivery information, but must:
+- respect metered-data/battery/resource policy;
+- not create a second durable ActiveSession before playback actually starts;
+- not begin an expensive transcode or large download speculatively unless policy explicitly allows it;
+- be cancelled when the user disables autoplay, seeks away from the end or selects another item.
+
+### Native/offline parity
+
+A verified offline copy should use the same Player semantics as streaming:
+- same track/language preferences;
+- same chapters/skip markers where packaged;
+- same Learning behavior where the required derived data is packaged;
+- same progress/session model;
+- same quality and synchronization controls that are meaningful locally.
+
+Offline playback must not become a stripped-down second Player.
+
+### Best-in-class verification corpus
+
+Maintain a legal/internal playback corpus and expected-capability matrix covering representative combinations such as:
+- MP4/fMP4/MKV/TS;
+- H.264, HEVC Main/Main10, AV1 and representative legacy compatibility cases;
+- SDR, HDR10 and Dolby Vision samples where test hardware legally supports them;
+- AAC, AC-3/E-AC-3, FLAC and representative DTS/TrueHD compatibility cases;
+- stereo and multichannel layouts;
+- SRT, WebVTT, ASS/SSA and image subtitle samples;
+- multiple audio/subtitle tracks;
+- chapters/intro/outro/credits markers;
+- high-bitrate 1080p/4K;
+- malformed/edge-case timestamps and known A/V-sync regressions.
+
+For each relevant real device class, qualification records:
+- selected PlaybackPlan and local engine;
+- startup-to-first-frame;
+- seek latency/accuracy;
+- rebuffer behavior;
+- dropped frames where exposed;
+- A/V sync;
+- subtitle correctness;
+- HDR/output behavior;
+- PiP/AirPlay/external-display behavior;
+- battery/thermal observations for representative long playback;
+- recovery result after network/route/interruption tests.
+
+A feature is not considered "best-in-class" merely because it exists. It must remain responsive, correct and explainable under this corpus.
 
 ## 2. Route / entry contract
 
@@ -425,18 +581,288 @@ Repeated presses may accumulate visually while the seek is being applied, but th
 
 Use capability detection and progressive enhancement. Do not fork server/domain playback rules.
 
-Where WebKit permits:
-- keep Jularr inline controls;
-- use normal PlaybackPlan/ActiveSession;
-- support fullscreen, PiP, Media Session and wake-lock-like behavior only when the platform actually exposes it.
+### Binding control policy
 
-Where WebKit requires system surfaces:
-- degrade deliberately to supported system playback/fullscreen controls;
-- preserve canonical progress, track preferences and session identity;
-- never claim a custom control exists when WebKit does not allow it;
-- return from system fullscreen/native surfaces to the same logical ActiveSession.
+The default iPhone/iPad Safari and Home Screen/PWA experience is the **Jularr custom Player**, not Safari's built-in `<video controls>` UI.
 
-The mockup represents the intended Jularr inline state, but implementation may use a system-control fallback for unsupported WebKit capabilities.
+For normal inline playback:
+- render the media element with `playsinline`;
+- do **not** add the HTML `controls` attribute;
+- keep `video.controls === false`;
+- Jularr owns play/pause, -10/+30 seek, timeline, audio/subtitle/quality menus, chapters, Learning controls, Minimize, Popout/PiP and the normal fullscreen action;
+- attach `playsinline` before playback starts so iPhone does not enter native fullscreen merely because playback began;
+- keep PlaybackPlan, ActiveSession, MediaProgress and track selection exactly the same as every other web client.
+
+Safari/Apple controls are an explicit compatibility surface, not a second normal Player design. Jularr must never accidentally show both its own chrome and the browser's normal inline controls at the same time.
+
+### Presentation modes
+
+WebKit presentation is a client-only presentation concern over the same ActiveSession. Model it explicitly as one of:
+
+`Inline | Theater | ElementFullscreen | NativeVideoFullscreen | PictureInPicture`
+
+This state does not create another playback session, progress record, quality decision or track-selection owner.
+
+#### Inline
+
+Inline is the default. The video stays inside the Jularr composition with custom controls and overlays.
+
+#### Jularr Theater Mode
+
+Theater Mode is the mandatory fallback when Jularr cannot put the whole Player container into standards-based fullscreen while retaining custom HTML chrome.
+
+Theater Mode:
+- keeps the same video element and ActiveSession;
+- expands the Jularr Player root to the complete usable viewport with fixed positioning;
+- keeps Jularr controls, subtitles and Learning overlays fully functional;
+- hides normal application chrome behind the Player;
+- locks page scrolling/overscroll while active and restores it exactly on exit;
+- respects `env(safe-area-inset-top/right/bottom/left)`;
+- uses modern dynamic viewport sizing such as `100dvh` with a safe fallback rather than assuming `100vh` equals the visible iOS viewport;
+- responds to portrait/landscape viewport changes without recreating playback;
+- does not claim that browser chrome has been removed when Safari itself still owns visible browser UI.
+
+For an installed iPhone/iPad Home Screen app, Theater Mode is the preferred full-screen-like Jularr experience when standards-based element fullscreen is unavailable because the standalone app viewport already removes normal Safari tab/address chrome.
+
+#### Element fullscreen with custom controls
+
+When the Player root exposes a working standards-based element Fullscreen API, the normal Fullscreen action should request fullscreen on the **Player root/container**, not directly on the `<video>`.
+
+This preserves:
+- custom transport;
+- Jularr subtitle rendering;
+- Learning overlays;
+- settings sheets;
+- safe custom exit/fullscreen actions.
+
+Use actual runtime capability detection, for example whether the Player root has a callable `requestFullscreen` and whether the document exposes matching fullscreen state/events. Do not hard-code `iPad = supported`; WebKit/browser version and presentation context are the deciding capability.
+
+If the element-fullscreen request rejects or is unavailable, fall back immediately to Jularr Theater Mode. Do not fall through automatically to the native Apple video player.
+
+#### Native Apple video fullscreen
+
+Native video fullscreen is a **last-resort or explicitly requested system-player path** because WebKit owns that surface and Jularr HTML overlays/custom controls cannot be assumed to remain visible.
+
+Only use native video fullscreen when:
+- the user deliberately chooses a system-player/system-fullscreen action; or
+- a WebKit limitation makes native fullscreen the only usable playback surface for that media/context.
+
+Where supported, this may use the WebKit video fullscreen API such as `webkitEnterFullscreen()`.
+
+Before entering native fullscreen:
+- flush meaningful current progress/session state;
+- preserve selected audio/subtitle/quality preference in the canonical session;
+- record that the presentation changed, not that a new playback session started.
+
+While native fullscreen is active:
+- do not display fake Jularr buttons that cannot control the native surface;
+- do not claim interactive Learning overlays remain available;
+- native subtitle/track behavior may be used only when it maps safely to the selected canonical tracks.
+
+On return:
+- keep the same ActiveSession;
+- restore the same logical position and selected tracks;
+- restore Jularr inline/Theater chrome without creating a second Player instance;
+- process `webkitbeginfullscreen` / `webkitendfullscreen` or equivalent supported events so state does not drift.
+
+The normal iPhone Fullscreen button must therefore prefer **Jularr Theater Mode**, not `webkitEnterFullscreen()`, when custom Player behavior is required.
+
+### Fullscreen action resolution
+
+The recommended implementation for the normal Jularr Fullscreen action is:
+
+```text
+user presses Fullscreen
+  -> Player-root element fullscreen supported and usable?
+       yes -> ElementFullscreen
+       no  -> Theater
+
+explicit "Open in system player/fullscreen"
+  -> native video fullscreen supported?
+       yes -> NativeVideoFullscreen
+       no  -> keep current Jularr mode and hide/disable the unsupported action
+```
+
+Exiting Fullscreen reverses only the presentation mode. It must not stop playback unless the user separately chose Close/Stop.
+
+### Picture in Picture / Popout
+
+PiP must be capability-based and must not be inferred only from `iPhone`, `iPad`, Safari version or PWA status.
+
+Recommended order:
+1. use the standards-based Picture-in-Picture API when it is actually exposed and succeeds;
+2. where necessary, use WebKit presentation-mode capability checks such as `webkitSupportsPresentationMode("picture-in-picture")` plus `webkitSetPresentationMode(...)`;
+3. if neither is usable, hide/disable Popout rather than presenting a dead button.
+
+A capability probe that reports support is not enough after a real invocation returns `NotSupportedError` or otherwise fails. Downgrade the current-session capability and stop offering a broken action until the environment changes/reloads.
+
+Listen to the corresponding enter/leave/presentation-mode events so Jularr chrome and ActiveSession state remain synchronized.
+
+### Safari vs installed PWA
+
+Safari and an installed Home Screen/PWA must share the same Player implementation and contracts. Do not create a separate iOS Player page.
+
+Presentation differences may be detected only to improve layout:
+- standalone display mode may use the full app viewport for Theater Mode;
+- Safari browser mode must account for dynamic browser chrome;
+- neither mode implies that PiP, fullscreen, orientation lock, Wake Lock or Media Session definitely works.
+
+Use `matchMedia("(display-mode: standalone)")` and, where useful for Apple Home Screen detection, the platform-exposed standalone signal only as presentation context. Never use those checks as codec/playback compatibility rules.
+
+### Orientation and safe areas
+
+Do not require orientation lock for correct playback. iPhone/iPad Player layout must remain usable when orientation APIs are missing or denied.
+
+On viewport/orientation change:
+- recompute Player geometry and subtitle safe zones;
+- preserve playback position and controls state;
+- do not reload the media;
+- keep top/bottom actions out of notch/Dynamic Island/home-indicator unsafe areas.
+
+### Subtitles and Learning
+
+Custom subtitle and Learning layers are first-class reasons to prefer Inline/Theater/ElementFullscreen over native video fullscreen.
+
+- Jularr-rendered subtitles remain above the media and independent from transient player chrome.
+- Learning hit targets remain interactive only while Jularr owns the composition.
+- Entering native system fullscreen must not silently pretend those HTML overlays are still available.
+- If native fullscreen is explicitly selected while Learning is On, the action must communicate that interactive Learning controls are unavailable in the system surface; returning restores them without changing Learning state.
+
+### Media Session, background transitions and progress
+
+Use Media Session and related APIs only when actually supported.
+
+Flush meaningful state on:
+- pause;
+- completed seek;
+- visibility/background transition;
+- entering/leaving native fullscreen or PiP;
+- route leave;
+- Player close.
+
+Do not recreate PlaybackPlan or ActiveSession solely because Safari changed presentation mode.
+
+### Implementation ownership
+
+Keep WebKit-specific behavior in the shared web Player presentation/capability layer. Do not spread `navigator.userAgent` checks through controls, playback planning or media-domain code.
+
+The implementation should have:
+- one media element;
+- one Jularr control tree;
+- one presentation-mode resolver;
+- one runtime capability snapshot that can be downgraded after failed API calls;
+- event synchronization for fullscreen/PiP/native-video presentation;
+- CSS presentation states for Inline/Theater/ElementFullscreen rather than separate Player pages.
+
+Playback compatibility remains owned by the canonical capability document + PlaybackPlan. Presentation capability must never become a rule such as `iOS = transcode`.
+
+### AirPlay and Apple-native delivery integration
+
+AirPlay is a first-class Player capability, not a reason to expose Safari's complete native control bar.
+
+Where WebKit exposes the playback-target picker:
+- Jularr may expose its own AirPlay/route action and invoke the platform picker from that user gesture;
+- route availability and route-change events update the existing Player state;
+- the action is hidden/disabled when the current environment cannot offer a route;
+- AirPlay does not create another ActiveSession or progress owner.
+
+The PlaybackPlan should prefer an Apple-native delivery representation when it avoids unnecessary transcoding and improves native playback integration. Native HLS/fMP4 is therefore a valid delivery target when the selected codec/track combination is compatible. This remains capability-driven; never encode `iOS = HLS`.
+
+When the same canonical subtitle track needs different delivery representations:
+- Jularr-owned Inline/Theater playback may render the canonical cues itself for Learning and custom styling;
+- AirPlay/native-system delivery may expose a compatible HLS/WebVTT/native text rendition derived from that same canonical track;
+- there is still one canonical subtitle identity and preference; delivery format is not a second subtitle model.
+
+### Managed Media Source / advanced adaptive web path
+
+Managed Media Source may be used where current WebKit exposes it and it materially improves adaptive/energy-efficient playback. It is an optional delivery mechanism behind the same PlaybackPlan, not a mandatory dependency and not a replacement for native HLS.
+
+If a Managed Media Source path is used, preserve a normal media/HLS source that WebKit can use for system/AirPlay presentation where required. Switching delivery representation must preserve the same logical ActiveSession, position and selected tracks.
+
+### Explicit system-player action
+
+In addition to the normal Jularr Fullscreen action, an overflow action such as **Open in System Player** may be offered when native video presentation is available.
+
+This is intentionally different from Fullscreen:
+- Fullscreen tries to preserve Jularr UI via ElementFullscreen/Theater;
+- System Player intentionally hands presentation to Apple's native media surface for maximum platform integration;
+- the user is told when Jularr-only interaction such as Learning overlays will be unavailable there;
+- return restores the Jularr presentation over the same ActiveSession.
+
+### iOS media self-test and bounded diagnostics
+
+Because real iPhone/iPad WebKit behavior cannot be inferred reliably from desktop/headless tests, Jularr should provide a developer/admin-accessible **Media Self Test** that runs on the actual client.
+
+The self-test should report machine-readable confirmed/inferred/unknown capability results for at least:
+- `canPlayType` / MediaCapabilities results for representative H.264, HEVC, AV1 and relevant audio combinations;
+- native HLS and fMP4;
+- MSE / Managed Media Source when exposed;
+- HDR capability where reliably detectable;
+- PiP and WebKit presentation modes;
+- element fullscreen and native video fullscreen;
+- AirPlay/playback-target picker availability;
+- Media Session;
+- Screen Wake Lock;
+- standalone/Home Screen presentation context;
+- storage estimate/persistence support;
+- relevant viewport/safe-area dimensions.
+
+Diagnostics may offer a **Copy diagnostics** action for support/debugging. Do not include credentials, auth tokens, private media URLs or raw internal exception stacks.
+
+When detailed Player diagnostics are enabled, keep a small bounded in-memory media-event ring buffer, for example the latest ~100 meaningful events:
+- load/start/play/pause;
+- waiting/stalled/playing;
+- seeking/seeked;
+- source/delivery-plan changes;
+- fullscreen/PiP/native presentation enter/leave;
+- AirPlay route changes;
+- visibility/background transitions;
+- recoverable media errors.
+
+Each event should carry only useful timing/state context such as monotonic/client timestamp, current position, PlaybackPlan/session diagnostic id and public error/reason code. This is debugging telemetry, not another durable playback history.
+
+### iOS PWA storage/offline behavior
+
+iOS storage is finite and may be reclaimed. Offline UI must therefore distinguish **requested download**, **verified locally present**, **storage removed/reclaimed**, and **corrupt/incomplete package**.
+
+Where supported:
+- use Storage API estimate/persistence capabilities to improve preflight and diagnostics;
+- show meaningful available/quota information before unusually large offline packages;
+- verify package manifests/checksums before advertising content as ready offline;
+- recover cleanly when WebKit removes local data;
+- never promise browser storage persistence that the platform does not guarantee.
+
+This supplements the canonical offline package contract; it must not create an iOS-only offline database.
+
+### PWA notification/platform integration
+
+Home Screen/PWA integration should progressively use platform capabilities when available:
+- Web Push for meaningful Jularr notifications such as completed downloads or requested-content availability;
+- Badging where supported;
+- declarative push delivery where supported and appropriate;
+- Screen Wake Lock while active playback needs it;
+- Media Session metadata/actions for platform surfaces.
+
+These capabilities must consume the canonical Jularr notification/session state. They must not create separate iOS-only notification or progress truth.
+
+### Required iPhone/iPad verification matrix
+
+Manual real-device verification is required in addition to browser/DOM regression tests because headless automation cannot prove all WebKit media surfaces.
+
+At minimum verify:
+- iPhone Safari portrait + landscape: playback begins inline with Jularr controls and no duplicate Safari controls;
+- iPhone installed Home Screen/PWA portrait + landscape: same Player, Theater fills the standalone viewport and respects safe areas;
+- iPad Safari portrait + landscape: custom controls remain intact through the best supported custom fullscreen path;
+- iPad installed Home Screen/PWA portrait + landscape;
+- normal Fullscreen never unexpectedly launches native Apple video fullscreen when Theater/custom fullscreen is available;
+- explicit native/system fullscreen preserves position/session and restores Jularr correctly on exit;
+- PiP button appears only when the actual current environment can use it and failure does not leave a dead control;
+- selected audio/subtitle state survives Inline <-> Theater <-> fullscreen/PiP transitions;
+- Learning subtitles/overlays remain usable in Jularr-owned presentation modes and are not falsely promised in native fullscreen;
+- Minimize, Popout, Fullscreen and Close remain four distinct actions;
+- rotation, safe-area changes, Safari browser chrome changes and PWA standalone sizing do not reload or restart playback.
+
+The mockup represents the intended Jularr-owned Player state. Apple system playback UI is an explicit compatibility fallback, not the primary iOS/iPadOS design.
 
 ## 9. Timeline, buffer, chapters and skip segments
 
@@ -463,6 +889,25 @@ When playback actually stalls waiting for media:
 - do not show a fake percentage unless the delivery layer exposes a meaningful buffer/download value.
 
 Buffer display is distinct from acquisition/download progress. Normal playback buffering must never expose indexer or download-client internals.
+
+### Buffer policy contract
+
+The visible Player consumes one canonical runtime buffer policy from the PlaybackPlan/session owner. The Player must not invent independent browser-only thresholds.
+
+The policy distinguishes:
+- **startup buffer** — minimum useful media-ahead before normal playback begins/resumes;
+- **target buffer ahead** — preferred steady-state reserve;
+- **resume/low-water mark** — reserve below which delivery/transcoding should become aggressive again;
+- **maximum buffer ahead** — upper bound after which server-side live processing may be paced/throttled instead of wasting CPU/GPU/disk.
+
+Rules:
+- **Automatic** is the normal default and may adapt these values from delivery mode, network stability, device capability and server resources;
+- Advanced/admin policy may expose explicit values such as 15 / 30 / 60 / 120 seconds where the delivery stack can honor them;
+- Direct Play/browser-controlled fetching may make server-side ahead targets advisory rather than exact; diagnostics must distinguish requested target from actually observed client buffer;
+- a larger buffer must not silently turn temporary playback cache into a durable optimized version;
+- buffering policy is session/runtime state, not acquisition/download progress and not a second progress store;
+- after a seek or delivery restart, the pipeline may temporarily use a **seek/startup burst** to rebuild a safe reserve quickly, then return to normal pacing;
+- the normal Player exposes only simple Auto/quality behavior; low/high watermarks and resource tuning belong to advanced/admin policy.
 
 ### Chapters
 
@@ -549,6 +994,168 @@ Do not present resolution-only labels if the actual decision is bitrate/network 
 
 Changing quality requests a new plan/session delivery while preserving position and track selections.
 
+### Automatic quality runtime behavior
+
+Automatic quality is runtime-aware rather than a one-time startup guess.
+
+Where the delivery/client can report reliable measurements, the canonical session feeds back:
+- measured sustainable throughput using a smoothed estimator rather than one instantaneous sample;
+- current buffer-ahead seconds;
+- recent rebuffer/stall count and cumulative stall duration;
+- segment/download timing for segmented delivery;
+- dropped-frame/decode stress where useful;
+- current transcode speed and server resource pressure from the server-side session owner.
+
+Adaptation rules:
+- downshift quickly when evidence shows playback is not sustainable;
+- upshift conservatively after a stable window;
+- use hysteresis/cooldown so quality does not oscillate between adjacent levels;
+- never upscale above the source merely to match a preset;
+- if true multi-rendition ABR is unavailable, a quality change may request a new PlaybackPlan/delivery at the same absolute position while preserving ActiveSession, selected tracks and progress;
+- the Player reports measurements; it does not locally become a second quality-decision engine.
+
+## 10a. Audio/video sync correction
+
+A/V sync is a first-class playback correction, not an undocumented FFmpeg workaround.
+
+### User correction
+When audio is visibly early/late, the Player exposes **Audio sync** inside the Audio/settings surface:
+- adjustment in milliseconds with clear direction semantics;
+- small-step controls suitable for lip-sync correction, plus direct reset to 0 ms;
+- applies to the current ActiveSession immediately without changing canonical progress;
+- session-only by default;
+- an authenticated user may optionally remember a personal correction for the exact Version/File + selected audio Track; that preference must not affect other users.
+
+The active correction must remain stable across pause/resume, seek, quality changes, remux/transcode fallback, fullscreen/PiP and restoration of the same ActiveSession. Seeking must never accumulate the delay a second time.
+
+A non-zero correction becomes an explicit PlaybackPlan input/reason. If the current Direct Play client cannot apply the requested correction reliably while leaving the original untouched, Direct Play is ruled out with a machine-readable reason and Jularr selects the lightest valid processing path. The client must not silently pretend the adjustment is active.
+
+### Source/admin repair
+Admin diagnostics for the canonical File/Track must distinguish:
+- source/container timing anomaly;
+- selected audio-track offset/delay metadata;
+- timestamp discontinuity/non-zero or negative stream starts;
+- delivery/remux/transcode timing regression;
+- client-only playback behavior.
+
+The media analysis should retain timing facts required for diagnosis where ffprobe exposes them, including stream/container start times, time bases and relevant timestamp/disposition metadata.
+
+Admin actions:
+- **Analyze A/V timing** without modifying the source;
+- preview/test a correction;
+- store an explicit canonical timing override for the affected File + audio Track when the source is known to be wrong;
+- create/use a lossless repaired derivative/remux when timestamp/container repair is sufficient;
+- mark the Version/source as bad and trigger the normal replacement/re-request workflow when repair is not trustworthy.
+
+Original media stays read-only. Jularr must not destructively rewrite the only source file.
+
+Automatic repair may normalize objectively broken timestamp structure when the condition is deterministic and reversible. Jularr must not automatically guess subjective lip-sync from picture/speech content and persist that guess as truth.
+
+### Offset versus progressive drift
+
+Jularr must distinguish a constant timing offset from progressive A/V drift.
+
+- **Constant offset:** audio is early/late by roughly the same amount throughout playback.
+- **Progressive drift:** audio gradually moves further away from video over time.
+- The two conditions must not share one opaque correction path.
+- Constant offsets may use the explicit session/user/canonical timing correction described above.
+- Progressive drift requires timestamp/clock diagnosis and, where needed, controlled audio timestamp correction/resampling or another deterministic FFmpeg synchronization strategy.
+- A drift repair must preserve pitch and playback speed unless the selected repair method explicitly requires a bounded synchronization correction.
+- Diagnostics should expose observed drift separately from the configured static offset.
+
+### Subtitle sync
+
+Subtitle timing correction follows the same explicit model:
+- user can apply a temporary subtitle delay/advance without changing media progress;
+- optional remembered correction is scoped to the exact Version/File + subtitle Track;
+- canonical admin overrides are separate from personal/session adjustments;
+- subtitle timing correction must survive seek, track changes, quality changes and restoration of the same ActiveSession;
+- subtitle offset must never be silently folded into audio correction.
+
+### Playback problem reporting
+
+The Player should expose a compact **Report playback problem** action when diagnostics are available.
+
+For sync-related reports Jularr records a bounded technical snapshot such as:
+- canonical Work/Version/File/Track identities;
+- selected audio/subtitle tracks;
+- playback position;
+- PlaybackPlan and delivery mode;
+- active user/session timing corrections;
+- relevant probed source timing facts;
+- client capability summary;
+- remux/transcode encoder/backend when applicable;
+- recent seek/re-plan/fallback events relevant to timing.
+
+The report must not include raw filesystem paths, secrets, arbitrary FFmpeg command strings or unrelated private data. Admin diagnostics should make the report reproducible where possible.
+
+### Timing fault classification
+
+Diagnostics may classify evidence into explicit categories such as:
+- source/container timing fault;
+- audio-track offset;
+- subtitle-track offset;
+- progressive drift;
+- remux/transcode timing regression;
+- client-specific playback behavior;
+- unknown / insufficient evidence.
+
+Classification must be evidence-based. Jularr must not claim a source is objectively broken when only a subjective lip-sync complaint exists.
+
+### Correction precedence
+
+Timing corrections use one deterministic precedence model so fixes are never applied twice:
+1. structural source/derivative timestamp repair;
+2. canonical File/Track timing override;
+3. personal user timing override;
+4. temporary ActiveSession adjustment.
+
+Diagnostics show the effective correction and its components. Re-planning, seeking or changing tracks must recompute from these canonical inputs rather than adding offsets incrementally.
+
+### Known-bad source feedback
+
+When an admin has confirmed a Version/release as timing-broken:
+- Jularr may mark that exact source/release as bad;
+- replacement/re-request uses the normal acquisition pipeline;
+- release scoring should strongly penalize the confirmed bad release/fingerprint so the same broken source is not selected again;
+- this signal must be scoped narrowly enough not to blacklist unrelated releases with similar names.
+
+### Repaired derivative cache
+
+When a deterministic non-destructive remux/repair produces a verified compatible derivative:
+- cache/reuse the repaired derivative for future playback when policy/storage allows;
+- record provenance back to the original File and the repair recipe/version;
+- invalidate/rebuild when the source changes or the repair logic version makes the derivative stale;
+- never replace the canonical original silently;
+- avoid repeating the same repair on every playback session.
+
+### Real-media regression corpus
+
+In addition to unit/argument tests, maintain a small legal test corpus or generated fixtures covering:
+- constant positive and negative audio offset;
+- progressive drift;
+- non-zero and negative stream starts;
+- timestamp discontinuities;
+- remux with copied audio/video;
+- audio conversion without video encode;
+- full transcode;
+- HLS/fMP4 segmentation and seeking;
+- subtitle offset cases;
+- already-correct media.
+
+Regression runs should verify not only command construction but actual observed output timing where practical.
+
+### Verification
+Regression coverage must include at least:
+- positive and negative audio offsets;
+- non-zero/negative stream start timestamps;
+- Direct Play versus remux versus audio-convert/transcode behavior;
+- seek before/after a correction;
+- HLS/fMP4 segment boundaries;
+- track switches;
+- repeated re-plan/fallback without cumulative drift;
+- a source that is already synchronized and therefore remains at 0 ms.
+
 ## 11. Playback mode status and diagnostics
 
 Normal UI may show a compact status in overflow/details:
@@ -565,11 +1172,19 @@ Diagnostics may show:
 - source/delivered container and codecs;
 - resolution/bitrate;
 - selected audio/subtitle;
-- throughput and buffer health;
-- transcode encoder/speed when applicable;
-- dropped frames/segment status where available.
+- measured/smoothed throughput and required bitrate;
+- actual buffer ahead plus target/low-water values when meaningful;
+- rebuffer/stall count and cumulative stall duration;
+- segment/download timing and cache status where available;
+- transcode encoder/backend, speed and FPS when applicable;
+- active / throttled / queued transcode state where applicable;
+- attributable CPU/GPU pressure only when the server can measure it reliably;
+- first-frame / first-segment latency when available;
+- repeated segment/producer failure count and current recovery/fallback state;
+- timestamp discontinuity or growing A/V-drift recovery reason when detected;
+- dropped frames where available.
 
-Diagnostics must never expose raw filesystem paths, secrets or arbitrary FFmpeg command strings.
+Diagnostics must clearly distinguish observed client values from policy targets/estimates. It must never expose raw filesystem paths, secrets or arbitrary FFmpeg command strings.
 
 ## 12. Progress and completion semantics
 
@@ -615,7 +1230,7 @@ When the next item is not locally ready but user policy allows instant acquisiti
 ## 14. Preparing / loading / partial states
 
 ### Resolving
-Short initial state while capabilities, file availability and PlaybackPlan are resolved.
+Short initial state while capabilities, file availability and PlaybackPlan are resolved. This state is only entered after a playable local target exists; manager-only instances and still-acquiring media do not open the Player.
 
 Show:
 - media title/context;
@@ -623,24 +1238,38 @@ Show:
 - no fake timeline.
 
 ### Preparing / acquiring
-Used when content is not ready locally but the play action triggered the acquisition flow.
+Used when content is not ready locally but an explicit playback intent triggered canonical Request/acquisition under the Instant Play contract.
+
+Before Player startup, the originating Detail/Preview surface owns the consumer sequence `Looking for media -> Getting episode/movie/media -> Preparing`. The full Player is not opened merely to show acquisition progress.
 
 Show compact user information such as:
 - Preparing;
 - requested language/profile summary if useful;
 - progress only when reliable;
-- Cancel/Back only when policy permits.
+- Stop waiting/Back only when policy permits.
+
+`Stop waiting` cancels only the transient auto-start intent; it must not falsely claim to cancel shared Request/monitoring acquisition. If the user navigates away before Ready, Jularr must not unexpectedly open the Player later.
 
 Do not expose indexer/download-client internals.
 
 ### Remux/transcode startup
 Show a normal loading state. Only show technical reason inside diagnostics.
 
+An admitted remux/transcode should produce playable media incrementally; the Player must never imply that the complete item is being prepared first. After start/seek, the delivery layer may run a short fill burst to rebuild the startup/resume buffer. Once the configured high-water/maximum-ahead threshold is reached, server-side live processing may be paced/throttled and resume aggressively below the low-water threshold.
+
+If the server cannot sustain the requested live transcode, the canonical PlaybackPlan/resource controller chooses a lower-cost compatible plan, lower quality, queue/unavailable state or another configured fallback. The Player only renders that decision and its reason.
+
 ### Buffering
 Keep the current frame when possible, show a center spinner after a short delay, keep controls available, and continue to show the buffered range in the timeline. For prolonged stalls add a concise `Buffering…` label. Do not show unreliable percentages.
 
+Repeated startup/segment/media failures must not become an endless spinner/retry loop. The Player follows bounded canonical recovery and preserves the same ActiveSession/absolute position when a valid fallback exists. When recovery is exhausted, show a concise stable error with Retry/Back and Diagnostics where appropriate; technical failure classification remains inside Diagnostics.
+
 ### Storage waking/offline
 Explain that media storage is unavailable/waking and expose Retry/Back. Do not classify it as codec failure.
+
+### Manager-only boundary
+
+When Jularr Playback is disabled/unavailable for the instance, this Player surface is not part of the consumer flow. Acquisition ends at `Available` / `Monitoring future releases` on Detail/Request surfaces. Do not render disabled Player chrome as a manager-only availability page.
 
 ## 15. Empty / unavailable states
 
@@ -856,6 +1485,10 @@ The Player must not query legacy Anime/Episode-only tables as its permanent sour
 - No Auto-Skip enabled by default.
 - No Auto-Skip without a canonical eligible segment marker.
 - No single symmetric seek-step setting that forces backward and forward to use the same duration; the canonical Player contract must support 10 seconds backward and 30 seconds forward independently.
+- No `controls` attribute or `video.controls = true` for normal iPhone/iPad inline playback while Jularr custom controls are active.
+- No normal iPhone Fullscreen action that blindly calls `webkitEnterFullscreen()` and discards Jularr controls/overlays.
+- No UA-only `iPhone/iPad/Safari` switch deciding fullscreen, PiP, playback compatibility or transcoding behavior.
+- No duplicate iOS/iPadOS Player page or second ActiveSession merely to handle WebKit presentation differences.
 
 ## 24. Mockup acceptance checklist
 
@@ -876,10 +1509,24 @@ A Player mockup is acceptable only when:
 - audio/subtitle/quality are accessible without persistent clutter;
 - Light/Dark contrast behavior is defined;
 - played/buffered/remaining timeline states are visually distinct;
+- buffer diagnostics distinguish actual observed buffer from target/low-water policy;
+- Automatic quality can consume measured throughput, buffer, stalls and server transcode health without creating client-side decision logic;
+- seek/restart buffering preserves ActiveSession, track selections and absolute position;
+- remux/transcode startup is incremental and may use bounded seek/startup fill bursts plus high/low-water throttling;
+- prolonged buffering is counted/diagnosable without showing a fake percentage;
+- first-frame/first-segment latency and repeated segment/producer failures are diagnosable when the delivery stack exposes them;
+- repeated plan/backend/media failures use bounded recovery and never leave the Player in an infinite retry/spinner loop;
+- timestamp/sync recovery preserves ActiveSession and logical position where a valid fallback exists;
 - chapters and segment markers are visible without making the timeline noisy;
 - manual Skip actions are direct contextual buttons;
 - Auto-Skip has explicit settings, defaults Off and provides temporary Undo feedback;
 - preparing/loading/buffering/error states have clear treatment;
 - completion vs resume semantics are not visually conflated;
 - no legacy media model is implied;
-- no control depends on a capability the platform may not have without a fallback state.
+- no control depends on a capability the platform may not have without a fallback state;
+- iPhone/iPad inline playback uses `playsinline` with Jularr custom controls and does not expose duplicate Safari inline controls;
+- normal Fullscreen preserves Jularr chrome by resolving to Player-root element fullscreen when usable, otherwise Jularr Theater Mode;
+- native Apple video fullscreen is explicit/last-resort and round-trips through the same ActiveSession;
+- PiP/Popout is shown from actual runtime capability and can downgrade cleanly after a failed invocation;
+- Safari and Home Screen/PWA share one Player implementation while handling standalone viewport/safe-area differences deliberately;
+- real-device iPhone/iPad Safari + Home Screen verification covers portrait, landscape, fullscreen/Theater, PiP, track persistence and Learning-overlay behavior.

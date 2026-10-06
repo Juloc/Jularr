@@ -1,5 +1,4 @@
 @page "/Library/Episode/{id:guid}"
-@using System.Text.Json
 @using Jularr.Web.Features.Playback
 @using Jularr.Web.Features.Playback.Decision
 @using Jularr.Web.Features.ClientApi
@@ -19,7 +18,6 @@
     var resumeLabel = Jularr.Web.Features.Progress.EpisodeProgressService.FormatPosition(resumeMs);
     var episodeCode = $"S{Model.SeasonNumber:00} E{Model.EpisodeNumber:00}";
     var nativeTitle = Model.Metadata?.NativeTitle;
-    var seekStep = PlayerDesign.SeekStepSeconds;
     var isAndroidClient = Request.Headers.UserAgent.ToString()
         .Contains("JularrAndroid/", StringComparison.OrdinalIgnoreCase);
 }
@@ -44,359 +42,34 @@
 }
 else if (Model.Playback.Media is { } media)
 {
-    <section class="player-panel"
-             data-episode-player
-             data-episode-id="@Model.EpisodeId"
-             data-duration-seconds="@(media.DurationSeconds?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "")"
-             data-playback-plan-url="@ClientApiRoutes.PlaybackPlan(Model.EpisodeId)"
-             data-app-version="@Jularr.Web.Features.Appearance.AppBuildInfo.Version"
-             data-stream-session-url-template="@ClientApiRoutes.StreamSession(Guid.Empty).Replace(Guid.Empty.ToString("D"), "__session__")"
-             data-storage-state="@(media.Storage is { } storage ? ClientApiMappings.AvailabilityStateName(storage.State) : "unknown")"
-             data-storage-availability-url="@ClientApiRoutes.MediaAvailability(media.MediaFileId)"
-             data-player-bootstrap-url="@ClientApiRoutes.Player(Model.EpisodeId)"
-             data-progress-url="@ClientApiRoutes.Progress(Model.EpisodeId)"
-             data-resume-seconds="@Model.ResumePositionSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)"
-             data-next-url="@(Model.NextEpisodeUrl ?? "")"
-             data-autoplay-next="@((Model.Flow?.AutoplayNext == true).ToString().ToLowerInvariant())"
-             data-playback-preferences-url="@ClientApiRoutes.PlaybackPreferences"
-             data-storage-health="@(media.Storage is { } health ? StorageHealth.Name(health.Health) : "")">
-        @* The whole player lives in the stage: one timeline, one control bar and every setting in
-           the player menu, so it behaves the same inline and in full screen. *@
-        <div class="video-stage player-placeholder"
-             data-video-stage
-             data-player-chrome
-             data-chrome-state="idle"
-             tabindex="0"
-             aria-label="@ui["library.watch.playerAria"]">
-            <video preload="none" playsinline hidden data-playback-video></video>
-            <div class="player-subtitle-stack">
-                <div class="subtitle-overlay"
-                     data-subtitle-overlay
-                     lang="ja"
-                     aria-live="polite"
-                     hidden></div>
-                <div class="playback-subtitle-overlay"
-                     data-playback-subtitle
-                     aria-live="polite"
-                     hidden></div>
-            </div>
-
-            @* Double-tap seek feedback on the side that was tapped (player-chrome.js). *@
-            <div class="player-seek-feedback" data-seek-feedback="back" aria-hidden="true" hidden>
-                <partial name="_PlayerIcon" model="@("seekBack")" />
-                <span data-seek-feedback-label></span>
-            </div>
-            <div class="player-seek-feedback" data-seek-feedback="forward" aria-hidden="true" hidden>
-                <partial name="_PlayerIcon" model="@("seekForward")" />
-                <span data-seek-feedback-label></span>
-            </div>
-
-            <div class="playback-preparation" data-playback-placeholder>
-                <span class="eyebrow">@ui["library.episode.browserPlayback"]</span>
-                <strong data-playback-status>@ui["library.episode.startingPlayback"]</strong>
-                <div class="playback-preparation-actions" data-storage-actions hidden>
-                    <button class="button" type="button" data-storage-retry>@ui["library.episode.tryAgain"]</button>
-                    <button class="button button-primary" type="button" data-storage-wake hidden>@ui["player.play"]</button>
-                </div>
-            </div>
-
-            <div class="player-chrome" data-player-controls>
-                <div class="player-top">
-                    <div class="player-heading">
-                        <strong>@Model.AnimeTitle</strong>
-                        <span>@episodeCode – @Model.EpisodeTitle</span>
-                        @if (!string.IsNullOrWhiteSpace(nativeTitle))
-                        {
-                            <span lang="ja">@nativeTitle</span>
-                        }
-                    </div>
-                </div>
-
-                @* The one play/pause button. Tapping the video only shows or hides these controls. *@
-                <div class="player-center">
-                    <button class="player-round-button" type="button" data-player-action="seekBack10"
-                            aria-label="@ui.Format("library.episode.seekBack", ("seconds", seekStep))">
-                        <partial name="_PlayerIcon" model="@("seekBack")" />
-                        <span>@seekStep</span>
-                    </button>
-                    <button class="player-round-button player-round-button-main" type="button" data-chrome-play
-                            aria-label="@ui["library.watch.play"]"
-                            data-label-play="@ui["library.watch.play"]" data-label-pause="@ui["library.watch.pause"]">
-                        <partial name="_PlayerIcon" model="@("play")" />
-                    </button>
-                    <button class="player-round-button" type="button" data-player-action="seekForward10"
-                            aria-label="@ui.Format("library.episode.seekForward", ("seconds", seekStep))">
-                        <partial name="_PlayerIcon" model="@("seekForward")" />
-                        <span>@seekStep</span>
-                    </button>
-                </div>
-
-                <div class="player-bottom">
-                    <div class="player-timeline-row" data-playback-timeline-row>
-                        <input class="player-timeline"
-                               type="range"
-                               min="0"
-                               max="0"
-                               step="0.1"
-                               value="0"
-                               disabled
-                               aria-label="@ui["library.episode.seekTimelineAria"]"
-                               data-playback-timeline />
-                    </div>
-                    <div class="player-bar">
-                        <div class="player-bar-group">
-                            @if (Model.NextEpisodeUrl is { } playerNextUrl)
-                            {
-                                <a class="player-icon-button" href="@playerNextUrl" data-player-next
-                                   aria-label="@ui["library.episode.nextEpisode"]" title="@ui["library.episode.nextEpisode"]">
-                                    <partial name="_PlayerIcon" model="@("next")" />
-                                </a>
-                            }
-                            <div class="player-volume">
-                                <button class="player-icon-button" type="button" data-chrome-mute
-                                        aria-label="@ui["library.watch.mute"]" title="@ui["library.watch.mute"]"
-                                        data-label-mute="@ui["library.watch.mute"]" data-label-unmute="@ui["library.watch.unmute"]">
-                                    <partial name="_PlayerIcon" model="@("volume")" />
-                                </button>
-                                <input class="player-volume-slider" type="range" min="0" max="1" step="0.05" value="1"
-                                       aria-label="@ui["library.watch.volume"]" data-chrome-volume />
-                            </div>
-                            <span class="player-time">
-                                <span data-playback-current>0:00</span>
-                                <span aria-hidden="true">/</span>
-                                <span data-playback-duration>--:--</span>
-                            </span>
-                        </div>
-                        <div class="player-bar-group">
-                            @if (Model.Controls is { HasLearningCues: true })
-                            {
-                                <button class="player-icon-button" type="button"
-                                        data-player-action="repeatCurrentCue"
-                                        data-repeat-line
-                                        aria-label="@ui["library.episode.repeatCurrentLine"]"
-                                        title="@ui["library.episode.repeatCurrentLine"]">
-                                    <partial name="_PlayerIcon" model="@("replay")" />
-                                </button>
-                            }
-                            <button class="player-icon-button" type="button" data-chrome-subtitles hidden
-                                    aria-label="@ui["library.watch.subtitlesToggle"]" title="@ui["library.watch.subtitlesToggle"]" aria-pressed="false">
-                                <partial name="_PlayerIcon" model="@("subtitles")" />
-                            </button>
-                            <button class="player-icon-button" type="button" data-chrome-settings-toggle
-                                    aria-label="@ui["library.watch.settings"]" title="@ui["library.watch.settings"]" aria-expanded="false" aria-controls="player-settings">
-                                <partial name="_PlayerIcon" model="@("settings")" />
-                            </button>
-                            <button class="player-icon-button" type="button" data-chrome-pip hidden
-                                    aria-label="@ui["library.watch.pictureInPicture"]" title="@ui["library.watch.pictureInPicture"]">
-                                <partial name="_PlayerIcon" model="@("pictureInPicture")" />
-                            </button>
-                            <button class="player-icon-button" type="button" data-chrome-fullscreen
-                                    aria-label="@ui["library.watch.fullscreen"]" title="@ui["library.watch.fullscreen"]"
-                                    data-label-enter="@ui["library.watch.fullscreen"]" data-label-exit="@ui["library.watch.exitFullscreen"]">
-                                <partial name="_PlayerIcon" model="@("fullscreen")" />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="player-settings" id="player-settings" data-chrome-settings role="dialog" aria-label="@ui["library.watch.settings"]" hidden>
-                    <div class="player-settings-header">
-                        <strong>@ui["library.watch.settings"]</strong>
-                        <button class="player-icon-button" type="button" data-chrome-settings-close aria-label="@ui["library.watch.closeSettings"]">
-                            <partial name="_PlayerIcon" model="@("close")" />
-                        </button>
-                    </div>
-                    @if (Model.Controls is { } controls)
-                    {
-                        <label class="player-setting">
-                            <span><partial name="_PlayerIcon" model="@("speed")" /> @ui["library.episode.speed"]</span>
-                            <select data-playback-speed>
-                                @foreach (var speed in controls.Speeds)
-                                {
-                                    <option value="@speed.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                            selected="@(Math.Abs(speed - controls.InitialSpeed) < 0.0001)">@PlayerDesign.FormatSpeed(speed)</option>
-                                }
-                            </select>
-                        </label>
-
-                        <label class="player-setting">
-                            <span><partial name="_PlayerIcon" model="@("subtitles")" /> @ui["library.episode.subtitles"]</span>
-                            <select data-subtitle-track>
-                                <option value="@PlayerControls.SubtitleOff"
-                                        selected="@(controls.InitialSubtitle == PlayerControls.SubtitleOff)">@ui["library.episode.subtitlesOff"]</option>
-                                @if (controls.HasLearningCues)
-                                {
-                                    <option value="@PlayerControls.SubtitleLearning"
-                                            data-language="ja"
-                                            selected="@(controls.InitialSubtitle == PlayerControls.SubtitleLearning)">@ui["library.episode.japaneseLearning"]</option>
-                                }
-                                @foreach (var track in controls.SubtitleTracks)
-                                {
-                                    @* Picture subtitles (PGS, VobSub) are burned into the video by the server;
-                                       the menu says so up front instead of after a surprising restart. *@
-                                    var note = !track.IsSelectable
-                                        ? ui["library.episode.subtitleUnsupported"]
-                                        : track.IsImage ? ui["library.episode.subtitleBurnedIn"] : null;
-                                    <option value="@track.Id"
-                                            data-language="@(track.Language ?? "")"
-                                            data-learning-source="@(track.IsLearningSource ? "true" : "false")"
-                                            data-image="@(track.IsImage ? "true" : "false")"
-                                            data-format="@(track.Format ?? "")"
-                                            disabled="@(!track.IsSelectable)"
-                                            selected="@(track.Id == controls.InitialSubtitle)">@track.Label@(note is null ? "" : $" · {note}")</option>
-                                }
-                            </select>
-                        </label>
-                        <small class="player-setting-hint" data-subtitle-hint aria-live="polite"></small>
-
-                        @if (controls.AudioTracks.Count > 1)
-                        {
-                            <label class="player-setting">
-                                <span><partial name="_PlayerIcon" model="@("audioTrack")" /> @ui["library.episode.audio"]</span>
-                                <select data-audio-track>
-                                    @foreach (var track in controls.AudioTracks)
-                                    {
-                                        <option value="@track.Id"
-                                                data-language="@(track.Language ?? "")"
-                                                selected="@(track.Id == controls.InitialAudioTrackId)">@track.Label</option>
-                                    }
-                                </select>
-                            </label>
-                        }
-
-                        <label class="player-setting">
-                            <span><partial name="_PlayerIcon" model="@("quality")" /> @ui["library.episode.quality"]</span>
-                            <select data-quality-cap>
-                                <option value="auto">@ui["playback.quality.auto"]</option>
-                                <option value="original">@ui["playback.quality.original"]</option>
-                                @foreach (var step in PlaybackQualityPresets.Ladder)
-                                {
-                                    <option value="@step.Name">@ui.Format("playback.quality.mbps", ("value", step.BitrateKbps / 1000))</option>
-                                }
-                            </select>
-                        </label>
-                        <small class="player-setting-hint" data-quality-hint aria-live="polite"></small>
-                    }
-
-                    <label class="player-setting">
-                        <span>@ui["library.episode.playbackLabel"]</span>
-                        <select data-playback-mode>
-                            <option value="auto">@ui["playback.preference.auto"]</option>
-                            <option value="direct_only">@ui["playback.preference.direct_only"]</option>
-                            <option value="always_transcode">@ui["playback.preference.always_transcode"]</option>
-                        </select>
-                    </label>
-                    @* Compact status for everyone ("Direct Play · HEVC · 1080p · AAC"); the reasons only
-                       appear when the original is not played untouched. *@
-                    <div class="player-setting-status">
-                        <span class="status-pill" data-playback-badge>@ui["library.episode.checking"]</span>
-                        <small data-playback-summary>@ui["playback.status.checking"]</small>
-                        <div class="player-playback-reasons" data-playback-reasons hidden>
-                            <strong data-playback-reasons-heading>@ui["playback.status.whyNotDirectPlay"]</strong>
-                            <ul data-playback-reason-list></ul>
-                        </div>
-                        @* Technical detail stays folded away inside the settings panel. *@
-                        <details class="player-diagnostics" data-playback-diagnostics hidden>
-                            <summary>@ui["playback.diagnostics.title"]</summary>
-                            <dl data-playback-diagnostics-list></dl>
-                        </details>
-                    </div>
-
-                    <label class="player-setting player-setting-toggle">
-                        <span>@ui["library.episode.autoplayNextEpisode"]</span>
-                        <input type="checkbox"
-                               data-autoplay-toggle
-                               checked="@(Model.Flow?.AutoplayNext == true)" />
-                    </label>
-
-                    <div class="player-settings-actions">
-                        <button class="button"
-                                type="button"
-                                data-restart
-                                hidden="@(Model.ResumePositionSeconds <= 0)">↺ @ui["library.episode.restartFromBeginning"]</button>
-                        @if (Model.Controls is not null)
-                        {
-                            <button class="button"
-                                    type="button"
-                                    data-save-playback-defaults
-                                    title="@ui["library.episode.saveDefaultsHint"]">@ui["library.episode.saveAsMyDefaults"]</button>
-                        }
-                    </div>
-                </div>
-            </div>
-
-            @if (Model.ShowPlayerTools)
-            {
-            <aside class="player-learning-sheet"
-                   data-word-inspector
-                   aria-label="@ui["library.episode.subtitleLearningAria"]"
-                   hidden>
-                <div class="player-learning-sheet-header">
-                    <div class="player-learning-copy">
-                        <span class="player-learning-kicker" data-learning-kicker>@ui["library.episode.word"]</span>
-                        <strong class="player-learning-word" data-word lang="ja"></strong>
-                        <span class="player-learning-reading" data-reading lang="ja"></span>
-                    </div>
-                    <button class="player-icon-button"
-                            type="button"
-                            data-close-learning
-                            data-player-action="closeOverlay"
-                            aria-label="@ui["library.episode.closeLearningOverlay"]"><partial name="_PlayerIcon" model="@("close")" /></button>
-                </div>
-                <p class="player-learning-meaning" data-meaning></p>
-                <div class="player-learning-actions">
-                    <button class="button player-action-button"
-                            type="button"
-                            data-replay
-                            data-player-action="repeatCurrentCue">↻ @ui["library.episode.repeatLine"]</button>
-                    <span class="status-pill" data-state></span>
-                </div>
-            </aside>
-            }
-
-            <div class="post-play" data-post-play role="dialog" aria-label="@ui["library.episode.episodeFinished"]" hidden>
-                <strong>@ui["library.episode.episodeFinished"]</strong>
-                <span class="post-play-countdown" data-post-play-countdown aria-live="polite" hidden></span>
-                <div class="post-play-actions">
-                    <button class="button" type="button" data-post-play-replay>↻ @ui["library.episode.replay"]</button>
-                    @if (Model.NextEpisodeUrl is { } postPlayNextUrl)
-                    {
-                        <a class="button button-primary" href="@postPlayNextUrl" data-post-play-next>@ui["library.episode.nextEpisode"]</a>
-                    }
-                    <a class="button" href="/Library/Anime/@Model.AnimeId" data-post-play-back>@ui["library.episode.backToEpisodes"]</a>
-                    <button class="button" type="button" data-post-play-cancel hidden>@ui["library.episode.cancelAutoplay"]</button>
-                </div>
-            </div>
-
-            <div class="player-error" data-player-error hidden></div>
-        </div>
-        <div class="reader-menu-offline" data-offline-media-item data-offline-media-kind="episode" data-offline-media-id="@Model.EpisodeId">
-            <button class="button" type="button" data-offline-episode-save="@Model.EpisodeId">@ui["offlineLibrary.action.saveButton"]</button>
-            <progress data-offline-media-progress max="100" value="0" hidden></progress>
-            <small data-offline-media-status></small>
-        </div>
-
-        @if (Model.Controls is { } controlsData)
-        {
-            <script type="application/json" data-player-controls-data>@Html.Raw(JsonSerializer.Serialize(new
-            {
-                fileDefaultAudioTrackId = controlsData.FileDefaultAudioTrackId,
-                initialAudioTrackId = controlsData.InitialAudioTrackId,
-                sourceHeight = controlsData.SourceHeight,
-                seekStepSeconds = seekStep,
-                subtitleCuesUrlTemplate = ClientApiRoutes.SubtitleTrackCues(Model.EpisodeId, "__track__")
-            }, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
-        }
-        <script type="application/json" data-player-icons>@Html.Raw(JsonSerializer.Serialize(new[] { "play", "pause", "volume", "volumeMuted", "fullscreen", "fullscreenExit" }.ToDictionary(name => name, name => new { viewBox = PlayerDesign.Icon(name).ViewBox, path = PlayerDesign.Icon(name).Path })))</script>
-        <script type="application/json" data-cue-data>@Html.Raw(JsonSerializer.Serialize(Model.Controls is { HasLearningCues: true } ? Model.Playback.Cues : [], new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
-        <script type="application/json" data-player-text>@Html.Raw(JsonSerializer.Serialize(ui.WithPrefix("playback.")))</script>
-    </section>
+    var stage = new VideoPlayerStageView(
+        Ui: ui,
+        LegacyEpisodeId: Model.EpisodeId,
+        Target: null,
+        PlanUrl: ClientApiRoutes.PlaybackPlan(Model.EpisodeId),
+        PlayerBootstrapUrl: ClientApiRoutes.Player(Model.EpisodeId),
+        ProgressUrl: ClientApiRoutes.Progress(Model.EpisodeId),
+        StorageAvailabilityUrl: ClientApiRoutes.MediaAvailability(media.MediaFileId),
+        StorageState: media.Storage is { } storage ? ClientApiMappings.AvailabilityStateName(storage.State) : "unknown",
+        StorageHealth: media.Storage is { } health ? StorageHealth.Name(health.Health) : "",
+        DurationSeconds: media.DurationSeconds,
+        ResumeSeconds: Model.ResumePositionSeconds,
+        NextUrl: Model.NextEpisodeUrl,
+        AutoplayNext: Model.Flow?.AutoplayNext == true,
+        OffersAutoplay: true,
+        FinishedKey: "library.episode.episodeFinished",
+        Title: Model.AnimeTitle,
+        EpisodeLine: $"{episodeCode} – {Model.EpisodeTitle}",
+        NativeTitle: nativeTitle,
+        BackUrl: $"/Library/Anime/{Model.AnimeId}",
+        BackLabelKey: "library.episode.backToEpisodes",
+        SubtitleCuesUrlTemplate: ClientApiRoutes.SubtitleTrackCues(Model.EpisodeId, "__track__"),
+        Controls: Model.Controls,
+        Cues: Model.Playback.Cues,
+        ShowPlayerTools: Model.ShowPlayerTools);
+    <partial name="_VideoPlayerStage" model="stage" />
     <partial name="_LanguageInspector" model='LanguageInspectorHost.ForAnimeEpisode(Model.AnimeId, Model.EpisodeId, "ja")' />
-    <script src="~/js/player-design.js" asp-append-version="true"></script>
-    <script src="~/js/playback-capabilities.js" asp-append-version="true"></script>
-    <script src="~/js/episode-player.js" asp-append-version="true"></script>
-    <script src="~/js/player-gestures.js" asp-append-version="true"></script>
-    <script src="~/js/player-chrome.js" asp-append-version="true" defer></script>
+    <partial name="_VideoPlayerScripts" />
     <partial name="_EpisodeMediaNavigation" model="new Jularr.Web.Features.MediaSegments.EpisodeMediaNavigationView(Model.EpisodeId, Model.Playback.Navigation, CanEdit: false, ui)" />
 }
 else

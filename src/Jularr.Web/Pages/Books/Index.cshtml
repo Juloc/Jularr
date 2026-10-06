@@ -5,6 +5,7 @@
     var ui = Model.Ui;
     ViewData["Title"] = ui["books.index.title"];
     var access = Model.Access;
+    var addBookLabel = access.CanRequest ? ui["books.page.requestBook"] : ui["books.page.addBook"];
 }
 @section Head {
     <link rel="stylesheet" href="~/css/books.css" asp-append-version="true" />
@@ -29,10 +30,10 @@
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"/></svg>
             <input type="search" placeholder="@ui["books.page.filterPlaceholder"]" aria-label="@ui["books.page.filterPlaceholder"]" data-books-filter-text />
         </label>
-        @if (access.CanAdd || access.CanAddManually)
+        @if (access.CanRequest || access.CanAddManually)
         {
             <button class="button button-primary books-add-button" type="button" data-open-dialog="books-add" data-books-add-open>
-                <span aria-hidden="true">+</span> @ui["books.page.addBook"]
+                <span aria-hidden="true">+</span> @addBookLabel
             </button>
         }
     </div>
@@ -45,7 +46,7 @@
             <button type="button" role="tab" aria-selected="false" data-books-tab="reading" data-library-filter-option="all">@ui["books.page.tab.reading"]</button>
             <button type="button" role="tab" aria-selected="false" data-books-tab="finished" data-library-filter-option="all">@ui["books.page.tab.finished"]</button>
             <button type="button" role="tab" aria-selected="false" data-books-tab="offline" data-library-filter-option="offline">@ui["offlineLibrary.library.filterOffline"]</button>
-            @if (Model.MyRequests.Count > 0 || access.AddCreatesRequest)
+            @if (Model.MyRequests.Count > 0 || access.CanRequest)
             {
                 <button type="button" role="tab" aria-selected="false" data-books-tab="requests" data-library-filter-option="all">@ui["books.page.tab.requests"] <span>@Model.MyRequests.Count(request => request.IsOpen)</span></button>
             }
@@ -83,9 +84,9 @@
         {
             <div class="books-empty">
                 <p>@ui["books.index.emptyTitle"]</p>
-                @if (access.CanAdd)
+                @if (access.CanRequest)
                 {
-                    <button class="button button-primary" type="button" data-open-dialog="books-add">@ui["books.page.addBook"]</button>
+                    <button class="button button-primary" type="button" data-open-dialog="books-add">@addBookLabel</button>
                 }
             </div>
         }
@@ -175,12 +176,13 @@
                             {
                                 <span>@request.Subtitle</span>
                             }
-                            @if (!string.IsNullOrWhiteSpace(request.StatusMessage))
+                            @* The stored message of a request is technical (indexer and downloader texts); only the reason of a rejection is for the requester. *@
+                            @if (request.Status == AcquisitionRequestStatus.Rejected && !string.IsNullOrWhiteSpace(request.StatusMessage))
                             {
                                 <small>@request.StatusMessage</small>
                             }
                         </div>
-                        <span class="status-pill request-status-@requestStatus">@ui["requests.status." + requestStatus]</span>
+                        <span class="status-pill request-status-@requestStatus">@ui[ConsumerAcquisitionLabels.StatusKey(requestStatus)]</span>
                         @if (request.ResultUrl is { } resultUrl)
                         {
                             <a class="button" href="@resultUrl">@ui["requests.open"]</a>
@@ -198,16 +200,14 @@
     </div>
 </section>
 
-@if (access.CanAdd || access.CanAddManually)
+@if (access.CanRequest || access.CanAddManually)
 {
     <dialog class="books-add-dialog" id="books-add" aria-labelledby="books-add-title"
             data-books-add
             data-search-url="@Url.Page("/Books/Index", "Search")"
             data-add-url="@Url.Page("/Books/Index", "Add")"
             data-status-url="@Url.Page("/Books/Index", "Status")"
-            data-can-add="@(access.CanAdd ? "true" : "false")"
-            data-creates-request="@(access.AddCreatesRequest ? "true" : "false")"
-            data-text-add="@ui["books.add.add"]"
+            data-can-add="@(access.CanRequest ? "true" : "false")"
             data-text-request="@ui["books.add.request"]"
             data-text-in-library="@ui["books.add.inLibrary"]"
             data-text-free="@ui["books.add.freeEdition"]"
@@ -219,24 +219,27 @@
             data-edition-format-epub="@ui["books.add.editionFormat.epub"]"
             data-edition-format-text="@ui["books.add.editionFormat.text"]"
             data-edition-format-listing="@ui["books.add.editionFormat.listing"]"
-            data-status-pending="@ui["requests.status.pending"]"
-            data-status-approved="@ui["requests.status.approved"]"
-            data-status-searching="@ui["requests.status.searching"]"
-            data-status-downloading="@ui["requests.status.downloading"]"
-            data-status-completed="@ui["requests.status.completed"]"
-            data-status-failed="@ui["requests.status.failed"]"
-            data-status-rejected="@ui["requests.status.rejected"]"
-            data-status-importing="@ui["books.add.importing"]"
+            data-status-pending="@ui[ConsumerAcquisitionLabels.StatusKey("pending")]"
+            data-status-approved="@ui[ConsumerAcquisitionLabels.StatusKey("approved")]"
+            data-status-searching="@ui[ConsumerAcquisitionLabels.StatusKey("searching")]"
+            data-status-downloading="@ui[ConsumerAcquisitionLabels.StatusKey("downloading")]"
+            data-status-completed="@ui[ConsumerAcquisitionLabels.StatusKey("completed")]"
+            data-status-failed="@ui[ConsumerAcquisitionLabels.StatusKey("failed")]"
+            data-status-rejected="@ui[ConsumerAcquisitionLabels.StatusKey("rejected")]"
+            data-status-importing="@ui[ConsumerAcquisitionLabels.StatusKey("importing")]"
             data-text-retry="@ui["books.add.retry"]">
         <div class="books-add-header">
             <div>
-                <h2 id="books-add-title">@ui["books.page.addBook"]</h2>
-                <p>@(access.AddCreatesRequest ? ui["books.add.requestSubtitle"] : ui["books.add.subtitle"])</p>
+                <h2 id="books-add-title">@addBookLabel</h2>
+                @if (access.CanRequest)
+                {
+                    <p>@ui["books.add.subtitle"]</p>
+                }
             </div>
             <form method="dialog"><button class="button" type="submit">@ui["books.add.close"]</button></form>
         </div>
 
-        @if (access.CanAdd)
+        @if (access.CanRequest)
         {
             <form class="books-add-search" role="search" data-books-add-search>
                 <input type="search" name="q" autocomplete="off" required minlength="2"
@@ -250,7 +253,7 @@
 
         @if (access.CanAddManually)
         {
-            <details class="books-manual" @(access.CanAdd ? "" : "open")>
+            <details class="books-manual" @(access.CanRequest ? "" : "open")>
                 <summary>@ui["books.add.manual"]</summary>
                 <div class="books-manual-grid">
                     <section>

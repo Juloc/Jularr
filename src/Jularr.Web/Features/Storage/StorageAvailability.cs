@@ -433,6 +433,45 @@ public sealed class LibraryRootAvailabilityService(
         return snapshot;
     }
 
+    // An import needs its destination storage now: a sleeping Wake-on-LAN NAS is started and the import waits for the bounded start
+    // attempt. A root whose folder does not exist yet is created when that is safe: nothing is known to live there, no wake target is
+    // configured and the parent exists, so it is a new folder rather than an unmounted share. False when the root is gone or still not
+    // readable, so no file is written or moved onto an unmounted mount point.
+    public async Task<bool> IsReadyForImportAsync(Guid rootId, CancellationToken cancellationToken)
+    {
+        var status = await RequireAsync(rootId, waitForStart: true, cancellationToken);
+        if (status is { DiagnosticCode: "root_not_found" } && await TryCreateNewRootFolderAsync(rootId, cancellationToken))
+        {
+            status = await CheckAsync(rootId, force: true, cancellationToken);
+        }
+
+        return status is { IsAvailable: true };
+    }
+
+    private async Task<bool> TryCreateNewRootFolderAsync(Guid rootId, CancellationToken cancellationToken)
+    {
+        if (await LoadAsync(rootId, cancellationToken) is not { ExpectedNonEmpty: false, WakeConfigured: false } root)
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(root.Path);
+            if (Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(fullPath)) is not { } parent || !Directory.Exists(parent))
+            {
+                return false;
+            }
+
+            Directory.CreateDirectory(fullPath);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
     // Returns the root's state for a media-dependent operation. A readable root is returned as
     // is; a Wake-on-LAN root that is not readable is woken through the shared start attempt of
     // StorageWakeCoordinator (concurrent callers join one attempt). With waitForStart the call

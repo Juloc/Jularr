@@ -3,8 +3,9 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Naming;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
-using Jularr.Web.Features.Discovery;
+using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,12 @@ namespace Jularr.Web.Features.Acquisition.Access;
 /// on through the acquisition pipeline and the Usenet search is queued. The importer later puts
 /// the files into the series folder the naming profile builds, and the scan finds this entry by
 /// the key of that folder.
+/// <para>
+/// The request follows the shared lifecycle (Approved, Downloading, Importing, Completed, Failed) but owns none of it:
+/// the monitoring pipeline searches, grabs and imports, and <see cref="AnimeRequestObservation"/> reads the requested episodes,
+/// the open acquisitions and the library back. A request is Completed only when every monitored episode it asks for
+/// that has aired has a file; the shared Wanted pass keeps asking until then.
+/// </para>
 /// <para>
 /// The requester's <see cref="AcquisitionRequestOptions"/> are applied when monitoring starts: the
 /// chosen quality profile becomes the series' profile, and a request for seasons or single episodes
@@ -33,22 +40,19 @@ public sealed class AnimeAcquisitionRequestExecutor(
     AnimeMonitoringStore monitoringStore,
     AnimeAcquisitionPipeline pipeline,
     AnimeAcquisitionInventory inventory,
-    AnimeAcquisitionScheduler scheduler) : IAcquisitionRequestExecutor
+    AnimeAcquisitionScheduler scheduler,
+    LegacyWorkBridge workBridge,
+    ReleaseCalendarCacheStore calendar,
+    TimeProvider clock) : IMonitoredAcquisitionExecutor
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Anime;
 
     public async Task<AcquisitionExecution> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
-        var options = request.Options;
-        var anime = await (
-                from match in db.AnimeMetadata.AsNoTracking()
-                join item in db.Anime.AsNoTracking() on match.AnimeId equals item.Id
-                where match.Provider == AniListMetadataProvider.ProviderKey && match.ExternalId == request.ExternalId
-                select new { item.Id, item.Key })
-            .FirstOrDefaultAsync(cancellationToken);
+        var anime = await FindSeriesAsync(request.ExternalId, cancellationToken);
         if (anime is not null)
         {
-            return await MonitorAsync(anime.Id, anime.Key, targetRootId: null, options, "Monitoring is on; missing episodes are searched automatically.", cancellationToken);
+            return await MonitorAsync(request, anime.Id, anime.Key, targetRootId: null, cancellationToken);
         }
 
         var root = await db.LibraryRoots
@@ -96,13 +100,15 @@ public sealed class AnimeAcquisitionRequestExecutor(
             await db.SaveChangesAsync(cancellationToken);
         }
 
+        // The Library lists canonical Works, so the series must have one before the first file exists.
+        await workBridge.EnsureWorkForAnimeAsync(created, cancellationToken);
+
         var matched = await metadata.MatchAsync(created.Id, candidate, cancellationToken);
         if (!matched.Success)
         {
             return new AcquisitionExecution(AcquisitionRequestStatus.Failed, matched.Error, ResultUrl: $"/Library/Anime/{created.Id}");
         }
 
-        DiscoveryCoordinator.InvalidateCache();
         if (existing is null)
         {
             // Jularr created the series, so Jularr manages it. A series that was already on disk
@@ -114,8 +120,39 @@ public sealed class AnimeAcquisitionRequestExecutor(
                 cancellationToken);
         }
 
-        return await MonitorAsync(created.Id, created.Key, root.Id, options, "Added to the library; the Usenet search has started.", cancellationToken);
+        return await MonitorAsync(request, created.Id, created.Key, root.Id, cancellationToken);
     }
+
+    /// <summary>
+    /// Loads the monitoring state, ownership, acquisition relations and release calendar once, so one pass can read where the monitoring
+    /// pipeline stands for every open request without loading them again for each (<see cref="AnimeRequestObservation"/>).
+    /// </summary>
+    public async Task<IRequestObservation> BeginObservationAsync(DateTime nowUtc, CancellationToken cancellationToken) =>
+        new AnimeRequestObservation(
+            db,
+            inventory,
+            pipeline,
+            calendar,
+            await monitoringStore.LoadAsync(cancellationToken),
+            await ownershipStore.LoadAsync(cancellationToken),
+            await pipeline.LoadAcquisitionSnapshotAsync(cancellationToken),
+            await calendar.GetSourcesAsync(AniListReleaseNormalizer.Provider, cancellationToken),
+            await pipeline.IsProwlarrConfiguredAsync(cancellationToken),
+            nowUtc);
+
+    private async Task<AcquisitionExecution> ObserveNowAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
+        await (await BeginObservationAsync(clock.GetUtcNow().UtcDateTime, cancellationToken)).ObserveAsync(request, cancellationToken)
+        ?? throw new InvalidOperationException("The series of the request does not exist after it was added.");
+
+    private async Task<SeriesIdentity?> FindSeriesAsync(string aniListId, CancellationToken cancellationToken) =>
+        await (
+                from match in db.AnimeMetadata.AsNoTracking()
+                join item in db.Anime.AsNoTracking() on match.AnimeId equals item.Id
+                where match.Provider == AniListMetadataProvider.ProviderKey && match.ExternalId == aniListId
+                select new SeriesIdentity(item.Id, item.Key))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    private sealed record SeriesIdentity(Guid Id, string Key);
 
     // The key the library scan derives from the series folder the importer will create.
     internal static string SeriesKey(AnimeNamingState naming, Anime anime, AnimeMetadataCandidate candidate, LibraryRoot root)
@@ -135,30 +172,26 @@ public sealed class AnimeAcquisitionRequestExecutor(
         return MediaPathParser.AnimeKeyForSeriesFolder(folder);
     }
 
-    private async Task<AcquisitionExecution> MonitorAsync(
-        Guid animeId,
-        string animeKey,
-        Guid? targetRootId,
-        AcquisitionRequestOptions options,
-        string message,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Puts the series under monitoring with the requested scope and queues a search for what is missing, then reports where the
+    /// request stands. Running it again (an approval, a retry) only repeats the same settings and queues another run, which the
+    /// pipeline answers without grabbing an episode that is already downloading or imported.
+    /// </summary>
+    private async Task<AcquisitionExecution> MonitorAsync(AcquisitionRequest request, Guid animeId, string animeKey, Guid? targetRootId, CancellationToken cancellationToken)
     {
+        var options = request.Options;
         var ownership = await ownershipStore.LoadAsync(cancellationToken);
         if (SonarrParallelSafety.GetMode(ownership, animeKey) == AnimeManagementMode.ReadOnlyCoexistence)
         {
-            return new AcquisitionExecution(
-                AcquisitionRequestStatus.Approved,
-                "Sonarr manages this series — the owner decides in Sonarr migration.",
-                ResultUrl: $"/Library/Anime/{animeId}");
+            return await ObserveNowAsync(request, cancellationToken);
         }
 
         var monitoring = await monitoringStore.LoadAsync(cancellationToken);
         var existing = monitoring.Anime.TryGetValue(animeKey, out var settings) ? settings : null;
         var startsMonitoring = existing?.Monitored != true;
-        AnimeSettingsUpdate? update = null;
         if (startsMonitoring)
         {
-            update = await pipeline.UpdateAnimeSettingsAsync(
+            await pipeline.UpdateAnimeSettingsAsync(
                 animeId,
                 monitored: true,
                 searchOnAdd: true,
@@ -170,29 +203,23 @@ public sealed class AnimeAcquisitionRequestExecutor(
         }
 
         // The scope is in place before any search runs, so a search only looks for what was requested.
-        var scoped = await ApplyScopeAsync(animeKey, options, startsMonitoring, cancellationToken);
-        if (update is { StartedMonitoring: true })
+        await ApplyScopeAsync(animeKey, options, startsMonitoring, cancellationToken);
+        var observed = await ObserveNowAsync(request, cancellationToken);
+        if (observed.Status != AcquisitionRequestStatus.Completed)
         {
-            scheduler.RequestRun(update.AnimeKey, AnimeSearchTrigger.SearchOnAdd);
-        }
-        else if (scoped)
-        {
-            scheduler.RequestRun(animeKey, AnimeSearchTrigger.Manual);
+            scheduler.RequestRun(animeKey, startsMonitoring ? AnimeSearchTrigger.SearchOnAdd : AnimeSearchTrigger.Manual);
         }
 
-        return new AcquisitionExecution(
-            AcquisitionRequestStatus.Completed,
-            message,
-            ResultUrl: $"/Library/Anime/{animeId}");
+        return observed;
     }
 
     /// <summary>
     /// Restricts monitoring to the requested seasons or episodes. When the request starts monitoring, every
     /// season or episode that is known now and not requested is switched off (for chosen episodes their whole
     /// season, so episodes that air later are not picked up unasked); when the title was monitored already,
-    /// the requested ones are only switched on. Returns whether the request had a scope to apply.
+    /// the requested ones are only switched on.
     /// </summary>
-    private async Task<bool> ApplyScopeAsync(
+    private async Task ApplyScopeAsync(
         string animeKey,
         AcquisitionRequestOptions options,
         bool startsMonitoring,
@@ -200,7 +227,7 @@ public sealed class AnimeAcquisitionRequestExecutor(
     {
         if (options.Scope == RequestScope.WholeSeries)
         {
-            return false;
+            return;
         }
 
         var known = startsMonitoring
@@ -245,6 +272,5 @@ public sealed class AnimeAcquisitionRequestExecutor(
                 return state with { Anime = anime };
             },
             cancellationToken);
-        return true;
     }
 }

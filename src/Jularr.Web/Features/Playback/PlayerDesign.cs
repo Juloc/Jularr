@@ -19,15 +19,21 @@ public static class PlayerDesign
 
     private static readonly Lazy<IReadOnlyDictionary<string, PlayerIcon>> LazyIcons = new(LoadIcons);
     private static readonly Lazy<IReadOnlyList<double>> LazySpeeds = new(LoadSpeeds);
-    private static readonly Lazy<int> LazySeekStep = new(() =>
-        ReadTokens(root => root.GetProperty("playback").GetProperty("seekStepSeconds").GetInt32()));
+    private static readonly Lazy<int> LazySeekBack = new(() => ReadTokens(root => root.GetProperty("playback").GetProperty("seekBackSeconds").GetInt32()));
+    private static readonly Lazy<int> LazySeekForward = new(() => ReadTokens(root => root.GetProperty("playback").GetProperty("seekForwardSeconds").GetInt32()));
 
     public static IReadOnlyDictionary<string, PlayerIcon> Icons => LazyIcons.Value;
 
     /// <summary>Allowed playback speeds, ascending; always contains 1.0.</summary>
     public static IReadOnlyList<double> PlaybackSpeeds => LazySpeeds.Value;
 
-    public static int SeekStepSeconds => LazySeekStep.Value;
+    /// <summary>Manual seek increments of every client; deliberately asymmetric (back 10 s, forward 30 s).</summary>
+    public static int SeekBackSeconds => LazySeekBack.Value;
+
+    public static int SeekForwardSeconds => LazySeekForward.Value;
+
+    /// <summary>The icons the player scripts swap at runtime (play/pause, mute, full screen); every other icon is rendered by the server.</summary>
+    public static IReadOnlyDictionary<string, PlayerIcon> ScriptIcons { get; } = new[] { "play", "pause", "volume", "volumeMuted", "fullscreen", "fullscreenExit" }.ToDictionary(id => id, Icon);
 
     public static PlayerIcon Icon(string id) =>
         Icons.TryGetValue(id, out var icon)

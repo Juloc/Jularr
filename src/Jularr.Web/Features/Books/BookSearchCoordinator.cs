@@ -36,6 +36,9 @@ public sealed class BookSearchCoordinator(
     QualityProfileStore qualityProfiles,
     ILogger<BookSearchCoordinator> logger)
 {
+    /// <summary>The warning source of the metadata catalogs (Open Library, Google Books, Wikisource) when none of them answered.</summary>
+    public const string CatalogSource = "Book catalogs";
+
     private const int ResultLimit = 24;
 
     public async Task<BookSearchResponse> SearchAsync(
@@ -61,7 +64,7 @@ public sealed class BookSearchCoordinator(
         // planned only after those records have been deduplicated into canonical works; this keeps
         // indexer load bounded and lets it reuse the normal Books author/title query rules.
         var catalogTask = CaptureAsync(
-            "Book catalogs",
+            CatalogSource,
             () => books.SearchPrimaryCatalogsAsync(normalizedQuery, cancellationToken),
             Array.Empty<BookCatalogItem>(),
             cancellationToken);

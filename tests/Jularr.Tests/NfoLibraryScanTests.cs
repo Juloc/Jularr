@@ -322,6 +322,7 @@ public sealed class NfoLibraryScanTests
                 Path = libraryPath
             };
             db.LibraryRoots.Add(root);
+            db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             await db.SaveChangesAsync();
 
             var dataProtection = DataProtectionProvider.Create(

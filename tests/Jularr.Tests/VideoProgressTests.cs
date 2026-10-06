@@ -33,10 +33,18 @@ public sealed class VideoProgressTests
         Assert.AreEqual(0L, other.PositionMs);
         Assert.IsNull(other.UpdatedAt);
 
+        var seeked = await service.UpdateAsync(
+            "reader",
+            target,
+            new MediaProgressUpdate(96_000, 100_000, Completed: false));
+        Assert.IsNotNull(seeked);
+        Assert.IsFalse(seeked.IsCompleted, "Seeking, pausing or resuming past the threshold must not complete the item.");
+        Assert.AreEqual(96_000L, seeked.PositionMs, "The position stays the exact resume point.");
+
         var completed = await service.UpdateAsync(
             "reader",
             target,
-            new MediaProgressUpdate(95_000, 100_000, Completed: false));
+            new MediaProgressUpdate(96_000, 100_000, Completed: true));
         Assert.IsNotNull(completed);
         Assert.IsTrue(completed.IsCompleted);
         Assert.AreEqual(0L, completed.PositionMs);
@@ -272,6 +280,130 @@ public sealed class VideoProgressTests
         var history = await videoProgress.GetHistoryAsync("reader");
         Assert.AreEqual(1, history.Count);
         Assert.AreEqual(workEpisode.Id, history[0].WorkEpisodeId);
+
+        Assert.AreEqual(0, await db.EpisodeProgress.CountAsync(), "Migrated progress rows are consumed.");
+        Assert.AreEqual(0, await db.EpisodePlaybackHistory.CountAsync(), "Migrated history rows are consumed.");
+        Assert.AreEqual(0, await backfill.BackfillLegacyAnimeAsync(), "The backfill is one-time: a second run imports nothing.");
+        await videoProgress.ClearHistoryAsync("reader");
+        await backfill.BackfillLegacyAnimeAsync();
+        Assert.AreEqual(0, (await videoProgress.GetHistoryAsync("reader")).Count, "Cleared history is not resurrected by a later backfill run.");
+    }
+
+    [TestMethod]
+    public async Task CompletedThroughStopsAtTheFirstGapAndIgnoresSpecials()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var series = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Gap Anime" };
+        var special = new WorkEpisode { WorkId = series.Id, SeasonNumber = 0, EpisodeNumber = 1 };
+        var episodes = Enumerable.Range(1, 4)
+            .Select(number => new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = number })
+            .ToArray();
+        db.AddRange(series, special);
+        db.AddRange(episodes);
+        await db.SaveChangesAsync();
+
+        var service = new VideoProgressService(db);
+        async Task CompleteAsync(string profile, WorkEpisode episode) =>
+            await service.SetCompletedAsync(profile, MediaProgressTarget.Episode(series.Id, episode.Id), true);
+
+        await CompleteAsync("reader", episodes[0]);
+        await CompleteAsync("reader", episodes[2]);
+        await CompleteAsync("reader", special);
+
+        var gap = Assert.ContainsSingle(await service.GetCompletedThroughAsync("reader"));
+        Assert.AreEqual(1, gap.CompletedThrough?.EpisodeNumber, "E1 and E3 completed with E2 open must give 1, never 3.");
+
+        await service.UpdateAsync("reader", MediaProgressTarget.Episode(series.Id, episodes[1].Id), new MediaProgressUpdate(600_000, 1_000_000, Completed: false));
+        Assert.AreEqual(1, (await service.GetCompletedThroughAsync("reader", series.Id)).Single().CompletedThrough?.EpisodeNumber, "An in-progress episode never advances CompletedThrough.");
+
+        await CompleteAsync("reader", episodes[1]);
+        var through = (await service.GetCompletedThroughAsync("reader", series.Id)).Single().CompletedThrough;
+        Assert.AreEqual(3, through?.EpisodeNumber, "Closing the gap extends the contiguous prefix up to the next open episode.");
+        Assert.AreEqual(episodes[2].Id, through?.WorkEpisodeId);
+
+        await service.SetCompletedAsync("reader", MediaProgressTarget.Episode(series.Id, episodes[0].Id), false);
+        Assert.IsNull((await service.GetCompletedThroughAsync("reader", series.Id)).Single().CompletedThrough, "Without E1 nothing is contiguously completed.");
+
+        Assert.AreEqual(0, (await service.GetCompletedThroughAsync("other")).Count, "Profiles are isolated.");
+    }
+
+    [TestMethod]
+    public async Task UntouchedEpisodeBetweenTwoCompletedOnesStopsCompletedThrough()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var series = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Open Episode Anime" };
+        var episodes = Enumerable.Range(1, 3)
+            .Select(number => new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = number })
+            .ToArray();
+        db.Add(series);
+        db.AddRange(episodes);
+        await db.SaveChangesAsync();
+
+        var service = new VideoProgressService(db);
+        await service.SetCompletedAsync("reader", MediaProgressTarget.Episode(series.Id, episodes[0].Id), true);
+        await service.SetCompletedAsync("reader", MediaProgressTarget.Episode(series.Id, episodes[2].Id), true);
+
+        var through = (await service.GetCompletedThroughAsync("reader", series.Id)).Single().CompletedThrough;
+        Assert.AreEqual(1, through?.EpisodeNumber, "E1 and E3 completed with an untouched E2 row present gives 1.");
+    }
+
+    [TestMethod]
+    public async Task RewatchKeepsCompletedStateAndOffersResumeInContinueWatching()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var root = new LibraryRoot { Name = "Video", Path = $"/tmp/jularr-rewatch-{Guid.NewGuid():N}" };
+        var series = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Rewatch Anime" };
+        var first = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 1 };
+        var second = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 2 };
+        db.AddRange(root, series, first, second);
+        await db.SaveChangesAsync();
+        await AddPlayableAsync(db, root, series, first, "s01e01.mkv");
+        await AddPlayableAsync(db, root, series, second, "s01e02.mkv");
+
+        var service = new VideoProgressService(db);
+        var target = MediaProgressTarget.Episode(series.Id, first.Id);
+        await service.UpdateAsync("reader", target, new MediaProgressUpdate(1_000_000, 1_000_000, Completed: true));
+
+        var upNext = Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader"));
+        Assert.AreEqual(VideoContinueWatchingKind.UpNext, upNext.Kind);
+        Assert.AreEqual(second.Id, upNext.WorkEpisodeId);
+
+        await service.UpdateAsync("reader", target, new MediaProgressUpdate(420_000, 1_000_000, Completed: false));
+
+        var rewatch = Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader"));
+        Assert.AreEqual(VideoContinueWatchingKind.Resume, rewatch.Kind, "A rewatch resume position is offered even though the episode is completed.");
+        Assert.AreEqual(first.Id, rewatch.WorkEpisodeId);
+        Assert.AreEqual(420_000L, rewatch.ResumePositionMs);
+
+        var snapshot = await service.GetAsync("reader", target);
+        Assert.IsTrue(snapshot!.IsCompleted, "The rewatch must not un-complete the episode.");
+        Assert.AreEqual(420_000L, snapshot.ResumePositionMs);
+        Assert.AreEqual(first.Id, (await service.GetCompletedThroughAsync("reader", series.Id)).Single().CompletedThrough?.WorkEpisodeId);
+
+        await service.UpdateAsync("reader", target, new MediaProgressUpdate(1_000_000, 1_000_000, Completed: true));
+        Assert.AreEqual(VideoContinueWatchingKind.UpNext, Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader")).Kind, "Finishing the rewatch clears the resume position.");
+    }
+
+    [TestMethod]
+    public async Task ContinueWatchingNarrowsToOneMediaTypeFromTheSharedOwner()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var root = new LibraryRoot { Name = "Video", Path = $"/tmp/jularr-types-{Guid.NewGuid():N}" };
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Movie" };
+        var anime = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Anime" };
+        var animeEpisode = new WorkEpisode { WorkId = anime.Id, SeasonNumber = 1, EpisodeNumber = 1 };
+        db.AddRange(root, movie, anime, animeEpisode);
+        await db.SaveChangesAsync();
+        await AddPlayableAsync(db, root, movie, null, "movie.mkv");
+        await AddPlayableAsync(db, root, anime, animeEpisode, "anime.mkv");
+
+        var service = new VideoProgressService(db);
+        await service.UpdateAsync("reader", MediaProgressTarget.Movie(movie.Id), new MediaProgressUpdate(60_000, 120_000, Completed: false));
+        await service.UpdateAsync("reader", MediaProgressTarget.Episode(anime.Id, animeEpisode.Id), new MediaProgressUpdate(60_000, 120_000, Completed: false));
+
+        Assert.AreEqual(2, (await service.GetContinueWatchingAsync("reader")).Count);
+        Assert.AreEqual(movie.Id, Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader", mediaTypes: [WorkMediaType.Movie])).WorkId);
+        Assert.AreEqual(anime.Id, Assert.ContainsSingle(await service.GetContinueWatchingAsync("reader", mediaTypes: [WorkMediaType.Anime])).WorkId);
     }
 
     private static async Task<StoredFile> AddPlayableAsync(

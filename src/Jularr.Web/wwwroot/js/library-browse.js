@@ -67,13 +67,40 @@
     });
 
     document.addEventListener("submit", event => {
-        if (event.target instanceof HTMLFormElement && event.target.hasAttribute("data-lib-filters")) {
+        if (event.target instanceof HTMLFormElement && event.target.hasAttribute("data-lib-form")) {
             setBusy(true);
         }
     });
 
     // Coming back through the history restores the page as it was.
     window.addEventListener("pageshow", () => setBusy(false));
+
+    // A poster that fails to load (the artwork file is gone, or a provider cover is unreachable) becomes the same initial placeholder
+    // a title without artwork gets, instead of a broken-image icon.
+    const showInitial = image => {
+        if (image.dataset.posterFailed) {
+            return;
+        }
+
+        image.dataset.posterFailed = "true";
+        const initial = document.createElement("span");
+        initial.className = "lib-card-initial";
+        initial.textContent = image.dataset.initial || "";
+        image.replaceWith(initial);
+    };
+
+    document.addEventListener("error", event => {
+        if (event.target instanceof HTMLImageElement && event.target.hasAttribute("data-lib-poster")) {
+            showInitial(event.target);
+        }
+    }, true);
+
+    // Posters that failed before this deferred script ran never fire again.
+    for (const image of document.querySelectorAll("img[data-lib-poster]")) {
+        if (image.complete && image.naturalWidth === 0) {
+            showInitial(image);
+        }
+    }
 
     // Offline notice: shown while the browser has no connection.
     const offline = document.querySelector("[data-lib-offline]");

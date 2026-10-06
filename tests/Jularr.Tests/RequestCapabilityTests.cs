@@ -41,7 +41,7 @@ public sealed class RequestCapabilityTests
             () => alice.SubmitAsync(Draft("frieren", MediaAcquisitionKind.Anime), CancellationToken.None));
 
         var access = await alice.GetCapabilitiesAsync(MediaAcquisitionKind.Anime, CancellationToken.None);
-        Assert.IsFalse(access.CanAdd);
+        Assert.IsFalse(access.CanRequest);
         Assert.AreEqual(0, (await fixture.Store.ListAsync(null, null, openOnly: false, 10, CancellationToken.None)).Count);
     }
 
@@ -58,9 +58,9 @@ public sealed class RequestCapabilityTests
         var animeAccess = await alice.GetCapabilitiesAsync(MediaAcquisitionKind.Anime, CancellationToken.None);
         var mangaAccess = await alice.GetCapabilitiesAsync(MediaAcquisitionKind.Manga, CancellationToken.None);
         var bookAccess = await alice.GetCapabilitiesAsync(MediaAcquisitionKind.Book, CancellationToken.None);
-        Assert.IsTrue(animeAccess is { CanAdd: true, AddCreatesRequest: false });
-        Assert.IsFalse(mangaAccess.CanAdd);
-        Assert.IsTrue(bookAccess is { CanAdd: true, AddCreatesRequest: true });
+        Assert.IsTrue(animeAccess is { CanRequest: true, AutoApproves: true });
+        Assert.IsFalse(mangaAccess.CanRequest);
+        Assert.IsTrue(bookAccess is { CanRequest: true, AutoApproves: false });
 
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, (await alice.SubmitAsync(Draft("a", MediaAcquisitionKind.Anime), CancellationToken.None)).Status);
         Assert.AreEqual(
@@ -95,11 +95,11 @@ public sealed class RequestCapabilityTests
 
         Assert.IsFalse(before.CanAddManually);
         Assert.IsTrue(after.CanAddManually);
-        Assert.AreEqual(before.AddCreatesRequest, after.AddCreatesRequest, "The manual rule does not change request versus instant.");
+        Assert.AreEqual(before.AutoApproves, after.AutoApproves, "The manual rule does not change request versus instant.");
     }
 
     [TestMethod]
-    public async Task DecisionNotificationsOpenTheRequestHistory()
+    public async Task DecisionNotificationsOpenTheRequestsStatus()
     {
         await using var fixture = await AcquisitionAccessFixture.CreateAsync();
         var alice = fixture.Service("alice", AccountRole.User);
@@ -109,7 +109,7 @@ public sealed class RequestCapabilityTests
         await owner.RejectAsync(request.Id, "Not now.", CancellationToken.None);
 
         var denied = fixture.Events.Published.Single(item => item.Category == Jularr.Web.Features.Events.JularrEventCategory.RequestDenied);
-        Assert.AreEqual(AcquisitionRequestService.HistoryPath, denied.DeepLink);
+        Assert.AreEqual(AcquisitionRequestService.StatusPath(request.Id), denied.DeepLink);
     }
 
     private static AcquisitionRequestDraft Draft(string id, MediaAcquisitionKind kind = MediaAcquisitionKind.Book) =>

@@ -313,6 +313,7 @@ public sealed class WorkService(AppDbContext db)
         var relations = await MoveRelationsAsync(sourceWorkId, targetWorkId, cancellationToken);
         var structure = await MoveStructureAsync(sourceWorkId, targetWorkId, cancellationToken);
         var provenance = await MoveProvenanceAsync(sourceWorkId, targetWorkId, cancellationToken);
+        await new WorkMetadataStore(db).MoveForMergeAsync(sourceWorkId, targetWorkId, cancellationToken);
 
         target.UpdatedAt = DateTime.UtcNow;
 

@@ -61,8 +61,8 @@ class TvClientFlowTest {
     private fun capabilities(
         nativeSessionAuth: Boolean = true,
     ) = ClientCapabilities(
-        apiVersion = 1,
-        minimumSupportedApiVersion = 1,
+        apiVersion = 2,
+        minimumSupportedApiVersion = 2,
         serverVersion = "test",
         features = ClientFeatureFlags(
             library = true,

@@ -1,6 +1,8 @@
 # Admin Users & Permissions — V1
 
-Status: planning baseline for mockups.
+Status: **binding V1 planning specification; approved mockup direction.**
+
+Text specification wins over the visual reference on conflict.
 
 ## Purpose
 Manage accounts/profiles, groups/roles and effective capabilities that derive both API authorization and visible app shell.
@@ -22,6 +24,19 @@ Account and Profile are distinct:
 Create/invite where supported, enable/disable, assign groups/roles, edit capabilities, manage allowed Profiles/profile limits, inspect/reset Profile PIN where authorized, inspect/revoke linked Login identities safely, revoke sessions, inspect effective permission explanation.
 
 Instance-wide Login-provider enablement/configuration belongs to provider/auth settings; this page manages which identities belong to a specific Account and the resulting user/profile policy.
+
+## Custom groups status
+
+V1 must not invent a half-defined custom-group authorization model.
+
+Until group semantics are explicitly approved:
+- built-in roles remain canonical;
+- explicit Account/Profile capability overrides may be used where the existing capability model supports them;
+- the UI may show inherited/effective permissions, but must not imply configurable custom groups are already supported;
+- do not persist placeholder group tables, group membership or precedence rules merely to satisfy the mockup;
+- do not infer Deny-vs-Allow precedence, multi-group merge behavior or user-override behavior.
+
+Custom groups are a **deferred product decision**, not an implementation detail. Their model must be specified before implementation.
 
 ## AI authorization boundary
 

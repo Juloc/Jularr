@@ -94,6 +94,9 @@ public static class PlaybackReasonCodes
     public const string DirectOnlyRequested = "direct_only_requested";
     public const string TranscodingDisabled = "transcoding_disabled";
     public const string TranscoderBusy = "transcoder_busy";
+    public const string TranscodeTooSlow = "transcode_too_slow";
+    public const string QualityRaised = "quality_raised";
+    public const string TranscodeUnsustainable = "transcode_unsustainable";
     public const string TranscodeTargetUnsupported = "transcode_target_unsupported";
     public const string NoDeliveryTransport = "no_delivery_transport";
     public const string LimitIgnoredNoTranscoder = "limit_ignored_no_transcoder";
@@ -107,6 +110,8 @@ public static class PlaybackReasonCodes
     public const string AudioConverted = "audio_converted";
     public const string AudioDownmixed = "audio_downmixed";
     public const string ResolutionReduced = "resolution_reduced";
+    public const string HardwareEncoder = "hardware_encoder";
+    public const string HardwareEncoderSuspended = "hardware_encoder_suspended";
     public const string NoServerProcessing = "no_server_processing";
     public const string CompatibleOriginal = "compatible_original";
 }
@@ -176,7 +181,8 @@ public sealed record PlaybackPlan(
     IReadOnlyList<PlaybackReason> Reasons,
     PlaybackCapabilitySupport Confidence,
     string? SourceContainer = null,
-    PlaybackSubtitleOutput? Subtitle = null)
+    PlaybackSubtitleOutput? Subtitle = null,
+    PlaybackBufferPolicy? Buffer = null)
 {
     public bool UsesServerProcessing =>
         Mode is PlaybackDeliveryMode.DirectStream or PlaybackDeliveryMode.Transcode;

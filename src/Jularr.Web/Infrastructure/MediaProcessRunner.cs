@@ -17,7 +17,14 @@ public sealed record MediaProcessResult(
     }
 }
 
-public sealed class MediaProcessRunner(ILogger<MediaProcessRunner> logger)
+/// <summary>Runs an external media tool with a timeout; the seam that lets tests answer ffmpeg without starting it.</summary>
+public interface IMediaProcessRunner
+{
+    /// <summary>Null when the tool could not start or exceeded <paramref name="timeout"/>; cancellation by the caller throws.</summary>
+    Task<MediaProcessResult?> RunAsync(string executable, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken);
+}
+
+public sealed class MediaProcessRunner(ILogger<MediaProcessRunner> logger) : IMediaProcessRunner
 {
     public async Task<MediaProcessResult?> RunAsync(
         string executable,

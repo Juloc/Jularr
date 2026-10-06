@@ -1,5 +1,7 @@
 using System.Globalization;
 using Jularr.Web.Data;
+using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Tracking;
@@ -18,7 +20,7 @@ public sealed record AniListSyncCheckpoint(
     string? CompletionMarker);
 
 /// <summary>
-/// Read-only view of the canonical local progress tables (EpisodeProgress,
+/// Read-only view of the canonical local progress tables (MediaProgress,
 /// MangaProgress, NovelProgress) for automatic AniList sync. It never writes
 /// progress and never decides AniList values; those always come from
 /// <see cref="AniListAccountService"/>.
@@ -66,46 +68,42 @@ public static class AniListSyncCheckpoints
         DateTime sinceUtc,
         CancellationToken cancellationToken)
     {
-        // Specials never drive the canonical anime position, so only regular
-        // episodes are considered.
-        var rows = await (
-            from progress in db.EpisodeProgress.AsNoTracking()
-            join episode in db.Episodes.AsNoTracking()
-                on progress.EpisodeId equals episode.Id
+        // The completion marker is the canonical contiguous CompletedThrough episode (specials excluded), so an
+        // in-progress or non-contiguous episode never changes it.
+        var completions = await new VideoProgressService(db).GetCompletedThroughAsync(profileId, cancellationToken: cancellationToken);
+        if (completions.Count == 0)
+        {
+            return [];
+        }
+
+        var workIds = completions.Select(x => x.WorkId).ToArray();
+        var animeByWork = await (
+            from link in db.WorkSourceLinks.AsNoTracking()
             join anime in db.Anime.AsNoTracking()
-                on episode.AnimeId equals anime.Id
-            where progress.ProfileId == profileId &&
-                  episode.SeasonNumber > 0 &&
-                  episode.Number > 0
+                on link.SourceId equals anime.Id
+            where link.SourceKind == WorkSourceKind.Anime &&
+                  workIds.Contains(link.WorkId)
             select new
             {
-                episode.AnimeId,
-                anime.Title,
-                progress.UpdatedAt,
-                progress.IsCompleted,
-                episode.SeasonNumber,
-                episode.Number
+                link.WorkId,
+                AnimeId = anime.Id,
+                anime.Title
             })
             .ToListAsync(cancellationToken);
 
-        return rows
-            .GroupBy(x => x.AnimeId)
-            .Select(group =>
-            {
-                var latestCompleted = group
-                    .Where(x => x.IsCompleted)
-                    .OrderByDescending(x => x.SeasonNumber)
-                    .ThenByDescending(x => x.Number)
-                    .FirstOrDefault();
-                return new AniListSyncCheckpoint(
+        return completions
+            .Join(
+                animeByWork,
+                completion => completion.WorkId,
+                anime => anime.WorkId,
+                (completion, anime) => new AniListSyncCheckpoint(
                     Anime,
-                    group.Key,
-                    group.First().Title,
-                    AsUtc(group.Max(x => x.UpdatedAt)),
-                    latestCompleted is null
-                        ? null
-                        : $"S{latestCompleted.SeasonNumber}E{latestCompleted.Number}");
-            })
+                    anime.AnimeId,
+                    anime.Title,
+                    AsUtc(completion.UpdatedAt),
+                    completion.CompletedThrough is { } through
+                        ? $"S{through.SeasonNumber}E{through.EpisodeNumber}"
+                        : null))
             .Where(x => x.UpdatedAt > sinceUtc);
     }
 

@@ -2,6 +2,10 @@
 @model Jularr.Web.Pages.Admin.Storage.IndexModel
 @using Jularr.Web.Features.Storage
 @using Jularr.Web.Features.Storage.Insights
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+}
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["admin.storage.title"];
@@ -19,6 +23,96 @@
 
 <partial name="_AdminNavigation" model="Model.Ui" />
 
+@if (!string.IsNullOrWhiteSpace(Model.Error))
+{
+    <p class="admset-notice" role="alert">@Model.Error</p>
+}
+
+<div class="admset-sections">
+@if (Model.Destinations.Count > 0)
+{
+    <section class="admset-section" id="destinations" data-storage-destinations aria-labelledby="destinations-title">
+        <div class="admset-head">
+            <span class="admset-tile"><partial name="_AdminIcon" model='"folder"' /></span>
+            <div>
+                <h2 id="destinations-title">@ui["admin.storage.destinations.title"]</h2>
+                <p>@ui["admin.storage.destinations.hint"]</p>
+            </div>
+        </div>
+        <div class="admset-table-wrap">
+            <table class="admset-table">
+                <thead>
+                    <tr>
+                        <th scope="col">@ui["admin.storage.destinations.column.type"]</th>
+                        <th scope="col">@ui["admin.storage.destinations.column.root"]</th>
+                        <th scope="col">@ui["admin.storage.destinations.column.placement"]</th>
+                        <th scope="col"><span class="admset-visually-hidden">@ui["admin.wanted.col.actions"]</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var destination in Model.Destinations)
+                    {
+                        var current = destination.Default;
+                        var formId = $"destination-{destination.ContentType}";
+                        <tr>
+                            <td data-label="@ui["admin.storage.destinations.column.type"]"><strong>@Model.ContentTypeLabel(destination.ContentType)</strong></td>
+                            @if (Model.CanManageDestinations)
+                            {
+                                <td data-label="@ui["admin.storage.destinations.column.root"]">
+                                    <select class="admset-control" name="libraryRootId" form="@formId" aria-label="@ui["admin.storage.destinations.column.root"]: @Model.ContentTypeLabel(destination.ContentType)">
+                                        <option value="">@ui["admin.storage.destinations.none"]</option>
+                                        @foreach (var root in Model.EnabledRoots)
+                                        {
+                                            <option value="@root.Id" selected="@(current?.LibraryRootId == root.Id)">@root.Name · @root.Path</option>
+                                        }
+                                    </select>
+                                    @if (current is null)
+                                    {
+                                        <small>@ui["admin.storage.destinations.waiting"]</small>
+                                    }
+                                </td>
+                                <td data-label="@ui["admin.storage.destinations.column.placement"]">
+                                    <select class="admset-control admset-control-fit" name="placementPolicy" form="@formId" aria-label="@ui["admin.storage.destinations.column.placement"]: @Model.ContentTypeLabel(destination.ContentType)">
+                                        @foreach (var policy in Enum.GetValues<Jularr.Web.Features.Library.LibraryPlacementPolicy>())
+                                        {
+                                            <option value="@policy" selected="@((current?.PlacementPolicy ?? Jularr.Web.Features.Library.LibraryPlacementPolicy.HardlinkOrCopy) == policy)">@Model.PlacementLabel(policy)</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td class="admset-cell-actions">
+                                    <form id="@formId" method="post" asp-page-handler="Destination">
+                                        <input type="hidden" name="contentType" value="@destination.ContentType" />
+                                        <button class="button" type="submit">@ui["common.save"]</button>
+                                    </form>
+                                </td>
+                            }
+                            else
+                            {
+                                <td data-label="@ui["admin.storage.destinations.column.root"]">
+                                    @if (current is null)
+                                    {
+                                        <span class="admin-tag admin-tag-warning">@ui["admin.storage.destinations.none"]</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="admset-name"><strong>@current.Name</strong><code>@current.Path</code></span>
+                                    }
+                                </td>
+                                <td data-label="@ui["admin.storage.destinations.column.placement"]">@(current is null ? "—" : Model.PlacementLabel(current.PlacementPolicy))</td>
+                                <td></td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.EnabledRoots.Count == 0)
+        {
+            <p class="admset-hint">@ui["admin.storage.destinations.noRoots"]</p>
+        }
+    </section>
+}
+
 <section class="panel" data-storage-roots>
     <div class="panel-heading"><h2>@ui["admin.storage.roots.title"]</h2></div>
     @if (usage.Roots.Count == 0)
@@ -27,7 +121,7 @@
     }
     else
     {
-        <table>
+        <div class="admset-table-wrap"><table class="admset-table">
             <thead>
                 <tr>
                     <th>@ui["admin.storage.roots.column.root"]</th>
@@ -45,9 +139,9 @@
                             <strong>@root.Name</strong>
                             <small class="muted">@root.Path</small>
                         </td>
-                        <td><span class="status-pill @IndexModel.HealthCss(root.Health)">@Model.HealthLabel(root.Health)</span></td>
-                        <td>@root.FileCount.ToString("N0")</td>
-                        <td>
+                        <td data-label="@ui["admin.storage.roots.column.state"]"><span class="status-pill @IndexModel.HealthCss(root.Health)">@Model.HealthLabel(root.Health)</span></td>
+                        <td data-label="@ui["admin.storage.column.files"]">@root.FileCount.ToString("N0")</td>
+                        <td data-label="@ui["admin.storage.column.size"]">
                             @StorageHealth.FormatBytes(root.Bytes)
                             @if (!root.IsOnline && root.FileCount > 0)
                             {
@@ -58,18 +152,18 @@
                                 <small class="muted">@ui.Format("admin.storage.roots.duplicates", ("count", root.DuplicateEpisodes))</small>
                             }
                         </td>
-                        <td>@(root.FreeBytes is { } free ? StorageHealth.FormatBytes(free) : "—")</td>
+                        <td data-label="@ui["admin.storage.roots.column.free"]">@(root.FreeBytes is { } free ? StorageHealth.FormatBytes(free) : "—")</td>
                     </tr>
                 }
             </tbody>
-        </table>
+        </table></div>
     }
 </section>
 
 <div class="settings-grid">
     <section class="panel" data-storage-media-types>
         <div class="panel-heading"><h2>@ui["admin.storage.media.title"]</h2></div>
-        <table>
+        <div class="admset-table-wrap"><table class="admset-table">
             <thead>
                 <tr>
                     <th>@ui["admin.storage.media.column.type"]</th>
@@ -82,12 +176,12 @@
                 {
                     <tr>
                         <td>@Model.MediaKindLabel(type.Kind)</td>
-                        <td>@type.FileCount.ToString("N0")</td>
-                        <td>@StorageHealth.FormatBytes(type.Bytes)</td>
+                        <td data-label="@ui["admin.storage.column.files"]">@type.FileCount.ToString("N0")</td>
+                        <td data-label="@ui["admin.storage.column.size"]">@StorageHealth.FormatBytes(type.Bytes)</td>
                     </tr>
                 }
             </tbody>
-        </table>
+        </table></div>
     </section>
 
     <section class="panel" data-storage-largest>
@@ -105,7 +199,9 @@
                         <div class="operation-copy">
                             <strong>@item.Title</strong>
                             <span>
-                                @ui.Format("admin.storage.largest.episode", ("season", item.SeasonNumber), ("episode", item.EpisodeNumber))
+                                @(item.SeasonNumber is { } season && item.EpisodeNumber is { } episode
+                                    ? ui.Format("admin.storage.largest.episode", ("season", season), ("episode", episode))
+                                    : ui["admin.storage.largest.movie"])
                                 · @item.RootName
                                 @if (item.RootHealth != StorageHealthState.Online)
                                 {
@@ -124,7 +220,7 @@
 <section class="panel" data-storage-cache>
     <div class="panel-heading"><h2>@ui["admin.storage.cache.title"]</h2></div>
     <p class="muted">@ui["admin.storage.cache.hint"]</p>
-    <table>
+    <div class="admset-table-wrap"><table class="admset-table">
         <thead>
             <tr>
                 <th>@ui["admin.storage.cache.column.area"]</th>
@@ -138,13 +234,13 @@
             {
                 <tr>
                     <td>@Model.AreaLabel(area.Area)</td>
-                    <td>@area.Files.ToString("N0")</td>
-                    <td>@StorageHealth.FormatBytes(area.Bytes)</td>
-                    <td>@(area.Cleanable ? StorageHealth.FormatBytes(area.ReclaimableBytes) : "—")</td>
+                    <td data-label="@ui["admin.storage.column.files"]">@area.Files.ToString("N0")</td>
+                    <td data-label="@ui["admin.storage.column.size"]">@StorageHealth.FormatBytes(area.Bytes)</td>
+                    <td data-label="@ui["admin.storage.cache.column.reclaimable"]">@(area.Cleanable ? StorageHealth.FormatBytes(area.ReclaimableBytes) : "—")</td>
                 </tr>
             }
         </tbody>
-    </table>
+    </table></div>
 </section>
 
 <section class="panel" data-storage-cleanup>
@@ -181,3 +277,4 @@
         </form>
     }
 </section>
+</div>

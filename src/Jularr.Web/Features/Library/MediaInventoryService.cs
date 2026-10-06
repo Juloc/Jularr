@@ -33,6 +33,10 @@ public sealed class MediaInventoryService(
     // re-run by every consumer of the same file within one scan or page load.
     public static readonly TimeSpan PendingRetryDelay = TimeSpan.FromMinutes(5);
 
+    // Files whose stored (Succeeded) analysis is kept because ffprobe could not run, with the instant its
+    // probe may be tried again. Only touched under analysisGate; the stored row has no Pending state to carry this.
+    private readonly Dictionary<Guid, DateTime> probeRetryNotBefore = [];
+
     // One analysis at a time per process: it bounds NAS/ffprobe load and makes the
     // "re-check, probe, persist" sequence race-free for concurrent on-demand callers.
     private readonly SemaphoreSlim analysisGate = new(1, 1);
@@ -101,7 +105,8 @@ public sealed class MediaInventoryService(
     // Forces the given media files to be re-probed on their next EnsureAnalyzedAsync/ReconcileAsync
     // call: an invalidated ProbeVersion makes Evaluate() see them as stale, so the existing
     // analysis path re-runs ffprobe without a second probe path. Used by the per-anime
-    // "re-analyse media" repair action, which never invents its own probing.
+    // "re-analyse media" repair action, which never invents its own probing. An explicit re-analysis also ends
+    // the wait after an unavailable ffprobe, so a repaired tool is tried at once.
     public async Task<int> InvalidateAsync(
         IReadOnlyCollection<Guid> mediaFileIds,
         CancellationToken cancellationToken)
@@ -109,6 +114,19 @@ public sealed class MediaInventoryService(
         if (mediaFileIds.Count == 0)
         {
             return 0;
+        }
+
+        await analysisGate.WaitAsync(cancellationToken);
+        try
+        {
+            foreach (var mediaFileId in mediaFileIds)
+            {
+                probeRetryNotBefore.Remove(mediaFileId);
+            }
+        }
+        finally
+        {
+            analysisGate.Release();
         }
 
         await using var scope = scopeFactory.CreateAsyncScope();
@@ -293,6 +311,15 @@ public sealed class MediaInventoryService(
                 return (await ToEntryAsync(db, analysis!, cancellationToken), AnalysisOutcome.Unchanged);
             }
 
+            // An analysis that already succeeded keeps serving the file while ffprobe cannot run: a missing or hanging
+            // tool says nothing about the file, so it must not erase the stored technical data or its tracks. The wait is checked before
+            // the fingerprint so a file on slow storage is not read again for every caller.
+            var keepStored = analysis is { Status: MediaAnalysisStatus.Succeeded };
+            if (keepStored && probeRetryNotBefore.TryGetValue(mediaFileId, out var retryNotBefore) && retryNotBefore > DateTime.UtcNow)
+            {
+                return (await ToKeptEntryAsync(db, analysis!, cancellationToken), AnalysisOutcome.Deferred);
+            }
+
             var fingerprint = await TryComputeFingerprintAsync(fullPath, cancellationToken);
             if (freshness == Freshness.ModifiedTimeOnly &&
                 fingerprint is not null &&
@@ -308,6 +335,23 @@ public sealed class MediaInventoryService(
             var (status, diagnostic, technical) = Interpret(run);
             diagnostic = diagnostic?.Replace(fullPath, Path.GetFileName(fullPath), StringComparison.Ordinal);
 
+            if (keepStored && status == MediaAnalysisStatus.Pending)
+            {
+                analysis!.Diagnostic = Bound(diagnostic, DiagnosticMaxLength);
+                await db.SaveChangesAsync(cancellationToken);
+
+                var now = DateTime.UtcNow;
+                foreach (var expired in probeRetryNotBefore.Where(x => x.Value <= now).Select(x => x.Key).ToList())
+                {
+                    probeRetryNotBefore.Remove(expired);
+                }
+
+                probeRetryNotBefore[mediaFileId] = now + PendingRetryDelay;
+                logger.LogDebug("Media analysis for {MediaPath} was deferred and its stored analysis kept: {Diagnostic}", fullPath, analysis.Diagnostic);
+                return (await ToKeptEntryAsync(db, analysis, cancellationToken), AnalysisOutcome.Deferred);
+            }
+
+            probeRetryNotBefore.Remove(mediaFileId);
             if (analysis is null)
             {
                 analysis = new MediaTechnicalAnalysis { MediaFileId = mediaFileId };
@@ -455,6 +499,14 @@ public sealed class MediaInventoryService(
             .ToListAsync(cancellationToken);
         return ToEntryFromRows(analysis, streams);
     }
+
+    // The re-check did not happen, so the entry is Pending while Technical still carries the last stored analysis;
+    // callers that report a re-analysis therefore never count it as done, and playback keeps its data.
+    private static async Task<MediaInventoryEntry> ToKeptEntryAsync(
+        AppDbContext db,
+        MediaTechnicalAnalysis analysis,
+        CancellationToken cancellationToken) =>
+        (await ToEntryAsync(db, analysis, cancellationToken)) with { Status = MediaAnalysisStatus.Pending };
 
     private static MediaInventoryEntry ToEntryFromRows(
         MediaTechnicalAnalysis analysis,

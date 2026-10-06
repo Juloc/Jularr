@@ -215,15 +215,16 @@ public sealed class HomeHeroTests
             LastWriteTimeUtc = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
+        await CanonicalProgressSeed.AttachCanonicalVideoAsync(db);
 
-        var progress = new EpisodeProgressService(db, EpisodeFlowFixture.Account(Profile));
+        var progress = EpisodeFlowFixture.ProgressService(db, EpisodeFlowFixture.Account(Profile));
         await progress.UpdateAsync(episode.Id, new EpisodeProgressUpdate(500_000, 1_400_000, false));
         return (anime.Id, episode.Id);
     }
 
     private static async Task<IndexModel> LoadHomeAsync(AppDbContext db)
     {
-        var home = new IndexModel(db, EpisodeFlowFixture.Account(Profile));
+        var home = EpisodeFlowFixture.Home(db, EpisodeFlowFixture.Account(Profile));
         await home.OnGetAsync(CancellationToken.None);
         return home;
     }

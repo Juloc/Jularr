@@ -1,0 +1,168 @@
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Discovery
+@using Jularr.Web.Features.Localization
+@model DiscoverRequestSettingsView
+@* The settings groups of the Request dialog for one resolved title (docs/mockups/add-request-flow). Only the groups that
+   apply to the media kind are rendered: a series has one Scope card selector with the Included content derived from it,
+   series and anime have Language & Edition, every other kind is just the identity and Request. Scope and ids are
+   re-validated by the server. The language group is two plain preference selects: Edition choices belong to the shared
+   Language & Edition dialog of a detail page, and a video has no user-facing Edition to request here. *@
+@{
+    var ui = Model.Ui;
+    (string Value, string Title, string Hint, string Icon)[] scopes =
+    [
+        ("all", "discover.request.scope.all", "discover.request.scope.all.hint", "requested"),
+        ("future", "discover.request.scope.future", "discover.request.scope.future.hint", "calendar"),
+        ("custom", "discover.request.scope.custom", "discover.request.scope.custom.hint", "sliders")
+    ];
+    string SeasonLabel(VideoRequestSeason season) =>
+        season.IsSpecial ? ui["discover.request.specials"] : ui.Format("discover.request.season", ("number", season.Number));
+    var saved = Model.SavedScope;
+    var currentScope = saved?.Scope switch { VideoRequestScope.FutureOnly => scopes[1], VideoRequestScope.Custom => scopes[2], _ => scopes[0] };
+    var savedSeasons = saved?.SelectedSeasonIds ?? [];
+    var savedEpisodes = saved?.SelectedEpisodeIds ?? [];
+    bool SeasonSaved(VideoRequestSeason season) => saved?.Scope == VideoRequestScope.Custom && season.Id is { } id && savedSeasons.Contains(id);
+    bool EpisodeSaved(VideoRequestSeason season, VideoRequestEpisode episode) => saved?.Scope == VideoRequestScope.Custom && (SeasonSaved(season) || savedEpisodes.Contains(episode.Id));
+    string EpisodeCount(VideoRequestSeason season)
+    {
+        var upcoming = season.Episodes.Count(episode => episode.AiredAt is { } aired && aired > DateTime.UtcNow);
+        return upcoming > 0
+            ? ui.Format("discover.request.episodesUpcoming", ("count", season.Episodes.Count), ("upcoming", upcoming))
+            : ui.Format("discover.request.episodes", ("count", season.Episodes.Count));
+    }
+}
+@if (Model.Existing is { } existing)
+{
+    @* An open request already covers this title: the dialog shows its state instead of a second form. *@
+    <partial name="~/Pages/Discover/_DiscoverRequestResult.cshtml" model="new DiscoverRequestResultView(ui, existing, true, [], 0, IsOwn: existing.RequestedByProfileId == Model.ProfileId)" />
+}
+
+@if (Model.OffersScope || Model.OffersLanguage)
+{
+    <h3 class="dc-rq-section">@ui["discover.request.settings"]</h3>
+}
+
+@if (Model.OffersScope)
+{
+    <div class="dc-rq-field">
+        <span class="dc-rq-label" id="dc-rq-scope-label">@ui["discover.request.scope"]</span>
+        @* One control: the chosen scope is the card, opening it lists the three scopes as cards. The radios are the real controls. *@
+        <details class="dc-rq-scope" data-dc-rq-scope-picker>
+            <summary class="dc-rq-choice" aria-labelledby="dc-rq-scope-label">
+                <span class="dc-rq-choice-body" data-dc-rq-scope-current>
+                    <span class="dc-rq-choice-icon"><partial name="_DiscoverIcon" model='currentScope.Icon' /></span>
+                    <span class="dc-rq-choice-text"><strong>@ui[currentScope.Title]</strong><small>@ui[currentScope.Hint]</small></span>
+                </span>
+                <span class="dc-rq-chevron"><partial name="_DiscoverIcon" model='"chevron"' /></span>
+            </summary>
+            <div class="dc-rq-choices" role="radiogroup" aria-labelledby="dc-rq-scope-label">
+                @foreach (var scope in scopes)
+                {
+                    <label class="dc-rq-choice">
+                        <input type="radio" name="scope" value="@scope.Value" checked="@(scope.Value == currentScope.Value)" data-dc-rq-scope />
+                        <span class="dc-rq-choice-body">
+                            <span class="dc-rq-choice-icon"><partial name="_DiscoverIcon" model='scope.Icon' /></span>
+                            <span class="dc-rq-choice-text"><strong>@ui[scope.Title]</strong><small>@ui[scope.Hint]</small></span>
+                        </span>
+                        <span class="dc-rq-radio" aria-hidden="true"></span>
+                    </label>
+                }
+            </div>
+        </details>
+    </div>
+
+    <fieldset class="dc-rq-field dc-rq-content" data-dc-rq-content>
+        <legend>@ui["discover.request.included"]</legend>
+        @* The derived result of the scope, collapsed to one summary; the tree is the same selection in detail and editing it makes the scope Custom. *@
+        <button type="button" class="dc-rq-choice dc-rq-included" aria-expanded="false" aria-controls="dc-rq-tree" data-dc-rq-included-toggle>
+            <span class="dc-rq-choice-body">
+                <span class="dc-rq-choice-icon"><partial name="_DiscoverIcon" model='"library"' /></span>
+                <span class="dc-rq-choice-text"><strong data-dc-rq-included-title></strong><small data-dc-rq-count></small></span>
+            </span>
+            <span class="dc-rq-chevron"><partial name="_DiscoverIcon" model='"chevron"' /></span>
+        </button>
+        <ul class="dc-rq-tree" id="dc-rq-tree" hidden>
+            @for (var index = 0; index < Model.Seasons.Count; index++)
+            {
+                var season = Model.Seasons[index];
+                <li class="dc-rq-season" data-dc-rq-season data-season-id="@season.Id" data-special="@(season.IsSpecial ? "true" : null)">
+                    <div class="dc-rq-row">
+                        <input type="checkbox" id="dc-rq-s-@index" data-dc-rq-season-check checked="@SeasonSaved(season)" />
+                        <label for="dc-rq-s-@index">
+                            <span>@SeasonLabel(season)</span>
+                            <small>@EpisodeCount(season)</small>
+                        </label>
+                        @if (season.Episodes.Count > 0)
+                        {
+                            <button type="button"
+                                    class="dc-icon-btn dc-rq-expand"
+                                    aria-expanded="false"
+                                    aria-controls="dc-rq-e-@index"
+                                    aria-label="@ui.Format("discover.request.expand", ("season", SeasonLabel(season)))"
+                                    data-dc-rq-expand>
+                                <partial name="~/Pages/Discover/_DiscoverIcon.cshtml" model='"chevron"' />
+                            </button>
+                        }
+                    </div>
+                    @if (season.Episodes.Count > 0)
+                    {
+                        <ul class="dc-rq-episodes" id="dc-rq-e-@index" hidden>
+                            @foreach (var episode in season.Episodes)
+                            {
+                                <li title="@episode.Title">
+                                    <input type="checkbox" id="dc-rq-ep-@episode.Id" value="@episode.Id" data-dc-rq-episode checked="@EpisodeSaved(season, episode)" />
+                                    <label for="dc-rq-ep-@episode.Id">
+                                        <span>@ui.Format("discover.request.episode", ("number", episode.Number))</span>
+                                        @if (!string.IsNullOrWhiteSpace(episode.Title))
+                                        {
+                                            <small>@episode.Title</small>
+                                        }
+                                    </label>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </li>
+            }
+            <li class="dc-rq-season dc-rq-future">
+                <div class="dc-rq-row">
+                    <input type="checkbox" id="dc-rq-future" data-dc-rq-future checked="@(saved is { Scope: VideoRequestScope.Custom, MonitorFuture: true })" />
+                    <label for="dc-rq-future">
+                        <span>@ui["discover.request.future"]</span>
+                        <small>@ui["discover.request.future.hint"]</small>
+                    </label>
+                </div>
+            </li>
+        </ul>
+    </fieldset>
+}
+
+@if (Model.OffersLanguage)
+{
+    <fieldset class="dc-rq-field">
+        <legend>@ui["discover.request.languageEdition"]</legend>
+        <div class="dc-rq-pair">
+            <label>
+                <span>@ui["requests.new.audio"]</span>
+                <select name="audio" data-dc-rq-audio>
+                    <option value="">@ui["requests.new.anyLanguage"]</option>
+                    @foreach (var (tag, name) in RequestLanguages.Choices)
+                    {
+                        <option value="@tag" selected="@(Model.DefaultAudio == tag)">@name</option>
+                    }
+                </select>
+            </label>
+            <label>
+                <span>@ui["requests.new.subtitles"]</span>
+                <select name="subtitles" data-dc-rq-subtitles>
+                    <option value="">@ui["requests.new.anyLanguage"]</option>
+                    <option value="off" selected="@(Model.DefaultSubtitles == "off")">@ui["requests.new.noSubtitles"]</option>
+                    @foreach (var (tag, name) in RequestLanguages.Choices)
+                    {
+                        <option value="@tag" selected="@(Model.DefaultSubtitles == tag)">@name</option>
+                    }
+                </select>
+            </label>
+        </div>
+    </fieldset>
+}

@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Devices;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,8 @@ public sealed record PlaybackPlanInput(
     PlaybackNetworkReport? Network = null,
     IReadOnlySet<PlaybackDeliveryMode>? FailedModes = null,
     Guid? ReplacesSessionId = null,
-    bool Wake = true);
+    bool Wake = true,
+    PlaybackAdaptationAdvice FollowedAdvice = PlaybackAdaptationAdvice.None);
 
 /// <summary>
 /// The client's own view of its connection. Only measured values count as throughput;
@@ -99,12 +101,34 @@ public static class PlaybackNetworkClassifier
 }
 
 /// <summary>
-/// The current server-side inputs of a decision: ffmpeg processing and free encode slots.
+/// The current server-side inputs of a decision: the Admin's transcoding switch, the detected
+/// encoder (hardware only when its test encode passed and its breaker is closed) and the free
+/// slots of that encoder's cost class.
 /// </summary>
-public sealed class PlaybackServerCapabilityProvider(PlaybackTranscodeSlots slots)
+public sealed class PlaybackServerCapabilityProvider(
+    PlaybackTranscodingSettingsStore settings,
+    PlaybackTranscodeSlots slots,
+    PlaybackHardwareService hardware)
 {
-    public PlaybackServerCapabilities Current() =>
-        PlaybackServerCapabilities.Software(slots.Available);
+    /// <param name="tooSlow">Encoders that already failed to keep up with real time for the title being planned; see <see cref="PlaybackHardwareService.Choose"/>.</param>
+    public PlaybackServerCapabilities Current(IReadOnlyCollection<PlaybackHardwareBackend>? tooSlow = null)
+    {
+        var choice = hardware.Choose(tooSlow);
+        var costClass = choice.Target.IsHardware ? PlaybackCostClass.HardwareVideo : PlaybackCostClass.SoftwareVideo;
+        return PlaybackServerCapabilities.Software(slots.Available(costClass)) with
+        {
+            // Until the first detection finished the server behaves as it always did: ffmpeg is assumed, hardware is not.
+            // Only "not found" blocks remux and transcode; a timeout or a failed run is transient and the sweeper detects again.
+            ProcessingAvailable = hardware.Detected?.FfmpegState is not PlaybackFfmpegState.NotFound,
+            TranscodingEnabled = settings.Current.TranscodingEnabled,
+            H264Encoder = PlaybackHardwareBackends.H264Encoder(choice.Target.Backend),
+            MaxTranscodeHeight = choice.Target.IsHardware ? PlaybackServerCapabilities.HardwareMaxHeight : PlaybackServerCapabilities.SoftwareMaxHeight,
+            SuspendedHardware = choice.Suspended,
+            BufferPreset = settings.Current.BufferPreset,
+            // Software is the last choice: when it is the one that was too slow nothing is left to try.
+            EncoderTooSlow = tooSlow?.Contains(choice.Target.Backend) == true
+        };
+    }
 }
 
 /// <summary>
@@ -122,7 +146,8 @@ public sealed class PlaybackPlanService(
     KnownDeviceRegistry? deviceRegistry = null,
     ActiveSessionService? activeSessions = null,
     CanonicalMediaStorageService? canonicalStorage = null,
-    VideoProgressService? videoProgress = null)
+    VideoProgressService? videoProgress = null,
+    PlaybackAdmissionService? admission = null)
 {
     /// <summary>
     /// Legacy Anime compatibility adapter. New callers use
@@ -214,13 +239,23 @@ public sealed class PlaybackPlanService(
         var capabilities = input.Capabilities?.Normalize() ??
                            ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
         var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network);
+        var previous = input.ReplacesSessionId is { } replaced ? sessions.Get(replaced, profileId) : null;
+
+        // What the replaced session's player reported (its buffer and the stalls of the last minute) is the evidence of how that
+        // delivery went and wins over the hints of the request, but only for the same title and only while it is fresh: another
+        // title's stalls say nothing about this one, and a stale or missing report leaves the request's own hints in charge.
+        // Throughput stays the request's hint because a player cannot measure the link while the browser is not fetching.
+        var evidence = previous is not null && previous.Target == target ? sessions.TelemetryEvidence(previous) : null;
         var network = new PlaybackNetworkConditions(
             networkClass,
             input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null,
-            input.Network?.BufferSeconds is >= 0 and <= 3600 ? input.Network.BufferSeconds : null,
-            Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
+            evidence?.BufferSeconds ?? (input.Network?.BufferSeconds is >= 0 and <= 3600 ? input.Network.BufferSeconds : null),
+            evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
         var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
-        var previous = input.ReplacesSessionId is { } replaced ? sessions.Get(replaced, profileId) : null;
+
+        // The replaced session's advice and what the server learned about its own capacity for this title (a tier ceiling, encoders that could
+        // not keep up) travel with the chain of re-plans of the title and nowhere else.
+        var directive = previous is not null && previous.Target == target ? sessions.NextDirective(previous, input.FollowedAdvice) : PlaybackAdaptationDirective.None;
         var resumePositionMs = videoProgress is null
             ? 0
             : (await videoProgress.GetAsync(
@@ -268,7 +303,7 @@ public sealed class PlaybackPlanService(
         var plan = PlaybackDecisionEngine.Decide(new PlaybackDecisionRequest(
             media,
             capabilities,
-            serverCapabilities.Current(),
+            serverCapabilities.Current(directive.SlowBackends),
             input.AudioStreamIndex,
             input.SubtitleStreamIndex,
             input.BurnInSubtitle,
@@ -276,11 +311,16 @@ public sealed class PlaybackPlanService(
             network,
             input.ModePreference,
             input.FailedModes,
-            previous?.Plan.Quality.DeliveredBitrateKbps));
+            previous?.Plan.Quality.DeliveredBitrateKbps,
+            directive));
 
         PlaybackStreamSession? session = null;
         if (plan.Mode != PlaybackDeliveryMode.Unavailable)
         {
+            // A re-plan that follows the server's advice is requested while the old stream keeps playing: the old session is only retired
+            // after this one's first output succeeded (see the stream endpoints), and an admission refusal is answered here, before the
+            // player swaps anything.
+            var followsAdvice = previous is not null && previous.Target == target && input.FollowedAdvice != PlaybackAdaptationAdvice.None;
             session = sessions.Create(
                 profileId,
                 target,
@@ -296,9 +336,25 @@ public sealed class PlaybackPlanService(
                     input.ModePreference,
                     capabilities.Client.Kind),
                 previous?.Id,
-                legacyEpisodeId);
+                legacyEpisodeId,
+                directive,
+                deferRetirement: followsAdvice);
 
-            if (activeSessions is not null)
+            if (followsAdvice && admission?.Preflight(plan, profileId, session) is { } refusal)
+            {
+                sessions.Remove(session.Id, profileId);
+                return new PlaybackPlanOutcome(
+                    UnavailablePlan(refusal, quality, networkClass),
+                    null,
+                    row.Id,
+                    availability,
+                    capabilities.Inferred,
+                    target,
+                    resumePositionMs);
+            }
+
+            // The ActiveSession of a deferred re-plan changes hands when the old session is retired.
+            if (activeSessions is not null && !followsAdvice)
             {
                 await activeSessions.OpenAsync(
                     session.Id,

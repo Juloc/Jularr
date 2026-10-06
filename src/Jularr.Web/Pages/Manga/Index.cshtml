@@ -1,5 +1,6 @@
 @page "/Manga"
 @model Jularr.Web.Pages.Manga.IndexModel
+@using Jularr.Web.Features.Acquisition.Access
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["reading.manga.title"];
@@ -15,13 +16,11 @@
         <a class="active" href="/Manga">@ui["reading.manga.title"]</a>
     </div>
 
-    @if (Model.Access.CanAdd)
+    @if (Model.Access.CanRequest)
     {
         <details class="manga-import" open="@(Model.SearchQuery.Length > 0)">
             <summary class="button">
-                @(Model.Access.AddCreatesRequest
-                    ? ui["discover.card.request"]
-                    : ui["discover.card.add"])
+                @ui["discover.card.request"]
             </summary>
             <div class="manga-import-panel">
                 <form method="get" class="reading-catalog-form">
@@ -91,7 +90,7 @@
                                         else if (result.RequestStatus is { Length: > 0 } requestStatus)
                                         {
                                             <button class="button" type="button" disabled>
-                                                @ui["requests.status." + requestStatus]
+                                                @ui[ConsumerAcquisitionLabels.StatusKey(requestStatus)]
                                             </button>
                                         }
                                         else
@@ -103,9 +102,7 @@
                                                 <input type="hidden" name="coverImageUrl" value="@result.Item.CoverImageUrl" />
                                                 <input type="hidden" name="q" value="@Model.SearchQuery" />
                                                 <button class="button button-primary" type="submit">
-                                                    @(Model.Access.AddCreatesRequest
-                                                        ? ui["discover.card.request"]
-                                                        : ui["discover.card.add"])
+                                                    @ui["discover.card.request"]
                                                 </button>
                                             </form>
                                         }

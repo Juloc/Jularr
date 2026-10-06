@@ -17,6 +17,9 @@ using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
+using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Media.Optimization;
 using Jularr.Web.Features.MediaMapping;
@@ -73,6 +76,9 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
     public IHardLinkCreator HardLinkCreator { get; }
     public HttpMessageHandler AniListHandler { get; set; } = new NotConnectedAniListHandler();
     public FakeAnimeMetadataProvider AniListMetadata { get; } = new();
+
+    /// <summary>What ffprobe says about files the library scan analyses; like a non-media file unless a test describes them.</summary>
+    public FakeMediaProbeRunner Probe { get; } = new();
     public Guid AnimeId { get; private set; }
     public Guid ProwlarrIndexerEntryId { get; private set; }
 
@@ -147,6 +153,57 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         return execution;
     }
 
+    /// <summary>The owner requests an anime through the one request service (auto-approved), which runs the Anime executor.</summary>
+    public async Task<AcquisitionRequest> SubmitRequestAsync(string aniListId, AcquisitionRequestOptions? options = null)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, AniListMetadataProvider.ProviderKey, aniListId, "Frieren", null, null, Options: options);
+        var submission = await scope.ServiceProvider.GetRequiredService<AcquisitionRequestService>().SubmitWithOutcomeAsync(draft, CancellationToken.None);
+        Db.ChangeTracker.Clear();
+        return submission.Request;
+    }
+
+    /// <summary>Approves (or retries) a request, or runs an approved one again, as the owner or a background pass would.</summary>
+    public async Task<AcquisitionRequest> RunRequestAsync(Guid id, bool continued = false)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var requests = scope.ServiceProvider.GetRequiredService<AcquisitionRequestService>();
+        var request = continued ? await requests.ContinueAsync(id, CancellationToken.None) : await requests.ApproveAsync(id, CancellationToken.None);
+        Db.ChangeTracker.Clear();
+        return request;
+    }
+
+    /// <summary>The domain events the owner's request service published in this environment.</summary>
+    public IReadOnlyList<Jularr.Web.Features.Events.JularrEvent> PublishedEvents => services.GetRequiredService<RecordingEventPublisher>().Published;
+
+    public async Task<AcquisitionRequest> GetRequestAsync(Guid id) => (await new AcquisitionAccessStore(Db).GetAsync(id, CancellationToken.None))!;
+
+    /// <summary>One pass of the shared Wanted scheduler, which brings the open anime requests to the state of the monitoring pipeline.</summary>
+    public async Task<int> RequestPassAsync(DateTime? nowUtc = null)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var advanced = await WantedAcquisitionService.ProcessOnceAsync(scope.ServiceProvider, nowUtc ?? DateTime.UtcNow, CancellationToken.None);
+        Db.ChangeTracker.Clear();
+        return advanced;
+    }
+
+    /// <summary>The release calendar knows these episode releases of an AniList entry (what the calendar refresh stores from AniList).</summary>
+    public async Task SeedReleaseCalendarAsync(string aniListId, string status, params (int Episode, DateTimeOffset At)[] releases)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var snapshot = new ReleaseSourceSnapshot(
+            aniListId,
+            status,
+            [.. releases.Select(release => new CachedRelease(AniListMetadataProvider.ProviderKey, aniListId, KindOf(release.Episode), release.Episode, ReleaseDate.FromInstant(release.At)))]);
+        var cache = scope.ServiceProvider.GetRequiredService<ReleaseCalendarCacheStore>();
+        await cache.SaveAsync(AniListMetadataProvider.ProviderKey, [snapshot], DateTimeOffset.UtcNow.AddYears(-1), DateTime.UtcNow, CancellationToken.None);
+    }
+
+    private static ReleaseKind KindOf(int episode) => episode == 1 ? ReleaseKind.SeasonPremiere : ReleaseKind.Episode;
+
+    /// <summary>The monitoring state file can no longer be read, so anything that loads it fails.</summary>
+    public Task CorruptMonitoringStateAsync() => File.WriteAllTextAsync(Path.Combine(DataRoot, "acquisition", "monitoring.json"), "{ not json");
+
     public async Task<AniListAutoMonitorRunResult> RunAniListAutoMonitorAsync(string profileId)
     {
         await using var scope = services.CreateAsyncScope();
@@ -179,6 +236,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         await DatabaseMigrationBridge.UpgradeAsync(db);
         var root = new LibraryRoot { Name = "Anime", Path = library };
         db.LibraryRoots.Add(root);
+        db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
         await db.SaveChangesAsync();
 
         var environment = new AnimeAcquisitionEnvironment(tempRoot, options, db, root, hardLinkCreator);
@@ -222,13 +280,14 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
     }
 
     /// <summary>
-    /// Frieren with S01E01 on disk, an AniList match with <paramref name="episodeCount"/> episodes,
+    /// Frieren with S01E01 on disk, an AniList match with <paramref name="episodeCount"/> episodes and AniList <paramref name="status"/>,
     /// monitored, and (unless <paramref name="mode"/> is null) the given management mode.
     /// </summary>
     public async Task SeedFrierenAsync(
-        int episodeCount = 2,
+        int? episodeCount = 2,
         AnimeManagementMode? mode = AnimeManagementMode.JularrManaged,
-        bool seasonFolders = true)
+        bool seasonFolders = true,
+        string? status = null)
     {
         AddLibraryFile(seasonFolders ? ["Frieren", "Season 01", "Frieren - S01E01 - Episode 1.mkv"] : ["Frieren", "Frieren - S01E01 - Episode 1.mkv"]);
         await ScanAsync();
@@ -242,7 +301,8 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
             ExternalId = "154587",
             PreferredTitle = "Frieren",
             RomajiTitle = "Sousou no Frieren",
-            EpisodeCount = episodeCount
+            EpisodeCount = episodeCount,
+            Status = status
         });
         await Db.SaveChangesAsync();
 
@@ -508,7 +568,23 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
 
         collection.AddSingleton<IAnimeMetadataProvider>(AniListMetadata);
         collection.AddScoped<AnimeMetadataService>();
+        collection.AddScoped<Jularr.Web.Features.MediaCore.WorkService>();
+        collection.AddScoped<Jularr.Web.Features.MediaCore.WorkStructureService>();
+        collection.AddScoped<Jularr.Web.Features.MediaCore.LegacyWorkBridge>();
         collection.AddScoped<AnimeAcquisitionRequestExecutor>();
+        collection.AddScoped<IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<AnimeAcquisitionRequestExecutor>());
+        collection.AddScoped<IMonitoredAcquisitionExecutor>(provider => provider.GetRequiredService<AnimeAcquisitionRequestExecutor>());
+        collection.AddSingleton(TimeProvider.System);
+        collection.AddScoped<ReleaseCalendarCacheStore>();
+        collection.AddSingleton<RecordingEventPublisher>();
+        collection.AddScoped(provider => new AcquisitionRequestService(
+            provider.GetRequiredService<AcquisitionAccessStore>(),
+            provider.GetServices<IAcquisitionRequestExecutor>(),
+            AcquisitionAccessFixture.Account("owner", AccountRole.Owner),
+            new MediaCapabilityService(new MediaCapabilityStore(DataRoot)),
+            new AcquisitionRequestSettingsStore(DataRoot),
+            provider.GetRequiredService<RecordingEventPublisher>(),
+            NullLogger<AcquisitionRequestService>.Instance));
         collection.AddScoped<SabnzbdConnectionResolver>();
         collection.AddScoped<SabnzbdDownloadService>();
         collection.AddScoped<SabnzbdAcquisitionService>();
@@ -533,7 +609,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddHttpClient();
 
         var dictionary = Path.Combine(TempRoot, "dictionary");
-        var mediaInventory = MediaInventoryTestSupport.Create(Options);
+        var mediaInventory = MediaInventoryTestSupport.Create(Options, Probe);
         collection.AddScoped(provider =>
         {
             var db = provider.GetRequiredService<AppDbContext>();
@@ -547,7 +623,12 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
                     sonarrStore,
                     new SonarrArtworkImportService(db, new NoHttpClientFactory(), NullLogger<SonarrArtworkImportService>.Instance),
                     NullLogger<SonarrArtworkSyncService>.Instance),
-                NullLogger<LibraryScanner>.Instance);
+                NullLogger<LibraryScanner>.Instance,
+                canonicalVideoBackfill: new CanonicalVideoStorageBackfillService(
+                    db,
+                    new Jularr.Web.Features.MediaCore.LegacyWorkBridge(db, new Jularr.Web.Features.MediaCore.WorkService(db), new Jularr.Web.Features.MediaCore.WorkStructureService(db)),
+                    new CanonicalMediaStorageService(db),
+                    NullLogger<CanonicalVideoStorageBackfillService>.Instance));
         });
 
         return collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
@@ -597,9 +678,9 @@ internal sealed class FakeAnimeMetadataProvider : IAnimeMetadataProvider
     public Task<AnimeMetadataCandidate?> GetAsync(string externalId, CancellationToken cancellationToken) =>
         Task.FromResult(Entries.GetValueOrDefault(externalId));
 
-    public void Add(string id, string title, int? episodeCount, int? year = null) =>
+    public void Add(string id, string title, int? episodeCount, int? year = null, string status = "RELEASING", string format = "TV") =>
         Entries[id] = new AnimeMetadataCandidate(
-            AniListMetadataProvider.ProviderKey, id, title, title, null, null, null, null, null, "TV", "RELEASING", null, year, episodeCount, 24);
+            AniListMetadataProvider.ProviderKey, id, title, title, null, null, null, null, null, format, status, null, year, episodeCount, 24);
 }
 
 /// <summary>Returns the configured releases for every query and counts the queries.</summary>

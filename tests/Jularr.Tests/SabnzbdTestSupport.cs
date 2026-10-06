@@ -132,6 +132,9 @@ internal sealed class FakeSabnzbdClient : ISabnzbdClient
     public SabnzbdQueueSnapshot Queue { get; set; } = new(false, null, null, []);
     public SabnzbdHistorySnapshot History { get; set; } = new([]);
     public List<SabnzbdGrabRequest> Grabs { get; } = [];
+
+    /// <summary>Thrown by <see cref="GrabAsync"/> after the attempt is recorded, as an interrupted submission.</summary>
+    public Exception? GrabException { get; set; }
     public List<string> Cancelled { get; } = [];
     public List<SabnzbdConnection> CancelConnections { get; } = [];
     public List<string> Retried { get; } = [];
@@ -143,16 +146,28 @@ internal sealed class FakeSabnzbdClient : ISabnzbdClient
         CancellationToken cancellationToken) =>
         Task.FromResult(new SabnzbdConnectionTestResult(true, "test", CanMonitor: true));
 
-    public Task<SabnzbdGrabResult> GrabAsync(
+    /// <summary>Lets a test hold a grab open before it counts, to change something while a download is being handed over.</summary>
+    public Func<Task>? BeforeGrab { get; set; }
+
+    public async Task<SabnzbdGrabResult> GrabAsync(
         SabnzbdConnection connection,
         SabnzbdGrabRequest grab,
         CancellationToken cancellationToken)
     {
+        if (BeforeGrab is { } gate)
+        {
+            await gate();
+        }
+
         Grabs.Add(grab);
-        return Task.FromResult(
-            GrabResults.Count > 0
-                ? GrabResults.Dequeue()
-                : new SabnzbdGrabResult(true, [$"SABnzbd_nzo_{++nextId}"]));
+        if (GrabException is not null)
+        {
+            throw GrabException;
+        }
+
+        return GrabResults.Count > 0
+            ? GrabResults.Dequeue()
+            : new SabnzbdGrabResult(true, [$"SABnzbd_nzo_{++nextId}"]);
     }
 
     public Task<SabnzbdGrabResult> AddFileAsync(

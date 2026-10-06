@@ -126,7 +126,8 @@ public sealed class PlaybackCueProjector(IJapaneseMorphology morphology)
         long cueId = 0)
     {
         var normalized = text.Normalize(NormalizationForm.FormKC);
-        var analyzed = morphology.Analyze(normalized);
+        // Without a Japanese dictionary the cue is still playable; it just carries no word tokens.
+        var analyzed = morphology.Status.IsAvailable ? morphology.Analyze(normalized) : [];
 
         if (analyzed.Count == 0)
         {
@@ -579,13 +580,23 @@ public sealed class PlaybackService
         }
 
         var row = await GetMediaRowAsync(episodeId, cancellationToken);
-        if (row is null)
-        {
-            return null;
-        }
+        return row is null
+            ? null
+            : await GetEmbeddedSubtitleCuesAsync(row.Id, row.Path, streamIndex, cancellationToken);
+    }
 
-        var availability = await CheckAvailabilityAsync(row.Id, cancellationToken);
-        if (availability is { IsAvailable: false } || !File.Exists(row.Path))
+    /// <summary>
+    /// The cues of one embedded text stream of an already resolved file, for the legacy episode route and the canonical
+    /// video route alike. Returns null when storage is unavailable, the file is gone or the stream is not a text stream.
+    /// </summary>
+    public async Task<PlaybackEmbeddedSubtitleCues?> GetEmbeddedSubtitleCuesAsync(
+        Guid mediaFileId,
+        string path,
+        int streamIndex,
+        CancellationToken cancellationToken)
+    {
+        var availability = await CheckAvailabilityAsync(mediaFileId, cancellationToken);
+        if (availability is { IsAvailable: false } || !File.Exists(path))
         {
             return null;
         }
@@ -593,7 +604,7 @@ public sealed class PlaybackService
         var extractor = subtitleExtractor ?? throw new InvalidOperationException(
             "This PlaybackService instance was created without subtitle extraction.");
         var extracted = await extractor.ExtractTextStreamAsync(
-            row.Path,
+            path,
             streamIndex,
             cancellationToken);
         if (extracted is null)
@@ -601,7 +612,7 @@ public sealed class PlaybackService
             return null;
         }
 
-        var probe = await ReadTechnicalInfoAsync(row.Id, cancellationToken);
+        var probe = await ReadTechnicalInfoAsync(mediaFileId, cancellationToken);
         var language = probe?.Tracks?
             .FirstOrDefault(x => x.Kind == PlaybackTrackKind.Subtitle && x.StreamIndex == streamIndex)?
             .Language;

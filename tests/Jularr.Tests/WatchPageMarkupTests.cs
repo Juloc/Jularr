@@ -5,8 +5,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class WatchPageMarkupTests
 {
-    private static readonly string Page = File.ReadAllText(Path.Combine(
-        FindRepositoryRoot(), "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+    private static readonly string Page = EpisodePlayerSource.Read(FindRepositoryRoot());
 
     [TestMethod]
     public void PlayerHasOwnChromeWithExactlyOneTimelineAndNoNativeControls()
@@ -24,18 +23,65 @@ public sealed class WatchPageMarkupTests
     {
         foreach (var hook in new[]
                  {
-                     "data-chrome-play", "data-chrome-settings-toggle", "data-chrome-fullscreen", "data-chrome-subtitles",
-                     "data-chrome-pip", "data-chrome-mute", "data-player-next", "data-repeat-line",
+                     "data-chrome-play", "data-chrome-settings-toggle", "data-chrome-fullscreen", "data-chrome-mute",
+                     "data-player-previous", "data-player-next", "data-repeat-line", "data-failure-retry",
                      "data-player-action=\"seekBack10\"", "data-player-action=\"seekForward10\""
                  })
         {
             Assert.AreEqual(1, Regex.Matches(Page, Regex.Escape(hook) + "[\\s>]").Count, $"{hook} must appear once.");
         }
 
-        // The speed shortcut duplicated the speed menu entry; the top bar only carries the title.
+        // Picture-in-picture is one action in two places: the top chrome of a phone or tablet stage and the bar of a wide one.
+        // The stage's layout shows one of them, never both.
+        Assert.AreEqual(2, Regex.Matches(Page, "data-chrome-pip[\\s>]").Count);
+        Assert.AreEqual(1, Regex.Matches(Page, "player-window-actions\"").Count);
+        Assert.AreEqual(1, Regex.Matches(Page, "player-control-pip").Count);
+
+        // The speed shortcut duplicated the speed menu entry; the top bar only carries the way back, the title and the pop-out.
         StringAssert.DoesNotMatch(Page, new Regex("data-chrome-speed"));
         StringAssert.DoesNotMatch(Page, new Regex("player-top-actions"));
+        StringAssert.DoesNotMatch(Page, new Regex("data-chrome-subtitles"), "The bar's Subtitles control opens the choice; there is no second toggle.");
         StringAssert.DoesNotMatch(Page, new Regex(">\\s*✕\\s*<"), "Close buttons use the shared close icon.");
+    }
+
+    // docs/mockups/player: the bar names Subtitles, Audio, Quality and Speed with their current choice; each one, like the gear, opens
+    // the one settings panel, where the choice itself is made.
+    [TestMethod]
+    public void TheBarNamesTheSettingsAndEveryControlOpensTheSamePanel()
+    {
+        foreach (var setting in new[] { "subtitles", "audio", "quality", "speed" })
+        {
+            Assert.AreEqual(1, Regex.Matches(Page, $"data-chrome-open-setting=\"{setting}\"").Count, setting);
+            StringAssert.Contains(Page, $"data-setting-row=\"{setting}\"", $"The panel has the {setting} row the bar control opens.");
+        }
+
+        Assert.AreEqual(5, Regex.Matches(Page, "aria-controls=\"player-settings\"").Count, "Four named settings and the gear.");
+        Assert.AreEqual(1, Regex.Matches(Page, "id=\"player-settings\"").Count, "There is one settings panel.");
+        StringAssert.Contains(Page, "data-chrome-setting-value");
+    }
+
+    // docs/mockups/player section 3: the way back is part of the player's top chrome, in the stage and in the unavailable state alike.
+    [TestMethod]
+    public void TheTopChromeLeadsBackThroughOneSharedHeading()
+    {
+        StringAssert.Contains(Page, "<partial name=\"_VideoPlayerHeading\" model=\"heading\" />");
+        var heading = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "Jularr.Web", "Pages", "Library", "_VideoPlayerHeading.cshtml"));
+        StringAssert.Contains(heading, "class=\"player-back\"");
+        StringAssert.Contains(heading, "data-context-back");
+    }
+
+    // docs/mockups/player: Previous and Next are part of the centred transport group, never of the volume/settings bar.
+    [TestMethod]
+    public void PreviousAndNextEpisodeBelongToTheTransportGroup()
+    {
+        var transportStart = Page.IndexOf("class=\"player-center\"", StringComparison.Ordinal);
+        var barStart = Page.IndexOf("class=\"player-bottom\"", StringComparison.Ordinal);
+        Assert.IsTrue(transportStart > 0 && barStart > transportStart);
+        var transport = Page[transportStart..barStart];
+
+        StringAssert.Contains(transport, "data-player-previous");
+        StringAssert.Contains(transport, "data-player-next");
+        StringAssert.DoesNotMatch(Page[barStart..], new Regex("data-player-(previous|next)"));
     }
 
     [TestMethod]

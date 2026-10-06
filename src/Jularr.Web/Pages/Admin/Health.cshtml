@@ -1,15 +1,19 @@
 @page
 @model Jularr.Web.Pages.Admin.HealthModel
 @using Jularr.Web.Features.Health
+@using Jularr.Web.Features.Playback.Transcoding
 @using Jularr.Web.Features.Storage
 @section Head {
     <link rel="stylesheet" href="~/css/admin-overview.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
 }
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["admin.nav.health"];
     var snapshot = Model.Snapshot;
     var update = Model.Update;
+    var encoderName = Model.EncoderInUse.IsHardware ? PlaybackHardwareBackends.DisplayName(Model.EncoderInUse.Backend) : ui["admin.health.hardware.software"];
 
     string Pill(HealthState state) => state switch
     {
@@ -139,7 +143,18 @@
                     @(snapshot.Ffprobe.IsAvailable ? ui["settings.connectionTable.healthy"] : ui["settings.connectionTable.unhealthy"])
                 </strong>
             </div>
+            <div>
+                <span>@ui["admin.health.japanese.label"]</span>
+                <strong class="status-pill @(Model.JapaneseAnalysis.IsAvailable ? "status-ok" : "status-error")">
+                    @(Model.JapaneseAnalysis.IsAvailable ? ui["settings.connectionTable.healthy"] : ui["settings.connectionTable.unhealthy"])
+                </strong>
+            </div>
         </div>
+
+        @if (!Model.JapaneseAnalysis.IsAvailable)
+        {
+            <p class="validation">@ui.Format("admin.health.japanese.unavailable", ("path", Model.JapaneseAnalysis.DictionaryPath ?? ""))</p>
+        }
 
         <div class="status-list admin-overview-list" aria-label="@ui["admin.health.services.title"]">
             <a asp-page="/Admin/Operations">
@@ -215,4 +230,104 @@
             <button class="button" type="submit">@ui["admin.health.update.checkButton"]</button>
         </form>
     </section>
+</div>
+
+<div class="admset-sections">
+<section class="admset-section" id="hardware" aria-labelledby="hardware-title">
+    <div class="admset-head">
+        <span class="admset-tile"><partial name="_AdminIcon" model='"chip"' /></span>
+        <div>
+            <h2 id="hardware-title">@ui["admin.health.hardware.title"]</h2>
+            <p>@ui.Format("admin.health.hardware.inUse", ("encoder", encoderName))</p>
+        </div>
+    </div>
+
+    @if (Model.HardwareCapabilities is not { } hardware)
+    {
+        <p class="admset-hint">@ui["admin.health.hardware.pending"]</p>
+    }
+    else
+    {
+        <div class="admset-table-wrap">
+            <table class="admset-table">
+                <thead>
+                    <tr>
+                        <th scope="col">@ui["admin.health.hardware.column.encoder"]</th>
+                        <th scope="col">@ui["admin.health.hardware.column.state"]</th>
+                        <th scope="col">@ui["admin.health.hardware.column.note"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var backend in PlaybackHardwareBackends.SelectionOrder)
+                    {
+                        var status = hardware.Status(backend);
+                        var breaker = Model.Breakers.First(x => x.Backend == backend);
+                        var stateKey = status?.State switch
+                        {
+                            PlaybackBackendState.Available => "available",
+                            PlaybackBackendState.EncoderMissing => "encoderMissing",
+                            PlaybackBackendState.NoDevice => "noDevice",
+                            PlaybackBackendState.TestFailed => "testFailed",
+                            _ => "ffmpegUnavailable"
+                        };
+                        var tone = status?.State switch
+                        {
+                            PlaybackBackendState.Available when !breaker.IsOpen => "success",
+                            PlaybackBackendState.TestFailed or PlaybackBackendState.Available => "warning",
+                            _ => ""
+                        };
+                        <tr>
+                            <td>
+                                <span class="admset-name">
+                                    <strong>@PlaybackHardwareBackends.DisplayName(backend)</strong>
+                                    @if (status?.Device is { } device)
+                                    {
+                                        <code>@device</code>
+                                    }
+                                </span>
+                            </td>
+                            <td><span class="admin-tag @(tone.Length == 0 ? "" : "admin-tag-" + tone)">@ui[$"admin.health.hardware.state.{stateKey}"]</span></td>
+                            <td>
+                                @if (status?.Detail is { } detail)
+                                {
+                                    <small>@detail</small>
+                                }
+                                @if (Model.DecodeDisabled.Contains(backend))
+                                {
+                                    <small>@ui["admin.health.hardware.decodeDisabled"]</small>
+                                }
+                                @if (breaker.ConsecutiveFailures > 0)
+                                {
+                                    <small>
+                                        @(breaker.IsOpen
+                                            ? ui.Format("admin.health.hardware.breakerOpen", ("until", breaker.OpenUntilUtc!.Value.ToLocalTime().ToString("t")))
+                                            : ui.Format("admin.health.hardware.breakerFailures", ("count", breaker.ConsecutiveFailures)))
+                                    </small>
+                                    @if (breaker.LastFailureDetail is { } failureDetail)
+                                    {
+                                        <small>@failureDetail</small>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="admset-hint">@ui.Format("admin.health.hardware.detectedAt", ("when", hardware.DetectedAtUtc.ToLocalTime().ToString("g")))</p>
+    }
+
+    @if (Model.HardwareDetectionError is { } detectionError)
+    {
+        <p class="admset-notice" role="alert">@ui.Format("admin.health.hardware.detectionFailed", ("error", detectionError))</p>
+    }
+
+    <div class="admset-actions">
+        <form method="post" asp-page-handler="Redetect">
+            <button class="button" type="submit">@ui["admin.health.hardware.redetect"]</button>
+        </form>
+        <a class="button" asp-page="/Admin/Transcoding">@ui["admin.health.hardware.settingsLink"]</a>
+    </div>
+</section>
 </div>

@@ -113,7 +113,7 @@
                                     <ul class="calendar-cell-events">
                                         @foreach (var release in day.Events.Take(monthCellLimit))
                                         {
-                                            var href = ReleaseCalendarPresenter.Href(release);
+                                            var href = presenter.Href(release);
                                             var unit = presenter.UnitLabel(release);
                                             var time = presenter.TimeLabel(release.Date);
                                             var typeClass = "calendar-type-" + ReleaseCalendarPresenter.FilterValue(release.MediaType).ToLowerInvariant();
@@ -163,7 +163,7 @@
                             @foreach (var item in sidebarUpcoming)
                             {
                                 var release = item.Event;
-                                var href = ReleaseCalendarPresenter.Href(release);
+                                var href = presenter.Href(release);
                                 var unit = presenter.UnitLabel(release);
                                 var time = presenter.TimeLabel(release.Date);
                                 var typeClass = "calendar-type-" + ReleaseCalendarPresenter.FilterValue(release.MediaType).ToLowerInvariant();

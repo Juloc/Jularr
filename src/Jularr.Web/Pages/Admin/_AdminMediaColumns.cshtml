@@ -1,0 +1,19 @@
+@model Jularr.Web.Features.Localization.UiTextBundle
+@* Presentation preference only: which optional columns the desktop rows show. Kept in the browser by admin-media-work.js; no data changes. *@
+<details class="admin-menu admmd-columns">
+    <summary class="admin-icon-button admin-icon-button-labelled"><partial name="_AdminIcon" model='"columns"' /><span class="admin-icon-label">@Model["admin.media.columns"]</span></summary>
+    <div class="admin-menu-list admmd-columns-list">
+        @foreach (var (column, labelKey) in new[]
+        {
+            ("status", "admin.media.col.status"),
+            ("quality", "admin.media.col.quality"),
+            ("audio", "admin.media.col.audio"),
+            ("subtitles", "admin.media.col.subtitles"),
+            ("files", "admin.media.col.files"),
+            ("size", "admin.media.col.size")
+        })
+        {
+            <label class="admmd-check"><input type="checkbox" data-column-toggle="@column" checked /><span>@Model[labelKey]</span></label>
+        }
+    </div>
+</details>

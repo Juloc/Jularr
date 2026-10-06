@@ -1,16 +1,26 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Features.Storage;
+using Jularr.Web.Features.Subtitles;
 
 namespace Jularr.Web.Features.ClientApi;
 
 public sealed record ClientVideoTarget(
     Guid WorkId,
-    Guid? WorkEpisodeId);
+    Guid? WorkEpisodeId)
+{
+    [JsonIgnore]
+    public bool IsValid => WorkId != Guid.Empty && (WorkEpisodeId is null || WorkEpisodeId != Guid.Empty);
+}
 
 /// <summary>
 /// One playback-plan request for every client (web, PWA, Android, TV). The capability
@@ -28,7 +38,8 @@ public sealed record ClientPlaybackPlanRequest(
     IReadOnlyList<PlaybackDeliveryMode>? FailedModes = null,
     Guid? ReplacesSessionId = null,
     bool Wake = true,
-    ClientVideoTarget? Target = null);
+    ClientVideoTarget? Target = null,
+    string? FollowedAdvice = null);
 
 /// <summary>
 /// Where and how to fetch the plan's stream. Live transports restart at a position by adding
@@ -49,6 +60,26 @@ public sealed record ClientPlaybackPlanResponse(
     bool CapabilitiesInferred,
     ClientVideoTarget Target,
     long ResumePositionMs);
+
+/// <summary>
+/// Whether the server still runs the session's stream. <see cref="Reason"/> says why an ended one ended when the server knows;
+/// <see cref="Recoverable"/> is the server's verdict that planning the same mode again is sensible (an encoder crash is not).
+/// </summary>
+public sealed record ClientStreamSessionStatus(StreamSessionState State, HlsSessionEndReason? Reason, bool Recoverable);
+
+[JsonConverter(typeof(SnakeCaseEnumConverter<StreamSessionState>))]
+public enum StreamSessionState
+{
+    Active,
+    Ended
+}
+
+/// <summary>
+/// The answer to a telemetry report. <see cref="Advice"/> is what the server asks the player to do about quality (<c>none</c>, <c>step_down</c>,
+/// <c>step_up</c>) and <see cref="Reason"/> why; the player re-plans with the same selections when it follows it. The transcode values are
+/// what the server measured while converting the video and are null when it does not convert or has no measurement yet.
+/// </summary>
+public sealed record ClientTelemetryAnswer(PlaybackAdaptationAdvice Advice, PlaybackAdaptationReason? Reason, double? TranscodeSpeed, double? TranscodeFps);
 
 public sealed record ClientVideoProgressUpdate(
     ClientVideoTarget? Target,
@@ -116,7 +147,8 @@ public static class ClientApiPlaybackPlanEndpoints
     {
         var group = endpoints
             .MapGroup(ClientApiContract.BasePath)
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .AddEndpointFilter<ClientVideoAccessFilter>();
 
         group.MapPost("/episodes/{episodeId:guid}/playback-plan", async (
             Guid episodeId,
@@ -150,7 +182,7 @@ public static class ClientApiPlaybackPlanEndpoints
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
-            if (!ValidTarget(request.Target))
+            if (request.Target is not { IsValid: true })
             {
                 return Results.BadRequest(new ClientErrorResponse(
                     "invalid_playback_target",
@@ -158,10 +190,10 @@ public static class ClientApiPlaybackPlanEndpoints
             }
 
             var target = request.Target!;
-            var snapshot = await player.GetAsync(
+            var snapshot = (await player.GetAsync(
                 currentAccount.ProfileId,
                 new PlaybackVideoTarget(target.WorkId, target.WorkEpisodeId),
-                cancellationToken);
+                cancellationToken)).Snapshot;
             if (snapshot is null)
             {
                 return Results.NotFound(new ClientErrorResponse(
@@ -179,7 +211,7 @@ public static class ClientApiPlaybackPlanEndpoints
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            if (request.Target is not { } target || !ValidTarget(target))
+            if (request.Target is not { IsValid: true } target)
             {
                 return Results.BadRequest(new ClientErrorResponse(
                     "invalid_playback_target",
@@ -214,7 +246,7 @@ public static class ClientApiPlaybackPlanEndpoints
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
-            if (!ValidTarget(update.Target) ||
+            if (update.Target is not { IsValid: true } ||
                 update.PositionMs < 0 ||
                 update.DurationMs is < 0)
             {
@@ -246,6 +278,27 @@ public static class ClientApiPlaybackPlanEndpoints
                 snapshot.ResumePositionMs));
         });
 
+        group.MapGet("/video/subtitle-tracks/{trackId}/cues", async (
+            string trackId,
+            Guid workId,
+            Guid? workEpisodeId,
+            CanonicalMediaStorageService storage,
+            PlaybackService playback,
+            CancellationToken cancellationToken) =>
+        {
+            if (!PlaybackTrackIds.TryParse(trackId, out var streamIndex))
+            {
+                return Results.BadRequest(new ClientErrorResponse("invalid_track_id", "trackId must be a canonical stream:{index} track id."));
+            }
+
+            var file = await storage.ResolveVideoAsync(workId, workEpisodeId, cancellationToken);
+            var cues = file is null ? null : await playback.GetEmbeddedSubtitleCuesAsync(file.StoredFileId, file.Path, streamIndex, cancellationToken);
+            return cues is null
+                ? Results.NotFound(new ClientErrorResponse("subtitle_track_not_found", "The requested embedded text subtitle stream is unavailable."))
+                : Results.Ok(ClientApiMappings.ToClientEmbeddedSubtitleCues(cues));
+        })
+        .RequireRateLimiting(RateLimitPolicy);
+
         group.MapGet("/media/{mediaFileId:guid}/trickplay", async (
             Guid mediaFileId,
             CanonicalPlayerNavigationAssetService navigationAssets,
@@ -272,12 +325,15 @@ public static class ClientApiPlaybackPlanEndpoints
                 : Results.File(asset.Path, asset.ContentType);
         });
 
-        group.MapGet("/stream-sessions/{sessionId:guid}/stream", (
+        group.MapGet("/stream-sessions/{sessionId:guid}/stream", async (
             Guid sessionId,
             double? startSeconds,
             PlaybackStreamSessionStore sessions,
-            PlaybackTranscodeSlots slots,
-            CurrentAccountContext currentAccount) =>
+            PlaybackAdmissionService admission,
+            ActiveSessionService activeSessions,
+            ILoggerFactory loggerFactory,
+            CurrentAccountContext currentAccount,
+            CancellationToken cancellationToken) =>
         {
             var session = sessions.Get(sessionId, currentAccount.ProfileId);
             if (session is null)
@@ -304,23 +360,40 @@ public static class ClientApiPlaybackPlanEndpoints
                     "The media file of this playback session is unavailable."));
             }
 
-            IDisposable? lease = null;
-            if (session.Plan.TranscodesVideo && (lease = slots.TryAcquire()) is null)
-            {
-                return TranscoderBusy();
-            }
-
             try
             {
-                var live = LivePlaybackStream.Start(
-                    PlaybackDeliveryCommand.Progressive(session.SourcePath, session.Plan, start),
-                    lease);
+                // The response only starts once ffmpeg produced its first bytes, so a failing encoder can still be replaced by the fallback.
+                var live = await admission.StartAsync(
+                    session.Plan,
+                    currentAccount.ProfileId,
+                    async admitted =>
+                    {
+                        LivePlaybackStream? stream = null;
+                        try
+                        {
+                            stream = LivePlaybackStream.Start(PlaybackDeliveryCommand.Progressive(session.SourcePath, session.Plan, start, admitted.Encoder), admitted.Lease, session.BeginTranscodeRun(admitted.Encoder.Backend));
+                            await stream.WaitForFirstBytesAsync(PlaybackDeliveryCommand.FirstOutputTimeout, cancellationToken);
+                            return stream;
+                        }
+                        catch
+                        {
+                            stream?.Dispose();
+                            admitted.Lease?.Dispose();
+                            throw;
+                        }
+                    },
+                    session);
+                await RetireReplacedSessionAsync(session, sessions, activeSessions, cancellationToken);
                 return Results.File(live, "video/mp4", enableRangeProcessing: false);
             }
-            catch (Exception exception) when (
-                exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+            catch (PlaybackAdmissionRefusedException refusal)
             {
-                lease?.Dispose();
+                return Refused(refusal.Code);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
+            {
+                // The client gets the safe generic failure; the cause stays in the server log, once, at the request boundary.
+                loggerFactory.CreateLogger("Jularr.Playback.Delivery").LogWarning(exception, "The progressive stream of playback session {SessionId} could not start.", sessionId);
                 return StartFailed();
             }
         })
@@ -330,7 +403,10 @@ public static class ClientApiPlaybackPlanEndpoints
             Guid sessionId,
             double? startSeconds,
             PlaybackStreamSessionStore sessions,
-            PlaybackTranscodeSlots slots,
+            PlaybackAdmissionService admission,
+            HlsPlaybackSessionManager manager,
+            ActiveSessionService activeSessions,
+            ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -361,44 +437,45 @@ public static class ClientApiPlaybackPlanEndpoints
 
             // Repeated requests for the same position reuse the running output; a new
             // position replaces it. Concurrent requests share one start.
-            var manager = HlsPlaybackSessionManager.Shared;
             try
             {
                 var hlsSessionId = await session.EnsureHlsAsync(
                     start,
                     running => manager.IsActive(running, session.ProfileId),
-                    async token =>
-                    {
-                        IDisposable? lease = null;
-                        if (session.Plan.TranscodesVideo && (lease = slots.TryAcquire()) is null)
-                        {
-                            return null;
-                        }
-
-                        var hls = await manager.StartAsync(
+                    token => admission.StartAsync(
+                        session.Plan,
+                        session.ProfileId,
+                        async admitted => (Guid?)(await manager.StartAsync(
                             session.EpisodeId,
                             session.ProfileId,
                             start,
-                            directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory),
-                            lease,
-                            token);
-                        return hls.SessionId;
-                    },
+                            directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory, admitted.Encoder),
+                            admitted.Lease,
+                            token,
+                            session.BeginTranscodeRun(admitted.Encoder.Backend))).SessionId,
+                        session),
                     previous => manager.Stop(previous, session.ProfileId),
                     cancellationToken);
                 if (hlsSessionId is not { } started)
                 {
-                    return TranscoderBusy();
+                    return StartFailed();
                 }
+
+                await RetireReplacedSessionAsync(session, sessions, activeSessions, cancellationToken);
 
                 return Results.Redirect(
                     ClientApiRoutes.StreamSessionHlsAsset(session.Id, started, "index.m3u8"),
                     permanent: false,
                     preserveMethod: false);
             }
+            catch (PlaybackAdmissionRefusedException refusal)
+            {
+                return Refused(refusal.Code);
+            }
             catch (Exception exception) when (
                 exception is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
             {
+                loggerFactory.CreateLogger("Jularr.Playback.Delivery").LogWarning(exception, "The HLS stream of playback session {SessionId} could not start.", sessionId);
                 return StartFailed();
             }
         })
@@ -409,6 +486,7 @@ public static class ClientApiPlaybackPlanEndpoints
             Guid hlsSessionId,
             string fileName,
             PlaybackStreamSessionStore sessions,
+            HlsPlaybackSessionManager manager,
             CurrentAccountContext currentAccount,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
@@ -419,7 +497,7 @@ public static class ClientApiPlaybackPlanEndpoints
                 return SessionNotFound();
             }
 
-            var asset = HlsPlaybackSessionManager.Shared.GetAsset(
+            var asset = manager.GetAsset(
                 hlsSessionId,
                 session.EpisodeId,
                 currentAccount.ProfileId,
@@ -428,7 +506,7 @@ public static class ClientApiPlaybackPlanEndpoints
             {
                 return Results.NotFound(new ClientErrorResponse(
                     "hls_asset_not_found",
-                    "The HLS playback segment is unavailable or expired."));
+                    $"The HLS playback segment is unavailable or expired ({(manager.EndReason(hlsSessionId) is { } ended ? JsonNamingPolicy.SnakeCaseLower.ConvertName(ended.ToString()) : "unknown")})."));
             }
 
             if (fileName == "index.m3u8")
@@ -447,9 +525,74 @@ public static class ClientApiPlaybackPlanEndpoints
                 return Results.Text(PlaybackDeliveryCommand.StartAtBeginning(playlist), asset.ContentType);
             }
 
-            HlsPlaybackSessionManager.Shared.PruneBehind(hlsSessionId, currentAccount.ProfileId, fileName);
+            manager.PruneBehind(hlsSessionId, currentAccount.ProfileId, fileName);
             return Results.File(asset.Path, asset.ContentType, enableRangeProcessing: asset.EnableRangeProcessing);
         });
+
+        // The player cannot read the HTTP status behind a failed video element, so it asks here whether the server ended
+        // the session itself (idle, cache policy, encoder crash) and then re-plans with the same mode instead of blaming the mode.
+        group.MapGet("/stream-sessions/{sessionId:guid}", (
+            Guid sessionId,
+            PlaybackStreamSessionStore sessions,
+            HlsPlaybackSessionManager manager,
+            HttpContext httpContext,
+            CurrentAccountContext currentAccount) =>
+        {
+            var session = sessions.Peek(sessionId, currentAccount.ProfileId);
+            if (session is null)
+            {
+                return SessionNotFound();
+            }
+
+            httpContext.Response.Headers.CacheControl = "no-store";
+            if (session.HlsSessionId is not { } hlsSessionId || manager.IsActive(hlsSessionId, currentAccount.ProfileId))
+            {
+                return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Active, null, Recoverable: false));
+            }
+
+            // Only an ending the server chose for capacity reasons says nothing against the mode; an unknown reason or a crash does not.
+            var reason = manager.EndReason(hlsSessionId);
+            var recoverable = reason is HlsSessionEndReason.Idle or HlsSessionEndReason.CacheBudget or HlsSessionEndReason.CacheFreeSpace;
+            return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Ended, reason, recoverable));
+        })
+        .RequireRateLimiting(RateLimitPolicy);
+
+        // Ephemeral runtime telemetry of a playing client (buffer, throughput, stalls). Never written to the database; a repeated or
+        // older report is ignored and answers like a new one, so a retried request changes nothing.
+        group.MapPut("/stream-sessions/{sessionId:guid}/telemetry", async (
+            Guid sessionId,
+            HttpRequest request,
+            PlaybackStreamSessionStore sessions,
+            TimeProvider time,
+            CurrentAccountContext currentAccount,
+            CancellationToken cancellationToken) =>
+        {
+            var (update, tooLarge) = await ReadTelemetryAsync(request, cancellationToken);
+            if (tooLarge)
+            {
+                return Results.Json(new ClientErrorResponse("telemetry_too_large", $"A telemetry report is at most {PlaybackTelemetryRules.MaxBodyBytes} bytes."), statusCode: StatusCodes.Status413PayloadTooLarge);
+            }
+
+            if (update is null || !PlaybackTelemetryRules.TryValidate(update, time.GetUtcNow(), out var report))
+            {
+                return Results.BadRequest(new ClientErrorResponse(
+                    "invalid_telemetry",
+                    "sequence, state, bufferAheadSeconds, stallCount, stallTotalMs and positionSeconds are required and must be non-negative, finite values a player can observe."));
+            }
+
+            if (!sessions.ReportTelemetry(sessionId, currentAccount.ProfileId, report) || sessions.Advise(sessionId, currentAccount.ProfileId) is not { } advice)
+            {
+                return SessionNotFound();
+            }
+
+            // A repeated or older report answers like a new one: the advice is a pure reading of the session's state, never of the request.
+            return Results.Ok(new ClientTelemetryAnswer(
+                advice.Decision.Advice,
+                advice.Decision.Reason,
+                advice.Transcode.Speed is { } speed ? Math.Round(speed, 2) : null,
+                advice.Transcode.Fps is { } fps ? Math.Round(fps, 1) : null));
+        })
+        .RequireRateLimiting(PlaybackDecisionRegistration.TelemetryRateLimitPolicy);
 
         group.MapDelete("/stream-sessions/{sessionId:guid}", async (
             Guid sessionId,
@@ -592,11 +735,6 @@ public static class ClientApiPlaybackPlanEndpoints
             track.IsForced,
             track.IsText);
 
-    private static bool ValidTarget(ClientVideoTarget? target) =>
-        target is not null &&
-        target.WorkId != Guid.Empty &&
-        (target.WorkEpisodeId is null || target.WorkEpisodeId != Guid.Empty);
-
     private static ClientPlaybackPlanResponse ToResponse(
         PlaybackPlanOutcome outcome,
         CurrentAccountContext currentAccount) =>
@@ -679,6 +817,12 @@ public static class ClientApiPlaybackPlanEndpoints
             quality = preset;
         }
 
+        if (!TryParseFollowedAdvice(request.FollowedAdvice, out var followedAdvice))
+        {
+            error = Results.BadRequest(new ClientErrorResponse("invalid_followed_advice", "followedAdvice must be none, step_down or step_up."));
+            return false;
+        }
+
         if (!TryParseMode(request.Mode, out var mode))
         {
             error = Results.BadRequest(new ClientErrorResponse(
@@ -701,8 +845,39 @@ public static class ClientApiPlaybackPlanEndpoints
             request.Network,
             request.FailedModes is { Count: > 0 } failed ? failed.Take(4).ToHashSet() : null,
             request.ReplacesSessionId,
-            request.Wake);
+            request.Wake,
+            followedAdvice);
         return true;
+    }
+
+    /// <summary>Parses the advice a re-plan names through the enum's own wire names (<c>none</c>, <c>step_down</c>, <c>step_up</c>); absent means none.</summary>
+    public static bool TryParseFollowedAdvice(string? value, out PlaybackAdaptationAdvice advice)
+    {
+        advice = PlaybackAdaptationAdvice.None;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        try
+        {
+            advice = JsonSerializer.Deserialize<PlaybackAdaptationAdvice>(JsonSerializer.Serialize(value.Trim()));
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    // The first output of a re-plan the player asked for (while the old stream kept playing) succeeded: the old session ends now and the
+    // ActiveSession moves to the new one.
+    private static async Task RetireReplacedSessionAsync(PlaybackStreamSession session, PlaybackStreamSessionStore sessions, ActiveSessionService activeSessions, CancellationToken cancellationToken)
+    {
+        if (sessions.CompleteReplacement(session) is { } replacedId)
+        {
+            await activeSessions.OpenAsync(session.Id, session.ProfileId, session.MediaFileId, session.Plan.Mode.ToString(), session.Selections.ClientKind, replacedId, cancellationToken);
+        }
     }
 
     public static bool TryParseMode(string? value, out PlaybackModePreference mode)
@@ -743,6 +918,42 @@ public static class ClientApiPlaybackPlanEndpoints
         return true;
     }
 
+    /// <summary>
+    /// Reads the report body, never more than <see cref="PlaybackTelemetryRules.MaxBodyBytes"/>, whatever the host's own request limit is:
+    /// a larger body is reported as too large and a body that is not a report as null.
+    /// </summary>
+    private static async Task<(PlaybackTelemetryUpdate? Update, bool TooLarge)> ReadTelemetryAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[PlaybackTelemetryRules.MaxBodyBytes + 1];
+        var length = 0;
+        while (length < buffer.Length)
+        {
+            var read = await request.Body.ReadAsync(buffer.AsMemory(length), cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            length += read;
+        }
+
+        if (length > PlaybackTelemetryRules.MaxBodyBytes)
+        {
+            return (null, true);
+        }
+
+        try
+        {
+            return (JsonSerializer.Deserialize<PlaybackTelemetryUpdate>(buffer.AsSpan(0, length), s_telemetryJson), false);
+        }
+        catch (JsonException)
+        {
+            return (null, false);
+        }
+    }
+
+    private static readonly JsonSerializerOptions s_telemetryJson = new(JsonSerializerDefaults.Web);
+
     private static IResult SessionNotFound() =>
         Results.NotFound(new ClientErrorResponse(
             "stream_session_not_found",
@@ -753,10 +964,21 @@ public static class ClientApiPlaybackPlanEndpoints
             "invalid_start_position",
             "startSeconds must be a finite value greater than or equal to zero."));
 
-    private static IResult TranscoderBusy() =>
-        Results.Json(
-            new ClientErrorResponse("transcoder_busy", "Every server transcode slot is in use."),
-            statusCode: StatusCodes.Status503ServiceUnavailable);
+    /// <summary>An admission refusal: 503 with the stable code, and a <c>Retry-After</c> where asking again can help. Nothing is queued server-side.</summary>
+    public static IResult Refused(string code) => new RefusalResult(code);
+
+    private sealed class RefusalResult(string code) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            if (PlaybackAdmissionCodes.RetryAfterSeconds(code) is { } seconds)
+            {
+                httpContext.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return Results.Json(new ClientErrorResponse(code, PlaybackAdmissionCodes.Message(code)), statusCode: StatusCodes.Status503ServiceUnavailable).ExecuteAsync(httpContext);
+        }
+    }
 
     private static IResult StartFailed() =>
         Results.Json(

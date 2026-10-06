@@ -57,7 +57,7 @@ public sealed class AnimeNamingRenameTests
         var trackPaths = await fixture.Db.SubtitleTracks.Select(x => x.Path).ToListAsync();
         CollectionAssert.Contains(trackPaths, newSidecar);
         CollectionAssert.Contains(trackPaths, EmbeddedSubtitleExtractor.BuildSourcePrefix(expected) + "2");
-        Assert.AreEqual(1, await fixture.Db.EpisodeProgress.CountAsync(x => x.EpisodeId == episode.EpisodeId));
+        Assert.AreEqual(1, (await CanonicalProgressSeed.RowsAsync(fixture.Db, fixture.Anime.Id)).Count(x => x.EpisodeId == episode.EpisodeId));
 
         var operation = (await new OperationStore(fixture.Db).ListAsync(new OperationListFilter(Category: "Library"))).Single();
         Assert.AreEqual(OperationStatus.Succeeded, operation.Status);
@@ -70,7 +70,7 @@ public sealed class AnimeNamingRenameTests
         fixture.Db.ChangeTracker.Clear();
         Assert.AreEqual(episode.EpisodeId, (await fixture.Db.Episodes.SingleAsync()).Id);
         Assert.AreEqual(1, await fixture.Db.Anime.CountAsync());
-        Assert.AreEqual(1, await fixture.Db.EpisodeProgress.CountAsync(x => x.EpisodeId == episode.EpisodeId));
+        Assert.AreEqual(1, (await CanonicalProgressSeed.RowsAsync(fixture.Db, fixture.Anime.Id)).Count(x => x.EpisodeId == episode.EpisodeId));
         Assert.AreEqual(mediaFileId, (await fixture.Db.MediaFiles.SingleAsync()).Id, "The media file row (and its inventory) survives the rename.");
         Assert.AreEqual(1, await fixture.Db.MediaAnalyses.CountAsync(x => x.MediaFileId == mediaFileId));
         Assert.AreEqual(0, fixture.ProbeRunner.Calls.Count, "A rename must not trigger a new media analysis.");
@@ -329,7 +329,7 @@ public sealed class AnimeNamingRenameTests
         fixture.Db.ChangeTracker.Clear();
         Assert.AreEqual(1, await fixture.Db.Anime.CountAsync());
         Assert.AreEqual(episode.EpisodeId, (await fixture.Db.Episodes.SingleAsync()).Id);
-        Assert.AreEqual(1, await fixture.Db.EpisodeProgress.CountAsync());
+        Assert.AreEqual(1, (await CanonicalProgressSeed.RowsAsync(fixture.Db, fixture.Anime.Id)).Count);
     }
 
     [TestMethod]
@@ -519,6 +519,7 @@ public sealed class AnimeNamingRenameTests
             var root = new LibraryRoot { Name = "Anime", Path = libraryPath };
             var anime = new Anime { Key = "frieren", Title = "Frieren" };
             db.LibraryRoots.Add(root);
+            db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
             db.Anime.Add(anime);
             await db.SaveChangesAsync();
 
@@ -555,7 +556,6 @@ public sealed class AnimeNamingRenameTests
                 SizeBytes = 1,
                 LastWriteTimeUtc = File.GetLastWriteTimeUtc(mediaPath)
             });
-            Db.EpisodeProgress.Add(new EpisodeProgress { ProfileId = "owner", EpisodeId = episode.Id, PositionMs = 90_000 });
 
             if (sidecar)
             {
@@ -566,6 +566,7 @@ public sealed class AnimeNamingRenameTests
             }
 
             await Db.SaveChangesAsync();
+            await CanonicalProgressSeed.SetAsync(Db, "owner", episode.Id, 90_000, null, false);
             return (episode.Id, mediaPath);
         }
 

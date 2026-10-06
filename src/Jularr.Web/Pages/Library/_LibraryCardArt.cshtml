@@ -1,0 +1,12 @@
+@using Jularr.Web.Features.Library
+@model LibraryCardView
+@if (!string.IsNullOrWhiteSpace(Model.PosterUrl))
+{
+    @* The card is 2:3 whatever the image is, so the intrinsic size is only a hint that keeps the layout still while it loads; a poster that
+       fails to load is replaced by the initial (library-browse.js). *@
+    <img src="@Model.PosterUrl" alt="" width="300" height="450" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-lib-poster data-initial="@Model.Initial" />
+}
+else
+{
+    <span class="lib-card-initial">@Model.Initial</span>
+}

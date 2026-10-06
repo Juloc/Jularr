@@ -64,6 +64,15 @@ public sealed record AcquisitionRequestOptions
         && SubtitleLanguage is null
         && QualityProfileId is null;
 
+    /// <summary>Whether the request asks for this episode.</summary>
+    public bool Includes(int seasonNumber, int episodeNumber) => Scope switch
+    {
+        RequestScope.WholeSeries => true,
+        RequestScope.Seasons => Seasons.Contains(seasonNumber),
+        RequestScope.Episodes => Episodes.Any(episode => episode.Season == seasonNumber && episode.Number == episodeNumber),
+        _ => throw new ArgumentOutOfRangeException(nameof(Scope))
+    };
+
     /// <summary>The options as they are kept in <see cref="AcquisitionRequest.PayloadJson"/>; null for the default options.</summary>
     public string? ToPayloadJson() =>
         IsDefault ? null : JsonSerializer.Serialize(this, PayloadJsonOptions);

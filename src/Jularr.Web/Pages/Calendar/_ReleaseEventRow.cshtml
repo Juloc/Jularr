@@ -3,7 +3,7 @@
 @{
     var release = Model.Event;
     var presenter = Model.Presenter;
-    var href = ReleaseCalendarPresenter.Href(release);
+    var href = presenter.Href(release);
     var unit = presenter.UnitLabel(release);
     var (stateLabel, stateTone) = presenter.State(release.Local);
     var when = Model.ShowDate ? presenter.DateLabel(release.Date) : presenter.TimeLabel(release.Date);

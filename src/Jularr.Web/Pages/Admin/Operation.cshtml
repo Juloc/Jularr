@@ -168,6 +168,10 @@
                 @if (Model.DownloadDetails is { } routing)
                 {
                     <div><span>@ui["admin.operation.mediaType"]</span><strong>@MediaLabel(routing.MediaKind)</strong></div>
+                    @if (Model.MediaLink is { } mediaLink)
+                    {
+                        <div><span>@ui["admin.operation.media"]</span><strong><a class="text-link" href="@mediaLink">@(string.IsNullOrWhiteSpace(operation.Subject) ? ui["admin.media.manage"] : operation.Subject)</a></strong></div>
+                    }
                     <div><span>@ui["admin.operation.downloadCategory"]</span><strong>@(routing.Category ?? dash)</strong></div>
                 }
             </div>

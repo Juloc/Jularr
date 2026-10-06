@@ -2,6 +2,7 @@ using System.Globalization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Calendar;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -19,7 +20,8 @@ public sealed class IndexModel(
     AppDbContext db,
     ReleaseCalendarService calendar,
     CurrentAccountContext account,
-    TimeProvider clock) : PageModel
+    TimeProvider clock,
+    IInstanceModuleService modules) : PageModel
 {
     public const int AgendaDays = 28;
 
@@ -64,7 +66,7 @@ public sealed class IndexModel(
         var zone = CalendarTimeZone.Resolve(HttpContext);
         ZoneId = zone.Id;
         var now = clock.GetUtcNow();
-        Presenter = new ReleaseCalendarPresenter(Ui, zone, now);
+        Presenter = new ReleaseCalendarPresenter(Ui, zone, now, await modules.IsEnabledAsync(InstanceModule.Playback, cancellationToken));
 
         View = Enum.TryParse<CalendarView>(ViewName, ignoreCase: true, out var view) ? view : CalendarView.Month;
         Anchor = DateOnly.TryParseExact(DateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var anchor)

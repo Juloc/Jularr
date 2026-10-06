@@ -46,6 +46,7 @@ import de.juloc.jularr.mobile.offline.OfflineDownloads
 import de.juloc.jularr.mobile.offline.OfflinePlayback
 import java.io.Closeable
 import java.io.IOException
+import kotlin.math.abs
 
 data class NativePlayerUiState(
     val loading: Boolean = true,
@@ -77,6 +78,12 @@ data class NativePlayerUiState(
     val offlineMode: Boolean = false,
 )
 
+/** Mirrors VideoProgressService.CompletionThreshold: the share of the duration natural playback must reach. */
+private const val COMPLETION_THRESHOLD = 0.95
+
+/** Largest forward step between two clock ticks that still counts as playing through rather than seeking. */
+private const val NATURAL_STEP_MS = 2_500L
+
 @OptIn(UnstableApi::class)
 class NativePlayerController(
     context: Context,
@@ -101,6 +108,14 @@ class NativePlayerController(
     private var recoveryJob: Job? = null
     private var lastProgressSentAt = 0L
     private var lastProgressPositionMs = -1L
+
+    // The server never infers completion from a position, so a seek or scrub that lands at or beyond the threshold
+    // stays a resume point and only `ended` completes it. Threshold completion is declared only after playback
+    // itself crossed the threshold: naturalPositionMs follows the position while it advances in small playback
+    // steps, a jump (seek) clears it and the crossing, so the threshold must be crossed by continuous playback.
+    private var lastClockPositionMs = -1L
+    private var naturalPositionMs = -1L
+    private var crossedThresholdByPlayback = false
     private var started = false
     private var offlineMode = false
 
@@ -137,6 +152,7 @@ class NativePlayerController(
         scope.launch {
             while (isActive) {
                 updatePlaybackClock()
+                trackNaturalPlayback()
                 maybePersistProgress()
                 delay(250)
             }
@@ -818,6 +834,38 @@ class NativePlayerController(
         }
     }
 
+    private fun trackNaturalPlayback() {
+        val position = absolutePositionMs()
+        val step = position - lastClockPositionMs
+        lastClockPositionMs = position
+        if (step < 0 || step > NATURAL_STEP_MS) {
+            naturalPositionMs = -1
+            crossedThresholdByPlayback = false
+            return
+        }
+
+        if (!player.isPlaying) {
+            return
+        }
+
+        val durationMs = _state.value.durationMs.takeIf { it > 0 }
+        if (durationMs != null && naturalPositionMs >= 0) {
+            val thresholdMs = durationMs.toDouble() * COMPLETION_THRESHOLD
+            if (naturalPositionMs < thresholdMs && position >= thresholdMs) {
+                crossedThresholdByPlayback = true
+            }
+        }
+
+        naturalPositionMs = position
+    }
+
+    private fun reachedCompletionNaturally(position: Long, durationMs: Long?): Boolean =
+        durationMs != null &&
+            crossedThresholdByPlayback &&
+            naturalPositionMs >= 0 &&
+            abs(position - naturalPositionMs) <= NATURAL_STEP_MS &&
+            position.toDouble() / durationMs.toDouble() >= COMPLETION_THRESHOLD
+
     private suspend fun maybePersistProgress() {
         if (!player.isPlaying) {
             return
@@ -853,8 +901,9 @@ class NativePlayerController(
         lastProgressPositionMs = position
 
         val durationMs = _state.value.durationMs.takeIf { it > 0 }
+        val declaredCompleted = completed || reachedCompletionNaturally(position, durationMs)
         if (offlineMode) {
-            offline.recordProgress(origin.value, episodeId, position, durationMs, completed)
+            offline.recordProgress(origin.value, episodeId, position, durationMs, declaredCompleted)
             return
         }
 
@@ -865,7 +914,7 @@ class NativePlayerController(
                     update = EpisodeProgressUpdate(
                         positionMs = position,
                         durationMs = durationMs,
-                        completed = completed,
+                        completed = declaredCompleted,
                     ),
                 )
             }
@@ -876,7 +925,7 @@ class NativePlayerController(
             // The server answered and rejected the checkpoint; queueing it would not help.
         } catch (exception: IOException) {
             // Connection lost mid-playback: keep the checkpoint for monotonic reconciliation.
-            offline.recordProgress(origin.value, episodeId, position, durationMs, completed)
+            offline.recordProgress(origin.value, episodeId, position, durationMs, declaredCompleted)
         }
     }
 

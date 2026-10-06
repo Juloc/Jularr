@@ -4,6 +4,8 @@ Status: **approved UX direction; binding planning specification**.
 
 This is the normal-user surface for understanding a previously submitted Request.
 
+Binding playback-intent relationship: `docs/mockups/instant-play/SPEC.md`.
+
 It is not an Admin Requests page, not Wanted, and not an acquisition diagnostics view.
 
 The approved visual direction is a compact status dialog/sheet centered on the **current user-relevant state**, with Request details and history collapsed behind optional disclosure.
@@ -89,14 +91,17 @@ Show:
 
 This projects internal Approved/Searching detail into one useful consumer state.
 
-### Downloading
+### Getting media
 
-`Downloading · 32%`
+Prefer a consumer-safe media-specific label:
+- `Getting episode · 32%`
+- `Getting movie · 32%`
+- `Getting media · 32%`
 
 Optional secondary context:
-`4 of 12 episodes downloaded`
+`4 of 12 episodes available`
 
-Only show percentage/count when trustworthy.
+Only show percentage/count when trustworthy. `Downloading` remains an Admin/technical term and is not the preferred primary label on this consumer surface.
 
 ### Preparing
 
@@ -153,7 +158,7 @@ The normal progression is intentionally simplified:
 ```text
 Waiting approval
 → Looking for media
-→ Downloading
+→ Getting media
 → Preparing
 → Available
 ```
@@ -204,7 +209,7 @@ Expanded timeline contains only meaningful consumer milestones:
 ```text
 Requested      2 Oct 18:42
 Approved       2 Oct 18:43
-Downloading    2 Oct 18:47
+Getting media  2 Oct 18:47
 Available      2 Oct 19:12
 ```
 
@@ -273,6 +278,16 @@ Show:
 - otherwise a quiet unknown/no-announcement state.
 
 Do not show polling intervals, scheduled jobs or technical search history.
+
+## 12a. Instant Play / Start Watching relationship
+
+When this Request was created transparently by a permitted `Start watching` / `Watch now` playback intent, this status surface still shows the same canonical Request and acquisition state. It does not become a separate instant-play job view.
+
+While the user remains on the originating media surface, the compact in-place playback-intent UI may show `Looking for media -> Getting media -> Preparing -> Starting playback` as defined by the Instant Play spec.
+
+If the user leaves that surface, acquisition may continue, but later readiness must not unexpectedly open the Player. This Request Status surface may then show `Available` / `Ready to watch` normally.
+
+`Stop waiting` belongs to the transient playback intent and does not cancel this Request. `Cancel request` remains the explicit Request action here and follows shared-acquisition ownership rules.
 
 ## 13. Available behavior
 

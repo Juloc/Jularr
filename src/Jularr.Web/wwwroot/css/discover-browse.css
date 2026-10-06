@@ -4,27 +4,29 @@
    and as a bottom sheet on touch. Surfaces use the shared theme tokens, so light, dark and every accent work
    unchanged. State is shown with icon, text, tint and weight, never a coloured left edge (CssAccentStripeTests). */
 
-.dc-page { display: grid; gap: 16px; min-width: 0; margin-bottom: 20px; }
+/* --dc-card-body-h is the height of everything under a poster (the title line, the type line and the indicator); real cards
+   and ghost cards both use it, so a ghost has the exact size of the card that replaces it. */
+.dc-page { --dc-card-body-h: 64px; display: grid; gap: 16px; min-width: 0; margin-bottom: 20px; }
 .dc-page :is(a, button, summary, select, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dc-icon { flex: none; }
 .dc-page [hidden] { display: none !important; }
+.dc-page .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 /* Heading and search ---------------------------------------------------------------------------- */
 .dc-head h1 { margin: 0; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.1; letter-spacing: -.02em; }
 .dc-searchbar { display: flex; align-items: center; gap: 10px; }
-.dc-search {
-    flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 48px; padding: 0 14px;
-    border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--muted);
-}
-.dc-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.dc-search .dc-icon { width: 20px; height: 20px; color: var(--accent-text); }
+/* The input is the field, with the icon and the key hint laid over it, so the shared control surface of the theme applies to it like to every other field. */
+.dc-search { position: relative; flex: 1; display: flex; align-items: center; min-width: 0; color: var(--muted); }
 .dc-search input {
-    flex: 1; min-width: 0; padding: 12px 0; border: 0; outline: 0; background: transparent;
-    color: var(--text); font: inherit; font-size: 15px;
+    width: 100%; min-width: 0; min-height: 48px; padding: 0 56px 0 46px; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--surface); color: var(--text); font: inherit; font-size: 15px;
 }
+.dc-search input::placeholder { color: var(--muted); }
+.dc-search input:focus-visible { border-color: var(--accent); }
+.dc-search .dc-icon { position: absolute; inset-inline-start: 14px; width: 20px; height: 20px; color: var(--accent-text); pointer-events: none; }
 .dc-search kbd {
-    padding: 1px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2);
-    color: var(--muted); font: inherit; font-size: 12px; font-weight: 700;
+    position: absolute; inset-inline-end: 12px; padding: 1px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2);
+    color: var(--muted); font: inherit; font-size: 12px; font-weight: 700; pointer-events: none;
 }
 
 /* Media-type switch ------------------------------------------------------------------------------ */
@@ -69,12 +71,11 @@
 .dc-pop-head .dc-icon-btn { width: 32px; min-height: 32px; border-color: transparent; background: transparent; }
 .dc-reset { color: var(--accent-text); font-size: 13px; font-weight: 700; }
 .dc-groups { display: grid; padding: 0 16px 8px; }
-.dc-group {
-    display: grid; gap: 2px; min-width: 0; margin: 0; padding: 10px 0 8px;
-    border: 0; border-top: 1px solid var(--border);
-}
+.dc-group { display: block; min-width: 0; margin: 0; padding: 10px 0 8px; border: 0; border-top: 1px solid var(--border); }
 .dc-group:first-child, .dc-group[hidden] + .dc-group { border-top: 0; padding-top: 2px; }
-.dc-group legend { padding: 0; margin-bottom: 4px; color: var(--text); font-size: 13px; font-weight: 800; }
+/* A floated legend is laid out inside the fieldset like any heading; an ordinary one is drawn on the border, where the divider would run through it. */
+.dc-group legend { float: left; width: 100%; padding: 0; margin-bottom: 4px; color: var(--text); font-size: 13px; font-weight: 800; }
+.dc-group legend + * { clear: both; }
 .dc-check { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; cursor: pointer; }
 .dc-check input { flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
 .dc-select { display: grid; gap: 4px; padding: 4px 0; color: var(--muted); font-size: 12px; font-weight: 700; }
@@ -96,6 +97,7 @@
     border-color: color-mix(in srgb, var(--warning-text) 40%, var(--border));
     background: color-mix(in srgb, var(--warning-text) 9%, transparent); color: var(--warning-text);
 }
+.dc-link[aria-disabled="true"] { opacity: .5; cursor: progress; }
 .dc-link { padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-weight: 700; cursor: pointer; }
 .dc-message {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
@@ -118,18 +120,28 @@
     background-repeat: no-repeat; animation: dc-loading 1s linear infinite;
 }
 @keyframes dc-loading { from { background-position: -40% 0; } to { background-position: 140% 0; } }
-.dc-skeleton { display: grid; gap: 12px; }
-.dc-skeleton-head { display: block; width: 180px; height: 22px; border-radius: 8px; background: var(--surface-2); }
-.dc-skeleton-card { display: block; aspect-ratio: 2 / 3; border-radius: 12px; background: var(--surface-2); animation: dc-pulse 1.4s ease-in-out infinite; }
+/* Without scripts nothing replaces the placeholders, so they are not shown and the noscript message stands alone. */
+@media (scripting: none) { .dc-skeleton { display: none; } .dc-results::before { display: none; } }
+.dc-skeleton-head { display: block; width: 180px; height: 22px; margin-bottom: 10px; border-radius: 8px; background: var(--surface-2); }
 @keyframes dc-pulse { 50% { opacity: .55; } }
 
 /* Rows and grid ------------------------------------------------------------------------------------ */
-.dc-shelf { display: grid; gap: 10px; min-width: 0; margin-bottom: 26px; }
+.dc-section { position: relative; display: grid; gap: 10px; min-width: 0; margin-bottom: 26px; }
 .dc-shelf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .dc-shelf-head h2 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: -.01em; }
+/* The group is the one child of its section: without a minimum width of zero a long row would stretch the whole page. */
+.dc-collapse { min-width: 0; }
+.dc-collapse > summary { cursor: pointer; list-style: none; }
+.dc-collapse[open] > summary { margin-bottom: 10px; }
+.dc-collapse > summary::-webkit-details-marker { display: none; }
+.dc-collapse > summary h2::after {
+    content: ""; display: inline-block; width: 7px; height: 7px; margin-inline-start: 10px; vertical-align: 3px;
+    border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .15s;
+}
+.dc-collapse:not([open]) > summary h2::after { transform: rotate(-45deg); }
 .dc-shelf-more { color: var(--accent-text); font-size: 13px; font-weight: 700; white-space: nowrap; }
 .dc-track {
-    display: flex; gap: 16px; margin: 0; padding: 4px 2px 12px; list-style: none;
+    display: flex; gap: 16px; margin: 0; padding: 4px 8px 12px 2px; list-style: none;
     overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin;
 }
 .dc-track-item { flex: 0 0 auto; width: 158px; scroll-snap-align: start; }
@@ -139,8 +151,31 @@
 }
 .dc-grid > li { min-width: 0; }
 
+/* A section that waits for its source keeps its place: ghost cards have the size of a real card, so the arrival of the titles moves nothing. */
+.dc-ghost { display: grid; gap: 10px; }
+.dc-ghost-body { display: block; height: var(--dc-card-body-h); }
+.dc-ghost-art {
+    display: block; aspect-ratio: 2 / 3; border-radius: 12px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border);
+    animation: dc-pulse 1.4s ease-in-out infinite;
+}
+.dc-ghost-line { display: block; width: 78%; height: 14px; margin-top: 4px; border-radius: 6px; background: var(--surface-2); }
+.dc-ghost-short { width: 48%; margin-top: 8px; }
+.dc-ghosts { pointer-events: none; overflow-x: hidden; }
+.dc-section-note {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; color: var(--muted); font-size: 13px; font-weight: 600;
+}
+.dc-section-note .dc-icon { width: 16px; height: 16px; color: var(--warning-text); }
+/* The ghost hint of a staged change: a faint mark in the gap between the first two covers. It sits inside spacing that already exists, takes no layout
+   space, ignores the pointer and is never focusable. */
+.dc-section[data-dc-staged] :is(.dc-track, .dc-grid) > li:first-child { position: relative; }
+.dc-section[data-dc-staged] :is(.dc-track, .dc-grid) > li:first-child::after {
+    content: ""; position: absolute; top: 80px; inset-inline-end: -10px; width: 4px; height: 56px; border-radius: 4px;
+    background: var(--muted); opacity: .4; pointer-events: none; animation: dc-pulse 1.6s ease-in-out infinite;
+}
+
 /* Card ---------------------------------------------------------------------------------------------- */
-.dc-card { position: relative; display: grid; align-content: start; gap: 10px; min-width: 0; }
+/* The card fills its row item and pins the Request action to the bottom, so the actions of one row line up whatever the title length. */
+.dc-card { position: relative; display: grid; grid-template-rows: auto 1fr; height: 100%; gap: 10px; min-width: 0; }
 .dc-art {
     position: relative; display: block; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 12px;
     background: var(--surface-2); box-shadow: var(--shadow-card);
@@ -151,20 +186,25 @@
     background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--accent-text);
     font-size: 44px; font-weight: 800;
 }
-.dc-card-body { display: grid; gap: 4px; justify-items: start; min-width: 0; }
-.dc-card-title { margin: 0; font-size: 14px; line-height: 1.3; font-weight: 700; }
-.dc-card-title a {
+.dc-card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; min-height: var(--dc-card-body-h); }
+.dc-card-title { margin: 0; font-size: 14px; line-height: 18px; font-weight: 700; }
+.dc-card-title :is(a, button) {
     display: -webkit-box; overflow: hidden; color: var(--text); overflow-wrap: anywhere;
-    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1; -webkit-box-orient: vertical;
 }
-.dc-card-title a::after { content: ""; position: absolute; inset: 0; z-index: 1; }
-.dc-card:hover .dc-card-title a, .dc-card-title a:focus-visible { color: var(--accent-text); }
-.dc-card-meta { margin: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
-.dc-card-action {
-    position: relative; z-index: 2; display: flex; width: 100%; min-height: 36px; margin-top: 2px;
+/* A title that has no page here is a button with the look of the link: it opens the Quick View, or the Detail once its Work is created. */
+.dc-card-title button { padding: 0; border: 0; background: none; font: inherit; text-align: start; cursor: pointer; }
+.dc-card[aria-busy="true"] { cursor: progress; }
+.dc-card[aria-busy="true"] .dc-art { opacity: .6; }
+.dc-card-title :is(a, button)::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+.dc-card:hover .dc-card-title :is(a, button), .dc-card-title :is(a, button):focus-visible { color: var(--accent-text); }
+.dc-card-meta { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
+.dc-card-media { position: relative; }
+.dc-card-request {
+    position: absolute; z-index: 2; inset-inline: 8px; bottom: 8px; width: auto; min-height: 34px; padding: 6px 10px; font-size: 12px;
+    opacity: 0; transition: opacity .15s;
 }
-.dc-card-action > :is(.button, .dc-request-live) { width: 100%; justify-content: center; }
-.dc-card-request { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+.dc-card:hover .dc-card-request, .dc-card:focus-within .dc-card-request { opacity: 1; }
 .dc-request-live {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     min-height: 36px; cursor: default; pointer-events: none;
@@ -191,9 +231,9 @@
 
 /* The one language / request indicator: icon and text, tinted. */
 .dc-state {
-    display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 9px 2px 6px;
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-height: 22px; padding: 2px 9px 2px 6px;
     border: 1px solid transparent; border-radius: 999px; background: var(--surface-2); color: var(--muted);
-    font-size: 11px; font-weight: 700; line-height: 1.5;
+    font-size: 11px; font-weight: 700; line-height: 16px;
 }
 .dc-state > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dc-state .dc-icon { width: 13px; height: 13px; }
@@ -204,20 +244,35 @@
 .dc-state-library { color: var(--text); }
 .dc-state-none, .dc-state-unavailable { border-color: var(--border); border-style: dashed; background: transparent; }
 
-/* Preview: shared by the hover popover and the sheet -------------------------------------------------- */
-.dc-pv { display: grid; min-width: 0; }
-.dc-pv-media { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
-.dc-pv-backdrop {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-    filter: blur(22px) saturate(1.2) brightness(.7); transform: scale(1.25);
+/* Preview (Quick View): a wide hero of backdrop or trailer, the cover anchoring the identity below it, then title, facts and actions
+   (docs/mockups/media-preview). Without a backdrop the hero is the cover blurred into one. -------------------------------------- */
+.dc-pv { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.dc-pv-media { position: relative; grid-column: 1 / -1; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
+.dc-pv-media::after {
+    content: ""; position: absolute; inset: auto 0 0; height: 38%; pointer-events: none;
+    background: linear-gradient(0deg, color-mix(in srgb, var(--surface) 70%, transparent), transparent);
 }
+.dc-pv-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dc-pv-backdrop.is-derived { filter: blur(22px) saturate(1.2) brightness(.7); transform: scale(1.25); }
+.dc-pv-trailer { position: absolute; inset: 0; z-index: 1; }
+.dc-pv-trailer-play { position: absolute; inset: 0; display: grid; place-items: center; color: #15121c; }
+.dc-pv-trailer-button {
+    display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
+    background: rgb(255 255 255 / .92); box-shadow: 0 8px 22px rgb(0 0 0 / .32);
+}
+.dc-pv-trailer-button .dc-icon { width: 28px; height: 28px; margin-inline-start: 3px; }
+.dc-pv-trailer-play:hover .dc-pv-trailer-button { background: #fff; }
+.dc-pv-trailer-play:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
+.dc-pv-trailer-play:focus-visible .dc-pv-trailer-button { box-shadow: 0 0 0 4px var(--accent), 0 8px 22px rgb(0 0 0 / .32); }
+.dc-pv-trailer .vd-trailer-embed { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+/* The cover overlaps the hero on a wide screen; a phone has no room for it, so its sheet goes from the hero straight to the title. */
 .dc-pv-poster {
-    position: absolute; top: 7%; height: 86%; aspect-ratio: 2 / 3; inset-inline-start: 50%; translate: -50% 0;
-    border-radius: 8px; object-fit: cover; box-shadow: 0 10px 30px rgb(0 0 0 / .45);
+    display: none; position: relative; z-index: 2; grid-column: 1; align-self: start; width: 156px; aspect-ratio: 2 / 3;
+    margin: -72px 0 24px 24px; overflow: hidden; border-radius: 10px; background: var(--surface-2); box-shadow: 0 12px 32px rgb(0 0 0 / .4);
 }
-:dir(rtl) .dc-pv-poster { translate: 50% 0; }
-.dc-pv-media .dc-initial { height: 100%; }
-.dc-pv-main { display: grid; gap: 8px; justify-items: start; padding: 14px 16px 16px; }
+.dc-pv-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.dc-pv-poster .dc-initial { height: 100%; }
+.dc-pv-main { display: grid; grid-column: 1 / -1; gap: 8px; justify-items: start; min-width: 0; padding: 14px 16px 16px; }
 .dc-pv-title { margin: 0; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
 .dc-pv-native, .dc-pv-meta { margin: 0; color: var(--muted); font-size: 13px; }
 .dc-pv-genres { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
@@ -236,8 +291,8 @@
 .dc-pv-facts dd { margin: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .dc-pv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; padding-top: 4px; }
 .dc-pv-actions .button { display: inline-flex; align-items: center; gap: 6px; }
-.dc-pv-add { display: inline-flex; align-items: center; gap: 8px; }
-.dc-pv-add .dc-request-live { width: auto; min-width: 140px; }
+.dc-pv-request { display: inline-flex; align-items: center; gap: 8px; }
+.dc-pv-request .dc-request-live { width: auto; min-width: 140px; }
 .dc-pv-status {
     padding: 6px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text);
     font-size: 13px; font-weight: 700;
@@ -251,7 +306,7 @@
 @keyframes dc-pop-in { from { opacity: 0; transform: scale(.97); } }
 
 .dc-sheet {
-    width: min(520px, 94vw); max-height: 90vh; padding: 0; overflow: auto; overscroll-behavior: contain;
+    width: min(780px, 94vw); max-height: 92vh; padding: 0; overflow: auto; overscroll-behavior: contain;
     border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text);
     box-shadow: 0 30px 80px rgb(0 0 0 / .4);
 }
@@ -277,6 +332,7 @@
 @media (max-width: 760px) {
     .dc-searchbar { gap: 8px; }
     .dc-search kbd { display: none; }
+    .dc-search input { padding-inline-end: 14px; }
     .dc-btn { width: 48px; padding: 0; position: relative; }
     .dc-btn-label { display: none; }
     .dc-btn .dc-badge { position: absolute; top: -6px; inset-inline-end: -6px; }
@@ -300,14 +356,27 @@
     }
 }
 
-/* Touch has no hover: the preview opens from a tap on the card. */
+/* A tablet held upright gets the sheet from the bottom with the wide layout inside it; held sideways it is the centred dialog (docs/mockups/media-preview, section 16). */
+@media (min-width: 761px) and (max-width: 1024px) and (orientation: portrait) {
+    .dc-sheet { width: 100%; max-width: none; margin: auto 0 0; border-width: 1px 0 0; border-radius: 18px 18px 0 0; }
+}
+
+@media (min-width: 761px) {
+    .dc-pv { grid-template-columns: 180px minmax(0, 1fr); column-gap: 20px; }
+    .dc-pv-poster { display: block; }
+    .dc-pv-main { grid-column: 2; padding: 18px 24px 24px 0; }
+    .dc-pv-title { font-size: 22px; }
+}
+
+/* Touch has no hover: a tap opens the Detail, so the secondary Quick View action stays visible on the artwork (docs/mockups/media-preview, section 3) and Request is made from there. */
 @media (hover: none), (pointer: coarse) {
-    .dc-card-preview { display: none; }
+    .dc-card-request { display: none; }
+    .dc-card-preview { opacity: 1; width: 40px; height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .dc-art img { transition: none; }
     .dc-results[aria-busy="true"]::before { animation: none; background-position: 30% 0; }
-    .dc-skeleton-card { animation: none; }
+    .dc-ghost-art, .dc-section[data-dc-staged] li:first-child::after, .dc-collapse > summary h2::after { animation: none; transition: none; }
     .dc-hover { animation: none; }
 }

@@ -12,7 +12,6 @@ public sealed class ReaderPreference
     public Guid Id { get; set; } = Guid.NewGuid();
     public string ProfileId { get; set; } = "";
     public string ScopeKey { get; set; } = "";
-    public Guid? WorkId { get; set; }
 
     public string? ReadingMode { get; set; }
     public string? PageTransition { get; set; }
@@ -64,6 +63,18 @@ public sealed class ReaderPreference
     public bool? ParagraphIndent { get; set; }
     /// <summary>Turning past the last page (or scrolling to the end) opens the next chapter.</summary>
     public bool? AutoContinueChapters { get; set; }
+
+    // Image-sequence presentation. These stay independent from text typography:
+    // Manga/comic page flow and image treatment must not overload Book/Novel fields.
+    public string? ImageFlowMode { get; set; }
+    public string? ImagePageDirection { get; set; }
+    public string? ImageFit { get; set; }
+    public int? ImageZoomPercent { get; set; }
+    public int? ImagePageGapPx { get; set; }
+    public bool? ImageFirstPageAlone { get; set; }
+    public bool? ImageSharpen { get; set; }
+    public bool? ImageCropBorders { get; set; }
+    public string? ImageColorScheme { get; set; }
 
     public string? TtsProviderId { get; set; }
     /// <summary>JSON object: normalized BCP-47 tag -> voice id. See <see cref="SpeechVoiceMap"/>.</summary>
@@ -121,6 +132,16 @@ public sealed class ReaderSettingsInput
     public bool? ParagraphIndent { get; set; }
     public bool? AutoContinueChapters { get; set; }
 
+    public string? ImageFlowMode { get; set; }
+    public string? ImagePageDirection { get; set; }
+    public string? ImageFit { get; set; }
+    public int? ImageZoomPercent { get; set; }
+    public int? ImagePageGapPx { get; set; }
+    public bool? ImageFirstPageAlone { get; set; }
+    public bool? ImageSharpen { get; set; }
+    public bool? ImageCropBorders { get; set; }
+    public string? ImageColorScheme { get; set; }
+
     public string? TtsProviderId { get; set; } = "auto";
     /// <summary>JSON object: language tag -> voice id (the effective map the client posts back).</summary>
     public string? TtsVoiceIds { get; set; }
@@ -162,7 +183,7 @@ public sealed record ReaderSettingsSnapshot(
     double ThemeTintStrength,
     string BookmarkStyle,
     string BookmarkColor,
-    bool HasBookOverride)
+    bool HasWorkOverride)
 {
     /// <summary>
     /// Off by default. The reader only offers the control when the content
@@ -175,6 +196,16 @@ public sealed record ReaderSettingsSnapshot(
     public bool ShowIllustrations { get; init; } = true;
     public bool ParagraphIndent { get; init; } = true;
     public bool AutoContinueChapters { get; init; }
+
+    public string ImageFlowMode { get; init; } = "continuous";
+    public string ImagePageDirection { get; init; } = "auto";
+    public string ImageFit { get; init; } = "height";
+    public int ImageZoomPercent { get; init; } = 100;
+    public int ImagePageGapPx { get; init; } = 8;
+    public bool ImageFirstPageAlone { get; init; }
+    public bool ImageSharpen { get; init; }
+    public bool ImageCropBorders { get; init; }
+    public string ImageColorScheme { get; init; } = "auto";
 
     public string ContentTypeKey { get; init; } = "light-novel";
     public bool HasTypeOverride { get; init; }
@@ -236,6 +267,14 @@ public static partial class ReaderPreferenceRules
         {
             "fabric", "paper", "leather", "cord", "minimal"
         };
+    private static readonly HashSet<string> ImageFlowModes =
+        new(StringComparer.OrdinalIgnoreCase) { "continuous", "horizontal", "webtoon" };
+    private static readonly HashSet<string> ImagePageDirections =
+        new(StringComparer.OrdinalIgnoreCase) { "auto", "ltr", "rtl" };
+    private static readonly HashSet<string> ImageFits =
+        new(StringComparer.OrdinalIgnoreCase) { "height", "width" };
+    private static readonly HashSet<string> ImageColorSchemes =
+        new(StringComparer.OrdinalIgnoreCase) { "auto", "light", "sepia", "dark" };
     private static readonly HashSet<string> BuiltInFonts =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -277,6 +316,24 @@ public static partial class ReaderPreferenceRules
 
     public static string NormalizeBookmarkStyle(string? value) =>
         NormalizeChoice(value, BookmarkStyles, "fabric");
+
+    public static string NormalizeImageFlowMode(string? value) =>
+        NormalizeChoice(value, ImageFlowModes, "continuous");
+
+    public static string NormalizeImagePageDirection(string? value) =>
+        NormalizeChoice(value, ImagePageDirections, "auto");
+
+    public static string NormalizeImageFit(string? value) =>
+        NormalizeChoice(value, ImageFits, "height");
+
+    public static string NormalizeImageColorScheme(string? value) =>
+        NormalizeChoice(value, ImageColorSchemes, "auto");
+
+    public static int NormalizeImageZoomPercent(int value) =>
+        Math.Clamp((int)Math.Round(value / 10d) * 10, 50, 300);
+
+    public static int NormalizeImagePageGapPx(int value) =>
+        Math.Clamp((int)Math.Round(value / 2d) * 2, 0, 48);
 
     public static string NormalizeBackgroundAssetId(string? value)
     {
@@ -474,7 +531,7 @@ public static class ReaderPreferenceStore
     public static async Task<ReaderSettingsSnapshot> GetAsync(
         AppDbContext db,
         string profileId,
-        Guid workId,
+        Guid? workId,
         string? genresJson,
         ReaderContentType contentType,
         CancellationToken cancellationToken)
@@ -489,14 +546,16 @@ public static class ReaderPreferenceStore
             .Select(ReaderPreferenceScopes.NormalizeGenreKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var typeScope = ReaderPreferenceScopes.Type(contentType);
-        var workScope = ReaderPreferenceScopes.Work(workId);
+        var workScope = workId is Guid id ? ReaderPreferenceScopes.Work(id) : null;
 
         var global = preferences.FirstOrDefault(
             x => x.ScopeKey == ReaderPreferenceRules.UserDefaultScope);
         var type = preferences.FirstOrDefault(
             x => x.ScopeKey.Equals(typeScope, StringComparison.OrdinalIgnoreCase));
-        var work = preferences.FirstOrDefault(
-            x => x.ScopeKey.Equals(workScope, StringComparison.OrdinalIgnoreCase));
+        var work = workScope is null
+            ? null
+            : preferences.FirstOrDefault(
+                x => x.ScopeKey.Equals(workScope, StringComparison.OrdinalIgnoreCase));
 
         var genreLayers = preferences
             .Select(preference =>
@@ -703,7 +762,7 @@ public static class ReaderPreferenceStore
                     "bookmarkColor",
                     x => x.BookmarkColor,
                     preset.BookmarkColor)),
-            HasBookOverride: work is not null)
+            HasWorkOverride: work is not null)
         {
             ContentTypeKey = ReaderContentTypes.ToKey(contentType),
             HasTypeOverride = type is not null,
@@ -715,7 +774,19 @@ public static class ReaderPreferenceStore
             ShowPageNumbers = ResolveValue("showPageNumbers", x => x.ShowPageNumbers, true),
             ShowIllustrations = ResolveValue("showIllustrations", x => x.ShowIllustrations, true),
             ParagraphIndent = ResolveValue("paragraphIndent", x => x.ParagraphIndent, true),
-            AutoContinueChapters = ResolveValue("autoContinueChapters", x => x.AutoContinueChapters, false),
+            AutoContinueChapters = ResolveValue(
+                "autoContinueChapters",
+                x => x.AutoContinueChapters,
+                preset.AutoContinueChapters),
+            ImageFlowMode = ReaderPreferenceRules.NormalizeImageFlowMode(ResolveString("imageFlowMode", x => x.ImageFlowMode, "continuous")),
+            ImagePageDirection = ReaderPreferenceRules.NormalizeImagePageDirection(ResolveString("imagePageDirection", x => x.ImagePageDirection, "auto")),
+            ImageFit = ReaderPreferenceRules.NormalizeImageFit(ResolveString("imageFit", x => x.ImageFit, "height")),
+            ImageZoomPercent = ReaderPreferenceRules.NormalizeImageZoomPercent(ResolveValue("imageZoomPercent", x => x.ImageZoomPercent, 100)),
+            ImagePageGapPx = ReaderPreferenceRules.NormalizeImagePageGapPx(ResolveValue("imagePageGapPx", x => x.ImagePageGapPx, 8)),
+            ImageFirstPageAlone = ResolveValue("imageFirstPageAlone", x => x.ImageFirstPageAlone, false),
+            ImageSharpen = ResolveValue("imageSharpen", x => x.ImageSharpen, false),
+            ImageCropBorders = ResolveValue("imageCropBorders", x => x.ImageCropBorders, false),
+            ImageColorScheme = ReaderPreferenceRules.NormalizeImageColorScheme(ResolveString("imageColorScheme", x => x.ImageColorScheme, "auto")),
             TtsProviderId = ReaderPreferenceRules.NormalizeTtsProviderId(
                 ResolveString("ttsProviderId", x => x.TtsProviderId, preset.TtsProviderId)),
             TtsVoiceIds = ttsVoiceIds,
@@ -744,7 +815,6 @@ public static class ReaderPreferenceStore
             db,
             profileId,
             ReaderPreferenceRules.UserDefaultScope,
-            null,
             input,
             cancellationToken);
 
@@ -758,7 +828,6 @@ public static class ReaderPreferenceStore
             db,
             profileId,
             ReaderPreferenceScopes.Type(contentType),
-            null,
             input,
             cancellationToken);
 
@@ -773,7 +842,6 @@ public static class ReaderPreferenceStore
             db,
             profileId,
             ReaderPreferenceScopes.Genre(genre, priority),
-            null,
             input,
             cancellationToken);
 
@@ -781,42 +849,31 @@ public static class ReaderPreferenceStore
         AppDbContext db,
         string profileId,
         string scopeKey,
-        Guid? workId,
         ReaderSettingsInput input,
         CancellationToken cancellationToken)
     {
         ValidateScope(scopeKey);
-        var preference = await FindOrCreateAsync(
-            db,
-            profileId,
-            scopeKey,
-            workId,
-            cancellationToken);
+        var preference = await FindOrCreateAsync(db, profileId, scopeKey, cancellationToken);
 
         ApplyAll(preference, input);
         preference.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public static async Task SaveBookOverrideAsync(
+    public static Task SaveWorkOverrideAsync(
         AppDbContext db,
         string profileId,
         Guid workId,
         string changedKey,
         ReaderSettingsInput input,
-        CancellationToken cancellationToken)
-    {
-        var preference = await FindOrCreateAsync(
+        CancellationToken cancellationToken) =>
+        SaveScopeFieldAsync(
             db,
             profileId,
             ReaderPreferenceScopes.Work(workId),
-            workId,
+            changedKey,
+            input,
             cancellationToken);
-
-        ApplyField(preference, changedKey, input);
-        preference.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(cancellationToken);
-    }
 
     public static async Task SaveScopeFieldAsync(
         AppDbContext db,
@@ -827,16 +884,33 @@ public static class ReaderPreferenceStore
         CancellationToken cancellationToken)
     {
         ValidateScope(scopeKey);
-        var preference = await FindOrCreateAsync(
-            db,
-            profileId,
-            scopeKey,
-            scopeKey.StartsWith("work:", StringComparison.OrdinalIgnoreCase)
-                ? TryParseWorkId(scopeKey)
-                : null,
-            cancellationToken);
+        var preference = await FindOrCreateAsync(db, profileId, scopeKey, cancellationToken);
 
         ApplyField(preference, changedKey, input);
+        preference.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public static async Task SaveScopeFieldsAsync(
+        AppDbContext db,
+        string profileId,
+        string scopeKey,
+        IReadOnlyCollection<string> changedKeys,
+        ReaderSettingsInput input,
+        CancellationToken cancellationToken)
+    {
+        ValidateScope(scopeKey);
+        if (changedKeys.Count == 0)
+        {
+            throw new ArgumentException("At least one reader setting is required.", nameof(changedKeys));
+        }
+
+        var preference = await FindOrCreateAsync(db, profileId, scopeKey, cancellationToken);
+        foreach (var changedKey in changedKeys.Distinct(StringComparer.Ordinal))
+        {
+            ApplyField(preference, changedKey, input);
+        }
+
         preference.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
     }
@@ -870,7 +944,7 @@ public static class ReaderPreferenceStore
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public static Task ResetBookAsync(
+    public static Task ResetWorkAsync(
         AppDbContext db,
         string profileId,
         Guid workId,
@@ -991,6 +1065,15 @@ public static class ReaderPreferenceStore
         if (input.ShowIllustrations is bool showIllustrationsValue) preference.ShowIllustrations = showIllustrationsValue;
         if (input.ParagraphIndent is bool paragraphIndentValue) preference.ParagraphIndent = paragraphIndentValue;
         if (input.AutoContinueChapters is bool autoContinueChaptersValue) preference.AutoContinueChapters = autoContinueChaptersValue;
+        if (input.ImageFlowMode is not null) preference.ImageFlowMode = ReaderPreferenceRules.NormalizeImageFlowMode(input.ImageFlowMode);
+        if (input.ImagePageDirection is not null) preference.ImagePageDirection = ReaderPreferenceRules.NormalizeImagePageDirection(input.ImagePageDirection);
+        if (input.ImageFit is not null) preference.ImageFit = ReaderPreferenceRules.NormalizeImageFit(input.ImageFit);
+        if (input.ImageZoomPercent is int imageZoomPercent) preference.ImageZoomPercent = ReaderPreferenceRules.NormalizeImageZoomPercent(imageZoomPercent);
+        if (input.ImagePageGapPx is int imagePageGapPx) preference.ImagePageGapPx = ReaderPreferenceRules.NormalizeImagePageGapPx(imagePageGapPx);
+        if (input.ImageFirstPageAlone is bool imageFirstPageAlone) preference.ImageFirstPageAlone = imageFirstPageAlone;
+        if (input.ImageSharpen is bool imageSharpen) preference.ImageSharpen = imageSharpen;
+        if (input.ImageCropBorders is bool imageCropBorders) preference.ImageCropBorders = imageCropBorders;
+        if (input.ImageColorScheme is not null) preference.ImageColorScheme = ReaderPreferenceRules.NormalizeImageColorScheme(input.ImageColorScheme);
         preference.TtsProviderId =
             ReaderPreferenceRules.NormalizeTtsProviderId(input.TtsProviderId);
         preference.TtsVoiceIds =
@@ -1173,6 +1256,33 @@ public static class ReaderPreferenceStore
             case "autoContinueChapters":
                 preference.AutoContinueChapters = input.AutoContinueChapters ?? false;
                 break;
+            case "imageFlowMode":
+                preference.ImageFlowMode = ReaderPreferenceRules.NormalizeImageFlowMode(input.ImageFlowMode);
+                break;
+            case "imagePageDirection":
+                preference.ImagePageDirection = ReaderPreferenceRules.NormalizeImagePageDirection(input.ImagePageDirection);
+                break;
+            case "imageFit":
+                preference.ImageFit = ReaderPreferenceRules.NormalizeImageFit(input.ImageFit);
+                break;
+            case "imageZoomPercent":
+                preference.ImageZoomPercent = ReaderPreferenceRules.NormalizeImageZoomPercent(input.ImageZoomPercent ?? 100);
+                break;
+            case "imagePageGapPx":
+                preference.ImagePageGapPx = ReaderPreferenceRules.NormalizeImagePageGapPx(input.ImagePageGapPx ?? 8);
+                break;
+            case "imageFirstPageAlone":
+                preference.ImageFirstPageAlone = input.ImageFirstPageAlone ?? false;
+                break;
+            case "imageSharpen":
+                preference.ImageSharpen = input.ImageSharpen ?? false;
+                break;
+            case "imageCropBorders":
+                preference.ImageCropBorders = input.ImageCropBorders ?? false;
+                break;
+            case "imageColorScheme":
+                preference.ImageColorScheme = ReaderPreferenceRules.NormalizeImageColorScheme(input.ImageColorScheme);
+                break;
             case "ttsProviderId":
                 preference.TtsProviderId =
                     ReaderPreferenceRules.NormalizeTtsProviderId(input.TtsProviderId);
@@ -1244,6 +1354,15 @@ public static class ReaderPreferenceStore
             case "showIllustrations": preference.ShowIllustrations = null; break;
             case "paragraphIndent": preference.ParagraphIndent = null; break;
             case "autoContinueChapters": preference.AutoContinueChapters = null; break;
+            case "imageFlowMode": preference.ImageFlowMode = null; break;
+            case "imagePageDirection": preference.ImagePageDirection = null; break;
+            case "imageFit": preference.ImageFit = null; break;
+            case "imageZoomPercent": preference.ImageZoomPercent = null; break;
+            case "imagePageGapPx": preference.ImagePageGapPx = null; break;
+            case "imageFirstPageAlone": preference.ImageFirstPageAlone = null; break;
+            case "imageSharpen": preference.ImageSharpen = null; break;
+            case "imageCropBorders": preference.ImageCropBorders = null; break;
+            case "imageColorScheme": preference.ImageColorScheme = null; break;
             case "ttsProviderId": preference.TtsProviderId = null; break;
             case "ttsRate": preference.TtsRate = null; break;
             case "ttsPitch": preference.TtsPitch = null; break;
@@ -1290,6 +1409,15 @@ public static class ReaderPreferenceStore
         preference.ShowIllustrations is null &&
         preference.ParagraphIndent is null &&
         preference.AutoContinueChapters is null &&
+        preference.ImageFlowMode is null &&
+        preference.ImagePageDirection is null &&
+        preference.ImageFit is null &&
+        preference.ImageZoomPercent is null &&
+        preference.ImagePageGapPx is null &&
+        preference.ImageFirstPageAlone is null &&
+        preference.ImageSharpen is null &&
+        preference.ImageCropBorders is null &&
+        preference.ImageColorScheme is null &&
         preference.TtsProviderId is null &&
         preference.TtsVoiceIds is null &&
         preference.TtsRate is null &&
@@ -1301,7 +1429,6 @@ public static class ReaderPreferenceStore
         AppDbContext db,
         string profileId,
         string scopeKey,
-        Guid? workId,
         CancellationToken cancellationToken)
     {
         var preference = await db.ReaderPreferences
@@ -1317,8 +1444,7 @@ public static class ReaderPreferenceStore
         preference = new ReaderPreference
         {
             ProfileId = profileId,
-            ScopeKey = scopeKey,
-            WorkId = workId
+            ScopeKey = scopeKey
         };
         db.ReaderPreferences.Add(preference);
         return preference;
@@ -1337,12 +1463,5 @@ public static class ReaderPreferenceStore
         throw new InvalidOperationException("Unknown reader preference scope.");
     }
 
-    private static Guid? TryParseWorkId(string scopeKey)
-    {
-        var raw = scopeKey["work:".Length..];
-        return Guid.TryParseExact(raw, "N", out var workId)
-            ? workId
-            : null;
-    }
 }
 

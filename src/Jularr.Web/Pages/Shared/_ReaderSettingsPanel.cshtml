@@ -57,7 +57,7 @@
                 <small>@Model.Document.Title</small>
             </div>
             <span data-reader-override-state data-book-override-state>
-                @(Model.Settings.HasBookOverride
+                @(Model.Settings.HasWorkOverride
                     ? ui["reader.settings.override.book"]
                     : Model.Settings.HasGenreOverride
                         ? ui["reader.settings.override.genre"]

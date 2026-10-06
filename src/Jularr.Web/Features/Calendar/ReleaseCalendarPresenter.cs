@@ -11,9 +11,11 @@ public sealed class ReleaseCalendarPresenter
 {
     private readonly UiTextBundle ui;
 
-    public ReleaseCalendarPresenter(UiTextBundle ui, TimeZoneInfo zone, DateTimeOffset now)
+    /// <param name="playbackEnabled">Whether this instance plays: only then does an available episode open the player.</param>
+    public ReleaseCalendarPresenter(UiTextBundle ui, TimeZoneInfo zone, DateTimeOffset now, bool playbackEnabled)
     {
         this.ui = ui;
+        PlaybackEnabled = playbackEnabled;
         Zone = zone;
         Now = now;
         Culture = CultureFor(ui.Locale);
@@ -21,6 +23,8 @@ public sealed class ReleaseCalendarPresenter
     }
 
     public CultureInfo Culture { get; }
+
+    public bool PlaybackEnabled { get; }
 
     public TimeZoneInfo Zone { get; }
 
@@ -165,10 +169,9 @@ public sealed class ReleaseCalendarPresenter
     {
         ReleaseLocalState.Available => (ui["calendar.state.available"], "ok"),
         ReleaseLocalState.Missing => (ui["calendar.state.missing"], "error"),
-        ReleaseLocalState.Failed => (ui["calendar.state.failed"], "error"),
-        ReleaseLocalState.Wanted => (ui["calendar.state.wanted"], "warn"),
-        ReleaseLocalState.Searching => (ui["calendar.state.searching"], "warn"),
-        ReleaseLocalState.Grabbed => (ui["calendar.state.grabbed"], "warn"),
+        ReleaseLocalState.Failed => (ui["acquisition.state.needsAttention"], "error"),
+        ReleaseLocalState.Wanted or ReleaseLocalState.Searching => (ui["acquisition.state.lookingForMedia"], "warn"),
+        ReleaseLocalState.Grabbed => (ui["acquisition.state.gettingMedia"], "warn"),
         ReleaseLocalState.Monitored => (ui["calendar.state.monitored"], "info"),
         ReleaseLocalState.NotMonitored => (ui["calendar.state.notMonitored"], "muted"),
         ReleaseLocalState.Following => (ui["calendar.state.following"], "muted"),
@@ -184,12 +187,12 @@ public sealed class ReleaseCalendarPresenter
     };
 
     /// <summary>The canonical page of the event: the local episode when it exists, else the media page.</summary>
-    public static string? Href(ReleaseEvent release) =>
+    public string? Href(ReleaseEvent release) =>
         !string.IsNullOrWhiteSpace(release.DetailsUrl)
             ? release.DetailsUrl
             : release.MediaType switch
             {
-                ReleaseMediaType.Anime when release.UnitId is { } episodeId && release.Local.IsAvailable => $"/Library/Episode/{episodeId}",
+                ReleaseMediaType.Anime when PlaybackEnabled && release.UnitId is { } episodeId && release.Local.IsAvailable => $"/Library/Episode/{episodeId}",
                 ReleaseMediaType.Anime => $"/Library/Anime/{release.MediaId}",
                 ReleaseMediaType.Manga => $"/Manga/Series/{release.MediaId}",
                 ReleaseMediaType.LightNovel => $"/Novels/Work/{release.MediaId}",

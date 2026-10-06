@@ -1,24 +1,40 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Storage;
 using Jularr.Web.Features.Storage.Insights;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Pages.Admin.Storage;
+
+/// <summary>One content type whose importer resolves its destination here: the supporting roots and the one default.</summary>
+public sealed record StorageDestination(LibraryContentType ContentType, IReadOnlyList<LibraryRootRoute> Routes)
+{
+    public LibraryRootRoute? Default => Routes.FirstOrDefault(route => route.IsDefault && route.IsEnabled);
+}
 
 /// <summary>
 /// Storage insights (#414): where disk space goes and what Jularr can safely clean up. Usage comes
 /// from the library inventory and cached storage state, so opening this page never wakes a
 /// sleeping NAS; the cleanup only removes rebuildable Jularr cache leftovers, never library media.
+/// It also owns the default destination LibraryRoot and placement policy of the content types whose importers route through
+/// Storage (#815).
 /// </summary>
 [Authorize(Policy = JularrPolicies.AdminMedia)]
 public sealed class IndexModel(
     AppDbContext db,
     StorageUsageService usageService,
-    StorageCleanupService cleanupService) : PageModel
+    StorageCleanupService cleanupService,
+    LibraryRootRoutingService routing,
+    CurrentAccountContext currentAccount,
+    IInstanceModuleService? instanceModules = null) : PageModel
 {
     // Entries listed per cache area in the cleanup preview; the totals always cover all of them.
     public const int PreviewEntriesPerArea = 8;
@@ -29,8 +45,75 @@ public sealed class IndexModel(
 
     public StorageCacheReport Cache { get; private set; } = new([], StorageCleanupPlan.Empty);
 
+    public IReadOnlyList<StorageDestination> Destinations { get; private set; } = [];
+
+    public IReadOnlyList<LibraryRoot> EnabledRoots { get; private set; } = [];
+
+    /// <summary>Changing where imports are placed is a storage setting: Owner only.</summary>
+    public bool CanManageDestinations => currentAccount.Can(JularrPolicies.AdminSystem);
+
+    public string? Error => TempData["StorageError"] as string;
+
     public async Task OnGetAsync(CancellationToken cancellationToken) =>
         await LoadAsync(cancellationToken);
+
+    /// <summary>Makes one root the default destination of a content type (or clears the default) and sets how it places imports.</summary>
+    public async Task<IActionResult> OnPostDestinationAsync(
+        LibraryContentType contentType,
+        Guid? libraryRootId,
+        LibraryPlacementPolicy placementPolicy,
+        CancellationToken cancellationToken)
+    {
+        if (!CanManageDestinations)
+        {
+            return Forbid();
+        }
+
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (!LibraryRootRoutingService.ImporterRoutedTypes.Contains(contentType) || !Enum.IsDefined(placementPolicy))
+        {
+            return BadRequest();
+        }
+
+        try
+        {
+            if (libraryRootId is { } rootId)
+            {
+                await routing.AssignDefaultAsync(contentType, rootId, placementPolicy, cancellationToken);
+            }
+            else
+            {
+                await routing.SetDefaultAsync(contentType, null, cancellationToken);
+            }
+
+            TempData["Status"] = Ui["admin.storage.destinations.saved"];
+        }
+        catch (LibraryRootConflictException)
+        {
+            TempData["StorageError"] = Ui["admin.storage.destinations.conflict"];
+        }
+        catch (InvalidOperationException)
+        {
+            TempData["StorageError"] = Ui["admin.storage.destinations.failed"];
+        }
+
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "destinations");
+    }
+
+    public string ContentTypeLabel(LibraryContentType contentType) => Ui[MediaKindLabelKeys.Name(KindOf(contentType))];
+
+    // Only the importer-routed types reach the page, so Movie and TV are the whole mapping.
+    private static MediaAcquisitionKind KindOf(LibraryContentType contentType) =>
+        contentType == LibraryContentType.Tv ? MediaAcquisitionKind.Tv : MediaAcquisitionKind.Movie;
+
+    public string PlacementLabel(LibraryPlacementPolicy policy) =>
+        ImportFileTransfer.ModeFor(policy) switch
+        {
+            ImportMode.Move => Ui["settings.acquisition.importMode.move"],
+            ImportMode.Copy => Ui["settings.acquisition.importMode.copy"],
+            ImportMode.Hardlink => Ui["settings.acquisition.importMode.hardlink"],
+            _ => Ui["settings.acquisition.importMode.hardlinkOrCopy"]
+        };
 
     public async Task<IActionResult> OnPostCleanAsync(
         List<StorageCacheAreaKind> areas,
@@ -85,5 +168,19 @@ public sealed class IndexModel(
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         Usage = await usageService.GetAsync(StorageUsageService.DefaultLargestItems, cancellationToken);
         Cache = await cleanupService.PreviewAsync(cancellationToken);
+        EnabledRoots = await db.LibraryRoots.AsNoTracking().Where(root => root.IsEnabled).OrderBy(root => root.Name).ToArrayAsync(cancellationToken);
+
+        // A content type whose module is disabled has no importer to configure, so it disappears instead of showing a dead control.
+        var modules = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
+        var destinations = new List<StorageDestination>();
+        foreach (var contentType in LibraryRootRoutingService.ImporterRoutedTypes)
+        {
+            if (modules.IsEnabled(InstanceModule.Acquisition) && modules.IsEnabled(AcquisitionInstanceModules.For(KindOf(contentType))))
+            {
+                destinations.Add(new StorageDestination(contentType, await routing.ListAsync(contentType, cancellationToken)));
+            }
+        }
+
+        Destinations = destinations;
     }
 }

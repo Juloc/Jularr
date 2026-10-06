@@ -356,3 +356,47 @@ Next work should be:
 1. implement/consolidate the target Admin shell and redirects without losing current functionality;
 2. migrate legacy settings/state to their canonical owners;
 3. execute dependency-ordered implementation, with Anime/Movie/TV request -> acquisition -> import -> playback as the primary product path.
+
+
+## 30. Remaining Admin cross-cutting ownership — aligned
+
+The last generic Admin ownership questions are now fixed:
+
+- custom Groups are deferred until multi-group/deny/override semantics are explicitly approved; V1 must not invent placeholder group persistence;
+- durable administrative audit is a typed append-oriented contract exposed through System & Diagnostics/contextual links, distinct from Activity/History and technical Logs;
+- Naming/organization is contextual to LibraryRoot/library management and the importer/library layer, not a permanent Admin destination;
+- Mapping/identity correction is contextual to Media Detail/To-Do/Reconciliation, not a permanent Admin destination;
+- UI translation management is a child of General Settings → Language & Localization;
+- API Keys remains transitional until a broader API & Automation contract is separately approved.
+
+No additional generic Admin top-level page is required for these concerns.
+
+
+## 19. Instant Play / manager-only acquisition — aligned
+
+Binding specification: `docs/mockups/instant-play/SPEC.md`.
+
+The earlier Request-only consumer rule is now clarified, not replaced:
+
+- **Request** remains the only explicit consumer acquisition action.
+- **Start watching / Watch now / Play / Continue** are playback intents, not a second acquisition action.
+- When the target is missing and effective Playback + instant-acquisition policy permits it, the playback intent may transparently create/reuse and auto-approve the same canonical Request, then use the normal Wanted -> Search -> Download/transfer -> Import pipeline.
+- Series Start watching prioritizes only the next required playable WorkEpisode; it does not imply whole-Series acquisition or monitoring.
+- Consumer Instant Play projects technical work as `Looking for media -> Getting episode/movie/media -> Preparing -> Starting playback`; downloader/import internals remain Admin concepts.
+- Leaving the originating surface clears only the transient auto-start intent. Canonical Request/acquisition may continue, but the Player must not unexpectedly open later.
+- `Stop waiting` never claims to cancel shared acquisition.
+- Manager-only / Playback-disabled Jularr is a first-class mode: `Request -> acquisition -> Available / Monitoring`, with no Start watching, Starting playback or Player controls.
+- Desktop, Mobile, Tablet and TV share one semantic state model.
+- Light and Dark are visual variants of the same contract; the new approved planning direction uses Light as the first mockup baseline.
+
+Aligned surfaces:
+- global UX;
+- Discover/Search;
+- Media Preview;
+- Movie Detail;
+- Anime/Series Detail;
+- Request Flow;
+- Request Status/Details;
+- Player.
+
+No second Instant Acquisition engine, Request state machine or platform-specific acquisition workflow is permitted.

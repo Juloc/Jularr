@@ -127,6 +127,8 @@ The live control is stateful but does not make Discover a Downloads dashboard. I
 
 Binding shared specification: `docs/mockups/media-preview/SPEC.md`.
 
+Binding missing-media playback intent: `docs/mockups/instant-play/SPEC.md`.
+
 Desktop:
 - ordinary hover may highlight the card and reveal a Quick View affordance;
 - the card itself does **not** expand/reflow on hover;
@@ -175,6 +177,78 @@ Discover/Search must cover:
 - requested title
 - downloading/preparing title
 - trailer unavailable
+
+## Staged late results and zero-shift ghost hints
+
+Late provider/cache results must never make Discover/Search feel unstable while the user is actively navigating.
+
+### Core rule
+
+A visible result generation is stable while the user is interacting with it.
+
+Newly arrived results are first **staged**, not immediately inserted into the card layout. The UI may show a restrained ghost hint in the existing inter-card spacing to communicate that another result is ready nearby.
+
+Ghost hints:
+- live entirely inside already-reserved card gap/padding space;
+- have zero layout footprint and cause **no card movement, reflow or scroll-position change**;
+- are not full cards and are not independently focusable/clickable;
+- use subtle neutral geometry rather than provider-specific branding;
+- respect reduced-motion preferences;
+- disappear when the staged result is committed or discarded.
+
+A real card is committed only at a safe interaction boundary. The insertion/rerank uses the next deterministic result generation; it must never be based on provider completion order.
+
+### TV
+
+TV has the strictest stability rule.
+
+Do not insert/rerank cards while:
+- D-pad/remote navigation is active or recently active;
+- a key/button is held or repeated;
+- focus is moving between cards/rows;
+- the focused card/Preview is still in its stable-focus interaction window.
+
+A short idle period after navigation settles may allow staged results to commit. The exact delay is an implementation tuning value, but it must be long enough that ordinary rapid remote navigation never triggers mid-navigation rearrangement.
+
+Before commit, a zero-shift ghost hint may appear in the adjacent card gap. Current focus identity and its visual screen position must remain unchanged. If the next generation cannot preserve the focused item's stable context, defer the commit until the user leaves/re-enters the row or another natural navigation boundary occurs.
+
+### Mobile / touch
+
+Do not insert/rerank while:
+- a touch/pointer contact is active;
+- the user is swiping/dragging;
+- inertial scrolling is still moving;
+- a sheet/Preview gesture is active.
+
+After scrolling and touch interaction have fully settled for a short idle period, staged results may commit. Preserve the visible anchor/scroll offset so the content under the user's finger/eyes does not jump.
+
+A ghost hint may appear in existing card spacing while results are staged, but it must not widen the row/grid or consume a new layout slot.
+
+### Desktop / mouse + keyboard
+
+Desktop must avoid moving a target underneath a pointer that may be about to click.
+
+Do not insert/rerank a result group while:
+- a pointer button is down;
+- wheel/trackpad scrolling is active or recently active;
+- keyboard navigation is active;
+- the pointer is over an actionable card, Quick View affordance or result-group control that would move because of the update.
+
+Pointer movement alone should not freeze the page indefinitely. After a short inactivity window, a commit is allowed only when it cannot move an actionable target currently under the pointer. Otherwise defer until the pointer leaves the affected target/group or another safe boundary occurs.
+
+Ghost hints may occupy the visual gap between covers while staging and must use `pointer-events: none`.
+
+### Safe commit behavior
+
+When staged results are committed:
+- preserve the current canonical item, focus/selection and scroll anchor;
+- avoid inserting before the active/focused/hovered item when that would visually move it;
+- prefer changes outside the currently visible interaction neighborhood;
+- never steal focus;
+- never auto-open Preview/Detail because a new result arrived;
+- keep accessibility order coherent after commit and announce new result availability only when useful, without repetitive live-region noise.
+
+If no safe in-place commit exists, keep the current generation and apply the new generation on explicit refresh, navigation away/back, filter/query change, or another natural surface reload.
 
 ## Mockup reference naming
 
@@ -302,6 +376,8 @@ Provider-specific records, regional releases or ROM variants must not become dup
 Opening a local Game goes to Game Detail.
 
 Opening a non-local Game uses the same canonical Game Detail / shared Request behavior as the rest of Jularr.
+
+For watchable media, opening a non-local title never acquires it merely from card activation. Detail/Preview resolves the effective action: Play/Continue when local, Start watching/Watch now when Playback + instant acquisition are permitted, or Request when explicit acquisition/approval is required. Manager-only instances never expose the playback-intent actions.
 
 Media Preview / Quick View is not required for Games in V1; a Game card may open Game Detail directly unless a future Games-specific preview is explicitly approved.
 

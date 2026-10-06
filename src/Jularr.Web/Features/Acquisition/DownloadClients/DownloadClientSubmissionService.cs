@@ -15,7 +15,8 @@ public sealed record DownloadSubmissionSpec(
     MediaAcquisitionKind MediaKind,
     Stream? File = null,
     string? FileName = null,
-    string? MediaTargetKey = null);
+    string? MediaTargetKey = null,
+    OperationPriority Priority = OperationPriority.Normal);
 
 public sealed record DownloadSubmissionOutcome(
     bool Accepted,
@@ -59,7 +60,8 @@ public sealed class DownloadClientSubmissionService(
                 spec.ProfileId,
                 OperationLane.Normal,
                 IsDownload: true,
-                Retryable: true),
+                Retryable: true,
+                Priority: spec.Priority),
             cancellationToken);
 
         await store.MarkRunningAsync(operationId, cancellationToken);
@@ -87,7 +89,7 @@ public sealed class DownloadClientSubmissionService(
             {
                 result = await client.SubmitAsync(
                     entry,
-                    new DownloadClientSubmitRequest(spec.Url, spec.Name, spec.MediaKind, spec.File, spec.FileName),
+                    new DownloadClientSubmitRequest(spec.Url, spec.Name, spec.MediaKind, spec.File, spec.FileName, spec.Priority),
                     cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

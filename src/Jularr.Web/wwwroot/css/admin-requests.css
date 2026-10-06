@@ -1,7 +1,7 @@
-/* Admin → Requests (docs/mockups/admin-requests/SPEC.md): status tabs, filter bar, request table that
-   turns into stacked cards on a phone, and the collapsed rules section. Theme tokens only, so light,
-   dark and every accent work unchanged. State is shown with outlined, subtly tinted pills and small
-   icons — never a coloured edge on a row or card. */
+/* Admin → Requests (docs/mockups/admin-requests/SPEC.md): status tabs, filter bar, request table that turns
+   into stacked cards when its own container is narrow (a phone, or a tablet next to the sidebar), and the
+   collapsed rules section. Theme tokens only, so light, dark and every accent work unchanged. State and media
+   type are the shared outlined Admin tags (admin-controls.css) — never a coloured edge on a row or card. */
 
 .admreq { display: grid; gap: 14px; margin-bottom: 20px; }
 .admreq-tabs { margin: 0; }
@@ -34,8 +34,9 @@
 .admreq-message[role="alert"] { border-style: solid; border-color: color-mix(in srgb, var(--danger-text) 40%, var(--border)); color: var(--danger-text); }
 
 /* Table -------------------------------------------------------------------------------------- */
+/* The wrap is the size container of the card layout below and stays overflow-visible so a row's menu is never clipped. */
 .admreq-table-wrap {
-    overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-card);
+    container-type: inline-size; border: 1px solid var(--border); border-radius: var(--radius-card);
     background: var(--surface); box-shadow: var(--shadow-card);
 }
 .admreq-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -45,9 +46,10 @@
 }
 .admreq-table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; }
 .admreq-table tbody tr:hover { background: var(--surface-2); }
+.admreq-table tbody tr:last-child:hover { border-radius: 0 0 var(--radius-card) var(--radius-card); }
 .admreq-table th:last-child, .admreq-cell-actions { text-align: end; }
 
-.admreq-cell-title { min-width: 220px; }
+.admreq-cell-title { min-width: 200px; }
 .admreq-title-wrap { display: flex; align-items: center; gap: 12px; }
 .admreq-cover { flex: none; width: 40px; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 6px; background: var(--surface-2); }
 .admreq-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -55,28 +57,11 @@
 .admreq-title { color: var(--text); font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
 a.admreq-title:hover { color: var(--accent-text); }
 .admreq-copy small, .admreq-cell-lang small, .admreq-cell-when small { color: var(--muted); font-size: 12px; }
-.admreq-kind {
-    padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px;
-    color: var(--muted); font-size: 11px; font-weight: 700;
-}
 .admreq-stack, .admreq-cell-when time { display: grid; gap: 2px; }
 .admreq-cell-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .admreq-cell-who { font-weight: 600; overflow-wrap: anywhere; }
 
-.admreq-state {
-    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--admreq-tone) 40%, transparent);
-    background: color-mix(in srgb, var(--admreq-tone) 11%, transparent);
-    color: var(--admreq-tone); font-size: 12px; font-weight: 700; white-space: nowrap;
-}
-.admreq-state-icon { flex: none; }
-.admreq-state-pending { --admreq-tone: var(--info-text); }
-.admreq-state-approved { --admreq-tone: var(--success-text); }
-.admreq-state-searching, .admreq-state-downloading, .admreq-state-importing { --admreq-tone: var(--warning-text); }
-.admreq-state-completed { --admreq-tone: var(--accent-text); }
-.admreq-state-rejected, .admreq-state-failed { --admreq-tone: var(--danger-text); }
-
-.admreq-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.admreq-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .admreq-actions form { margin: 0; }
 .admreq-actions .button { white-space: nowrap; }
 
@@ -95,19 +80,15 @@ a.admreq-title:hover { color: var(--accent-text); }
 .admreq-settings > summary:hover { color: var(--text); background: var(--surface-2); }
 .admreq-settings[open] > summary { color: var(--text); }
 
-/* Phone: every request is a stacked card with large touch targets ------------------------------- */
-@media (max-width: 760px) {
-    .admreq-selects select { flex: 1 1 calc(50% - 8px); }
-    .admreq-selects .text-link { flex: 1 0 100%; margin-inline-start: 0; padding: 6px 0; }
-    .admreq-table-wrap { overflow: visible; border: 0; background: transparent; box-shadow: none; }
-    .admreq-table, .admreq-table tbody { display: grid; gap: 10px; }
+/* Card layout: a phone, or any container too narrow for the six columns ------------------------- */
+@container (max-width: 880px) {
+    .admreq-table, .admreq-table tbody { display: grid; gap: 0; }
     .admreq-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .admreq-table tr {
-        display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 12px;
-        padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-card);
-        background: var(--surface); box-shadow: var(--shadow-card);
+        display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 12px; padding: 12px;
+        border-top: 1px solid var(--border);
     }
-    .admreq-table tbody tr:hover { background: var(--surface); }
+    .admreq-table tbody tr:first-child { border-top: 0; }
     .admreq-table td { display: block; padding: 0; border: 0; }
     .admreq-cell-title { grid-column: 1; grid-row: 1; min-width: 0; }
     .admreq-title-wrap { align-items: flex-start; }
@@ -118,9 +99,17 @@ a.admreq-title:hover { color: var(--accent-text); }
     .admreq-cell-when time { display: block; }
     .admreq-cell-when time small { display: none; }
     .admreq-cell-lang { grid-column: 1 / -1; grid-row: 3; color: var(--muted); }
+    .admreq-cell-lang:has(.admreq-none):not(:has(small)) { display: none; }
     .admreq-cell-actions { grid-column: 1 / -1; grid-row: 4; text-align: start; }
-    .admreq-actions { justify-content: stretch; gap: 8px; }
-    .admreq-actions > form, .admreq-actions > a.button { flex: 1 1 120px; }
+    .admreq-actions { justify-content: flex-start; flex-wrap: wrap; }
+    .admreq-actions > form:has(.button) { flex: 1 1 120px; }
     .admreq-actions .button { width: 100%; min-height: 46px; display: flex; align-items: center; justify-content: center; }
+    .admreq-actions .admin-icon-button { min-height: 46px; }
+    .admreq-actions .admin-icon-label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+}
+
+@media (max-width: 760px) {
+    .admreq-selects select { flex: 1 1 calc(50% - 8px); }
+    .admreq-selects .text-link { flex: 1 0 100%; margin-inline-start: 0; padding: 6px 0; }
     .admreq-footer { justify-content: center; }
 }

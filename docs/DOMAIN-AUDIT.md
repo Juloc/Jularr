@@ -258,29 +258,56 @@ Mandatory preservation:
 - media-to-learning context links
 - generated translation provenance
 
-## 20. Architecture questions to settle next
+## 20. Architecture decisions and remaining migration work
 
-`ARCHITECTURE.md` must decide:
+The architecture/UX acceptance gate that originally blocked broad feature implementation has been passed. The questions formerly listed here are no longer all open.
 
-1. Final names/contracts for `MediaAsset`, `StoredFile`, `MediaTrack` and technical analysis.
-2. How a Version targets whole Work vs Episode/Chapter without polymorphic-FK chaos.
-3. Unified progress representation for timed media vs document locators.
-4. Explicit Profile entity and ownership model.
-5. Domain module boundaries and allowed dependencies.
-6. Provider contracts for metadata, discovery, acquisition, subtitles and translation.
-7. Background-job ownership and idempotency.
-8. API contracts used by Web/PWA/Android/TV/future iOS clients.
-9. Migration compatibility window and removal criteria for legacy bridges.
-10. How AppDbContext configuration is modularized without overengineering.
+Current decision state:
+
+1. **Asset/File/Track names — settled.**  
+   Canonical storage uses `MediaAsset`, `StoredFile`, `MediaTrack` and `MediaTechnicalAnalysis`.
+
+2. **Version / playable-target ownership — settled for the first video vertical, still needs broader migration completion.**  
+   Movie playback targets Work; Anime/TV playback targets WorkEpisode. WorkVersion carries release/version provenance and MediaAsset owns the canonical playable/readable artifact relationship. Reading/Audiobook migrations must follow the same canonical hierarchy without inventing polymorphic legacy shortcuts.
+
+3. **Unified progress — settled conceptually and implemented for canonical video; Reader migration remains open.**  
+   `MediaProgress` is the canonical consumption-state envelope. Exact resume and completion are separate semantics. Timed video progress is implemented; Reader must complete stable `ReaderLocator`/document-position migration rather than add a second progress store.
+
+4. **Account/Profile ownership — settled as a product/domain contract; legacy storage cleanup may remain.**  
+   Account owns authentication/security/authorization. Profile owns personal progress/history/ratings/preferences/connections. Remaining free-form or legacy profile identifiers must migrate toward that contract rather than redefining ownership.
+
+5. **Module boundaries — settled in `ARCHITECTURE.md`.**  
+   MediaCore, Library, Metadata, Discovery, Acquisition, Playback, Progress, Reader, Learning, Accounts, Devices and Admin/Operations have explicit ownership/dependency rules.
+
+6. **Provider contracts — settled architecturally, implementation remains incremental.**  
+   Metadata, discovery, identity/login, profile connections, release search, subtitles and translation use capability-specific provider ports. Provider-native records remain evidence/mappings, never canonical media identity.
+
+7. **Background jobs/idempotency — settled architecturally, implementation verification remains per vertical.**  
+   Durable/retryable work must use explicit Job/Operation state, stable correlation and idempotent handlers. Acquisition/import/retry paths need final E2E validation, not another job architecture.
+
+8. **Client/API contracts — settled as capability-oriented DTO/application contracts, still implemented slice by slice.**  
+   Web/PWA/native clients consume canonical application contracts and must not depend on EF entities or raw filesystem identity.
+
+9. **Legacy bridge removal — criteria settled.**  
+   Remove a legacy read/write path only after canonical backfill, parity and validation of identity/files/progress/provider mappings. `WorkSourceLink` / `LegacyWorkBridge` remain migration-only until then.
+
+10. **AppDbContext modularization — still implementation debt.**  
+    EF configuration should continue moving toward bounded-domain ownership without forcing unnecessary physical DbContext fragmentation.
+
+Current implementation-readiness details for the first video vertical are recorded in:
+`docs/implementation/request-to-play-readiness-audit.md`.
 
 ## 21. Coding gate
 
-Until `ARCHITECTURE.md` and the UX plan are accepted:
+Major implementation is no longer globally paused for lack of architecture/UX planning.
 
-- bug/security fixes are allowed;
-- migration/audit tests are allowed;
-- no new parallel media entities;
-- no new per-media progress models;
-- no new Anime-only acquisition architecture;
-- no expansion of `LegacyWorkBridge` as a permanent feature mechanism;
-- large feature implementations remain paused.
+Current gate:
+
+- follow `IMPLEMENTATION-ROADMAP.md` and binding screen specs;
+- no new parallel media identities;
+- no new per-media progress/session systems;
+- no new media-specific acquisition scheduler when the shared pipeline owns the concern;
+- no expansion of `LegacyWorkBridge` / `WorkSourceLink` into permanent product architecture;
+- migrations/backfills must be reversible and validated before legacy deletion;
+- legacy reads/writes may remain only while required for controlled compatibility;
+- final vertical completion requires integration/E2E proof, not only foundation classes.

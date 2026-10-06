@@ -1,3 +1,5 @@
+using Jularr.Web.Data;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,11 +29,11 @@ public sealed class EpisodeProgressTests
         Assert.IsNotNull(b);
         Assert.AreEqual(20, a.Percent);
         Assert.AreEqual(60, b.Percent);
-        Assert.AreEqual(2, await fixture.Db.EpisodeProgress.CountAsync());
+        Assert.AreEqual(2, await CountAsync(fixture.Db, "MediaProgress"));
 
         var completed = await readerA.UpdateAsync(
             episode.Id,
-            new EpisodeProgressUpdate(192_000, 200_000, false));
+            new EpisodeProgressUpdate(192_000, 200_000, true));
 
         Assert.IsNotNull(completed);
         Assert.IsTrue(completed.IsCompleted);
@@ -92,33 +94,46 @@ public sealed class EpisodeProgressTests
         Assert.IsNotNull(snapshot);
         Assert.IsNull(snapshot.UpdatedAt);
         Assert.AreEqual(0, snapshot.ResumePositionMs);
-        Assert.AreEqual(0, await fixture.Db.EpisodeProgress.CountAsync());
-        Assert.AreEqual(0, await fixture.Db.EpisodePlaybackHistory.CountAsync());
+        Assert.AreEqual(0, await CountAsync(fixture.Db, "MediaProgress"));
+        Assert.AreEqual(0, await CountAsync(fixture.Db, "MediaPlaybackHistory"));
         Assert.AreEqual(0, (await service.GetContinueWatchingAsync()).Count);
     }
 
     [TestMethod]
-    public async Task CompletionThresholdAndExplicitEndMarkWatchedAndClearResume()
+    public async Task OnlyDeclaredCompletionMarksWatchedAndClearsResume()
     {
         await using var fixture = await EpisodeFlowFixture.CreateAsync();
         var anime = await fixture.AddAnimeAsync("threshold");
-        var nearEnd = await fixture.AddEpisodeAsync(anime, 1, 1);
+        var natural = await fixture.AddEpisodeAsync(anime, 1, 1);
         var ended = await fixture.AddEpisodeAsync(anime, 1, 2);
         var service = fixture.Service("reader");
 
         var belowThreshold = await service.UpdateAsync(
-            nearEnd.Id,
+            natural.Id,
             new EpisodeProgressUpdate(949_000, 1_000_000, false));
         Assert.IsNotNull(belowThreshold);
         Assert.IsFalse(belowThreshold.IsCompleted);
         Assert.AreEqual(949_000, belowThreshold.ResumePositionMs);
 
-        var atThreshold = await service.UpdateAsync(
-            nearEnd.Id,
-            new EpisodeProgressUpdate(950_000, null, false));
-        Assert.IsNotNull(atThreshold);
-        Assert.IsTrue(atThreshold.IsCompleted, "The stored duration applies when a checkpoint omits it.");
-        Assert.AreEqual(0, atThreshold.PositionMs);
+        var seekedPastThreshold = await service.UpdateAsync(
+            natural.Id,
+            new EpisodeProgressUpdate(960_000, 1_000_000, false));
+        Assert.IsNotNull(seekedPastThreshold);
+        Assert.IsFalse(seekedPastThreshold.IsCompleted, "A position past the threshold without a declared completion is a seek, not a finish.");
+        Assert.AreEqual(960_000, seekedPastThreshold.ResumePositionMs);
+
+        var omittedDuration = await service.UpdateAsync(
+            natural.Id,
+            new EpisodeProgressUpdate(970_000, null, false));
+        Assert.IsNotNull(omittedDuration);
+        Assert.IsFalse(omittedDuration.IsCompleted);
+
+        var naturalFinish = await service.UpdateAsync(
+            natural.Id,
+            new EpisodeProgressUpdate(960_000, null, true));
+        Assert.IsNotNull(naturalFinish);
+        Assert.IsTrue(naturalFinish.IsCompleted);
+        Assert.AreEqual(0, naturalFinish.PositionMs);
 
         var explicitEnd = await service.UpdateAsync(
             ended.Id,
@@ -185,14 +200,14 @@ public sealed class EpisodeProgressTests
 
         var noRow = await service.SetWatchedAsync(untouched.Id, false);
         Assert.IsNotNull(noRow);
-        Assert.IsFalse(await fixture.Db.EpisodeProgress.AnyAsync(x => x.EpisodeId == untouched.Id));
+        Assert.IsNull((await service.GetAsync(untouched.Id))!.UpdatedAt, "Marking an untouched episode unwatched creates no state.");
 
         await service.SetWatchedAsync(untouched.Id, true);
         Assert.IsTrue((await service.GetAsync(untouched.Id))!.IsCompleted);
 
         Assert.AreEqual(
             1,
-            await fixture.Db.EpisodePlaybackHistory.CountAsync(),
+            await CountAsync(fixture.Db, "MediaPlaybackHistory"),
             "Manual watched actions are state, not playback history.");
         Assert.IsFalse((await fixture.Service("other").GetAsync(untouched.Id))!.IsCompleted);
     }
@@ -234,9 +249,8 @@ public sealed class EpisodeProgressTests
         Assert.AreEqual(1, merged.Count, "Checkpoints of one session extend one entry.");
         Assert.AreEqual(90_000, merged[0].PositionMs);
 
-        var entry = await fixture.Db.EpisodePlaybackHistory.SingleAsync();
-        entry.LastPlayedAt = DateTime.UtcNow - EpisodeProgressService.HistorySessionGap - TimeSpan.FromMinutes(1);
-        await fixture.Db.SaveChangesAsync();
+        var staleAt = DateTime.UtcNow - VideoProgressService.HistorySessionGap - TimeSpan.FromMinutes(1);
+        await fixture.Db.Database.ExecuteSqlRawAsync("""UPDATE "MediaPlaybackHistory" SET "LastPlayedAt" = {0}""", staleAt);
 
         await reader.UpdateAsync(first.Id, new EpisodeProgressUpdate(120_000, 1_400_000, false));
         Assert.AreEqual(2, (await reader.GetHistoryAsync()).Count, "A later session starts a new entry.");
@@ -253,7 +267,7 @@ public sealed class EpisodeProgressTests
 
         Assert.AreEqual(
             EpisodeProgressService.HistoryLimit,
-            await fixture.Db.EpisodePlaybackHistory.CountAsync(x => x.ProfileId == "reader"));
+            await CountAsync(fixture.Db, "MediaPlaybackHistory", "reader"));
 
         var history = await reader.GetHistoryAsync();
         Assert.AreEqual(EpisodeProgressService.HistoryLimit, history.Count);
@@ -268,6 +282,81 @@ public sealed class EpisodeProgressTests
         Assert.IsTrue(
             (await reader.GetAsync(first.Id))!.ResumePositionMs > 0,
             "Clearing history keeps resume positions.");
+    }
+
+    [TestMethod]
+    public async Task AdapterWritesOnlyCanonicalStateAndNeverTheLegacyTables()
+    {
+        await using var fixture = await EpisodeFlowFixture.CreateAsync();
+        var anime = await fixture.AddAnimeAsync("single-writer");
+        var first = await fixture.AddEpisodeAsync(anime, 1, 1);
+        var second = await fixture.AddEpisodeAsync(anime, 1, 2);
+        var service = fixture.Service("reader");
+
+        await service.UpdateAsync(first.Id, new EpisodeProgressUpdate(300_000, 1_400_000, false));
+        await service.UpdateAsync(first.Id, new EpisodeProgressUpdate(1_400_000, 1_400_000, true));
+        await service.SetWatchedAsync(second.Id, true);
+
+        Assert.AreEqual(0, await fixture.Db.EpisodeProgress.CountAsync(), "The legacy progress table has no runtime writer.");
+        Assert.AreEqual(0, await fixture.Db.EpisodePlaybackHistory.CountAsync(), "The legacy history table has no runtime writer.");
+        Assert.AreEqual(2, await CountAsync(fixture.Db, "MediaProgress", "reader"));
+        Assert.AreEqual(1, await CountAsync(fixture.Db, "MediaPlaybackHistory", "reader"));
+        Assert.IsTrue((await service.GetAsync(first.Id))!.IsCompleted);
+        Assert.IsTrue((await service.GetAsync(second.Id))!.IsCompleted);
+    }
+
+    [TestMethod]
+    public async Task BackfillKeepsALegacyCompletionWhenTheCanonicalRowIsNewer()
+    {
+        await using var fixture = await EpisodeFlowFixture.CreateAsync();
+        var anime = await fixture.AddAnimeAsync("backfill-completion");
+        var episode = await fixture.AddEpisodeAsync(anime, 1, 1);
+        var service = fixture.Service("reader");
+        await service.UpdateAsync(episode.Id, new EpisodeProgressUpdate(300_000, 1_400_000, false));
+        fixture.Db.EpisodeProgress.Add(new EpisodeProgress
+        {
+            ProfileId = "reader",
+            EpisodeId = episode.Id,
+            DurationMs = 1_400_000,
+            IsCompleted = true,
+            UpdatedAt = DateTime.UtcNow.AddDays(-2)
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var resolver = new CanonicalVideoTargetResolver(fixture.Db, new LegacyWorkBridge(fixture.Db, new WorkService(fixture.Db), new WorkStructureService(fixture.Db)));
+        var backfill = new CanonicalVideoProgressBackfillService(fixture.Db, resolver, new VideoProgressService(fixture.Db));
+
+        Assert.AreEqual(1, await backfill.BackfillLegacyAnimeAsync());
+
+        var stored = await service.GetAsync(episode.Id);
+        Assert.IsTrue(stored!.IsCompleted, "An older legacy completion must not be lost behind a newer canonical resume row.");
+        Assert.AreEqual(300_000, stored.ResumePositionMs, "The newer canonical resume position stays.");
+        Assert.AreEqual(0, await fixture.Db.EpisodeProgress.CountAsync(), "The legacy row is consumed only after its facts are covered.");
+    }
+
+    [TestMethod]
+    public async Task BackfilledLegacyProgressWithAnOpenEpisodeBetweenGivesCompletedThroughOne()
+    {
+        await using var fixture = await EpisodeFlowFixture.CreateAsync();
+        var anime = await fixture.AddAnimeAsync("backfill-gap");
+        var first = await fixture.AddEpisodeAsync(anime, 1, 1);
+        var second = await fixture.AddEpisodeAsync(anime, 1, 2, withMedia: false);
+        var third = await fixture.AddEpisodeAsync(anime, 1, 3);
+        foreach (var completed in new[] { first, third })
+        {
+            fixture.Db.EpisodeProgress.Add(new EpisodeProgress { ProfileId = "reader", EpisodeId = completed.Id, IsCompleted = true, UpdatedAt = DateTime.UtcNow.AddDays(-1) });
+        }
+
+        await fixture.Db.SaveChangesAsync();
+
+        var videoProgress = new VideoProgressService(fixture.Db);
+        var resolver = new CanonicalVideoTargetResolver(fixture.Db, new LegacyWorkBridge(fixture.Db, new WorkService(fixture.Db), new WorkStructureService(fixture.Db)));
+        Assert.AreEqual(2, await new CanonicalVideoProgressBackfillService(fixture.Db, resolver, videoProgress).BackfillLegacyAnimeAsync());
+
+        var completion = Assert.ContainsSingle(await videoProgress.GetCompletedThroughAsync("reader"));
+        Assert.AreEqual(1, completion.CompletedThrough?.EpisodeNumber, "E1 and E3 completed with E2 never watched gives 1, with a canonical row for every legacy episode.");
+        var rows = await fixture.Db.WorkEpisodes.Where(x => x.WorkId == completion.WorkId).CountAsync();
+        Assert.AreEqual(3, rows, "The backfill bridges every legacy episode, including the one without a file.");
     }
 
     [TestMethod]
@@ -286,4 +375,10 @@ public sealed class EpisodeProgressTests
         Assert.IsFalse((await reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(AutoplayNext: false))).AutoplayNext);
         Assert.AreEqual(1, await fixture.Db.ProfilePlaybackPreferences.CountAsync());
     }
+
+    private static async Task<int> CountAsync(AppDbContext db, string table, string? profileId = null) =>
+        await db.Database.SqlQueryRaw<int>(
+                $$"""SELECT COUNT(*)::int AS "Value" FROM "{{table}}" WHERE {0}::text IS NULL OR "ProfileId" = {0}""",
+                (object?)profileId ?? DBNull.Value)
+            .SingleAsync();
 }

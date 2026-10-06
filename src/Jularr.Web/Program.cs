@@ -116,10 +116,7 @@ builder.Services.AddScoped<IMediaCapabilityService, MediaCapabilityService>();
 builder.Services.AddSingleton<IInstanceModuleService>(_ => new InstanceModuleStore("/data"));
 // Permission-derived app shell (#598): the profile's visible media types, resolved once per request.
 builder.Services.AddScoped<IAppShellService, AppShellService>();
-// Provider-driven discovery (#595): the coordinator behind browse/search + the shelf board it feeds.
-builder.Services.AddScoped<DiscoveryCoordinator>();
-builder.Services.AddScoped<IDiscoveryFeed>(sp => sp.GetRequiredService<DiscoveryCoordinator>());
-builder.Services.AddScoped<DiscoveryShelfService>();
+builder.Services.AddDiscovery();
 // Explainable cross-media recommendations & continuation shelves (#428): the media-neutral engine's
 // composition service, rendered on the shared shelf surface by /Recommendations and Discover.
 builder.Services.AddScoped<Jularr.Web.Features.Recommendations.MediaRecommendationService>();
@@ -144,6 +141,7 @@ builder.Services.AddHttpClient(GitHubReleaseCheckService.HttpClientName, client 
 // Singleton: caches the last GitHub release check in memory across requests (#528), never on GET.
 builder.Services.AddSingleton<GitHubReleaseCheckService>();
 builder.Services.AddScoped<OperationRunner>();
+builder.Services.AddScoped<MediaFileReanalysisService>();
 builder.Services.AddSingleton<IPasswordHasher<OwnerAccount>, PasswordHasher<OwnerAccount>>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -240,6 +238,16 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // A client that backs off needs to know for how long (Discover pauses its follow-ups for exactly that time).
+    options.OnRejected = (context, _) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = Math.Ceiling(retryAfter.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return ValueTask.CompletedTask;
+    };
     options.AddPolicy("login", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -330,6 +338,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 builder.Services.AddSingleton<MediaProcessRunner>();
+builder.Services.AddSingleton<IMediaProcessRunner>(services => services.GetRequiredService<MediaProcessRunner>());
 builder.Services.AddScoped<LibraryScanner>();
 builder.Services.AddScoped<CanonicalMediaStorageService>();
 builder.Services.AddScoped<CanonicalVideoStorageBackfillService>();
@@ -351,7 +360,9 @@ builder.Services.AddSingleton<IWakeOnLanPacketSender, UdpWakeOnLanPacketSender>(
 builder.Services.AddSingleton(new StorageWakeOptions());
 builder.Services.AddSingleton<StorageWakeCoordinator>();
 builder.Services.AddScoped<StorageIntegrityService>();
-builder.Services.AddSingleton(StorageCacheLayout.Default);
+builder.Services.AddScoped<LibraryRootRoutingService>();
+// The HLS cache lives where the Admin configured it, so the layout is resolved per request instead of frozen at startup.
+builder.Services.AddScoped(services => StorageCacheLayout.Default with { HlsRoot = services.GetRequiredService<Jularr.Web.Features.Playback.Transcoding.PlaybackTranscodingSettingsStore>().Current.HlsCachePath });
 builder.Services.AddScoped<StorageUsageService>();
 builder.Services.AddScoped<StorageCacheScanner>();
 builder.Services.AddScoped<StorageCleanupService>();
@@ -364,6 +375,7 @@ builder.Services.AddScoped<SubtitleLanguageProfileService>();
 builder.Services.AddScoped<SubtitleCompletenessService>();
 builder.Services.AddSubtitleProviders();
 builder.Services.AddScoped<VocabularyService>();
+builder.Services.Configure<JapaneseMorphologyOptions>(builder.Configuration.GetSection(JapaneseMorphologyOptions.SectionName));
 builder.Services.AddSingleton<IJapaneseMorphology, MeCabJapaneseMorphology>();
 builder.Services.AddSingleton<JapaneseTermExtractor>();
 builder.Services.AddSingleton<JapaneseDictionary>();
@@ -378,6 +390,7 @@ builder.Services.AddSingleton<PlaybackPreparationTracker>();
 builder.Services.AddScoped<PlaybackPreparationService>();
 builder.Services.AddScoped<PlaybackService>();
 Jularr.Web.Features.Playback.Decision.PlaybackDecisionRegistration.AddPlaybackDecision(builder.Services);
+Jularr.Web.Features.InstantPlay.InstantPlayRegistration.AddInstantPlay(builder.Services);
 // Universal media core (#592): the provider-independent work/identity model the #556 children build on.
 Jularr.Web.Features.MediaCore.MediaCoreRegistration.AddMediaCore(builder.Services);
 // Smart & manual collections (#427): user-curated and rule-driven cross-media shelves over works.
@@ -407,6 +420,7 @@ builder.Services.AddSingleton<SeasonSegmentDetectionQueue>();
 builder.Services.AddScoped<MediaSegmentService>();
 builder.Services.AddScoped<MediaSegmentSidecarImporter>();
 builder.Services.AddScoped<VideoProgressService>();
+builder.Services.AddScoped<VideoDetailQuery>();
 builder.Services.AddScoped<CanonicalVideoTargetResolver>();
 builder.Services.AddScoped<CanonicalVideoProgressBackfillService>();
 builder.Services.AddScoped<ActiveSessionService>();
@@ -415,6 +429,7 @@ builder.Services.AddScoped<ClientApiService>();
 builder.Services.AddScoped<ClientApiOfflineService>();
 builder.Services.AddSingleton<OfflinePortableRenditionService>();
 builder.Services.AddScoped<ClientApiOfflineMediaPackageService>();
+builder.Services.AddScoped<ClientApiOfflinePackageOptionsService>();
 builder.Services.AddScoped<OfflineProgressReconciler>();
 builder.Services.AddScoped<OfflineLibraryQueries>();
 builder.Services.AddScoped<OfflineLibraryProgressReconciler>();
@@ -443,6 +458,15 @@ builder.Services.AddScoped<AnimeMetadataService>();
 builder.Services.AddScoped<AnimeRepairService>();
 builder.Services.AddHttpClient(Jularr.Web.Features.Artwork.AnimeArtworkLibrary.HttpClientName, client =>
     client.Timeout = TimeSpan.FromSeconds(30));
+// Persisted Work metadata and artwork (#820): the spool worker fetches through the TMDB adapter and keeps artwork only from its CDN.
+builder.Services.AddHttpClient(Jularr.Web.Features.Artwork.WorkArtworkCache.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.Artwork.WorkArtworkCache(Jularr.Web.Features.Artwork.WorkArtworkCache.DefaultRootPath, [TmdbDiscoveryProvider.ImageHost], services.GetRequiredService<IHttpClientFactory>()));
+builder.Services.AddSingleton<WorkMetadataRefreshSignal>();
+builder.Services.AddScoped<WorkMetadataRefreshQueue>();
+builder.Services.AddScoped<WorkMetadataRefresher>();
+builder.Services.AddHostedService<WorkMetadataRefreshService>();
 builder.Services.AddScoped<Jularr.Web.Features.Artwork.AnimeArtworkLibrary>();
 builder.Services.AddScoped<Jularr.Web.Features.Artwork.BesideMediaArtworkStore>();
 builder.Services.AddScoped<Jularr.Web.Features.Artwork.BesideMediaArtworkCache>();
@@ -523,19 +547,27 @@ builder.Services.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(servic
 builder.Services.AddScoped<IndexerSearchCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestScopeResolver>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestWorkResolver>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Monitoring.VideoMonitoringService>();
+builder.Services.AddScoped<Jularr.Web.Features.Library.AdminVideoMediaService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.WantedListService>();
 builder.Services.AddScoped<Jularr.Web.Features.Library.AdminMediaDetailService>();
 // Request experience (#597): auto-approval rules and requester-selectable quality profiles are
 // configuration (JSON store under /data); the per-user history is a query over the request table.
 builder.Services.AddSingleton(_ => new Jularr.Web.Features.Acquisition.Access.AcquisitionRequestSettingsStore("/data"));
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestHistoryQuery>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestArtworkResolver>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestStatusQuery>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Books.BookAcquisitionExecutor>();
-builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IMonitoredAcquisitionExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
-builder.Services.AddSingleton(_ => new Jularr.Web.Features.Acquisition.Access.VideoAcquisitionMonitoringStores("/data"));
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.VideoManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.MovieAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.TvAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Acquisition.Access.MovieWantedRequestHandler>();
@@ -726,26 +758,11 @@ if (app.Environment.IsDevelopment())
 app.UseForwardedHeaders();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseRateLimiter();
+// Authentication runs first so the per-account rate-limit policies ("wake", "playbackStart", "playbackIntent", ...) see the signed-in
+// account; behind it they would all fall back to the shared client IP. The anonymous policies partition by IP either way.
 app.UseAuthentication();
-// Instance module switches are stronger than profile settings. Gated routes disappear immediately
-// when an owner disables a module; background/service gates use the same canonical service.
-app.Use(async (context, next) =>
-{
-    var requiredModules = InstanceModuleRoutes.Resolve(context.Request.Path);
-    if (requiredModules.Count > 0)
-    {
-        var modules = context.RequestServices.GetRequiredService<IInstanceModuleService>();
-        var settings = await modules.GetAsync(context.RequestAborted);
-        if (requiredModules.Any(module => !settings.IsEnabled(module)))
-        {
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
-            return;
-        }
-    }
-
-    await next();
-});
+app.UseRateLimiter();
+app.UseInstanceModuleGates();
 // Operations created while a signed-in account's request runs record that account as their actor
 // (Admin → History); work started by the server itself has none.
 app.Use(async (context, next) =>
@@ -756,9 +773,11 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 app.MapClientApiV1();
 app.MapClientApiPlaybackPlanV1();
+app.MapClientApiPlaybackIntentsV1();
 app.MapAcquisitionApiV1();
 app.MapClientApiOfflineV1();
 app.MapClientApiOfflineMediaPackageV1();
+app.MapClientApiOfflinePackagesV1();
 app.MapClientApiOfflineLibraryV1();
 app.MapClientApiOfflinePrefetchV1();
 app.MapHub<PlaybackSessionHub>(PlaybackSessionHub.Route)
@@ -786,6 +805,9 @@ try
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
     await Jularr.Web.Features.Acquisition.Import.MediaFolderSettingsMigration.RunAtStartupAsync(
+        app.Services,
+        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
+    await Jularr.Web.Features.Acquisition.Import.VideoLibraryRootMigration.RunAtStartupAsync(
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
     var migratedBibles = await BookTranslationMemoryStore
@@ -847,10 +869,12 @@ static async Task InitializeDatabaseAsync(
 
     log($"Creating bootstrap library root {media.BootstrapRoot}.");
 
-    db.LibraryRoots.Add(new LibraryRoot
+    var bootstrapRoot = new LibraryRoot
     {
         Name = "Anime",
         Path = Path.GetFullPath(media.BootstrapRoot)
-    });
+    };
+    db.LibraryRoots.Add(bootstrapRoot);
+    db.LibraryRootContentAssignments.Add(new Jularr.Web.Features.Library.LibraryRootContentAssignment { LibraryRootId = bootstrapRoot.Id, ContentType = Jularr.Web.Features.Library.LibraryContentType.Anime });
     await db.SaveChangesAsync();
 }

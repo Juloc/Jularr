@@ -25,12 +25,15 @@ public sealed class AnimeAcquisitionRequestExecutorTests
 
         var execution = await environment.ExecuteAnimeRequestAsync(FrierenId);
 
-        Assert.AreEqual(AcquisitionRequestStatus.Completed, execution.Status, execution.Message);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "Adding the series is not having its media: the request is only completed by the import.");
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
         Assert.AreEqual(AnimeAcquisitionEnvironment.AnimeKey, anime.Key, "The key matches the series folder the importer creates.");
         Assert.AreEqual($"/Library/Anime/{anime.Id}", execution.ResultUrl);
         var match = await environment.Db.AnimeMetadata.AsNoTracking().SingleAsync(item => item.AnimeId == anime.Id);
         Assert.AreEqual(FrierenId, match.ExternalId);
+
+        var library = await new LibraryMediaCardQuery(environment.Db).GetEntriesAsync("reader", [Jularr.Web.Features.MediaCore.WorkMediaType.Anime], CancellationToken.None);
+        Assert.AreEqual($"/Library/Anime/{anime.Id}", Assert.ContainsSingle(library.Entries).Card.Href, "A requested anime is in the Library before any scan or file.");
 
         var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
         Assert.IsTrue(settings.Monitored);
@@ -82,14 +85,14 @@ public sealed class AnimeAcquisitionRequestExecutorTests
     public async Task AnimeInTheLibraryIsMonitoredAndSearchedInsteadOfDuplicated()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync();
+        await environment.SeedFrierenAsync(status: "FINISHED");
         await environment.Scheduler.RunExclusiveAsync(
             (pipeline, token) => pipeline.UpdateAnimeSettingsAsync(environment.AnimeId, false, false, null, [], token),
             CancellationToken.None);
 
         var execution = await environment.ExecuteAnimeRequestAsync(FrierenId);
 
-        Assert.AreEqual(AcquisitionRequestStatus.Completed, execution.Status, execution.Message);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "S01E02 has aired (the series is finished) and is missing, so the request is not completed.");
         Assert.AreEqual(1, await environment.Db.Anime.CountAsync());
         Assert.IsTrue((await environment.MonitoringStateAsync()).Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored);
         Assert.AreEqual(1, environment.Scheduler.QueuedRequests);
@@ -120,23 +123,5 @@ public sealed class AnimeAcquisitionRequestExecutorTests
         var root = Path.Combine(Path.GetTempPath(), "anime");
         Assert.IsTrue(MediaPathParser.TryParse(root, Path.Combine(root, folder, "Season 01", "x - S01E01.mkv"), out var descriptor));
         Assert.AreEqual(descriptor.AnimeKey, MediaPathParser.AnimeKeyForSeriesFolder(folder));
-    }
-
-    [TestMethod]
-    [DataRow(MediaAcquisitionKind.Anime, true, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.Anime, false, MediaCapability.Request, "request")]
-    [DataRow(MediaAcquisitionKind.Anime, false, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.Anime, false, MediaCapability.Browse, "")]
-    [DataRow(MediaAcquisitionKind.Manga, true, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.Manga, false, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.LightNovel, false, MediaCapability.Request, "request")]
-    [DataRow(MediaAcquisitionKind.LightNovel, false, MediaCapability.Hidden, "")]
-    [DataRow(MediaAcquisitionKind.Book, true, MediaCapability.Instant, "add")]
-    [DataRow(MediaAcquisitionKind.Book, false, MediaCapability.Request, "request")]
-    public void DiscoverCardActionFollowsTheCapability(MediaAcquisitionKind kind, bool isOwner, MediaCapability capability, string expected)
-    {
-        var access = AcquisitionCapabilities.Resolve(kind, capability, ManualAddMode.OwnerOnly, isOwner);
-
-        Assert.AreEqual(expected, DiscoverIndexModel.AddAction(kind, access));
     }
 }

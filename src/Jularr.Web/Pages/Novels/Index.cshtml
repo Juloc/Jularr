@@ -1,5 +1,6 @@
 @page "/Novels"
 @model Jularr.Web.Pages.Novels.IndexModel
+@using Jularr.Web.Features.Acquisition.Access
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["novels.index.title"];
@@ -22,14 +23,12 @@
         <h1>@ui["novels.index.title"]</h1>
     </div>
 
-    @if (Model.Access.CanAdd)
+    @if (Model.Access.CanRequest)
     {
         <details class="novel-import-popover" open="@(Model.SearchQuery.Length > 0)">
             <summary class="novel-add-button">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-                @(Model.Access.AddCreatesRequest
-                    ? ui["discover.card.request"]
-                    : ui["novels.index.addNovel"])
+                @ui["discover.card.request"]
             </summary>
             <div class="novel-import-panel">
                 <form method="get" class="reading-catalog-form">
@@ -118,7 +117,7 @@
                                         else if (result.RequestStatus is { Length: > 0 } requestStatus)
                                         {
                                             <button class="button" type="button" disabled>
-                                                @ui["requests.status." + requestStatus]
+                                                @ui[ConsumerAcquisitionLabels.StatusKey(requestStatus)]
                                             </button>
                                         }
                                         else if (!result.Source.CanAdd)
@@ -140,9 +139,7 @@
                                                 <input type="hidden" name="coverImageUrl" value="@result.Item.CoverImageUrl" />
                                                 <input type="hidden" name="q" value="@Model.SearchQuery" />
                                                 <button class="button button-primary" type="submit">
-                                                    @(Model.Access.AddCreatesRequest
-                                                        ? ui["discover.card.request"]
-                                                        : ui["discover.card.add"])
+                                                    @ui["discover.card.request"]
                                                 </button>
                                             </form>
                                         }
@@ -159,7 +156,7 @@
                     <a class="button" asp-page="/Admin/ReadingSources">@ui["novels.index.configureSources"]</a>
                 }
 
-                @if (Model.Access.CanAdd && !Model.Access.AddCreatesRequest)
+                @if (Model.Access.CanRequest && Model.Access.AutoApproves)
                 {
                     <div class="reading-catalog-divider">@ui["books.add.manual"]</div>
 

@@ -33,7 +33,7 @@ public sealed class OfflinePlaybackTests
             [new OfflineProgressCheckpoint(episode.Id, 600_000, Duration, false)]);
         Assert.AreEqual(OfflineProgressOutcome.Applied, forward.Single().Outcome);
         Assert.AreEqual(600_000, forward.Single().Progress?.ResumePositionMs);
-        var historyAfterForward = await fixture.Db.EpisodePlaybackHistory.CountAsync();
+        var historyAfterForward = await CanonicalProgressSeed.CountAsync(fixture.Db, "MediaPlaybackHistory");
 
         var replay = await reconciler.ReconcileAsync(
             [new OfflineProgressCheckpoint(episode.Id, 600_000, Duration, false)]);
@@ -48,7 +48,7 @@ public sealed class OfflinePlaybackTests
         Assert.AreEqual(600_000, stored?.PositionMs, "Offline reconciliation must never move progress backwards.");
         Assert.AreEqual(
             historyAfterForward,
-            await fixture.Db.EpisodePlaybackHistory.CountAsync(),
+            await CanonicalProgressSeed.CountAsync(fixture.Db, "MediaPlaybackHistory"),
             "Ignored or replayed checkpoints must not create history.");
     }
 
@@ -84,7 +84,7 @@ public sealed class OfflinePlaybackTests
     }
 
     [TestMethod]
-    public async Task ThresholdUsesTheServerDurationWhenTheCheckpointOmitsIt()
+    public async Task OfflinePositionPastTheThresholdIsOnlyAResumePointUnlessCompletionIsDeclared()
     {
         await using var fixture = await EpisodeFlowFixture.CreateAsync();
         var anime = await fixture.AddAnimeAsync("offline-threshold");
@@ -94,10 +94,18 @@ public sealed class OfflinePlaybackTests
 
         await service.UpdateAsync(episode.Id, new EpisodeProgressUpdate(100_000, 1_000_000, false));
 
-        var result = await reconciler.ReconcileAsync(
+        var seeked = await reconciler.ReconcileAsync(
             [new OfflineProgressCheckpoint(episode.Id, 960_000, null, false)]);
 
-        Assert.AreEqual(OfflineProgressOutcome.Completed, result.Single().Outcome);
+        Assert.AreEqual(OfflineProgressOutcome.Applied, seeked.Single().Outcome);
+        var stored = await service.GetAsync(episode.Id);
+        Assert.IsFalse(stored!.IsCompleted, "The server never infers completion from an offline position.");
+        Assert.AreEqual(960_000, stored.ResumePositionMs);
+
+        var declared = await reconciler.ReconcileAsync(
+            [new OfflineProgressCheckpoint(episode.Id, 970_000, null, true)]);
+
+        Assert.AreEqual(OfflineProgressOutcome.Completed, declared.Single().Outcome);
         Assert.IsTrue((await service.GetAsync(episode.Id))?.IsCompleted);
     }
 
@@ -119,8 +127,8 @@ public sealed class OfflinePlaybackTests
         Assert.AreEqual(OfflineProgressOutcome.IgnoredAccidentalStart, results[0].Outcome);
         Assert.AreEqual(OfflineProgressOutcome.EpisodeNotFound, results[1].Outcome);
         Assert.IsNull(results[1].Progress);
-        Assert.AreEqual(0, await fixture.Db.EpisodeProgress.CountAsync());
-        Assert.AreEqual(0, await fixture.Db.EpisodePlaybackHistory.CountAsync());
+        Assert.AreEqual(0, await CanonicalProgressSeed.CountAsync(fixture.Db, "MediaProgress"));
+        Assert.AreEqual(0, await CanonicalProgressSeed.CountAsync(fixture.Db, "MediaPlaybackHistory"));
     }
 
     [TestMethod]

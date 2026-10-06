@@ -71,12 +71,18 @@ AniList/TMDB/OpenLibrary/etc. are adapters behind this module.
 ### Acquisition
 Owns the universal Wanted-to-Import pipeline:
 - WantedItem
-- search orchestration
-- ReleaseCandidate
-- scoring/profiles
+- canonical Search Planner / SearchIntent / QueryPlan
+- provider/indexer search orchestration and budgets
+- normalized/deduplicated ReleaseCandidate + query/source provenance
+- canonical identity/safety/profile selection evaluator
+- Acquisition Profiles / preference scoring / fallback / upgrade policy
 - DownloadJob
 - ImportJob
 - AcquisitionEvent/history
+
+Binding semantics:
+- `docs/ACQUISITION_SEARCH_PLANNER.md`
+- `docs/AUTOMATIC_RELEASE_SELECTION.md`
 
 Anime, TV, Movies, Manga, Books and Light Novels use this module rather than independent pipelines.
 
@@ -137,9 +143,18 @@ Owns reusable translation tasks and persisted derivatives:
 - provider abstraction
 - local/self-hosted and optional remote adapters
 - document/chapter translation jobs
+- provider-neutral progressive translation run/block contract (#834)
+- validated partial block cache and resume/idempotency semantics
 - Translation provenance
-- derived Edition/Version creation
+- derived Edition/Version creation/finalization
 - cache/versioning
+
+Translation normalizes provider-native token/delta or final-response behavior
+behind its application contract. Reader never owns provider protocol details,
+partial JSON or a second translation cache. Only validated completed blocks are
+durable/reusable; a complete derived Edition/Version is published after final
+validation. Translation generation is shared content capability rather than a
+Learning/profile-owned capability.
 
 Reader and Learning can consume this module through application contracts.
 
@@ -176,6 +191,12 @@ For watch/read/listen media, that target is canonical `Work` plus optional prese
 Games remains deliberately outside MediaCore. Games discovery resolves through an explicit Games application port to canonical `Game` identity; Discovery must not force Game/GameRelease into Work/Edition merely to share Search UI.
 
 A discovery result is not automatically a library item.
+
+Provider calls of Discover run as single flights per source (`DiscoverySourceFlights`): one call per source, mode, genre, text and locale, shared by every request that needs it, with a hard timeout, a short-lived cache of successful answers and no cache of failures as empty answers. The coordinator waits for the sources only within the budget it is given, so a first paint shows what is ready, a source that has not answered keeps a reserved place, and a follow-up request is held open until one more source has answered. Titles and sections are ordered by the fixed source order, never by the order in which sources answered (see `docs/mockups/discover/SPEC.md`, staged late results).
+
+Retries, limits and failures: a viewer's retry replaces only a settled failure (never a running or a healthy call) and at most once per key within ten seconds; the number of remembered calls is capped (the oldest settled answer goes first, and when every slot is running a new key is refused as busy); calls per provider run a few at a time (both AniList sources share one budget); every call ends at a hard timeout. A catalog that did not answer is a failure that the section shows with a retry, never an empty row. The Discover handlers are rate limited per account with separate budgets for the body, the live request status and the page. A failed follow-up never removes titles that are on the page.
+
+Not yet implemented in Discover (blocked by missing backend capabilities or an open product decision): the Audiobooks and Games media-type chips (no discovery source for either yet), the Filter surface as a bottom sheet or side panel per platform (it is a popover on every size), the Jularr / AniList result-view switch of the Anime scope (needs the canonical season grouping), a canonical Detail page for titles that are not in the library (the Details action opens the provider's page in a new tab), and a tap on a local card, which opens the Quick View sheet on touch where the SPEC says it opens the Detail page (there is no Quick View affordance on touch yet).
 
 ### Collections
 Owns profile-scoped Collection metadata and canonical Work membership.
@@ -426,7 +447,7 @@ User/automation
  -> Progress/Library immediately sees canonical content
 ```
 
-Every step is inspectable in Admin UI. Manual Search uses the same candidates/scoring data rather than a separate path.
+Every step is inspectable in Admin UI. Manual Search uses the same Search Planner, normalized candidates and selection/scoring evaluator rather than a separate path.
 
 ## 11. Metadata flow
 
@@ -460,17 +481,32 @@ Client capabilities + requested canonical unit
 
 Web, Android and TV use the same planning semantics. They may render completely different controls.
 
+Completion contract of video progress: a checkpoint carries the exact resume position and a client-declared `completed` flag. The server never infers completion from a position, because a seek, scrub or resume can land past the threshold without the content having been watched. Clients declare completion only when playback itself reached `VideoProgressService.CompletionThreshold` by continuous forward playback from below it, or ended, or when the user marks the item watched; after a seek that lands at or beyond the threshold only `ended` or an explicit watched action completes. This is client API contract version 2 (see ANDROID_CLIENTS.md section 12): older clients are refused by the capabilities version check and the server keeps no position-inference fallback. A completed item keeps its completed state while a later rewatch stores a new resume position, and Continue Watching offers that resume. `CompletedThrough` is the contiguous completed prefix of a work's regular canonical episodes, owned by `VideoProgressService.GetCompletedThroughAsync`; AniList write-back reads only that projection. The legacy `EpisodeProgress` / `EpisodePlaybackHistory` tables are a one-time backfill source with no runtime reader or writer.
+
 ## 13. Reader/translation flow
 
 ```text
 requested Work/Edition/Chapter
  -> preferred available language edition
- -> if unavailable and policy permits: TranslationJob
+ -> if unavailable and policy permits: shared TranslationJob/run
+ -> stable semantic source blocks
+ -> provider adapter (delta-capable or bounded final-response)
+ -> validated completed translated blocks
+ -> Reader can consume partial readable coverage
+ -> final validation
  -> translated derived Edition/Version
  -> persisted/cached Asset
  -> Reader document contract
  -> progress/annotations
 ```
+
+Progressive translation is ordered/idempotent and reconnectable by stable
+run/block identity. Provider deltas are transient infrastructure events; the
+Translation module validates and normalizes them before Reader consumption.
+Completed blocks survive retry/restart, while incomplete output cannot be
+published as a complete derivative. Multiple viewers share canonical work rather
+than starting duplicate provider runs. Search/TTS/offline/durable annotation
+features consume completed validated text, not ephemeral deltas.
 
 Never destructively overwrite source text with machine translation.
 

@@ -91,7 +91,7 @@ public sealed class OfflineMediaEngineTests
         var root = RepositoryRoot();
         var ui = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "offline-media-ui.js"));
         var settings = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Settings", "Offline.cshtml"));
-        var episode = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+        var episode = EpisodePlayerSource.Read(root);
         var manga = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Manga", "Read.cshtml"));
         var book = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Books", "Read.cshtml"));
 

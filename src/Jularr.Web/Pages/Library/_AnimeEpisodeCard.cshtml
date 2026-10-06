@@ -11,7 +11,7 @@
     var stateName = AnimeDetailView.AvailabilityName(episode.Availability);
     var stateIcon = episode.Availability == AnimeEpisodeAvailability.OtherLanguageOnly ? "language" : stateName;
     var art = vm.BannerImageUrl ?? vm.CoverImageUrl;
-    var href = $"/Library/Episode/{episode.Id}";
+    var href = vm.PlaybackEnabled ? $"/Library/Episode/{episode.Id}" : null;
 }
 <article class="ad-ep ad-ep-@stateName@(episode.IsWatched ? " is-watched" : "")">
     <a class="ad-ep-thumb" href="@href" aria-label="@ui.Format("library.anime.openEpisodeAria", ("code", code), ("title", episode.Title))">
@@ -19,7 +19,10 @@
         {
             <img src="@art" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
         }
-        <span class="ad-ep-play" aria-hidden="true"><partial name="_AnimeDetailIcon" model='"play"' /></span>
+        @if (href is not null)
+        {
+            <span class="ad-ep-play" aria-hidden="true"><partial name="_AnimeDetailIcon" model='"play"' /></span>
+        }
         @if (episode.RuntimeMinutes is int minutes)
         {
             <span class="ad-ep-runtime">@ui.Format("library.anime.durationMinutes", ("minutes", minutes))</span>
@@ -51,7 +54,10 @@
                     <partial name="_AnimeDetailIcon" model='"more"' />
                 </summary>
                 <div class="ad-menu-panel">
-                    <a href="@href">@ui["library.watch.play"]</a>
+                    @if (href is not null)
+                    {
+                        <a href="@href">@ui["library.watch.play"]</a>
+                    }
                     <form method="post" asp-page-handler="Watched" asp-route-id="@vm.AnimeId">
                         <input type="hidden" name="episodeId" value="@episode.Id" />
                         <input type="hidden" name="watched" value="@(episode.IsWatched ? "false" : "true")" />

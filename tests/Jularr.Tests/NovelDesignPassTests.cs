@@ -67,7 +67,14 @@ public sealed class NovelDesignPassTests
             "Any other paged column gap makes the page count include an empty last page.");
 
         var script = Read("src", "Jularr.Web", "wwwroot", "js", "reader-personalization.js");
-        StringAssert.Contains(script, "Math.ceil((content.scrollWidth - 2) / width)");
+        // The page count is the shared ceil((scrollWidth - 2) / columnStride) measurement with one page width as the stride.
+        StringAssert.Contains(script, "const width = Math.max(1, content.clientWidth);");
+        StringAssert.Contains(script, "columnStride: width,");
+        StringAssert.Contains(script, "trailingCompensation: 2");
+        var reflow = Read("src", "Jularr.Web", "wwwroot", "js", "reflow-reader.js");
+        StringAssert.Contains(reflow, "Number(scrollWidth)");
+        StringAssert.Contains(reflow, "- Number(trailingCompensation || 0)");
+        StringAssert.Contains(reflow, "Math.ceil(rawPages)");
     }
 
     [TestMethod]

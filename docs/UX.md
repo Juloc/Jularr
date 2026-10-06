@@ -162,20 +162,22 @@ Clean and Original Jularr use identical structure/behavior; only visual skin tok
 
 ## 3b. Consumer acquisition status vocabulary
 
+Binding Instant Play / Start Watching specification: `docs/mockups/instant-play/SPEC.md`.
+
 All consumer surfaces project the same user-facing Request/acquisition vocabulary.
 
 Preferred labels:
 - Waiting for approval;
 - Requested / Approved where needed;
 - Looking for media;
-- Downloading;
+- Getting episode / movie / media, with reliable progress where useful;
 - Preparing;
 - Available / Partially available;
 - Monitoring future releases;
 - Needs attention / Failed;
 - Cancelled.
 
-`Search`, `ImportJob`, importer phases, verification and post-processing are internal/Admin concepts. Consumer pages may show progress, but should use `Looking for media` and `Preparing` instead of exposing `Searching` / `Importing` as separate product states.
+`Search`, `ImportJob`, downloader/importer names, importer phases, verification and post-processing are internal/Admin concepts. Consumer pages may show reliable progress, but should use `Looking for media`, `Getting episode/movie/media` and `Preparing` instead of exposing `Searching`, `Downloading` or `Importing` as the primary Instant Play product states.
 
 This vocabulary is a projection over the canonical Request -> Wanted -> Search -> Download -> Import pipeline; it does not create a second state machine.
 
@@ -250,7 +252,7 @@ All media detail pages share a common skeleton while adapting content.
 - title and useful alternate title where configured
 - concise metadata
 - progress/status
-- primary action is state-dependent: Play / Continue / Read / Listen when usable, otherwise Request when acquisition is permitted;
+- primary action is state-dependent: Play / Continue / Read / Listen when usable; Start watching / Watch now may represent a playback intent that transparently acquires the smallest required playable unit when Playback + instant acquisition are permitted; otherwise Request is the explicit acquisition action;
 - secondary actions are personal-state/context actions such as Watchlist/Reading List, Favorite, Collection and options where supported;
 - never expose a separate consumer `Add to Library` acquisition action.
 
@@ -286,6 +288,8 @@ Audiobook:
 - recommendations
 
 User pages do not expose release-group/import internals by default.
+
+When Jularr Playback is disabled/unavailable for the instance, consumer media pages remain valid manager-only surfaces: missing media uses Request, successful acquisition ends at Available/Monitoring, and Jularr does not show Start watching, Watch now, Starting playback or Player controls.
 
 ## 7. Episode / chapter / volume interaction
 
@@ -564,6 +568,16 @@ AI provider/model configuration stays in the dedicated **AI** Admin area rather 
 - Appearance
 
 
+### Cross-cutting Admin ownership notes
+
+The following concerns intentionally do **not** get additional permanent top-level sidebar entries:
+
+- **Naming / organization** — configured from the relevant LibraryRoot/Storage or canonical library-management context. Naming templates/policies belong to the content importer/library layer; Storage owns the target root/path/placement policy. Legacy `/Settings/Naming` and `/Settings/ReadingNaming` become compatibility/contextual routes after parity.
+- **Identity / mapping correction** — opened contextually from Admin Media Detail, To-Do, Reconciliation or another owning workflow. Legacy Mapping Review/Segments routes do not become a permanent "Mapping" Admin area.
+- **UI translations** — contextual child of General Settings → Language & Localization. Personal language remains User Settings; Translation providers remain Providers.
+- **API keys / automation** — until a broader API/Webhook/Automation contract is approved, API Keys remains a transitional technical sub-surface. A future **API & Automation** owner may absorb API keys, webhooks and automation credentials; do not create a new main destination merely for the existing API-key page.
+- **Administrative audit** — durable typed audit evidence is surfaced through System & Diagnostics/contextual links, not as another top-level Admin destination.
+
 ### Storage ownership and lifecycle
 
 Binding specification:
@@ -701,7 +715,7 @@ The primary score is contextual to the selected acquisition profile + language t
 
 Rejected and suspicious candidates remain visible by default so the admin can understand why automatic acquisition did not choose them. This includes likely wrong-episode/unit matches. Identity mismatches are clearly marked and can never be automatically grabbed; any permitted manual override requires explicit confirmation and target mapping.
 
-Candidate columns are configurable and all meaningful fields are filterable. Default ordering follows the effective profile score, then decision quality/source preference.
+Candidate columns are configurable and all meaningful fields are filterable. Default ordering follows the canonical selection hierarchy: identity/eligibility state, quality/fallback tier, preference score, coverage utility and configured source/tiebreak policy. Network response order is never meaningful.
 
 ## 22. Downloads / Imports inside Activity
 
@@ -784,7 +798,7 @@ One profile owns:
 - minimum acceptance score and upgrade-until-score;
 - normalized language policy;
 - reusable Release Rules with profile-specific effect/score;
-- explicit hard Reject rules;
+- explicit hard Require and Reject rules;
 - per-quality/group size policy where supported;
 - wait/delay and source/provider preference;
 - default-per-media-kind and per-Work assignment;
@@ -794,7 +808,7 @@ Shared Release Rule definitions answer *what is detected*; the effect inside a p
 
 Normal workflow stays inside the profile. A secondary Rule Library is allowed, but there is no required permanent Custom Formats sidebar destination.
 
-Automatic acquisition, Manual Search and Score-Test must use the same scorer/decision explanation. Sonarr Quality Profiles, Custom Formats, Release Profiles and Delay Profiles are migration inputs translated into the Jularr model, not parallel runtime models.
+Automatic acquisition and Manual Search must use the same canonical Search Planner (`docs/ACQUISITION_SEARCH_PLANNER.md`). Automatic acquisition, Manual Search and Score-Test must use the same canonical selection/scoring explanation (`docs/AUTOMATIC_RELEASE_SELECTION.md`). Sonarr Quality Profiles, Custom Formats, Release Profiles and Delay Profiles are migration inputs translated into the Jularr model, not parallel runtime models.
 
 Provider credentials remain in Providers, downloader transport in Downloader and paths in Storage.
 

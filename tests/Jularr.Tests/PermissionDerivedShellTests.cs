@@ -41,7 +41,7 @@ public sealed class PermissionDerivedShellTests
             UiShellNavigation.BuildLibraryTabs("/Books", books).Select(tab => tab.Id).ToArray());
 
         var (_, elsewhere) = UiShellNavigation.BuildProfile(learningVisible: false, User, books);
-        Assert.AreEqual("/Books", elsewhere.Single(item => item.Id == "library").Href);
+        Assert.AreEqual("/Books", nav.MobilePrimary.Single(item => item.Id == "library").Href, "The phone bar leads to the same only media type.");
 
         var hrefs = nav.Primary.Concat(nav.Secondary).Concat(nav.MobilePrimary).Concat(elsewhere)
             .Select(item => item.Href)
@@ -67,12 +67,12 @@ public sealed class PermissionDerivedShellTests
     }
 
     [TestMethod]
-    [DataRow("anime,book", "/Library", "library-anime,library-books")]
+    [DataRow("anime,book", "/Library", "library-video,library-books")]
     [DataRow("book,manga", "/Reading", "library-reading,library-books")]
     [DataRow("lightNovel", "/Reading", "library-reading")]
     [DataRow("manga", "/Reading", "library-reading")]
     [DataRow("book", "/Books", "library-books")]
-    [DataRow("anime,manga,lightNovel,book", "/Library", "library-anime,library-reading,library-books")]
+    [DataRow("anime,manga,lightNovel,book", "/Library", "library-video,library-reading,library-books")]
     public void LibraryOpensTheFirstVisibleTabAndListsOnlyVisibleTabs(string visible, string expectedHref, string expectedTabs)
     {
         var media = Types(visible);
@@ -89,7 +89,7 @@ public sealed class PermissionDerivedShellTests
     [DataRow("/Novels/Work/7a4c", "lightNovel", "library-reading")]
     [DataRow("/Manga/Series/7a4c", "manga,book", "library-reading")]
     [DataRow("/Books/Read/7a4c", "anime,book", "library-books")]
-    [DataRow("/Library/Anime/7a4c", "anime,book", "library-anime")]
+    [DataRow("/Library/Anime/7a4c", "anime,book", "library-video")]
     public void TheCurrentLibraryTabStaysMarkedWhenOtherTypesAreHidden(string path, string visible, string expectedTab)
     {
         var media = Types(visible);
@@ -109,35 +109,32 @@ public sealed class PermissionDerivedShellTests
             unscoped.Primary.Concat(unscoped.Secondary).Select(item => (item.Id, item.Href)).ToArray(),
             everything.Primary.Concat(everything.Secondary).Select(item => (item.Id, item.Href)).ToArray());
         CollectionAssert.AreEqual(
-            new[] { "library-anime", "library-reading", "library-books" },
+            new[] { "library-video", "library-reading", "library-books" },
             UiShellNavigation.BuildLibraryTabs("/Library", WorkMediaTypes.All).Select(tab => tab.Id).ToArray());
         Assert.AreEqual("/Library", everything.Primary.Single(item => item.Id == "library").Href);
     }
 
     [TestMethod]
-    public void EveryMediaTypeIsEitherInTheCatalogOrExplicitlyWithoutAConsumerDestination()
+    public void EveryMediaTypeHasAConsumerDestinationInTheLibraryTabs()
     {
-        // Movies and series have no consumer pages yet (#556 children add them). When a tab for one of
-        // them is added to UiNavigationCatalog.LibraryTabs, this list shrinks and the shell follows.
-        WorkMediaType[] withoutDestination = [WorkMediaType.Movie, WorkMediaType.Series];
-
         var covered = UiNavigationCatalog.LibraryTabs.SelectMany(UiNavigationCatalog.MediaTypesOf).Distinct().ToArray();
 
         CollectionAssert.AreEquivalent(
-            WorkMediaTypes.All.Except(withoutDestination).ToArray(),
+            WorkMediaTypes.All.ToArray(),
             covered,
-            "A media type gained or lost its consumer destination; update this list and the shell tests.");
+            "A media type gained or lost its consumer destination; update the shell tests.");
 
         foreach (var type in WorkMediaTypes.All)
         {
             var nav = UiShellNavigation.Build("/", learningVisible: false, User, [type]);
-            Assert.AreEqual(
-                covered.Contains(type),
-                nav.Primary.Any(item => item.Id == "library"),
-                $"{type} must open Library only when it has a tab.");
+            Assert.IsTrue(nav.Primary.Any(item => item.Id == "library"), $"{type} must open Library.");
         }
-    }
 
+        CollectionAssert.AreEquivalent(
+            new[] { WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie },
+            UiNavigationCatalog.MediaTypesOf(UiNavigationCatalog.LibraryTabs.Single(tab => tab.Id == UiNavigationCatalog.LibraryVideoTabId)).ToArray(),
+            "Anime, Series and Movies are one Library destination.");
+    }
     [TestMethod]
     public void EveryMediaRouteRootIsAPageFolderOfTheNavigationTab()
     {

@@ -1,6 +1,7 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Ui;
 
 namespace Jularr.Tests;
@@ -33,12 +34,15 @@ public sealed class LibraryBrowseTests
         int missing = 0,
         DateTime? added = null,
         DateTime? watched = null,
-        AcquisitionRequestStatus? request = null) =>
+        AcquisitionRequestStatus? request = null,
+        WorkMediaType mediaType = WorkMediaType.Anime,
+        int? runtimeMinutes = null,
+        int? remainingMinutes = null) =>
         new(
             new MediaBannerCardData(
-                MediaBannerKind.Anime,
+                mediaType == WorkMediaType.Movie ? MediaBannerKind.Movie : mediaType == WorkMediaType.Series ? MediaBannerKind.Series : MediaBannerKind.Anime,
                 title,
-                "/Library/Anime/" + title,
+                LibraryBrowse.DetailHref(mediaType, TitleId(title)),
                 ProviderStatus: status,
                 Year: year,
                 AverageScore: score,
@@ -51,7 +55,13 @@ public sealed class LibraryBrowseTests
             playable,
             missing,
             added ?? Stamp,
-            watched);
+            watched,
+            TitleId(title),
+            mediaType,
+            runtimeMinutes,
+            remainingMinutes);
+
+    private static Guid TitleId(string title) => new(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(title)));
 
     private static MediaBannerProgress Progress(
         MediaBannerProgressState state,
@@ -59,6 +69,80 @@ public sealed class LibraryBrowseTests
         int? season = null,
         int? percent = null) =>
         new(state, MediaBannerUnit.Episode, next, "/Library/Episode/" + next, null, season, percent);
+
+    private static LibraryCardView Card(LibraryCardEntry entry, LibraryLanguagePreference preference, UiTextBundle ui) => LibraryCardView.Create(entry, preference, ui, playbackEnabled: true);
+
+    [TestMethod]
+    public void ACardOffersNoPlayActionWithoutPlayback()
+    {
+        var anime = Entry("Anime", progress: Progress(MediaBannerProgressState.NotStarted));
+
+        Assert.IsNotNull(LibraryCardView.Create(anime, LibraryLanguagePreference.None, Ui, playbackEnabled: true).Action);
+        Assert.IsNull(LibraryCardView.Create(anime, LibraryLanguagePreference.None, Ui, playbackEnabled: false).Action);
+    }
+
+    [TestMethod]
+    public void TheMediaTypeScopeRoundTripsThroughTheAddressAndIsNotAFilter()
+    {
+        var query = Parse("type=movie&sort=title");
+
+        Assert.AreEqual(WorkMediaType.Movie, query.MediaType);
+        Assert.AreEqual("/Library?type=movie&sort=title", LibraryBrowse.Href(query));
+        Assert.AreEqual(0, query.ActiveFilterCount);
+        Assert.AreEqual(WorkMediaType.Movie, query.WithoutFilters().MediaType, "Resetting filters keeps the tab.");
+        Assert.AreEqual(WorkMediaType.Series, Parse("type=tv").MediaType);
+        Assert.IsNull(Parse("type=book").MediaType, "Only video types are scopes of this page.");
+        Assert.IsNull(Parse("type=nonsense").MediaType);
+    }
+
+    [TestMethod]
+    public void ScopeTabsListTheVisibleVideoTypesThenTheOtherLibraryDestinations()
+    {
+        var other = new[] { new UiNavigationItem("library-books", "nav.books", "/Books", "books", false) };
+        var query = Parse("type=series&sort=title");
+
+        var tabs = LibraryBrowse.ScopeTabs(query, [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie], other);
+
+        CollectionAssert.AreEqual(
+            new[] { "/Library?sort=title", "/Library?type=anime&sort=title", "/Library?type=series&sort=title", "/Library?type=movie&sort=title", "/Books" },
+            tabs.Select(x => x.Href).ToArray());
+        CollectionAssert.AreEqual(new[] { false, false, true, false, false }, tabs.Select(x => x.IsActive).ToArray());
+
+        var single = LibraryBrowse.ScopeTabs(new LibraryBrowseQuery(), [WorkMediaType.Movie], []);
+        Assert.AreEqual("library.browse.scope.movie", Assert.ContainsSingle(single).LabelKey, "A single type has no All tab.");
+    }
+
+    [TestMethod]
+    public void MovieCardsShowYearAndRuntimeThenTimeLeftAndNeverAPlayShortcut()
+    {
+        var plain = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, runtimeMinutes: 124, progress: Progress(MediaBannerProgressState.NotStarted));
+        var resumed = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, runtimeMinutes: 124, remainingMinutes: 48, progress: Progress(MediaBannerProgressState.InProgress, percent: 61));
+        var done = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, progress: Progress(MediaBannerProgressState.Completed, percent: 100));
+        var unknownRuntime = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, runtimeMinutes: 45);
+
+        Assert.AreEqual("2024 · 2h 04m", Card(plain, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual("48 min left", Card(resumed, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual(61, Card(resumed, LibraryLanguagePreference.None, Ui).ProgressPercent);
+        Assert.AreEqual("Completed", Card(done, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual("2024 · 45m", Card(unknownRuntime, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.IsNull(Card(resumed, LibraryLanguagePreference.None, Ui).Action, "Movies play from their detail page.");
+        Assert.IsNotNull(Card(Entry("Anime", progress: Progress(MediaBannerProgressState.NotStarted)), LibraryLanguagePreference.None, Ui).Action);
+    }
+
+    [TestMethod]
+    public void EveryVideoTypeHasADetailPageSoItsCardIsALink()
+    {
+        var id = Guid.NewGuid();
+
+        Assert.AreEqual($"/Library/Anime/{id}", LibraryBrowse.DetailHref(WorkMediaType.Anime, id));
+        Assert.AreEqual($"/Library/Series/{id}", LibraryBrowse.DetailHref(WorkMediaType.Series, id));
+        Assert.AreEqual($"/Library/Movie/{id}", LibraryBrowse.DetailHref(WorkMediaType.Movie, id));
+
+        var movie = Card(Entry("Moon", mediaType: WorkMediaType.Movie), LibraryLanguagePreference.None, Ui);
+        Assert.AreEqual(LibraryBrowse.DetailHref(WorkMediaType.Movie, TitleId("Moon")), movie.Href);
+        Assert.IsNull(movie.Action, "Movies and Series play from their detail page, not from the card.");
+        Assert.AreEqual(LibraryBrowse.DetailHref(WorkMediaType.Anime, TitleId("Akatsuki")), Card(Entry("Akatsuki"), LibraryLanguagePreference.None, Ui).Href);
+    }
 
     [TestMethod]
     public void PlainLibraryHasNoQueryAndEveryViewRoundTripsThroughTheAddress()
@@ -97,6 +181,40 @@ public sealed class LibraryBrowseTests
         Assert.AreEqual(MediaReleaseStatus.Ongoing, parsed.Status);
         Assert.AreEqual("TV_SHORT", parsed.Format);
         Assert.AreEqual(10, parsed.ActiveFilterCount);
+    }
+
+    [TestMethod]
+    public void TheSearchNarrowsTheTitlesByNameStaysInTheAddressAndIsNoFilter()
+    {
+        var entries = new[] { Entry("Frieren"), Entry("Solo Leveling"), Entry("Leveling Up", mediaType: WorkMediaType.Movie) };
+        var query = Parse("q=%20LEVELING%20&sort=title&type=anime");
+
+        Assert.AreEqual("LEVELING", query.Search);
+        Assert.AreEqual(0, query.ActiveFilterCount);
+        Assert.AreEqual("/Library?type=anime&q=LEVELING&sort=title", LibraryBrowse.Href(query));
+        CollectionAssert.AreEqual(new[] { "Solo Leveling" }, LibraryBrowse.Apply(entries, query, LibraryLanguagePreference.None).Select(x => x.Card.Title).ToArray());
+        Assert.IsNull(Parse("q=%20%20").Search);
+        Assert.AreEqual(LibraryBrowse.MaxSearchLength, Parse("q=" + new string('x', 500)).Search!.Length);
+        Assert.AreEqual("LEVELING", query.WithoutFilters().Search, "Resetting filters keeps what was searched for.");
+    }
+
+    [TestMethod]
+    public void AToolbarFormRepeatsTheOtherControlsAsHiddenFields()
+    {
+        var query = Parse("type=movie&q=dune&sort=title&view=list&year=2024");
+
+        CollectionAssert.AreEqual(
+            new[] { "type=movie", "sort=title", "view=list", "year=2024" },
+            LibraryBrowse.Parameters(query with { Search = null }).Select(x => x.Key + "=" + x.Value).ToArray());
+    }
+
+    [TestMethod]
+    public void APartialTitleShowsHowManyUnitsAreAvailableAndNoOtherWording()
+    {
+        var card = Card(Entry("Attack on Titan", playable: 18, missing: 6), LibraryLanguagePreference.None, Ui);
+
+        Assert.AreEqual("18 / 24 available", card.Availability?.Label);
+        Assert.AreEqual(LibraryAvailabilityState.Partial, card.Availability?.State);
     }
 
     [TestMethod]
@@ -277,11 +395,11 @@ public sealed class LibraryBrowseTests
     [TestMethod]
     public void InProgressCardNamesTheNextEpisodeAndOffersToContinue()
     {
-        var single = LibraryCardView.Create(
+        var single = Card(
             Entry("Solo", progress: Progress(MediaBannerProgressState.InProgress, 8, percent: 72)),
             LibraryLanguagePreference.None,
             Ui);
-        var multi = LibraryCardView.Create(
+        var multi = Card(
             Entry("Multi", progress: Progress(MediaBannerProgressState.InProgress, 3, season: 2, percent: 10)),
             LibraryLanguagePreference.None,
             Ui);
@@ -298,11 +416,11 @@ public sealed class LibraryBrowseTests
     [TestMethod]
     public void NotStartedCompletedAndUnplayableCardsSayOnlyWhatIsUseful()
     {
-        var fresh = LibraryCardView.Create(
+        var fresh = Card(
             Entry("Fresh", progress: Progress(MediaBannerProgressState.NotStarted)), LibraryLanguagePreference.None, Ui);
-        var done = LibraryCardView.Create(
+        var done = Card(
             Entry("Done", progress: Progress(MediaBannerProgressState.Completed, 1, percent: 100)), LibraryLanguagePreference.None, Ui);
-        var empty = LibraryCardView.Create(
+        var empty = Card(
             Entry("Empty", year: 2019, playable: 0, progress: null), LibraryLanguagePreference.None, Ui);
 
         Assert.AreEqual("Not started", fresh.StatusText);
@@ -320,10 +438,10 @@ public sealed class LibraryBrowseTests
     public void LanguageLineShowsThePreferredLanguageFirstAndFallsBackToWhatExists()
     {
         var preference = LibraryLanguagePreference.From("de", "de");
-        var hasGerman = LibraryCardView.Create(
+        var hasGerman = Card(
             Entry("A", audio: ["ja", "en", "de", "fr", "es"], subtitles: ["en", "de"]), preference, Ui);
-        var fallback = LibraryCardView.Create(Entry("B", audio: ["ja"], subtitles: ["en"]), preference, Ui);
-        var none = LibraryCardView.Create(Entry("C"), preference, Ui);
+        var fallback = Card(Entry("B", audio: ["ja"], subtitles: ["en"]), preference, Ui);
+        var none = Card(Entry("C"), preference, Ui);
 
         Assert.AreEqual("DE", hasGerman.Audio.Shown[0].Code);
         Assert.IsTrue(hasGerman.Audio.Shown[0].IsPreferred);
@@ -343,11 +461,11 @@ public sealed class LibraryBrowseTests
     [TestMethod]
     public void RequestedCardNamesTheStageOfTheRequest()
     {
-        var card = LibraryCardView.Create(
+        var card = Card(
             Entry("R", playable: 0, request: AcquisitionRequestStatus.Downloading), LibraryLanguagePreference.None, Ui);
 
         Assert.AreEqual(LibraryAvailabilityState.Requested, card.Availability?.State);
-        Assert.AreEqual("Downloading", card.Availability?.Label);
+        Assert.AreEqual("Getting media", card.Availability?.Label);
     }
 
     [TestMethod]

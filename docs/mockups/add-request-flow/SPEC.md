@@ -8,7 +8,11 @@ The user will upload the approved visual reference to this mockup folder. The te
 
 ## 1. Purpose
 
-There is only one consumer acquisition action: **Request**.
+There is only one explicit consumer acquisition action: **Request**.
+
+Binding playback-intent exception: `docs/mockups/instant-play/SPEC.md`.
+
+`Start watching`, `Watch now`, `Play` and `Continue` are playback intents, not a second acquisition action. When the selected target is missing and effective policy permits instant acquisition, that playback intent may transparently create/reuse and auto-approve the same canonical Request for the smallest required playable target, then continue through Wanted/Search/Download/Import. It never creates a separate acquisition path.
 
 There is no separate Add flow.
 
@@ -257,7 +261,7 @@ There is never:
 - Submit;
 - Next.
 
-Auto-approval is backend/policy behavior after pressing Request, not a different button.
+Auto-approval is backend/policy behavior after pressing Request, not a different acquisition button. A permitted playback intent may also use the same auto-approval policy through the Instant Play contract without opening this explicit Request dialog.
 
 ## 11. Success state
 
@@ -337,6 +341,7 @@ These are separate domains.
 - for example AniList/MAL synchronization.
 
 The Request dialog never contains:
+- Start watching / Watch now playback controls;
 - Watching;
 - Planning;
 - Completed;

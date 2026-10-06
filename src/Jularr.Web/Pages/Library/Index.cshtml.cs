@@ -1,8 +1,11 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Collections;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Shell;
 using Jularr.Web.Ui;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +16,9 @@ public sealed class IndexModel(
     AppDbContext db,
     CurrentAccountContext currentAccount,
     CollectionService collections,
-    ILogger<IndexModel> logger) : PageModel
+    IAppShellService appShell,
+    ILogger<IndexModel> logger,
+    IInstanceModuleService instanceModules) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -25,8 +30,14 @@ public sealed class IndexModel(
     /// <summary>The titles that pass the filters, in sort order, ready to render.</summary>
     public IReadOnlyList<LibraryCardView> Cards { get; private set; } = [];
 
-    /// <summary>All titles in the library, before filtering.</summary>
+    /// <summary>The titles of the selected media-type tab, before filtering.</summary>
     public int Total { get; private set; }
+
+    /// <summary>The titles of every visible video type, before the tab and the filters.</summary>
+    public int LibraryTotal { get; private set; }
+
+    /// <summary>The media-type tabs: the video scopes of this page and the other Library destinations the profile may browse.</summary>
+    public IReadOnlyList<LibraryScopeTab> ScopeTabs { get; private set; } = [];
 
     public LibraryFacets Facets { get; private set; } = new(
         new Dictionary<LibraryProgressState, int>(),
@@ -70,9 +81,17 @@ public sealed class IndexModel(
 
     private async Task LoadTitlesAsync(CancellationToken cancellationToken)
     {
-        var read = await new LibraryMediaCardQuery(db).GetAnimeEntriesAsync(
-            currentAccount.ProfileId,
-            cancellationToken);
+        var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
+        var visibleVideoTypes = LibraryBrowse.VideoMediaTypes.Where(access.IsVisible).ToArray();
+        if (Query.MediaType is { } scope && !visibleVideoTypes.Contains(scope))
+        {
+            Query = Query with { MediaType = null };
+        }
+
+        var otherTabs = UiShellNavigation.BuildLibraryTabs(Request.Path, access.VisibleMediaTypes).Where(tab => tab.Id != UiNavigationCatalog.LibraryVideoTabId);
+        ScopeTabs = LibraryBrowse.ScopeTabs(Query, visibleVideoTypes, otherTabs);
+
+        var read = await new LibraryMediaCardQuery(db).GetEntriesAsync(currentAccount.ProfileId, visibleVideoTypes, cancellationToken);
 
         var degraded = read.Degraded;
         try
@@ -96,10 +115,13 @@ public sealed class IndexModel(
             degraded = true;
         }
 
-        var shown = LibraryBrowse.Apply(read.Entries, Query, Preference);
-        Total = read.Entries.Count;
-        Facets = LibraryBrowse.Facets([.. read.Entries], Preference);
-        Cards = [.. shown.Select(entry => LibraryCardView.Create(entry, Preference, Ui))];
+        var scoped = LibraryBrowse.Scope(read.Entries, Query);
+        var shown = LibraryBrowse.Apply(scoped, Query, Preference);
+        LibraryTotal = read.Entries.Count;
+        Total = scoped.Count;
+        Facets = LibraryBrowse.Facets([.. scoped], Preference);
+        var playbackEnabled = await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken);
+        Cards = [.. shown.Select(entry => LibraryCardView.Create(entry, Preference, Ui, playbackEnabled))];
         Degraded = degraded;
         State = LibraryBrowse.ResolveState(false, degraded, Total, Cards.Count);
     }

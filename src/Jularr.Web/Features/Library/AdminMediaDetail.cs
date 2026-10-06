@@ -14,6 +14,7 @@ public enum AdminMediaState
     Missing,
     Searching,
     Downloading,
+    Importing,
     Failed
 }
 
@@ -225,6 +226,7 @@ public static class AdminMediaDetailView
         AdminMediaState.Available => "available",
         AdminMediaState.Searching => "searching",
         AdminMediaState.Downloading => "downloading",
+        AdminMediaState.Importing => "importing",
         AdminMediaState.Failed => "failed",
         _ => "missing"
     };

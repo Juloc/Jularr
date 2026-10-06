@@ -29,3 +29,9 @@ tasks.register<Sync>("syncPlayerDesignAssets") {
 tasks.named("preBuild").configure {
     dependsOn("syncPlayerDesignAssets")
 }
+
+dependencies {
+    testImplementation(libs.junit)
+    // Real org.json for JVM unit tests (android.jar only ships stubs).
+    testImplementation(libs.org.json)
+}

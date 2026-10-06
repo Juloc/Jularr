@@ -182,6 +182,12 @@ public sealed class ActiveSessionService(
         return updated > 0;
     }
 
+    /// <summary>Removes the sessions of a deleted profile; the table is outside the EF model's generic profile sweep.</summary>
+    public Task<int> DeleteProfileSessionsAsync(
+        string profileId,
+        CancellationToken cancellationToken = default) =>
+        db.Database.ExecuteSqlRawAsync("""DELETE FROM "ActiveSessions" WHERE "ProfileId" = {0}""", [profileId], cancellationToken);
+
     public async Task<bool> EndAsync(
         Guid sessionId,
         string profileId,

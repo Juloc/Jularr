@@ -55,20 +55,25 @@ public sealed record DiscoveryShelfRow(
     string Genre,
     string TitleKey,
     string? MediaLabelKey,
-    IReadOnlyList<DiscoveryItem> Items)
+    IReadOnlyList<DiscoveryItem> Items,
+    IReadOnlyList<DiscoverySourceResult> Sources)
 {
     /// <summary>Deep link into Discover pre-filtered to this row's category/mode/genre.</summary>
     public string DeepLinkUrl => DiscoveryShelfLinks.ToDiscoverUrl(Category, Mode, Genre);
+
+    public DiscoverySectionState State => DiscoverySections.StateOf(Items.Count, Sources);
 }
 
-/// <summary>A resolved discovery board: the ordered visible rows plus any provider warnings.</summary>
+/// <summary>A resolved discovery board: the ordered visible rows, which may still wait for a source, and how far the sources have answered.</summary>
+/// <param name="Settled">The sources that have answered or failed; a follow-up load passes it back to wait for the next arrival.</param>
 public sealed record DiscoveryShelfBoard(
     IReadOnlyList<DiscoveryShelfRow> Rows,
-    IReadOnlyList<string> Warnings)
+    int Settled,
+    int Pending)
 {
     public bool IsEmpty => Rows.Count == 0;
 
-    public static DiscoveryShelfBoard Empty { get; } = new([], []);
+    public static DiscoveryShelfBoard Empty { get; } = new([], 0, 0);
 }
 
 /// <summary>
@@ -79,13 +84,15 @@ public sealed record DiscoveryShelfBoard(
 /// </summary>
 public interface IDiscoveryFeed
 {
-    Task<DiscoveryResponse> GetAsync(
-        DiscoveryRequest request,
-        string profileId,
-        bool isOwner,
-        bool includeAniList,
-        bool includeBooks,
+    /// <summary>Loads the titles of several requests at once, so the provider calls of all of them run side by side.</summary>
+    Task<DiscoveryLoad> LoadAsync(
+        IReadOnlyList<DiscoveryRequest> requests,
+        DiscoveryAudience audience,
+        DiscoveryWait wait,
         CancellationToken cancellationToken);
+
+    /// <summary>The library state of the given titles, keyed by <see cref="DiscoveryItem.Id"/>, read in one batch.</summary>
+    Task<IReadOnlyDictionary<string, DiscoveryItem>> OverlayLocalStateAsync(IEnumerable<DiscoveryItem> items, string profileId, CancellationToken cancellationToken);
 }
 
 /// <summary>Builds the <c>/Discover</c> deep link for a shelf row, matching the client URL scheme in discover.js.</summary>

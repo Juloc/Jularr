@@ -1,4 +1,5 @@
 @page "/Discover"
+@using Jularr.Web.Features.Acquisition.Access
 @using Jularr.Web.Features.Discovery
 @using Jularr.Web.Ui
 @model Jularr.Web.Pages.Discover.IndexModel
@@ -47,16 +48,19 @@
 
 @section Head {
     <link rel="stylesheet" href="~/css/discover-browse.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-request.css" asp-append-version="true" />
 }
 
 <div class="dc-page"
      data-discover
      data-is-owner="@Model.IsOwner.ToString().ToLowerInvariant()"
-     data-add-url="@Url.Page("/Discover/Index", "Add")"
+     data-resolve-url="@Url.Page("/Discover/Index", "Resolve")"
+     data-open-url="@Url.Page("/Discover/Index", "Open")"
+     data-request-url="@Url.Page("/Discover/Index", "Request")"
      data-request-status-url="@Url.Page("/Discover/Index", "RequestStatus")"
      data-watchlist-url="@Url.Page("/Discover/Index", "Watchlist")"
      data-franchise-url="@Url.Page("/Discover/Index", "FollowFranchise")"
-     data-text-add-failed="@ui["discover.card.addFailed"]"
+     data-text-action-failed="@ui["discover.card.actionFailed"]"
      data-text-follow="@ui["discover.card.follow"]"
      data-text-followed="@ui["discover.card.followed"]"
      data-text-unfollow="@ui["discover.card.unfollow"]"
@@ -64,14 +68,14 @@
      data-text-open="@ui["requests.open"]"
      data-text-source-for="@ui["discover.import.sourceFor"]"
      data-text-source-url="@ui["discover.import.sourceUrlHeading"]"
-     data-status-pending="@ui["requests.status.pending"]"
-     data-status-approved="@ui["requests.status.approved"]"
-     data-status-searching="@ui["requests.status.searching"]"
-     data-status-downloading="@ui["requests.status.downloading"]"
-     data-status-importing="@ui["requests.status.importing"]"
-     data-status-completed="@ui["requests.status.completed"]"
-     data-status-failed="@ui["requests.status.failed"]"
-     data-status-rejected="@ui["requests.status.rejected"]">
+     data-status-pending="@ui[ConsumerAcquisitionLabels.StatusKey("pending")]"
+     data-status-approved="@ui[ConsumerAcquisitionLabels.StatusKey("approved")]"
+     data-status-searching="@ui[ConsumerAcquisitionLabels.StatusKey("searching")]"
+     data-status-downloading="@ui[ConsumerAcquisitionLabels.StatusKey("downloading")]"
+     data-status-importing="@ui[ConsumerAcquisitionLabels.StatusKey("importing")]"
+     data-status-completed="@ui[ConsumerAcquisitionLabels.StatusKey("completed")]"
+     data-status-failed="@ui[ConsumerAcquisitionLabels.StatusKey("failed")]"
+     data-status-rejected="@ui[ConsumerAcquisitionLabels.StatusKey("rejected")]">
     @Html.AntiForgeryToken()
 
     <header class="dc-head">
@@ -197,7 +201,7 @@
     </form>
 
     <nav class="dc-tabs" aria-label="@ui["discover.categories.aria"]">
-        @foreach (var (category, labelKey) in DiscoverScopes.Tabs)
+        @foreach (var (category, labelKey) in Model.VisibleTabs)
         {
             var selected = DiscoverScopes.IsActive(category, query.Category);
             <a class="dc-tab@(selected ? " is-active" : "")"
@@ -212,14 +216,22 @@
         <span>@ui["discover.offline"]</span>
     </p>
 
+    <p class="dc-notice dc-notice-warning" data-dc-sync hidden role="status">
+        <partial name="_DiscoverIcon" model='"warning"' />
+        <span>@ui["discover.results.updateFailed"]</span>
+        <button type="button" class="dc-link" data-dc-sync-retry>@ui["library.browse.error.retry"]</button>
+    </p>
+
+    <noscript><p class="dc-message">@ui["discover.noscript"]</p></noscript>
+
     <div class="dc-results" data-dc-body aria-busy="true">
         <p class="sr-only">@ui["discover.results.loading"]</p>
         <div class="dc-skeleton" aria-hidden="true">
             <span class="dc-skeleton-head"></span>
-            <ul class="dc-track">
-                @for (var i = 0; i < 8; i++)
+            <ul class="dc-track dc-ghosts">
+                @for (var i = 0; i < DiscoverSectionView.TrackGhosts; i++)
                 {
-                    <li class="dc-track-item"><span class="dc-skeleton-card"></span></li>
+                    <li class="dc-track-item"><partial name="_DiscoverGhost" /></li>
                 }
             </ul>
         </div>
@@ -274,8 +286,12 @@
         </button>
         <div class="dc-sheet-content" data-dc-sheet-content></div>
     </dialog>
+    <partial name="_DiscoverRequestDialog" model="ui" />
 </div>
 
 @section Scripts {
+    <script src="~/js/work-metadata.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-staging.js" asp-append-version="true" defer></script>
     <script src="~/js/discover.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-request.js" asp-append-version="true" defer></script>
 }

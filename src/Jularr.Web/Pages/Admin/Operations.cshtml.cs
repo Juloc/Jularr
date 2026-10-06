@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Operations;
@@ -17,6 +18,7 @@ namespace Jularr.Web.Pages.Admin;
 public sealed class OperationsModel(
     AppDbContext db,
     IOperationActions actions,
+    VideoRequestWorkResolver videoWorks,
     ILogger<OperationsModel> logger) : PageModel
 {
     public const string PagePath = "/Admin/Operations";
@@ -26,6 +28,9 @@ public sealed class OperationsModel(
     public AdminActivityPlan Plan { get; private set; } = AdminActivityQuery.Plan([], new AdminActivityFilter());
 
     public IReadOnlyList<OperationSnapshot> Items { get; private set; } = [];
+
+    /// <summary>The Admin media page of the Movie or Series a download on this page belongs to, by operation id.</summary>
+    public IReadOnlyDictionary<Guid, string> MediaLinks { get; private set; } = new Dictionary<Guid, string>();
 
     /// <summary>Whether the operations could not be read.</summary>
     public bool Failed { get; private set; }
@@ -73,6 +78,7 @@ public sealed class OperationsModel(
             if (Plan.Total > 0)
             {
                 Items = (await store.QueryActivityAsync(AdminActivityQuery.DatabaseFilter(Plan), cancellationToken)).Items;
+                MediaLinks = await videoWorks.ResolveOperationLinksAsync(Items, cancellationToken);
             }
         }
         catch (Exception exception) when (exception is DbException or InvalidOperationException or FormatException)

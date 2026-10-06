@@ -68,26 +68,35 @@ public sealed class VocabularyService
 
             var aggregate = new Dictionary<string, TermAggregate>(StringComparer.Ordinal);
 
-            foreach (var cue in track)
+            try
             {
-                foreach (var candidate in extractor.Extract(cue.Text))
+                foreach (var cue in track)
                 {
-                    if (aggregate.TryGetValue(candidate.Canonical, out var current))
+                    foreach (var candidate in extractor.Extract(cue.Text))
                     {
-                        aggregate[candidate.Canonical] = current with
+                        if (aggregate.TryGetValue(candidate.Canonical, out var current))
                         {
-                            Count = current.Count + 1,
-                            Reading = PreferReading(current.Reading, candidate.Reading)
-                        };
-                    }
-                    else
-                    {
-                        aggregate[candidate.Canonical] = new TermAggregate(
-                            Count: 1,
-                            FirstMs: cue.StartMs,
-                            Reading: candidate.Reading);
+                            aggregate[candidate.Canonical] = current with
+                            {
+                                Count = current.Count + 1,
+                                Reading = PreferReading(current.Reading, candidate.Reading)
+                            };
+                        }
+                        else
+                        {
+                            aggregate[candidate.Canonical] = new TermAggregate(
+                                Count: 1,
+                                FirstMs: cue.StartMs,
+                                Reading: candidate.Reading);
+                        }
                     }
                 }
+            }
+            catch (JapaneseAnalysisUnavailableException)
+            {
+                // Vocabulary is derived state: a missing dictionary (already logged and shown on Admin > Health by the
+                // morphology owner) must not fail the subtitle import; the episode is rebuilt on its next import or repair.
+                continue;
             }
 
             if (aggregate.Count == 0)

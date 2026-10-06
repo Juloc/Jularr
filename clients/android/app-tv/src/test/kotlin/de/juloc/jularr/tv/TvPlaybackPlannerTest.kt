@@ -92,8 +92,8 @@ class TvPlaybackPlannerTest {
     private fun capabilities(
         hls: Boolean = false,
     ) = ClientCapabilities(
-        apiVersion = 1,
-        minimumSupportedApiVersion = 1,
+        apiVersion = 2,
+        minimumSupportedApiVersion = 2,
         serverVersion = "test",
         features = ClientFeatureFlags(
             library = true,
@@ -121,7 +121,7 @@ class TvPlaybackPlannerTest {
         fallbackUrl: String = "/api/client/v1/episodes/episode/fallback?mode=server",
         seekableWithinStream: Boolean = false,
     ) = PlayerBootstrap(
-        apiVersion = 1,
+        apiVersion = 2,
         episode = PlayerEpisode(
             id = "episode",
             animeId = "anime",

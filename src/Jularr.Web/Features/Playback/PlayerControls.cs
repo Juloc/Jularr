@@ -46,9 +46,13 @@ public sealed record PlayerControls(
         PlaybackMedia media,
         bool hasLearningCues,
         int? learningSourceStreamIndex,
-        PlaybackPreferencesSnapshot preferences)
+        PlaybackPreferencesSnapshot preferences) =>
+        Build(media.Tracks, media.VideoHeight, hasLearningCues, learningSourceStreamIndex, preferences);
+
+    /// <summary>The same controls from the tracks and picture height of a canonical file inventory, which has no legacy playback media.</summary>
+    public static PlayerControls Build(IReadOnlyList<PlaybackMediaTrack>? mediaTracks, int? videoHeight, bool hasLearningCues, int? learningSourceStreamIndex, PlaybackPreferencesSnapshot preferences)
     {
-        var tracks = media.Tracks ?? [];
+        var tracks = mediaTracks ?? [];
         var audio = tracks
             .Where(x => x.Kind == PlaybackTrackKind.Audio)
             .OrderBy(x => x.StreamIndex)
@@ -92,7 +96,7 @@ public sealed record PlayerControls(
             initialSubtitle,
             PlaybackPreferenceRules.Speeds,
             preferences.DefaultPlaybackSpeed,
-            media.VideoHeight,
+            videoHeight,
             preferences);
     }
 

@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.Learning.Courses;
+using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Admin;
@@ -53,7 +54,7 @@ public sealed record AdminUserProgressSummary(
     AdminLearningProgressSummary Learning,
     DateTime? LastActivityAt);
 
-public sealed class AdminUserProgressService(AppDbContext db)
+public sealed class AdminUserProgressService(AppDbContext db, VideoProgressService videoProgress)
 {
     public async Task<IReadOnlyList<AdminUserProgressSummary>> GetAsync(
         CancellationToken cancellationToken = default)
@@ -70,27 +71,22 @@ public sealed class AdminUserProgressService(AppDbContext db)
                 x.CreatedAt))
             .ToListAsync(cancellationToken);
 
-        var episodeRows = await (
-            from progress in db.EpisodeProgress.AsNoTracking()
-            join episode in db.Episodes.AsNoTracking()
-                on progress.EpisodeId equals episode.Id
-            join anime in db.Anime.AsNoTracking()
-                on episode.AnimeId equals anime.Id
-            select new
+        var episodeRows = (await videoProgress.GetLegacyEpisodeProgressAsync(null, null, cancellationToken))
+            .Select(row => new
             {
-                progress.ProfileId,
+                row.ProfileId,
                 Summary = new AdminEpisodeProgressSummary(
-                    episode.Id,
-                    anime.Title,
-                    episode.SeasonNumber,
-                    episode.Number,
-                    episode.Title,
-                    progress.PositionMs,
-                    progress.DurationMs,
-                    progress.IsCompleted,
-                    progress.UpdatedAt)
+                    row.EpisodeId,
+                    row.AnimeTitle,
+                    row.SeasonNumber,
+                    row.EpisodeNumber,
+                    row.EpisodeTitle,
+                    row.PositionMs,
+                    row.DurationMs,
+                    row.IsCompleted,
+                    row.UpdatedAt)
             })
-            .ToListAsync(cancellationToken);
+            .ToArray();
 
         var novelRows = await (
             from progress in db.NovelProgress.AsNoTracking()

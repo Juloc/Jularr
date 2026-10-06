@@ -104,6 +104,7 @@ internal sealed class LibraryScanTestHost : IAsyncDisposable
             ReconciliationIntervalMinutes = intervalMinutes
         };
         db.LibraryRoots.Add(root);
+        db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
         await db.SaveChangesAsync();
         return root;
     }

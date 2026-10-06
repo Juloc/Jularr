@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Ui;
 
@@ -10,6 +11,9 @@ namespace Jularr.Web.Features.Library;
 /// <param name="PlayableUnits">Episodes (or specials, for a title that only has those) with a file.</param>
 /// <param name="MissingUnits">Known episodes without a file, plus the ones a finished title's provider lists beyond the library.</param>
 /// <param name="LastWatchedAt">The last meaningful watch progress of the profile; null when never watched.</param>
+/// <param name="WorkId">The canonical identity of the title; the Card href of an Anime is still keyed by its legacy record.</param>
+/// <param name="RuntimeMinutes">The runtime of a Movie from its analysed file; null for episodic titles and when unknown.</param>
+/// <param name="RemainingMinutes">What is left of a Movie that is in progress; null otherwise.</param>
 public sealed record LibraryCardEntry(
     MediaBannerCardData Card,
     string? PosterUrl,
@@ -17,7 +21,11 @@ public sealed record LibraryCardEntry(
     int PlayableUnits,
     int MissingUnits,
     DateTime AddedAt,
-    DateTime? LastWatchedAt);
+    DateTime? LastWatchedAt,
+    Guid WorkId,
+    WorkMediaType MediaType,
+    int? RuntimeMinutes,
+    int? RemainingMinutes);
 
 /// <summary>The entries of one Library read; <see cref="Degraded"/> when supporting details (open requests) could not be loaded.</summary>
 public sealed record LibraryEntries(IReadOnlyList<LibraryCardEntry> Entries, bool Degraded);
@@ -88,15 +96,25 @@ public sealed record LibraryLanguagePreference(string? Audio, string? Subtitle)
     }
 
     /// <summary>Whether the title has the preferred audio or the preferred subtitle language.</summary>
-    public bool IsAvailableIn(LibraryCardEntry entry) =>
-        (Audio is not null && LibraryBrowse.Has(entry.Card.AudioLanguages, Audio))
-        || (Subtitle is not null && LibraryBrowse.Has(entry.Card.SubtitleLanguages, Subtitle));
+    public bool IsAvailableIn(LibraryCardEntry entry) => IsAvailableIn(entry.Card.AudioLanguages, entry.Card.SubtitleLanguages);
+
+    /// <summary>Whether the given audio or subtitle languages include the preferred audio or the preferred subtitle language.</summary>
+    public bool IsAvailableIn(IEnumerable<string>? audio, IEnumerable<string>? subtitles) =>
+        (Audio is not null && LibraryBrowse.Has(audio, Audio))
+        || (Subtitle is not null && LibraryBrowse.Has(subtitles, Subtitle));
 }
 
 /// <summary>What the Library grid is narrowed and ordered by; every member round-trips through the address.</summary>
 public sealed record LibraryBrowseQuery
 {
     public bool Collections { get; init; }
+
+    /// <summary>The media-type scope of the Library (a tab, not a filter); null shows every video type.</summary>
+    public WorkMediaType? MediaType { get; init; }
+
+    /// <summary>Case-insensitive title text of the in-library search; never searches outside the Library.</summary>
+    public string? Search { get; init; }
+
     public LibrarySort Sort { get; init; }
     public LibraryLayout Layout { get; init; }
     public IReadOnlyList<LibraryProgressState> Progress { get; init; } = [];
@@ -164,6 +182,9 @@ public sealed record LibraryAvailabilityIndicator(LibraryAvailabilityState State
 
 public sealed record LibraryCardAction(string Label, string Url);
 
+/// <summary>One media-type tab of the Library: the video scopes are addresses of this page, the others lead to their own page.</summary>
+public sealed record LibraryScopeTab(string LabelKey, string Href, bool IsActive);
+
 /// <summary>Everything one Library card renders, resolved and localised; build it with <see cref="Create"/>.</summary>
 public sealed record LibraryCardView(
     string Title,
@@ -182,7 +203,8 @@ public sealed record LibraryCardView(
 {
     public bool HasLanguages => Audio.Any || Subtitles.Any;
 
-    public static LibraryCardView Create(LibraryCardEntry entry, LibraryLanguagePreference preference, UiTextBundle ui)
+    /// <param name="playbackEnabled">Only an instance that plays has a play action on a card; a manager-only instance shows none (docs/mockups/instant-play, section 11).</param>
+    public static LibraryCardView Create(LibraryCardEntry entry, LibraryLanguagePreference preference, UiTextBundle ui, bool playbackEnabled)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(preference);
@@ -190,7 +212,8 @@ public sealed record LibraryCardView(
 
         var card = entry.Card;
         var progress = card.Progress;
-        var culture = Culture(ui.Locale);
+        var culture = VideoDetailView.CultureOf(ui.Locale);
+        var isMovie = entry.MediaType == WorkMediaType.Movie;
 
         string? statusText;
         int? percent = null;
@@ -198,17 +221,27 @@ public sealed record LibraryCardView(
         string? progressText = null;
         LibraryCardAction? action = null;
 
+        var yearText = card.Year is > 0 ? card.Year.Value.ToString(culture) : null;
+
+        // A Movie has no next unit: it shows what it is (year and runtime) until it is resumed or finished.
+        var movieFacts = string.Join(" · ", new[] { yearText, entry.RuntimeMinutes is > 0 ? VideoDetailView.RuntimeText(entry.RuntimeMinutes.Value, ui) : null }.Where(fact => fact is not null));
+        string? movieStatus = movieFacts.Length > 0 ? movieFacts : null;
+
         if (progress is null)
         {
-            statusText = card.Year is int year and > 0 ? year.ToString(culture) : null;
+            statusText = isMovie ? movieStatus : yearText;
         }
         else
         {
             var number = progress.NextNumber.ToString("0.##", culture);
-            statusText = progress.State switch
+            statusText = (isMovie, progress.State) switch
             {
-                MediaBannerProgressState.NotStarted => ui["library.browse.card.notStarted"],
-                MediaBannerProgressState.Completed => ui["library.browse.card.completed"],
+                (true, MediaBannerProgressState.InProgress) when entry.RemainingMinutes is int left =>
+                    ui.Format("library.browse.card.minutesLeft", ("minutes", left)),
+                (true, MediaBannerProgressState.Completed) => ui["library.browse.card.completed"],
+                (true, _) => movieStatus,
+                (false, MediaBannerProgressState.NotStarted) => ui["library.browse.card.notStarted"],
+                (false, MediaBannerProgressState.Completed) => ui["library.browse.card.completed"],
                 _ => progress.NextSeason is int season
                     ? ui.Format("library.browse.card.seasonEpisode", ("season", season), ("number", number))
                     : ui.Format("library.browse.card.episode", ("number", number))
@@ -221,14 +254,18 @@ public sealed record LibraryCardView(
                 progressText = ui.Format("library.mediaCard.percent", ("percent", percent.Value));
             }
 
-            action = new LibraryCardAction(
-                ui[progress.State switch
-                {
-                    MediaBannerProgressState.NotStarted => "library.mediaCard.startWatching",
-                    MediaBannerProgressState.Completed => "library.mediaCard.watchAgain",
-                    _ => "library.mediaCard.continueWatching"
-                }],
-                progress.NextUrl);
+            // Only Anime has a player route to open from the card; Movies and Series play from their detail page.
+            if (entry.MediaType == WorkMediaType.Anime && playbackEnabled)
+            {
+                action = new LibraryCardAction(
+                    ui[progress.State switch
+                    {
+                        MediaBannerProgressState.NotStarted => "library.mediaCard.startWatching",
+                        MediaBannerProgressState.Completed => "library.mediaCard.watchAgain",
+                        _ => "library.mediaCard.continueWatching"
+                    }],
+                    progress.NextUrl);
+            }
         }
 
         var audio = AnimeDetailView.Chips(ToSet(card.AudioLanguages), preference.Audio);
@@ -250,6 +287,7 @@ public sealed record LibraryCardView(
             action);
     }
 
+
     private static string InitialOf(string title)
     {
         var trimmed = title.Trim();
@@ -270,24 +308,13 @@ public sealed record LibraryCardView(
         {
             LibraryAvailabilityState.Requested => new(
                 state,
-                ui["requests.status." + AcquisitionAccessNames.Status(entry.Card.Availability!.Request!.Value)]),
-            LibraryAvailabilityState.Partial => new(state, ui["library.browse.availability.partial"]),
+                ui[ConsumerAcquisitionLabels.StatusKey(entry.Card.Availability!.Request!.Value)]),
+            LibraryAvailabilityState.Partial => new(state, ui.Format("library.browse.availability.partialCount", ("available", entry.PlayableUnits), ("total", entry.PlayableUnits + entry.MissingUnits))),
             LibraryAvailabilityState.Missing => new(state, ui["library.browse.availability.missing"]),
             _ => null
         };
     }
 
-    private static CultureInfo Culture(string locale)
-    {
-        try
-        {
-            return string.IsNullOrWhiteSpace(locale) ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(locale);
-        }
-        catch (CultureNotFoundException)
-        {
-            return CultureInfo.InvariantCulture;
-        }
-    }
 }
 
 /// <summary>
@@ -298,6 +325,20 @@ public sealed record LibraryCardView(
 public static class LibraryBrowse
 {
     public const string BasePath = "/Library";
+
+    public const int MaxSearchLength = 100;
+
+    /// <summary>
+    /// The detail address of a title. Movies and Series are keyed by their Work; an Anime is still keyed by its legacy
+    /// record id until its detail page moves to the Work.
+    /// </summary>
+    public static string DetailHref(WorkMediaType mediaType, Guid id) => mediaType switch
+    {
+        WorkMediaType.Anime => $"/Library/Anime/{id}",
+        WorkMediaType.Series => $"/Library/Series/{id}",
+        WorkMediaType.Movie => $"/Library/Movie/{id}",
+        _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
+    };
 
     private static readonly LibraryProgressState[] ProgressOrder =
         [LibraryProgressState.NotStarted, LibraryProgressState.InProgress, LibraryProgressState.Completed];
@@ -313,6 +354,9 @@ public static class LibraryBrowse
         LibrarySort.Recent, LibrarySort.Title, LibrarySort.LastWatched, LibrarySort.YearNewest,
         LibrarySort.YearOldest, LibrarySort.ProgressHighest, LibrarySort.ProgressLowest, LibrarySort.Rating
     ];
+
+    /// <summary>The media types this page serves, in tab order.</summary>
+    public static IReadOnlyList<WorkMediaType> VideoMediaTypes { get; } = [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie];
 
     /// <summary>Every sort in menu order.</summary>
     public static IReadOnlyList<LibrarySort> Sorts => SortOrder;
@@ -382,10 +426,13 @@ public static class LibraryBrowse
         var yearText = First("year");
         var format = First("format")?.ToUpperInvariant();
         var statusText = First("status")?.ToLowerInvariant();
+        var mediaType = WorkMediaTypes.Parse(First("type"));
 
         return new LibraryBrowseQuery
         {
             Collections = string.Equals(First("section"), "collections", StringComparison.OrdinalIgnoreCase),
+            Search = First("q") is { } search ? search[..Math.Min(search.Length, MaxSearchLength)] : null,
+            MediaType = mediaType is { } scope && VideoMediaTypes.Contains(scope) ? scope : null,
             Sort = SortOrder.FirstOrDefault(sort => SortName(sort) == sortValue),
             Layout = string.Equals(First("view"), "list", StringComparison.OrdinalIgnoreCase)
                 ? LibraryLayout.List
@@ -407,22 +454,36 @@ public static class LibraryBrowse
     /// <summary>The address of a view: only what differs from the plain Library is written.</summary>
     public static string Href(LibraryBrowseQuery query)
     {
+        var parts = Parameters(query).Select(parameter => $"{parameter.Key}={Uri.EscapeDataString(parameter.Value)}").ToArray();
+        return parts.Length == 0 ? BasePath : BasePath + "?" + string.Join('&', parts);
+    }
+
+    /// <summary>The address parameters of a view, also the hidden fields a toolbar form repeats so one control keeps the others.</summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> Parameters(LibraryBrowseQuery query)
+    {
         ArgumentNullException.ThrowIfNull(query);
 
-        var parts = new List<string>();
+        List<KeyValuePair<string, string>> parts = [];
         void Add(string key, string? value)
         {
             if (!string.IsNullOrEmpty(value))
             {
-                parts.Add($"{key}={Uri.EscapeDataString(value)}");
+                parts.Add(new(key, value));
             }
         }
 
         if (query.Collections)
         {
             Add("section", "collections");
-            return BasePath + "?" + string.Join('&', parts);
+            return parts;
         }
+
+        if (query.MediaType is { } mediaType)
+        {
+            Add("type", WorkMediaTypes.ToStorage(mediaType));
+        }
+
+        Add("q", query.Search);
 
         if (query.Sort != LibrarySort.Recent)
         {
@@ -455,7 +516,7 @@ public static class LibraryBrowse
         Add("status", query.Status is { } status ? StatusName(status) : null);
         Add("format", query.Format);
 
-        return parts.Count == 0 ? BasePath : BasePath + "?" + string.Join('&', parts);
+        return parts;
     }
 
     /// <summary>The state of the body from the read and the query.</summary>
@@ -522,11 +583,49 @@ public static class LibraryBrowse
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(preference);
 
-        return Sort([.. entries.Where(entry => Matches(entry, query, preference))], query.Sort);
+        return Sort([.. Scope(entries, query).Where(entry => Matches(entry, query, preference))], query.Sort);
     }
 
+    /// <summary>The titles of the selected media-type tab, before any filter.</summary>
+    public static IReadOnlyList<LibraryCardEntry> Scope(IEnumerable<LibraryCardEntry> entries, LibraryBrowseQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(query);
+
+        return [.. entries.Where(entry => query.MediaType is null || entry.MediaType == query.MediaType)];
+    }
+
+    /// <summary>
+    /// The media-type tabs: All (only when several video types are visible) and each visible video type as a scope of this page,
+    /// then the other Library destinations the profile may browse. Sort and filters stay when switching scope.
+    /// </summary>
+    public static IReadOnlyList<LibraryScopeTab> ScopeTabs(LibraryBrowseQuery query, IReadOnlyCollection<WorkMediaType> visibleVideoTypes, IEnumerable<UiNavigationItem> otherTabs)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(visibleVideoTypes);
+        ArgumentNullException.ThrowIfNull(otherTabs);
+
+        var video = VideoMediaTypes
+            .Where(visibleVideoTypes.Contains)
+            .Select(type => new LibraryScopeTab(ScopeKey(type), Href(query with { MediaType = type }), query.MediaType == type))
+            .ToList();
+        if (video.Count > 1)
+        {
+            video.Insert(0, new LibraryScopeTab("library.browse.scope.all", Href(query with { MediaType = null }), query.MediaType is null));
+        }
+
+        return [.. video, .. otherTabs.Select(tab => new LibraryScopeTab(tab.LabelKey, tab.Href, false))];
+    }
+
+    public static string ScopeKey(WorkMediaType type) => type switch
+    {
+        WorkMediaType.Series => "library.browse.scope.series",
+        WorkMediaType.Movie => "library.browse.scope.movie",
+        _ => "library.browse.scope.anime"
+    };
     public static bool Matches(LibraryCardEntry entry, LibraryBrowseQuery query, LibraryLanguagePreference preference) =>
-        (query.Progress.Count == 0 || query.Progress.Contains(ProgressOf(entry)))
+        (query.Search is null || entry.Card.Title.Contains(query.Search, StringComparison.InvariantCultureIgnoreCase))
+        && (query.Progress.Count == 0 || query.Progress.Contains(ProgressOf(entry)))
         && (query.Availability.Count == 0 || query.Availability.Any(state => Matches(entry, state)))
         && (!query.PreferredLanguage || preference.IsAvailableIn(entry))
         && (query.AudioLanguage is null || Has(entry.Card.AudioLanguages, query.AudioLanguage))
@@ -612,7 +711,7 @@ public static class LibraryBrowse
     }
 
     /// <summary>Case-insensitive membership of a language code in a card's language list.</summary>
-    public static bool Has(IReadOnlyList<string>? languages, string code) =>
+    public static bool Has(IEnumerable<string>? languages, string code) =>
         languages is not null && languages.Any(x => string.Equals(x, code, StringComparison.OrdinalIgnoreCase));
 
     private static string? FormatOf(LibraryCardEntry entry) =>

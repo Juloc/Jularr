@@ -195,6 +195,12 @@ public static class AnimeArtworkStore
         AnimeArtworkCache.Default.GetPublicUrl(animeId, AnimeArtworkSlot.SeasonPoster(seasonNumber)) ??
         ResolvePosterUrl(animeId, fallbackUrl);
 
+    /// <summary>The largest side an artwork source may have; anything bigger is refused before it is decoded.</summary>
+    public const int MaxSourceDimension = 8000;
+
+    /// <summary>The largest pixel count an artwork source may have, so a small compressed file cannot expand into gigabytes.</summary>
+    public const long MaxSourcePixels = 40_000_000;
+
     public static async Task<bool> CreateOptimizedDerivativeAsync(
         AnimeArtworkKind kind,
         Stream source,
@@ -208,16 +214,42 @@ public static class AnimeArtworkStore
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-
-        if (AnimeArtworkFiles.DetectExtension(bytes) is null)
+        if (CreateOptimizedDerivative(kind, bytes) is not { } derivative)
         {
             return false;
         }
 
-        using var bitmap = SKBitmap.Decode(bytes);
+        await destination.WriteAsync(derivative, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// The WebP derivative of a JPEG, PNG or WebP image, scaled down to the kind's width; null for anything else, for an image whose
+    /// declared dimensions exceed <see cref="MaxSourceDimension"/> or <see cref="MaxSourcePixels"/> (checked from the header, before
+    /// any pixel is decoded), and for an image that does not decode.
+    /// </summary>
+    public static byte[]? CreateOptimizedDerivative(AnimeArtworkKind kind, byte[] bytes)
+    {
+        if (bytes.Length == 0)
+        {
+            return null;
+        }
+
+        using var encoded = SKData.CreateCopy(bytes);
+        using var codec = SKCodec.Create(encoded);
+        if (codec is null
+            || codec.EncodedFormat is not (SKEncodedImageFormat.Jpeg or SKEncodedImageFormat.Png or SKEncodedImageFormat.Webp)
+            || codec.Info.Width is <= 0 or > MaxSourceDimension
+            || codec.Info.Height is <= 0 or > MaxSourceDimension
+            || (long)codec.Info.Width * codec.Info.Height > MaxSourcePixels)
+        {
+            return null;
+        }
+
+        using var bitmap = SKBitmap.Decode(codec);
         if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0)
         {
-            return false;
+            return null;
         }
 
         var maxWidth = kind == AnimeArtworkKind.Poster
@@ -239,7 +271,7 @@ public static class AnimeArtworkStore
 
             if (resized is null)
             {
-                return false;
+                return null;
             }
 
             outputBitmap = resized;
@@ -247,18 +279,16 @@ public static class AnimeArtworkStore
 
         try
         {
-            cancellationToken.ThrowIfCancellationRequested();
             using var data = outputBitmap.Encode(
                 SKEncodedImageFormat.Webp,
                 WebpQuality);
 
             if (data is null || data.Size == 0)
             {
-                return false;
+                return null;
             }
 
-            await destination.WriteAsync(data.ToArray(), cancellationToken);
-            return true;
+            return data.ToArray();
         }
         finally
         {

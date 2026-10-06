@@ -98,11 +98,7 @@ public sealed class OfflineProgressReconciler(EpisodeProgressService progress)
             positionMs = Math.Min(positionMs, duration);
         }
 
-        var reachedEnd = checkpoint.Completed ||
-            (durationMs is { } knownDuration &&
-             positionMs >= knownDuration * EpisodeProgressService.CompletionThreshold);
-
-        if (reachedEnd)
+        if (checkpoint.Completed)
         {
             return current.IsCompleted
                 ? OfflineProgressOutcome.Unchanged

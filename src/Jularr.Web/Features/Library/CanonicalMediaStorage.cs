@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
@@ -354,119 +355,153 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
     private sealed record VideoEpisodeRow(Guid Id, Guid WorkId, int SeasonNumber, int EpisodeNumber);
 }
 
+
 /// <summary>
-/// Idempotent bridge for legacy Anime files. File/analysis ids are retained because the schema evolves
-/// the old tables in place; only canonical WorkEpisode/Version/Asset relations are added.
+/// Idempotent bridge for legacy Anime records. Every legacy Anime and Episode gets its canonical Work,
+/// WorkEpisode and source link whether or not a file exists, because the consumer Library derives
+/// membership and missing units from the canonical structure. Files are attached to canonical
+/// Asset/StoredFile identity afterwards. File/analysis ids are retained because the schema evolves the
+/// old tables in place; only canonical WorkEpisode/Version/Asset relations are added.
 /// </summary>
 public sealed class CanonicalVideoStorageBackfillService(
     AppDbContext db,
     LegacyWorkBridge bridge,
-    CanonicalMediaStorageService storage)
+    CanonicalMediaStorageService storage,
+    ILogger<CanonicalVideoStorageBackfillService> logger)
 {
-    public async Task<int> BackfillLegacyAnimeAsync(
-        Guid? libraryRootId,
-        CancellationToken cancellationToken)
+    // A stale file stays pending until a scan removes it; warn once per process instead of on every scan.
+    private static readonly ConcurrentDictionary<string, byte> WarnedMissingFiles = new(StringComparer.Ordinal);
+
+    /// <returns>The number of legacy files attached to canonical video Assets.</returns>
+    public async Task<int> BackfillLegacyAnimeAsync(Guid? libraryRootId, CancellationToken cancellationToken)
     {
-        var candidates = await (
-                from file in db.StoredFiles.AsNoTracking()
-                where file.EpisodeId != null &&
-                      file.MediaAssetId == null &&
-                      (!libraryRootId.HasValue || file.LibraryRootId == libraryRootId.Value)
-                join episode in db.Episodes.AsNoTracking()
-                    on file.EpisodeId!.Value equals episode.Id
-                join anime in db.Anime.AsNoTracking()
-                    on episode.AnimeId equals anime.Id
-                select new LegacyAnimeStoredFile(
-                    file.Path,
-                    episode.Id,
-                    episode.AnimeId,
-                    anime.Key,
-                    anime.Title,
-                    episode.SeasonNumber,
-                    episode.Number,
-                    episode.Title))
+        var pendingFiles = await db.StoredFiles
+            .AsNoTracking()
+            .Where(x => x.EpisodeId != null && x.MediaAssetId == null && (!libraryRootId.HasValue || x.LibraryRootId == libraryRootId.Value))
+            .Select(x => new LegacyStoredFile(x.Path, x.EpisodeId!.Value))
+            .ToListAsync(cancellationToken);
+        var pendingEpisodeIds = pendingFiles.Select(x => x.LegacyEpisodeId).Distinct().ToArray();
+
+        var episodes = await (
+                from episode in db.Episodes.AsNoTracking()
+                join anime in db.Anime.AsNoTracking() on episode.AnimeId equals anime.Id
+                where pendingEpisodeIds.Contains(episode.Id) ||
+                      !db.WorkSourceLinks.Any(link => link.SourceKind == WorkSourceKind.Episode && link.SourceId == episode.Id)
+                select new LegacyAnimeEpisode(episode.Id, anime.Id, anime.Key, anime.Title, episode.SeasonNumber, episode.Number, episode.Title))
+            .ToListAsync(cancellationToken);
+        var animeWithoutWork = await db.Anime
+            .AsNoTracking()
+            .Where(anime => !db.WorkSourceLinks.Any(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == anime.Id))
+            .Select(anime => new LegacyAnime(anime.Id, anime.Key, anime.Title))
             .ToListAsync(cancellationToken);
 
-        if (candidates.Count == 0)
+        if (episodes.Count == 0 && animeWithoutWork.Count == 0)
         {
             return 0;
         }
 
-        var workByAnime = new Dictionary<Guid, Guid>();
-        foreach (var anime in candidates
-                     .GroupBy(x => x.AnimeId)
-                     .Select(group => group.First()))
+        var animeById = episodes
+            .Select(x => new LegacyAnime(x.AnimeId, x.AnimeKey, x.AnimeTitle))
+            .Concat(animeWithoutWork)
+            .DistinctBy(x => x.Id)
+            .ToDictionary(x => x.Id);
+        var animeIds = animeById.Keys.ToArray();
+        var workByAnime = await db.WorkSourceLinks
+            .AsNoTracking()
+            .Where(x => x.SourceKind == WorkSourceKind.Anime && animeIds.Contains(x.SourceId))
+            .ToDictionaryAsync(x => x.SourceId, x => x.WorkId, cancellationToken);
+        foreach (var anime in animeById.Values.Where(x => !workByAnime.ContainsKey(x.Id)))
         {
-            workByAnime[anime.AnimeId] = await bridge.EnsureWorkForAnimeAsync(
-                new Anime { Id = anime.AnimeId, Key = anime.AnimeKey, Title = anime.AnimeTitle },
+            workByAnime[anime.Id] = await bridge.EnsureWorkForAnimeAsync(
+                new Anime { Id = anime.Id, Key = anime.Key, Title = anime.Title },
                 cancellationToken);
         }
 
         var workIds = workByAnime.Values.Distinct().ToArray();
-        var existingEpisodes = await db.WorkEpisodes
-            .Where(x => workIds.Contains(x.WorkId))
-            .ToListAsync(cancellationToken);
-        var canonicalEpisodeByKey = existingEpisodes.ToDictionary(
-            x => (x.WorkId, x.SeasonNumber, x.EpisodeNumber));
+        var canonicalEpisodeByKey = (await db.WorkEpisodes
+                .Where(x => workIds.Contains(x.WorkId))
+                .ToListAsync(cancellationToken))
+            .ToDictionary(x => (x.WorkId, x.SeasonNumber, x.EpisodeNumber));
 
-        foreach (var candidate in candidates
-                     .GroupBy(x => x.LegacyEpisodeId)
-                     .Select(group => group.First()))
+        foreach (var episode in episodes.GroupBy(x => x.LegacyEpisodeId).Select(group => group.First()))
         {
-            var workId = workByAnime[candidate.AnimeId];
-            var key = (workId, candidate.SeasonNumber, candidate.EpisodeNumber);
+            var workId = workByAnime[episode.AnimeId];
+            var key = (workId, episode.SeasonNumber, episode.EpisodeNumber);
             if (canonicalEpisodeByKey.ContainsKey(key))
             {
                 continue;
             }
 
-            var episode = new WorkEpisode
+            var canonical = new WorkEpisode
             {
                 WorkId = workId,
-                SeasonNumber = candidate.SeasonNumber,
-                EpisodeNumber = candidate.EpisodeNumber,
-                IsSpecial = candidate.SeasonNumber == 0,
-                Title = candidate.EpisodeTitle
+                SeasonNumber = episode.SeasonNumber,
+                EpisodeNumber = episode.EpisodeNumber,
+                IsSpecial = episode.SeasonNumber == 0,
+                Title = episode.EpisodeTitle
             };
-            db.WorkEpisodes.Add(episode);
-            canonicalEpisodeByKey.Add(key, episode);
+            db.WorkEpisodes.Add(canonical);
+            canonicalEpisodeByKey.Add(key, canonical);
         }
 
-        var legacyEpisodeIds = candidates.Select(x => x.LegacyEpisodeId).Distinct().ToArray();
-        var linkedEpisodeIds = await db.WorkSourceLinks
-            .AsNoTracking()
-            .Where(x => x.SourceKind == WorkSourceKind.Episode && legacyEpisodeIds.Contains(x.SourceId))
-            .Select(x => x.SourceId)
-            .ToListAsync(cancellationToken);
-        var linkedSet = linkedEpisodeIds.ToHashSet();
-        foreach (var candidate in candidates
-                     .Where(x => !linkedSet.Contains(x.LegacyEpisodeId))
+        var legacyEpisodeIds = episodes.Select(x => x.LegacyEpisodeId).Distinct().ToArray();
+        var linkedEpisodeIds = (await db.WorkSourceLinks
+                .AsNoTracking()
+                .Where(x => x.SourceKind == WorkSourceKind.Episode && legacyEpisodeIds.Contains(x.SourceId))
+                .Select(x => x.SourceId)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+        foreach (var episode in episodes
+                     .Where(x => !linkedEpisodeIds.Contains(x.LegacyEpisodeId))
                      .GroupBy(x => x.LegacyEpisodeId)
                      .Select(group => group.First()))
         {
             db.WorkSourceLinks.Add(new WorkSourceLink
             {
-                WorkId = workByAnime[candidate.AnimeId],
+                WorkId = workByAnime[episode.AnimeId],
                 SourceKind = WorkSourceKind.Episode,
-                SourceId = candidate.LegacyEpisodeId
+                SourceId = episode.LegacyEpisodeId
             });
         }
 
         await db.SaveChangesAsync(cancellationToken);
 
-        var attachments = candidates.Select(candidate =>
-        {
-            var workId = workByAnime[candidate.AnimeId];
-            var episode = canonicalEpisodeByKey[(workId, candidate.SeasonNumber, candidate.EpisodeNumber)];
-            return new CanonicalVideoAttachment(workId, episode.Id, candidate.Path);
-        }).ToArray();
+        var episodeById = episodes.GroupBy(x => x.LegacyEpisodeId).ToDictionary(group => group.Key, group => group.First());
+        // A file on unmounted or removed media must not stop startup or the scan; it is attached once it is back.
+        var attachments = pendingFiles
+            .Where(file => episodeById.ContainsKey(file.LegacyEpisodeId) && IsFilePresent(file.Path))
+            .Select(file =>
+            {
+                var episode = episodeById[file.LegacyEpisodeId];
+                var workId = workByAnime[episode.AnimeId];
+                return new CanonicalVideoAttachment(workId, canonicalEpisodeByKey[(workId, episode.SeasonNumber, episode.EpisodeNumber)].Id, file.Path);
+            })
+            .ToArray();
 
         await storage.AttachVideosAsync(attachments, cancellationToken);
         return attachments.Length;
     }
 
-    private sealed record LegacyAnimeStoredFile(
-        string Path,
+    private bool IsFilePresent(string path)
+    {
+        if (File.Exists(path))
+        {
+            return true;
+        }
+
+        if (WarnedMissingFiles.TryAdd(path, 0))
+        {
+            logger.LogWarning("Skipping the canonical video bridge for missing file {Path}; it is attached when the file is back or removed by a scan.", path);
+        }
+
+        return false;
+    }
+
+    private sealed record LegacyStoredFile(string Path, Guid LegacyEpisodeId);
+
+    private sealed record LegacyAnime(Guid Id, string Key, string Title);
+
+    private sealed record LegacyAnimeEpisode(
         Guid LegacyEpisodeId,
         Guid AnimeId,
         string AnimeKey,

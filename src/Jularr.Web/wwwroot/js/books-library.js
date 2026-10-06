@@ -1,5 +1,5 @@
 // Books page: client-side tabs, filters, sort and view over the server-rendered shelf, plus the
-// "Add book" dialog (catalog search → add or request through the access policy). The Offline tab
+// book dialog (catalog search → Request through the access policy; manual import for managers). The Offline tab
 // is applied by offline-library-ui.js through the shared data-library-filter-option buttons.
 (() => {
     const library = document.querySelector("[data-books-library]");
@@ -175,8 +175,7 @@
             slot.append(element("span", `status-pill request-status-${current.requestStatus}`, label));
         }
         if (!current.requestStatus || failed) {
-            const label = failed ? text("textRetry")
-                : dialog.dataset.createsRequest === "true" ? text("textRequest") : text("textAdd");
+            const label = failed ? text("textRetry") : text("textRequest");
             const button = element("button", failed ? "button" : "button button-primary", label);
             button.type = "button";
             button.addEventListener("click", () => add(item, slot, button));

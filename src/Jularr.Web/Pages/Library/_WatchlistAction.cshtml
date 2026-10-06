@@ -1,0 +1,13 @@
+@model WatchlistActionView
+@* The watchlist ("My List") control beside the primary action of the Anime, Movie and Series heroes. It is a plain form that posts to
+   the page's Follow or Unfollow handler, so it works without script; the handler is idempotent and profile-scoped. *@
+@{
+    var ui = Model.Ui;
+    var isOn = Model.IsOn;
+}
+<form method="post" asp-page-handler="@(isOn ? "Unfollow" : "Follow")" asp-all-route-data="Model.Route" class="ad-inline-form ad-watchlist">
+    <button class="ad-secondary@(isOn ? " is-on" : "")" type="submit" aria-pressed="@(isOn ? "true" : "false")" title="@(isOn ? ui["library.anime.watchlistRemoveAria"] : null)">
+        <partial name="_AnimeDetailIcon" model='isOn ? "check" : "plus"' />
+        <span>@(isOn ? ui["library.anime.watchlistOn"] : ui["library.anime.watchlistAdd"])</span>
+    </button>
+</form>

@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Watchlist;
 using Jularr.Web.Ui;
@@ -47,7 +48,15 @@ public sealed record DiscoverLocalFacts(
     IReadOnlyList<string> Audio,
     IReadOnlyList<string> Subtitles,
     string? PlayUrl,
-    string? PlayLabel);
+    string? PlayLabel)
+{
+    /// <param name="playbackEnabled">The play link opens the player, so an instance without Playback has none (docs/mockups/instant-play, section 11).</param>
+    public static DiscoverLocalFacts From(MediaBannerCardData card, UiTextBundle ui, bool playbackEnabled)
+    {
+        var action = playbackEnabled ? MediaBannerCardModel.Create(card, ui).Action : null;
+        return new DiscoverLocalFacts(card.AudioLanguages ?? [], card.SubtitleLanguages ?? [], action?.Url, action?.Label);
+    }
+}
 
 /// <summary>One title of a Discover shelf or result grid: what the card shows and what its preview offers.</summary>
 public sealed record DiscoverCardView(
@@ -58,9 +67,11 @@ public sealed record DiscoverCardView(
     string Title,
     string? NativeTitle,
     string? Author,
-    string Href,
-    bool HrefIsExternal,
+    string? DetailUrl,
+    bool ResolvesDetail,
     string? PosterUrl,
+    string? BackdropUrl,
+    string? TrailerKey,
     string Initial,
     string Meta,
     int? Year,
@@ -79,19 +90,13 @@ public sealed record DiscoverCardView(
     string? PlayLabel,
     string? Format,
     string? RawStatus,
-    string AddAction,
+    bool CanRequest,
     string? ImportMangaUrl,
     bool CanFollow,
     bool IsFollowed,
     Guid? FollowedFranchiseId,
     bool CanFollowFranchise,
     bool CanImportSource);
-
-public sealed record DiscoverShelfView(
-    string Id,
-    string Heading,
-    string? SeeAllUrl,
-    IReadOnlyList<DiscoverCardView> Cards);
 
 /// <summary>Everything a card needs besides the title itself. All of it is read on the server; the browser never supplies library state.</summary>
 public sealed record DiscoverContext(
@@ -100,7 +105,7 @@ public sealed record DiscoverContext(
     IReadOnlyDictionary<(MediaAcquisitionKind Kind, string ExternalId), AcquisitionRequest> OpenRequests,
     IReadOnlyDictionary<string, DiscoverLocalFacts> Local,
     IReadOnlyDictionary<string, Guid?> Followed,
-    IReadOnlyDictionary<string, string> AddActions);
+    IReadOnlySet<string> RequestableCategories);
 
 public static partial class DiscoverCardFactory
 {
@@ -126,21 +131,16 @@ public static partial class DiscoverCardFactory
                 ? facts
                 : null;
 
-        var addAction = !item.IsLocal && open is null && context.AddActions.TryGetValue(item.Category, out var action)
-            ? action
-            : "";
+        var canRequest = !item.IsLocal && open is null && context.RequestableCategories.Contains(item.Category);
+        var state = DiscoverStates.Resolve(item, open, local, context.Preference, canRequest, ui);
 
-        var state = DiscoverStates.Resolve(item, open, local, context.Preference, addAction.Length > 0, ui);
-
-        var providerUrl = ProviderUrl(item);
         var importUrl = item.DetailsUrl.StartsWith("/Discover/MangaImport", StringComparison.Ordinal)
             ? item.DetailsUrl
             : null;
-        var href = item.IsLocal && item.LocalUrl is { Length: > 0 } target
-            ? target
-            : importUrl is not null
-                ? providerUrl ?? item.DetailsUrl
-                : item.DetailsUrl;
+        var detailUrl = DetailUrlOf(item);
+
+        // A title the library does not know yet gets its canonical Work when it is opened, and only a profile that may request it may create one (docs/mockups/discover/SPEC.md).
+        var resolvesDetail = detailUrl is null && canRequest && item.Provider == TmdbDiscoveryProvider.ProviderKey && item.Category is "movie" or "tv";
 
         var canFollow = WatchlistDraftInput.TryIdentity(item.Category, item.Provider, item.ExternalId, out var identity);
         var followedFranchise = canFollow && context.Followed.TryGetValue(identity.Key, out var franchiseId)
@@ -151,7 +151,7 @@ public static partial class DiscoverCardFactory
         var release = MediaBannerCardModel.MapStatus(item.Status);
         var requestLabel = open is null
             ? null
-            : ui["requests.status." + AcquisitionAccessNames.Status(open.Status)];
+            : ui[ConsumerAcquisitionLabels.StatusKey(open.Status)];
 
         return new DiscoverCardView(
             item.Id,
@@ -161,9 +161,11 @@ public static partial class DiscoverCardFactory
             item.Title,
             string.IsNullOrWhiteSpace(item.NativeTitle) || item.NativeTitle == item.Title ? null : item.NativeTitle,
             item.Author,
-            href,
-            IsExternal(href),
-            string.IsNullOrWhiteSpace(item.CoverImageUrl) ? null : item.CoverImageUrl,
+            detailUrl,
+            resolvesDetail,
+            DiscoverUrls.Safe(item.CoverImageUrl),
+            DiscoverUrls.Safe(item.BackdropUrl),
+            WorkTrailerView.IsYouTubeKey(item.TrailerKey) ? item.TrailerKey : null,
             WatchlistLabels.Initial(item.Title),
             Meta(item.Category, kind, item.Year, ui),
             item.Year,
@@ -187,7 +189,7 @@ public static partial class DiscoverCardFactory
             local?.PlayLabel,
             item.Format,
             item.Status,
-            addAction,
+            canRequest,
             importUrl,
             canFollow,
             isFollowed,
@@ -272,14 +274,17 @@ public static partial class DiscoverCardFactory
         return facts;
     }
 
-    private static string? ProviderUrl(DiscoveryItem item) =>
-        item.Provider == "anilist" && item.ExternalId.All(char.IsAsciiDigit) && item.ExternalId.Length > 0
-            ? $"https://anilist.co/{(item.Category == "anime" ? "anime" : "manga")}/{item.ExternalId}"
-            : null;
-
-    private static bool IsExternal(string url) =>
-        url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-        || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// The page of this application that opens the title: its library page, the Detail of the canonical Work it already has, or the catalog page of a book.
+    /// A title that only exists at a provider has none, and a provider page is never the card's destination (docs/mockups/media-preview, section 21).
+    /// </summary>
+    private static string? DetailUrlOf(DiscoveryItem item)
+    {
+        var candidate = item.IsLocal && item.LocalUrl is { Length: > 0 } localUrl
+            ? localUrl
+            : item.WorkUrl ?? (item.DetailsUrl.StartsWith("/Books/", StringComparison.Ordinal) ? item.DetailsUrl : null);
+        return DiscoverUrls.Safe(candidate) is { } safe && safe.StartsWith('/') ? safe : null;
+    }
 
     internal static string CodeList(IReadOnlyList<string> codes) =>
         string.Join('/', codes.Take(MaxLanguageCodes).Select(code => code.ToUpperInvariant()));
@@ -327,7 +332,7 @@ public static class DiscoverStates
                 .Where(code => code is not null && code != PlaybackLanguages.SubtitlesOff)
                 .Select(code => code!)
                 .ToArray();
-            var stage = ui["requests.status." + AcquisitionAccessNames.Status(open.Status)];
+            var stage = ui[ConsumerAcquisitionLabels.StatusKey(open.Status)];
 
             if (requested.Length > 0 && preference.IsSet)
             {
@@ -394,6 +399,33 @@ public static partial class DiscoverText
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
+}
+
+/// <summary>Provider text is untrusted: an address that comes from a provider is only used as an image or a link when it is a web address or a path of this application.</summary>
+public static class DiscoverUrls
+{
+    public static string? Safe(string? url)
+    {
+        var candidate = url?.Trim();
+        if (string.IsNullOrEmpty(candidate))
+        {
+            return null;
+        }
+
+        // A path of this application is decided by its text first: on Unix a path such as /Library/Movie/1 also parses as an absolute file address, so the
+        // parser cannot tell it from a foreign scheme. A protocol-relative address (//host), a backslash variant or a control character would leave the application.
+        if (candidate.Any(char.IsControl))
+        {
+            return null;
+        }
+
+        if (candidate.StartsWith('/'))
+        {
+            return candidate.Length > 1 && candidate[1] is '/' or '\\' ? null : candidate;
+        }
+
+        return Uri.TryCreate(candidate, UriKind.Absolute, out var absolute) && absolute.Scheme is "http" or "https" ? candidate : null;
+    }
 }
 
 public static class DiscoverCanonical

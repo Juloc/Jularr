@@ -1,3 +1,5 @@
+using Jularr.Web.Features.Library;
+
 namespace Jularr.Web.Features.Acquisition.Import;
 
 /// <summary>What happens to the source file of an import: moved, copied or hardlinked.</summary>
@@ -15,6 +17,17 @@ public enum ImportFileAction
 /// </summary>
 public sealed class ImportFileTransfer(IHardLinkCreator hardLinks)
 {
+    /// <summary>The import mode that executes a LibraryRoot placement policy; the two enums order their members differently.</summary>
+    public static ImportMode ModeFor(LibraryPlacementPolicy policy) =>
+        policy switch
+        {
+            LibraryPlacementPolicy.HardlinkOrCopy => ImportMode.HardlinkOrCopy,
+            LibraryPlacementPolicy.Hardlink => ImportMode.Hardlink,
+            LibraryPlacementPolicy.Copy => ImportMode.Copy,
+            LibraryPlacementPolicy.Move => ImportMode.Move,
+            _ => throw new ArgumentOutOfRangeException(nameof(policy))
+        };
+
     /// <summary>The file action and cross-filesystem fallback an import mode stands for.</summary>
     public static (ImportFileAction Action, bool AllowHardlinkFallbackToCopy) Resolve(ImportMode mode) =>
         mode switch

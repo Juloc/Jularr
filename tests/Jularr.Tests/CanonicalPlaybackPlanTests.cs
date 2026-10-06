@@ -25,7 +25,7 @@ public sealed class CanonicalPlaybackPlanTests
             fixture.Db,
             fixture.Inventory,
             sessions,
-            new PlaybackServerCapabilityProvider(new PlaybackTranscodeSlots()),
+            PlaybackServerTestKit.Create().Capabilities,
             canonicalStorage: storage,
             videoProgress: progress);
 
@@ -153,18 +153,18 @@ public sealed class CanonicalPlaybackPlanTests
         await AttachAsync(fixture, storage, series.Id, episode2.Id, "bootstrap-s01e02.mkv", MediaProbeFixtures.HevcTenBitHdrMultiAudio);
         await AttachAsync(fixture, storage, series.Id, episode3.Id, "bootstrap-s02e01.mp4", MediaProbeFixtures.H264Stereo);
 
-        var movieBootstrap = await player.GetAsync(
+        var movieBootstrap = (await player.GetAsync(
             "reader",
             PlaybackVideoTarget.Movie(movie.Id),
-            CancellationToken.None);
+            CancellationToken.None)).Snapshot;
         Assert.IsNotNull(movieBootstrap);
         Assert.IsNull(movieBootstrap.Navigation.Previous);
         Assert.IsNull(movieBootstrap.Navigation.Next, "A movie never fabricates episode navigation.");
 
-        var tvBootstrap = await player.GetAsync(
+        var tvBootstrap = (await player.GetAsync(
             "reader",
             PlaybackVideoTarget.Episode(series.Id, episode2.Id),
-            CancellationToken.None);
+            CancellationToken.None)).Snapshot;
         Assert.IsNotNull(tvBootstrap);
         Assert.AreEqual(episode1.Id, tvBootstrap.Navigation.Previous!.Target.WorkEpisodeId);
         Assert.AreEqual(episode3.Id, tvBootstrap.Navigation.Next!.Target.WorkEpisodeId);
@@ -209,7 +209,7 @@ public sealed class CanonicalPlaybackPlanTests
             fixture.Db,
             fixture.Inventory,
             sessions,
-            new PlaybackServerCapabilityProvider(new PlaybackTranscodeSlots()),
+            PlaybackServerTestKit.Create().Capabilities,
             canonicalStorage: storage);
 
         var outcome = await planner.PlanAsync(

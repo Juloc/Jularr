@@ -156,7 +156,14 @@
                                     <strong class="admact-title">@operation.Title</strong>
                                     @if (!string.IsNullOrWhiteSpace(operation.Subject))
                                     {
-                                        <small>@operation.Subject</small>
+                                        @if (Model.MediaLinks.TryGetValue(operation.Id, out var mediaLink))
+                                        {
+                                            <small><a class="text-link" href="@mediaLink">@operation.Subject</a></small>
+                                        }
+                                        else
+                                        {
+                                            <small>@operation.Subject</small>
+                                        }
                                     }
                                 </div>
                             </td>

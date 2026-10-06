@@ -25,8 +25,10 @@ public sealed class RoleAuthorizationTests
         ["Jularr.Web.Pages.Admin.BookManualSearchModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.HistoryModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.IndexModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.ManualSearchModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.LogsModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.MediaDetailModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.MediaWorkModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.OperationModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.OperationsModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.Reconciliation.IndexModel"] = JularrPolicies.AdminSystem,
@@ -65,6 +67,7 @@ public sealed class RoleAuthorizationTests
         ["Jularr.Web.Pages.Admin.RolesModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.SonarrModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.SystemModel"] = JularrPolicies.AdminSystem,
+        ["Jularr.Web.Pages.Admin.TranscodingModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.UserModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.UsersModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.LocalizationAdmin.IndexModel"] = JularrPolicies.AdminSystem,
@@ -158,6 +161,7 @@ public sealed class RoleAuthorizationTests
     [DataRow(typeof(Jularr.Web.Pages.Admin.UsersModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Admin.SystemModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Admin.HealthModel), false)]
+    [DataRow(typeof(Jularr.Web.Pages.Admin.TranscodingModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Settings.ApiKeys.IndexModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Library.RenameModel), false)]
     [DataRow(typeof(Jularr.Web.Pages.Admin.OperationsModel), true)]

@@ -1,17 +1,18 @@
 @page
 @using Jularr.Web.Features.Collections
 @using Jularr.Web.Features.Library
+@using Jularr.Web.Features.MediaCore
 @model Jularr.Web.Pages.Library.IndexModel
 @* Layout and hierarchy follow docs/mockups/library (binding): a Library | Collections switch, the media-type
-   tabs, one toolbar (count, Filters, Sort, layout) and a poster grid. The address is the only state. *@
+   tabs, one toolbar (search, count, Filters, Sort, layout) and a poster grid. The address is the only state. *@
 @{
     var ui = Model.Ui;
     var query = Model.Query;
     ViewData["Title"] = ui["nav.library"];
-    var isOwner = User.IsInRole(Jularr.Web.Features.Auth.AccountRoles.Owner);
     var state = Model.State;
     var facets = Model.Facets;
     var active = query.ActiveFilterCount;
+    var refined = active > 0 || query.Search is not null;
     var hasTitles = !query.Collections && Model.Total > 0 && state != LibraryPageState.Error;
 
     string CountText(int count) => count == 1 ? ui["library.browse.countOne"] : ui.Format("library.browse.count", ("count", count));
@@ -40,18 +41,11 @@
                    aria-current="@(query.Collections ? "page" : null)" data-lib-nav>@ui["collections.nav.title"]</a>
             </nav>
         </div>
-        @if (isOwner && !query.Collections)
-        {
-            <div class="lib-head-actions">
-                <a class="button" href="/Settings/Sonarr">@ui["library.index.importFromSonarr"]</a>
-                <a class="button" href="/Settings">@ui["library.index.manageRoots"]</a>
-            </div>
-        }
     </header>
 
     @if (!query.Collections)
     {
-        <partial name="_LibraryTypeTabs" model="ui" />
+        <partial name="_LibraryScopeTabs" model="(Model.ScopeTabs, ui)" />
     }
 
     <p class="lib-notice" data-lib-offline hidden role="status">
@@ -64,8 +58,18 @@
     {
         var sortHref = new Func<LibrarySort, string>(sort => LibraryBrowse.Href(query with { Sort = sort }));
         <div class="lib-toolbar">
+            <form class="lib-search" method="get" action="@LibraryBrowse.BasePath" role="search" data-lib-form>
+                @foreach (var parameter in LibraryBrowse.Parameters(query with { Search = null }))
+                {
+                    <input type="hidden" name="@parameter.Key" value="@parameter.Value" />
+                }
+                <partial name="_LibraryIcon" model='"search"' />
+                <input type="search" name="q" value="@query.Search" maxlength="@LibraryBrowse.MaxSearchLength" aria-label="@ui["library.browse.search.label"]"
+                       placeholder="@ui["library.browse.search.label"]" autocomplete="off" enterkeyhint="search" />
+            </form>
+
             <p class="lib-count" aria-live="polite">
-                @(active > 0
+                @(refined
                     ? ui.Format("library.browse.countFiltered", ("count", Model.Cards.Count), ("total", Model.Total))
                     : CountText(Model.Total))
             </p>
@@ -83,14 +87,10 @@
                     </summary>
                     <span class="lib-pop-backdrop" data-lib-close></span>
                     <div class="lib-pop-panel lib-filter-panel" role="dialog" aria-label="@ui["library.browse.filters"]">
-                        <form method="get" action="@LibraryBrowse.BasePath" data-lib-filters>
-                            @if (query.Sort != LibrarySort.Recent)
+                        <form method="get" action="@LibraryBrowse.BasePath" data-lib-form>
+                            @foreach (var parameter in LibraryBrowse.Parameters(query.WithoutFilters()))
                             {
-                                <input type="hidden" name="sort" value="@LibraryBrowse.SortName(query.Sort)" />
-                            }
-                            @if (query.Layout == LibraryLayout.List)
-                            {
-                                <input type="hidden" name="view" value="list" />
+                                <input type="hidden" name="@parameter.Key" value="@parameter.Value" />
                             }
                             <div class="lib-pop-head">
                                 <h2>@ui["library.browse.filters"]</h2>
@@ -297,18 +297,33 @@
         {
             <partial name="_LibraryCollections" model="(Model.Collections, ui)" />
         }
+        else if (state == LibraryPageState.Empty && Model.LibraryTotal > 0)
+        {
+            <div class="lib-message">
+                <p>@ui["library.browse.scopeEmpty"]</p>
+            </div>
+        }
         else if (state == LibraryPageState.Empty)
         {
             <div class="empty-state">
                 <h3>@ui["library.index.emptyTitle"]</h3>
-                <p>@ui[isOwner ? "library.index.emptyHint" : "library.browse.empty.member"]</p>
+                <p>@ui["library.index.emptyHint"]</p>
+                <a class="button" href="/Discover">@ui["library.index.emptyAction"]</a>
             </div>
         }
         else if (state == LibraryPageState.NoResults)
         {
             <div class="lib-message">
-                <p>@ui["library.browse.noResults.title"]</p>
-                <a class="button" href="@LibraryBrowse.Href(query.WithoutFilters())" data-lib-nav>@ui["library.browse.noResults.reset"]</a>
+                @if (query.Search is { } search)
+                {
+                    <p>@ui.Format("library.browse.noResults.search", ("query", search))</p>
+                    <a class="button" href="@LibraryBrowse.Href(query.WithoutFilters() with { Search = null })" data-lib-nav>@ui["library.browse.noResults.clear"]</a>
+                }
+                else
+                {
+                    <p>@ui["library.browse.noResults.title"]</p>
+                    <a class="button" href="@LibraryBrowse.Href(query.WithoutFilters())" data-lib-nav>@ui["library.browse.noResults.reset"]</a>
+                }
             </div>
         }
         else

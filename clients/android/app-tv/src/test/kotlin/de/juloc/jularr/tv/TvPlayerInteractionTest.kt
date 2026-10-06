@@ -1,17 +1,20 @@
 package de.juloc.jularr.tv
 
+import de.juloc.jularr.core.design.PlayerSeekSteps
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TvPlayerInteractionTest {
+    private val seek = PlayerSeekSteps(backSeconds = 10, forwardSeconds = 30)
+
     @Test
-    fun hiddenControlsUseLeftRightForTenSecondSeeking() {
-        val left = TvPlayerInteraction.left(TvPlayerUiState(), wordCount = 0)
-        val right = TvPlayerInteraction.right(TvPlayerUiState(), wordCount = 0)
+    fun hiddenControlsUseLeftRightForTheAsymmetricSeekSteps() {
+        val left = TvPlayerInteraction.left(TvPlayerUiState(), wordCount = 0, seek = seek)
+        val right = TvPlayerInteraction.right(TvPlayerUiState(), wordCount = 0, seek = seek)
 
         assertEquals(listOf(TvPlayerEffect.SeekBy(-10_000)), left.effects)
-        assertEquals(listOf(TvPlayerEffect.SeekBy(10_000)), right.effects)
+        assertEquals(listOf(TvPlayerEffect.SeekBy(30_000)), right.effects)
     }
 
     @Test
@@ -67,11 +70,11 @@ class TvPlayerInteractionTest {
             learningLayer = TvLearningLayer.SENTENCE,
             focusedWordIndex = 0,
         )
-        state = TvPlayerInteraction.left(state, wordCount = 2).state
+        state = TvPlayerInteraction.left(state, wordCount = 2, seek = seek).state
         assertEquals(0, state.focusedWordIndex)
 
-        state = TvPlayerInteraction.right(state, wordCount = 2).state
-        state = TvPlayerInteraction.right(state, wordCount = 2).state
+        state = TvPlayerInteraction.right(state, wordCount = 2, seek = seek).state
+        state = TvPlayerInteraction.right(state, wordCount = 2, seek = seek).state
         assertEquals(1, state.focusedWordIndex)
 
         state = TvPlayerInteraction.ok(state, wordCount = 2).state

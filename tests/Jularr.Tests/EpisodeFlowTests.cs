@@ -128,7 +128,7 @@ public sealed class EpisodeFlowTests
     {
         var capabilities = ClientApiContract.Capabilities();
 
-        Assert.AreEqual(1, capabilities.ApiVersion);
+        Assert.AreEqual(2, capabilities.ApiVersion);
         Assert.IsTrue(capabilities.Features.PlaybackProgress);
         Assert.IsTrue(capabilities.Features.EpisodeFlow);
         Assert.IsTrue(capabilities.Features.ContinueWatching);

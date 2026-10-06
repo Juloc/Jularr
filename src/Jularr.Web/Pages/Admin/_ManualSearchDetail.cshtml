@@ -1,0 +1,73 @@
+@model Jularr.Web.Pages.Admin.ManualSearchModel
+@using Jularr.Web.Features.Acquisition.ManualSearch
+@* The inspected candidate: where it comes from, how Jularr read it, why it is eligible, warned or rejected and the score behind it.
+   The desktop drawer and the expanded phone card render the same body; the phone card leaves the download action to the sticky bar. *@
+@{
+    var ui = Model.Ui;
+    var chosen = Model.Selected!;
+    var target = Model.Target;
+    var chosenVerdict = ManualSearchModel.VerdictName(chosen.Verdict);
+    var parsedIdentity = chosen.ParsedTitle is null ? null : chosen.ParsedTitle + (chosen.ParsedUnit is null ? "" : " · " + chosen.ParsedUnit);
+    var requestedIdentity = target.Unit is { } requestedUnit ? target.Title + " · " + requestedUnit.Label : null;
+    var sameIdentity = string.Equals(parsedIdentity, requestedIdentity, StringComparison.OrdinalIgnoreCase);
+    var showAction = ViewData["ShowAction"] as bool? ?? true;
+}
+<div class="bms-detail-tags">
+    <span class="admin-tag admin-tag-text"><partial name="_ManualSearchIcon" model="@ManualSearchModel.TypeIcon(chosen.ReleaseType)" />@ui[ManualSearchModel.TypeKey(chosen.ReleaseType)]</span>
+    @if (chosen.Indexer is not null)
+    {
+        <span class="admin-tag admin-tag-text">@chosen.Indexer</span>
+    }
+    <span class="admin-tag admin-tag-@ManualSearchModel.VerdictTone(chosen.Verdict)"><partial name="_ManualSearchIcon" model="chosenVerdict" />@ui["admin.manualSearch.state." + chosenVerdict]</span>
+</div>
+<dl class="bms-facts">
+    <div><dt>@ui["admin.manualSearch.col.score"]</dt><dd>@(chosen.Score?.ToString() ?? "–")</dd></div>
+    <div><dt>@ui["admin.manualSearch.col.size"]</dt><dd>@ManualSearchModel.Size(chosen.SizeBytes)</dd></div>
+    <div><dt>@ui["admin.manualSearch.col.age"]</dt><dd>@ManualSearchModel.AgeText(ui, chosen.AgeDays)</dd></div>
+    <div><dt>@ui["admin.manualSearch.filter.quality"]</dt><dd>@(chosen.Quality ?? "—")</dd></div>
+    <div><dt>@ui["admin.manualSearch.col.language"]</dt><dd>@(chosen.AudioLanguages.Count > 0 ? string.Join(" / ", chosen.AudioLanguages) : "—")</dd></div>
+    <div><dt>@ui["admin.manualSearch.subtitles"]</dt><dd>@(chosen.SubtitleLanguages.Count > 0 ? string.Join(" / ", chosen.SubtitleLanguages) : "—")</dd></div>
+    <div><dt>@ui["admin.manualSearch.group"]</dt><dd>@(chosen.ReleaseGroup ?? "—")</dd></div>
+    <div><dt>@ui["admin.manualSearch.parsedIdentity"]</dt><dd>@(parsedIdentity ?? "—")</dd></div>
+    @if (requestedIdentity is not null && !sameIdentity)
+    {
+        <div><dt>@ui["admin.manualSearch.requestedIdentity"]</dt><dd>@requestedIdentity</dd></div>
+    }
+</dl>
+
+<div>
+    <strong>@ui["admin.manualSearch.whyThisResult"]</strong>
+    <ul class="bms-reasons">
+        @foreach (var reason in chosen.Reasons)
+        {
+            var reasonTone = ManualSearchModel.ReasonTone(reason.Code);
+            <li class="bms-reason-@reasonTone">
+                <partial name="_ManualSearchIcon" model="reasonTone" />
+                <span>@ui[ManualSearchModel.ReasonKey(reason.Code)]@(reason.Detail is null ? "" : ": " + reason.Detail)</span>
+            </li>
+        }
+    </ul>
+</div>
+
+@if (chosen.ScoreBreakdown.Count > 0)
+{
+    <div class="bms-breakdown">
+        <strong>@ui["admin.manualSearch.scoreBreakdown"]</strong>
+        <ul>
+            @foreach (var line in chosen.ScoreBreakdown)
+            {
+                <li>@line</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (showAction && chosen.CanGrab)
+{
+    <form method="post" asp-page-handler="Grab" class="bms-detail-action">
+        <input type="hidden" name="id" value="@target.Request.Id" />
+        <input type="hidden" name="unit" value="@(Model.UnitId ?? target.Unit?.Id)" />
+        <input type="hidden" name="releaseIdentity" value="@chosen.Identity" />
+        <button class="button button-primary" type="submit">@ui["admin.manualSearch.selectAndDownload"]</button>
+    </form>
+}

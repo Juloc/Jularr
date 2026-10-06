@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Web.Features.Media.Compatibility;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Subtitles;
 
 namespace Jularr.Web.Features.Playback.Decision;
@@ -20,7 +21,8 @@ public sealed record PlaybackDecisionRequest(
     PlaybackNetworkConditions? Network = null,
     PlaybackModePreference ModePreference = PlaybackModePreference.Auto,
     IReadOnlySet<PlaybackDeliveryMode>? FailedModes = null,
-    int? CurrentTargetKbps = null);
+    int? CurrentTargetKbps = null,
+    PlaybackAdaptationDirective? Adaptation = null);
 
 /// <summary>
 /// The one playback decision for every Jularr client. It walks Direct Play → Direct Stream
@@ -43,7 +45,8 @@ public static class PlaybackDecisionEngine
         return plan with
         {
             SourceContainer = PlaybackContainerNames.Name(request.Media.Container),
-            Subtitle = SubtitleOutput(request, plan)
+            Subtitle = SubtitleOutput(request, plan),
+            Buffer = plan.Mode == PlaybackDeliveryMode.Unavailable ? null : PlaybackBufferPolicy.For(request.Server.BufferPreset, plan.Mode)
         };
     }
 
@@ -83,8 +86,8 @@ public static class PlaybackDecisionEngine
         var client = request.Client;
         var network = request.Network ?? new PlaybackNetworkConditions();
         var failed = request.FailedModes ?? new HashSet<PlaybackDeliveryMode>();
-        var limit = PlaybackAutoQuality.Resolve(request.Quality, network, request.CurrentTargetKbps);
         var sourceKbps = media.OverallBitrateKbps;
+        var limit = PlaybackAutoQuality.Resolve(request.Quality, network, request.CurrentTargetKbps, request.Adaptation);
         var quality = new PlaybackQualityResolution(
             request.Quality,
             network.Class,
@@ -251,6 +254,10 @@ public static class PlaybackDecisionEngine
         else if (server.AvailableTranscodeSlots <= 0)
         {
             transcodeReasons.Add(Reason(PlaybackReasonCodes.TranscoderBusy, PlaybackReasonSeverity.Blocker, PlaybackDeliveryMode.Transcode));
+        }
+        else if (server.EncoderTooSlow)
+        {
+            transcodeReasons.Add(Reason(PlaybackReasonCodes.TranscodeUnsustainable, PlaybackReasonSeverity.Blocker, PlaybackDeliveryMode.Transcode));
         }
         else if (transport == PlaybackTransport.None)
         {
@@ -527,6 +534,8 @@ public static class PlaybackDecisionEngine
             PlaybackLimitSource.Preset => PlaybackReasonCodes.QualityLimit,
             PlaybackLimitSource.NetworkDefault => PlaybackReasonCodes.RemoteStartLimit,
             PlaybackLimitSource.Stalls => PlaybackReasonCodes.StallLimit,
+            PlaybackLimitSource.TranscodeSpeed => PlaybackReasonCodes.TranscodeTooSlow,
+            PlaybackLimitSource.Headroom => PlaybackReasonCodes.QualityRaised,
             _ => PlaybackReasonCodes.BandwidthLimit
         };
 
@@ -620,19 +629,7 @@ public static class PlaybackDecisionEngine
                     ("output", maxHeight.ToString(CultureInfo.InvariantCulture)))));
         }
 
-        var targetKbps = DefaultVideoKbps(maxHeight);
-        if (limit.MaxKbps is { } max)
-        {
-            targetKbps = Math.Min(targetKbps, max - audioKbps);
-        }
-
-        if (media.OverallBitrateKbps is { } source)
-        {
-            // Never spend more than the source: a transcode cannot add quality.
-            targetKbps = Math.Min(targetKbps, source);
-        }
-
-        targetKbps = Math.Max(MinimumVideoKbps, targetKbps);
+        var targetKbps = TranscodeVideoKbps(maxHeight, limit.MaxKbps, audioKbps, media.OverallBitrateKbps);
 
         var toneMap = video.IsHdr && server.CanToneMap;
         if (video.IsHdr)
@@ -641,6 +638,22 @@ public static class PlaybackDecisionEngine
                 toneMap ? PlaybackReasonCodes.HdrToneMapped : PlaybackReasonCodes.HdrToneMapUnavailable,
                 toneMap ? PlaybackReasonSeverity.Info : PlaybackReasonSeverity.Warning,
                 values: Values(("format", video.DynamicRange))));
+        }
+
+        // A hardware encoder is named so Diagnostics shows what converts the video; a preferred
+        // backend skipped by its circuit breaker explains why the conversion runs on something else.
+        var encoderBackend = PlaybackHardwareBackends.FromEncoder(server.H264Encoder);
+        if (encoderBackend != PlaybackHardwareBackend.Software)
+        {
+            reasons.Add(Reason(PlaybackReasonCodes.HardwareEncoder, PlaybackReasonSeverity.Info, values: Values(("backend", PlaybackHardwareBackends.DisplayName(encoderBackend)))));
+        }
+
+        if (server.SuspendedHardware is { } suspended)
+        {
+            reasons.Add(Reason(
+                PlaybackReasonCodes.HardwareEncoderSuspended,
+                PlaybackReasonSeverity.Warning,
+                values: Values(("backend", PlaybackHardwareBackends.DisplayName(suspended.Backend)))));
         }
 
         // DecideCore only asks for a burn-in the server can do (see WithoutBurnIn).
@@ -669,6 +682,26 @@ public static class PlaybackDecisionEngine
             quality with { DeliveredBitrateKbps = targetKbps + audioKbps },
             reasons,
             confidence);
+    }
+
+    /// <summary>
+    /// The video bitrate a transcode targets: the height's default, within the limit once the audio took its share, and never more than the
+    /// source (a transcode cannot add quality). The runtime adaptation asks the same function whether a higher tier would deliver more.
+    /// </summary>
+    public static int TranscodeVideoKbps(int outputHeight, int? limitKbps, int audioKbps, int? sourceKbps)
+    {
+        var target = DefaultVideoKbps(outputHeight);
+        if (limitKbps is { } max)
+        {
+            target = Math.Min(target, max - audioKbps);
+        }
+
+        if (sourceKbps is { } source)
+        {
+            target = Math.Min(target, source);
+        }
+
+        return Math.Max(MinimumVideoKbps, target);
     }
 
     public static int DefaultVideoKbps(int height) =>

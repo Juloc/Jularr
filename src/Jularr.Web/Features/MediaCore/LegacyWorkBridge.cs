@@ -47,7 +47,8 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     public async Task<Guid> EnsureWorkForMovieAsync(Movie movie, CancellationToken cancellationToken)
     {
         var workId = await EnsureWorkAsync(
-            WorkSourceKind.Movie, movie.Id, WorkMediaType.Movie, movie.Title, movie.Year, cancellationToken);
+            WorkSourceKind.Movie, movie.Id, WorkMediaType.Movie, movie.Title, movie.Year, cancellationToken,
+            identityProvider: MappingProviders.Tmdb, identityExternalId: movie.TmdbId);
 
         await works.AddOrUpdateTitleAsync(
             workId, WorkTitleType.Primary, "und", movie.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
@@ -83,7 +84,8 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     public async Task<Guid> EnsureWorkForSeriesAsync(TvSeries series, CancellationToken cancellationToken)
     {
         var workId = await EnsureWorkAsync(
-            WorkSourceKind.Series, series.Id, WorkMediaType.Series, series.Title, series.Year, cancellationToken);
+            WorkSourceKind.Series, series.Id, WorkMediaType.Series, series.Title, series.Year, cancellationToken,
+            identityProvider: MappingProviders.Tmdb, identityExternalId: series.TmdbId);
 
         await works.AddOrUpdateTitleAsync(
             workId, WorkTitleType.Primary, "und", series.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
@@ -291,14 +293,20 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
         return workId;
     }
 
-    /// <summary>Resolves the existing work bridged to a legacy record, creating and linking one if absent.</summary>
+    /// <summary>
+    /// Resolves the existing work bridged to a legacy record, creating and linking one if absent. When the record carries a provider
+    /// id, the work that id already identifies is the record's work: Discover and Request materialize the canonical Work from the
+    /// provider id before the importer creates the legacy record, and a second Work would split request, files and progress.
+    /// </summary>
     private async Task<Guid> EnsureWorkAsync(
         WorkSourceKind sourceKind,
         Guid sourceId,
         WorkMediaType mediaType,
         string title,
         int? year,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? identityProvider = null,
+        string? identityExternalId = null)
     {
         var existing = await db.Set<WorkSourceLink>().AsNoTracking()
             .Where(x => x.SourceKind == sourceKind && x.SourceId == sourceId)
@@ -310,7 +318,9 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
             return workId;
         }
 
-        var work = await works.CreateWorkAsync(mediaType, title, year, cancellationToken);
+        var work = identityProvider is not null && !string.IsNullOrWhiteSpace(identityExternalId)
+            ? await works.EnsureWorkByExternalIdentityAsync(mediaType, identityProvider, identityExternalId, title, year, cancellationToken)
+            : await works.CreateWorkAsync(mediaType, title, year, cancellationToken);
         await works.LinkSourceAsync(work.Id, sourceKind, sourceId, cancellationToken);
         return work.Id;
     }

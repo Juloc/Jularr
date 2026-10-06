@@ -56,19 +56,9 @@ public sealed record DiscoveryRequest(
     public bool RequiresPersonalAniListAccount =>
         Mode == DiscoveryMode.MyList;
 
-    public string CacheKey(string profileId) =>
-        string.Join(
-            '|',
-            profileId,
-            Mode.ToString().ToLowerInvariant(),
-            Category.ToString().ToLowerInvariant(),
-            Genre.ToLowerInvariant(),
-            Query.ToLowerInvariant());
-
     /// <summary>
-    /// Trims and title-cases a genre so casual input ("sci-fi", "SLICE OF LIFE")
-    /// still matches AniList's genre strings ("Sci-Fi", "Slice of Life") closely
-    /// enough for <c>genre_in</c>. Empty when no genre was requested.
+    /// Maps casual input ("sci-fi", "SLICE OF LIFE") to the genre Discover offers, spelled the way
+    /// AniList spells it for <c>genre_in</c>. Empty when no genre was requested or it is not one Discover offers.
     /// </summary>
     public static string NormalizeGenre(string? value)
     {
@@ -77,9 +67,9 @@ public sealed record DiscoveryRequest(
             return "";
         }
 
-        var trimmed = value.Trim().Truncate(40);
-        return KnownGenres.FirstOrDefault(genre => string.Equals(genre, trimmed, StringComparison.OrdinalIgnoreCase))
-            ?? System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(trimmed.ToLowerInvariant());
+        // Only the genres Discover offers: free text would make every spelling a provider call of its own.
+        var trimmed = value.Trim();
+        return KnownGenres.FirstOrDefault(genre => string.Equals(genre, trimmed, StringComparison.OrdinalIgnoreCase)) ?? "";
     }
 
     /// <summary>The genres Discover offers, spelled the way AniList spells them (its genre filter is case-sensitive).</summary>
@@ -160,16 +150,12 @@ public sealed record DiscoveryItem(
     Guid? FollowedFranchiseId = null,
     // Books only (#371): the source never fabricates either when it does not supply one.
     string? Author = null,
-    double? Rating = null);
-
-public sealed record DiscoveryResponse(
-    string Query,
-    string Category,
-    string Mode,
-    string Genre,
-    bool AniListConnected,
-    IReadOnlyList<DiscoveryItem> Items,
-    IReadOnlyList<string> Warnings);
+    double? Rating = null,
+    // The wide artwork and the YouTube trailer id of the Preview (docs/mockups/media-preview, section 7); only what the source already returned, never a further call.
+    string? BackdropUrl = null,
+    string? TrailerKey = null,
+    // The Detail of the canonical Work this title already has without being in the library (for example after a Request); set per response, never cached.
+    string? WorkUrl = null);
 
 internal static class DiscoveryStringExtensions
 {

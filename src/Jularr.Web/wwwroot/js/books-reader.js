@@ -1,4 +1,4 @@
-(() => {
+(async () => {
     "use strict";
 
     // Books reader (reader frame, see docs/UNIFIED_READER.md "Reader frame").
@@ -11,6 +11,25 @@
 
     const root = document.querySelector("[data-book-reader]");
     if (!root) return;
+
+    const scriptUrl = document.currentScript?.src;
+    if (!scriptUrl) return;
+    const sourceScriptUrl = new URL(scriptUrl);
+    const reflowModuleUrl = new URL("reflow-reader.js", sourceScriptUrl);
+    const buildVersion = sourceScriptUrl.searchParams.get("v");
+    if (buildVersion) reflowModuleUrl.searchParams.set("v", buildVersion);
+    const {
+        clamp,
+        permilleForIndex,
+        indexForPermille,
+        scrollPermille: reflowScrollPermille,
+        scrollTopForPermille,
+        captureContinuousAnchor,
+        capturePagedRectAnchor,
+        createReflowTextRenderer,
+        measurePagedSequence,
+        viewIndexForDisplayPage
+    } = await import(reflowModuleUrl.href);
 
     const readJson = (selector, fallback) => {
         try {
@@ -94,7 +113,7 @@
         themeTintStrength: 1,
         bookmarkStyle: "fabric",
         bookmarkColor: "#b04455",
-        hasBookOverride: false
+        hasWorkOverride: false
     }, readJson("[data-book-settings-json]", {}));
 
     const fontStacks = {
@@ -117,6 +136,7 @@
 
     let view = root.dataset.view || "original";
     let restoring = true;
+    let reflowRenderer = null;
 
     const toast = message => {
         if (!toastElement || !message) return;
@@ -298,7 +318,7 @@
 
     const scheduleSettingSave = changedKey => {
         const scope = settingsForm?.querySelector('[name="scope"]')?.value || "work";
-        if (scope === "work") settings.hasBookOverride = true;
+        if (scope === "work") settings.hasWorkOverride = true;
         const value = settings[changedKey];
         unsavedEdits.set(changedKey, value);
         settingsSave = settingsSave
@@ -366,55 +386,46 @@
     const topBarBottom = () =>
         root.querySelector("[data-reader-chrome-primary]")?.getBoundingClientRect().bottom || 0;
 
-    const scrollPermille = () => {
-        const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        return Math.max(0, Math.min(1000, Math.round(window.scrollY / max * 1000)));
-    };
+    const scrollPermille = () =>
+        reflowScrollPermille(
+            window.scrollY,
+            document.documentElement.scrollHeight,
+            window.innerHeight);
 
-    const currentPermille = () => {
-        if (!layout.paged) return scrollPermille();
-        return layout.viewCount <= 1
-            ? 0
-            : Math.round(currentView / (layout.viewCount - 1) * 1000);
-    };
+    const currentPermille = () =>
+        layout.paged
+            ? permilleForIndex(currentView, layout.viewCount)
+            : scrollPermille();
 
     const viewForPermille = permille =>
-        layout.viewCount <= 1
-            ? 0
-            : Math.max(0, Math.min(
-                layout.viewCount - 1,
-                Math.round(Number(permille) / 1000 * (layout.viewCount - 1))));
+        indexForPermille(permille, layout.viewCount);
 
-    // First paragraph of the active language on screen; used to keep the
-    // reading position when the layout changes (mode, font, window size).
+    // One canonical anchor algorithm is shared with Novel/LN. Books supplies
+    // its paper-spread geometry, while the reflow runtime owns anchor semantics.
     function captureAnchor() {
         const list = paragraphsOf(activeColumn());
         if (!list.length) return null;
+
         if (layout.paged) {
-            // Positions relative to the column box and the current page window,
-            // independent of any running transform.
             const origin = columns.getBoundingClientRect().left;
-            const start = currentView * layout.stride;
-            const end = start + flow.clientWidth;
-            const inside = rect =>
-                rect.right - origin > start + 1 && rect.left - origin < end - 1;
-            for (let index = 0; index < list.length; index++) {
-                const rects = Array.from(list[index].getClientRects());
-                const part = rects.findIndex(inside);
-                if (part < 0) continue;
-                // A paragraph continued from the previous page is a weak anchor;
-                // prefer the next one when it starts on this page.
-                const next = list[index + 1]?.getClientRects()[0];
-                if (part > 0 && next && inside(next)) {
-                    return { index: Number(list[index + 1].dataset.bookParagraph), part: 0 };
-                }
-                return { index: Number(list[index].dataset.bookParagraph), part };
-            }
-            return null;
+            const viewOfRect = rect => {
+                const page = Math.floor(
+                    (rect.left - origin + 2) / Math.max(1, layout.columnStride));
+                return Math.floor(page / Math.max(1, layout.pages));
+            };
+            const anchor = capturePagedRectAnchor(
+                list,
+                currentView,
+                viewOfRect);
+            return anchor
+                ? { index: anchor.index, part: anchor.part || 0 }
+                : null;
         }
-        const line = topBarBottom() + 8;
-        const found = list.find(paragraph => paragraph.getBoundingClientRect().bottom > line);
-        return found ? { index: Number(found.dataset.bookParagraph) } : null;
+
+        const anchor = captureContinuousAnchor(
+            list,
+            topBarBottom() + 8);
+        return anchor ? { index: anchor.index } : null;
     }
 
     const paragraphAt = index =>
@@ -438,8 +449,6 @@
         paragraph.classList.add("book-paragraph-flash");
     };
 
-    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-
     function scheduleLayout(anchor) {
         if (anchor && !pendingAnchor) pendingAnchor = anchor;
         cancelAnimationFrame(layoutFrame);
@@ -455,6 +464,8 @@
         root.classList.toggle("reader-frame-fixed", paged);
 
         if (!paged) {
+            reflowRenderer?.setMode("continuous");
+            reflowRenderer?.setPageState(0, 1);
             columns.style.transform = "";
             spread.style.cssText = "";
             layout.pages = 1;
@@ -472,8 +483,13 @@
                 }
             } else if (anchor === null && restoring) {
                 const initial = Number(root.dataset.progress || "0");
-                const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-                window.scrollTo({ top: max * initial / 1000, behavior: "auto" });
+                window.scrollTo({
+                    top: scrollTopForPermille(
+                        initial,
+                        document.documentElement.scrollHeight,
+                        window.innerHeight),
+                    behavior: "auto"
+                });
             }
             renderPageNumbers();
             emitLocation();
@@ -482,7 +498,7 @@
         }
 
         window.clearTimeout(turnTimer);
-        columns.classList.remove("is-turning", "is-fading");
+        columns.classList.remove("is-turning");
         const styles = getComputedStyle(stage);
         const width = stage.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
         const height = stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
@@ -516,8 +532,17 @@
 
         columns.style.transform = "translate3d(0,0,0)";
         const contentWidth = columns.scrollWidth;
-        layout.pageCount = Math.max(1, Math.round((contentWidth + gap) / layout.columnStride));
-        layout.viewCount = Math.max(1, Math.ceil(layout.pageCount / pages));
+        const measured = measurePagedSequence({
+            scrollWidth: contentWidth,
+            columnStride: layout.columnStride,
+            pagesPerView: pages,
+            extraExtent: gap,
+            rounding: "round"
+        });
+        layout.pageCount = measured.pageCount;
+        layout.viewCount = measured.viewCount;
+        reflowRenderer?.setMode("paged");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
 
         let target;
         currentView = 0;
@@ -560,7 +585,7 @@
             return;
         }
         const max = compactQuery.matches ? 6 : STACK_MAX_PX;
-        const ratio = layout.viewCount > 1 ? currentView / (layout.viewCount - 1) : 0;
+        const ratio = permilleForIndex(currentView, layout.viewCount) / 1000;
         spread.style.setProperty("--book-stack-left", Math.round(STACK_MIN_PX + ratio * (max - STACK_MIN_PX)) + "px");
         spread.style.setProperty("--book-stack-right", Math.round(STACK_MIN_PX + (1 - ratio) * (max - STACK_MIN_PX)) + "px");
     };
@@ -611,32 +636,32 @@
 
     // A slider value is a page number (Pages mode) or a permille (Scroll mode).
     const viewForSliderPage = value =>
-        Math.floor((Math.max(1, Math.round(Number(value) || 0)) - 1) / Math.max(1, layout.pages));
+        viewIndexForDisplayPage(value, layout.pages);
 
     function goToView(target, { animate = true, save = true } = {}) {
         const next = clamp(target, 0, layout.viewCount - 1);
         const direction = Math.sign(next - currentView);
         currentView = next;
-        const transition = reduceMotion.matches ? "none" : settings.pageTransition;
-        const animated = animate && direction !== 0 && transition !== "none";
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
+        const animated = animate && direction !== 0 &&
+            root.dataset.readerTransitionActive !== "true" && !reduceMotion.matches;
 
         window.clearTimeout(turnTimer);
-        columns.classList.remove("is-turning", "is-fading");
-        if (animated && transition === "fade") {
-            columns.classList.add("is-fading");
-        } else if (animated) {
-            columns.classList.add("is-turning");
-        }
+        columns.classList.remove("is-turning");
+        if (animated) columns.classList.add("is-turning");
         columns.style.transform = `translate3d(${-next * layout.stride}px,0,0)`;
         if (animated) {
             turnTimer = window.setTimeout(() => {
-                columns.classList.remove("is-turning", "is-fading");
+                columns.classList.remove("is-turning");
             }, 360);
         }
 
         renderPageNumbers();
         updateStackDepth();
         emitLocation();
+        requestAnimationFrame(() => {
+            root.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
+        });
         if (save) {
             readerMoved = true;
             queueProgressSave();
@@ -659,25 +684,26 @@
         return true;
     };
 
-    const turn = (direction, { fromUser = true } = {}) => {
-        if (!layout.paged) {
+    reflowRenderer = createReflowTextRenderer({
+        initialMode: isPaged() ? "paged" : "continuous",
+        goToPage: page => goToView(page),
+        turnContinuous: direction => {
             window.scrollBy({
                 top: direction * window.innerHeight * 0.85,
                 behavior: reduceMotion.matches ? "auto" : "smooth"
             });
-            return;
-        }
-        const next = currentView + direction;
-        if (next < 0) {
-            if (fromUser) openChapter("previous", true);
-            return;
-        }
-        if (next >= layout.viewCount) {
-            if (fromUser) openChapter("next", false);
-            return;
-        }
-        goToView(next);
-    };
+        },
+        onPageEdge: direction => {
+            const speaking =
+                root.dataset.readerTts && root.dataset.readerTts !== "idle";
+            if (speaking) return;
+            if (direction < 0) openChapter("previous", true);
+            else openChapter("next", false);
+        },
+        getScrollPermille: scrollPermille,
+        scrollToPermille: value => jumpToPermille(value),
+        captureAnchor
+    });
 
     // ---- Interactive page-turn drag (#446) -----------------------------------------
     // Holding and dragging a page follows the pointer instead of jumping straight to
@@ -724,7 +750,7 @@
         columns.classList.add("is-turning");
         columns.style.transform = `translate3d(${-currentView * layout.stride}px,0,0)`;
         turnTimer = window.setTimeout(() => {
-            columns.classList.remove("is-turning", "is-fading");
+            columns.classList.remove("is-turning");
         }, 360);
     };
 
@@ -761,7 +787,7 @@
                 dragState.atEnd = currentView >= layout.viewCount - 1;
                 window.getSelection()?.removeAllRanges();
                 window.clearTimeout(turnTimer);
-                columns.classList.remove("is-turning", "is-fading");
+                columns.classList.remove("is-turning");
                 columns.classList.add("is-dragging");
                 root.classList.add("book-is-dragging");
                 spread.setPointerCapture(event.pointerId);
@@ -821,8 +847,13 @@
             goToView(viewForPermille(permille), { animate: false });
             return;
         }
-        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-        window.scrollTo({ top: max * Number(permille) / 1000, behavior: "auto" });
+        window.scrollTo({
+            top: scrollTopForPermille(
+                permille,
+                document.documentElement.scrollHeight,
+                window.innerHeight),
+            behavior: "auto"
+        });
     };
 
     function finishRestore() {
@@ -843,15 +874,23 @@
             pdf?.turn(direction);
             return;
         }
-        // Read-aloud follows the voice within the chapter; it never changes chapters.
-        turn(direction, { fromUser: !(root.dataset.readerTts && root.dataset.readerTts !== "idle") });
+
+        reflowRenderer?.setMode(layout.paged ? "paged" : "continuous");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
+        reflowRenderer?.turn(direction);
     });
 
     root.addEventListener("jularr:reader-seek", event => {
         const value = Number(event.detail?.value || 0);
-        if (pdfContainer) pdf?.seek(value);
-        else if (layout.paged) goToView(viewForSliderPage(value), { animate: false });
-        else jumpToPermille(value);
+        if (pdfContainer) {
+            pdf?.seek(value);
+            return;
+        }
+
+        reflowRenderer?.setMode(layout.paged ? "paged" : "continuous");
+        reflowRenderer?.setPageState(currentView, layout.viewCount);
+        if (layout.paged) reflowRenderer?.seekPage(viewForSliderPage(value));
+        else reflowRenderer?.seekPermille(value);
     });
 
     // After a drag the slider snaps to the page actually shown.

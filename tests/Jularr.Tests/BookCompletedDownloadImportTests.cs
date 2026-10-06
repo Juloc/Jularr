@@ -367,6 +367,7 @@ public sealed class BookCompletedDownloadImportTests
                 .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
                 .AddSingleton<BookCompletedDownloadImportAdapter>()
                 .AddSingleton<IMediaInboxImportAdapter>(provider => provider.GetRequiredService<BookCompletedDownloadImportAdapter>())
+                .AddSingleton<Jularr.Web.Features.Storage.LibraryRootRoutingService>()
                 .AddSingleton<MediaInboxImportService>()
                 .BuildServiceProvider();
             return new Host(root, services);

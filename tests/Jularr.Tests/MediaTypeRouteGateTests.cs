@@ -28,6 +28,9 @@ public sealed class MediaTypeRouteGateTests
     [DataRow("/Library")]
     [DataRow("/Library/Anime/7a4c0000-0000-0000-0000-000000000001")]
     [DataRow("/Library/Episode/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("/Library/Movie/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("/Library/Series/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("/Library/Watch/7a4c0000-0000-0000-0000-000000000001")]
     [DataRow("/Reading")]
     [DataRow("/Novels")]
     [DataRow("/Novels/Work/7a4c0000-0000-0000-0000-000000000001")]
@@ -59,6 +62,51 @@ public sealed class MediaTypeRouteGateTests
     }
 
     [TestMethod]
+    [DataRow("/Library/Anime/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("/Library/Episode/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("/Library/Episode/7a4c0000-0000-0000-0000-000000000001/segments")]
+    [DataRow("/Library/PresentationGroups/7a4c0000-0000-0000-0000-000000000001")]
+    public async Task AMovieOnlyOrSeriesOnlyProfileDoesNotReachTheAnimePagesThroughTheSharedLibraryHub(string path)
+    {
+        // AnimeRepair and Rename carry their own role policy, which answers first; the route-table test checks their gate.
+        await using var host = await GateHost.CreateAsync();
+        await host.OnlyAsync("movies", WorkMediaType.Movie);
+        await host.OnlyAsync("series", WorkMediaType.Series);
+
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync(path, "movies"), path);
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync(path, "series"), path);
+        Assert.AreNotEqual(HttpStatusCode.NotFound, await host.GetStatusAsync("/Library", "movies"), "The hub itself stays open for Movies.");
+    }
+
+    [TestMethod]
+    [DataRow("movie", "/Library/Series/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("series", "/Library/Movie/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("anime", "/Library/Movie/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("anime", "/Library/Series/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("anime", "/Library/Watch/7a4c0000-0000-0000-0000-000000000001")]
+    public async Task AProfileDoesNotReachTheDetailOrPlayerPagesOfAVideoTypeItCannotBrowse(string visible, string path)
+    {
+        await using var host = await GateHost.CreateAsync();
+        await host.OnlyAsync("viewer", WorkMediaTypes.Parse(visible)!.Value);
+
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync(path, "viewer"), path);
+    }
+
+    [TestMethod]
+    [DataRow("movie", "/Library/Movie/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("series", "/Library/Series/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("movie", "/Library/Watch/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("series", "/Library/Watch/7a4c0000-0000-0000-0000-000000000001")]
+    public async Task AProfileReachesTheDetailAndPlayerPagesOfItsOwnVideoType(string visible, string path)
+    {
+        await using var host = await GateHost.CreateAsync();
+        await host.OnlyAsync("viewer", WorkMediaTypes.Parse(visible)!.Value);
+
+        // The gate lets the request through to a page model this host cannot build; only the gate answers 404.
+        Assert.AreNotEqual(HttpStatusCode.NotFound, await host.GetStatusAsync(path, "viewer"), path);
+    }
+
+    [TestMethod]
     public async Task TheReadingHubIsClosedOnlyWhenBothReadingTypesAreHidden()
     {
         await using var host = await GateHost.CreateAsync();
@@ -76,6 +124,8 @@ public sealed class MediaTypeRouteGateTests
     [DataRow("/Novels", "lightNovel", false)]
     [DataRow("/Manga", "manga", false)]
     [DataRow("/Library", "anime", false)]
+    [DataRow("/Library", "movie", false)]
+    [DataRow("/Library", "series", false)]
     [DataRow("/Books", "book", true)]
     [DataRow("/Library", "book", true)]
     [DataRow("/Novels", "anime", true)]
@@ -119,10 +169,15 @@ public sealed class MediaTypeRouteGateTests
                 continue;
             }
 
-            Assert.AreEqual(1, owners.Length, $"{route} matches several media routes.");
-            Assert.AreEqual(1, gates.Length, $"{page.RelativePath} ({route}) must be gated for {owners[0].Root}.");
-            CollectionAssert.AreEquivalent(owners[0].MediaTypes, gates[0].MediaTypes.ToArray(), page.RelativePath);
-            gatedRoots.Add(owners[0].Root);
+            // A narrow root (an Anime page) sits inside its hub root (/Library): the page carries one gate per root.
+            Assert.AreEqual(owners.Length, gates.Length, $"{page.RelativePath} ({route}) must carry one gate per media route above it.");
+            foreach (var owner in owners)
+            {
+                Assert.IsTrue(
+                    gates.Any(gate => gate.MediaTypes.Order().SequenceEqual(owner.MediaTypes.Order())),
+                    $"{page.RelativePath} ({route}) is missing the gate of {owner.Root}.");
+                gatedRoots.Add(owner.Root);
+            }
         }
 
         CollectionAssert.AreEquivalent(

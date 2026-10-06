@@ -1,0 +1,62 @@
+@using Jularr.Web.Features.Library
+@model VideoDetailPageModel
+@* About / Details of a Movie (docs/mockups/movie-detail, section 8): what the hero does not already say. The hero names the year, the
+   runtime, up to three genres, the first studio, the age rating and the original title; this adds the tagline, the full release date,
+   all studios and genres when there are more than the hero shows, the production countries and the other titles. Rows without data do
+   not exist and the section disappears when nothing is left. *@
+@{
+    var ui = Model.Ui;
+    var detail = Model.Detail;
+    var metadata = detail.Metadata;
+    var culture = VideoDetailView.CultureOf(ui.Locale);
+    var rows = new List<(string Label, string Value)>();
+    if (metadata?.ReleaseDate is { } releaseDate)
+    {
+        rows.Add((ui["library.video.releaseDate"], releaseDate.ToString("D", culture)));
+    }
+
+    if (metadata?.Studios is { Count: > 1 } studios)
+    {
+        rows.Add((ui["library.video.studios"], string.Join(" · ", studios)));
+    }
+
+    if (metadata?.Genres is { Count: > VideoDetailView.HeroGenreCount } genres)
+    {
+        rows.Add((ui["library.video.genres"], string.Join(" · ", genres)));
+    }
+
+    if (metadata?.ProductionCountries is { Count: > 0 } countries)
+    {
+        rows.Add((ui["library.video.productionCountries"], string.Join(" · ", countries)));
+    }
+
+    if (detail.AlsoKnownAs.Count > 0)
+    {
+        rows.Add((ui["library.video.alsoKnownAs"], string.Join(" · ", detail.AlsoKnownAs)));
+    }
+
+    var tagline = metadata?.Tagline;
+}
+@if (rows.Count > 0 || !string.IsNullOrWhiteSpace(tagline))
+{
+    <section class="vd-card vd-about" aria-labelledby="vd-about-title">
+        <h2 id="vd-about-title">@ui["library.video.aboutHeading"]</h2>
+        @if (!string.IsNullOrWhiteSpace(tagline))
+        {
+            <p class="vd-tagline">@tagline</p>
+        }
+
+        @if (rows.Count > 0)
+        {
+            <dl class="vd-facts">
+                @foreach (var (label, value) in rows)
+                {
+                    <div>
+                        <dt>@label</dt>
+                        <dd>@value</dd>
+                    </div>
+                }
+            </dl>
+        }
+    </section>
+}

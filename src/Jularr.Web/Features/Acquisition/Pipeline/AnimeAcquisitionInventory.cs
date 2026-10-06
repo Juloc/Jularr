@@ -46,6 +46,22 @@ public sealed record AnimeAcquisitionTarget(
             .ToArray();
 }
 
+// One episode slot without titles. SourceExternalId is the AniList entry the slot is expected from and Key.AbsoluteEpisodeNumber
+// its episode number there; both are null for a local episode nothing expected.
+public sealed record AnimeEpisodeSlot(
+    AnimeEpisodeKey Key,
+    bool HasFile,
+    string? SourceExternalId);
+
+// ExpectedEpisodesUnknown: the series expects no episodes at all (an AniList entry without an episode count, several local seasons without
+// mappings), so the slots are only what the library has and the pipeline searches nothing.
+public sealed record AnimeEpisodeSlots(
+    AnimeAcquisitionAnime Anime,
+    string? MatchedExternalId,
+    string? MatchedStatus,
+    IReadOnlyList<AnimeEpisodeSlot> Slots,
+    bool ExpectedEpisodesUnknown);
+
 // Where imported files of an anime go: the library root and series folder its existing files
 // live in. AnimeDirectory is null when the anime has no folder in any library root yet.
 public sealed record AnimeLibraryLocation(
@@ -74,6 +90,73 @@ public sealed class AnimeAcquisitionInventory(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(animeKey);
 
+        var layout = await ReadLayoutAsync(animeKey, cancellationToken);
+        if (layout is null)
+        {
+            return null;
+        }
+
+        var profile = await profiles.ResolveAsync(layout.Anime.Id, cancellationToken);
+        var primaryTitles = PrimaryTitles(layout.Anime, layout.Match);
+        var episodes = new List<AnimeAcquisitionEpisode>();
+        foreach (var slot in MergeSlots(layout))
+        {
+            var titles = slot.Source is { } source
+                ? await TitlesForAsync(source.Provider, source.ExternalId, source.PreferredTitle, layout.Match, primaryTitles, cancellationToken)
+                : primaryTitles;
+            episodes.Add(new AnimeAcquisitionEpisode(slot.Key, slot.FilePath, slot.FileSizeBytes, titles[0], titles));
+        }
+
+        return new AnimeAcquisitionTarget(new AnimeAcquisitionAnime(layout.Anime.Id, layout.Anime.Key, layout.Anime.Title), profile, episodes, layout.Diagnostic);
+    }
+
+    /// <summary>
+    /// The same episode slots as <see cref="LoadAsync"/> (one rule for what a series is expected to have), without the titles:
+    /// reading them needs no provider call, so it is cheap enough to repeat for every open request.
+    /// </summary>
+    public async Task<AnimeEpisodeSlots?> LoadSlotsAsync(string animeKey, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(animeKey);
+
+        var layout = await ReadLayoutAsync(animeKey, cancellationToken);
+        if (layout is null)
+        {
+            return null;
+        }
+
+        var slots = MergeSlots(layout).Select(slot => new AnimeEpisodeSlot(slot.Key, slot.FilePath is not null, slot.Source?.ExternalId)).ToArray();
+        return new AnimeEpisodeSlots(new AnimeAcquisitionAnime(layout.Anime.Id, layout.Anime.Key, layout.Anime.Title), layout.Match?.ExternalId, layout.Match?.Status, slots, layout.Diagnostic is not null);
+    }
+
+    /// <summary>
+    /// The expected slots with the local episodes laid over them, ordered by season and episode: an expected slot keeps the AniList entry
+    /// and absolute number it comes from, and a local episode nothing expected stands for itself.
+    /// </summary>
+    private static IReadOnlyList<MergedSlot> MergeSlots(InventoryLayout layout)
+    {
+        var key = layout.Anime.Key;
+        var slots = new Dictionary<(int Season, int Episode), MergedSlot>();
+        foreach (var (slot, source) in layout.Expected)
+        {
+            slots[slot] = new MergedSlot(new AnimeEpisodeKey(key, slot.Season, slot.Episode, source.Absolute), null, null, source);
+        }
+
+        foreach (var episode in layout.Local)
+        {
+            var slot = (episode.SeasonNumber, episode.Number);
+            var known = slots.TryGetValue(slot, out var planned) ? planned : new MergedSlot(new AnimeEpisodeKey(key, episode.SeasonNumber, episode.Number), null, null, null);
+            slots[slot] = known with { FilePath = episode.FilePath, FileSizeBytes = episode.FilePath is null ? null : episode.SizeBytes };
+        }
+
+        return slots.Values.OrderBy(slot => slot.Key.SeasonNumber).ThenBy(slot => slot.Key.EpisodeNumber).ToArray();
+    }
+
+    /// <summary>
+    /// The one reading of what an anime has and is expected to have: its local episodes (with files), its AniList match and
+    /// episode-range mappings, and for each expected slot the AniList entry and episode number it comes from.
+    /// </summary>
+    private async Task<InventoryLayout?> ReadLayoutAsync(string animeKey, CancellationToken cancellationToken)
+    {
         var anime = await db.Anime
             .AsNoTracking()
             .SingleOrDefaultAsync(item => item.Key == animeKey, cancellationToken);
@@ -82,7 +165,6 @@ public sealed class AnimeAcquisitionInventory(
             return null;
         }
 
-        var profile = await profiles.ResolveAsync(anime.Id, cancellationToken);
         var local = await db.Episodes
             .AsNoTracking()
             .Where(episode => episode.AnimeId == anime.Id)
@@ -103,9 +185,8 @@ public sealed class AnimeAcquisitionInventory(
 
         var match = await metadata.GetAsync(anime.Id, cancellationToken);
         var mappings = await metadata.GetEpisodeMappingsAsync(anime.Id, cancellationToken);
-        var primaryTitles = PrimaryTitles(anime, match);
 
-        var expected = new Dictionary<(int Season, int Episode), (int? Absolute, string Title, IReadOnlyList<string> Aliases)>();
+        var expected = new Dictionary<(int Season, int Episode), ExpectedSlot>();
         string? diagnostic = null;
 
         if (mappings.Count > 0)
@@ -114,10 +195,9 @@ public sealed class AnimeAcquisitionInventory(
             // explicit mapping always wins over the extension of a neighbouring one.
             foreach (var mapping in mappings)
             {
-                var titles = await TitlesForAsync(mapping.Provider, mapping.ExternalId, mapping.PreferredTitle, match, primaryTitles, cancellationToken);
                 for (var number = mapping.LocalEpisodeStart; number <= mapping.LocalEpisodeEnd; number++)
                 {
-                    expected[(mapping.SeasonNumber, number)] = (mapping.ResolveRemoteEpisode(number), titles[0], titles);
+                    expected[(mapping.SeasonNumber, number)] = new ExpectedSlot(mapping.ResolveRemoteEpisode(number), mapping.Provider, mapping.ExternalId, mapping.PreferredTitle);
                 }
             }
 
@@ -128,11 +208,10 @@ public sealed class AnimeAcquisitionInventory(
                     continue;
                 }
 
-                var titles = await TitlesForAsync(mapping.Provider, mapping.ExternalId, mapping.PreferredTitle, match, primaryTitles, cancellationToken);
                 var end = mapping.LocalEpisodeStart + (mapping.EpisodeCount.Value - mapping.RemoteEpisodeStart);
                 for (var number = mapping.LocalEpisodeEnd + 1; number <= end; number++)
                 {
-                    expected.TryAdd((mapping.SeasonNumber, number), (mapping.ResolveRemoteEpisode(number), titles[0], titles));
+                    expected.TryAdd((mapping.SeasonNumber, number), new ExpectedSlot(mapping.ResolveRemoteEpisode(number), mapping.Provider, mapping.ExternalId, mapping.PreferredTitle));
                 }
             }
         }
@@ -144,7 +223,7 @@ public sealed class AnimeAcquisitionInventory(
                 var season = seasons.Length == 1 ? seasons[0] : 1;
                 for (var number = 1; number <= match.EpisodeCount.Value; number++)
                 {
-                    expected[(season, number)] = (number, primaryTitles[0], primaryTitles);
+                    expected[(season, number)] = new ExpectedSlot(number, match.Provider, match.ExternalId, match.PreferredTitle);
                 }
             }
             else
@@ -159,44 +238,7 @@ public sealed class AnimeAcquisitionInventory(
             diagnostic = "No AniList match; nothing is expected until the anime is matched.";
         }
 
-        var episodes = new Dictionary<(int Season, int Episode), AnimeAcquisitionEpisode>();
-        foreach (var (slot, info) in expected)
-        {
-            episodes[slot] = new AnimeAcquisitionEpisode(
-                new AnimeEpisodeKey(anime.Key, slot.Season, slot.Episode, info.Absolute),
-                null,
-                null,
-                info.Title,
-                info.Aliases);
-        }
-
-        foreach (var episode in local)
-        {
-            var slot = (episode.SeasonNumber, episode.Number);
-            var known = episodes.TryGetValue(slot, out var planned)
-                ? planned
-                : new AnimeAcquisitionEpisode(
-                    new AnimeEpisodeKey(anime.Key, episode.SeasonNumber, episode.Number),
-                    null,
-                    null,
-                    primaryTitles[0],
-                    primaryTitles);
-
-            episodes[slot] = known with
-            {
-                FilePath = episode.FilePath,
-                FileSizeBytes = episode.FilePath is null ? null : episode.SizeBytes
-            };
-        }
-
-        return new AnimeAcquisitionTarget(
-            new AnimeAcquisitionAnime(anime.Id, anime.Key, anime.Title),
-            profile,
-            episodes.Values
-                .OrderBy(episode => episode.Key.SeasonNumber)
-                .ThenBy(episode => episode.Key.EpisodeNumber)
-                .ToArray(),
-            diagnostic);
+        return new InventoryLayout(anime, match, local, expected, diagnostic);
     }
 
     // preferredRootId (the anime's assigned target root, item 3 of the P1 backlog) is used only
@@ -371,4 +413,23 @@ public sealed class AnimeAcquisitionInventory(
         int Number,
         string? FilePath,
         long? SizeBytes);
+
+    private sealed record MergedSlot(
+        AnimeEpisodeKey Key,
+        string? FilePath,
+        long? FileSizeBytes,
+        ExpectedSlot? Source);
+
+    private sealed record ExpectedSlot(
+        int? Absolute,
+        string Provider,
+        string ExternalId,
+        string PreferredTitle);
+
+    private sealed record InventoryLayout(
+        Anime Anime,
+        AnimeMetadata? Match,
+        IReadOnlyList<LocalEpisode> Local,
+        IReadOnlyDictionary<(int Season, int Episode), ExpectedSlot> Expected,
+        string? Diagnostic);
 }

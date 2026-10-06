@@ -30,9 +30,9 @@ public sealed class HomePageLearningGatingTests
         await home.OnGetAsync(CancellationToken.None);
 
         Assert.IsFalse(home.ShowContentMetrics);
-        Assert.AreEqual(1, home.RecentEpisodes.Count);
-        Assert.AreEqual(0, home.RecentEpisodes[0].TotalOccurrences, "Coverage must not be loaded.");
-        Assert.AreEqual(0, home.RecentEpisodes[0].PreparationPercent);
+        Assert.AreEqual(1, home.RecentTitles.Count);
+        Assert.AreEqual(0, home.RecentTitles[0].TotalOccurrences, "Coverage must not be loaded.");
+        Assert.AreEqual(0, home.RecentTitles[0].PreparationPercent);
     }
 
     [TestMethod]
@@ -46,7 +46,7 @@ public sealed class HomePageLearningGatingTests
         await home.OnGetAsync(CancellationToken.None);
 
         Assert.IsFalse(home.ShowContentMetrics, "ContentMetrics is opt-in even in Study.");
-        Assert.AreEqual(0, home.RecentEpisodes[0].TotalOccurrences);
+        Assert.AreEqual(0, home.RecentTitles[0].TotalOccurrences);
     }
 
     [TestMethod]
@@ -75,9 +75,9 @@ public sealed class HomePageLearningGatingTests
         await home.OnGetAsync(CancellationToken.None);
 
         Assert.IsTrue(home.ShowContentMetrics);
-        Assert.AreEqual(3, home.RecentEpisodes[0].TotalOccurrences);
-        Assert.AreEqual(2, home.RecentEpisodes[0].PreparedOccurrences);
-        Assert.AreEqual(66, home.RecentEpisodes[0].PreparationPercent);
+        Assert.AreEqual(3, home.RecentTitles[0].TotalOccurrences);
+        Assert.AreEqual(2, home.RecentTitles[0].PreparedOccurrences);
+        Assert.AreEqual(66, home.RecentTitles[0].PreparationPercent);
     }
 
     [TestMethod]
@@ -91,7 +91,7 @@ public sealed class HomePageLearningGatingTests
         await home.OnGetAsync(CancellationToken.None);
 
         Assert.IsFalse(home.ShowContentMetrics);
-        Assert.AreEqual(0, home.RecentEpisodes[0].TotalOccurrences);
+        Assert.AreEqual(0, home.RecentTitles[0].TotalOccurrences);
     }
 
     [TestMethod]
@@ -173,7 +173,7 @@ public sealed class HomePageLearningGatingTests
             return new Fixture(path, db);
         }
 
-        public IndexModel Home() => new(Db, Account());
+        public IndexModel Home() => EpisodeFlowFixture.Home(Db, Account());
 
         public Task SetModeAsync(LearningMode mode) =>
             new LearningConfigurationStore(Db).SetModeAsync(
@@ -188,21 +188,12 @@ public sealed class HomePageLearningGatingTests
         /// </summary>
         public async Task SeedEpisodeWithDueVocabularyAsync()
         {
-            var anime = new Anime { Key = "test", Title = "Test" };
-            var episode = new Episode
-            {
-                AnimeId = anime.Id,
-                SeasonNumber = 1,
-                Number = 1,
-                Title = "Episode 1",
-                DiscoveredAt = DateTime.UtcNow
-            };
+            var seeded = await new LibraryCanonicalSeed(Db).AddAnimeAsync("Test", [(1, 1, true)]);
+            var episode = seeded.Episodes[0].Legacy;
             var known = new Term { Canonical = "見る", Reading = "みる", Meaning = "see" };
             var unknown = new Term { Canonical = "走る", Reading = "はしる", Meaning = "run" };
 
             Db.AddRange(
-                anime,
-                episode,
                 known,
                 unknown,
                 new EpisodeTerm { EpisodeId = episode.Id, TermId = known.Id, Occurrences = 2 },

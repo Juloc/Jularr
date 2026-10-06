@@ -238,8 +238,20 @@ Core concepts:
 Pipeline:
 
 ```text
-Wanted -> Search -> Candidate scoring -> Grab -> Download -> Import -> Version/Asset/File -> Library
+Wanted
+ -> SearchIntent / QueryPlan
+ -> normalized + deduplicated ReleaseCandidate
+ -> identity/safety/profile selection
+ -> Grab
+ -> Download
+ -> Import
+ -> Version/Asset/File
+ -> Library
 ```
+
+Binding acquisition planning semantics:
+- search/query planning: `docs/ACQUISITION_SEARCH_PLANNER.md`;
+- automatic release eligibility/ranking/fallback/upgrade: `docs/AUTOMATIC_RELEASE_SELECTION.md`.
 
 Anime, TV, Movies, Books, Manga and Light Novels must not each implement a separate acquisition engine.
 

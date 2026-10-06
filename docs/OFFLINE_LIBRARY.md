@@ -209,6 +209,24 @@ translations: [{ targetLanguage, text }]
   asset URLs below, never raw bytes inline.
 - `translations` includes only the current translation per language (see
   above) — never every historical translation attempt.
+
+### Progressive translation compatibility (#834)
+
+Live provider output is never an offline artifact. The offline library may package
+only translated text that has reached #834's validated `BlockCompleted` state
+and still matches the current canonical source/execution identity.
+
+The existing `translations: [{ targetLanguage, text }]` payload represents a
+complete current chapter translation. Until the offline contract gains explicit
+block-level coverage/identity fields, an incomplete progressive run is excluded
+from that array rather than being serialized as if the chapter were complete.
+
+If block-level partial translation coverage is added later, the manifest/payload
+must make completeness explicit per stable source block, hash that coverage into
+the chapter ref and let the Reader fall back to source text for missing blocks.
+A client must never infer full translated-edition availability merely because
+some translated blocks are cached locally.
+
 - `hash` is repeated here (equal to the manifest's ref for this chapter) so a
   client can immediately detect a version race: if the manifest was fetched,
   then the chapter changed again before the payload request landed, the

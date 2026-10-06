@@ -32,7 +32,7 @@ namespace Jularr.Tests;
 public sealed class RequestPagesRenderTests
 {
     [TestMethod]
-    public async Task HistoryShowsTheSignedInProfilesRequestsWithTheirStateOptionsAndWithdrawAction()
+    public async Task HistoryShowsTheSignedInProfilesRequestsWithTheirStateAndOptionsAndOpensTheirStatus()
     {
         await using var host = await RequestPagesHost.CreateAsync();
         var store = new AcquisitionAccessStore(host.Db);
@@ -67,10 +67,12 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(all, "Audio: 日本語");
         StringAssert.Contains(all, "Subtitles: Deutsch");
         StringAssert.Contains(all, "Approved automatically");
-        StringAssert.Contains(all, "Withdraw");
-        StringAssert.Contains(all, "request-status-pending");
-        StringAssert.Contains(all, "request-status-completed");
-        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "class=\"button\" type=\"submit\">Withdraw").Count, "Only the pending request can be withdrawn.");
+        Assert.IsFalse(all.Contains("Withdraw", StringComparison.Ordinal), "Cancelling a request lives on its status, not in the list.");
+        StringAssert.Contains(all, "request-tone-waiting");
+        StringAssert.Contains(all, "request-tone-done");
+        Assert.AreEqual(2, System.Text.RegularExpressions.Regex.Matches(all, "data-rqs-open").Count, "Every request of the profile opens its status.");
+        StringAssert.Contains(all, "request-sr-only", "The exact time is there for assistive technology; the visible time is relative.");
+        Assert.IsFalse(all.Contains(" UTC</time>", StringComparison.Ordinal), "No raw UTC timestamp is the visible time of a row.");
 
         var finished = await host.GetHtmlAsync("/Requests?show=finished", asOwner: false);
         StringAssert.Contains(finished, "Dungeon Meshi");
@@ -81,7 +83,7 @@ public sealed class RequestPagesRenderTests
     }
 
     [TestMethod]
-    public async Task RequestFormOffersTheOptionsAndNamesTheOutcomeAfterTheCapability()
+    public async Task RequestFormOffersTheOptionsAndTheSameRequestActionForEveryCapability()
     {
         await using var host = await RequestPagesHost.CreateAsync();
         await host.Settings.SetRequesterQualityProfilesAsync([AnimeQualityProfiles.DefaultAnime1080pId]);
@@ -98,15 +100,15 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(user, "日本語");
         StringAssert.Contains(user, "No subtitles");
         StringAssert.Contains(user, "Anime 1080p");
-        StringAssert.Contains(user, "Send request");
+        StringAssert.Matches(user, new System.Text.RegularExpressions.Regex(@"type=""submit"">\s*Request\s*</button>"));
 
-        // Only the profiles the owner opened are offered to a requester; the owner adds instead of requesting.
+        // Only the profiles the owner opened are offered to a requester; the owner sees the same Request action.
         var noProfiles = await host.GetHtmlAsync(path, asOwner: false, mediaCapability: MediaCapability.Request, openProfiles: false);
         Assert.IsFalse(noProfiles.Contains("name=\"QualityProfileId\"", StringComparison.Ordinal));
         var owner = await host.GetHtmlAsync(path, asOwner: true);
         StringAssert.Contains(owner, "name=\"QualityProfileId\"");
-        Assert.IsFalse(owner.Contains("Send request", StringComparison.Ordinal));
-        StringAssert.Matches(owner, new System.Text.RegularExpressions.Regex(@"type=""submit"">\s*Add\s*</button>"));
+        StringAssert.Matches(owner, new System.Text.RegularExpressions.Regex(@"type=""submit"">\s*Request\s*</button>"));
+        Assert.IsFalse(owner.Contains(">Add<", StringComparison.Ordinal), "Instant approval never becomes another action.");
 
         var refused = await host.GetStatusAsync(path, asOwner: false, MediaCapability.Browse);
         Assert.AreEqual(HttpStatusCode.Forbidden, refused);
@@ -163,12 +165,12 @@ public sealed class RequestPagesRenderTests
 
         StringAssert.Contains(all, "Pending Show");
         StringAssert.Contains(all, "Deutsch");
-        StringAssert.Contains(all, "admreq-state-pending");
-        StringAssert.Contains(all, "admreq-state-downloading");
+        StringAssert.Contains(all, "data-status=\"pending\"");
+        StringAssert.Contains(all, "data-status=\"downloading\"");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "button-primary\" type=\"submit\">\\s*Approve\\s*</button>").Count, "Only the pending request can be approved.");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "type=\"submit\">Reject</button>").Count);
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "type=\"submit\">Reopen</button>").Count);
-        StringAssert.Contains(all, "class=\"button\" href=\"/Admin/Wanted\"");
+        StringAssert.Contains(all, "class=\"admin-menu-item\" href=\"/Admin/Wanted\"");
         Assert.IsFalse(all.Contains("/Acquisition#wanted", StringComparison.Ordinal));
 
         var rejected = await host.GetHtmlAsync("/Admin/Requests?tab=rejected", asOwner: true);
@@ -184,38 +186,63 @@ public sealed class RequestPagesRenderTests
     }
 
     [TestMethod]
+    public async Task TheStatusPageShowsTheCurrentStateTheSavedIntentAndOnlyTheActionsTheRequestAllows()
+    {
+        await using var host = await RequestPagesHost.CreateAsync();
+        var store = new AcquisitionAccessStore(host.Db);
+        var german = new AcquisitionRequestOptions { AudioLanguage = "de", SubtitleLanguage = "en" }.Validate();
+        var waiting = await store.CreateAsync(Anime("1", "Frieren", german), RequestPagesHost.Profile, AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        var failed = await store.CreateAsync(Anime("2", "Dungeon Meshi"), RequestPagesHost.Profile, AcquisitionRequestStatus.Failed, "owner", CancellationToken.None);
+        var others = await store.CreateAsync(Anime("3", "Someone Elses Show"), "another-profile", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+
+        var pending = await host.GetHtmlAsync($"/Requests/{waiting.Id}", asOwner: false);
+
+        StringAssert.Contains(pending, "Frieren");
+        StringAssert.Contains(pending, "Waiting for approval");
+        StringAssert.Contains(pending, "Your request has been submitted and is waiting for approval.");
+        StringAssert.Contains(pending, "Request details");
+        StringAssert.Contains(pending, "Audio");
+        StringAssert.Contains(pending, "Deutsch");
+        StringAssert.Contains(pending, "Timeline · 1");
+        StringAssert.Contains(pending, ">Cancel request<");
+        StringAssert.Contains(pending, ">Edit request<");
+        StringAssert.Contains(pending, "Cancel this request?");
+        Assert.IsFalse(pending.Contains("Retry request", StringComparison.Ordinal));
+        var panel = System.Text.RegularExpressions.Regex.Match(pending, "<section class=\"rqs\".*?</section>", System.Text.RegularExpressions.RegexOptions.Singleline).Value;
+        Assert.IsTrue(panel.Length > 0);
+        var forbidden = System.Text.RegularExpressions.Regex.Match(panel, "Downloading|Importing|Searching|indexer|usenet|NZB|grab", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        Assert.IsFalse(forbidden.Success, $"The consumer surface uses consumer words, found '{forbidden.Value}'.");
+
+        var broken = await host.GetHtmlAsync($"/Requests/{failed.Id}", asOwner: false);
+
+        StringAssert.Contains(broken, "Could not complete request");
+        StringAssert.Contains(broken, ">Retry request<");
+        Assert.IsFalse(broken.Contains("Cancel request", StringComparison.Ordinal), "Only a request that waits for approval can be cancelled.");
+        Assert.IsFalse(broken.Contains("Edit request", StringComparison.Ordinal));
+        Assert.IsFalse(broken.Contains("No release", StringComparison.Ordinal), "The stored technical message is never shown.");
+
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync($"/Requests/{others.Id}", asOwner: false), "Another profile's request does not exist here.");
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync($"/Requests/{waiting.Id}", asOwner: true), "The owner reads it in Admin, not on the consumer surface.");
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync($"/Requests/{Guid.NewGuid()}", asOwner: false));
+    }
+
+    [TestMethod]
     public async Task LibraryCardsShowTheAvailabilityBadgeOnlyWhereItAddsSomething()
     {
         await using var host = await RequestPagesHost.CreateAsync();
-        var root = new LibraryRoot { Name = "Test", Path = Path.GetTempPath() };
-        host.Db.Add(root);
-        var playable = new Anime { Key = "playable", Title = "Playable Show" };
-        var empty = new Anime { Key = "empty", Title = "Empty Show" };
-        var requested = new Anime { Key = "requested", Title = "Requested Show" };
-        host.Db.AddRange(playable, empty, requested);
-        await host.Db.SaveChangesAsync();
-        var episode = new Episode { AnimeId = playable.Id, SeasonNumber = 1, Number = 1, Title = "One" };
-        host.Db.Add(episode);
-        host.Db.Add(new Episode { AnimeId = empty.Id, SeasonNumber = 1, Number = 1, Title = "One" });
-        host.Db.Add(new Episode { AnimeId = requested.Id, SeasonNumber = 1, Number = 1, Title = "One" });
-        host.Db.Add(new MediaFile
-        {
-            LibraryRootId = root.Id,
-            EpisodeId = episode.Id,
-            Path = Path.Combine(Path.GetTempPath(), $"playable-{Guid.NewGuid():N}.mkv"),
-            SizeBytes = 1,
-            LastWriteTimeUtc = DateTime.UtcNow
-        });
+        var seed = new LibraryCanonicalSeed(host.Db);
+        await seed.AddAnimeAsync("Playable Show", [(1, 1, true)]);
+        await seed.AddAnimeAsync("Empty Show", [(1, 1, false)]);
+        var requested = await seed.AddAnimeAsync("Requested Show", [(1, 1, false)]);
         host.Db.AnimeMetadata.Add(new AnimeMetadata
         {
-            AnimeId = requested.Id,
+            AnimeId = requested.Anime.Id,
             Provider = "anilist",
             ExternalId = "42",
-            PreferredTitle = requested.Title
+            PreferredTitle = requested.Anime.Title
         });
-        await host.Db.SaveChangesAsync();
-        await new AcquisitionAccessStore(host.Db).CreateAsync(
-            Anime("42", requested.Title),
+        await host.Db.SaveChangesAsync();        await new AcquisitionAccessStore(host.Db).CreateAsync(
+            Anime("42", "Requested Show"),
             "someone",
             AcquisitionRequestStatus.Downloading,
             "owner",
@@ -230,7 +257,7 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(CardOf("Empty Show"), "lib-state-missing");
         StringAssert.Contains(CardOf("Empty Show"), "Not available");
         StringAssert.Contains(CardOf("Requested Show"), "lib-state-requested");
-        StringAssert.Contains(CardOf("Requested Show"), "Downloading");
+        StringAssert.Contains(CardOf("Requested Show"), "Getting media");
     }
 
     private static AcquisitionRequestDraft Anime(string id, string title, AcquisitionRequestOptions? options = null) =>
@@ -306,16 +333,23 @@ public sealed class RequestPagesRenderTests
                         services.AddSingleton<ViteAssetManifest>();
                         services.AddScoped<CurrentAccountContext>();
                         services.AddSingleton(capabilities);
+                        services.AddSingleton<Jularr.Web.Features.Instance.IInstanceModuleService>(new Jularr.Web.Features.Instance.InstanceModuleStore(data.FullName));
                         services.AddScoped<IMediaCapabilityService, MediaCapabilityService>();
                         services.AddScoped<IAppShellService, AppShellService>();
                         services.AddSingleton(settings);
                         services.AddSingleton(new QualityProfileStore(new DirectoryInfo(Path.Combine(data.FullName, "quality"))));
                         services.AddScoped<AcquisitionAccessStore>();
+                        services.AddScoped<VideoRequestWorkResolver>();
                         // The Library page's Collections view.
                         services.AddScoped<Jularr.Web.Features.MediaFacts.MediaFactsService>();
                         services.AddScoped<Jularr.Web.Features.Franchises.FranchiseStore>();
                         services.AddCollections();
                         services.AddScoped<RequestHistoryQuery>();
+                        services.AddSingleton(TimeProvider.System);
+                        services.AddScoped<ConsumerAcquisitionQuery>();
+                        services.AddScoped<RequestArtworkResolver>();
+                        services.AddScoped<RequestStatusQuery>();
+                        services.AddScoped<VideoRequestScopeResolver>();
                         services.AddScoped<AcquisitionRequestService>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                     })

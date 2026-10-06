@@ -407,8 +407,9 @@
 /* Continue tiles: landscape artwork, thin progress along its bottom edge, two caption lines. */
 .home-continue-tile {
     display: grid;
+    align-content: start;
     gap: 3px;
-    width: clamp(220px, 21vw, 290px);
+    width: clamp(170px, 12vw, 230px);
     color: inherit;
     text-decoration: none;
 }
@@ -487,11 +488,12 @@
 }
 
 .home-continue-caption {
+    display: -webkit-box;
     overflow: hidden;
     color: var(--muted);
     font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 /* "For you": text-free portrait posters; the title is each poster's accessible name. */
@@ -583,8 +585,7 @@
     }
 
     .home-continue-tile {
-        width: 70vw;
-        max-width: 280px;
+        width: clamp(124px, 36vw, 200px);
     }
 }
 

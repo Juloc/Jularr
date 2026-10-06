@@ -8,11 +8,16 @@ on:
         required: false
         default: false
         type: boolean
-      attach:
-        description: "Attach signed APKs to an already-created GitHub release"
-        required: false
-        default: true
-        type: boolean
+    # Declared explicitly so the caller passes exactly the signing material and nothing else.
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
   workflow_dispatch:
 
   pull_request:
@@ -30,13 +35,15 @@ on:
 permissions:
   contents: read
 
+# A release signing run reached through workflow_call must never be cancelled by a newer run.
 concurrency:
   group: android-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+  cancel-in-progress: ${{ inputs.release != true }}
 
 jobs:
+  # Runs for every trigger, including the release call, so signed assets only exist for a tree
+  # that passed the Android unit tests and lint. Manual dispatch on any ref ends here (unsigned).
   build:
-    if: github.event_name != 'workflow_dispatch' && inputs.release != true
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -79,14 +86,13 @@ jobs:
           :core-tts:lintDebug
           :core-update:lintDebug
 
+  # Production signing is reachable only through the CI release call on main. The signed assets
+  # are uploaded as an artifact; the CI release flow attaches them to the GitHub Release.
   release:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      inputs.release == true
+    if: inputs.release == true && github.ref == 'refs/heads/main'
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v7
@@ -122,16 +128,6 @@ jobs:
           PY
           )"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
-
-          if [[ "${RELEASE_INPUT}" == "true" && "${ATTACH_INPUT}" == "true" ]]; then
-            gh release view "v${VERSION}" >/dev/null
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          RELEASE_INPUT: ${{ inputs.release }}
-          ATTACH_INPUT: ${{ inputs.attach }}
 
       - name: Stamp Android package version
         shell: bash
@@ -170,6 +166,7 @@ jobs:
           : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD is required}"
 
           KEYSTORE="${RUNNER_TEMP}/jularr-release.jks"
+          trap 'rm -f "${KEYSTORE}"' EXIT
           printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${KEYSTORE}"
 
           MOBILE_UNSIGNED="$(find clients/android/app-mobile/build/outputs/apk/release -name '*-release-unsigned.apk' -print -quit)"
@@ -190,14 +187,15 @@ jobs:
             "${ZIPALIGN}" -f -p 4 "${source}" "${aligned}"
             "${APKSIGNER}" sign               --ks "${KEYSTORE}"               --ks-key-alias "${ANDROID_KEY_ALIAS}"               --ks-pass env:ANDROID_KEYSTORE_PASSWORD               --key-pass env:ANDROID_KEY_PASSWORD               --out "${target}"               "${aligned}"
             "${APKSIGNER}" verify --verbose "${target}"
-            sha256sum "${target}" > "${target}.sha256"
+            # Checksum from inside dist so the file names the portable basename and
+            # "sha256sum -c" works next to the downloaded APK.
+            (cd dist && sha256sum "${name}.apk" > "${name}.apk.sha256")
           }
 
           sign_apk "${MOBILE_UNSIGNED}" "Jularr-Mobile-${VERSION}"
           sign_apk "${TV_UNSIGNED}" "Jularr-TV-${VERSION}"
 
       - name: Upload signed release assets
-        if: inputs.release == true
         uses: actions/upload-artifact@v7
         with:
           name: jularr-android-release-assets
@@ -206,23 +204,3 @@ jobs:
             dist/*.apk
             dist/*.sha256
           retention-days: 1
-
-      - name: Upload signed APKs for manual test
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7
-        with:
-          name: jularr-android-signed-test
-          if-no-files-found: error
-          path: |
-            dist/*.apk
-            dist/*.sha256
-
-      - name: Attach Android assets to GitHub release
-        if: inputs.release == true && inputs.attach == true
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          set -euo pipefail
-          gh release upload "${RELEASE_TAG}" dist/*.apk dist/*.sha256 --clobber

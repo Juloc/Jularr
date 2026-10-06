@@ -18,7 +18,7 @@
     const statusText = status =>
         root.dataset[`status${status.charAt(0).toUpperCase()}${status.slice(1)}`] || status;
 
-    const touchFirst = window.matchMedia("(hover: none), (pointer: coarse)");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const SEARCH_DELAY = 250;
 
     let abortController = null;
@@ -63,46 +63,303 @@
         if (browseGroup) browseGroup.hidden = q.length > 0;
     }
 
-    // ---- Body: rows or results, fetched after first paint --------------------------------------
+    // ---- Body: sections of titles, fetched after first paint and completed by later generations ----------------------------------------
+    //
+    // The first response holds what the sources had ready within the first paint budget; a source that was not ready leaves a ghost section
+    // of the final size. The page then asks for the next generation and the server answers as soon as one more source has settled. A
+    // generation that only fills ghost rows is applied at once (nothing moves); every other change is staged until it is safe to apply it
+    // (discover-staging.js), and the scroll anchor and the focus stay where they were.
+
+    const staging = window.JularrDiscoverStaging;
+    const interaction = { pointerDown: false, touchActive: false, lastScrollAt: 0, lastKeyAt: 0, x: -1, y: -1 };
+    const syncNotice = root.querySelector("[data-dc-sync]");
+    const maxRetryAfterMs = 30000;
+
+    const bodyRoot = () => body.querySelector("[data-dc-state]");
+
+    // How far the sources had answered in the newest generation received, whether it was applied or is still staged: the next request waits from there.
+    let generation = { settled: 0, pending: 0 };
+    const generationOf = (element) => ({ settled: Number(element?.dataset.dcSettled) || 0, pending: Number(element?.dataset.dcPending) || 0 });
+
+    // The rows or groups of a generation: only what the viewer would notice changing is compared.
+    const viewOf = (element) => ({
+        state: element?.dataset.dcState || "",
+        sections: [...(element?.querySelectorAll(":scope > [data-dc-section]") || [])].map(section => ({
+            id: section.dataset.dcSection,
+            sig: section.dataset.dcSig,
+            state: section.dataset.dcSectionState,
+            layout: section.dataset.dcLayout,
+            note: section.dataset.dcNote === "true"
+        }))
+    });
+
+    function sectionIn(container, id) {
+        return container.querySelector(`:scope > [data-dc-section="${CSS.escape(id)}"]`);
+    }
+
+    // Only something to click counts as under the pointer: resting over a ghost or over empty space between cards blocks nothing.
+    const actionable = "a, button, summary, select, input, [data-dc-card]";
+    const sectionAt = (x, y) => (x < 0 ? null : document.elementFromPoint(x, y)?.closest(actionable)?.closest("[data-dc-section]")?.dataset.dcSection ?? null);
+
+    function interactionContext() {
+        return {
+            pointerDown: interaction.pointerDown,
+            touchActive: interaction.touchActive,
+            modalOpen: sheet.open,
+            lastScrollAt: interaction.lastScrollAt,
+            lastKeyAt: interaction.lastKeyAt,
+            pointerSection: sectionAt(interaction.x, interaction.y),
+            focusSection: document.activeElement?.closest?.("[data-dc-section]")?.dataset.dcSection ?? null
+        };
+    }
+
+    // What the viewer is looking at or aiming at: the card under the pointer, else the first card in view, else the first section in view. The section
+    // is kept as a second reference, since a replaced section takes its cards with it.
+    function findAnchor() {
+        const inView = item => {
+            const rect = item.getBoundingClientRect();
+            return rect.bottom > 0 && rect.top < window.innerHeight;
+        };
+        const hovered = interaction.x < 0 ? null : document.elementFromPoint(interaction.x, interaction.y)?.closest("[data-dc-card]");
+        const element = hovered || [...body.querySelectorAll("[data-dc-card]")].find(inView) || [...body.querySelectorAll("[data-dc-section]")].find(inView);
+        const section = element?.closest("[data-dc-section]");
+        return element ? { element, top: element.getBoundingClientRect().top, sectionId: section?.dataset.dcSection, sectionTop: section?.getBoundingClientRect().top } : null;
+    }
+
+    function restoreAnchor(anchor) {
+        if (!anchor) return;
+        const kept = anchor.element.isConnected;
+        const target = kept ? anchor.element : anchor.sectionId ? sectionIn(bodyRoot(), anchor.sectionId) : null;
+        if (!target) return;
+        const shift = target.getBoundingClientRect().top - (kept ? anchor.top : anchor.sectionTop);
+        if (Math.abs(shift) >= 1) window.scrollBy(0, shift);
+    }
+
+    // The focus is on a control of a section that is about to be replaced: afterwards it goes to the same control of the new section, else to the
+    // first control of that section. A section that went away takes the focus with it, as it would on any page.
+    function captureFocus() {
+        const active = document.activeElement;
+        const section = body.contains(active) ? active.closest("[data-dc-section]") : null;
+        return section ? { element: active, sectionId: section.dataset.dcSection, retry: active.dataset?.dcRetrySources ?? null } : null;
+    }
+
+    function restoreFocus(focus) {
+        if (!focus || focus.element.isConnected) return;
+        const section = sectionIn(bodyRoot(), focus.sectionId);
+        const same = focus.retry ? section?.querySelector(`[data-dc-retry-sources="${CSS.escape(focus.retry)}"]`) : null;
+        (same || section?.querySelector("summary, a, button"))?.focus({ preventScroll: true });
+    }
+
+    // Replaces one section by its next version without losing what the viewer set on it: a collapsed group stays collapsed and a row keeps its scroll position.
+    function swapSection(current, next) {
+        const open = current.querySelector(":scope > details");
+        const nextDetails = next.querySelector(":scope > details");
+        if (open && nextDetails) nextDetails.open = open.open;
+        const track = current.querySelector(".dc-track");
+        const nextTrack = next.querySelector(".dc-track");
+        const scrolled = track ? track.scrollLeft : 0;
+        current.replaceWith(next);
+        if (nextTrack && scrolled) nextTrack.scrollLeft = scrolled;
+    }
+
+    // The generation being applied; the document adapter below reads the sections it brings from it.
+    let incoming = null;
+    const incomingSection = (id) => document.importNode(sectionIn(incoming, id), true);
+
+    const applier = staging.createApplier({
+        captureAnchor: findAnchor,
+        restoreAnchor,
+        captureFocus,
+        restoreFocus,
+        hideHover: () => hideHover(),
+        replaceAll() {
+            body.replaceChildren(document.importNode(incoming, true));
+            activateLiveRequests(body);
+        },
+        has: (id) => Boolean(sectionIn(bodyRoot(), id)),
+        swap(id) {
+            const fresh = incomingSection(id);
+            swapSection(sectionIn(bodyRoot(), id), fresh);
+            activateLiveRequests(fresh);
+        },
+        insertAfter(beforeId, id) {
+            const fresh = incomingSection(id);
+            if (beforeId) sectionIn(bodyRoot(), beforeId).after(fresh); else bodyRoot().prepend(fresh);
+            activateLiveRequests(fresh);
+        },
+        remove: (id) => sectionIn(bodyRoot(), id)?.remove(),
+        updateGeneration() {
+            bodyRoot().dataset.dcSettled = incoming.dataset.dcSettled;
+            bodyRoot().dataset.dcPending = incoming.dataset.dcPending;
+        },
+        view: () => viewOf(bodyRoot())
+    });
+
+    function applyOperations(operations, payload) {
+        incoming = payload.querySelector("[data-dc-state]");
+        return applier.apply(operations, [...incoming.querySelectorAll(":scope > [data-dc-section]")].map(section => section.dataset.dcSection));
+    }
+
+    // The ghost hint: a section that has a change waiting is marked; the stylesheet draws a faint mark in the gap between its first cards.
+    function showStaged(operations) {
+        const waiting = new Set(operations.filter(operation => !operation.neutral && operation.id !== "*").map(operation => operation.id));
+        body.querySelectorAll("[data-dc-section]").forEach(section => {
+            section.toggleAttribute("data-dc-staged", waiting.has(section.dataset.dcSection));
+        });
+    }
+
+    const controller = staging.createController({
+        timers: window,
+        getContext: interactionContext,
+        commit: applyOperations,
+        show: showStaged
+    });
+
+    // A failed request is reported with what the server said about waiting (a 429 carries Retry-After), so the page never retries sooner than that.
+    async function fetchBody(extra, signal) {
+        const params = new URLSearchParams(window.location.search);
+        params.set("handler", "Body");
+        Object.entries(extra).forEach(([name, value]) => params.set(name, String(value)));
+        const response = await fetch(`${window.location.pathname}?${params}`, {
+            signal,
+            cache: "no-store",
+            headers: { "X-Requested-With": "fetch" }
+        });
+        const html = await response.text();
+        // A failed body still renders its own unavailable state; anything else is a plain failure.
+        if (!response.ok && !html.includes("data-dc-state")) {
+            const error = new Error(String(response.status));
+            error.retryAfterMs = Math.min(maxRetryAfterMs, (Number(response.headers.get("Retry-After")) || 0) * 1000);
+            throw error;
+        }
+
+        return html;
+    }
+
+    function showSyncNotice(visible) {
+        if (syncNotice) syncNotice.hidden = !visible;
+    }
+
+    let resumeTimer = null;
+
+    // Asking for the next generation failed: what is on the page stays, the viewer is told and can ask again; a server that named a time to wait is asked once more then.
+    function showUpdateFailure(error) {
+        showSyncNotice(true);
+        clearTimeout(resumeTimer);
+        if (error?.retryAfterMs) {
+            const version = requestVersion;
+            resumeTimer = setTimeout(() => {
+                if (version === requestVersion) resumeFollowUp();
+            }, error.retryAfterMs);
+        }
+    }
+
+    function resumeFollowUp() {
+        clearTimeout(resumeTimer);
+        showSyncNotice(false);
+        void followUp.run(requestVersion);
+    }
+
+    function stageGeneration(html, explicit) {
+        const payload = new DOMParser().parseFromString(html, "text/html");
+        const next = payload.querySelector("[data-dc-state]");
+        if (!next) return;
+        generation = generationOf(next);
+        showSyncNotice(false);
+        controller.stage(viewOf(next), payload, explicit);
+    }
+
+    const followUp = staging.createFollowUp({
+        fetchNext: settled => fetchBody({ after: settled }, abortController.signal),
+        stage: html => stageGeneration(html, false),
+        generation: () => generation,
+        isCurrent: version => version === requestVersion,
+        onFailure: showUpdateFailure
+    });
 
     async function loadBody() {
         clearTimeout(debounceTimer);
+        clearTimeout(resumeTimer);
         abortController?.abort();
         abortController = new AbortController();
         const version = ++requestVersion;
-        const params = new URLSearchParams(window.location.search);
-        params.set("handler", "Body");
 
         body.setAttribute("aria-busy", "true");
         errorBox.hidden = true;
+        showSyncNotice(false);
         try {
-            const response = await fetch(`${window.location.pathname}?${params}`, {
-                signal: abortController.signal,
-                cache: "no-store",
-                headers: { "X-Requested-With": "fetch" }
-            });
+            const html = await fetchBody({}, abortController.signal);
             if (version !== requestVersion) return;
-
-            const html = await response.text();
-            // A failed body still renders its own unavailable state; anything else is a plain failure.
-            if (!response.ok && !html.includes("data-dc-state")) {
-                throw new Error(String(response.status));
-            }
 
             hideHover();
             // Same-origin, server-rendered and HTML-encoded by Razor; injected as the page body.
             body.innerHTML = html;
             activateLiveRequests(body);
+            controller.reset(viewOf(bodyRoot()));
+            generation = generationOf(bodyRoot());
             loadFailed = false;
+            body.setAttribute("aria-busy", "false");
+            void followUp.run(version);
         } catch (error) {
             if (error?.name === "AbortError" || version !== requestVersion) return;
-            loadFailed = true;
-            body.replaceChildren();
-            errorBox.hidden = false;
-        } finally {
-            if (version === requestVersion) body.setAttribute("aria-busy", "false");
+            showLoadFailure();
         }
     }
+
+    // The new address could not be loaded: what is on the page stays under the message, so a hiccup never leaves an empty page.
+    function showLoadFailure() {
+        loadFailed = true;
+        errorBox.hidden = false;
+        body.setAttribute("aria-busy", "false");
+    }
+
+    // A retry the viewer asked for: the server fetches the failed sources again and the answer is applied as soon as it arrives. A source that fails
+    // again leaves its section as it was, so the button only becomes available again.
+    async function retrySources(button) {
+        // Not disabled: a disabled control loses the keyboard focus, and a retry is often pressed with the keyboard.
+        if (button.getAttribute("aria-disabled") === "true") return;
+        const section = button.closest("[data-dc-section]");
+        button.setAttribute("aria-disabled", "true");
+        section?.setAttribute("aria-busy", "true");
+        const version = requestVersion;
+        try {
+            const html = await fetchBody({ retry: button.dataset.dcRetrySources }, abortController?.signal);
+            if (version !== requestVersion) return;
+            stageGeneration(html, true);
+            void followUp.run(version);
+        } catch (error) {
+            if (error?.name === "AbortError" || version !== requestVersion) return;
+            showUpdateFailure(error);
+        }
+
+        button.removeAttribute("aria-disabled");
+        section?.removeAttribute("aria-busy");
+    }
+
+    // What the viewer is doing right now, read by the staging rules before any staged change is applied.
+    ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel"].forEach(type => {
+        window.addEventListener(type, event => {
+            if (type.startsWith("pointer")) interaction.pointerDown = type === "pointerdown";
+            else interaction.touchActive = type === "touchstart";
+            if (type === "pointerdown" && event.pointerType === "mouse") {
+                interaction.x = event.clientX;
+                interaction.y = event.clientY;
+            }
+        }, { passive: true, capture: true });
+    });
+    window.addEventListener("pointermove", event => {
+        if (event.pointerType === "mouse") {
+            interaction.x = event.clientX;
+            interaction.y = event.clientY;
+        }
+    }, { passive: true });
+    document.documentElement.addEventListener("mouseleave", () => { interaction.x = -1; interaction.y = -1; });
+    ["scroll", "wheel"].forEach(type => window.addEventListener(type, () => { interaction.lastScrollAt = Date.now(); }, { passive: true, capture: true }));
+    window.addEventListener("keydown", event => {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+            interaction.lastKeyAt = Date.now();
+        }
+    }, { capture: true });
 
     function scheduleSearch() {
         clearTimeout(debounceTimer);
@@ -129,6 +386,17 @@
 
         if (target.closest("[data-dc-retry]")) {
             loadBody();
+            return;
+        }
+
+        if (target.closest("[data-dc-sync-retry]")) {
+            resumeFollowUp();
+            return;
+        }
+
+        const retrySource = target.closest("[data-dc-retry-sources]");
+        if (retrySource) {
+            void retrySources(retrySource);
             return;
         }
 
@@ -222,6 +490,11 @@
         } else {
             sheet.setAttribute("open", "");
         }
+
+        // The one trailer starts only now that the sheet is open and visible, muted and without taking the focus; closing the sheet removes its frame.
+        // Reduced motion keeps the facade, so the viewer starts it on purpose.
+        const facade = sheetContent.querySelector("[data-vd-trailer]");
+        if (facade && !reducedMotion.matches) window.JularrWorkMetadata?.startTrailer(facade, document, { muted: true });
         return true;
     }
 
@@ -236,8 +509,8 @@
         if (event.target === sheet) closeSheet();
     });
 
-    // Click: the preview button always opens the sheet. A card that is not in the library opens it too, since
-    // its only page is the provider's; a library card opens its page, except on touch where the sheet comes first.
+    // Click: a card opens the canonical Detail on every pointer, so a link just navigates. A title whose Work is created when it is opened asks the
+    // server for it first; a title that only exists at a provider has no page here and opens the Quick View, as does the Quick View button itself.
     body.addEventListener("click", event => {
         const target = event.target instanceof Element ? event.target : null;
         const card = target?.closest("[data-dc-card]");
@@ -248,12 +521,28 @@
             return;
         }
 
-        const link = target.closest("a");
-        if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        if (link.closest(".dc-card-body, .dc-art") && (touchFirst.matches || !card.classList.contains("is-local"))) {
-            if (openSheet(card)) event.preventDefault();
+        const activate = target.closest("[data-dc-activate]");
+        if (!activate) return;
+        if (activate.dataset.dcActivate === "preview") {
+            openSheet(card);
+        } else {
+            void openDetail(card.dataset.dcCategory, card.dataset.dcProvider, card.dataset.dcExternalId, card, () => openSheet(card));
         }
     });
+
+    // The server resolves the identity to its canonical Work (creating it once) and names its Detail. A refusal or a failure is never a dead end:
+    // the card falls back to its Quick View, the Details button of the Quick View reports it.
+    async function openDetail(category, provider, externalId, busy, onFailure) {
+        if (busy.getAttribute("aria-busy") === "true") return;
+        busy.setAttribute("aria-busy", "true");
+        try {
+            const payload = await postForm(root.dataset.openUrl, { category, provider, externalId });
+            window.location.assign(payload.url);
+        } catch {
+            busy.removeAttribute("aria-busy");
+            onFailure();
+        }
+    }
 
     // ---- Preview actions ---------------------------------------------------------------------------
 
@@ -312,28 +601,14 @@
 
     function requestProgressLabel(payload) {
         const stage = statusText(payload.status || "pending");
-        const progress = Number.isFinite(payload.progress) ? Math.max(0, Math.min(100, payload.progress)) : 0;
-        return payload.done || progress <= 0 ? stage : `${stage} · ${progress}%`;
-    }
-
-    function defaultProgress(status) {
-        return {
-            pending: 0,
-            approved: 5,
-            searching: 15,
-            downloading: 35,
-            importing: 90,
-            completed: 100,
-            rejected: 100,
-            failed: 100
-        }[status] ?? 0;
+        const progress = Number.isFinite(payload.progress) ? Math.max(0, Math.min(100, payload.progress)) : null;
+        return payload.done || progress === null ? stage : `${stage} · ${progress}%`;
     }
 
     function renderRequestSlot(slot, payload) {
         if (!slot) return;
-        const progress = Number.isFinite(payload.progress)
-            ? Math.max(0, Math.min(100, payload.progress))
-            : defaultProgress(payload.status);
+        // Only a percentage the server read from the transfer is ever shown; without one the ring is an empty outline.
+        const progress = Number.isFinite(payload.progress) ? Math.max(0, Math.min(100, payload.progress)) : null;
         slot.dataset.dcLiveRequest = payload.requestId || slot.dataset.dcLiveRequest || "";
         slot.dataset.dcLiveStatus = payload.status || "";
 
@@ -352,17 +627,18 @@
 
         const ring = document.createElement("span");
         ring.className = "dc-request-ring";
-        ring.style.setProperty("--dc-progress", `${progress}%`);
-        const number = document.createElement("span");
-        number.textContent = `${Math.round(progress)}%`;
-        ring.append(number);
+        ring.style.setProperty("--dc-progress", `${progress ?? 0}%`);
+        if (progress !== null) {
+            const number = document.createElement("span");
+            number.textContent = `${Math.round(progress)}%`;
+            ring.append(number);
+        }
 
         const label = document.createElement("span");
         label.className = "dc-request-live-label";
         label.textContent = statusText(payload.status || "pending");
 
         live.append(ring, label);
-        if (payload.message) live.title = payload.message;
         slot.replaceChildren(live);
     }
 
@@ -387,14 +663,27 @@
             credentials: "same-origin",
             headers: { Accept: "application/json" }
         });
-        if (!response.ok) throw new Error(String(response.status));
+        if (!response.ok) {
+            const error = new Error(String(response.status));
+            error.retryAfterMs = (Number(response.headers.get("Retry-After")) || 0) * 1000;
+            throw error;
+        }
+
         return response.json();
     }
 
-    function pollRequest(requestId) {
-        if (!requestId || requestPollers.has(requestId)) return;
+    // Only this many requested titles are watched at a time; the others show the state they were rendered with.
+    const maxWatchedRequests = 8;
 
+    // The live state of a requested title is read soon after it changed and less often while it does not; a server that asks to be left alone is left alone.
+    function pollRequest(requestId) {
+        if (!requestId || requestPollers.has(requestId) || requestPollers.size >= maxWatchedRequests) return;
+
+        let delay = 0;
+        let last = "";
         const tick = async () => {
+            let retryAfterMs = 0;
+            let changed = false;
             try {
                 const payload = await fetchRequestProgress(requestId);
                 updateRequestEverywhere(payload);
@@ -402,12 +691,17 @@
                     requestPollers.delete(requestId);
                     return;
                 }
-            } catch {
+
+                const signature = `${payload.status}|${payload.progress}`;
+                changed = signature !== last;
+                last = signature;
+            } catch (error) {
                 // Keep the current visible state; transient navigation/network failures may recover.
+                retryAfterMs = error?.retryAfterMs || 0;
             }
 
-            const timer = window.setTimeout(tick, 1500);
-            requestPollers.set(requestId, timer);
+            delay = staging.nextPollDelay(delay, changed, retryAfterMs);
+            requestPollers.set(requestId, window.setTimeout(tick, delay));
         };
 
         requestPollers.set(requestId, 0);
@@ -415,13 +709,15 @@
     }
 
     function activateLiveRequests(scope) {
+        // A card shows the progress of its request in its indicator, so it only needs to be watched.
+        scope.querySelectorAll("[data-dc-watch-request]").forEach(card => pollRequest(card.dataset.dcWatchRequest));
         scope.querySelectorAll("[data-dc-live-request]").forEach(slot => {
             const requestId = slot.dataset.dcLiveRequest;
             if (!requestId) return;
             renderRequestSlot(slot, {
                 requestId,
                 status: slot.dataset.dcLiveStatus || "pending",
-                progress: defaultProgress(slot.dataset.dcLiveStatus || "pending"),
+                progress: null,
                 done: false
             });
             pollRequest(requestId);
@@ -432,7 +728,7 @@
         if (change.followed !== undefined) showFollowState(scope, change.followed);
         if (change.franchiseId) showFranchise(scope, change.franchiseId);
         if (change.requestId) {
-            const slot = scope.querySelector("[data-dc-add-slot]");
+            const slot = scope.querySelector("[data-dc-request-slot]");
             if (slot) {
                 slot.dataset.dcLiveRequest = change.requestId;
                 slot.dataset.dcLiveStatus = change.status || "pending";
@@ -443,114 +739,34 @@
     }
 
     function remember(scope, change) {
-        const holder = scope.closest("[data-dc-sheet]");
-        const key = holder?.dataset.for;
-        if (!key) return;
-        overrides.set(key, { ...(overrides.get(key) || {}), ...change });
-        if (change.requestId) {
-            const card = document.querySelector(`[data-dc-card][data-dc-key="${key}"]`);
-            if (card) {
-                card.dataset.dcRequestId = change.requestId;
-                card.dataset.dcRequestStatus = change.status || "pending";
-                const slot = card.querySelector("[data-dc-card-request-slot]");
-                if (slot) {
-                    slot.dataset.dcLiveRequest = change.requestId;
-                    slot.dataset.dcLiveStatus = change.status || "pending";
-                    renderRequestSlot(slot, change);
-                }
-                showRequested(card, requestProgressLabel(change));
-                pollRequest(change.requestId);
-            }
-        }
+        const key = scope.closest("[data-dc-sheet]")?.dataset.for;
+        if (key) overrides.set(key, { ...(overrides.get(key) || {}), ...change });
     }
 
-    async function submitDiscoverRequest(data, button, scope) {
-        button.disabled = true;
-        const slot = button.closest("[data-dc-add-slot], [data-dc-card-request-slot]");
-        if (slot) {
-            renderRequestSlot(slot, {
-                status: "searching",
-                progress: 10,
-                done: false
-            });
-        }
-        showRequested(scope, `${statusText("searching")} · 10%`);
+    // The Request dialog (discover-request.js) owns submitting; the persisted request it created is brought
+    // to the card behind it and to the preview of that card here.
+    root.addEventListener("dc:request-created", event => {
+        const { identity, payload } = event.detail;
+        const card = [...body.querySelectorAll("[data-dc-card]")].find(item =>
+            item.dataset.dcCategory === identity.category && item.dataset.dcExternalId === identity.externalId);
+        if (!card) return;
 
-        try {
-            const payload = await postForm(root.dataset.addUrl, {
-                category: data.category,
-                provider: data.provider,
-                externalId: data.externalId,
-                title: data.title,
-                subtitle: data.subtitle,
-                author: data.author,
-                coverImageUrl: data.cover
-            });
-
-            if (slot) {
-                slot.dataset.dcLiveRequest = payload.requestId;
-                slot.dataset.dcLiveStatus = payload.status;
-                renderRequestSlot(slot, payload);
-            }
-            showRequested(scope, requestProgressLabel(payload));
-            pollRequest(payload.requestId);
-            return payload;
-        } catch {
-            if (slot) {
-                const retry = document.createElement("button");
-                retry.type = "button";
-                retry.className = "button button-primary dc-card-request";
-                retry.textContent = text("textAddFailed");
-                if (scope.matches(".dc-pv")) {
-                    retry.dataset.dcAdd = "";
-                } else {
-                    retry.dataset.dcCardAdd = "";
-                }
-                slot.replaceChildren(retry);
-            } else {
-                button.disabled = false;
-                button.textContent = text("textAddFailed");
-            }
-            return null;
-        }
-    }
+        card.dataset.dcRequestId = payload.requestId;
+        card.dataset.dcRequestStatus = payload.status;
+        card.querySelector("[data-dc-card-request]")?.remove();
+        showRequested(card, requestProgressLabel(payload));
+        const key = keyOf(card);
+        overrides.set(key, { ...(overrides.get(key) || {}), ...payload });
+        pollRequest(payload.requestId);
+    });
 
     root.addEventListener("click", async event => {
         const target = event.target instanceof Element ? event.target : null;
         if (!target) return;
 
-        const cardAdd = target.closest("[data-dc-card-add]");
-        if (cardAdd) {
-            const card = cardAdd.closest("[data-dc-card]");
-            if (!card) return;
-            const payload = await submitDiscoverRequest({
-                category: card.dataset.dcCategory,
-                provider: card.dataset.dcProvider,
-                externalId: card.dataset.dcExternalId,
-                title: card.dataset.dcTitle,
-                subtitle: card.dataset.dcSubtitle,
-                author: card.dataset.dcAuthor,
-                cover: card.dataset.dcCover
-            }, cardAdd, card);
-            if (payload) {
-                card.dataset.dcRequestId = payload.requestId;
-                card.dataset.dcRequestStatus = payload.status;
-            }
-            return;
-        }
-
         const preview = target.closest(".dc-pv");
         if (!preview) return;
         const data = preview.dataset;
-
-        const add = target.closest("[data-dc-add]");
-        if (add) {
-            const payload = await submitDiscoverRequest(data, add, preview);
-            if (payload) {
-                remember(preview, payload);
-            }
-            return;
-        }
 
         const follow = target.closest("[data-dc-follow]");
         if (follow) {
@@ -572,10 +788,16 @@
                 showFollowState(preview, payload.followed === true);
                 remember(preview, { followed: payload.followed === true });
             } catch {
-                follow.title = text("textAddFailed");
+                follow.title = text("textActionFailed");
             } finally {
                 follow.disabled = false;
             }
+            return;
+        }
+
+        const open = target.closest("[data-dc-activate='open']");
+        if (open) {
+            void openDetail(data.category, data.provider, data.externalId, open, () => { open.title = text("textActionFailed"); });
             return;
         }
 
@@ -591,7 +813,7 @@
                 showFranchise(preview, payload.franchiseId);
                 remember(preview, { franchiseId: payload.franchiseId });
             } catch {
-                franchise.title = text("textAddFailed");
+                franchise.title = text("textActionFailed");
                 franchise.disabled = false;
             }
             return;

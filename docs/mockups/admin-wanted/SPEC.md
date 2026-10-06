@@ -113,7 +113,7 @@ Filters:
 - rejection reason
 - profile score where useful
 
-Sorting defaults to effective-profile score, then decision quality and source preference.
+Default ordering follows the canonical automatic-selection hierarchy: decision eligibility/identity state first, then effective quality/fallback tier, preference score, coverage utility and configured source/tiebreak policy. Network response order is never significant.
 
 ### Candidate decision visibility
 
@@ -266,3 +266,40 @@ Partial provider failure must not discard valid results from providers that succ
 - No silent parser correction from a manual override.
 - No arbitrary provider-specific columns permanently hard-coded into the default table.
 - No consumer exposure of this Admin workflow.
+
+
+## 2026-10-06 automatic search/selection refinement
+
+Binding generic behavior:
+- `docs/ACQUISITION_SEARCH_PLANNER.md` / #864
+- `docs/AUTOMATIC_RELEASE_SELECTION.md` / #865
+
+Wanted remains the worklist. It does not own another query/scoring engine.
+
+### Automatic search state
+
+Wanted may surface compact operational context such as:
+- effective search depth (normally Normal);
+- next allowed search/backoff time;
+- active fallback tier / next fallback transition;
+- partial-indexer failure without hiding successful candidates;
+- whether the target is waiting because enough evidence has not yet appeared;
+- whether current local content is Temporary and still upgrade-wanted.
+
+Do not expose raw provider query internals in the main list; deeper details belong to Manual Search/Search Trace.
+
+### Multi-target coverage
+
+A single pack/multi-unit release may satisfy several Wanted targets through one canonical acquisition plan.
+
+Wanted must avoid showing those covered units as independent simultaneous downloads once the shared candidate is grabbed. Only confirmed covered targets transition to Grabbed/Downloading.
+
+### Temporary vs final
+
+A successfully imported fallback release may leave the target in a clear `Available, upgrade still wanted`/equivalent Admin state until the profile's final quality/score/fallback goal is reached.
+
+Successful download/import alone does not mean the final acquisition goal is satisfied.
+
+### Automatic decision hierarchy
+
+Wanted/Auto uses the canonical hierarchy from `AUTOMATIC_RELEASE_SELECTION.md`; identity/safety/Require/Reject gates precede score, pack utility uses actual coverage, and upgrade selection requires configured material benefit.

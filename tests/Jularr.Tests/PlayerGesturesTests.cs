@@ -15,7 +15,7 @@ public sealed class PlayerGesturesTests
     public void SingleTapTogglesTheControlsOnlyAfterTheDoubleTapWindow()
     {
         var result = Run("""
-            const d = window.JularrPlayerGestures.createTapDecider({ delayMs: 280, stepSeconds: 10 });
+            const d = window.JularrPlayerGestures.createTapDecider({ delayMs: 280, backSeconds: 10, forwardSeconds: 30 });
             const out = [];
             out.push(d.tap(0.5, 0).action);
             out.push(d.settle(100).action);   // too early: a second tap may still come
@@ -32,7 +32,7 @@ public sealed class PlayerGesturesTests
     public void DoubleTapOnTheSidesSeeksAndFurtherTapsAccumulate()
     {
         var result = Run("""
-            const d = window.JularrPlayerGestures.createTapDecider({ delayMs: 280, seriesMs: 700, stepSeconds: 10 });
+            const d = window.JularrPlayerGestures.createTapDecider({ delayMs: 280, seriesMs: 700, backSeconds: 10, forwardSeconds: 30 });
             const out = [];
             const log = r => out.push(r.action === "seek" ? `${r.zone}:${r.total}` : r.action);
             log(d.tap(0.1, 0));
@@ -41,21 +41,21 @@ public sealed class PlayerGesturesTests
             log(d.tap(0.1, 900));    // -30
             log(d.settle(1300));     // the series never toggles the controls
             log(d.tap(0.9, 3000));
-            log(d.tap(0.9, 3150));   // double tap right: +10
-            log(d.tap(0.9, 3400));   // +20
+            log(d.tap(0.9, 3150));   // double tap right: +30
+            log(d.tap(0.9, 3400));   // +60
             log(d.tap(0.1, 3500));   // other side ends the series and starts a fresh tap
             log(d.settle(3800));
             out.join(",");
             """);
 
-        Assert.AreEqual("wait,back:10,back:20,back:30,none,wait,forward:10,forward:20,wait,toggleControls", result);
+        Assert.AreEqual("wait,back:10,back:20,back:30,none,wait,forward:30,forward:60,wait,toggleControls", result);
     }
 
     [TestMethod]
     public void SlowTapsDifferentZonesAndTheMiddleNeverSeek()
     {
         var result = Run("""
-            const d = window.JularrPlayerGestures.createTapDecider({ delayMs: 280, stepSeconds: 10 });
+            const d = window.JularrPlayerGestures.createTapDecider({ delayMs: 280, backSeconds: 10, forwardSeconds: 30 });
             const out = [];
             out.push(d.tap(0.1, 0).action, d.tap(0.1, 400).action);             // too slow: two single taps
             d.reset();
@@ -81,7 +81,7 @@ public sealed class PlayerGesturesTests
         StringAssert.Contains(chrome, "stage.addEventListener(\"pointerup\"");
         StringAssert.Contains(chrome, "\"seekBack10\" : \"seekForward10\"");
 
-        var page = Read("src", "Jularr.Web", "Pages", "Library", "Episode.cshtml");
+        var page = EpisodePlayerSource.Read(PlayerControlsTests.RepositoryRoot());
         var gestures = page.IndexOf("~/js/player-gestures.js", StringComparison.Ordinal);
         Assert.IsTrue(gestures > 0 && gestures < page.IndexOf("~/js/player-chrome.js", StringComparison.Ordinal));
         StringAssert.Contains(page, "data-seek-feedback=\"back\"");

@@ -1,6 +1,23 @@
-(() => {
+(async () => {
     const shell = document.querySelector("[data-novel-reader][data-reader-personalization]");
     if (!shell) return;
+
+    const scriptUrl = document.currentScript?.src;
+    if (!scriptUrl) return;
+    const sourceScriptUrl = new URL(scriptUrl);
+    const reflowModuleUrl = new URL("reflow-reader.js", sourceScriptUrl);
+    const buildVersion = sourceScriptUrl.searchParams.get("v");
+    if (buildVersion) reflowModuleUrl.searchParams.set("v", buildVersion);
+    const {
+        clamp,
+        permilleForIndex,
+        scrollPermille,
+        scrollTopForPermille,
+        captureContinuousAnchor,
+        capturePagedTextAnchor,
+        createReflowTextRenderer,
+        measurePagedSequence
+    } = await import(reflowModuleUrl.href);
 
     const settingsElement = shell.querySelector("[data-reader-settings-json]");
     const settingsForm = shell.querySelector("[data-reader-settings-form]");
@@ -60,11 +77,9 @@
     let keepAwake = true;
     let toastTimer = null;
     let saveQueue = Promise.resolve();
+    let reflowRenderer = null;
 
     const bookmarkState = new Map();
-
-    const clamp = (value, min, max) =>
-        Math.min(max, Math.max(min, value));
 
     const cssEscape = value =>
         window.CSS?.escape ? window.CSS.escape(value) : String(value).replace(/["\\]/g, "\\$&");
@@ -329,7 +344,7 @@
                     false);
 
                 if (scope === "work" || scope === "book") {
-                    state.hasBookOverride = true;
+                    state.hasWorkOverride = true;
                 }
                 // Apply the saved values, except for settings that changed again
                 // while this save was in flight (an appearance card sets several
@@ -450,7 +465,7 @@
         });
 
         if (overrideState) {
-            overrideState.textContent = state.hasBookOverride
+            overrideState.textContent = state.hasWorkOverride
                 ? t("overrideWork", "Customized for this work")
                 : state.hasGenreOverride
                     ? t("overrideGenre", "Genre default")
@@ -508,30 +523,6 @@
         return Math.floor((content.scrollLeft + left - content.getBoundingClientRect().left + 1) / width);
     };
 
-    const pagedAnchor = paragraphs => {
-        const page = Math.round(content.scrollLeft / Math.max(1, content.clientWidth));
-        const paragraph = paragraphs.find(item =>
-            Array.from(item.getClientRects()).some(rect => rect.width > 0 && pageAt(rect.left) >= page));
-        if (!paragraph) return { paragraph: paragraphs[0], offset: 0 };
-
-        const first = paragraph.getClientRects()[0];
-        if (!first || pageAt(first.left) >= page) return { paragraph, offset: 0 };
-
-        // The paragraph started on an earlier page: find the first character laid
-        // out on this page. Characters run in reading order across the columns,
-        // so "on this page or later" is monotonic in the offset.
-        const length = paragraph.textContent?.length || 0;
-        let low = 0;
-        let high = length;
-        while (low < high) {
-            const middle = Math.floor((low + high) / 2);
-            const left = characterLeft(paragraph, middle, length);
-            if (left !== null && pageAt(left) >= page) high = middle;
-            else low = middle + 1;
-        }
-        return { paragraph, offset: Math.min(low, Math.max(0, length - 1)) };
-    };
-
     const captureLogicalAnchor = () => {
         const language =
             shell.dataset.view === "de" && shell.dataset.hasTranslation === "true"
@@ -543,21 +534,18 @@
         if (paragraphs.length === 0) return null;
 
         if ((shell.dataset.readingMode || state.readingMode) === "paged") {
-            return pagedAnchor(paragraphs);
+            return capturePagedTextAnchor(
+                paragraphs,
+                Math.round(content.scrollLeft / Math.max(1, content.clientWidth)),
+                pageAt,
+                characterLeft,
+                { language });
         }
 
-        const target = window.innerHeight * .28;
-        let selected = paragraphs[0];
-        for (const paragraph of paragraphs) {
-            const rect = paragraph.getBoundingClientRect();
-            if (rect.top <= target) selected = paragraph;
-            if (rect.top <= target && rect.bottom >= target) break;
-            if (rect.top > target) break;
-        }
-        const rect = selected.getBoundingClientRect();
-        const length = selected.textContent?.length || 0;
-        const fraction = rect.height <= 0 ? 0 : clamp((target - rect.top) / rect.height, 0, 1);
-        return { paragraph: selected, offset: Math.round(length * fraction) };
+        return captureContinuousAnchor(
+            paragraphs,
+            window.innerHeight * .28,
+            { language });
     };
 
     // Page that shows the anchor's character (the paragraph start for offset 0).
@@ -572,8 +560,7 @@
 
     const updateReadingProgress = () => {
         if (state.readingMode !== "paged") return;
-        const progress =
-            pageCount <= 1 ? 1000 : Math.round(currentPage / (pageCount - 1) * 1000);
+        const progress = permilleForIndex(currentPage, pageCount);
         document.querySelectorAll("[data-reading-progress]").forEach(bar => {
             bar.style.width = (progress / 10) + "%";
         });
@@ -595,8 +582,7 @@
             shell.dataset.view === "de" && shell.dataset.hasTranslation === "true"
                 ? "de"
                 : "ja";
-        const progress =
-            pageCount <= 1 ? 1000 : Math.round(currentPage / (pageCount - 1) * 1000);
+        const progress = permilleForIndex(currentPage, pageCount);
         const data = new FormData(progressForm);
         setFormValue(data, "positionPermille", progress);
         setFormValue(data, "anchorLanguage", language);
@@ -626,10 +612,12 @@
             max = pageCount - 1;
         } else {
             const viewport = Math.max(1, window.innerHeight);
-            const scrollable = Math.max(1, document.documentElement.scrollHeight - viewport);
             total = Math.max(1, Math.ceil(document.documentElement.scrollHeight / viewport));
             page = Math.min(total, Math.floor(window.scrollY / viewport) + 1);
-            value = Math.round(clamp(window.scrollY / scrollable, 0, 1) * 1000);
+            value = scrollPermille(
+                window.scrollY,
+                document.documentElement.scrollHeight,
+                viewport);
             max = 1000;
         }
         const percent = state.readingMode === "paged"
@@ -654,8 +642,15 @@
         // Columns advance by exactly one page width (novels.css: column gap = twice the
         // inline padding). The 2 px allowance absorbs sub-pixel rounding, which would
         // otherwise add an empty page after the last one.
-        pageCount = Math.max(1, Math.ceil((content.scrollWidth - 2) / width));
+        const measured = measurePagedSequence({
+            scrollWidth: content.scrollWidth,
+            columnStride: width,
+            trailingCompensation: 2
+        });
+        pageCount = measured.pageCount;
         currentPage = clamp(Math.round(content.scrollLeft / width), 0, pageCount - 1);
+        reflowRenderer?.setMode("paged");
+        reflowRenderer?.setPageState(currentPage, pageCount);
         if (pageNumber) pageNumber.textContent = `${currentPage + 1} / ${pageCount}`;
         emitLocation();
         shell.querySelector("[data-reader-page-prev]")?.toggleAttribute("disabled", currentPage <= 0);
@@ -664,29 +659,18 @@
         renderPageBookmarks();
     };
 
-    const animatePage = direction => {
-        if (reduceMotion.matches || state.pageTransition === "none") return;
-        const animation = `reader-turn-${state.pageTransition}-${direction}`;
-        content.classList.remove(
-            "reader-turn-curl-next", "reader-turn-curl-prev",
-            "reader-turn-slide-next", "reader-turn-slide-prev",
-            "reader-turn-fade-next", "reader-turn-fade-prev");
-        void content.offsetWidth;
-        content.classList.add(animation);
-        setTimeout(() => content.classList.remove(animation), 430);
-    };
-
-    const goToPage = (page, animate = true) => {
+    const goToPage = page => {
         if (state.readingMode !== "paged") return;
         const next = clamp(page, 0, pageCount - 1);
-        const direction = next >= currentPage ? "next" : "prev";
-        if (animate && next !== currentPage) animatePage(direction);
         content.scrollTo({
             left: next * content.clientWidth,
-            behavior: reduceMotion.matches ? "auto" : "smooth"
+            behavior: "auto"
         });
         currentPage = next;
         syncPageState();
+        requestAnimationFrame(() => {
+            shell.dispatchEvent(new CustomEvent("jularr:reader-rendered", { bubbles: false }));
+        });
         window.setTimeout(() => {
             syncPageState();
             sendPagedProgress();
@@ -735,6 +719,7 @@
     const applySettings = (preserveAnchor = true) => {
         const anchor = preserveAnchor ? captureLogicalAnchor() : initialAnchor();
         const previousMode = shell.dataset.readingMode || state.readingMode;
+        reflowRenderer?.setMode(state.readingMode);
 
         shell.dataset.pageTransition = state.pageTransition;
         shell.dataset.twoPage = String(Boolean(state.twoPageSpread));
@@ -1040,8 +1025,7 @@
             shell.dataset.view === "de" && shell.dataset.hasTranslation === "true"
                 ? "de"
                 : "ja";
-        const position =
-            pageCount <= 1 ? 1000 : Math.round(currentPage / (pageCount - 1) * 1000);
+        const position = pageCount <= 1 ? 1000 : permilleForIndex(currentPage, pageCount);
         const data = new FormData(bookmarkForm);
         setFormValue(data, "positionPermille", position);
         setFormValue(data, "language", language);
@@ -1192,34 +1176,49 @@
         return true;
     };
 
-    shell.addEventListener("jularr:reader-page-edge", event => {
-        const direction = Number(event.detail?.direction || 0);
-        if (!direction) return;
-        if (state.readingMode !== "paged") {
-            // Frame page buttons in Scroll mode move by one screen.
+    reflowRenderer = createReflowTextRenderer({
+        initialMode: state.readingMode,
+        goToPage,
+        turnContinuous: direction => {
             window.scrollBy({
                 top: direction * window.innerHeight * .85,
                 behavior: reduceMotion.matches ? "auto" : "smooth"
             });
-            return;
-        }
-        const speaking = shell.dataset.readerTts && shell.dataset.readerTts !== "idle";
-        const next = currentPage + direction;
-        // Turning past either end opens the adjacent chapter; read-aloud page
-        // following never changes chapters.
-        if (!speaking && next >= pageCount && openAdjacentChapter("next")) return;
-        if (!speaking && next < 0 && openAdjacentChapter("previous")) return;
-        goToPage(next);
+        },
+        onPageEdge: direction => {
+            const speaking =
+                shell.dataset.readerTts && shell.dataset.readerTts !== "idle";
+            if (speaking) return;
+            openAdjacentChapter(direction < 0 ? "previous" : "next");
+        },
+        getScrollPermille: () => scrollPermille(
+            window.scrollY,
+            document.documentElement.scrollHeight,
+            window.innerHeight),
+        scrollToPermille: value => window.scrollTo({
+            top: scrollTopForPermille(
+                value,
+                document.documentElement.scrollHeight,
+                window.innerHeight),
+            behavior: "auto"
+        }),
+        captureAnchor: captureLogicalAnchor
+    });
+
+    shell.addEventListener("jularr:reader-page-edge", event => {
+        const direction = Number(event.detail?.direction || 0);
+        if (!direction) return;
+        reflowRenderer?.setMode(state.readingMode);
+        reflowRenderer?.setPageState(currentPage, pageCount);
+        reflowRenderer?.turn(direction);
     });
 
     shell.addEventListener("jularr:reader-seek", event => {
         const value = Number(event.detail?.value || 0);
-        if (state.readingMode === "paged") {
-            goToPage(value, false);
-            return;
-        }
-        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-        window.scrollTo({ top: max * value / 1000, behavior: "auto" });
+        reflowRenderer?.setMode(state.readingMode);
+        reflowRenderer?.setPageState(currentPage, pageCount);
+        if (state.readingMode === "paged") reflowRenderer?.seekPage(value);
+        else reflowRenderer?.seekPermille(value);
     });
 
     // Search hits and note jumps inside the current chapter (novel-search.js).

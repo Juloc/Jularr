@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Jularr.Web.Features.Playback.Transcoding;
 
 namespace Jularr.Web.Features.Playback;
 
@@ -110,41 +111,57 @@ public static class LivePlaybackCommand
 
 public sealed class LivePlaybackStream : Stream
 {
-    private readonly Process process;
-    private readonly Stream output;
-    private readonly Task stderrDrain;
-    private bool disposed;
+    private const int PrefixBufferSize = 16 * 1024;
 
-    private readonly IDisposable? lease;
+    private readonly Stream _output;
+    private readonly Task<string> _errors;
+    private readonly Action _endProcess;
+    private readonly IDisposable? _lease;
+    private bool _disposed;
+    private byte[] _prefix = [];
+    private int _prefixOffset;
 
-    private LivePlaybackStream(Process process, IDisposable? lease)
+    private LivePlaybackStream(Stream output, Task<string> errors, Action endProcess, IDisposable? lease)
     {
-        this.process = process;
-        this.lease = lease;
-        output = process.StandardOutput.BaseStream;
-        stderrDrain = process.StandardError.ReadToEndAsync();
+        _output = output;
+        _errors = errors;
+        _endProcess = endProcess;
+        _lease = lease;
     }
+
+    /// <summary>
+    /// Wraps the output of an already running encoder. <paramref name="endProcess"/> kills and cleans up the process; it runs
+    /// on dispose, together with the pipe and the lease. This is the seam that tests a silent or dying encoder without ffmpeg.
+    /// </summary>
+    public static LivePlaybackStream Wrap(Stream output, Task<string> errors, Action endProcess, IDisposable? lease = null) =>
+        new(output, errors, endProcess, lease);
 
     public static LivePlaybackStream Start(
         string sourcePath,
         PlaybackPreparationPlan plan,
         double startSeconds = 0,
         int? audioStreamIndex = null,
-        PlaybackQualityCap qualityCap = PlaybackQualityCap.Auto) =>
-        Start(LivePlaybackCommand.BuildArguments(
-            sourcePath,
-            plan,
-            startSeconds,
-            audioStreamIndex,
-            qualityCap));
+        PlaybackQualityCap qualityCap = PlaybackQualityCap.Auto,
+        IDisposable? lease = null) =>
+        Start(
+            LivePlaybackCommand.BuildArguments(
+                sourcePath,
+                plan,
+                startSeconds,
+                audioStreamIndex,
+                qualityCap),
+            lease);
 
     /// <summary>
     /// Starts ffmpeg with prepared arguments writing fragmented MP4 to stdout. The optional
-    /// lease (a transcode slot) is released when the response stream is disposed.
+    /// lease (a transcode slot) is released when the response stream is disposed; when the
+    /// start itself throws, the lease is not touched and stays with the caller. <paramref name="onProgress"/> receives the measured
+    /// progress of the encoder while it runs (its <c>-progress</c> blocks share the stderr pipe).
     /// </summary>
     public static LivePlaybackStream Start(
         IReadOnlyList<string> arguments,
-        IDisposable? lease = null)
+        IDisposable? lease = null,
+        Action<PlaybackTranscodeSample>? onProgress = null)
     {
         var process = new Process
         {
@@ -169,7 +186,71 @@ public sealed class LivePlaybackStream : Stream
             throw new InvalidOperationException("Could not start ffmpeg playback stream.");
         }
 
-        return new LivePlaybackStream(process, lease);
+        return new LivePlaybackStream(process.StandardOutput.BaseStream, ReadDiagnosticsAsync(process.StandardError, onProgress), () => EndProcess(process), lease);
+    }
+
+    /// <summary>
+    /// Drains stderr for the life of the process (a full pipe would stall the encoder). Progress blocks go to <paramref name="onProgress"/>;
+    /// the result is the bounded tail of the diagnostic lines (see <see cref="FfmpegStderrReader"/>).
+    /// </summary>
+    public static async Task<string> ReadDiagnosticsAsync(TextReader reader, Action<PlaybackTranscodeSample>? onProgress)
+    {
+        var stderr = new FfmpegStderrReader();
+        if (onProgress is not null)
+        {
+            stderr.ProgressReported += onProgress;
+        }
+
+        try
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                stderr.Feed(line);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+            // Ending the stream disposes the process and its pipes; what was read until then is the diagnostic.
+        }
+
+        return stderr.Tail;
+    }
+
+    /// <summary>
+    /// Waits until ffmpeg has produced its first bytes, which the stream then serves first. A response
+    /// that has not started can still fail over to another encoder; once bytes flow it cannot. Throws
+    /// <see cref="InvalidOperationException"/> when ffmpeg ends without output and
+    /// <see cref="TimeoutException"/> when it stays silent for <paramref name="timeout"/>.
+    /// </summary>
+    public async Task WaitForFirstBytesAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        // A pipe read of a child process does not honour cancellation once it started, so the read is raced against the
+        // timeout and the caller's token. Losing the race ends the process and closes the pipe, which also frees the lease.
+        var buffer = new byte[PrefixBufferSize];
+        var read = _output.ReadAsync(buffer, CancellationToken.None).AsTask();
+        using var waitSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var wait = Task.Delay(timeout, waitSource.Token);
+        var finished = await Task.WhenAny(read, wait);
+        await waitSource.CancelAsync();
+        if (finished != read)
+        {
+            Dispose();
+            _ = read.ContinueWith(static finished => _ = finished.Exception, TaskContinuationOptions.OnlyOnFaulted);
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException("ffmpeg produced no output in time.");
+        }
+
+        var bytes = await read;
+        if (bytes == 0)
+        {
+            var detail = await Task.WhenAny(_errors, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken)) == _errors
+                ? _errors.Result.Trim().Split('\n')[^1].Trim()
+                : "";
+            throw new InvalidOperationException($"ffmpeg exited before producing output: {(detail.Length <= 200 ? detail : detail[..200])}");
+        }
+
+        _prefix = buffer[..bytes];
+        _prefixOffset = 0;
     }
 
     public override bool CanRead => true;
@@ -188,19 +269,19 @@ public sealed class LivePlaybackStream : Stream
     }
 
     public override int Read(byte[] buffer, int offset, int count) =>
-        output.Read(buffer, offset, count);
+        TakePrefix(buffer.AsSpan(offset, count)) is var served and > 0 ? served : _output.Read(buffer, offset, count);
 
-    public override Task<int> ReadAsync(
+    public override async Task<int> ReadAsync(
         byte[] buffer,
         int offset,
         int count,
         CancellationToken cancellationToken) =>
-        output.ReadAsync(buffer, offset, count, cancellationToken);
+        TakePrefix(buffer.AsSpan(offset, count)) is var served and > 0 ? served : await _output.ReadAsync(buffer, offset, count, cancellationToken);
 
-    public override ValueTask<int> ReadAsync(
+    public override async ValueTask<int> ReadAsync(
         Memory<byte> buffer,
         CancellationToken cancellationToken = default) =>
-        output.ReadAsync(buffer, cancellationToken);
+        TakePrefix(buffer.Span) is var served and > 0 ? served : await _output.ReadAsync(buffer, cancellationToken);
 
     public override long Seek(long offset, SeekOrigin origin) =>
         throw new NotSupportedException();
@@ -211,38 +292,64 @@ public sealed class LivePlaybackStream : Stream
     public override void Write(byte[] buffer, int offset, int count) =>
         throw new NotSupportedException();
 
+    // The bytes read ahead by WaitForFirstBytesAsync belong at the front of the response.
+    private int TakePrefix(Span<byte> destination)
+    {
+        var available = _prefix.Length - _prefixOffset;
+        if (available <= 0 || destination.IsEmpty)
+        {
+            return 0;
+        }
+
+        var count = Math.Min(available, destination.Length);
+        _prefix.AsSpan(_prefixOffset, count).CopyTo(destination);
+        _prefixOffset += count;
+        return count;
+    }
+
     protected override void Dispose(bool disposing)
     {
-        if (!disposing || disposed)
+        if (!disposing || _disposed)
         {
             base.Dispose(disposing);
             return;
         }
 
-        disposed = true;
-
+        _disposed = true;
         try
         {
-            output.Dispose();
+            // The process is ended first so a blocked pipe read is released by its exit, then the pipe is closed.
+            _endProcess();
         }
         finally
         {
             try
             {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                }
+                _output.Dispose();
             }
-            catch (InvalidOperationException)
+            finally
             {
+                _lease?.Dispose();
             }
-
-            process.Dispose();
-            _ = stderrDrain;
-            lease?.Dispose();
         }
 
         base.Dispose(disposing);
+    }
+
+    private static void EndProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited between the check and the kill: it is gone, which is what the caller wants.
+        }
+
+        process.Dispose();
     }
 }

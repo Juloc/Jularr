@@ -1,0 +1,122 @@
+@page
+@model Jularr.Web.Pages.Admin.TranscodingModel
+@using Jularr.Web.Features.Playback.Decision
+@using Jularr.Web.Features.Playback.Transcoding
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+}
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.transcoding.title"];
+
+    (string Label, string Field, PlaybackCostClass CostClass)[] sessionFields =
+    [
+        (ui["admin.transcoding.softwareVideo"], nameof(Model.SoftwareVideoSessions), PlaybackCostClass.SoftwareVideo),
+        (ui["admin.transcoding.hardwareVideo"], nameof(Model.HardwareVideoSessions), PlaybackCostClass.HardwareVideo),
+        (ui["admin.transcoding.remux"], nameof(Model.RemuxSessions), PlaybackCostClass.Remux),
+        (ui["admin.transcoding.audioOnly"], nameof(Model.AudioOnlySessions), PlaybackCostClass.AudioOnly)
+    ];
+}
+
+<header class="page-header">
+    <div>
+        <h1>@ui["admin.transcoding.title"]</h1>
+        <p>@ui["admin.transcoding.description"]</p>
+    </div>
+    <button class="button button-primary" type="submit" form="transcoding-form">@ui["admin.transcoding.save"]</button>
+</header>
+
+<partial name="_AdminNavigation" model="ui" />
+
+<form id="transcoding-form" method="post" class="admset-sections">
+    <div asp-validation-summary="ModelOnly" class="admset-notice" role="alert"></div>
+
+    <section class="admset-section" aria-labelledby="transcoding-enabled-title">
+        <div class="admset-head">
+            <span class="admset-tile"><partial name="_AdminIcon" model='"power"' /></span>
+            <div><h2 id="transcoding-enabled-title">@ui["admin.transcoding.enabledTitle"]</h2></div>
+        </div>
+        <label class="admset-switch-row">
+            <span class="admset-switch-copy">
+                <strong>@ui["admin.transcoding.enabled"]</strong>
+                <span>@ui["admin.transcoding.enabledHint"]</span>
+            </span>
+            <input asp-for="TranscodingEnabled" class="admin-switch" role="switch" />
+        </label>
+        <a class="button admset-link" asp-page="/Admin/Health" asp-fragment="hardware">@ui["admin.health.hardware.title"]</a>
+    </section>
+
+    <section class="admset-section" aria-labelledby="transcoding-sessions-title">
+        <div class="admset-head">
+            <span class="admset-tile"><partial name="_AdminIcon" model='"sessions"' /></span>
+            <div>
+                <h2 id="transcoding-sessions-title">@ui["admin.transcoding.sessionsTitle"]</h2>
+                <p>@ui["admin.transcoding.sessionsHint"]</p>
+            </div>
+        </div>
+        <div class="admset-fields">
+            @foreach (var (label, field, costClass) in sessionFields)
+            {
+                <div class="admset-field">
+                    <label for="@field">@label</label>
+                    <input id="@field" name="@field" value="@Model.SessionLimit(field)" type="number" inputmode="numeric" min="0" max="@PlaybackTranscodingSettings.MaxSessionsPerClass"
+                           class="@(Model.FieldError(field) is null ? null : "input-validation-error")" aria-describedby="@field-hint" aria-invalid="@(Model.FieldError(field) is null ? null : "true")" />
+                    <span id="@field-hint" class="admset-hint-row">
+                        <span class="admin-tag">@ui.Format("admin.transcoding.running", ("count", Model.Running(costClass)))</span>
+                        <span class="admset-error">@Model.FieldError(field)</span>
+                    </span>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="admset-section" aria-labelledby="transcoding-cache-title">
+        <div class="admset-head">
+            <span class="admset-tile"><partial name="_AdminIcon" model='"folder"' /></span>
+            <div>
+                <h2 id="transcoding-cache-title">@ui["admin.transcoding.cacheTitle"]</h2>
+                <p>@ui["admin.transcoding.cacheHint"]</p>
+            </div>
+        </div>
+        <div class="admset-fields">
+            <div class="admset-field admset-field-wide">
+                <label asp-for="HlsCachePath">@ui["admin.transcoding.cachePath"]</label>
+                <input asp-for="HlsCachePath" autocomplete="off" spellcheck="false" aria-describedby="cache-path-hint" />
+                <span id="cache-path-hint" class="admset-hint">@ui["admin.transcoding.cachePathHint"]</span>
+                <span asp-validation-for="HlsCachePath" class="admset-error"></span>
+            </div>
+            <div class="admset-field">
+                <label asp-for="CacheBudgetGiB">@ui["admin.transcoding.cacheBudget"]</label>
+                <input asp-for="CacheBudgetGiB" type="number" inputmode="numeric" min="@PlaybackTranscodingSettings.MinCacheBudgetGiB" max="@PlaybackTranscodingSettings.MaxCacheBudgetGiB" aria-describedby="cache-budget-hint" />
+                <span id="cache-budget-hint" class="admset-hint">@ui["admin.transcoding.cacheBudgetHint"]</span>
+                <span asp-validation-for="CacheBudgetGiB" class="admset-error"></span>
+            </div>
+            <div class="admset-field">
+                <label asp-for="FreeSpaceFloorGiB">@ui["admin.transcoding.freeSpaceFloor"]</label>
+                <input asp-for="FreeSpaceFloorGiB" type="number" inputmode="numeric" min="0" max="@PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB" aria-describedby="free-floor-hint" />
+                <span id="free-floor-hint" class="admset-hint">@ui["admin.transcoding.freeSpaceFloorHint"]</span>
+                <span asp-validation-for="FreeSpaceFloorGiB" class="admset-error"></span>
+            </div>
+        </div>
+    </section>
+    <section class="admset-section" aria-labelledby="transcoding-buffer-title">
+        <div class="admset-head">
+            <span class="admset-tile"><partial name="_AdminIcon" model='"play"' /></span>
+            <div><h2 id="transcoding-buffer-title">@ui["admin.transcoding.bufferTitle"]</h2></div>
+        </div>
+        <div class="admset-fields">
+            <div class="admset-field">
+                <label asp-for="BufferPreset">@ui["admin.transcoding.bufferPreset"]</label>
+                <select asp-for="BufferPreset" aria-describedby="buffer-hint">
+                    @foreach (var preset in Enum.GetValues<PlaybackBufferPreset>())
+                    {
+                        <option value="@preset" selected="@(preset == Model.BufferPreset)">@ui.Format("admin.transcoding.bufferOption", ("name", ui["playback.buffer." + preset.ToString().ToLowerInvariant()]), ("seconds", PlaybackBufferPolicy.TargetSeconds(preset)))</option>
+                    }
+                </select>
+                <span id="buffer-hint" class="admset-hint">@ui["admin.transcoding.bufferHint"]</span>
+                <span asp-validation-for="BufferPreset" class="admset-error"></span>
+            </div>
+        </div>
+    </section>
+</form>

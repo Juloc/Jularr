@@ -92,7 +92,11 @@ public sealed class TvLibraryService(
         return new TvSeriesEntry(series, workId);
     }
 
-    /// <summary>Upserts one episode of a series into the universal season/episode structure.</summary>
+    /// <summary>
+    /// Upserts one episode of a series into the universal season/episode structure. An import only knows the numbers (and at best a
+    /// title from the release), so what the provider already recorded for the episode and its season (titles, air date, absolute
+    /// number) is kept: the structure the Request was made against must not lose its facts when the file arrives.
+    /// </summary>
     public async Task<WorkEpisode> EnsureEpisodeAsync(
         Guid workId,
         int seasonNumber,
@@ -102,16 +106,22 @@ public sealed class TvLibraryService(
     {
         await EnsureEnabledAsync(cancellationToken);
 
-        var season = await structure.AddOrUpdateSeasonAsync(workId, seasonNumber, title: null, cancellationToken);
+        var knownSeasonTitle = await db.Set<WorkSeason>().AsNoTracking()
+            .Where(x => x.WorkId == workId && x.SeasonNumber == seasonNumber)
+            .Select(x => x.Title)
+            .FirstOrDefaultAsync(cancellationToken);
+        var known = await db.Set<WorkEpisode>().AsNoTracking()
+            .FirstOrDefaultAsync(x => x.WorkId == workId && x.SeasonNumber == seasonNumber && x.EpisodeNumber == episodeNumber, cancellationToken);
+        var season = await structure.AddOrUpdateSeasonAsync(workId, seasonNumber, knownSeasonTitle, cancellationToken);
         return await structure.AddOrUpdateEpisodeAsync(
             workId,
             seasonNumber,
             episodeNumber,
-            absoluteNumber: null,
+            known?.AbsoluteNumber,
             isSpecial: seasonNumber == 0,
-            title: string.IsNullOrWhiteSpace(episodeTitle) ? null : episodeTitle.Trim(),
-            airedAt: null,
-            seasonId: season.Id,
+            string.IsNullOrWhiteSpace(episodeTitle) ? known?.Title : episodeTitle.Trim(),
+            known?.AiredAt,
+            season.Id,
             cancellationToken);
     }
 

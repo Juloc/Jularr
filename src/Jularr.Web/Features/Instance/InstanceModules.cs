@@ -19,7 +19,13 @@ public enum InstanceModule
     Audiobook = 7,
     Learning = 8,
     Acquisition = 9,
-    Tracking = 10
+    Tracking = 10,
+
+    /// <summary>
+    /// Whether this instance plays media itself. Off is the manager-only mode (discovery, requests, monitoring and
+    /// acquisition without a Jularr player): no Watch page, no player/plan/progress/stream API and no play action.
+    /// </summary>
+    Playback = 11
 }
 
 public sealed record InstanceModuleSettings(
@@ -325,18 +331,52 @@ public static class InstanceModuleRoutes
             [InstanceModule.Tracking] =
             [
                 "/Settings/AniList"
+            ],
+            // Only what serves or locates playable bytes, plans or starts playback, or spawns ffmpeg: manager-only clients keep episode
+            // metadata, flow, progress and watched marks, cues and segments, storage availability and offline books/manga.
+            [InstanceModule.Playback] =
+            [
+                "/Library/Watch",
+                "/Library/Episode",
+                "/api/client/v1/video/player",
+                "/api/client/v1/video/playback-plan",
+                "/api/client/v1/video/playback-intents",
+                "/api/client/v1/video/progress",
+                "/api/client/v1/video/subtitle-tracks",
+                "/api/client/v1/stream-sessions",
+                "/api/client/v1/media/*/content",
+                "/api/client/v1/media/*/trickplay",
+                "/api/client/v1/episodes/*/player",
+                "/api/client/v1/episodes/*/hls",
+                "/api/client/v1/episodes/*/fallback",
+                "/api/client/v1/episodes/*/playback-plan",
+                "/api/client/v1/episodes/*/offline-download",
+                "/api/client/v1/episodes/*/trickplay",
+                "/api/client/v1/episodes/*/subtitle-tracks",
+                "/api/client/v1/offline/media"
             ]
         };
 
     public static IReadOnlyList<InstanceModule> Resolve(PathString path) =>
         Roots
-            .Where(pair => pair.Value.Any(root =>
-                path.StartsWithSegments(
-                    new PathString(root),
-                    StringComparison.OrdinalIgnoreCase)))
+            .Where(pair => pair.Value.Any(root => Matches(path, root)))
             .Select(pair => pair.Key)
             .Distinct()
             .ToArray();
+
+    /// <summary>A root is a path prefix; a <c>*</c> segment in it matches any one segment (an id), so a route can be gated by what follows the id.</summary>
+    private static bool Matches(PathString path, string root)
+    {
+        if (!root.Contains('*'))
+        {
+            return path.StartsWithSegments(new PathString(root), StringComparison.OrdinalIgnoreCase);
+        }
+
+        var wanted = root.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var actual = (path.Value ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return actual.Length >= wanted.Length
+            && wanted.Select((segment, index) => segment == "*" || string.Equals(segment, actual[index], StringComparison.OrdinalIgnoreCase)).All(matches => matches);
+    }
 
     public static bool TryResolve(PathString path, out InstanceModule module)
     {
@@ -350,4 +390,29 @@ public static class InstanceModuleRoutes
         module = default;
         return false;
     }
+}
+
+public static class InstanceModuleGateExtensions
+{
+    /// <summary>
+    /// Instance module switches are stronger than profile settings: a route of a disabled module answers 404 immediately, like a
+    /// hidden media type. Background and service gates use the same <see cref="IInstanceModuleService"/>.
+    /// </summary>
+    public static IApplicationBuilder UseInstanceModuleGates(this IApplicationBuilder app) =>
+        app.Use(async (context, next) =>
+        {
+            var requiredModules = InstanceModuleRoutes.Resolve(context.Request.Path);
+            if (requiredModules.Count > 0)
+            {
+                var modules = context.RequestServices.GetRequiredService<IInstanceModuleService>();
+                var settings = await modules.GetAsync(context.RequestAborted);
+                if (requiredModules.Any(module => !settings.IsEnabled(module)))
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
+                }
+            }
+
+            await next();
+        });
 }

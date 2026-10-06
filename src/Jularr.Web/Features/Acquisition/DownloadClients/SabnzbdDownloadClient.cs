@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Sabnzbd;
+using Jularr.Web.Features.Operations;
 
 namespace Jularr.Web.Features.Acquisition.DownloadClients;
 
@@ -40,7 +41,7 @@ public sealed class SabnzbdDownloadClient(ISabnzbdClient client) : IDownloadClie
         {
             result = await client.GrabAsync(
                 ToConnection(entry),
-                new SabnzbdGrabRequest(request.Url, request.Name, entry.CategoryFor(request.MediaKind)),
+                new SabnzbdGrabRequest(request.Url, request.Name, entry.CategoryFor(request.MediaKind), SabnzbdPriority(request.Priority)),
                 cancellationToken);
         }
         else
@@ -121,6 +122,14 @@ public sealed class SabnzbdDownloadClient(ISabnzbdClient client) : IDownloadClie
         var history = await client.DeleteHistoryAsync(connection, externalId, deleteFiles, cancellationToken);
         return queue.Success || history.Success;
     }
+
+    /// <summary>SABnzbd's queue priorities: 1 is High and -1 Low; null leaves the queue's default for a normal download.</summary>
+    private static int? SabnzbdPriority(OperationPriority priority) => priority switch
+    {
+        OperationPriority.High => 1,
+        OperationPriority.Low => -1,
+        _ => null
+    };
 
     public static SabnzbdConnection ToConnection(DownloadClientEntry entry) =>
         new(

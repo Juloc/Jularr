@@ -44,8 +44,7 @@ public sealed class PlayerDesignTests
         // colours in player-tokens.json remain the defaults for native clients.
         StringAssert.Contains(css, "--player-accent: var(--accent);");
 
-        var page = File.ReadAllText(
-            Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+        var page = EpisodePlayerSource.Read(root);
         StringAssert.Contains(page, "~/css/player.css");
         StringAssert.Contains(page, "~/js/player-design.js");
         StringAssert.Contains(page, "data-word-inspector");
@@ -90,7 +89,7 @@ public sealed class PlayerDesignTests
     }
 
     [TestMethod]
-    public void PlaybackSpeedsAndSeekStepComeFromTheCanonicalTokens()
+    public void PlaybackSpeedsAndSeekIncrementsComeFromTheCanonicalTokens()
     {
         var root = FindRepositoryRoot();
         using var document = JsonDocument.Parse(File.ReadAllText(
@@ -104,9 +103,30 @@ public sealed class PlayerDesignTests
         Assert.AreEqual(0.5, speeds.Min());
         Assert.AreEqual(2.0, speeds.Max());
         CollectionAssert.Contains(speeds, 1.0);
-        Assert.AreEqual(
-            playback.GetProperty("seekStepSeconds").GetInt32(),
-            Jularr.Web.Features.Playback.PlayerDesign.SeekStepSeconds);
+        Assert.AreEqual(10, Jularr.Web.Features.Playback.PlayerDesign.SeekBackSeconds, "SPEC: manual seek is 10 seconds back ...");
+        Assert.AreEqual(30, Jularr.Web.Features.Playback.PlayerDesign.SeekForwardSeconds, "... and 30 seconds forward.");
+        Assert.AreEqual(playback.GetProperty("seekBackSeconds").GetInt32(), Jularr.Web.Features.Playback.PlayerDesign.SeekBackSeconds);
+        Assert.AreEqual(playback.GetProperty("seekForwardSeconds").GetInt32(), Jularr.Web.Features.Playback.PlayerDesign.SeekForwardSeconds);
+        Assert.IsFalse(playback.TryGetProperty("seekStepSeconds", out _), "There is no single symmetric seek step.");
+    }
+
+    [TestMethod]
+    public void NativeAndroidPlayersReadTheSeekIncrementsFromTheTokensInsteadOfHardcodingThem()
+    {
+        var root = FindRepositoryRoot();
+        foreach (var file in new[]
+                 {
+                     Path.Combine("app-tv", "src", "main", "kotlin", "de", "juloc", "jularr", "tv", "TvPlayerScreen.kt"),
+                     Path.Combine("app-tv", "src", "main", "kotlin", "de", "juloc", "jularr", "tv", "TvPlayerInteraction.kt"),
+                     Path.Combine("app-mobile", "src", "main", "kotlin", "de", "juloc", "jularr", "mobile", "NativePlayerScreen.kt")
+                 })
+        {
+            var source = File.ReadAllText(Path.Combine(root, "clients", "android", file));
+            Assert.IsFalse(
+                System.Text.RegularExpressions.Regex.IsMatch(source, @"(seekBy|SeekBy)(-?10_000)|currentPosition [-+] 10_000"),
+                $"{file} must seek by design.seek (10 s back, 30 s forward), not a hardcoded step.");
+            StringAssert.Contains(source, "seek.");
+        }
     }
 
     [TestMethod]
@@ -121,8 +141,7 @@ public sealed class PlayerDesignTests
             Path.Combine(root, "design", "player", "player-actions.json")));
 
         var iconIds = icons.RootElement.GetProperty("icons").EnumerateObject().Select(x => x.Name).ToArray();
-        var page = File.ReadAllText(
-            Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+        var page = EpisodePlayerSource.Read(root);
         var usedIcons = System.Text.RegularExpressions.Regex
             .Matches(page, "_PlayerIcon\" model=\"@\\(\"(?<id>[A-Za-z0-9]+)\"\\)")
             .Select(x => x.Groups["id"].Value)
@@ -165,6 +184,32 @@ public sealed class PlayerDesignTests
         var playbackSubtitle = tokens.RootElement.GetProperty("typographySp").GetProperty("playbackSubtitle").GetInt32();
         StringAssert.Contains(css, $"--player-control-radius: {radius}px;");
         StringAssert.Contains(css, $"--player-playback-subtitle-size: {playbackSubtitle}px;");
+    }
+
+    // docs/mockups/player section 19: the stage is a dark surface in both application themes. The clean themes colour every select and
+    // button light, so the player's own fields and buttons take player tokens and the theme rules leave the stage out; otherwise
+    // the settings read white text on a near-white field in the light theme.
+    [TestMethod]
+    public void PlayerFieldsAndButtonsReadPlayerTokensAndTheThemeLeavesThePlayerStageAlone()
+    {
+        var root = FindRepositoryRoot();
+        var css = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "css", "player.css"));
+        var themes = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "css", "theme-catalog.css"));
+
+        StringAssert.Contains(css, "color-scheme: dark;");
+        foreach (var token in new[] { "--player-field-bg", "--player-field-text", "--player-field-border", "--player-button-bg", "--player-popup-bg" })
+        {
+            StringAssert.Contains(css, $"{token}:", $"{token} is defined for the stage.");
+        }
+
+        var select = System.Text.RegularExpressions.Regex.Match(css, @"\.player-setting select \{(?<body>[^}]*)\}").Groups["body"].Value;
+        StringAssert.Contains(select, "background: var(--player-field-bg)");
+        StringAssert.Contains(select, "color: var(--player-field-text)");
+        StringAssert.Contains(css, ".player-panel .button { background: var(--player-button-bg)");
+
+        // :where() keeps the exclusion at zero specificity, so it never lifts a theme rule above .button-primary.
+        Assert.AreEqual(3, System.Text.RegularExpressions.Regex.Matches(themes, @":not\(:where\(\.player-panel \*\)\)").Count);
+        StringAssert.DoesNotMatch(themes, new System.Text.RegularExpressions.Regex(@":not\(\.player-panel \*\)"));
     }
 
     private static string FindRepositoryRoot()

@@ -4,6 +4,8 @@ using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Pairing;
 using Jularr.Web.Features.Playback;
+using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.PlaybackSessions;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Speech;
@@ -22,7 +24,8 @@ public static class ClientApiEndpoints
     {
         var group = endpoints
             .MapGroup(ClientApiContract.BasePath)
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .AddEndpointFilter<ClientVideoAccessFilter>();
 
         group.MapGet("/capabilities", async (HttpContext context) =>
             {
@@ -543,6 +546,9 @@ public static class ClientApiEndpoints
             string? quality,
             PlaybackService playbackService,
             MediaAvailabilityService mediaAvailability,
+            HlsPlaybackSessionManager hlsSessions,
+            PlaybackAdmissionService admission,
+            ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -600,19 +606,27 @@ public static class ClientApiEndpoints
                     "No source media is available for HLS fallback with the requested audio track.");
             }
 
+            // This compatibility fallback always encodes with libx264, so it is a software video delivery.
+            var admitted = admission.AdmitLegacy(PlaybackCostClass.SoftwareVideo, currentAccount.ProfileId);
+            if (!admitted.Admitted)
+            {
+                return ClientApiPlaybackPlanEndpoints.Refused(admitted.RefusalCode!);
+            }
+
             try
             {
                 var start = NormalizeStart(
                     startSeconds,
                     stream.DurationSeconds);
-                var session = await HlsPlaybackSessionManager.Shared.StartAsync(
+                var session = await hlsSessions.StartAsync(
                     episodeId,
                     currentAccount.ProfileId,
                     stream.SourcePath,
                     start,
                     cancellationToken,
                     stream.AudioStreamIndex,
-                    stream.QualityCap);
+                    stream.QualityCap,
+                    admitted.Lease);
 
                 return Results.Redirect(
                     ClientApiRoutes.HlsPlaylist(
@@ -621,11 +635,16 @@ public static class ClientApiEndpoints
                     permanent: false,
                     preserveMethod: false);
             }
+            catch (PlaybackAdmissionRefusedException refusal)
+            {
+                return ClientApiPlaybackPlanEndpoints.Refused(refusal.Code);
+            }
             catch (Exception exception) when (
                 exception is InvalidOperationException or
                 TimeoutException or
                 System.ComponentModel.Win32Exception)
             {
+                loggerFactory.CreateLogger("Jularr.Playback.Delivery").LogWarning(exception, "The compatibility HLS stream of episode {EpisodeId} could not start.", episodeId);
                 return Results.Json(
                     new ClientErrorResponse(
                         "hls_start_failed",
@@ -640,9 +659,10 @@ public static class ClientApiEndpoints
                 Guid episodeId,
                 Guid sessionId,
                 string fileName,
+                HlsPlaybackSessionManager hlsSessions,
                 CurrentAccountContext currentAccount) =>
             {
-                var asset = HlsPlaybackSessionManager.Shared.GetAsset(
+                var asset = hlsSessions.GetAsset(
                     sessionId,
                     episodeId,
                     currentAccount.ProfileId,
@@ -666,6 +686,8 @@ public static class ClientApiEndpoints
             string? quality,
             PlaybackService playbackService,
             MediaAvailabilityService mediaAvailability,
+            PlaybackAdmissionService admission,
+            ILoggerFactory loggerFactory,
             CurrentAccountContext currentAccount,
             CancellationToken cancellationToken) =>
         {
@@ -739,17 +761,19 @@ public static class ClientApiEndpoints
                     enableRangeProcessing: true);
             }
 
+            // A copy is a remux; anything else is a libx264 software transcode. Both obey the Admin limits.
+            var admitted = admission.AdmitLegacy(
+                stream.LivePlan!.VideoMode == PlaybackVideoMode.Copy ? PlaybackCostClass.Remux : PlaybackCostClass.SoftwareVideo,
+                currentAccount.ProfileId);
+            if (!admitted.Admitted)
+            {
+                return ClientApiPlaybackPlanEndpoints.Refused(admitted.RefusalCode!);
+            }
+
             try
             {
-                var start = NormalizeStart(
-                    startSeconds,
-                    stream.DurationSeconds);
-                var live = LivePlaybackStream.Start(
-                    stream.SourcePath,
-                    stream.LivePlan!,
-                    start,
-                    stream.AudioStreamIndex,
-                    stream.QualityCap);
+                var start = NormalizeStart(startSeconds, stream.DurationSeconds);
+                var live = LivePlaybackStream.Start(stream.SourcePath, stream.LivePlan!, start, stream.AudioStreamIndex, stream.QualityCap, admitted.Lease);
 
                 return Results.File(
                     live,
@@ -760,11 +784,18 @@ public static class ClientApiEndpoints
                 exception is InvalidOperationException or
                 System.ComponentModel.Win32Exception)
             {
+                admitted.Lease?.Dispose();
+                loggerFactory.CreateLogger("Jularr.Playback.Delivery").LogWarning(exception, "The compatibility stream of episode {EpisodeId} could not start.", episodeId);
                 return Results.Json(
                     new ClientErrorResponse(
                         "playback_start_failed",
                         "The server could not start the compatibility stream."),
                     statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+            catch
+            {
+                admitted.Lease?.Dispose();
+                throw;
             }
         });
 

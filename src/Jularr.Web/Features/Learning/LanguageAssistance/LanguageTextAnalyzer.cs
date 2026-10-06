@@ -38,6 +38,10 @@ public sealed partial class LanguageTextAnalyzer
         toolkits = new LearningLanguageToolkitRegistry(new JapaneseTermExtractor(morphology), dictionary);
     }
 
+    /// <summary>Whether the language's analysis can run; only readings-capable languages (Japanese) depend on the morphology dictionary.</summary>
+    public bool CanAnalyze(string languageTag) =>
+        !toolkits.Get(languageTag).Supports(LearningLanguageCapability.Readings) || morphology.Status.IsAvailable;
+
     public IReadOnlyList<LanguageTextToken> Analyze(string text, string languageTag)
     {
         if (string.IsNullOrEmpty(text))
@@ -46,9 +50,15 @@ public sealed partial class LanguageTextAnalyzer
         }
 
         var toolkit = toolkits.Get(languageTag);
-        return toolkit.Supports(LearningLanguageCapability.Readings)
+        if (!toolkit.Supports(LearningLanguageCapability.Readings))
+        {
+            return AnalyzeGeneric(text);
+        }
+
+        // Readers and practice pages keep rendering the text; only the word annotations are missing.
+        return CanAnalyze(languageTag)
             ? AnalyzeJapanese(text, toolkit)
-            : AnalyzeGeneric(text);
+            : [LanguageTextToken.Plain(text.Normalize(NormalizationForm.FormKC))];
     }
 
     /// <summary>Reading and meaning of a dictionary form, when the toolkit has a dictionary.</summary>
@@ -65,7 +75,7 @@ public sealed partial class LanguageTextAnalyzer
             }
         }
 
-        if (!toolkit.Supports(LearningLanguageCapability.Readings))
+        if (!toolkit.Supports(LearningLanguageCapability.Readings) || !morphology.Status.IsAvailable)
         {
             return (null, null);
         }

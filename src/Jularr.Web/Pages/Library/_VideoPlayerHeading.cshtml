@@ -1,0 +1,18 @@
+@model Jularr.Web.Features.Playback.VideoPlayerHeading
+@* The top-left chrome of every video player surface: the way back (a context-aware link, see context-back-link.js) and the title. *@
+<div class="player-top-start">
+    <a class="player-back" href="@Model.BackUrl" data-context-back aria-label="@Model.BackLabel" title="@Model.BackLabel">
+        <partial name="_PlayerIcon" model="@("back")" />
+    </a>
+    <div class="player-heading">
+        <strong>@Model.Title</strong>
+        @if (!string.IsNullOrWhiteSpace(Model.EpisodeLine))
+        {
+            <span>@Model.EpisodeLine</span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.NativeTitle))
+        {
+            <span lang="ja">@Model.NativeTitle</span>
+        }
+    </div>
+</div>

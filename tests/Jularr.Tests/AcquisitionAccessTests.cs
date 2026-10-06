@@ -13,7 +13,7 @@ namespace Jularr.Tests;
 public sealed class AcquisitionAccessTests
 {
     [TestMethod]
-    public void OwnerAlwaysAddsAutomaticallyAndManually()
+    public void OwnerAlwaysAutoApprovesAndAddsManually()
     {
         var capabilities = AcquisitionCapabilities.Resolve(
             MediaAcquisitionKind.Book,
@@ -21,17 +21,17 @@ public sealed class AcquisitionAccessTests
             ManualAddMode.OwnerOnly,
             isOwner: true);
 
-        Assert.IsTrue(capabilities.CanAdd);
-        Assert.IsFalse(capabilities.AddCreatesRequest);
+        Assert.IsTrue(capabilities.CanRequest);
+        Assert.IsTrue(capabilities.AutoApproves);
         Assert.IsTrue(capabilities.CanAddManually);
     }
 
     [TestMethod]
     [DataRow(MediaCapability.Hidden, false, false)]
     [DataRow(MediaCapability.Browse, false, false)]
-    [DataRow(MediaCapability.Request, true, true)]
-    [DataRow(MediaCapability.Instant, true, false)]
-    public void ProfileCapabilitiesFollowTheCapabilityMatrix(MediaCapability capability, bool canAdd, bool createsRequest)
+    [DataRow(MediaCapability.Request, true, false)]
+    [DataRow(MediaCapability.Instant, true, true)]
+    public void ProfileCapabilitiesFollowTheCapabilityMatrix(MediaCapability capability, bool canRequest, bool autoApproves)
     {
         var capabilities = AcquisitionCapabilities.Resolve(
             MediaAcquisitionKind.Anime,
@@ -39,8 +39,8 @@ public sealed class AcquisitionAccessTests
             ManualAddMode.Users,
             isOwner: false);
 
-        Assert.AreEqual(canAdd, capabilities.CanAdd);
-        Assert.AreEqual(createsRequest, capabilities.AddCreatesRequest);
+        Assert.AreEqual(canRequest, capabilities.CanRequest);
+        Assert.AreEqual(autoApproves, capabilities.AutoApproves);
         Assert.IsTrue(capabilities.CanAddManually);
     }
 

@@ -37,6 +37,10 @@ env:
   NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
   IMAGE: ghcr.io/juloc/jularr
   IMAGE_ARTIFACT: jularr-image
+  # Explicit PostgreSQL validation version, aligned with the deployment baseline (18.6-bookworm).
+  # Bump it intentionally; never use a mutable major tag. The build-test service image below cannot
+  # read this value (the env context is unavailable in services) and must carry the same literal.
+  POSTGRES_IMAGE: postgres:18.6-bookworm
 
 jobs:
   release-info:
@@ -176,7 +180,8 @@ jobs:
 
     services:
       postgres:
-        image: postgres:18
+        # Must equal env.POSTGRES_IMAGE; the "Tune ephemeral PostgreSQL" step fails if it drifts.
+        image: postgres:18.6-bookworm
         env:
           POSTGRES_USER: jularr
           POSTGRES_PASSWORD: jularr_ci
@@ -213,7 +218,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PG_CONTAINER="$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}' | head -n 1)"
+          PG_CONTAINER="$(docker ps --filter "ancestor=${POSTGRES_IMAGE}" --format '{{.ID}}' | head -n 1)"
           test -n "${PG_CONTAINER}"
           docker exec -i "${PG_CONTAINER}" psql -U jularr -d postgres -v ON_ERROR_STOP=1 <<'SQL'
           ALTER SYSTEM SET fsync = off;
@@ -429,7 +434,7 @@ jobs:
             -e POSTGRES_USER=jularr -e POSTGRES_PASSWORD=jularr_ci -e POSTGRES_DB=jularr \
             --health-cmd "pg_isready -U jularr -d jularr" \
             --health-interval 3s --health-timeout 5s --health-retries 20 \
-            postgres:18 >/dev/null
+            "${POSTGRES_IMAGE}" >/dev/null
           for _ in {1..40}; do
             if [ "$(docker inspect -f '{{.State.Health.Status}}' jularr-ci-pg)" = healthy ]; then
               exit 0
@@ -646,17 +651,81 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish commit, latest and versioned images
+      # Version tags are immutable. This runs before any push and decides whether the version is
+      # unpublished, already published by an earlier attempt of the SAME release (rerun is then
+      # idempotent), or taken by something else (hard failure). A release retry commit may differ from
+      # the first attempt only in ci.yml, mirroring the retry rule in release-info.
+      - name: Release preflight for immutable version
+        id: preflight
+        shell: bash
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.release-info.outputs.version }}
+          RELEASE_TAG: ${{ needs.release-info.outputs.tag }}
         run: |
           set -euo pipefail
           test -n "${VERSION}"
-          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:latest"
-          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:${VERSION}"
+
+          if gh api "repos/${GH_REPO}/git/ref/tags/${RELEASE_TAG}" --jq '.object.type + " " + .object.sha' > "${RUNNER_TEMP}/tag-ref.txt" 2> "${RUNNER_TEMP}/tag-ref.err"; then
+            read -r TAG_OBJECT_TYPE TAG_OBJECT_SHA < "${RUNNER_TEMP}/tag-ref.txt"
+            TAG_SHA="${TAG_OBJECT_SHA}"
+            if [[ "${TAG_OBJECT_TYPE}" == "tag" ]]; then
+              TAG_SHA="$(gh api "repos/${GH_REPO}/git/tags/${TAG_OBJECT_SHA}" --jq '.object.sha')"
+            fi
+            if [[ "${TAG_SHA}" != "${GITHUB_SHA}" ]]; then
+              OTHER_FILES="$(gh api "repos/${GH_REPO}/compare/${TAG_SHA}...${GITHUB_SHA}" \
+                --jq '[.files[].filename | select(. != ".github/workflows/ci.yml")] | length')"
+              if [[ "${OTHER_FILES}" != "0" ]]; then
+                echo "::error::${RELEASE_TAG} already exists at ${TAG_SHA}, which differs from ${GITHUB_SHA}. Bump the version instead of republishing."
+                exit 1
+              fi
+            fi
+          elif ! grep -qi "not found" "${RUNNER_TEMP}/tag-ref.err"; then
+            cat "${RUNNER_TEMP}/tag-ref.err"
+            echo "::error::Could not determine whether ${RELEASE_TAG} exists."
+            exit 1
+          fi
+
+          if docker manifest inspect "${IMAGE}:${VERSION}" > /dev/null 2> "${RUNNER_TEMP}/image-manifest.err"; then
+            # Compare content (layers + config), the same fingerprint the artifact was verified with,
+            # because manifest digests are not stable across image stores.
+            docker pull --quiet "${IMAGE}:${VERSION}" > /dev/null
+            fingerprint() {
+              docker image inspect --format '{{json .RootFS.Layers}}{{json .Config}}' "$1" | sha256sum | cut -d' ' -f1
+            }
+            if [[ "$(fingerprint "${IMAGE}:${VERSION}")" != "$(fingerprint "${IMAGE}:${GITHUB_SHA}")" ]]; then
+              echo "::error::${IMAGE}:${VERSION} is already published with different content. Bump the version instead of republishing."
+              exit 1
+            fi
+            echo "${IMAGE}:${VERSION} is already published with identical content; it will not be pushed again."
+            echo "version_published=true" >> "${GITHUB_OUTPUT}"
+          elif grep -qiE "no such manifest|manifest unknown|name unknown|not found" "${RUNNER_TEMP}/image-manifest.err"; then
+            echo "version_published=false" >> "${GITHUB_OUTPUT}"
+          else
+            cat "${RUNNER_TEMP}/image-manifest.err"
+            echo "::error::Could not determine whether ${IMAGE}:${VERSION} exists."
+            exit 1
+          fi
+
+      - name: Publish commit and versioned images
+        env:
+          VERSION: ${{ needs.release-info.outputs.version }}
+          VERSION_PUBLISHED: ${{ steps.preflight.outputs.version_published }}
+        run: |
+          set -euo pipefail
           docker push "${IMAGE}:${GITHUB_SHA}"
+          if [[ "${VERSION_PUBLISHED}" != "true" ]]; then
+            docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:${VERSION}"
+            docker push "${IMAGE}:${VERSION}"
+          fi
+
+      # latest is mutable by design and moves only after the immutable version tag is secured.
+      - name: Publish latest image
+        run: |
+          set -euo pipefail
+          docker tag "${IMAGE}:${GITHUB_SHA}" "${IMAGE}:latest"
           docker push "${IMAGE}:latest"
-          docker push "${IMAGE}:${VERSION}"
 
   release:
     if: needs.release-info.outputs.is_release == 'true'
@@ -678,11 +747,21 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${VERSION}"
-          gh release create "${RELEASE_TAG}" \
-            --target "${GITHUB_SHA}" \
-            --title "Jularr ${VERSION}" \
-            --prerelease \
-            --generate-notes
+
+          # The publish preflight already proved that an existing tag belongs to this release, so a
+          # rerun only completes the release when it is missing.
+          if gh release view "${RELEASE_TAG}" > /dev/null 2> "${RUNNER_TEMP}/release-view.err"; then
+            echo "Release ${RELEASE_TAG} already exists; nothing to create."
+          elif grep -qi "release not found" "${RUNNER_TEMP}/release-view.err"; then
+            gh release create "${RELEASE_TAG}" \
+              --target "${GITHUB_SHA}" \
+              --title "Jularr ${VERSION}" \
+              --prerelease \
+              --generate-notes
+          else
+            cat "${RUNNER_TEMP}/release-view.err"
+            exit 1
+          fi
 
   android-release:
     if: needs.release-info.outputs.is_release == 'true'
@@ -691,10 +770,14 @@ jobs:
     uses: ./.github/workflows/android.yml
     with:
       release: true
-      attach: false
-    secrets: inherit
+    # Only the signing material is handed over, never the full secret set.
+    secrets:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     permissions:
-      contents: write
+      contents: read
 
   attach-android-release:
     if: needs.release-info.outputs.is_release == 'true'
@@ -721,4 +804,6 @@ jobs:
           RELEASE_TAG: ${{ needs.release-info.outputs.tag }}
         run: |
           set -euo pipefail
+          # Mirrors what a user does after downloading: checksums must verify from one directory.
+          (cd dist && sha256sum -c ./*.sha256)
           gh release upload "${RELEASE_TAG}" dist/*.apk dist/*.sha256 --clobber

@@ -1,6 +1,7 @@
 # Jularr planning audit
 
 Cross-spec consistency: `CROSS-SPEC-CONSISTENCY-AUDIT.md`.
+Implementation readiness: `implementation/request-to-play-readiness-audit.md`.
 
 Status: **current planning coverage audit**. This document does not authorize bypassing architecture, migration, security, visual-approval or implementation gates.
 
@@ -120,15 +121,22 @@ The next work should therefore not invent additional pages merely to continue pl
 
 The Admin cross-spec consistency pass is now complete at planning-contract level.
 
+Custom-group semantics remain the only Admin authorization product decision intentionally left for discussion; implementation must not invent them meanwhile. The remaining cross-cutting ownership points (audit trail, naming/mapping, UI translations, API keys) are now assigned without adding new generic Admin pages.
+
 Implementation handoff: `docs/implementation/admin-navigation-route-consolidation.md`.
 
 Remaining work is primarily:
 
 - implement the consolidated Admin shell/legacy-route redirects without creating duplicate owners;
-- complete page-specific visual approval only where a spec explicitly still requires it;
+- implement the first complete Anime/Movie/TV Request-to-Play vertical according to `implementation/request-to-play-readiness-audit.md`;
 - keep Games page-by-page implementation separate from core media completion;
-- prioritize dependency-ordered implementation of the canonical request -> acquisition -> import -> playback path;
 - keep implementation dependent on the canonical persistence/application contracts in the roadmap.
+
+Explicit approval gates that genuinely remain:
+- Calendar: final owner review of status/filter semantics, event interaction, responsive behavior and Light/Dark before implementation merge;
+- PlayStation 1 Game Player: visual mockup approval is still pending.
+
+Profile/Activity, Admin Users & Permissions and Admin Media Detail no longer carry stale “waiting for first mockup” status language; their existing visual directions/specs are sufficient planning baselines.
 
 A new screen should be added only when a concrete workflow cannot be represented cleanly by an existing page, dialog, sheet or state.
 
@@ -167,6 +175,9 @@ Consumer Library is distinct from Discover and Admin:
 ### Aligned with the target when interpreted through current specs
 
 - #403 playback: use current Player + PlaybackPlan/ActiveSession/File/Track/MediaProgress contracts.
+- #596 is re-scoped to post-Request live progress/progressive availability; Play/Read/Listen never silently starts acquisition for unavailable media.
+- #812 now has Movie/TV executors/Wanted handlers on dev and is a closure-verification issue rather than a missing-engine design task.
+- #813 remains the final Anime/Movie/TV end-to-end completion gate.
 - #662 progress: exact resume and completed-through remain separate semantics inside canonical MediaProgress.
 - #389 acquisition/import: all media types converge on the shared Wanted/Download/Import pipeline.
 - #396 Wanted/monitoring: target canonical Work/unit/Edition references, not permanent per-media roots.

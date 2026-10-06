@@ -202,6 +202,47 @@ Operational lifecycle jobs should use the shared Operations/Activity infrastruct
 - **Adoption.** The optimizer waits while a library scan, import or rename runs, re-checks Sonarr ownership like a rename, and verifies that the source did not change. It then renames the output into place and, in one transaction, moves the existing `MediaFiles` row (same id, so progress, segments and episode identity stay) and embedded/transcribed subtitle sources to the new path; acquisition ownership and import records follow. Only then is the source deleted.
 - **Recovery.** `/data/media-optimization/<mediaFileId>.json` journals every optimization in flight. At start-up (and before the same file is optimized again) an interrupted remux is discarded; an interrupted commit is rolled back if the database still names the source, or completed if it already names the output. The original is never deleted before the output was verified and recorded.
 
+## Playback transcoding and hardware encoders
+
+Server-side remux and transcode limits live in **Admin > Transcoding** and are stored in `/data/playback/transcoding.json`: whether transcoding is allowed, the concurrent sessions per cost class (software video 2, hardware video 4, remux 6, audio only 8, and at most 3 per profile), the HLS cache folder (default `/data/playback-cache/hls`), its size budget (10 GiB) and the free space to keep on its volume (5 GiB). The cache folder must be empty or created by Jularr and may not contain `..` or `%`; Jularr marks it with `.jularr-hls-cache` and only ever deletes its own session directories there. When the budget or the free-space floor is exceeded, idle sessions go first (idle meaning two minutes without a request), then at most one running session per minute, the largest.
+
+Hardware encoders (NVENC, QSV, VAAPI, AMF, in that order, then software) are detected at startup and on **Admin > Health > Detect again**: ffmpeg must list the encoder and a short test encode must pass. Three consecutive failures of a backend (counted only when the software fallback of the same request then succeeds) pause it for ten minutes.
+
+An HLS video transcode is measured while it runs (ffmpeg's `-progress` speed; a progressive stream is only shown in the player diagnostics, because a player that stops reading would slow it down without any lack of server capacity): after 10 s of produced media a speed under 1.0x for 10 s means the server cannot keep up. The player is then re-planned in this order: a lower quality tier, another healthy encoder backend, and only then no playback with the reason "The server cannot convert this video fast enough right now" (a device that can play the original untouched gets it). Slowness never counts as a hardware failure and never opens the circuit breaker. While a running conversion is below real time, a new conversion of the same kind (software or hardware) is refused at once with a retry hint instead of queued (never a seek in the slow session itself, nor a re-plan that replaces a running conversion at the same or a lower bitrate; only sessions active in the last 90 seconds count, and the playback sweeper ends a too-slow session whose player is gone); what the server learned is forgotten after 10 minutes. The thresholds live in one typed policy with these defaults; making them editable here is a follow-up. Automatic quality also raises the quality again, one tier at a time, only after 60 s of stable delivery and never within 120 s of any change.
+
+The shipped `compose.yaml` passes **no GPU device** to the container, so detection finds software only until the operator adds one. Nothing in Jularr turns this on by itself. Optional mappings for the owner's own compose file (the container runs as UID `1654`, so the render node's group must be added):
+
+```yaml
+services:
+  jularr:
+    # Intel Quick Sync (QSV) and AMD/Intel VAAPI: pass the render node and its group.
+    # devices:
+    #   - /dev/dri/renderD128:/dev/dri/renderD128
+    # group_add:
+    #   - "992"   # numeric gid of the host "render" group (stat -c %g /dev/dri/renderD128)
+    #
+    # NVIDIA NVENC: needs the NVIDIA Container Toolkit on the host.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu, video, utility]   # "gpu" is required by the Compose spec; NVENC needs "video"
+```
+
+**The image does not contain the GPU user-space drivers.** Its runtime stage installs Debian `ffmpeg` with `--no-install-recommends`, so `mesa-va-drivers` (AMD, older Intel) and `intel-media-va-driver` (Intel Quick Sync; in Debian `non-free`, `intel-media-va-driver-non-free` for full codec support) are absent, and passing `/dev/dri` alone makes the VAAPI and QSV test encodes fail. This is deliberate: the packages are architecture and vendor specific, `intel-media-va-driver` needs the `non-free` component, and they add to the image size for every install. Operators who want VAAPI or QSV build a small derived image:
+
+```dockerfile
+FROM ghcr.io/juloc/jularr:latest
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends mesa-va-drivers vainfo && rm -rf /var/lib/apt/lists/*
+# Intel Quick Sync additionally: intel-media-va-driver (add the Debian non-free component first)
+USER 1654
+```
+
+NVENC needs no driver package in the image: the NVIDIA Container Toolkit injects the host driver libraries. Whether ffmpeg lists NVENC or AMF depends on how the Debian build was configured and on the host; **Admin > Health** shows what the test encode found for each backend, with the reason when it failed. The HLS cache path is changed in the Admin page, never through an environment variable.
+
 ## Logs and security
 
 `OperationLogs` contains structured operational events keyed by operation ID.

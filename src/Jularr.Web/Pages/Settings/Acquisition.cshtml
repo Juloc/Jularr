@@ -30,6 +30,8 @@
 @section Head {
     <link rel="stylesheet" href="~/css/acquisition.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/storage-paths.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
 }
 
 <header class="page-header">
@@ -42,10 +44,10 @@
 
 @if (!string.IsNullOrWhiteSpace(Model.Error))
 {
-    <p class="metadata-error" role="alert">@Model.Error</p>
+    <p class="admset-notice" role="alert">@Model.Error</p>
 }
 
-<div class="settings-grid">
+<div class="settings-grid acquisition-grid">
     <section class="panel">
         <div class="panel-heading"><h2>@ui["settings.acquisition.importModeHeading"]</h2></div>
         <p class="muted">
@@ -54,7 +56,7 @@
         <form method="post" asp-page-handler="ImportMode" class="form-stack">
             <label>
                 <span>@ui["settings.acquisition.defaultImportModeLabel"]</span>
-                <select name="defaultImportMode">
+                <select class="admset-control" name="defaultImportMode">
                             @foreach (var mode in Enum.GetValues<ImportMode>())
                     {
                         <option value="@mode" selected="@(Model.ImportSettings.DefaultImportMode == mode)">@Model.ImportModeLabel(mode)</option>
@@ -66,32 +68,40 @@
 
         @if (Model.Roots.Count > 0)
         {
-            <table>
+            <div class="admset-table-wrap"><table class="admset-table">
                 <thead><tr><th>@ui["settings.acquisition.libraryRootColumn"]</th><th>@ui["settings.acquisition.importModeOverrideColumn"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var root in Model.Roots)
                     {
                         <tr>
                             <td>@root.Name</td>
-                            <td>@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var mode) ? Model.ImportModeLabel(mode) : ui["settings.acquisition.usesDefault"])</td>
-                            <td>
-                                <form method="post" asp-page-handler="ImportMode" class="acquisition-inline-form">
-                                    <input type="hidden" name="defaultImportMode" value="@Model.ImportSettings.DefaultImportMode" />
-                                    <input type="hidden" name="rootId" value="@root.Id" />
-                                    <select name="rootImportMode">
-                                        <option value="">@ui["settings.acquisition.usesDefault"]</option>
-                                @foreach (var mode in Enum.GetValues<ImportMode>())
-                                        {
-                                            <option value="@mode" selected="@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var current) && current == mode)">@Model.ImportModeLabel(mode)</option>
-                                        }
-                                    </select>
-                                    <button class="button" type="submit">@ui["settings.acquisition.set"]</button>
-                                </form>
-                            </td>
+                            @if (Model.RoutedRootIds.Contains(root.Id))
+                            {
+                                <td>@Model.ImportPolicyLabel(root.PlacementPolicy)</td>
+                                <td class="admset-cell-actions"><a class="admin-tag admin-tag-accent" asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.placementInStorage"]</a></td>
+                            }
+                            else
+                            {
+                                <td>@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var mode) ? Model.ImportModeLabel(mode) : ui["settings.acquisition.usesDefault"])</td>
+                                <td>
+                                    <form method="post" asp-page-handler="ImportMode" class="acquisition-inline-form">
+                                        <input type="hidden" name="defaultImportMode" value="@Model.ImportSettings.DefaultImportMode" />
+                                        <input type="hidden" name="rootId" value="@root.Id" />
+                                        <select class="admset-control" name="rootImportMode">
+                                            <option value="">@ui["settings.acquisition.usesDefault"]</option>
+                                    @foreach (var mode in Enum.GetValues<ImportMode>())
+                                            {
+                                                <option value="@mode" selected="@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var current) && current == mode)">@Model.ImportModeLabel(mode)</option>
+                                            }
+                                        </select>
+                                        <button class="button" type="submit">@ui["settings.acquisition.set"]</button>
+                                    </form>
+                                </td>
+                            }
                         </tr>
                     }
                 </tbody>
-            </table>
+            </table></div>
         }
     </section>
 
@@ -115,6 +125,7 @@
                 Disabled = !Model.CanManageStorage,
                 PairGroup = hasLibrary ? slug : null
             };
+            <div class="acquisition-folder">
             <h3>@Model.MediaLabel(kind)</h3>
             <form method="post" asp-page-handler="MediaFolders" class="form-stack">
                 <input type="hidden" name="kind" value="@kind" />
@@ -123,7 +134,7 @@
                     <partial name="_PathField" model="libraryField" />
                     <label>
                         <span>@ui["settings.acquisition.importModeLabel"]</span>
-                        <select name="importMode" disabled="@(!Model.CanManageStorage)">
+                        <select class="admset-control" name="importMode" disabled="@(!Model.CanManageStorage)">
                             <option value="">@ui["settings.acquisition.usesDefault"]</option>
                             @foreach (var mode in Enum.GetValues<ImportMode>())
                             {
@@ -131,6 +142,29 @@
                             }
                         </select>
                     </label>
+                }
+                else if (Jularr.Web.Pages.Settings.AcquisitionModel.IsRouted(kind))
+                {
+                    if (Model.Destinations.TryGetValue(kind, out var destination))
+                    {
+                        <div class="acquisition-destination">
+                            <span class="admset-label">@ui["settings.acquisition.destinationLabel"]</span>
+                            <span class="admset-name">
+                                <strong>@destination.Name</strong>
+                                @if (Model.CanManageStorage)
+                                {
+                                    <code>@destination.Path</code>
+                                }
+                            </span>
+                            <span class="admin-tag">@Model.ImportPolicyLabel(destination.PlacementPolicy)</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="admset-hint">@ui["settings.acquisition.destinationMissing"]</p>
+                    }
+
+                    <a class="text-link" asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.destinationChange"]</a>
                 }
                 else
                 {
@@ -148,6 +182,7 @@
                     }
                 </div>
             </form>
+            </div>
         }
     </section>
 
@@ -157,7 +192,7 @@
         <form method="post" asp-page-handler="PlaybackOptimization" class="form-stack">
             <label>
                 <span>@ui["settings.acquisition.playbackOptimizationLabel"]</span>
-                <select name="playbackOptimization">
+                <select class="admset-control" name="playbackOptimization">
                     @foreach (var mode in Enum.GetValues<LosslessPlaybackOptimizationMode>())
                     {
                         <option value="@mode" selected="@(Model.ImportSettings.PlaybackOptimization == mode)">@Model.PlaybackOptimizationLabel(mode)</option>
@@ -256,7 +291,7 @@
         <p class="muted">@ui["settings.acquisition.delayProfilesDescription"]</p>
         @if (Model.Policy.DelayProfiles.Count > 0)
         {
-            <table>
+            <div class="admset-table-wrap"><table class="admset-table">
                 <thead><tr><th>@ui["settings.acquisition.nameColumn"]</th><th>@ui["settings.acquisition.delayColumn"]</th><th>@ui["settings.acquisition.qualityProfileColumn"]</th><th>@ui["settings.acquisition.tagsColumn"]</th><th>@ui["settings.acquisition.defaultColumn"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var profile in Model.Policy.DelayProfiles)
@@ -276,7 +311,7 @@
                         </tr>
                     }
                 </tbody>
-            </table>
+            </table></div>
         }
         <form method="post" asp-page-handler="AddDelayProfile" class="acquisition-inline-form">
             <label><span>@ui["settings.acquisition.nameColumn"]</span><input type="text" name="name" required /></label>
@@ -301,7 +336,7 @@
         <p class="muted">@ui["settings.acquisition.indexerRestrictionsDescription"]</p>
         @if (Model.Policy.IndexerRestrictions.Count > 0)
         {
-            <table>
+            <div class="admset-table-wrap"><table class="admset-table">
                 <thead><tr><th>@ui["settings.acquisition.nameColumn"]</th><th>@ui["settings.acquisition.tagsColumn"]</th><th>@ui["settings.acquisition.allowedIndexersColumn"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var restriction in Model.Policy.IndexerRestrictions)
@@ -319,7 +354,7 @@
                         </tr>
                     }
                 </tbody>
-            </table>
+            </table></div>
         }
         <form method="post" asp-page-handler="AddIndexerRestriction" class="acquisition-inline-form">
             <label><span>@ui["settings.acquisition.nameColumn"]</span><input type="text" name="name" required /></label>

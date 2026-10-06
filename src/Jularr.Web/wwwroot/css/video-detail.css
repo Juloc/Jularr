@@ -1,0 +1,131 @@
+/* Movie and Series detail (docs/mockups/movie-detail, anime-series-detail): the hero, season rail, episode cards and related
+   panel are the shared anime-detail.css pieces; this file only adds what the Movie page and the canonical frame need.
+   Surfaces use the shared theme tokens, so light, dark and every accent work unchanged. State is shown with tints, weight
+   and full borders only, never a coloured left edge (CssAccentStripeTests). */
+
+/* A hero state that is only information, such as "Not available": same pill as the actions, but not a control. */
+.ad-secondary.ad-static { cursor: default; }
+.ad-secondary.ad-static:hover { background: rgb(255 255 255 / .14); }
+
+/* A related Work without a consumer page is listed without a link. */
+.ad-related li > a:not([href]) { cursor: default; }
+.ad-related li > a:not([href]):hover { background: var(--surface-2); }
+
+/* Hero without artwork: the home hero fallback gradient, shorter than the artwork hero but still a banner with the copy
+   resting above the facts. With persisted artwork the hero is the full cinematic banner of anime-detail.css: the backdrop, or
+   the poster as a blurred background (.ad-hero-derived) when there is no backdrop. */
+.ad-hero.vd-hero-plain { min-height: clamp(260px, 22vw, 300px); }
+
+/* Real artwork can be any brightness. On a wide hero the copy sits on the dark left of the scrim (white text stays above 8:1 even on a
+   white backdrop); on a narrow hero the copy spans the whole width, so the scrim there is an even veil instead of a fade. */
+@container (max-width: 900px) {
+    [data-work-hero] .ad-hero-bg::after { background: linear-gradient(0deg, rgb(8 7 14 / .88) 0%, rgb(8 7 14 / .74) 100%); }
+}
+
+/* The description is cut to a few lines only once work-metadata.js runs (.is-clamped), because the script also provides the button that
+   shows the rest and shows it only while text is actually hidden; without script the whole description is there. */
+.vd-overview { display: grid; justify-items: start; gap: 2px; max-width: 58ch; }
+.vd-overview .ad-hero-description { display: block; max-width: none; overflow: visible; -webkit-line-clamp: unset; }
+.vd-overview.is-clamped:not(.is-expanded) .ad-hero-description { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 4; }
+@media (max-width: 900px) { .vd-overview.is-clamped:not(.is-expanded) .ad-hero-description { -webkit-line-clamp: 3; } }
+.vd-expand {
+    min-height: 28px; padding: 0; border: 0; background: none; color: var(--hero-on-scrim);
+    font: inherit; font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer;
+}
+.vd-expand[hidden] { display: none; }
+.ad-hero .vd-expand:focus-visible { outline: 2px solid var(--hero-on-scrim); outline-offset: 3px; box-shadow: 0 0 0 5px var(--accent); }
+.ad-hero :is(a.ad-primary, .ad-secondary):focus-visible { outline: 2px solid var(--hero-on-scrim); box-shadow: 0 0 0 5px var(--accent); }
+@media (pointer: coarse) { .vd-expand { min-height: 44px; } }
+
+/* Hero facts that are values rather than counts: the vote count beside the rating and the age rating as a small outlined mark. */
+/* A very long studio name is cut with an ellipsis (its full name is the tooltip of the item) instead of pushing the other facts away. */
+.ad-strip-studio { min-width: 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-strip-sub { opacity: .78; font-size: 12px; font-weight: 600; }
+.ad-strip-cert { padding: 2px 8px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .55); font-size: 12px; font-weight: 800; letter-spacing: .03em; }
+
+/* Movie body: compact Versions & Languages and About side by side, then Related Works as a row of cards. */
+.vd-body { display: grid; gap: 20px; align-items: start; grid-template-columns: minmax(0, 1fr); }
+.vd-top { display: grid; gap: 20px; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.vd-top:not(:has(*)) { display: none; }
+.vd-top.has-trailer { grid-template-columns: minmax(0, 1fr); }
+.vd-top:not(.has-trailer) .vd-trailer { max-width: 880px; }
+@media (min-width: 900px) { .vd-top.has-trailer { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); } }
+
+/* Trailer facade: the Work's backdrop with a play button; the frame is added only after the click (work-metadata.js). */
+.vd-trailer, .vd-cast { display: grid; gap: 12px; min-width: 0; align-content: start; }
+.vd-trailer h2, .vd-cast h2 { margin: 0; font-size: 18px; }
+.vd-trailer-frame {
+    position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--radius-card);
+    background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 40%, #120f1a) 0%, #120f1a 80%); box-shadow: var(--shadow-card);
+}
+.vd-trailer-play { position: absolute; inset: 0; display: grid; place-items: center; color: #15121c; }
+.vd-trailer-play img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.vd-trailer-play::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgb(8 7 14 / .45), rgb(8 7 14 / .06) 65%); }
+.vd-trailer-button {
+    position: relative; z-index: 1; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
+    background: rgb(255 255 255 / .94); box-shadow: 0 8px 22px rgb(0 0 0 / .32);
+}
+.vd-trailer-button svg { margin-inline-start: 3px; }
+.vd-trailer-play:hover .vd-trailer-button { background: #fff; }
+.vd-page .vd-trailer-play:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
+.vd-trailer-play:focus-visible .vd-trailer-button { box-shadow: 0 0 0 4px var(--accent), 0 8px 22px rgb(0 0 0 / .32); }
+.vd-trailer-embed { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+@media (prefers-reduced-motion: no-preference) {
+    .vd-trailer-button { transition: transform .15s ease; }
+    .vd-trailer-play:hover .vd-trailer-button { transform: scale(1.06); }
+}
+
+/* Cast & Crew: one horizontal row, a keyboard-reachable scroll region. */
+.vd-people { overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.vd-page .vd-people:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.vd-people ul { display: flex; gap: 14px; width: max-content; margin: 0; padding: 0; list-style: none; }
+.vd-person { display: grid; align-content: start; gap: 2px; width: 108px; min-width: 0; scroll-snap-align: start; }
+.vd-person-art {
+    display: grid; place-items: center; aspect-ratio: 3 / 4; margin-bottom: 6px; border-radius: 12px;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); color: var(--accent-text); font-size: 28px; font-weight: 800;
+}
+.vd-person strong, .vd-person small { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.vd-person strong { font-size: 13px; line-height: 1.3; }
+.vd-person small { color: var(--muted); font-size: 12px; line-height: 1.3; }
+.vd-body > .ad-related { margin: 0; }
+.vd-body > .ad-related ul { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.vd-body > .ad-related small { white-space: normal; }
+
+.vd-card {
+    display: grid; gap: 12px; min-width: 0; padding: 16px;
+    border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: var(--surface); box-shadow: var(--shadow-card);
+}
+.vd-card h2 { margin: 0; font-size: 18px; }
+
+.vd-langs { display: grid; gap: 8px 24px; margin: 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.vd-langs > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.vd-langs dt { min-width: 76px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.vd-langs dd { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+
+.vd-language-state {
+    margin: 0; padding: 6px 10px; border-radius: 10px; width: fit-content;
+    background: color-mix(in srgb, var(--success-text) 13%, transparent); color: var(--success-text);
+    font-size: 12px; font-weight: 700;
+}
+.vd-language-state.is-other { background: color-mix(in srgb, var(--warning-text) 15%, transparent); color: var(--warning-text); }
+
+.vd-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.vd-badges li {
+    padding: 3px 9px; border: 1px solid var(--border-strong); border-radius: 8px;
+    color: var(--text-secondary); font-size: 12px; font-weight: 800; letter-spacing: .03em;
+}
+
+.vd-versions summary { width: fit-content; color: var(--accent-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.vd-versions summary:hover { text-decoration: underline; }
+.vd-versions ol { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.vd-versions li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 13px; }
+.vd-versions li span { color: var(--muted); font-size: 12px; }
+
+.vd-tagline { margin: 0; color: var(--text-secondary); font-size: 15px; font-style: italic; line-height: 1.5; overflow-wrap: anywhere; }
+.vd-facts { display: grid; gap: 10px; margin: 0; }
+.vd-about .vd-facts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px 24px; }
+.vd-facts dt { color: var(--muted); font-size: 12px; font-weight: 700; }
+.vd-facts dd { margin: 2px 0 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+
+.vd-page :is(a, button, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

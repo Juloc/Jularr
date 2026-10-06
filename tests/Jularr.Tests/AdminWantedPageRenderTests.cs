@@ -58,11 +58,11 @@ public sealed class AdminWantedPageRenderTests
             Assert.IsFalse(html.Contains(hidden, StringComparison.Ordinal), $"{hidden} is not part of the worklist.");
         }
 
-        StringAssert.Contains(html, "admwant-state-requested");
-        StringAssert.Contains(html, "admwant-state-missing");
-        StringAssert.Contains(html, "admwant-state-downloading");
-        StringAssert.Contains(html, "admwant-state-failed");
-        StringAssert.Contains(html, "admwant-tag-manga");
+        StringAssert.Contains(html, "data-status=\"requested\"");
+        StringAssert.Contains(html, "data-status=\"missing\"");
+        StringAssert.Contains(html, "data-status=\"downloading\"");
+        StringAssert.Contains(html, "data-status=\"failed\"");
+        StringAssert.Contains(html, "data-kind=\"manga\"");
         StringAssert.Contains(html, "Season 1, episode 28");
         StringAssert.Contains(html, "Volume 42");
         StringAssert.Contains(html, "Deutsch");
@@ -72,9 +72,9 @@ public sealed class AdminWantedPageRenderTests
         StringAssert.Contains(html, "No release yet.");
         StringAssert.Contains(html, "No search recorded");
 
-        Assert.AreEqual(4, Regex.Matches(html, @">\s*Search now\s*</button>").Count);
-        Assert.AreEqual(1, Regex.Matches(html, @">\s*Retry\s*</button>").Count, "Only the failed request can be retried.");
-        Assert.AreEqual(4, Regex.Matches(html, @">\s*Manual search\s*</a>").Count);
+        Assert.AreEqual(4, Regex.Matches(html, @"admin-icon-label"">Search now</span>").Count);
+        Assert.AreEqual(1, Regex.Matches(html, @"admin-icon-label"">Retry</span>").Count, "Only the failed request can be retried.");
+        Assert.AreEqual(4, Regex.Matches(html, @"admin-icon-label"">Manual search</span>").Count);
         Assert.AreEqual(2, Regex.Matches(html, @"href=""/Admin/BookManualSearch\?id=").Count, "Approved/failed Book requests expose their own manual release search.");
         StringAssert.Contains(html, "handler=SearchRequest");
         StringAssert.Contains(html, "handler=SearchAnime");
@@ -267,6 +267,8 @@ public sealed class AdminWantedPageRenderTests
                         services.AddSingleton(monitoring);
                         services.AddSingleton<AnimeAcquisitionScheduler>();
                         services.AddScoped<AcquisitionAccessStore>();
+                        services.AddScoped<VideoRequestWorkResolver>();
+                        services.AddScoped<RequestArtworkResolver>();
                         services.AddScoped<IAcquisitionRequestExecutor>(_ => new StubExecutor(MediaAcquisitionKind.Book));
                         services.AddScoped<IAcquisitionRequestExecutor>(_ => new StubExecutor(MediaAcquisitionKind.Manga));
                         services.AddScoped<AcquisitionRequestService>();

@@ -3,13 +3,25 @@ using System.Data.Common;
 using System.Globalization;
 using Jularr.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Jularr.Web.Features.Acquisition.Access;
+
+/// <summary>A payload patch lost the compare-and-set race on every attempt (see AcquisitionAccessStore.PatchPayloadAsync).</summary>
+public sealed class PayloadConflictException() : InvalidOperationException("The request payload kept changing; try again.");
+
+/// <summary>Another open request for the same title exists already (unique index on the open title).</summary>
+public sealed class OpenRequestExistsException(Exception inner) : Exception("The title already has an open request.", inner);
 
 /// <summary>Persistence of the access policies and acquisition requests (tables from migration 20260927120000).</summary>
 public sealed class AcquisitionAccessStore(AppDbContext db)
 {
+    private const string OpenTitleIndex = "IX_AcquisitionRequests_OpenTitle";
     private const string OpenStatuses = "'pending', 'approved', 'searching', 'downloading', 'importing'";
+
+    private const int MaxPatchAttempts = 8;
+
+    private sealed record StatusChange(AcquisitionRequestStatus Expected, Func<string?, AcquisitionStatusOutcome> Choose);
 
     private const string Columns =
         """
@@ -125,6 +137,24 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             },
             cancellationToken);
 
+    /// <summary>The open requests of the given titles (a kind and a provider id each), most recently changed first: a page reads only the requests of the cards it shows.</summary>
+    public Task<IReadOnlyList<AcquisitionRequest>> ListOpenForAsync(IReadOnlyCollection<MediaAcquisitionKind> kinds, IReadOnlyCollection<string> externalIds, int limit, CancellationToken cancellationToken) =>
+        QueryAsync(
+            $"""
+            SELECT {Columns} FROM "AcquisitionRequests"
+            WHERE "Kind" = ANY(@kinds) AND "ExternalId" = ANY(@externalIds)
+              AND "Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing')
+            ORDER BY "UpdatedAt" DESC
+            LIMIT @limit;
+            """,
+            command =>
+            {
+                Add(command, "@kinds", kinds.Select(AcquisitionAccessNames.Kind).ToArray());
+                Add(command, "@externalIds", externalIds.ToArray());
+                Add(command, "@limit", Math.Clamp(limit, 1, 500));
+            },
+            cancellationToken);
+
     /// <summary>Every request, waiting ones first, then most recently changed first; the owner's queue narrows them.</summary>
     public Task<IReadOnlyList<AcquisitionRequest>> ListAllAsync(int limit, CancellationToken cancellationToken) =>
         QueryAsync(
@@ -208,6 +238,23 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
         }, cancellationToken);
 
+    /// <summary>
+    /// The newest open Movie and TV requests that carry playback markers, at most <paramref name="limit"/>; the caller judges which markers
+    /// are still alive. A request has markers only while someone waits for a unit, so the set is small.
+    /// </summary>
+    public Task<IReadOnlyList<AcquisitionRequest>> ListOpenWithPlaybackMarkersAsync(int limit, CancellationToken cancellationToken) =>
+        QueryAsync(
+            $$"""
+            SELECT {{Columns}} FROM "AcquisitionRequests"
+            WHERE "Kind" IN ('movie', 'tv')
+              AND "Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing')
+              AND "PayloadJson" LIKE '%"playbackMarkers":[{%'
+            ORDER BY "UpdatedAt" DESC
+            LIMIT @limit;
+            """,
+            command => Add(command, "@limit", limit),
+            cancellationToken);
+
     public Task<IReadOnlyList<AcquisitionRequest>> ListDownloadingAsync(
         MediaAcquisitionKind kind,
         CancellationToken cancellationToken) =>
@@ -236,6 +283,37 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             },
             cancellationToken);
 
+    /// <summary>
+    /// One batch of the requests of a media type that a pass reads back from its monitoring pipeline (see
+    /// <see cref="AcquisitionRequest.IsObservedFromMonitoring"/>), in id order after <paramref name="afterId"/>. Walking the batches by the
+    /// last id reaches every request however many there are, and a request that is not written meanwhile keeps its place.
+    /// </summary>
+    public Task<IReadOnlyList<AcquisitionRequest>> ListObservedFromMonitoringAsync(
+        MediaAcquisitionKind kind,
+        Guid? afterId,
+        int limit,
+        CancellationToken cancellationToken) =>
+        QueryAsync(
+            $"""
+            SELECT {Columns} FROM "AcquisitionRequests"
+            WHERE "Kind" = @kind
+              AND ("Status" = ANY(@underway) OR ("Status" = 'failed' AND "OperationId" IS NOT NULL))
+              AND (@after::text IS NULL OR "Id" > @after)
+            ORDER BY "Id"
+            LIMIT @limit;
+            """,
+            command =>
+            {
+                Add(command, "@kind", AcquisitionAccessNames.Kind(kind));
+                Add(command, "@after", afterId?.ToString());
+                Add(command, "@limit", limit);
+                var underway = command.CreateParameter();
+                underway.ParameterName = "@underway";
+                underway.Value = AcquisitionAccessNames.UnderwayStatuses.Select(AcquisitionAccessNames.Status).ToArray();
+                command.Parameters.Add(underway);
+            },
+            cancellationToken);
+
     /// <summary>Replaces the media-specific payload (for example which releases were already tried).</summary>
     public Task UpdatePayloadAsync(Guid id, string? payloadJson, CancellationToken cancellationToken) =>
         WithConnectionAsync(async connection =>
@@ -247,6 +325,105 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             await command.ExecuteNonQueryAsync(cancellationToken);
             return true;
         }, cancellationToken);
+
+    /// <summary>
+    /// Changes the payload from what is stored now: <paramref name="patch"/> gets the current text and returns the new one, and the
+    /// write only lands if nothing else changed the payload meanwhile (compare and set), otherwise the patch runs again on the newer
+    /// text. Two owners of different payload fields therefore never overwrite each other. Returns false when the request is gone.
+    /// </summary>
+    public Task<bool> PatchPayloadAsync(Guid id, Func<string?, string?> patch, CancellationToken cancellationToken) =>
+        PatchAsync(id, patch, null, cancellationToken);
+
+    /// <summary>
+    /// <see cref="PatchPayloadAsync(Guid, Func{string?, string?}, CancellationToken)"/> and a status change in one write: the status only
+    /// moves from <paramref name="expected"/> to <paramref name="status"/> together with the payload, so the two can never disagree.
+    /// Returns false when the request is gone, is no longer in <paramref name="expected"/>, or the new status would open a second request
+    /// for the title; nothing is written then. A null <paramref name="message"/> keeps the message, and the request only counts as changed
+    /// (<c>UpdatedAt</c>) when its status really changes, so a patch does not restart the stale-search clock of a claimed request.
+    /// </summary>
+    public Task<bool> PatchPayloadAsync(Guid id, Func<string?, string?> patch, AcquisitionRequestStatus expected, AcquisitionRequestStatus status, string? message, CancellationToken cancellationToken) =>
+        PatchAsync(id, patch, new StatusChange(expected, _ => new AcquisitionStatusOutcome(status, message)), cancellationToken);
+
+    /// <summary>
+    /// The same write where the new status is chosen from the payload stored at that moment (and the write is conditional on that very
+    /// payload), for a result that is only true while the payload still says what the run read.
+    /// </summary>
+    public Task<bool> PatchPayloadAsync(Guid id, Func<string?, string?> patch, AcquisitionRequestStatus expected, Func<string?, AcquisitionStatusOutcome> choose, CancellationToken cancellationToken) =>
+        PatchAsync(id, patch, new StatusChange(expected, choose), cancellationToken);
+
+    private Task<bool> PatchAsync(Guid id, Func<string?, string?> patch, StatusChange? change, CancellationToken cancellationToken) =>
+        WithConnectionAsync(async connection =>
+        {
+            for (var attempt = 0; attempt < MaxPatchAttempts; attempt++)
+            {
+                string? current;
+                await using (var read = connection.CreateCommand())
+                {
+                    read.CommandText = """SELECT "PayloadJson", "Status" FROM "AcquisitionRequests" WHERE "Id" = @id;""";
+                    Add(read, "@id", id.ToString());
+                    await using var reader = await read.ExecuteReaderAsync(cancellationToken);
+                    if (!await reader.ReadAsync(cancellationToken) || change is not null && reader.GetString(1) != AcquisitionAccessNames.Status(change.Expected))
+                    {
+                        return false;
+                    }
+
+                    current = reader.IsDBNull(0) ? null : reader.GetString(0);
+                }
+
+                await using var write = connection.CreateCommand();
+                write.CommandText = change is null
+                    ? """UPDATE "AcquisitionRequests" SET "PayloadJson" = @next WHERE "Id" = @id AND "PayloadJson" IS NOT DISTINCT FROM @current::text;"""
+                    : """
+                      UPDATE "AcquisitionRequests"
+                      SET "PayloadJson" = @next, "Status" = @status, "StatusMessage" = COALESCE(@message, "StatusMessage"),
+                          "ResultUrl" = COALESCE(@resultUrl, "ResultUrl"), "UpdatedAt" = CASE WHEN "Status" = @status THEN "UpdatedAt" ELSE @now END
+                      WHERE "Id" = @id AND "PayloadJson" IS NOT DISTINCT FROM @current::text AND "Status" = @expected;
+                      """;
+                Add(write, "@id", id.ToString());
+                Add(write, "@next", patch(current));
+                Add(write, "@current", current);
+                if (change is not null)
+                {
+                    var outcome = change.Choose(current);
+                    Add(write, "@expected", AcquisitionAccessNames.Status(change.Expected));
+                    Add(write, "@status", AcquisitionAccessNames.Status(outcome.Status));
+                    Add(write, "@message", outcome.Message);
+                    Add(write, "@resultUrl", outcome.ResultUrl);
+                    Add(write, "@now", DateTime.UtcNow);
+                }
+
+                try
+                {
+                    if (await write.ExecuteNonQueryAsync(cancellationToken) == 1)
+                    {
+                        return true;
+                    }
+                }
+                catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation && exception.ConstraintName == OpenTitleIndex)
+                {
+                    return false;
+                }
+            }
+
+            throw new PayloadConflictException();
+        }, cancellationToken);
+
+    /// <summary>The newest request for the title in any state, or null; an open request is the newest one.</summary>
+    public Task<AcquisitionRequest?> FindLatestAsync(MediaAcquisitionKind kind, string provider, string externalId, CancellationToken cancellationToken) =>
+        QuerySingleAsync(
+            $"""
+            SELECT {Columns} FROM "AcquisitionRequests"
+            WHERE "Kind" = @kind AND "Provider" = @provider AND "ExternalId" = @externalId
+            ORDER BY "CreatedAt" DESC
+            LIMIT 1;
+            """,
+            command =>
+            {
+                Add(command, "@kind", AcquisitionAccessNames.Kind(kind));
+                Add(command, "@provider", provider);
+                Add(command, "@externalId", externalId);
+            },
+            cancellationToken);
 
     public async Task<int> CountPendingAsync(CancellationToken cancellationToken) =>
         await WithConnectionAsync(async connection =>
@@ -305,7 +482,15 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             Add(command, "@now", now);
             Add(command, "@decidedBy", decidedByProfileId);
             Add(command, "@decidedAt", request.DecidedAt);
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            try
+            {
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation && exception.ConstraintName == OpenTitleIndex)
+            {
+                throw new OpenRequestExistsException(exception);
+            }
+
             return true;
         }, cancellationToken);
 
@@ -344,6 +529,85 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             Add(command, "@now", DateTime.UtcNow);
             await command.ExecuteNonQueryAsync(cancellationToken);
             return true;
+        }, cancellationToken);
+
+    /// <summary>
+    /// Moves a request to <paramref name="status"/> only while it is still in one of <paramref name="expected"/>, in one statement, and
+    /// returns what it was before. Null means it changed meanwhile (rejected, grabbed by the scheduler, cancelled), so the caller must stop
+    /// instead of acting on a stale read. A given <paramref name="operationId"/> is linked to the request and a given
+    /// <paramref name="resultUrl"/> replaces its result address.
+    /// </summary>
+    public Task<AcquisitionStatusTransition?> TryTransitionStatusAsync(
+        Guid id,
+        IReadOnlyCollection<AcquisitionRequestStatus> expected,
+        AcquisitionRequestStatus status,
+        string? message,
+        Guid? operationId,
+        CancellationToken cancellationToken) =>
+        TryTransitionStatusAsync(id, expected, status, message, operationId, resultUrl: null, clearOperation: false, cancellationToken);
+
+    /// <summary>
+    /// The same transition that also replaces the result address of the request and, when <paramref name="clearOperation"/> is set, unlinks
+    /// the download the request had: a request that is back to waiting for a release must not point at a download that is no longer its own.
+    /// </summary>
+    public Task<AcquisitionStatusTransition?> TryTransitionStatusAsync(
+        Guid id,
+        IReadOnlyCollection<AcquisitionRequestStatus> expected,
+        AcquisitionRequestStatus status,
+        string? message,
+        Guid? operationId,
+        string? resultUrl,
+        bool clearOperation,
+        CancellationToken cancellationToken) =>
+        TryTransitionStatusAsync(id, expected, status, message, operationId, resultUrl, clearOperation, decidedByProfileId: null, cancellationToken);
+
+    /// <summary>
+    /// The same transition for a decision of a person: the profile that decided and the moment are recorded in the same statement, so an
+    /// approval or rejection can only land on a request that is still in one of <paramref name="expected"/> and never overwrites a cancel.
+    /// </summary>
+    public Task<AcquisitionStatusTransition?> TryTransitionStatusAsync(
+        Guid id,
+        IReadOnlyCollection<AcquisitionRequestStatus> expected,
+        AcquisitionRequestStatus status,
+        string? message,
+        Guid? operationId,
+        string? resultUrl,
+        bool clearOperation,
+        string? decidedByProfileId,
+        CancellationToken cancellationToken) =>
+        WithConnectionAsync(async connection =>
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                UPDATE "AcquisitionRequests" AS current
+                SET "Status" = @status,
+                    "StatusMessage" = @message,
+                    "OperationId" = CASE WHEN @clearOperation THEN NULL ELSE COALESCE(@operationId, current."OperationId") END,
+                    "ResultUrl" = COALESCE(@resultUrl, current."ResultUrl"),
+                    "DecidedByProfileId" = COALESCE(@decidedBy, current."DecidedByProfileId"),
+                    "DecidedAt" = CASE WHEN @decidedBy::text IS NULL THEN current."DecidedAt" ELSE @now END,
+                    "UpdatedAt" = @now
+                FROM (SELECT "Status" AS "PreviousStatus", "StatusMessage" AS "PreviousMessage" FROM "AcquisitionRequests" WHERE "Id" = @id) AS previous
+                WHERE current."Id" = @id AND current."Status" = ANY(@expected)
+                RETURNING previous."PreviousStatus", previous."PreviousMessage";
+                """;
+            Add(command, "@id", id.ToString());
+            Add(command, "@status", AcquisitionAccessNames.Status(status));
+            Add(command, "@message", message);
+            Add(command, "@operationId", operationId?.ToString());
+            Add(command, "@resultUrl", resultUrl);
+            Add(command, "@clearOperation", clearOperation);
+            Add(command, "@decidedBy", decidedByProfileId);
+            Add(command, "@now", DateTime.UtcNow);
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@expected";
+            parameter.Value = expected.Select(AcquisitionAccessNames.Status).ToArray();
+            command.Parameters.Add(parameter);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            return await reader.ReadAsync(cancellationToken)
+                ? new AcquisitionStatusTransition(AcquisitionAccessNames.ParseStatus(reader.GetString(0)), reader.IsDBNull(1) ? null : reader.GetString(1))
+                : null;
         }, cancellationToken);
 
     private async Task<AcquisitionRequest?> QuerySingleAsync(

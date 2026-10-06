@@ -12,23 +12,8 @@
 <article class="lib-card@(card.Availability is { } marker ? " lib-card-" + marker.CssModifier : "")">
     @* The whole card opens the title through the stretched title link; the poster link is only for pointers. *@
     <a class="lib-card-art" href="@card.Href" tabindex="-1" aria-hidden="true">
-        @if (!string.IsNullOrWhiteSpace(card.PosterUrl))
-        {
-            <img src="@card.PosterUrl" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
-        }
-        else
-        {
-            <span class="lib-card-initial">@card.Initial</span>
-        }
+        <partial name="_LibraryCardArt" model="card" />
     </a>
-
-    @if (card.Availability is { } availability)
-    {
-        <span class="lib-state lib-state-@availability.CssModifier">
-            <partial name="_LibraryIcon" model="availability.CssModifier" />
-            @availability.Label
-        </span>
-    }
 
     <div class="lib-card-body">
         <div class="lib-card-head">
@@ -45,6 +30,15 @@
                 </details>
             }
         </div>
+
+        @if (card.Availability is { } availability)
+        {
+            @* On the poster in the grid, a plain label in the list row. *@
+            <span class="lib-state lib-state-@availability.CssModifier">
+                <partial name="_LibraryIcon" model="availability.CssModifier" />
+                @availability.Label
+            </span>
+        }
 
         @if (!string.IsNullOrWhiteSpace(card.StatusText))
         {

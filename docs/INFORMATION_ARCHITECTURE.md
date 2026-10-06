@@ -297,7 +297,7 @@ stops profile-specific work where applicable; it does not disable shared instanc
 users. Re-enabling restores the preserved profile state subject to current policy.
 
 All current instance modules are exposed in Admin → Instance: Anime, Movies, TV, Manga, Novel, Books,
-Audiobooks, Learning, Acquisition and Tracking. Their personal toggles appear only where the module is
+Audiobooks, Learning, Acquisition, Playback and Tracking. Their personal toggles appear only where the module is
 meaningful and permitted for that profile.
 
 ## 5. Parity matrices
@@ -337,7 +337,7 @@ each row's Where.
 | Media processing: ffprobe inventory, remux, verification, rollback | Exists | `MediaInventoryService`, `MediaContainerOptimizer`, `MediaRemuxVerifier` | — |
 | Media processing: dedicated transcode/optimize job (beyond lossless remux) | Partial — only the lossless MP4 remux is a durable job; lossy transcode happens live during playback, not as a background optimization job | `MediaContainerOptimizer`, playback-plan `transcode` mode | #403 |
 | **Movies and TV library** | **Partial — first-class `Movie` and `TvSeries` entities bridged to the universal media core, completed-download + inbox import adapters on the shared spine, and per-kind naming/library roots exist (#593/#594); the consumer library grid + discovery UI (#595/#395) and playback wiring (#403) are pending** | `Features/Movies/**`, `Features/Tv/**`, `AppDbContext` `Movies`/`TvSeries` `DbSet` | #593 #594 |
-| Requests & approvals (Overseerr/Jellyseerr-style) | Partial — request lifecycle, the owner queue with auto-approval rules (`/Admin/Requests`), a per-user request history (`/Requests`), anime request options (whole series, seasons or episodes, audio/subtitle preference, requester-selectable quality profile at `/Requests/New`) and an availability badge (requested / in library / available) on Media Banner cards exist; request versus instant follows the per-media-type capability. Audio/subtitle preferences are shown to the approver but not yet enforced in release scoring; `/Requests/New` is not yet linked from the Discover cards | `AcquisitionRequestService`, `AutoApprovalEvaluator`, `RequestHistoryQuery`, `MediaAvailability`, `/Admin/Requests`, `/Requests` | #597 #436 |
+| Requests & approvals (Overseerr/Jellyseerr-style) | Partial — request lifecycle, the owner queue with auto-approval rules (`/Admin/Requests`), a per-user request history (`/Requests`) whose rows open the request status surface (`/Requests/{id}`: consumer state, saved intent, milestones, Cancel / Edit / Retry request for the requester's own request, per docs/mockups/request-status-details), anime request options (whole series, seasons or episodes, audio/subtitle preference, requester-selectable quality profile at `/Requests/New`) and an availability badge (requested / in library / available) on Media Banner cards exist; request versus instant follows the per-media-type capability. Audio/subtitle preferences are shown to the approver but not yet enforced in release scoring; `/Requests/New` is not yet linked from the Discover cards | `AcquisitionRequestService`, `AutoApprovalEvaluator`, `RequestHistoryQuery`, `RequestStatusQuery`, `RequestArtworkResolver`, `MediaAvailability`, `/Admin/Requests`, `/Requests` | #597 #436 |
 | Notifications (events/destinations) | Missing | — | #429 |
 | Clients & devices inventory (admin) | Partial — `/Admin/Devices` lists known clients/devices across every account (kind, label, app version, first/last seen, online state, live playback method) with a Revoke action that ends the device's live session and forgets it; `/Profile/Devices` lets a user self-manage their own devices the same way. No capability/app-version negotiation beyond what a client already reports, and Jularr's cookie auth has no per-device token, so revoke cannot block a future reconnect from the same browser/app | `Features/Devices/KnownDeviceRegistry`, `Pages/Admin/Devices`, `Pages/Profile/Devices` | #510 |
 | Transcoder resources dashboard | Missing | — | #403 |
@@ -511,9 +511,7 @@ Books-only profile sees a pure book app.
   at least browse the type gets **404** (the type does not exist for them) before the page model is
   constructed; the owner is unrestricted through the capability policy. The gate is not a second
   policy: it reads the same `MediaCapabilityView`.
-- **Not yet media-scoped (follow-ups).** Home type chips and Continue rows, the `/Discover` category
-  tab strip and browse grid (the provider-driven shelf board #595 is capability-scoped; the manual
-  category tabs/grid are not yet), Watchlist/Calendar/Franchise content, and the ClientApi surface
+- **Not yet media-scoped (follow-ups).** Home type chips and Continue rows, Watchlist/Calendar/Franchise content, and the ClientApi surface
   (`/api/client/v1/...`) still list every media type the data contains; they should narrow by
   `ShellMediaAccess`.
 

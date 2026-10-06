@@ -82,7 +82,8 @@ public sealed class SystemModel(
     StorageIntegrityService integrity,
     IndexerStore indexerStore,
     DownloadClientStore downloadClientStore,
-    AcquisitionHealthStore acquisitionHealth) : PageModel
+    AcquisitionHealthStore acquisitionHealth,
+    LibraryRootRoutingService routing) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -97,6 +98,12 @@ public sealed class SystemModel(
 
     [BindProperty]
     public string Path { get; set; } = "/media/anime";
+
+    /// <summary>What the new root is for. The Anime scanner reads only roots that serve Anime; a Movie or TV root is routed through Storage.</summary>
+    [BindProperty]
+    public LibraryContentType ContentType { get; set; } = LibraryContentType.Anime;
+
+    public static readonly LibraryContentType[] RootContentTypes = [LibraryContentType.Anime, LibraryContentType.Movie, LibraryContentType.Tv];
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -123,12 +130,30 @@ public sealed class SystemModel(
             return Page();
         }
 
-        db.LibraryRoots.Add(new LibraryRoot
+        if (!RootContentTypes.Contains(ContentType))
+        {
+            return BadRequest();
+        }
+
+        var root = new LibraryRoot
         {
             Name = Name.Trim(),
             Path = fullPath
-        });
+        };
+        db.LibraryRoots.Add(root);
         await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await routing.SetSupportedAsync(root.Id, ContentType, true, cancellationToken);
+        }
+        catch (LibraryRootConflictException)
+        {
+            db.LibraryRoots.Remove(root);
+            await db.SaveChangesAsync(cancellationToken);
+            ModelState.AddModelError(string.Empty, Ui["admin.storage.destinations.conflict"]);
+            await LoadAsync(cancellationToken);
+            return Page();
+        }
 
         TempData["Status"] = Ui["admin.system.rootAdded"];
         return RedirectToPage();

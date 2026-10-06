@@ -1,0 +1,128 @@
+@page "/Library/Series/{workId:guid}"
+@using Jularr.Web.Features.Library
+@model Jularr.Web.Pages.Library.SeriesDetailModel
+@* The canonical Series detail (docs/mockups/anime-series-detail/SPEC.md, binding): one hero with its facts inside it,
+   then seasons | episodes | related works. The season rail comes from the seasons of the canonical WorkEpisodes with the
+   specials last; the selected season is part of the address. *@
+@{
+    Layout = "_VideoDetailLayout";
+    var ui = Model.Ui;
+    var detail = Model.Detail;
+    ViewData["Title"] = detail.Title;
+    var offersRequest = Model.OffersRequest;
+    var hasSide = detail.Related.Count > 0;
+    string SeasonName(AnimeStructureEntry entry) => entry.IsSpecials ? ui["library.anime.specials"] : ui.Format("library.watch.season", ("number", entry.SeasonNumber));
+    string EpisodeCountText(int count) => count == 1 ? ui["library.anime.oneEpisode"] : ui.Format("library.index.episodeCount", ("count", count));
+    var sortOptions = new[]
+    {
+        (AnimeEpisodeSort.EpisodeAscending, ui["library.anime.sort.episodeAsc"]),
+        (AnimeEpisodeSort.EpisodeDescending, ui["library.anime.sort.episodeDesc"]),
+        (AnimeEpisodeSort.UnwatchedFirst, ui["library.anime.sort.unwatched"])
+    };
+}
+
+<partial name="_VideoDetailHero" model="Model" />
+
+<div class="ad-main@(Model.Seasons.Count == 0 ? " no-rail" : "")@(hasSide ? "" : " no-side")">
+    @if (Model.Seasons.Count > 0)
+    {
+        <nav class="ad-seasons" aria-labelledby="ad-seasons-title">
+            <h2 id="ad-seasons-title">@ui["library.anime.seasonsHeading"]</h2>
+            <ul>
+                @foreach (var entry in Model.Seasons)
+                {
+                    var isSelected = entry.Key == Model.Selected?.Key;
+                    <li>
+                        <a class="ad-season@(isSelected ? " is-selected" : "")"
+                           href="@Model.PageHref(entry.Key, Model.Sort, Model.Layout)"
+                           aria-current="@(isSelected ? "true" : null)">
+                            <span class="ad-season-art" aria-hidden="true"><span>@(entry.SeasonNumber == 0 ? "SP" : $"S{entry.SeasonNumber}")</span></span>
+                            <span class="ad-season-copy">
+                                <strong>@SeasonName(entry)</strong>
+                                <small>@EpisodeCountText(entry.EpisodeCount)</small>
+                            </span>
+                            <partial name="_AnimeDetailIcon" model='"chevron"' />
+                        </a>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
+
+    <section class="ad-episodes" id="episodes" aria-labelledby="ad-episodes-title">
+        <header class="ad-episodes-head">
+            <h2 id="ad-episodes-title">@ui["library.watch.episodesHeading"]</h2>
+            @if (Model.Selected is { } selected)
+            {
+                <span class="ad-context">@ui.Format("library.anime.selectedSeasonContext", ("season", SeasonName(selected)), ("count", EpisodeCountText(selected.EpisodeCount)))</span>
+            }
+            @if (Model.SelectedEpisodes.Count > 0)
+            {
+                <div class="ad-tools">
+                    @if (offersRequest && Model.MissingInSelected.Count > 0)
+                    {
+                        <button type="button" class="button" data-dc-card-request data-dc-preselect="@string.Join(',', Model.MissingInSelected.Select(x => x.Id))">@ui["library.video.requestMissing"]</button>
+                    }
+                    <form method="get" action="/Library/Series/@detail.WorkId#episodes" class="ad-sort" data-ad-sort>
+                        @if (Model.Selected is { SeasonNumber: int sortSeason })
+                        {
+                            <input type="hidden" name="season" value="@sortSeason" />
+                        }
+                        @if (AnimeDetailView.LayoutName(Model.Layout) is { } layoutValue)
+                        {
+                            <input type="hidden" name="view" value="@layoutValue" />
+                        }
+                        <label>
+                            <span>@ui["library.anime.sortLabel"]</span>
+                            <select name="sort">
+                                @foreach (var (value, label) in sortOptions)
+                                {
+                                    <option value="@AnimeDetailView.SortName(value)" selected="@(value == Model.Sort)">@label</option>
+                                }
+                            </select>
+                        </label>
+                        <noscript><button type="submit" class="button">@ui["common.search"]</button></noscript>
+                    </form>
+                    <div class="ad-view" role="group" aria-label="@ui["library.anime.viewAria"]">
+                        @foreach (var (layout, icon, label) in new[]
+                        {
+                            (AnimeEpisodeLayout.Grid, "grid", ui["library.anime.view.grid"]),
+                            (AnimeEpisodeLayout.List, "list", ui["library.anime.view.list"])
+                        })
+                        {
+                            <a class="ad-view-button@(layout == Model.Layout ? " is-active" : "")"
+                               href="@Model.PageHref(Model.Selected?.Key, Model.Sort, layout)"
+                               aria-current="@(layout == Model.Layout ? "true" : null)"
+                               aria-label="@label" title="@label">
+                                <partial name="_AnimeDetailIcon" model="icon" />
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+        </header>
+
+        @if (Model.SelectedEpisodes.Count == 0)
+        {
+            <div class="ad-empty">
+                <p>@ui["library.anime.noEpisodes"]</p>
+            </div>
+        }
+        else
+        {
+            <ul class="ad-episode-list@(Model.Layout == AnimeEpisodeLayout.List ? " is-list" : " is-grid")">
+                @foreach (var episode in Model.SelectedEpisodes)
+                {
+                    <li><partial name="_VideoEpisodeCard" model="(Model, episode)" /></li>
+                }
+            </ul>
+        }
+    </section>
+
+    @if (hasSide)
+    {
+        <aside class="ad-side">
+            <partial name="_VideoDetailRelated" model="Model" />
+        </aside>
+    }
+</div>

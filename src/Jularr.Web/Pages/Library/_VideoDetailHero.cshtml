@@ -1,0 +1,285 @@
+@using System.Globalization
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.ClientApi
+@using Jularr.Web.Features.InstantPlay
+@using Jularr.Web.Features.Library
+@using Jularr.Web.Features.MediaCore
+@model VideoDetailPageModel
+@* The hero of the Movie and Series detail pages (docs/mockups/movie-detail and anime-series-detail): the persisted backdrop (the
+   poster as a calm blurred background without one, the home hero gradient without either; never a second sharp poster), the title,
+   a compact meta line, the short description, the one state-derived primary action and the facts strip inside the hero. Provider
+   text is rendered encoded like any other text, and artwork only through the Jularr artwork endpoint. Nothing is rendered for data
+   that does not exist. *@
+@{
+    var ui = Model.Ui;
+    var detail = Model.Detail;
+    var action = Model.PrimaryAction;
+    var isMovie = detail.MediaType == WorkMediaType.Movie;
+    var culture = CultureInfo.InvariantCulture;
+    var viewerCulture = VideoDetailView.CultureOf(ui.Locale);
+    var knownEpisodes = detail.Episodes.Count;
+    var availableEpisodes = detail.Episodes.Count(x => x.HasFile);
+    var regularSeasons = detail.Episodes.Where(x => x.SeasonNumber > 0).Select(x => x.SeasonNumber).Distinct().Count();
+    var hasSpecials = detail.Episodes.Any(x => x.SeasonNumber == 0);
+    var structure = string.Join(" + ", new[]
+    {
+        regularSeasons > 1 ? ui.Format("mediaFacts.seasonCount", ("count", regularSeasons)) : null,
+        hasSpecials ? ui["library.anime.specials"] : null
+    }.Where(x => x is not null));
+    var metadata = detail.Metadata;
+    var heroArt = metadata?.Backdrop ?? metadata?.Poster;
+    var heroClass = (metadata?.Backdrop is null ? " ad-hero-derived" : "") + (heroArt is null ? " vd-hero-plain" : "");
+    var runtime = isMovie ? detail.MovieRuntimeMinutes ?? metadata?.RuntimeMinutes : null;
+    var episodeRuntime = isMovie ? null : metadata?.RuntimeMinutes;
+    var alternateTitles = new[] { detail.NativeTitle, metadata?.OriginalTitle }
+        .Where(x => !string.IsNullOrWhiteSpace(x) && !string.Equals(x, detail.Title, StringComparison.OrdinalIgnoreCase))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    var heroGenres = metadata?.Genres.Take(VideoDetailView.HeroGenreCount).ToArray() ?? [];
+    var rating = metadata?.Rating is > 0 ? metadata.Rating : null;
+    var ratingVotes = metadata?.RatingCount is int votes and > 0 ? VideoDetailView.CompactCount(votes, viewerCulture) : null;
+    var studio = metadata?.Studios.FirstOrDefault();
+    var certification = metadata?.Certification;
+    var audio = AnimeDetailView.Chips(detail.Audio, detail.Preference.Audio);
+    var subtitles = AnimeDetailView.Chips(detail.Subtitles, detail.Preference.Subtitle);
+    var offersRequest = Model.OffersRequest;
+    var missing = VideoDetailView.RequestableEpisodes(detail.Episodes);
+    var episodesText = availableEpisodes == knownEpisodes
+        ? ui.Format("mediaFacts.episodeCount", ("count", knownEpisodes))
+        : ui.Format("library.video.episodesAvailable", ("available", availableEpisodes), ("total", knownEpisodes));
+    var openStatus = detail.Request?.Open?.Status;
+    var watched = detail.Episodes.Count(x => x.IsWatched);
+    var watchedPercent = knownEpisodes == 0 ? 0 : watched * 100 / knownEpisodes;
+    var hasStrip = rating is not null || studio is not null || certification is not null || episodeRuntime is not null || knownEpisodes > 0 || audio.Any || subtitles.Any || watched > 0;
+    // The open request beside the action, in the words of the consumer projection: no pill while the target is simply ready, and
+    // "Monitoring future releases" when a ready or available title is also being watched for new releases. A profile that may not
+    // read the request (ConsumerAcquisitionQuery.MayRead) is shown nothing of it.
+    var requestState = Model.RequestState;
+    var observes = requestState?.State is ConsumerAcquisitionState.LookingForMedia or ConsumerAcquisitionState.GettingMedia or ConsumerAcquisitionState.Preparing;
+    string? requestPill = requestState switch
+    {
+        null => null,
+        { State: ConsumerAcquisitionState.ReadyToWatch or ConsumerAcquisitionState.Available, IsMonitoring: true } => ui["acquisition.state.monitoringFutureReleases"],
+        { State: ConsumerAcquisitionState.ReadyToWatch or ConsumerAcquisitionState.Available } => null,
+        { State: ConsumerAcquisitionState.GettingMedia, ProgressPercent: int percent } => ui.Format("acquisition.instant.progress", ("state", ui[ConsumerAcquisitionLabels.StateKey(requestState)]), ("percent", percent)),
+        _ => ui[ConsumerAcquisitionLabels.StateKey(requestState)]
+    };
+    string RequestStateIcon(AcquisitionRequestStatus status) =>
+        AnimeDetailView.AvailabilityName(AnimeDetailView.Availability(AnimeEpisodeMediaFacts.None, status, null, null));
+}
+<section class="ad-hero@(heroClass)" aria-labelledby="ad-title" data-work-hero>
+    <div class="ad-hero-bg" aria-hidden="true">
+        @if (heroArt is not null)
+        {
+            @* Eager: it is the largest paint of the page. A file that is gone is dropped by work-metadata.js and the gradient stays. *@
+            <img class="ad-hero-art" src="@heroArt.Url" alt="" width="@heroArt.Width" height="@heroArt.Height" decoding="async" fetchpriority="high" data-work-art />
+        }
+    </div>
+    <div class="ad-hero-copy">
+        <h1 id="ad-title">@detail.Title</h1>
+        @if (alternateTitles.Length > 0)
+        {
+            <p class="ad-hero-alt">
+                @foreach (var alternate in alternateTitles)
+                {
+                    <span>@alternate</span>
+                }
+            </p>
+        }
+
+        <ul class="ad-hero-meta">
+            @if (detail.Year is int year)
+            {
+                <li>@year.ToString(culture)</li>
+            }
+            <li>@ui[VideoDetailView.KindKey(detail.MediaType)]</li>
+            @if (runtime is int movieMinutes)
+            {
+                <li>@VideoDetailView.RuntimeText(movieMinutes, ui)</li>
+            }
+            @if (structure.Length > 0)
+            {
+                <li>@structure</li>
+            }
+            @foreach (var genre in heroGenres)
+            {
+                <li>@genre</li>
+            }
+        </ul>
+
+        @if (metadata?.Overview is { Length: > 0 } overview)
+        {
+            <div class="vd-overview" data-vd-overview>
+                <p class="ad-hero-description" id="vd-overview-text">@overview</p>
+                <button type="button" class="vd-expand" data-vd-expand aria-expanded="false" aria-controls="vd-overview-text"
+                        data-more="@ui["library.video.readMore"]" data-less="@ui["library.video.readLess"]" hidden>@ui["library.video.readMore"]</button>
+            </div>
+        }
+
+        <div class="ad-hero-actions">
+            @switch (action.Kind)
+            {
+                case PrimaryActionKind.Play:
+                case PrimaryActionKind.Continue:
+                case PrimaryActionKind.StartWatching when Model.PlayHref is not null:
+                    <a class="ad-primary" href="@Model.PlayHref">
+                        <partial name="_AnimeDetailIcon" model='"play"' />
+                        <span>@ui[VideoDetailView.PlayKey(action)]</span>
+                        @if (Model.ActionEpisode is { } episode)
+                        {
+                            <small>@AnimeDetailView.EpisodeCode(episode.SeasonNumber, episode.Number)</small>
+                        }
+                    </a>
+                    break;
+                case PrimaryActionKind.Request:
+                    <button type="button" class="ad-primary" data-dc-card-request>
+                        <partial name="_AnimeDetailIcon" model='"plus"' />
+                        <span>@ui["discover.card.request"]</span>
+                    </button>
+                    break;
+                case PrimaryActionKind.StartWatching:
+                case PrimaryActionKind.WatchNow:
+                    @* A missing target is started by the explicit playback intent, which morphs in place. *@
+                    <partial name="_InstantPlayAction" model="new InstantPlayActionView(Model, action, Model.ActionEpisode, false)" />
+                    break;
+                case PrimaryActionKind.Available:
+                    <span class="ad-secondary ad-static">
+                        <partial name="_AnimeDetailIcon" model='"episodes"' />
+                        <span>@ui["library.mediaCard.availability.available"]</span>
+                    </span>
+                    break;
+                case PrimaryActionKind.None:
+                    <span class="ad-secondary ad-static">
+                        <partial name="_AnimeDetailIcon" model='"unavailable"' />
+                        <span>@ui["library.anime.availability.unavailable"]</span>
+                    </span>
+                    break;
+            }
+
+            @if (openStatus is { } status && requestPill is not null)
+            {
+                @* A request that is still being worked on is followed live by instant-play.js; every other state is simply shown. *@
+                if (observes)
+                {
+                    <a class="ad-secondary ip-observe" href="@AcquisitionRequestService.HistoryPath" title="@ui["discover.request.viewStatus"]"
+                       data-instant-play-observe
+                       data-ip-request-id="@detail.Request!.Open!.Id"
+                       data-ip-work-id="@detail.WorkId"
+                       data-ip-episode-id="@action.WorkEpisodeId"
+                       data-ip-unit="@(isMovie ? "movie" : "episode")"
+                       data-ip-watch-href="@(Model.PlaybackEnabled ? VideoDetailView.WatchHref(detail.WorkId, action.WorkEpisodeId) : "")"
+                       data-ip-status-url="@ClientApiPlaybackIntentRoutes.RequestStatus">
+                        <partial name="_AnimeDetailIcon" model="RequestStateIcon(status)" />
+                        <span data-ip-label>@requestPill</span>
+                    </a>
+                }
+                else
+                {
+                    <a class="ad-secondary ip-observe" href="@AcquisitionRequestService.HistoryPath" title="@ui["discover.request.viewStatus"]">
+                        <partial name="_AnimeDetailIcon" model="RequestStateIcon(status)" />
+                        <span>@requestPill</span>
+                    </a>
+                }
+            }
+
+            @if (Model.IsOnWatchlist is bool onWatchlist)
+            {
+                <partial name="_WatchlistAction" model="new WatchlistActionView(onWatchlist, Model.PageRoute(detail.WorkId), ui)" />
+            }
+
+            @* A playback intent is the primary action of a missing target; the explicit Request stays one step away (instant-play SPEC, section 12). *@
+            @if (offersRequest && action.Kind != PrimaryActionKind.Request && (missing.Count > 0 || action.RequestIsAlternative))
+            {
+                <details class="ad-menu" data-ad-menu>
+                    <summary class="ad-secondary ad-icon-button" aria-label="@ui["library.anime.moreActions"]">
+                        <partial name="_AnimeDetailIcon" model='"more"' />
+                    </summary>
+                    <div class="ad-menu-panel">
+                        @if (isMovie)
+                        {
+                            <button type="button" data-dc-card-request>@ui["discover.card.request"]</button>
+                        }
+                        else
+                        {
+                            <button type="button" data-dc-card-request data-dc-preselect="@string.Join(',', missing.Select(x => x.Id))">@ui["library.video.requestMissingAll"]</button>
+                        }
+                    </div>
+                </details>
+            }
+        </div>
+    </div>
+
+    @if (hasStrip)
+    {
+        <ul class="ad-hero-strip">
+            @if (rating is double ratingValue)
+            {
+                <li title="@ui["library.mediaCard.rating"]">
+                    <partial name="_AnimeDetailIcon" model='"star"' />
+                    <span>
+                        <span class="sr-only">@ui["library.mediaCard.rating"] </span>@VideoDetailView.RatingText(ratingValue, viewerCulture)
+                        @if (ratingVotes is not null)
+                        {
+                            <small class="ad-strip-sub">(@ratingVotes)</small>
+                        }
+                    </span>
+                </li>
+            }
+            @if (studio is not null)
+            {
+                <li title="@ui["library.video.studio"]">
+                    <partial name="_AnimeDetailIcon" model='"studio"' />
+                    <span class="ad-strip-studio"><span class="sr-only">@ui["library.video.studio"] </span>@studio</span>
+                </li>
+            }
+            @if (certification is not null)
+            {
+                <li title="@ui["library.video.certification"]">
+                    <span class="ad-strip-cert"><span class="sr-only">@ui["library.video.certification"] </span>@certification</span>
+                </li>
+            }
+            @if (knownEpisodes > 0)
+            {
+                <li>
+                    <partial name="_AnimeDetailIcon" model='"episodes"' />
+                    <span>@episodesText</span>
+                </li>
+            }
+            @if (episodeRuntime is int minutes)
+            {
+                <li>
+                    <partial name="_AnimeDetailIcon" model='"clock"' />
+                    <span>@ui.Format("library.anime.durationMinutes", ("minutes", minutes))</span>
+                </li>
+            }
+            @foreach (var (label, icon, chips) in new[] { (ui["library.mediaCard.audioLanguages"], "audio", audio), (ui["library.mediaCard.subtitleLanguages"], "subtitles", subtitles) })
+            {
+                if (chips.Any)
+                {
+                    <li role="group" aria-label="@label" title="@label">
+                        <partial name="_AnimeDetailIcon" model="icon" />
+                        <span>
+                            @foreach (var chip in chips.Shown)
+                            {
+                                <span class="ad-strip-lang">@chip.Code</span>
+                            }
+                            @if (chips.More > 0)
+                            {
+                                <span class="ad-strip-lang is-partial" title="@ui.Format("library.anime.moreLanguages", ("count", chips.More))">+@chips.More</span>
+                            }
+                        </span>
+                    </li>
+                }
+            }
+            @if (watched > 0)
+            {
+                <li class="ad-strip-progress">
+                    <span>@ui.Format("library.video.watchedOf", ("watched", watched), ("total", knownEpisodes))</span>
+                    <span class="progress-track" role="progressbar"
+                          aria-label="@ui.Format("library.mediaCard.progressWatched", ("percent", watchedPercent))"
+                          aria-valuemin="0" aria-valuemax="100" aria-valuenow="@watchedPercent"><span style="width:@watchedPercent%"></span></span>
+                </li>
+            }
+        </ul>
+    }
+</section>

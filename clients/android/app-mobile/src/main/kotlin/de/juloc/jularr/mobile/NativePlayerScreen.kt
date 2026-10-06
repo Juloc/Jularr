@@ -39,7 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -262,9 +262,9 @@ fun NativePlayerScreen(
                             onDoubleTap = { offset ->
                                 controlsVisible = true
                                 if (offset.x < size.width / 2f) {
-                                    controller.seekBy(-10_000)
+                                    controller.seekBy(-design.seek.backMs)
                                 } else {
-                                    controller.seekBy(10_000)
+                                    controller.seekBy(design.seek.forwardMs)
                                 }
                             },
                         )
@@ -318,8 +318,8 @@ fun NativePlayerScreen(
                         }
                     },
                     onPlayPause = controller::togglePlayPause,
-                    onBack10 = { controller.seekBy(-10_000) },
-                    onForward10 = { controller.seekBy(10_000) },
+                    onSeekBack = { controller.seekBy(-design.seek.backMs) },
+                    onSeekForward = { controller.seekBy(design.seek.forwardMs) },
                     onRepeatCurrentCue = controller::repeatCurrentCue,
                     audioMenuOpen = audioMenuOpen,
                     onAudioMenuOpen = { audioMenuOpen = it },
@@ -446,8 +446,8 @@ private fun PlayerControls(
     onScrubFinished: () -> Unit,
     onClose: () -> Unit,
     onPlayPause: () -> Unit,
-    onBack10: () -> Unit,
-    onForward10: () -> Unit,
+    onSeekBack: () -> Unit,
+    onSeekForward: () -> Unit,
     onRepeatCurrentCue: () -> Unit,
     audioMenuOpen: Boolean,
     onAudioMenuOpen: (Boolean) -> Unit,
@@ -541,10 +541,10 @@ private fun PlayerControls(
         ) {
             PlayerIconButton(
                 icon = Icons.Filled.Replay10,
-                label = "Back 10 seconds",
+                label = "Back ${design.seek.backSeconds} seconds",
                 design = design,
                 large = true,
-                onClick = onBack10,
+                onClick = onSeekBack,
             )
             PlayerIconButton(
                 icon = if (ui.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
@@ -554,11 +554,11 @@ private fun PlayerControls(
                 onClick = onPlayPause,
             )
             PlayerIconButton(
-                icon = Icons.Filled.Forward10,
-                label = "Forward 10 seconds",
+                icon = Icons.Filled.Forward30,
+                label = "Forward ${design.seek.forwardSeconds} seconds",
                 design = design,
                 large = true,
-                onClick = onForward10,
+                onClick = onSeekForward,
             )
         }
 

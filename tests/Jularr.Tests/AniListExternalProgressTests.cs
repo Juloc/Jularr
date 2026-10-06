@@ -158,7 +158,7 @@ public sealed class AniListExternalProgressTests
     }
 
     [TestMethod]
-    public async Task AnimeStatesUseFurthestWatchedEpisodeAsync()
+    public async Task AnimeStatesUseTheContiguouslyCompletedEpisodeAsync()
     {
         await using var fixture = await ExternalProgressFixture.CreateAsync();
         var anime = await fixture.AddAnimeAsync("Example Anime", "555", episodes: 12);
@@ -173,7 +173,7 @@ public sealed class AniListExternalProgressTests
 
         var cases = new (FakeAniList Remote, AniListExternalProgressStateKind Expected)[]
         {
-            (FakeAniList.OnList(progress: 4), AniListExternalProgressStateKind.Synced),
+            (FakeAniList.OnList(progress: 2), AniListExternalProgressStateKind.Synced),
             (FakeAniList.OnList(progress: 1), AniListExternalProgressStateKind.LocalAhead),
             (FakeAniList.OnList(progress: 7), AniListExternalProgressStateKind.AniListAhead),
             (FakeAniList.NotOnList(), AniListExternalProgressStateKind.NotOnList),
@@ -185,14 +185,22 @@ public sealed class AniListExternalProgressTests
             var state = await fixture.Service(Owner, remote)
                 .GetAnimeProgressStateAsync(anime.Id, CancellationToken.None);
             Assert.AreEqual(expected, state.Kind, $"remote {remote.Name}");
-            Assert.AreEqual(4, state.LocalProgress, "Anime state follows the furthest watched episode.");
+            Assert.AreEqual(2, state.LocalProgress, "E1, E2 and E4 finished with E3 open: the state stops at the gap.");
             Assert.AreEqual(555, state.MediaId);
         }
 
         var episodeState = await fixture.Service(Owner, FakeAniList.OnList(progress: 1))
-            .GetEpisodeProgressStateAsync(anime.Episodes[7], CancellationToken.None);
+            .GetEpisodeProgressStateAsync(anime.Episodes[1], CancellationToken.None);
         Assert.AreEqual(AniListExternalProgressStateKind.LocalAhead, episodeState.Kind);
-        Assert.AreEqual(8, episodeState.LocalProgress);
+        Assert.AreEqual(2, episodeState.LocalProgress);
+
+        var afterGap = await fixture.Service(Owner, FakeAniList.OnList(progress: 1))
+            .GetEpisodeProgressStateAsync(anime.Episodes[3], CancellationToken.None);
+        Assert.AreEqual(AniListExternalProgressStateKind.NoLocalProgress, afterGap.Kind, "A finished episode behind a gap is not written.");
+
+        var unfinished = await fixture.Service(Owner, FakeAniList.OnList(progress: 1))
+            .GetEpisodeProgressStateAsync(anime.Episodes[7], CancellationToken.None);
+        Assert.AreEqual(AniListExternalProgressStateKind.NoLocalProgress, unfinished.Kind, "An episode that was never finished is not written.");
     }
 
     [TestMethod]
@@ -610,7 +618,7 @@ public sealed class AniListExternalProgressTests
                 Metadata(),
                 account,
                 new OperationRunner(Db, new ServiceCollection().BuildServiceProvider()),
-                new EpisodeProgressService(Db, account),
+                EpisodeFlowFixture.ProgressService(Db, account),
                 Service(profileId, remote),
                 new FranchiseStore(Db),
                 CreateFranchiseService(),
@@ -800,15 +808,9 @@ public sealed class AniListExternalProgressTests
         {
             foreach (var number in numbers)
             {
-                Db.Add(new EpisodeProgress
-                {
-                    ProfileId = profileId,
-                    EpisodeId = anime.Episodes[number - 1],
-                    IsCompleted = true
-                });
+                await CanonicalProgressSeed.SetAsync(Db, profileId, anime.Episodes[number - 1], 0, null, true);
             }
 
-            await Db.SaveChangesAsync();
             Db.ChangeTracker.Clear();
         }
 

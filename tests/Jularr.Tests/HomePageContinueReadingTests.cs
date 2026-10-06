@@ -116,7 +116,7 @@ public sealed class HomePageContinueReadingTests
                     "test"))
         };
 
-        return new IndexModel(
+        return EpisodeFlowFixture.Home(
             fixture.Db,
             new CurrentAccountContext(new HttpContextAccessor { HttpContext = httpContext }));
     }

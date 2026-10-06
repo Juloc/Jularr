@@ -42,7 +42,8 @@ public sealed record AnimeMetadataCandidate(
     int? SeasonYear,
     int? EpisodeCount,
     int? EpisodeDurationMinutes,
-    int? AverageScore = null);
+    int? AverageScore = null,
+    string? TrailerKey = null);
 
 public sealed record AnimeMetadataMatchResult(
     bool Success,

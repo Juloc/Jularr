@@ -1,45 +1,21 @@
 @using Jularr.Web.Features.Discovery
 @model DiscoverBodyView
-@* The body of Discover under the search field, returned by the Body handler and injected after first paint:
-   rows on the landing, one grid for a search or drill-down, and the empty, unavailable and not-connected
-   states. Styles: wwwroot/css/discover-browse.css. *@
+@* The body of Discover under the search field, returned by the Body handler and injected after first paint: sections of titles (rows on the
+   landing, groups or one grid for a search or drill-down) and the empty, unavailable and not-connected states. The sections that are still
+   waiting for a source are marked, and the root names how far the sources have answered so the browser can ask for the next generation.
+   Styles: wwwroot/css/discover-browse.css. *@
 @{
     var ui = Model.Ui;
     var query = Model.Query;
 }
-<div data-dc-state="@Model.State.ToString().ToLowerInvariant()">
-    @if (Model.Degraded)
-    {
-        <p class="dc-notice dc-notice-warning" role="status">
-            <partial name="_DiscoverIcon" model='"warning"' />
-            <span>@ui["discover.results.degraded"]</span>
-            <button type="button" class="dc-link" data-dc-retry>@ui["library.browse.error.retry"]</button>
-        </p>
-    }
-
+<div data-dc-state="@Model.State.ToString().ToLowerInvariant()" data-dc-settled="@Model.Settled" data-dc-pending="@Model.Pending">
     @switch (Model.State)
     {
-        case DiscoverBodyState.Shelves:
-            foreach (var shelf in Model.Shelves)
+        case DiscoverBodyState.Sections:
+            foreach (var part in Model.Sections)
             {
-                <partial name="_DiscoverShelf" model="(shelf, ui)" />
+                <partial name="_DiscoverSection" model="(part, ui)" />
             }
-            break;
-
-        case DiscoverBodyState.Results:
-            <p class="dc-count" aria-live="polite">
-                @(query.HasPostFilters
-                    ? ui.Format("discover.results.countFiltered", ("count", Model.Cards.Count), ("total", Model.Total))
-                    : Model.Cards.Count == 1
-                        ? ui["discover.results.countOne"]
-                        : ui.Format("discover.results.count", ("count", Model.Cards.Count)))
-            </p>
-            <ul class="dc-grid">
-                @foreach (var card in Model.Cards)
-                {
-                    <li><partial name="_DiscoverCard" model="(card, ui)" /></li>
-                }
-            </ul>
             break;
 
         case DiscoverBodyState.NoResults:

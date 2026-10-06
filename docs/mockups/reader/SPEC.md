@@ -510,6 +510,60 @@ If no target edition exists and policy allows generation:
 
 Do not translate on every page render.
 
+
+### Progressive / live translation
+
+When generation can produce validated blocks before the whole requested unit is
+finished, the Reader exposes them immediately instead of waiting for the whole
+chapter/book. The UX is provider-neutral and follows #834.
+
+Required behavior:
+- keep original/source content readable for blocks that are not translated yet;
+- show a compact first-text/preparing state until the first validated translated
+  block is available;
+- render completed translated blocks in their canonical positions immediately;
+- an optional in-progress current block may visibly fill from ephemeral provider
+  deltas, but it is not yet durable/searchable/annotatable/offline content;
+- previously completed blocks do not change underneath the reader during the
+  same translation version;
+- translation completion must not move the current logical Reader locator or
+  cause layout/scroll jumps;
+- show useful progress such as validated blocks / known total plus current
+  translating/finalizing state; never show 100% before final validation;
+- reconnect/reload restores validated blocks and reconnects to the shared active
+  run without duplicating text or work;
+- closing/navigating away from Reader does not implicitly cancel shared
+  translation;
+- authorized controls may expose Pause, Resume, Cancel and Retry without turning
+  them into permanent primary chrome;
+- partial failure/rate limiting keeps already validated blocks readable and
+  Retry resumes missing/failed blocks rather than starting over;
+- if source/model/prompt/context changes, present/use the resulting translation
+  as another version rather than mixing it into the currently displayed run;
+- never show raw provider JSON, markup/script or provider-specific protocol
+  events.
+
+For providers without token streaming, Jularr still delivers progressive reading
+by translating bounded semantic blocks sequentially. PDF Smart Book uses #819
+semantic blocks/source mapping. Manga/comics/fixed image content can use the same
+states only when a stable OCR/text-region model such as #846 exists; otherwise a
+translation action is not offered for guessed whole-page text.
+
+Only validated completed blocks feed search, canonical TTS text, durable
+translation-based annotations and offline packages.
+
+Accessibility:
+- do not announce token/delta updates through an ARIA live region; assistive
+  technology receives concise state changes such as preparing, translated
+  content available, paused, failed or completed;
+- preserve keyboard focus, text selection and the current semantic locator while
+  translated blocks appear;
+- do not require a typing animation; reduced-motion users receive the same
+  content without decorative streaming motion;
+- TTS on a partially generated target-language view reads only validated target
+  blocks and waits at the first missing block while generation is active rather
+  than silently switching languages.
+
 ## 14. Reader appearance and preferences
 
 Reader settings use the existing preference cascade rather than per-page localStorage copies.

@@ -209,8 +209,7 @@ public sealed class MediaDetailModel(
         string? view,
         string? open,
         string? ep,
-        [FromServices] MediaInventoryService inventory,
-        [FromServices] OperationRunner operations,
+        [FromServices] MediaFileReanalysisService reanalysis,
         CancellationToken cancellationToken)
     {
         if (!await IsAnimeEnabledAsync(cancellationToken))
@@ -219,38 +218,18 @@ public sealed class MediaDetailModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        var owned = await (
-                from media in db.MediaFiles.AsNoTracking()
-                join episode in db.Episodes.AsNoTracking() on media.EpisodeId equals episode.Id
-                where media.Id == fileId && episode.AnimeId == id
-                select media.Id)
-            .AnyAsync(cancellationToken);
-        if (!owned)
-        {
-            TempData["Error"] = Ui["admin.media.fileGone"];
-            return Redirect(Href(id, AdminMediaDetailView.IsAniList(view), open, ep));
-        }
-
         try
         {
-            var entry = await operations.RunAsync(
-                new OperationDescriptor(
-                    ReanalyzeOperationKind,
-                    "Anime",
-                    "Re-analyse anime media",
-                    ProfileId: currentAccount.ProfileId,
-                    Lane: OperationLane.Normal,
-                    Retryable: false),
-                async (_, token) =>
-                {
-                    await inventory.InvalidateAsync([fileId], token);
-                    return await inventory.EnsureAnalyzedAsync(fileId, token);
-                },
-                null,
-                cancellationToken);
-            TempData["AcquisitionNotice"] = entry?.Status == MediaAnalysisStatus.Succeeded
-                ? Ui["admin.media.reanalyzed"]
-                : Ui["admin.media.reanalyzeIncomplete"];
+            var descriptor = new OperationDescriptor(ReanalyzeOperationKind, "Anime", "Re-analyse anime media", ProfileId: currentAccount.ProfileId);
+            var result = await reanalysis.ReanalyzeAnimeFileAsync(id, fileId, descriptor, cancellationToken);
+            if (!result.Found)
+            {
+                TempData["Error"] = Ui["admin.media.fileGone"];
+            }
+            else
+            {
+                TempData["AcquisitionNotice"] = result.Status == MediaAnalysisStatus.Succeeded ? Ui["admin.media.reanalyzed"] : Ui["admin.media.reanalyzeIncomplete"];
+            }
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or DbException)
         {

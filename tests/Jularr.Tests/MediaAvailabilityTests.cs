@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Ui;
@@ -53,11 +54,11 @@ public sealed class MediaAvailabilityTests
         Assert.AreEqual("available", available?.CssModifier);
 
         // A requested title uses the words of the request lists for the stage it is in.
-        Assert.AreEqual("Requested", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Pending)).Availability?.Label);
-        Assert.AreEqual("Approved", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Approved)).Availability?.Label);
-        Assert.AreEqual("Searching", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Searching)).Availability?.Label);
-        Assert.AreEqual("Downloading", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Downloading)).Availability?.Label);
-        Assert.AreEqual("Importing", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Importing)).Availability?.Label);
+        Assert.AreEqual("Waiting for approval", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Pending)).Availability?.Label);
+        Assert.AreEqual("Looking for media", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Approved)).Availability?.Label);
+        Assert.AreEqual("Looking for media", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Searching)).Availability?.Label);
+        Assert.AreEqual("Getting media", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Downloading)).Availability?.Label);
+        Assert.AreEqual("Preparing", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Importing)).Availability?.Label);
         Assert.AreEqual("requested", Card(new MediaAvailabilityFacts(false, false, AcquisitionRequestStatus.Pending)).Availability?.CssModifier);
     }
 
@@ -88,35 +89,33 @@ public sealed class MediaAvailabilityTests
                 Progress = new MediaBannerProgress(MediaBannerProgressState.NotStarted, MediaBannerUnit.Episode, 1, "/Library/Episode/1")
             },
             Ui);
-        Assert.AreEqual("Searching", requestedWithAction.Availability?.Label, "Only the redundant Available badge is dropped.");
+        Assert.AreEqual("Looking for media", requestedWithAction.Availability?.Label, "Only the redundant Available badge is dropped.");
     }
 
     [TestMethod]
     public async Task LibraryCardsCarryWhatTheLibraryAndTheOpenRequestsKnowAsync()
     {
         await using var fixture = await EpisodeFlowFixture.CreateAsync();
-        var playable = await fixture.AddAnimeAsync("playable");
-        await fixture.AddEpisodeAsync(playable, 1, 1);
-        var empty = await fixture.AddAnimeAsync("empty");
-        await fixture.AddEpisodeAsync(empty, 1, 1, withMedia: false);
-        var requested = await fixture.AddAnimeAsync("requested");
-        await fixture.AddEpisodeAsync(requested, 1, 1, withMedia: false);
-        var finished = await fixture.AddAnimeAsync("finished");
-        await fixture.AddEpisodeAsync(finished, 1, 1, withMedia: false);
-        await AddMatchAsync(fixture.Db, requested, "42");
-        await AddMatchAsync(fixture.Db, finished, "7");
+        var seed = new LibraryCanonicalSeed(fixture.Db);
+        await seed.AddAnimeAsync("playable", [(1, 1, true)]);
+        await seed.AddAnimeAsync("empty", [(1, 1, false)]);
+        var requested = await seed.AddAnimeAsync("requested", [(1, 1, false)]);
+        var finished = await seed.AddAnimeAsync("finished", [(1, 1, false)]);
+        await AddMatchAsync(fixture.Db, requested.Anime, "42");
+        await AddMatchAsync(fixture.Db, finished.Anime, "7");
 
         var store = new AcquisitionAccessStore(fixture.Db);
         await store.CreateAsync(AnimeDraft("42"), "alice", AcquisitionRequestStatus.Searching, "owner", CancellationToken.None);
         await store.CreateAsync(AnimeDraft("7"), "alice", AcquisitionRequestStatus.Completed, "owner", CancellationToken.None);
 
-        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetAnimeAsync("alice", CancellationToken.None))
-            .ToDictionary(card => card.Title);
+        var cards = (await new LibraryMediaCardQuery(fixture.Db).GetEntriesAsync("alice", [WorkMediaType.Anime], CancellationToken.None))
+            .Entries
+            .ToDictionary(entry => entry.Card.Title, entry => entry.Card);
         var badges = cards.ToDictionary(pair => pair.Key, pair => MediaBannerCardModel.Create(pair.Value, Ui).Availability?.Label);
 
         Assert.IsNull(badges["playable"], "It has a play button already.");
         Assert.AreEqual("In library", badges["empty"]);
-        Assert.AreEqual("Searching", badges["requested"]);
+        Assert.AreEqual("Looking for media", badges["requested"]);
         Assert.AreEqual("In library", badges["finished"], "A finished request no longer says anything.");
         Assert.AreEqual(true, cards["playable"].Availability?.HasPlayableContent);
         Assert.AreEqual(false, cards["empty"].Availability?.HasPlayableContent);

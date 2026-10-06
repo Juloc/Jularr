@@ -207,7 +207,7 @@ public sealed class RequestOptionsTests
                 QualityProfileId = "anime-720p"
             }.Validate().ToPayloadJson());
 
-        Assert.AreEqual(AcquisitionRequestStatus.Completed, execution.Status, execution.Message);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "The request is only completed by the import of the requested episodes.");
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
         var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
         Assert.IsTrue(settings.Monitored);
@@ -228,7 +228,7 @@ public sealed class RequestOptionsTests
             FrierenId,
             new AcquisitionRequestOptions { Scope = RequestScope.Seasons, Seasons = [2] }.Validate().ToPayloadJson());
 
-        Assert.AreEqual(AcquisitionRequestStatus.Completed, execution.Status, execution.Message);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "The request is only completed by the import of the requested episodes.");
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
         var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
         Assert.AreEqual(false, settings.SeasonOverrides[1]);

@@ -36,6 +36,8 @@ Exit gate: clients do not need EF/legacy table shapes.
 
 ## Phase 3 — Consumer read/browse verticals
 
+Current first-video vertical audit: `docs/implementation/request-to-play-readiness-audit.md`.
+
 Implement approved specs using canonical reads only:
 1. Login/Profile Selection and authenticated consumer shell.
 2. Home.
@@ -56,8 +58,10 @@ Do not add acquisition internals to consumer pages.
 5. Complete the Unified Reader engine consolidation from `docs/implementation/unified-reader-engine-completion.md`: one shared interaction runtime plus ReflowText, FixedPage and ImageSequence renderers selected from parsed document layout/capabilities rather than file extension.
 6. Migrate Book/LN/Manga/PDF exact reading state to canonical ReaderLocator/MediaProgress and remove legacy per-type progress runtime paths after validation.
 7. Edition/language switching and Translation integration, including official/generated variants and source mapping.
-8. Integrate #819 Smart PDF as a derived view of the same Reader/progress identity; do not build another PDF shell.
-9. Implement the approved `continuation-surfaces/SPEC.md` only after canonical ActiveSession and Reader/MediaProgress state work; no separate mini-player/reading state store.
+8. Implement #834 progressive translation: one provider-neutral stable-block stream, validated restart-safe partial cache, shared/reconnectable runs, Codex delta support when available, bounded-block fallback for non-streaming providers and the corresponding Unified Reader partial/finalizing/error states.
+9. Integrate #819 Smart PDF as a derived view of the same Reader/progress identity and feed its semantic blocks into #834; do not build another PDF shell.
+10. Integrate #846 Manga/comic OCR/text-region identities with #834 only after stable regions exist; image pages remain canonical and no guessed whole-page translation path is added.
+11. Implement the approved `continuation-surfaces/SPEC.md` only after canonical ActiveSession and Reader/MediaProgress state work; no separate mini-player/reading state store.
 
 This phase resolves the foundation required by #403, #662 and the incomplete completion gates of #289. #819 supplies PDF-derived-document semantics and remains a dependency rather than a separate Reader architecture.
 

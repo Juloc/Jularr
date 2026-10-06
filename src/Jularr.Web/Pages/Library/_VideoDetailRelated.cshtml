@@ -1,0 +1,33 @@
+@using System.Globalization
+@using Jularr.Web.Features.Library
+@using Jularr.Web.Features.Watchlist
+@model VideoDetailPageModel
+@* Related Works of the Movie and Series detail pages: canonical Work relations (sequel, prequel, adaptation, source),
+   not recommendations. The relation group stays visible but compact; a related Work without a consumer page has no
+   link. The panel does not exist when the Work has no relations. *@
+@if (Model.Detail.Related.Count > 0)
+{
+    var ui = Model.Ui;
+    <section class="ad-related" aria-labelledby="vd-related-title">
+        <h2 id="vd-related-title">@ui["library.anime.relatedHeading"]</h2>
+        <ul>
+            @foreach (var related in Model.Detail.Related)
+            {
+                var detail = string.Join(" · ", new[] { ui[related.GroupKey], ui[VideoDetailView.KindKey(related.MediaType)], related.Year?.ToString(CultureInfo.InvariantCulture) }.Where(x => !string.IsNullOrEmpty(x)));
+                <li>
+                    <a href="@related.Href">
+                        <span class="ad-related-art" aria-hidden="true"><span>@WatchlistLabels.Initial(related.Title)</span></span>
+                        <span class="ad-related-copy">
+                            <strong>@related.Title</strong>
+                            <small>@detail</small>
+                        </span>
+                        @if (related.Href is not null)
+                        {
+                            <partial name="_AnimeDetailIcon" model='"chevron"' />
+                        }
+                    </a>
+                </li>
+            }
+        </ul>
+    </section>
+}

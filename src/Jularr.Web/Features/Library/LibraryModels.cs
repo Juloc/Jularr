@@ -1,11 +1,32 @@
 namespace Jularr.Web.Features.Library;
 
+public enum LibraryContentType
+{
+    Anime = 1,
+    Manga = 2,
+    LightNovel = 3,
+    Book = 4,
+    Movie = 5,
+    Tv = 6,
+    Audiobook = 7,
+    Game = 8
+}
+
+public enum LibraryPlacementPolicy
+{
+    HardlinkOrCopy = 0,
+    Hardlink = 1,
+    Copy = 2,
+    Move = 3
+}
+
 public sealed class LibraryRoot
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Path { get; set; } = "";
     public bool IsEnabled { get; set; } = true;
+    public LibraryPlacementPolicy PlacementPolicy { get; set; } = LibraryPlacementPolicy.HardlinkOrCopy;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastScannedAt { get; set; }
     public bool WakeOnLanEnabled { get; set; }
@@ -18,6 +39,14 @@ public sealed class LibraryRoot
     public const int DefaultReconciliationIntervalMinutes = 30;
     public const int MinimumReconciliationIntervalMinutes = 5;
     public const int MaximumReconciliationIntervalMinutes = 24 * 60;
+}
+
+public sealed class LibraryRootContentAssignment
+{
+    public Guid LibraryRootId { get; set; }
+    public LibraryContentType ContentType { get; set; }
+    public bool IsDefault { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public sealed class Anime

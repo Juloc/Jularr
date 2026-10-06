@@ -1,5 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Storage.Insights;
@@ -61,12 +62,27 @@ public sealed class StorageUsageService(
                 root.LastScannedAt));
         }
 
+        var videoFiles = await db.Database
+            .SqlQuery<VideoFileTotalsRow>(
+                $"""
+                SELECT work."MediaType" AS "WorkMediaType",
+                       (file."EpisodeId" IS NOT NULL) AS "HasLegacyEpisode",
+                       COUNT(*) AS "FileCount",
+                       COALESCE(SUM(file."SizeBytes"), 0)::bigint AS "Bytes"
+                FROM "StoredFiles" AS file
+                LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                LEFT JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                GROUP BY work."MediaType", (file."EpisodeId" IS NOT NULL)
+                """)
+            .ToListAsync(cancellationToken);
+
+        var videoByKind = videoFiles
+            .GroupBy(VideoKindOf)
+            .ToDictionary(group => group.Key, group => new StorageMediaTypeUsage(group.Key, group.Sum(x => x.FileCount), group.Sum(x => x.Bytes)));
         var mediaTypes = new List<StorageMediaTypeUsage>
         {
-            new(
-                StorageMediaKind.Episodes,
-                rootUsage.Sum(x => x.FileCount),
-                rootUsage.Sum(x => x.Bytes)),
+            videoByKind.GetValueOrDefault(StorageMediaKind.Movies, new StorageMediaTypeUsage(StorageMediaKind.Movies, 0, 0)),
+            videoByKind.GetValueOrDefault(StorageMediaKind.Episodes, new StorageMediaTypeUsage(StorageMediaKind.Episodes, 0, 0)),
             new(
                 StorageMediaKind.Audiobooks,
                 await db.AudiobookFiles.AsNoTracking().LongCountAsync(cancellationToken),
@@ -77,22 +93,34 @@ public sealed class StorageUsageService(
                 await db.BookFiles.AsNoTracking().SumAsync(x => (long?)x.SizeBytes, cancellationToken) ?? 0)
         };
 
+        // Files no Work or episode claims are only listed when they exist, so a healthy library shows no empty row.
+        if (videoByKind.TryGetValue(StorageMediaKind.UnmatchedVideo, out var unmatched))
+        {
+            mediaTypes.Insert(2, unmatched);
+        }
+
         var rootNames = roots.ToDictionary(x => x.Id, x => x.Name);
-        var largest = await (
-                from file in db.MediaFiles.AsNoTracking()
-                join episode in db.Episodes.AsNoTracking() on file.EpisodeId equals episode.Id
-                join anime in db.Anime.AsNoTracking() on episode.AnimeId equals anime.Id
-                orderby file.SizeBytes descending, file.Id
-                select new
-                {
-                    file.Id,
-                    anime.Title,
-                    episode.SeasonNumber,
-                    EpisodeNumber = episode.Number,
-                    file.LibraryRootId,
-                    file.SizeBytes
-                })
-            .Take(limit)
+        // A movie has a Work but no episode; an anime/series file resolves its title and numbers through its Work episode or, for
+        // files the media core has not claimed yet, through the legacy episode bridge. Files that resolve to neither carry no title and are skipped.
+        var largest = await db.Database
+            .SqlQuery<LargestFileRow>(
+                $"""
+                SELECT file."Id" AS "Id",
+                       COALESCE(work."CanonicalTitle", anime."Title") AS "Title",
+                       COALESCE(workEpisode."SeasonNumber", episode."SeasonNumber") AS "SeasonNumber",
+                       COALESCE(workEpisode."EpisodeNumber", episode."Number") AS "EpisodeNumber",
+                       file."LibraryRootId" AS "LibraryRootId",
+                       file."SizeBytes" AS "SizeBytes"
+                FROM "StoredFiles" AS file
+                LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                LEFT JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                LEFT JOIN "WorkEpisodes" AS workEpisode ON workEpisode."Id" = asset."WorkEpisodeId"
+                LEFT JOIN "Episodes" AS episode ON episode."Id" = file."EpisodeId"
+                LEFT JOIN "Anime" AS anime ON anime."Id" = episode."AnimeId"
+                WHERE COALESCE(work."CanonicalTitle", anime."Title") IS NOT NULL
+                ORDER BY file."SizeBytes" DESC, file."Id"
+                LIMIT {limit}
+                """)
             .ToListAsync(cancellationToken);
 
         return new StorageUsageReport(
@@ -129,4 +157,17 @@ public sealed class StorageUsageService(
             ? null
             : await availability.CheckAsync(root.Id, force: false, cancellationToken);
     }
+
+    // The Work media type decides the kind; a file the media core does not claim yet counts as an episode only through the legacy bridge.
+    private static StorageMediaKind VideoKindOf(VideoFileTotalsRow row) =>
+        (WorkMediaType?)row.WorkMediaType switch
+        {
+            WorkMediaType.Movie => StorageMediaKind.Movies,
+            WorkMediaType.Series or WorkMediaType.Anime => StorageMediaKind.Episodes,
+            _ => row.HasLegacyEpisode ? StorageMediaKind.Episodes : StorageMediaKind.UnmatchedVideo
+        };
+
+    private sealed record VideoFileTotalsRow(int? WorkMediaType, bool HasLegacyEpisode, long FileCount, long Bytes);
+
+    private sealed record LargestFileRow(Guid Id, string Title, int? SeasonNumber, int? EpisodeNumber, Guid LibraryRootId, long SizeBytes);
 }
