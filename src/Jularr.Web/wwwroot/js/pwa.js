@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const INSTALL_DISMISS_KEY = "anilingo.pwa.installDismissedUntil";
+  const INSTALL_DISMISS_KEY = "jularr.pwa.installDismissedUntil";
   const INSTALL_DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
   let deferredInstallPrompt = null;
 
@@ -606,7 +606,7 @@
     if (event.target instanceof HTMLFormElement
         && event.target.matches("[data-offline-logout]")) {
       try {
-        localStorage.removeItem("anilingo.activeProfile");
+        localStorage.removeItem("jularr.activeProfile");
       } catch {
         // Ignore unavailable local storage.
       }
