@@ -29,7 +29,7 @@ public static class VideoDetailView
     public static string RuntimeText(int minutes) => minutes >= 60 ? $"{minutes / 60}h {minutes % 60:00}m" : $"{minutes}m";
 
     /// <summary>A provider rating on the 0-10 scale with one decimal, as every rating chip writes it.</summary>
-    public static string RatingText(double rating) => rating.ToString("0.0", CultureInfo.InvariantCulture);
+    public static string RatingText(double rating) => Math.Round(rating, 1, MidpointRounding.AwayFromZero).ToString("0.0", CultureInfo.InvariantCulture);
 
     /// <summary>A vote count in the short form of a rating fact: 640, 12K, 1.2M.</summary>
     public static string CompactCount(int count) => count switch

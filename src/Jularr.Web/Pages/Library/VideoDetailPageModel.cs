@@ -137,7 +137,7 @@ public abstract class VideoDetailPageModel(
 
         Detail = detail;
         await PromoteMetadataRefreshAsync(workId, detail.Metadata, cancellationToken);
-        if (MediaType == WorkMediaType.Movie && detail.Metadata?.Trailers.Any(x => x.IsPlayable) == true)
+        if (MediaType == WorkMediaType.Movie && detail.Metadata?.PlayableTrailer is not null)
         {
             // The trailer facade adds one frame after the viewer clicks; no other page content may be framed.
             Response.Headers.ContentSecurityPolicy = $"frame-src 'self' {WorkTrailerView.EmbedOrigin}";

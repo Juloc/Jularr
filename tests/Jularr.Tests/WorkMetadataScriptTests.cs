@@ -73,17 +73,17 @@ public sealed class WorkMetadataScriptTests
             const api = window.JularrWorkMetadata;
             api.syncOverview(view, text, more); const cutOff = more.hidden;
             const expanded = api.toggleOverview(view, more); api.syncOverview(view, text, more);
-            const open = { expanded, aria: more.attrs['aria-expanded'], label: more.textContent, hidden: more.hidden, classes: view.classList.list() };
+            const open = { expanded, label: more.textContent, hidden: more.hidden, classes: view.classList.list() };
             text.scrollHeight = 88; api.syncOverview(view, text, more); const stillThere = more.hidden;
             const collapsed = api.toggleOverview(view, more); api.syncOverview(view, text, more);
-            const closed = { collapsed, aria: more.attrs['aria-expanded'], label: more.textContent, hidden: more.hidden, classes: view.classList.list() };
+            const closed = { collapsed, label: more.textContent, hidden: more.hidden, classes: view.classList.list() };
             const fits = root(); const fitsButton = button(); api.syncOverview(fits, { scrollHeight: 66, clientHeight: 66 }, fitsButton);
             return { cutOff, open, stillThere, closed, fitsHidden: fitsButton.hidden };
             """);
 
         Assert.AreEqual(
-            "{\"cutOff\":false,\"open\":{\"expanded\":true,\"aria\":\"true\",\"label\":\"Show less\",\"hidden\":false,\"classes\":[\"is-expanded\"]},\"stillThere\":false,"
-            + "\"closed\":{\"collapsed\":false,\"aria\":\"false\",\"label\":\"Read more\",\"hidden\":true,\"classes\":[]},\"fitsHidden\":true}",
+            "{\"cutOff\":false,\"open\":{\"expanded\":true,\"label\":\"Show less\",\"hidden\":false,\"classes\":[\"is-expanded\"]},\"stillThere\":false,"
+            + "\"closed\":{\"collapsed\":false,\"label\":\"Read more\",\"hidden\":true,\"classes\":[]},\"fitsHidden\":true}",
             result);
     }
 

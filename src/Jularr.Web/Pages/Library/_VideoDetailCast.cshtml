@@ -8,12 +8,12 @@
     <section class="vd-cast" aria-labelledby="vd-cast-title">
         <h2 id="vd-cast-title">@Model.Ui["library.video.castHeading"]</h2>
         <div class="vd-people" role="region" aria-labelledby="vd-cast-title" tabindex="0">
-            <ul>
+            <ul role="list">
                 @foreach (var person in people)
                 {
                     <li class="vd-person">
                         <span class="vd-person-art" aria-hidden="true">@VideoDetailView.Initials(person.Name)</span>
-                        <strong>@person.Name</strong>
+                        <strong title="@person.Name">@person.Name</strong>
                         @if (!string.IsNullOrWhiteSpace(person.Role))
                         {
                             <small>@person.Role</small>

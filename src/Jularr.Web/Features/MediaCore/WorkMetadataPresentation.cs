@@ -47,7 +47,11 @@ public sealed record WorkMetadataView(
     WorkArtworkImage? Poster,
     WorkArtworkImage? Backdrop,
     WorkArtworkImage? Logo,
-    DateTime? RefreshedAt);
+    DateTime? RefreshedAt)
+{
+    /// <summary>The first trailer whose key may become a link or a frame; null when there is none.</summary>
+    public WorkTrailerView? PlayableTrailer => Trailers.FirstOrDefault(x => x.IsPlayable);
+}
 
 /// <summary>The card-sized metadata of one Work: what a Library card shows from the persisted metadata, resolved for the viewer.</summary>
 public sealed record WorkCardMetadata(string? Title, string? PosterUrl, string? BackdropUrl, double? Rating);

@@ -46,11 +46,10 @@
         return true;
     };
 
-    /** Expands or collapses the description of a hero and keeps the button's state and words in step. */
+    /** Expands or collapses the description of a hero; the button's words say what it does next, so it carries no separate expanded state. */
     const toggleOverview = (root, button) => {
         const expanded = !root.classList.contains("is-expanded");
         root.classList.toggle("is-expanded", expanded);
-        button.setAttribute("aria-expanded", expanded ? "true" : "false");
         button.textContent = expanded ? button.dataset.less : button.dataset.more;
         return expanded;
     };

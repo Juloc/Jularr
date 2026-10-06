@@ -433,6 +433,7 @@ public sealed class VideoDetailMetadataPageTests
         Assert.AreEqual("48m", VideoDetailView.RuntimeText(48));
         Assert.AreEqual("8.1", VideoDetailView.RatingText(8.1));
         Assert.AreEqual("7.0", VideoDetailView.RatingText(7));
+        Assert.AreEqual("7.7", VideoDetailView.RatingText(7.65), "Halves round up, like the card rating.");
         Assert.AreEqual("812", VideoDetailView.CompactCount(812));
         Assert.AreEqual("12.3K", VideoDetailView.CompactCount(12_345));
         Assert.AreEqual("621.3K", VideoDetailView.CompactCount(621_345));

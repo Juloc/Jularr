@@ -20,7 +20,7 @@
     var hasHdr = detail.Versions.Any(x => x.IsHdr);
     var hasDolbyVision = detail.Versions.Any(x => x.IsDolbyVision);
     var preferredAvailable = detail.Preference.IsAvailableIn(audio, subtitles);
-    var hasTrailer = detail.Metadata?.Trailers.Any(x => x.IsPlayable) == true;
+    var hasTrailer = detail.Metadata?.PlayableTrailer is not null;
     string Codes(IEnumerable<string> languages) => string.Join(" · ", languages.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()));
     string VersionLabel(VideoDetailVersion version, int number)
     {

@@ -350,7 +350,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
     }
 
     // Cards show provider scores on the 0-100 scale of AniList; persisted Work ratings are 0-10.
-    private static int? AverageScore(WorkCardMetadata? metadata) => metadata?.Rating is { } rating ? (int)Math.Round(rating * 10) : null;
+    private static int? AverageScore(WorkCardMetadata? metadata) => metadata?.Rating is { } rating ? (int)Math.Round(rating * 10, MidpointRounding.AwayFromZero) : null;
 
     private static MediaBannerProgress? BuildProgress(WorkRow work, AnimeRow? anime, string href, IReadOnlyList<UnitRow> episodes, IReadOnlyList<EpisodeOrderKey> playable, IReadOnlyList<int> localSeasons, ReadContext context)
     {

@@ -4,7 +4,7 @@
    of YouTube is requested until the viewer starts it; work-metadata.js then adds one sandboxed no-cookie frame. The link works
    without script and is built only from a key that has the shape of a YouTube id. The still is the Work's own backdrop. The section
    does not exist without a playable trailer. *@
-@if (Model.Detail.Metadata?.Trailers.FirstOrDefault(x => x.IsPlayable) is { } trailer)
+@if (Model.Detail.Metadata?.PlayableTrailer is { } trailer)
 {
     var ui = Model.Ui;
     var title = Model.Detail.Title;
