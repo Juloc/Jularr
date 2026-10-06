@@ -508,8 +508,6 @@ builder.Services.AddHttpClient<BookCatalogService>(client =>
 builder.Services.AddScoped<BookSearchCoordinator>();
 builder.Services.AddScoped<BookManualSearchService>();
 
-builder.Services.AddSingleton<SabnzbdSettingsStore>();
-builder.Services.AddSingleton<SabnzbdConnectionResolver>();
 builder.Services.AddSingleton<SabnzbdAcquisitionStore>();
 builder.Services.AddHttpClient<ISabnzbdClient, SabnzbdClient>(client =>
 {
