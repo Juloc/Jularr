@@ -207,7 +207,7 @@
                             "home.continueWatching.episode",
                             ("season", episode.SeasonNumber.ToString("00")),
                             ("episode", episode.Number)),
-                        $"/Library/Episode/{episode.Id}",
+                        Model.EpisodeHref(episode),
                         Model.ShowContentMetrics ? episode.PreparationPercent : null,
                         coverageLabel,
                         episode.CoverImageUrl,

@@ -203,7 +203,8 @@ public sealed record LibraryCardView(
 {
     public bool HasLanguages => Audio.Any || Subtitles.Any;
 
-    public static LibraryCardView Create(LibraryCardEntry entry, LibraryLanguagePreference preference, UiTextBundle ui)
+    /// <param name="playbackEnabled">Only an instance that plays has a play action on a card; a manager-only instance shows none (docs/mockups/instant-play, section 11).</param>
+    public static LibraryCardView Create(LibraryCardEntry entry, LibraryLanguagePreference preference, UiTextBundle ui, bool playbackEnabled)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(preference);
@@ -254,7 +255,7 @@ public sealed record LibraryCardView(
             }
 
             // Only Anime has a player route to open from the card; Movies and Series play from their detail page.
-            if (entry.MediaType == WorkMediaType.Anime)
+            if (entry.MediaType == WorkMediaType.Anime && playbackEnabled)
             {
                 action = new LibraryCardAction(
                     ui[progress.State switch

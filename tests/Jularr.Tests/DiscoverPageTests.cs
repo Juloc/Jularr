@@ -218,6 +218,25 @@ public sealed class DiscoverPageTests
     }
 
     [TestMethod]
+    public void ALocalTitleOffersAPlayLinkOnlyWhereThereIsAPlayer()
+    {
+        var card = new MediaBannerCardData(
+            MediaBannerKind.Anime,
+            "Akatsuki no Sora",
+            "/Library/Anime/1",
+            AudioLanguages: ["ja"],
+            Progress: new MediaBannerProgress(MediaBannerProgressState.NotStarted, MediaBannerUnit.Episode, 1, "/Library/Episode/e"));
+
+        var playing = DiscoverLocalFacts.From(card, Ui, playbackEnabled: true);
+        var managerOnly = DiscoverLocalFacts.From(card, Ui, playbackEnabled: false);
+
+        Assert.AreEqual("/Library/Episode/e", playing.PlayUrl);
+        Assert.IsNull(managerOnly.PlayUrl);
+        Assert.IsNull(managerOnly.PlayLabel);
+        CollectionAssert.AreEqual(new[] { "ja" }, managerOnly.Audio.ToArray(), "The languages stay: they are library facts, not playback.");
+    }
+
+    [TestMethod]
     public void ALibraryTitleWithOnlyOtherLanguagesSaysWhichOnes()
     {
         var local = new Dictionary<string, DiscoverLocalFacts>

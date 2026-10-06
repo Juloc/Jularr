@@ -137,6 +137,14 @@ public sealed record ConsumerRequestRead(AcquisitionRequest Request, Guid WorkId
 public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessStore requests, VideoRequestWorkResolver works, TimeProvider clock)
 {
     /// <summary>
+    /// The one rule of who may read the consumer state of a request (docs/mockups/instant-play, section 13): its requester, whoever manages
+    /// media, and every profile that may request this media type, because one open request per title is shared state. Everyone else is
+    /// told nothing about it. The playback intent, the status endpoint and the detail pages all ask this.
+    /// </summary>
+    public static bool MayRead(AcquisitionRequest request, string profileId, bool canRequest, bool isAdminMedia) =>
+        request.RequestedByProfileId == profileId || isAdminMedia || canRequest;
+
+    /// <summary>
     /// The Movie or Series request with its canonical Work, or null when it does not exist, has no Work yet, or <paramref name="workEpisodeId"/>
     /// is not an episode of that Work (a Movie has none).
     /// </summary>

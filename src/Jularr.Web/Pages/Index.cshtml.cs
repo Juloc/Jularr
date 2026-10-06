@@ -115,6 +115,12 @@ public sealed class IndexModel(
         : ContinueReadingDiscoverUrl;
 
     public IReadOnlyList<PlaybackHistoryItem> PlaybackHistory { get; private set; } = [];
+
+    /// <summary>False on a manager-only instance: nothing on the page links into the player.</summary>
+    public bool PlaybackEnabled { get; private set; } = true;
+
+    /// <summary>A recently added episode opens the player where there is one, otherwise the title it belongs to.</summary>
+    public string EpisodeHref(HomeEpisode episode) => PlaybackEnabled ? $"/Library/Episode/{episode.Id}" : $"/Library/Anime/{episode.AnimeId}";
     public int PlaybackHistoryLimit => EpisodeProgressService.HistoryLimit;
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -146,12 +152,15 @@ public sealed class IndexModel(
             ? InstanceModuleSettings.Default
             : await instanceModules.GetAsync(cancellationToken);
         var animeEnabled = instance.IsEnabled(InstanceModule.Anime);
+        PlaybackEnabled = instance.IsEnabled(InstanceModule.Playback);
 
+        // Continue watching and the playback history only exist where something plays; every link of them opens the player.
         ContinueWatching = animeEnabled
+            && PlaybackEnabled
             && (ActiveType is DiscoveryCategory.All or DiscoveryCategory.Anime)
                 ? await progress.GetContinueWatchingAsync(cancellationToken: cancellationToken)
                 : [];
-        PlaybackHistory = animeEnabled
+        PlaybackHistory = animeEnabled && PlaybackEnabled
             ? await progress.GetHistoryAsync(cancellationToken)
             : [];
 
@@ -421,7 +430,7 @@ public sealed class IndexModel(
         }
 
         var zone = CalendarTimeZone.Resolve(HttpContext?.Request.Cookies[CalendarTimeZone.CookieName]);
-        var presenter = new ReleaseCalendarPresenter(Ui, zone, DateTimeOffset.UtcNow);
+        var presenter = new ReleaseCalendarPresenter(Ui, zone, DateTimeOffset.UtcNow, PlaybackEnabled);
         var source = new WatchlistReleaseEventSource(
             new ReleaseCalendarCacheStore(db),
             new WatchlistStore(db),
@@ -463,7 +472,7 @@ public sealed class IndexModel(
                 null,
                 row.Release.CoverImageUrl,
                 false,
-                ReleaseCalendarPresenter.Href(row.Release) ?? "/Watchlist",
+                presenter.Href(row.Release) ?? "/Watchlist",
                 Ui["home.spotlight.details"],
                 false,
                 "/Calendar",

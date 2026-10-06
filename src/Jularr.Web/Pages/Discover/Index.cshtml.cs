@@ -4,6 +4,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Franchises;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
@@ -36,6 +37,7 @@ public sealed class IndexModel(
     WatchlistStore watchlist,
     FranchiseService franchiseService,
     MediaRecommendationService recommendations,
+    IInstanceModuleService modules,
     ILogger<IndexModel> logger,
     IAppShellService? shell = null) : PageModel
 {
@@ -304,20 +306,12 @@ public sealed class IndexModel(
         try
         {
             var entries = await new LibraryMediaCardQuery(db).GetEntriesAsync(account.ProfileId, [WorkMediaType.Anime], cancellationToken);
+            var playbackEnabled = await modules.IsEnabledAsync(InstanceModule.Playback, cancellationToken);
             return entries.Entries
                 .GroupBy(entry => entry.Card.Href, StringComparer.Ordinal)
                 .ToDictionary(
                     group => group.Key,
-                    group =>
-                    {
-                        var card = group.First().Card;
-                        var action = MediaBannerCardModel.Create(card, Ui).Action;
-                        return new DiscoverLocalFacts(
-                            card.AudioLanguages ?? [],
-                            card.SubtitleLanguages ?? [],
-                            action?.Url,
-                            action?.Label);
-                    },
+                    group => DiscoverLocalFacts.From(group.First().Card, Ui, playbackEnabled),
                     StringComparer.Ordinal);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

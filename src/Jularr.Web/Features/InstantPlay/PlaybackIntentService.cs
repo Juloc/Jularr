@@ -93,7 +93,7 @@ public sealed class PlaybackIntentService(
         {
             case PrimaryActionKind.ShowRequestState:
                 // Someone who may not request this media type and did not make the request is told nothing about it.
-                return !policy.AllowsRequest && state.OpenRequest!.RequestedByProfileId != account.ProfileId && !account.Can(JularrPolicies.AdminMedia)
+                return !ConsumerAcquisitionQuery.MayRead(state.OpenRequest!, account.ProfileId, policy.CanRequest, account.Can(JularrPolicies.AdminMedia))
                     ? new PlaybackIntentResult(PlaybackIntentOutcome.NotAvailable, action, null, null)
                     : await ReportAsync(state.OpenRequest!, action, policy, cancellationToken);
             case PrimaryActionKind.StartWatching or PrimaryActionKind.WatchNow:

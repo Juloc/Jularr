@@ -435,7 +435,7 @@ internal static class DiscoverPageFactory
         var store = new AcquisitionAccessStore(db);
         var requests = new AcquisitionRequestService(store, executors, account, new MediaCapabilityService(capabilities), settings, new RecordingEventPublisher(), NullLogger<AcquisitionRequestService>.Instance);
         var scopes = new VideoRequestScopeResolver(db);
-        var page = new DiscoverIndexModel(null!, null!, tmdb!, db, null!, null!, account, null!, requests, store, scopes, null!, null!, null!, NullLogger<DiscoverIndexModel>.Instance);
+        var page = new DiscoverIndexModel(null!, null!, tmdb!, db, null!, null!, account, null!, requests, store, scopes, null!, null!, null!, null!, NullLogger<DiscoverIndexModel>.Instance);
         var requestServices = new ServiceCollection().AddSingleton<IModelMetadataProvider, EmptyModelMetadataProvider>().BuildServiceProvider();
         page.PageContext = new PageContext
         {

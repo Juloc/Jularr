@@ -290,6 +290,7 @@ public sealed class RequestPagesRenderTests
                         services.AddSingleton<ViteAssetManifest>();
                         services.AddScoped<CurrentAccountContext>();
                         services.AddSingleton(capabilities);
+                        services.AddSingleton<Jularr.Web.Features.Instance.IInstanceModuleService>(new Jularr.Web.Features.Instance.InstanceModuleStore(data.FullName));
                         services.AddScoped<IMediaCapabilityService, MediaCapabilityService>();
                         services.AddScoped<IAppShellService, AppShellService>();
                         services.AddSingleton(settings);

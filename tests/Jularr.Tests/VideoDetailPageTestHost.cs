@@ -258,6 +258,26 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
         return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
+    /// <summary>Sends a body exactly as given, with the content type and headers a browser or a client chose.</summary>
+    public async Task<HttpStatusCode> SendRawAsync(HttpMethod method, string path, string body, string contentType, IReadOnlyDictionary<string, string>? headers = null, bool asOwner = false)
+    {
+        using var client = server.CreateClient();
+        if (asOwner)
+        {
+            client.DefaultRequestHeaders.Add(OwnerHeader, "true");
+        }
+
+        using var request = new HttpRequestMessage(method, path) { Content = new StringContent(body) };
+        request.Content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+        foreach (var (name, value) in headers ?? new Dictionary<string, string>())
+        {
+            request.Headers.Add(name, value);
+        }
+
+        using var response = await client.SendAsync(request);
+        return response.StatusCode;
+    }
+
     /// <summary>Posts a form to a page handler as the signed-in profile (or the owner) without following the redirect; antiforgery is not part of what these tests cover.</summary>
     public async Task<(HttpStatusCode Status, string? Location, IReadOnlyList<string> Cookies)> PostFormAsync(string path, IReadOnlyDictionary<string, string> fields, bool asOwner = false, string? profile = null)
     {

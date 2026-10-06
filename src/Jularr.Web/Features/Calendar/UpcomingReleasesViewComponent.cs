@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Localization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,7 +23,8 @@ public sealed record UpcomingReleasesModel(
 /// </summary>
 public sealed class UpcomingReleasesViewComponent(
     ReleaseCalendarService calendar,
-    TimeProvider clock) : ViewComponent
+    TimeProvider clock,
+    IInstanceModuleService modules) : ViewComponent
 {
     public const int Limit = 3;
 
@@ -40,7 +42,7 @@ public sealed class UpcomingReleasesViewComponent(
             "/Pages/Calendar/_UpcomingReleases.cshtml",
             new UpcomingReleasesModel(
                 events,
-                new ReleaseCalendarPresenter(ui, zone, now),
+                new ReleaseCalendarPresenter(ui, zone, now, await modules.IsEnabledAsync(InstanceModule.Playback, HttpContext.RequestAborted)),
                 ui,
                 "/Calendar?type=" + ReleaseCalendarPresenter.FilterValue(mediaType)));
     }

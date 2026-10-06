@@ -27,7 +27,7 @@ public abstract class VideoDetailPageModel(
     PlaybackIntentService intents,
     ConsumerAcquisitionQuery acquisition) : PageModel
 {
-    private static readonly HashSet<string> PlayingWords = new(["acquisition.state.readyToWatch", "acquisition.instant.stopWaiting", "acquisition.instant.stopped", "acquisition.instant.stoppedHint"], StringComparer.Ordinal);
+    private static readonly HashSet<string> PlayingWords = new(["acquisition.state.readyToWatch", "acquisition.instant.milestone.preparing", "acquisition.instant.stopWaiting", "acquisition.instant.stopped", "acquisition.instant.stoppedHint"], StringComparer.Ordinal);
 
     private InstantPlayPolicy? policy;
 
@@ -137,7 +137,7 @@ public abstract class VideoDetailPageModel(
         ActionEpisode = PrimaryAction.WorkEpisodeId is { } episodeId ? detail.Episodes.FirstOrDefault(x => x.Id == episodeId) : null;
         PlayHref = PrimaryAction.TargetIsLocal && PrimaryAction.Kind is not (PrimaryActionKind.Available or PrimaryActionKind.None) ? VideoDetailView.WatchHref(PrimaryAction.WorkId, PrimaryAction.WorkEpisodeId) : null;
         OffersRequest = policy.AllowsRequest && detail.Request is { Open: null } && (PrimaryAction.Kind == PrimaryActionKind.Request || VideoDetailView.RequestableEpisodes(detail.Episodes).Count > 0);
-        if (detail.Request?.Open is { } open && (policy.AllowsRequest || open.RequestedByProfileId == account.ProfileId || account.Can(JularrPolicies.AdminMedia)))
+        if (detail.Request?.Open is { } open && ConsumerAcquisitionQuery.MayRead(open, account.ProfileId, policy.CanRequest, account.Can(JularrPolicies.AdminMedia)))
         {
             // A local target has no state of its own to show, so the request as a whole is projected: it still says whether monitoring continues.
             RequestState = await acquisition.ProjectAsync(open, PrimaryAction.TargetIsLocal ? null : PrimaryAction.WorkEpisodeId, policy.PlaybackEnabled, cancellationToken);

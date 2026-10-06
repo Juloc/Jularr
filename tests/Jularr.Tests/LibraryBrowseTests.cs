@@ -70,6 +70,17 @@ public sealed class LibraryBrowseTests
         int? percent = null) =>
         new(state, MediaBannerUnit.Episode, next, "/Library/Episode/" + next, null, season, percent);
 
+    private static LibraryCardView Card(LibraryCardEntry entry, LibraryLanguagePreference preference, UiTextBundle ui) => LibraryCardView.Create(entry, preference, ui, playbackEnabled: true);
+
+    [TestMethod]
+    public void ACardOffersNoPlayActionWithoutPlayback()
+    {
+        var anime = Entry("Anime", progress: Progress(MediaBannerProgressState.NotStarted));
+
+        Assert.IsNotNull(LibraryCardView.Create(anime, LibraryLanguagePreference.None, Ui, playbackEnabled: true).Action);
+        Assert.IsNull(LibraryCardView.Create(anime, LibraryLanguagePreference.None, Ui, playbackEnabled: false).Action);
+    }
+
     [TestMethod]
     public void TheMediaTypeScopeRoundTripsThroughTheAddressAndIsNotAFilter()
     {
@@ -109,13 +120,13 @@ public sealed class LibraryBrowseTests
         var done = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, progress: Progress(MediaBannerProgressState.Completed, percent: 100));
         var unknownRuntime = Entry("Moon", year: 2024, mediaType: WorkMediaType.Movie, runtimeMinutes: 45);
 
-        Assert.AreEqual("2024 · 2h 04m", LibraryCardView.Create(plain, LibraryLanguagePreference.None, Ui).StatusText);
-        Assert.AreEqual("48 min left", LibraryCardView.Create(resumed, LibraryLanguagePreference.None, Ui).StatusText);
-        Assert.AreEqual(61, LibraryCardView.Create(resumed, LibraryLanguagePreference.None, Ui).ProgressPercent);
-        Assert.AreEqual("Completed", LibraryCardView.Create(done, LibraryLanguagePreference.None, Ui).StatusText);
-        Assert.AreEqual("2024 · 45m", LibraryCardView.Create(unknownRuntime, LibraryLanguagePreference.None, Ui).StatusText);
-        Assert.IsNull(LibraryCardView.Create(resumed, LibraryLanguagePreference.None, Ui).Action, "Movies play from their detail page.");
-        Assert.IsNotNull(LibraryCardView.Create(Entry("Anime", progress: Progress(MediaBannerProgressState.NotStarted)), LibraryLanguagePreference.None, Ui).Action);
+        Assert.AreEqual("2024 · 2h 04m", Card(plain, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual("48 min left", Card(resumed, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual(61, Card(resumed, LibraryLanguagePreference.None, Ui).ProgressPercent);
+        Assert.AreEqual("Completed", Card(done, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.AreEqual("2024 · 45m", Card(unknownRuntime, LibraryLanguagePreference.None, Ui).StatusText);
+        Assert.IsNull(Card(resumed, LibraryLanguagePreference.None, Ui).Action, "Movies play from their detail page.");
+        Assert.IsNotNull(Card(Entry("Anime", progress: Progress(MediaBannerProgressState.NotStarted)), LibraryLanguagePreference.None, Ui).Action);
     }
 
     [TestMethod]
@@ -127,10 +138,10 @@ public sealed class LibraryBrowseTests
         Assert.AreEqual($"/Library/Series/{id}", LibraryBrowse.DetailHref(WorkMediaType.Series, id));
         Assert.AreEqual($"/Library/Movie/{id}", LibraryBrowse.DetailHref(WorkMediaType.Movie, id));
 
-        var movie = LibraryCardView.Create(Entry("Moon", mediaType: WorkMediaType.Movie), LibraryLanguagePreference.None, Ui);
+        var movie = Card(Entry("Moon", mediaType: WorkMediaType.Movie), LibraryLanguagePreference.None, Ui);
         Assert.AreEqual(LibraryBrowse.DetailHref(WorkMediaType.Movie, TitleId("Moon")), movie.Href);
         Assert.IsNull(movie.Action, "Movies and Series play from their detail page, not from the card.");
-        Assert.AreEqual(LibraryBrowse.DetailHref(WorkMediaType.Anime, TitleId("Akatsuki")), LibraryCardView.Create(Entry("Akatsuki"), LibraryLanguagePreference.None, Ui).Href);
+        Assert.AreEqual(LibraryBrowse.DetailHref(WorkMediaType.Anime, TitleId("Akatsuki")), Card(Entry("Akatsuki"), LibraryLanguagePreference.None, Ui).Href);
     }
 
     [TestMethod]
@@ -200,7 +211,7 @@ public sealed class LibraryBrowseTests
     [TestMethod]
     public void APartialTitleShowsHowManyUnitsAreAvailableAndNoOtherWording()
     {
-        var card = LibraryCardView.Create(Entry("Attack on Titan", playable: 18, missing: 6), LibraryLanguagePreference.None, Ui);
+        var card = Card(Entry("Attack on Titan", playable: 18, missing: 6), LibraryLanguagePreference.None, Ui);
 
         Assert.AreEqual("18 / 24 available", card.Availability?.Label);
         Assert.AreEqual(LibraryAvailabilityState.Partial, card.Availability?.State);
@@ -384,11 +395,11 @@ public sealed class LibraryBrowseTests
     [TestMethod]
     public void InProgressCardNamesTheNextEpisodeAndOffersToContinue()
     {
-        var single = LibraryCardView.Create(
+        var single = Card(
             Entry("Solo", progress: Progress(MediaBannerProgressState.InProgress, 8, percent: 72)),
             LibraryLanguagePreference.None,
             Ui);
-        var multi = LibraryCardView.Create(
+        var multi = Card(
             Entry("Multi", progress: Progress(MediaBannerProgressState.InProgress, 3, season: 2, percent: 10)),
             LibraryLanguagePreference.None,
             Ui);
@@ -405,11 +416,11 @@ public sealed class LibraryBrowseTests
     [TestMethod]
     public void NotStartedCompletedAndUnplayableCardsSayOnlyWhatIsUseful()
     {
-        var fresh = LibraryCardView.Create(
+        var fresh = Card(
             Entry("Fresh", progress: Progress(MediaBannerProgressState.NotStarted)), LibraryLanguagePreference.None, Ui);
-        var done = LibraryCardView.Create(
+        var done = Card(
             Entry("Done", progress: Progress(MediaBannerProgressState.Completed, 1, percent: 100)), LibraryLanguagePreference.None, Ui);
-        var empty = LibraryCardView.Create(
+        var empty = Card(
             Entry("Empty", year: 2019, playable: 0, progress: null), LibraryLanguagePreference.None, Ui);
 
         Assert.AreEqual("Not started", fresh.StatusText);
@@ -427,10 +438,10 @@ public sealed class LibraryBrowseTests
     public void LanguageLineShowsThePreferredLanguageFirstAndFallsBackToWhatExists()
     {
         var preference = LibraryLanguagePreference.From("de", "de");
-        var hasGerman = LibraryCardView.Create(
+        var hasGerman = Card(
             Entry("A", audio: ["ja", "en", "de", "fr", "es"], subtitles: ["en", "de"]), preference, Ui);
-        var fallback = LibraryCardView.Create(Entry("B", audio: ["ja"], subtitles: ["en"]), preference, Ui);
-        var none = LibraryCardView.Create(Entry("C"), preference, Ui);
+        var fallback = Card(Entry("B", audio: ["ja"], subtitles: ["en"]), preference, Ui);
+        var none = Card(Entry("C"), preference, Ui);
 
         Assert.AreEqual("DE", hasGerman.Audio.Shown[0].Code);
         Assert.IsTrue(hasGerman.Audio.Shown[0].IsPreferred);
@@ -450,7 +461,7 @@ public sealed class LibraryBrowseTests
     [TestMethod]
     public void RequestedCardNamesTheStageOfTheRequest()
     {
-        var card = LibraryCardView.Create(
+        var card = Card(
             Entry("R", playable: 0, request: AcquisitionRequestStatus.Downloading), LibraryLanguagePreference.None, Ui);
 
         Assert.AreEqual(LibraryAvailabilityState.Requested, card.Availability?.State);

@@ -392,7 +392,7 @@ public sealed class ReleaseCalendarTests
     [TestMethod]
     public void PresenterShowsDatesAtTheirPrecision()
     {
-        var presenter = new ReleaseCalendarPresenter(UiTextBundle.English, Utc, Now);
+        var presenter = new ReleaseCalendarPresenter(UiTextBundle.English, Utc, Now, playbackEnabled: true);
 
         Assert.AreEqual("October 2026", presenter.DateLabel(ReleaseDate.FromMonth(2026, 10)));
         Assert.AreEqual("Q4 2026", presenter.DateLabel(ReleaseDate.FromQuarter(2026, 4)));
@@ -405,9 +405,33 @@ public sealed class ReleaseCalendarTests
     }
 
     [TestMethod]
+    public void AnAvailableEpisodeOpensThePlayerOnlyWhereThereIsOne()
+    {
+        var available = Event(ReleaseMediaType.Anime, ReleaseDate.FromInstant(Now.AddDays(-1)), new ReleaseLocalStatus(true, true, ReleaseLocalState.Available)) with { UnitId = Guid.NewGuid() };
+
+        var playing = new ReleaseCalendarPresenter(UiTextBundle.English, Utc, Now, playbackEnabled: true);
+        var managerOnly = new ReleaseCalendarPresenter(UiTextBundle.English, Utc, Now, playbackEnabled: false);
+
+        StringAssert.StartsWith(playing.Href(available), "/Library/Episode/");
+        Assert.AreEqual($"/Library/Anime/{available.MediaId}", managerOnly.Href(available), "Without Playback the title page is the destination, never the player.");
+    }
+
+    [TestMethod]
+    [DataRow(ReleaseLocalState.Wanted, "Looking for media")]
+    [DataRow(ReleaseLocalState.Searching, "Looking for media")]
+    [DataRow(ReleaseLocalState.Grabbed, "Getting media")]
+    [DataRow(ReleaseLocalState.Failed, "Needs attention")]
+    public void TheCalendarNamesAcquisitionInConsumerWords(ReleaseLocalState state, string expected)
+    {
+        var presenter = new ReleaseCalendarPresenter(UiTextBundle.English, Utc, Now, playbackEnabled: true);
+
+        Assert.AreEqual(expected, presenter.State(new ReleaseLocalStatus(true, true, state)).Label);
+    }
+
+    [TestMethod]
     public void PresenterLabelsUnitsAndKinds()
     {
-        var presenter = new ReleaseCalendarPresenter(UiTextBundle.English, Utc, Now);
+        var presenter = new ReleaseCalendarPresenter(UiTextBundle.English, Utc, Now, playbackEnabled: true);
         ReleaseEvent With(ReleaseKind kind, ReleaseUnit? unit) =>
             Event(ReleaseMediaType.Anime, ReleaseDate.Unknown) with { Kind = kind, Unit = unit };
 

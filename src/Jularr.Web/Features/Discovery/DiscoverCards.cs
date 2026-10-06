@@ -47,7 +47,15 @@ public sealed record DiscoverLocalFacts(
     IReadOnlyList<string> Audio,
     IReadOnlyList<string> Subtitles,
     string? PlayUrl,
-    string? PlayLabel);
+    string? PlayLabel)
+{
+    /// <param name="playbackEnabled">The play link opens the player, so an instance without Playback has none (docs/mockups/instant-play, section 11).</param>
+    public static DiscoverLocalFacts From(MediaBannerCardData card, UiTextBundle ui, bool playbackEnabled)
+    {
+        var action = playbackEnabled ? MediaBannerCardModel.Create(card, ui).Action : null;
+        return new DiscoverLocalFacts(card.AudioLanguages ?? [], card.SubtitleLanguages ?? [], action?.Url, action?.Label);
+    }
+}
 
 /// <summary>One title of a Discover shelf or result grid: what the card shows and what its preview offers.</summary>
 public sealed record DiscoverCardView(

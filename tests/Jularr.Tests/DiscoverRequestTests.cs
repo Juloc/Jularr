@@ -525,6 +525,7 @@ public sealed class DiscoverRequestTests
                 null!,
                 null!,
                 null!,
+                null!,
                 NullLogger<DiscoverIndexModel>.Instance);
             var httpContext = new DefaultHttpContext
             {

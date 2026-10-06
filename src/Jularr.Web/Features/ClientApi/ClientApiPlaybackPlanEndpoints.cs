@@ -18,6 +18,7 @@ public sealed record ClientVideoTarget(
     Guid WorkId,
     Guid? WorkEpisodeId)
 {
+    [JsonIgnore]
     public bool IsValid => WorkId != Guid.Empty && (WorkEpisodeId is null || WorkEpisodeId != Guid.Empty);
 }
 

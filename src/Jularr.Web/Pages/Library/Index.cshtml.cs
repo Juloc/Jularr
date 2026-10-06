@@ -18,7 +18,7 @@ public sealed class IndexModel(
     CollectionService collections,
     IAppShellService appShell,
     ILogger<IndexModel> logger,
-    IInstanceModuleService? instanceModules = null) : PageModel
+    IInstanceModuleService instanceModules) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -120,9 +120,8 @@ public sealed class IndexModel(
         LibraryTotal = read.Entries.Count;
         Total = scoped.Count;
         Facets = LibraryBrowse.Facets([.. scoped], Preference);
-        // The play action of a card opens the player; an instance without Playback has none (docs/mockups/instant-play, section 11).
-        var playbackEnabled = instanceModules is null || await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken);
-        Cards = [.. shown.Select(entry => LibraryCardView.Create(entry, Preference, Ui)).Select(card => playbackEnabled ? card : card with { Action = null })];
+        var playbackEnabled = await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken);
+        Cards = [.. shown.Select(entry => LibraryCardView.Create(entry, Preference, Ui, playbackEnabled))];
         Degraded = degraded;
         State = LibraryBrowse.ResolveState(false, degraded, Total, Cards.Count);
     }

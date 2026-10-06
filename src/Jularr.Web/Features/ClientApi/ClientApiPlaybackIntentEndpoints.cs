@@ -20,7 +20,7 @@ public sealed record ClientRequestStatusResponse(Guid RequestId, ClientVideoTarg
 /// <summary>
 /// Reads the bounded body of a playback intent before anything else touches it: a body is a pair of ids, so more than
 /// <see cref="ClientApiPlaybackIntentEndpoints.MaxBodyBytes"/> bytes is refused with 413 without being parsed. The parsed request is handed
-/// to the access filter and the handler through <see cref="HttpContext.Items"/>.
+/// to the access filter and the handler through <see cref="HttpContext.Items"/>. The body must be <c>application/json</c> and must not come from another site.
 /// </summary>
 public sealed class ClientPlaybackIntentBodyFilter : IEndpointFilter
 {
@@ -31,6 +31,19 @@ public sealed class ClientPlaybackIntentBodyFilter : IEndpointFilter
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var http = context.HttpContext;
+
+        // A browser sends a cross-origin text/plain or form POST without a preflight, so only a JSON body counts, and a request that the
+        // browser itself says came from another site is refused. Native clients send neither Sec-Fetch header.
+        if (!http.Request.HasJsonContentType())
+        {
+            return Results.Json(new ClientErrorResponse("unsupported_media_type", "A playback intent is application/json."), statusCode: StatusCodes.Status415UnsupportedMediaType);
+        }
+
+        if (http.Request.Headers["Sec-Fetch-Site"] is { Count: > 0 } site && site[0] is not ("same-origin" or "none"))
+        {
+            return Results.Json(new ClientErrorResponse("cross_site_intent", "A playback intent is sent from this application only."), statusCode: StatusCodes.Status403Forbidden);
+        }
+
         var buffer = new byte[ClientApiPlaybackIntentEndpoints.MaxBodyBytes + 1];
         var length = 0;
         while (length < buffer.Length)
@@ -119,8 +132,9 @@ public static class ClientApiPlaybackIntentEndpoints
             }
 
             // One open request per title is shared state, so what a profile that may request this media type reads is exactly what the
-            // detail page already shows it; nothing of the requester is part of the projection.
-            if (read.Request.RequestedByProfileId != account.ProfileId && !account.Can(JularrPolicies.AdminMedia) && !(await requestService.GetCapabilitiesAsync(read.Request.Kind, cancellationToken)).CanRequest)
+            // detail page shows it; nothing of the requester is part of the projection.
+            var canRequest = (await requestService.GetCapabilitiesAsync(read.Request.Kind, cancellationToken)).CanRequest;
+            if (!ConsumerAcquisitionQuery.MayRead(read.Request, account.ProfileId, canRequest, account.Can(JularrPolicies.AdminMedia)))
             {
                 return NotFound();
             }

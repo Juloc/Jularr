@@ -178,6 +178,26 @@ public sealed class LocalFirstPageGetTests
     }
 
     [TestMethod]
+    public async Task HomeOfAManagerOnlyInstanceLinksNothingIntoThePlayer()
+    {
+        await using var fixture = await LocalFirstFixture.CreateAsync();
+        var modules = new Jularr.Web.Features.Instance.InstanceModuleStore(fixture.Root);
+        await fixture.AddAnimeAsync("Local Anime", episodes: 2);
+        var playing = fixture.Attach(fixture.HomePage(modules));
+        await playing.OnGetAsync(CancellationToken.None);
+        StringAssert.StartsWith(playing.EpisodeHref(playing.RecentEpisodes[0]), "/Library/Episode/");
+
+        await modules.SetAsync(Jularr.Web.Features.Instance.InstanceModule.Playback, false);
+        var managerOnly = fixture.Attach(fixture.HomePage(modules));
+        await managerOnly.OnGetAsync(CancellationToken.None);
+
+        Assert.AreEqual(2, managerOnly.RecentEpisodes.Count);
+        Assert.IsFalse(managerOnly.RecentEpisodes.Any(episode => managerOnly.EpisodeHref(episode).Contains("/Library/Episode/", StringComparison.Ordinal)));
+        Assert.IsEmpty(managerOnly.ContinueWatching);
+        Assert.IsEmpty(managerOnly.PlaybackHistory);
+    }
+
+    [TestMethod]
     public async Task DiscoverMangaImportGetRendersWithoutExternalCallsAsync()
     {
         await using var fixture = await LocalFirstFixture.CreateAsync();
@@ -407,7 +427,7 @@ public sealed class LocalFirstPageGetTests
                 NullLogger<FranchiseService>.Instance);
 
         /// <summary>Home with the real local recommendation service; its relation source is guarded.</summary>
-        public Jularr.Web.Pages.IndexModel HomePage()
+        public Jularr.Web.Pages.IndexModel HomePage(Jularr.Web.Features.Instance.IInstanceModuleService? modules = null)
         {
             var animeProvider = new AniListMetadataProvider(
                 Guard.CreateClient(),
@@ -431,7 +451,7 @@ public sealed class LocalFirstPageGetTests
                 new Jularr.Web.Features.Shell.AppShellService(
                     new MediaCapabilityService(new MediaCapabilityStore(root))));
 
-            return new Jularr.Web.Pages.IndexModel(Db, OwnerAccount, EpisodeFlowFixture.ProgressService(Db, OwnerAccount), recommendations);
+            return new Jularr.Web.Pages.IndexModel(Db, OwnerAccount, EpisodeFlowFixture.ProgressService(Db, OwnerAccount), recommendations, modules);
         }
 
         public LibraryIndexModel LibraryPage() => new(
@@ -448,7 +468,8 @@ public sealed class LocalFirstPageGetTests
                     new MediaCapabilityService(new MediaCapabilityStore(root)))),
             new Jularr.Web.Features.Shell.AppShellService(
                 new MediaCapabilityService(new MediaCapabilityStore(root))),
-            NullLogger<LibraryIndexModel>.Instance);
+            NullLogger<LibraryIndexModel>.Instance,
+            new Jularr.Web.Features.Instance.InstanceModuleStore(root));
 
         public DiscoverIndexModel DiscoverPage()
         {
@@ -541,6 +562,7 @@ public sealed class LocalFirstPageGetTests
                 watchlistStore,
                 franchiseService,
                 recommendations,
+                new Jularr.Web.Features.Instance.InstanceModuleStore(root),
                 NullLogger<DiscoverIndexModel>.Instance);
         }
 

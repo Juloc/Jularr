@@ -59,6 +59,43 @@ public sealed class InstantPlayApiTests
     }
 
     [TestMethod]
+    public async Task OnlyAJsonIntentFromThisApplicationIsAccepted()
+    {
+        await using var host = await ReadyHostAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", "603");
+        var body = JsonSerializer.Serialize(Target(movie.Id));
+
+        var simple = await host.SendRawAsync(HttpMethod.Post, Intents, body, "text/plain", asOwner: true);
+        var form = await host.SendRawAsync(HttpMethod.Post, Intents, "target=1", "application/x-www-form-urlencoded", asOwner: true);
+        var crossSite = await host.SendRawAsync(HttpMethod.Post, Intents, body, "application/json", new Dictionary<string, string> { ["Sec-Fetch-Site"] = "cross-site" }, asOwner: true);
+        var sameSite = await host.SendRawAsync(HttpMethod.Post, Intents, body, "application/json", new Dictionary<string, string> { ["Sec-Fetch-Site"] = "same-site" }, asOwner: true);
+        Assert.IsEmpty(await new AcquisitionAccessStore(host.Db).ListAllAsync(10, CancellationToken.None), "Nothing is acquired for a request that was refused.");
+
+        Assert.AreEqual(HttpStatusCode.UnsupportedMediaType, simple, "text/plain needs no preflight, so it is not an intent.");
+        Assert.AreEqual(HttpStatusCode.UnsupportedMediaType, form);
+        Assert.AreEqual(HttpStatusCode.Forbidden, crossSite);
+        Assert.AreEqual(HttpStatusCode.Forbidden, sameSite, "Another origin of the same site is still another origin.");
+        foreach (var origin in new[] { "same-origin", "none" })
+        {
+            var accepted = await host.SendRawAsync(HttpMethod.Post, Intents, body, "application/json; charset=utf-8", new Dictionary<string, string> { ["Sec-Fetch-Site"] = origin }, asOwner: true);
+            Assert.AreEqual(HttpStatusCode.OK, accepted, origin);
+        }
+
+        Assert.AreEqual(HttpStatusCode.OK, await host.SendRawAsync(HttpMethod.Post, Intents, body, "application/json", asOwner: true), "A native client sends no Sec-Fetch header.");
+    }
+
+    [TestMethod]
+    public async Task TheStatusSentToAClientCarriesNoValidityFlag()
+    {
+        await using var host = await ReadyHostAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", "603");
+
+        var (_, body) = await host.SendAsync(HttpMethod.Post, Intents, Target(movie.Id), asOwner: true);
+
+        Assert.IsFalse(Json(body).GetProperty("target").TryGetProperty("isValid", out _));
+    }
+
+    [TestMethod]
     public async Task AHiddenMediaTypeHasNoIntentSurfaceAndBrowseOnlyCannotAcquire()
     {
         await using var host = await ReadyHostAsync();
