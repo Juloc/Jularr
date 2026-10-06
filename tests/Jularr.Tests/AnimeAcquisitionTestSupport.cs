@@ -620,7 +620,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
                     sonarrStore,
                     new SonarrArtworkImportService(db, new NoHttpClientFactory(), NullLogger<SonarrArtworkImportService>.Instance),
                     NullLogger<SonarrArtworkSyncService>.Instance),
-                NullLogger<LibraryScanner>.Instance;
+                NullLogger<LibraryScanner>.Instance);
         });
 
         return collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
