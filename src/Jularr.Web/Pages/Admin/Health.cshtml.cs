@@ -5,6 +5,7 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Health;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Playback.Transcoding;
+using Jularr.Web.Features.Vocabulary;
 using Jularr.Web.Infrastructure.Ai;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +24,8 @@ public sealed class HealthModel(
     SystemHealthService health,
     GitHubReleaseCheckService updateCheck,
     CodexCliProvider codex,
-    PlaybackHardwareService hardware) : PageModel
+    PlaybackHardwareService hardware,
+    IJapaneseMorphology japaneseMorphology) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -31,6 +33,8 @@ public sealed class HealthModel(
 
     public AiProviderStatus AiStatus { get; private set; } =
         new("codex-cli", "OpenAI Codex CLI", false, false, null, null, null);
+
+    public JapaneseMorphologyStatus JapaneseAnalysis { get; private set; } = JapaneseMorphologyStatus.Ready;
 
     public UpdateStatus? Update { get; private set; }
 
@@ -87,6 +91,7 @@ public sealed class HealthModel(
     {
         Snapshot = await health.GetAsync(cancellationToken);
         AiStatus = await codex.GetStatusAsync(cancellationToken);
+        JapaneseAnalysis = japaneseMorphology.Status;
         Update = updateCheck.GetCached();
         HardwareCapabilities = hardware.Detected;
         HardwareDetectionError = hardware.DetectionError;

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Vocabulary;
 using Microsoft.AspNetCore.Antiforgery;
 
 namespace Jularr.Web.Features.Learning.LanguageAssistance;
@@ -73,6 +74,10 @@ public static class LanguageInspectorEndpoints
         catch (LanguageAssistanceDeniedException exception)
         {
             return Error(StatusCodes.Status403Forbidden, exception.Message);
+        }
+        catch (JapaneseAnalysisUnavailableException exception)
+        {
+            return Error(StatusCodes.Status503ServiceUnavailable, exception.Message);
         }
         catch (KeyNotFoundException exception)
         {

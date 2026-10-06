@@ -126,7 +126,8 @@ public sealed class PlaybackCueProjector(IJapaneseMorphology morphology)
         long cueId = 0)
     {
         var normalized = text.Normalize(NormalizationForm.FormKC);
-        var analyzed = morphology.Analyze(normalized);
+        // Without a Japanese dictionary the cue is still playable; it just carries no word tokens.
+        var analyzed = morphology.Status.IsAvailable ? morphology.Analyze(normalized) : [];
 
         if (analyzed.Count == 0)
         {

@@ -328,6 +328,8 @@ SQLite now uses an EF Core migration baseline. Existing epoch-2 pre-release data
 
 Japanese lexical data is derived from the JMdict project maintained by the Electronic Dictionary Research and Development Group (EDRDG), via the jmdict-simplified JSON distribution. Jularr pins the dictionary snapshot used for each image build and verifies the downloaded archives by SHA-256.
 
+Japanese word analysis uses the MeCab NAIST-jdic dictionary the image installs under `/var/lib/mecab/dic/open-jtalk/naist-jdic`. Outside the image, point `JapaneseMorphology:DictionaryPath` (environment variable `JapaneseMorphology__DictionaryPath`) at a NAIST-jdic directory. Without a loadable dictionary only Japanese analysis is off: the cause is logged and **Admin > Health** shows it.
+
 - JMdict project: https://www.edrdg.org/jmdict/j_jmdict.html
 - jmdict-simplified: https://github.com/scriptin/jmdict-simplified
 - JMdict data license/conditions: https://www.edrdg.org/edrdg/licence.html

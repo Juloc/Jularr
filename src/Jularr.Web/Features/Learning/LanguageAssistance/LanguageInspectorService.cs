@@ -43,6 +43,11 @@ public sealed class LanguageInspectorService(
                 "Language tools are off for this content.");
         }
 
+        if (!analyzer.CanAnalyze(source.Language))
+        {
+            throw new JapaneseAnalysisUnavailableException("Japanese text analysis is not available on this server.");
+        }
+
         var analyzed = analyzer.Analyze(text, source.Language);
         var states = availability.Vocabulary
             ? await LoadStatesAsync(source.Language, analyzed, cancellationToken)

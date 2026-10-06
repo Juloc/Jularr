@@ -375,6 +375,7 @@ builder.Services.AddScoped<SubtitleLanguageProfileService>();
 builder.Services.AddScoped<SubtitleCompletenessService>();
 builder.Services.AddSubtitleProviders();
 builder.Services.AddScoped<VocabularyService>();
+builder.Services.Configure<JapaneseMorphologyOptions>(builder.Configuration.GetSection(JapaneseMorphologyOptions.SectionName));
 builder.Services.AddSingleton<IJapaneseMorphology, MeCabJapaneseMorphology>();
 builder.Services.AddSingleton<JapaneseTermExtractor>();
 builder.Services.AddSingleton<JapaneseDictionary>();
