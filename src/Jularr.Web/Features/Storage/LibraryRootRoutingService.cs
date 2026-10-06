@@ -11,7 +11,10 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
     /// The content types whose importers already resolve their destination through this service. Types not listed here
     /// still read their legacy per-media library folder until their importer is migrated.
     /// </summary>
-    public static readonly LibraryContentType[] ImporterRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv];
+    public static readonly LibraryContentType[] ImporterRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music];
+
+    /// <summary>The video types: a root serving Anime cannot also serve them, because the Anime scanner would read their folders as anime.</summary>
+    private static readonly LibraryContentType[] VideoRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv];
 
     /// <summary>Why an importer cannot place media: no enabled default LibraryRoot is configured for the content type.</summary>
     public static string MissingDefaultMessage(LibraryContentType contentType) =>
@@ -127,7 +130,7 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             throw new InvalidOperationException("A disabled LibraryRoot cannot be the default destination.");
         }
 
-        if (ImporterRoutedTypes.Contains(contentType))
+        if (VideoRoutedTypes.Contains(contentType))
         {
             await EnsureNoAnimeConflictAsync(root, cancellationToken);
         }
@@ -156,7 +159,7 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
     {
         if (contentType == LibraryContentType.Anime)
         {
-            if (await db.LibraryRootContentAssignments.AsNoTracking().AnyAsync(row => row.LibraryRootId == root.Id && ImporterRoutedTypes.Contains(row.ContentType), cancellationToken))
+            if (await db.LibraryRootContentAssignments.AsNoTracking().AnyAsync(row => row.LibraryRootId == root.Id && VideoRoutedTypes.Contains(row.ContentType), cancellationToken))
             {
                 throw new LibraryRootConflictException($"LibraryRoot '{root.Name}' is a Movie or TV destination and cannot also serve Anime.");
             }
@@ -164,7 +167,7 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             return;
         }
 
-        if (ImporterRoutedTypes.Contains(contentType))
+        if (VideoRoutedTypes.Contains(contentType))
         {
             await EnsureNoAnimeConflictAsync(root, cancellationToken);
         }

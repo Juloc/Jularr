@@ -133,6 +133,7 @@ public static class UiNavigationCatalog
         ]),
         new("nav.group.adminMedia",
         [
+            new("admin-music", "admin.nav.music", "/Admin/Music", "library", Policy: JularrPolicies.AdminMedia, Modules: [InstanceModule.Music, InstanceModule.Acquisition]),
             new("admin-usenet", "admin.nav.usenet", "/Admin/Usenet", "download", ["/Admin/Usenet", "/Settings/Indexers", "/Settings/DownloadClients"], Policy: JularrPolicies.AcquisitionSettings, Module: InstanceModule.Acquisition),
             new("admin-providers", "admin.nav.providers", "/Admin/Providers", "providers", Policy: JularrPolicies.AdminSystem),
             new("admin-anime-acquisition", "admin.nav.animeAcquisition", "/Acquisition", "library", ["/Acquisition"], Policy: JularrPolicies.AdminMedia, Modules: [InstanceModule.Anime, InstanceModule.Acquisition]),

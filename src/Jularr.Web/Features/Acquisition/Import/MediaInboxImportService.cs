@@ -30,7 +30,8 @@ public sealed class MediaInboxImportService(
         MediaAcquisitionKind.LightNovel,
         MediaAcquisitionKind.Book,
         MediaAcquisitionKind.Movie,
-        MediaAcquisitionKind.Tv
+        MediaAcquisitionKind.Tv,
+        MediaAcquisitionKind.Music
     ];
 
     /// <summary>The LibraryRoot content type whose default root receives this media type's imports, or null while its importer still reads a per-media library folder.</summary>
@@ -38,6 +39,7 @@ public sealed class MediaInboxImportService(
     {
         MediaAcquisitionKind.Movie => LibraryContentType.Movie,
         MediaAcquisitionKind.Tv => LibraryContentType.Tv,
+        MediaAcquisitionKind.Music => LibraryContentType.Music,
         _ => null
     };
 

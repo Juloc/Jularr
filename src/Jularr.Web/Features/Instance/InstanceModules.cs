@@ -304,10 +304,15 @@ public static class InstanceModuleRoutes
             [
                 "/Settings/Books"
             ],
+            [InstanceModule.Music] =
+            [
+                "/Admin/Music"
+            ],
             [InstanceModule.Acquisition] =
             [
                 "/Acquisition",
                 "/Requests",
+                "/Admin/Music",
                 "/Admin/Requests",
                 "/Admin/Wanted",
                 "/Admin/Usenet",

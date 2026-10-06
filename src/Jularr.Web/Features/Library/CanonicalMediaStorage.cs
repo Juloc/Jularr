@@ -52,6 +52,10 @@ public sealed record CanonicalVideoAttachment(
     string Path,
     string? StorageRootPath = null);
 
+public sealed record CanonicalAudioAttachment(Guid WorkId, Guid WorkTrackId, string Path);
+
+public sealed record CanonicalAudioFile(Guid MediaAssetId, Guid StoredFileId, Guid WorkTrackId, string Path);
+
 public sealed record CanonicalPlayableFile(
     Guid MediaAssetId,
     Guid StoredFileId,
@@ -69,6 +73,7 @@ public sealed record CanonicalPlayableFile(
 public sealed class CanonicalMediaStorageService(AppDbContext db)
 {
     private const string LocalVideoVersionPrefix = "video-file:";
+    private const string LocalAudioVersionPrefix = "audio-file:";
 
     public async Task<CanonicalPlayableFile> AttachVideoAsync(
         Guid workId,
@@ -266,6 +271,98 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
                 stored.Path,
                 stored.SizeBytes,
                 stored.LastWriteTimeUtc));
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return result;
+    }
+
+    /// <summary>
+    /// Records placed audio files as canonical Audio assets of album tracks: one StoredFile, one WorkVersion and one MediaAsset per file, in a
+    /// single save. Idempotent by path: recording a file again refreshes its row and keeps its asset. A file must lie inside a LibraryRoot (the
+    /// importer placed it there) and a path never serves two tracks.
+    /// </summary>
+    public async Task<IReadOnlyList<CanonicalAudioFile>> AttachAudiosAsync(IReadOnlyCollection<CanonicalAudioAttachment> requested, CancellationToken cancellationToken)
+    {
+        if (requested.Count == 0)
+        {
+            return [];
+        }
+
+        var normalized = requested.Select(item => item with { Path = System.IO.Path.GetFullPath(item.Path) }).ToArray();
+        if (normalized.GroupBy(item => item.Path, StringComparer.Ordinal).Any(group => group.Select(item => item.WorkTrackId).Distinct().Count() > 1))
+        {
+            throw new InvalidOperationException("A stored audio file cannot serve more than one track.");
+        }
+
+        var trackIds = normalized.Select(item => item.WorkTrackId).Distinct().ToArray();
+        var tracks = await db.WorkTracks.AsNoTracking().Where(track => trackIds.Contains(track.Id)).ToDictionaryAsync(track => track.Id, cancellationToken);
+        foreach (var item in normalized)
+        {
+            if (!tracks.TryGetValue(item.WorkTrackId, out var track) || track.WorkId != item.WorkId)
+            {
+                throw new InvalidOperationException("The canonical track does not belong to the album.");
+            }
+        }
+
+        var paths = normalized.Select(item => item.Path).ToArray();
+        var storedByPath = (await db.StoredFiles.Where(file => paths.Contains(file.Path)).ToListAsync(cancellationToken)).ToDictionary(file => file.Path, StringComparer.Ordinal);
+        var roots = await db.LibraryRoots.ToListAsync(cancellationToken);
+        foreach (var item in normalized)
+        {
+            var info = new FileInfo(item.Path);
+            if (!info.Exists)
+            {
+                throw new FileNotFoundException("Cannot attach a missing stored audio file.", item.Path);
+            }
+
+            var root = ResolveStorageRoot(item.Path, roots) ?? throw new InvalidOperationException("A stored audio file has to lie inside a library root.");
+            if (!storedByPath.TryGetValue(item.Path, out var stored))
+            {
+                stored = new StoredFile { LibraryRootId = root.Id, Path = item.Path };
+                db.StoredFiles.Add(stored);
+                storedByPath.Add(item.Path, stored);
+            }
+
+            stored.LibraryRootId = root.Id;
+            stored.SizeBytes = info.Length;
+            stored.LastWriteTimeUtc = info.LastWriteTimeUtc;
+        }
+
+        var workIds = normalized.Select(item => item.WorkId).Distinct().ToArray();
+        var versionKeys = storedByPath.Values.Select(file => $"{LocalAudioVersionPrefix}{file.Id:N}").ToArray();
+        var versionByKey = (await db.WorkVersions.Where(version => workIds.Contains(version.WorkId) && versionKeys.Contains(version.VersionKey)).ToListAsync(cancellationToken))
+            .ToDictionary(version => (version.WorkId, version.VersionKey));
+        foreach (var item in normalized)
+        {
+            var key = $"{LocalAudioVersionPrefix}{storedByPath[item.Path].Id:N}";
+            var track = tracks[item.WorkTrackId];
+            if (!versionByKey.ContainsKey((item.WorkId, key)))
+            {
+                var version = new WorkVersion { WorkId = item.WorkId, VersionKey = key, UnitKey = $"D{track.Disc:D2}T{track.Number:D2}", Source = "local" };
+                db.WorkVersions.Add(version);
+                versionByKey.Add((item.WorkId, key), version);
+            }
+        }
+
+        var versionIds = versionByKey.Values.Select(version => version.Id).ToArray();
+        var assetByVersion = (await db.MediaAssets.Where(asset => versionIds.Contains(asset.WorkVersionId) && asset.Kind == MediaAssetKind.Audio).ToListAsync(cancellationToken))
+            .ToDictionary(asset => asset.WorkVersionId);
+        var result = new List<CanonicalAudioFile>(normalized.Length);
+        foreach (var item in normalized)
+        {
+            var stored = storedByPath[item.Path];
+            var version = versionByKey[(item.WorkId, $"{LocalAudioVersionPrefix}{stored.Id:N}")];
+            if (!assetByVersion.TryGetValue(version.Id, out var asset))
+            {
+                asset = new MediaAsset { WorkId = item.WorkId, WorkTrackId = item.WorkTrackId, WorkVersionId = version.Id, Kind = MediaAssetKind.Audio };
+                db.MediaAssets.Add(asset);
+                assetByVersion.Add(version.Id, asset);
+            }
+
+            asset.WorkTrackId = item.WorkTrackId;
+            stored.MediaAssetId = asset.Id;
+            result.Add(new CanonicalAudioFile(asset.Id, stored.Id, item.WorkTrackId, stored.Path));
         }
 
         await db.SaveChangesAsync(cancellationToken);

@@ -577,6 +577,11 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequest
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Music.MusicWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, Jularr.Web.Features.Music.MusicWantedSource>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicMonitoringService>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicAdminQuery>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicManualSearchService>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.ICompletedDownloadImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>());
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.IMediaInboxImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>());
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Music.MusicAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.ReleaseRequestTracker>();

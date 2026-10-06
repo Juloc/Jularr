@@ -1,0 +1,182 @@
+@page "{workId:guid}"
+@model Jularr.Web.Pages.Admin.Music.AlbumModel
+@using Jularr.Web.Features.Acquisition.Search
+@using Jularr.Web.Features.Music
+@using Jularr.Web.Pages.Admin.Music
+@{
+    var ui = Model.Ui;
+    var view = Model.View!;
+    var album = view.Album;
+    ViewData["Title"] = album.Title;
+    string ReasonText(Jularr.Web.Features.Acquisition.Selection.SelectionReason reason) =>
+        reason.Kind == Jularr.Web.Features.Acquisition.Selection.SelectionReasonKind.Identity && AlbumModel.IdentityKey(reason.Code) is { } key ? ui[key] : reason.Detail;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<header class="page-header">
+    <div>
+        <h1>@album.Title</h1>
+        <p><a class="text-link" asp-page="Artist" asp-route-id="@view.Artist.Id">@view.Artist.Name</a></p>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+@if (Model.Notice is not null)
+{
+    <p class="metadata-notice" role="status">@Model.Notice</p>
+}
+@if (Model.Error is not null)
+{
+    <p class="metadata-error" role="alert">@Model.Error</p>
+}
+
+<div class="admmusic">
+    <section class="admmusic-panel" aria-label="@ui["admin.music.albums"]">
+        <dl class="admmusic-facts">
+            <div><dt>@ui["admin.music.col.state"]</dt><dd><span class="admin-tag admin-tag-@ArtistModel.StateTone(album.State)">@Model.StateLabel(album.State)</span></dd></div>
+            <div><dt>@ui["admin.music.col.type"]</dt><dd>@Model.TypeLabel(album.Type)</dd></div>
+            @if (album.Year is { } year)
+            {
+                <div><dt>@ui["admin.music.col.year"]</dt><dd>@year</dd></div>
+            }
+            <div><dt>@ui["admin.music.col.tracks"]</dt><dd>@(album.Tracks == 0 ? "—" : $"{album.TracksWithFiles}/{album.Tracks}")</dd></div>
+        </dl>
+        @if (album.RequestMessage is not null)
+        {
+            <p class="admmusic-summary">@album.RequestMessage</p>
+        }
+        <div class="admmusic-toolbar">
+            <form method="post" asp-page-handler="Monitor" asp-route-workId="@album.WorkId" class="admmusic-inline">
+                <input type="hidden" name="monitored" value="@((!album.Monitored).ToString().ToLowerInvariant())" />
+                <button class="button" type="submit" aria-pressed="@(album.Monitored ? "true" : "false")">@(album.Monitored ? ui["admin.music.monitored"] : ui["admin.music.unmonitored"])</button>
+            </form>
+            @if (album.State is not (MusicAlbumState.Available or MusicAlbumState.Downloading))
+            {
+                <form method="post" asp-page-handler="SearchNow" asp-route-workId="@album.WorkId" class="admmusic-inline">
+                    <button class="button button-primary" type="submit">@ui["admin.music.searchNow"]</button>
+                </form>
+            }
+        </div>
+    </section>
+
+    <section class="admmusic-panel" aria-labelledby="admmusic-tracks-heading">
+        <h2 id="admmusic-tracks-heading">@ui["admin.music.tracks"]</h2>
+        @if (view.Tracks.Count == 0)
+        {
+            <p class="admmusic-empty">@ui["admin.music.noTracks"]</p>
+        }
+        else
+        {
+            <div class="admmusic-table-wrap">
+                <table class="admmusic-table">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="is-numeric">@ui["admin.music.col.disc"]</th>
+                            <th scope="col" class="is-numeric">@ui["admin.music.col.number"]</th>
+                            <th scope="col">@ui["admin.music.col.trackTitle"]</th>
+                            <th scope="col">@ui["admin.music.col.file"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var track in view.Tracks)
+                        {
+                            <tr>
+                                <td class="is-numeric">@track.Disc</td>
+                                <td class="is-numeric">@track.Number</td>
+                                <td>@track.Title</td>
+                                <td>@(track.Path is null ? "—" : System.IO.Path.GetFileName(track.Path))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="admmusic-panel" id="manual-search" aria-labelledby="admmusic-manual-heading">
+        <h2 id="admmusic-manual-heading">@ui["admin.music.manualSearch"]</h2>
+        <div class="admmusic-toolbar">
+            <a class="button" asp-page="Album" asp-route-workId="@album.WorkId" asp-route-search="normal" asp-fragment="manual-search">@ui["admin.music.manual.run"]</a>
+            <a class="button button-quiet" asp-page="Album" asp-route-workId="@album.WorkId" asp-route-search="deep" asp-route-refresh="true" asp-fragment="manual-search">@ui["admin.music.manual.deep"]</a>
+            @if (Model.ManualDepth is not null)
+            {
+                <a class="button button-quiet" asp-page="Album" asp-route-workId="@album.WorkId" asp-route-search="@Model.ManualDepth.ToString()!.ToLowerInvariant()" asp-route-refresh="true" asp-fragment="manual-search">@ui["admin.music.manual.refresh"]</a>
+            }
+        </div>
+        @if (Model.Manual is { } manual)
+        {
+            <p class="admmusic-summary">@ui.Format("admin.music.manual.summary", ("raw", manual.Summary.RawResults), ("distinct", manual.Summary.DistinctCandidates))</p>
+            @foreach (var outcome in manual.Summary.Outcomes.Where(outcome => outcome.Message is not null))
+            {
+                <p class="admmusic-summary">@outcome.IndexerName: @outcome.Message</p>
+            }
+            @if (manual.WinnerReason is not null && manual.Candidates.Any(candidate => candidate.CanGrab))
+            {
+                <p class="admmusic-summary">@ui.Format("admin.music.manual.winner", ("reason", manual.WinnerReason))</p>
+            }
+            @if (manual.Candidates.Count == 0)
+            {
+                <p class="admmusic-empty">@ui["admin.music.manual.noCandidates"]</p>
+            }
+            else
+            {
+                <div class="admmusic-table-wrap">
+                    <table class="admmusic-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">@ui["admin.manualSearch.col.release"]</th>
+                                <th scope="col">@ui["admin.music.col.quality"]</th>
+                                <th scope="col" class="is-numeric">@ui["admin.manualSearch.col.score"]</th>
+                                <th scope="col" class="is-numeric">@ui["admin.manualSearch.col.size"]</th>
+                                <th scope="col" class="is-numeric">@ui["admin.manualSearch.col.age"]</th>
+                                <th scope="col">@ui["admin.manualSearch.col.match"]</th>
+                                <th scope="col"><span class="visually-hidden">@ui["admin.requests.col.actions"]</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var candidate in manual.Candidates)
+                            {
+                                var verdict = candidate.Verdict.ToString().ToLowerInvariant();
+                                <tr>
+                                    <td>
+                                        <span class="admmusic-title">@candidate.Title</span>
+                                        <span class="admmusic-sub">@string.Join(" · ", new[] { string.Join(", ", candidate.Sources.DefaultIfEmpty(candidate.Indexer ?? "—")), AlbumModel.FoundVia(candidate) }.Where(part => part.Length > 0))</span>
+                                        <ul class="admmusic-reasons">
+                                            @foreach (var reason in candidate.Reasons.Where(reason => reason.Kind != Jularr.Web.Features.Acquisition.Selection.SelectionReasonKind.Identity || reason.Code != "Matches"))
+                                            {
+                                                <li>@ReasonText(reason)</li>
+                                            }
+                                        </ul>
+                                    </td>
+                                    <td>@(candidate.Quality ?? "—")</td>
+                                    <td class="is-numeric">@(candidate.Score?.ToString() ?? "—")</td>
+                                    <td class="is-numeric">@AlbumModel.Size(candidate.SizeBytes)</td>
+                                    <td class="is-numeric">@(candidate.AgeDays is { } days ? ui.Format("admin.manualSearch.ageDays", ("days", days)) : "—")</td>
+                                    <td>
+                                        <span class="admin-tag admin-tag-@AlbumModel.VerdictTone(candidate.Verdict)">@ui["admin.manualSearch.state." + (candidate.IsTried ? "tried" : verdict)]</span>
+                                    </td>
+                                    <td class="is-actions">
+                                        @if (candidate.CanGrab)
+                                        {
+                                            <form method="post" asp-page-handler="Grab" asp-route-workId="@album.WorkId" class="admmusic-inline">
+                                                <input type="hidden" name="releaseIdentity" value="@candidate.Identity" />
+                                                <button class="button button-small" type="submit">@ui["admin.music.manual.grab"]</button>
+                                            </form>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </section>
+</div>

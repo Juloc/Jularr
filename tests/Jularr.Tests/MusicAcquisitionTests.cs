@@ -156,6 +156,102 @@ public sealed class MusicAcquisitionTests
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "After its wait, the lower quality is acceptable.");
     }
 
+    [TestMethod]
+    public async Task ManualSearchListsEveryReleaseWithItsVerdictAndHowItWasFound()
+    {
+        await using var host = await MusicHost.CreateAsync("Daft Punk - Homework (1997) [FLAC]", "Daft Punk - Discovery (2001) [FLAC]", "Daft Punk - Homework Live (1997) [FLAC]", "Daft Punk - Homework (1997) MP3 320");
+        var work = await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: false);
+
+        var result = await host.Get<MusicManualSearchService>().SearchAsync(work, refresh: true, Jularr.Web.Features.Acquisition.Search.SearchDepth.Normal, CancellationToken.None);
+
+        Assert.AreEqual(4, result!.Candidates.Count);
+        var flac = result.Candidates.Single(candidate => candidate.Title.EndsWith("(1997) [FLAC]", StringComparison.Ordinal) && !candidate.Title.Contains("Live"));
+        Assert.IsTrue(flac.CanGrab);
+        Assert.AreEqual("FLAC", flac.Quality);
+        Assert.IsTrue(flac.Provenance.Count > 0, "Every candidate keeps the query that found it.");
+        Assert.IsFalse(result.Candidates.Single(candidate => candidate.Title.Contains("Discovery")).CanGrab, "Another album is rejected.");
+        Assert.IsFalse(result.Candidates.Single(candidate => candidate.Title.Contains("Live")).CanGrab, "A live release is not the studio album.");
+        Assert.AreEqual(flac.Identity, result.Candidates.First(candidate => candidate.CanGrab).Identity, "The best release is listed before the lossy one.");
+        Assert.IsNotNull(result.WinnerReason);
+        Assert.AreEqual(0, host.Environment.Client.Grabs.Count, "Searching never grabs.");
+    }
+
+    [TestMethod]
+    public async Task ManualGrabSendsTheSelectedReleaseOnceAndRefusesWhatIsNotEligible()
+    {
+        await using var host = await MusicHost.CreateAsync("Daft Punk - Homework (1997) [FLAC]", "Daft Punk - Homework (1997) MP3 320", "Daft Punk - Discovery (2001) [FLAC]");
+        var work = await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: false);
+        var service = host.Get<MusicManualSearchService>();
+        var listed = await service.SearchAsync(work, refresh: true, Jularr.Web.Features.Acquisition.Search.SearchDepth.Normal, CancellationToken.None);
+        var mp3 = listed!.Candidates.Single(candidate => candidate.Quality == "MP3-320").Identity;
+        var wrong = listed.Candidates.Single(candidate => candidate.Title.Contains("Discovery")).Identity;
+
+        var refused = await service.GrabAsync(work, "owner", wrong, CancellationToken.None);
+        var first = await service.GrabAsync(work, "owner", mp3, CancellationToken.None);
+        var again = await service.GrabAsync(work, "owner", mp3, CancellationToken.None);
+        var unknown = await service.GrabAsync(Guid.NewGuid(), "owner", mp3, CancellationToken.None);
+
+        Assert.AreEqual(MusicGrabStatus.NotAvailable, refused.Status);
+        Assert.AreEqual(MusicGrabStatus.Submitted, first.Status, first.Message);
+        Assert.AreEqual(MusicGrabStatus.AlreadySubmitted, again.Status);
+        Assert.AreEqual(MusicGrabStatus.NotFound, unknown.Status);
+        var grab = host.Environment.Client.Grabs.Single();
+        StringAssert.Contains(grab.NzbName!, "MP3 320", "The owner's choice is grabbed, not the automatic favourite.");
+        Assert.AreEqual("music", grab.Category);
+        var request = (await host.Requests.ListAsync(MediaAcquisitionKind.Music, null, openOnly: false, 10, CancellationToken.None)).Single();
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
+        CollectionAssert.Contains((MusicRequestPayload.Of(request).TriedReleases ?? []).ToList(), mp3, "A manual grab is recorded as tried like an automatic one.");
+    }
+
+    [TestMethod]
+    public async Task SearchNowCreatesTheRequestRunsItAndNeverGrabsTwice()
+    {
+        await using var host = await MusicHost.CreateAsync("Daft Punk - Homework (1997) [FLAC]");
+        var work = await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: false);
+        var service = host.Get<MusicManualSearchService>();
+
+        var first = await service.SearchNowAsync(work, "owner", CancellationToken.None);
+        var second = await service.SearchNowAsync(work, "owner", CancellationToken.None);
+
+        Assert.IsNotNull(first);
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
+        Assert.AreEqual(1, (await host.Requests.ListAsync(MediaAcquisitionKind.Music, null, openOnly: false, 10, CancellationToken.None)).Count);
+        Assert.IsNotNull(second);
+        Assert.IsNull(await service.SearchNowAsync(Guid.NewGuid(), "owner", CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task TheAdminQueryDerivesAlbumStatesFromFilesMonitoringAndTheRequest()
+    {
+        await using var host = await MusicHost.CreateAsync();
+        var unmonitored = await host.AddAlbumAsync("rg-1", "Unmonitored", 1990, monitored: false);
+        var missing = await host.AddAlbumAsync("rg-2", "Missing", 1991, monitored: true);
+        var available = await host.AddAlbumAsync("rg-3", "Available", 1992, monitored: true);
+        var requested = await host.AddAlbumAsync("rg-4", "Requested", 1993, monitored: true);
+        var failed = await host.AddAlbumAsync("rg-5", "Failed", 1994, monitored: true);
+        var partial = await host.AddAlbumAsync("rg-6", "Partial", 1995, monitored: true);
+        await host.AttachAudioAsync(available, 1);
+        await host.AttachAudioAsync(partial, 1);
+        host.Environment.Db.WorkTracks.Add(new WorkTrack { WorkId = partial, Number = 2, Title = "Second" });
+        await host.Environment.Db.SaveChangesAsync();
+        await host.Requests.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Music, "musicbrainz", "rg-4", "Requested", "Daft Punk", null), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
+        var failure = await host.Requests.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Music, "musicbrainz", "rg-5", "Failed", "Daft Punk", null), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
+        await host.Requests.UpdateStatusAsync(failure.Id, AcquisitionRequestStatus.Failed, "Gave up.", null, null, null, CancellationToken.None);
+
+        var artistId = (await host.Environment.Db.MusicArtists.SingleAsync()).Id;
+        var view = await host.Get<MusicAdminQuery>().GetArtistAsync(artistId, CancellationToken.None);
+        var states = view!.Albums.ToDictionary(album => album.WorkId, album => album.State);
+        var artists = await host.Get<MusicAdminQuery>().ListArtistsAsync(CancellationToken.None);
+
+        Assert.AreEqual(MusicAlbumState.Unmonitored, states[unmonitored]);
+        Assert.AreEqual(MusicAlbumState.Missing, states[missing]);
+        Assert.AreEqual(MusicAlbumState.Available, states[available]);
+        Assert.AreEqual(MusicAlbumState.Requested, states[requested]);
+        Assert.AreEqual(MusicAlbumState.Failed, states[failed]);
+        Assert.AreEqual(MusicAlbumState.Partial, states[partial]);
+        Assert.AreEqual((6, 5, 2), (artists.Single().Albums, artists.Single().Monitored, artists.Single().Available));
+    }
+
     private static ProwlarrReleaseCandidate Release(string title) =>
         new(title, "Music test indexer", 1, "usenet", 400L * 1024 * 1024, null, null, DateTimeOffset.UtcNow, 0, 1, title, null, AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.invalid/download/{Uri.EscapeDataString(title)}"), null);
 
@@ -233,6 +329,8 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton<MusicLibraryService>()
                 .AddSingleton<MusicMonitoringService>()
                 .AddSingleton<MusicAcquisitionEngine>()
+                .AddSingleton<MusicManualSearchService>()
+                .AddSingleton<MusicAdminQuery>()
                 .AddSingleton<IAcquisitionRequestExecutor, MusicAcquisitionRequestExecutor>()
                 .AddSingleton<IWantedRequestHandler, MusicWantedRequestHandler>()
                 .AddSingleton<IWantedSource, MusicWantedSource>()

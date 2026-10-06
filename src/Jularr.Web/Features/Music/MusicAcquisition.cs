@@ -153,6 +153,16 @@ public sealed record MusicReleaseEvaluation(ProwlarrReleaseCandidate Candidate, 
     public bool IsManuallyGrabbable => (IsGrabbable || Selection.Decision == SelectionDecision.ManualReview) && Candidate.InternalDownloadUri is not null;
 }
 
+/// <summary>What a manual grab got through before it stopped, so a caller that sees an exception knows whether a download exists.</summary>
+public sealed class MusicGrabProgress
+{
+    public bool SubmitStarted { get; set; }
+
+    public bool Accepted { get; set; }
+
+    public Guid? OperationId { get; set; }
+}
+
 public sealed record MusicSearchEvaluation(QualityProfile Profile, AcquisitionSearchResult Search, IReadOnlyList<MusicReleaseEvaluation> Releases, SelectionResult Selection)
 {
     public IReadOnlyList<MusicReleaseEvaluation> Grabbable => [.. Releases.Where(release => release.IsGrabbable)];
@@ -218,33 +228,56 @@ public sealed class MusicAcquisitionEngine(
         }
 
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId.Value, cancellationToken);
-        var evaluation = await SearchAsync(request, payload, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
-        var candidates = evaluation.Grabbable
+        var evaluation = await SearchAsync(request.CreatedAt, payload, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
+        return await GrabAsync(request, payload, evaluation.Grabbable, FailureMessage(evaluation), cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the tracker lifecycle over the given releases (best first) and submits the first untried one through the shared download-client path.
+    /// Automatic acquisition passes every grabbable release; Manual Search passes the one the owner selected.
+    /// </summary>
+    public async Task<AcquisitionExecution> GrabAsync(
+        AcquisitionRequest request,
+        MusicRequestPayload payload,
+        IReadOnlyList<MusicReleaseEvaluation> releases,
+        string noReleaseReason,
+        CancellationToken cancellationToken,
+        MusicGrabProgress? progress = null)
+    {
+        var workId = payload.WorkId;
+        var candidates = releases
             .Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!))
             .ToArray();
-        var byIdentity = evaluation.Grabbable.ToDictionary(release => release.Candidate.Identity, release => release.Candidate, StringComparer.Ordinal);
+        var byIdentity = releases.ToDictionary(release => release.Candidate.Identity, release => release.Candidate, StringComparer.Ordinal);
         var title = $"{payload.Artist} - {payload.Album}";
         var execution = await tracker.ContinueAsync(
             request,
             payload,
             candidates,
-            FailureMessage(evaluation),
+            noReleaseReason,
             async release =>
             {
+                progress?.SubmitStarted = true;
                 var sources = byIdentity[release.Identity].Sources.Select(source => source.DownloadUri).OfType<Uri>().Distinct().ToArray();
                 var outcome = await downloads.SubmitFirstAcceptedAsync(
                     sources.Length == 0 ? [release.DownloadUri] : sources,
-                    uri => new DownloadSubmissionSpec(OperationKind, "Download Music", title, request.RequestedByProfileId, uri, release.Title, MediaAcquisitionKind.Music, MediaTargetKey: $"work:{workId.Value:D}"),
+                    uri => new DownloadSubmissionSpec(OperationKind, "Download Music", title, request.RequestedByProfileId, uri, release.Title, MediaAcquisitionKind.Music, MediaTargetKey: $"work:{workId:D}"),
                     cancellationToken);
+                if (outcome.Accepted && progress is not null)
+                {
+                    progress.Accepted = true;
+                    progress.OperationId = outcome.OperationId;
+                }
+
                 return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
             },
             cancellationToken);
-        return execution with { ResultUrl = MusicLinks.AlbumPath(workId.Value) };
+        return execution with { ResultUrl = MusicLinks.AlbumPath(workId) };
     }
 
     /// <summary>The one search + selection pipeline: automatic acquisition and Manual Search read their candidates from here.</summary>
     public async Task<MusicSearchEvaluation> SearchAsync(
-        AcquisitionRequest request,
+        DateTime wantedSinceUtc,
         MusicRequestPayload payload,
         QualityProfile profile,
         SearchOptions options,
@@ -261,7 +294,7 @@ public sealed class MusicAcquisitionEngine(
         var judged = search.Releases
             .GroupBy(release => release.Identity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (Release: group.First(), Judgement: Judge(group.First())), StringComparer.Ordinal);
-        var wantedSince = new DateTimeOffset(DateTime.SpecifyKind(request.CreatedAt, DateTimeKind.Utc));
+        var wantedSince = new DateTimeOffset(DateTime.SpecifyKind(wantedSinceUtc, DateTimeKind.Utc));
         var selection = ReleaseSelectionEngine.Select(
             profile,
             new SelectionContext(clock.GetUtcNow(), wantedSince),

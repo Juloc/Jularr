@@ -1,0 +1,124 @@
+@page
+@model Jularr.Web.Pages.Admin.Music.IndexModel
+@using Jularr.Web.Features.Music
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.music.title"];
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<header class="page-header">
+    <div>
+        <h1>@ui["admin.music.title"]</h1>
+        <p>@ui["admin.music.subtitle"]</p>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+@if (Model.Notice is not null)
+{
+    <p class="metadata-notice" role="status">@Model.Notice</p>
+}
+@if (Model.Error is not null)
+{
+    <p class="metadata-error" role="alert">@Model.Error</p>
+}
+
+<div class="admmusic">
+    <section class="admmusic-panel" aria-labelledby="admmusic-add-heading">
+        <h2 id="admmusic-add-heading">@ui["admin.music.addArtist"]</h2>
+        <form method="get" class="admmusic-search" role="search">
+            <input type="search" name="q" value="@Model.Search" maxlength="120" placeholder="@ui["admin.music.searchPlaceholder"]" aria-label="@ui["admin.music.searchPlaceholder"]" />
+            <button class="button" type="submit">@ui["common.search"]</button>
+        </form>
+        @if (Model.ProviderFailed)
+        {
+            <p class="metadata-error" role="alert">@ui["admin.music.providerFailed"]</p>
+        }
+        else if (Model.Search is not null && Model.Found.Count == 0)
+        {
+            <p class="admmusic-empty">@ui["admin.music.noResults"]</p>
+        }
+        else if (Model.Found.Count > 0)
+        {
+            <div class="admmusic-table-wrap">
+                <table class="admmusic-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">@ui["admin.music.col.artist"]</th>
+                            <th scope="col"><span class="visually-hidden">@ui["admin.requests.col.actions"]</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var artist in Model.Found)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="admmusic-title">@artist.Name</span>
+                                    <span class="admmusic-sub">@string.Join(" · ", new[] { artist.Type, artist.Country, artist.Disambiguation }.Where(value => !string.IsNullOrWhiteSpace(value)))</span>
+                                </td>
+                                <td class="is-actions">
+                                    <form method="post" asp-page-handler="Add" class="admmusic-inline">
+                                        <input type="hidden" name="musicBrainzId" value="@artist.MusicBrainzId" />
+                                        <select name="mode" aria-label="@ui["admin.music.monitor.label"]">
+                                            @foreach (var mode in new[] { MusicMonitorMode.All, MusicMonitorMode.Future, MusicMonitorMode.None })
+                                            {
+                                                <option value="@((int)mode)">@Model.MonitorLabel(mode)</option>
+                                            }
+                                        </select>
+                                        <button class="button button-primary" type="submit">@ui["admin.music.add"]</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="admmusic-panel" aria-labelledby="admmusic-artists-heading">
+        <h2 id="admmusic-artists-heading">@ui["admin.music.artists"]</h2>
+        @if (Model.Artists.Count == 0)
+        {
+            <p class="admmusic-empty">@ui["admin.music.empty"]</p>
+        }
+        else
+        {
+            <div class="admmusic-table-wrap">
+                <table class="admmusic-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">@ui["admin.music.col.artist"]</th>
+                            <th scope="col">@ui["admin.music.monitor.label"]</th>
+                            <th scope="col" class="is-numeric">@ui["admin.music.col.albums"]</th>
+                            <th scope="col" class="is-numeric">@ui["admin.music.col.monitored"]</th>
+                            <th scope="col" class="is-numeric">@ui["admin.music.col.available"]</th>
+                            <th scope="col">@ui["admin.music.col.refreshed"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var artist in Model.Artists)
+                        {
+                            <tr>
+                                <td><a class="admmusic-title" asp-page="Artist" asp-route-id="@artist.Id">@artist.Name</a></td>
+                                <td>@Model.MonitorLabel(artist.Monitor)</td>
+                                <td class="is-numeric">@artist.Albums</td>
+                                <td class="is-numeric">@artist.Monitored</td>
+                                <td class="is-numeric">@artist.Available</td>
+                                <td>@Model.RefreshedLabel(artist.LastRefreshedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
