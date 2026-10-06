@@ -36,7 +36,7 @@ public sealed class SabnzbdSettingsStore
         ArgumentNullException.ThrowIfNull(directory);
 
         protector = dataProtectionProvider.CreateProtector(
-            "AniLingo.Acquisition.Sabnzbd.ApiKey.v1");
+            "Jularr.Acquisition.Sabnzbd.ApiKey.v1");
         storePath = Path.Combine(directory.FullName, FileName);
     }
 
