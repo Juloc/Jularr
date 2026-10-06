@@ -1,4 +1,4 @@
-@page
+@page "/Admin/Sonarr"
 @model Jularr.Web.Pages.Admin.SonarrModel
 @{
     var ui = Model.Ui;
@@ -13,8 +13,8 @@
     <a class="button" href="/Library">@ui["admin.sonarr.backToLibrary"]</a>
 </header>
 
-<partial name="_AdminNavigation" model="Model.Ui" />
-<p class="muted">@ui["admin.sonarr.perAnime"] <a asp-page="/Settings/SonarrMigration">@ui["admin.sonarr.migrationLink"]</a> &middot; <a asp-page="/Settings/Naming">@ui["admin.sonarr.namingLink"]</a></p>
+<partial name="~/Pages/Admin/_AdminNavigation.cshtml" model="Model.Ui" />
+<p class="muted">@ui["admin.sonarr.perAnime"] <a asp-page="/Settings/SonarrMigration">@ui["admin.sonarr.migrationLink"]</a> &middot; <a asp-page="/Legacy/Settings/Naming">@ui["admin.sonarr.namingLink"]</a></p>
 
 <div class="settings-grid">
     <section class="panel">

@@ -1,4 +1,4 @@
-@page
+@page "/Settings/Subtitles"
 @using Jularr.Web.Features.Providers
 @using Jularr.Web.Features.Subtitles
 @using Jularr.Web.Features.Watchlist
@@ -46,7 +46,7 @@
             @foreach (var profile in Model.Profiles)
             {
                 <li>
-                    <a asp-page="/Settings/Subtitles" asp-route-edit="@profile.Id"><strong>@profile.Name</strong></a>
+                    <a asp-page="/Legacy/Settings/Subtitles" asp-route-edit="@profile.Id"><strong>@profile.Name</strong></a>
                     <span class="muted">
                         @ui.Format("settings.subtitles.languageCount", ("count", profile.Items.Count))
                         @(profile.IsGlobalDefault ? $" · {ui["settings.subtitles.default"]}" : "")
@@ -56,7 +56,7 @@
             }
         </ul>
         <div class="inline-actions">
-            <a class="button" asp-page="/Settings/Subtitles">@ui["settings.subtitles.newProfile"]</a>
+            <a class="button" asp-page="/Legacy/Settings/Subtitles">@ui["settings.subtitles.newProfile"]</a>
         </div>
     </section>
 

@@ -153,7 +153,7 @@
                 @if (Model.IsOwner)
                 {
                     <div class="reading-catalog-divider">@ui["novels.index.sourcesHeading"]</div>
-                    <a class="button" asp-page="/Admin/ReadingSources">@ui["novels.index.configureSources"]</a>
+                    <a class="button" asp-page="/Legacy/Admin/ReadingSources">@ui["novels.index.configureSources"]</a>
                 }
 
                 @if (Model.Access.CanRequest && Model.Access.AutoApproves)

@@ -1,4 +1,4 @@
-@page
+@page "/Admin/Subtitles"
 @using Jularr.Web.Features.Subtitles
 @model Jularr.Web.Pages.Admin.SubtitlesModel
 @{
@@ -22,7 +22,7 @@
     </div>
 </header>
 
-<partial name="_AdminNavigation" model="Model.Ui" />
+<partial name="~/Pages/Admin/_AdminNavigation.cshtml" model="Model.Ui" />
 
 @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
 {
@@ -184,7 +184,7 @@
                             @foreach (var missing in completion.Missing)
                             {
                                 <a class="button"
-                                   asp-page="/Admin/Subtitles"
+                                   asp-page="/Legacy/Admin/Subtitles"
                                    asp-route-searchEpisodeId="@completion.EpisodeId"
                                    asp-route-searchLanguage="@missing.LanguageTag"
                                    asp-route-searchForced="@missing.Forced"
@@ -211,7 +211,7 @@
         @if (!Model.HasProviders)
         {
             <p class="muted">@ui["admin.subtitles.search.noProviders"]</p>
-            <a class="button" asp-page="/Settings/Subtitles">@ui["admin.subtitles.search.configureProviders"]</a>
+            <a class="button" asp-page="/Legacy/Settings/Subtitles">@ui["admin.subtitles.search.configureProviders"]</a>
         }
         else
         {

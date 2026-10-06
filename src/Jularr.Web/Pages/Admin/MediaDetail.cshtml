@@ -163,15 +163,15 @@
            asp-route-search="@detail.Key"
            asp-route-mode="Anime"
            asp-fragment="search-results">@ui["admin.wanted.manualSearch"]</a>
-        <form method="post" asp-page="/Library/AnimeRepair" asp-page-handler="Rescan" asp-route-id="@id">
+        <form method="post" asp-page="/Legacy/Library/AnimeRepair" asp-page-handler="Rescan" asp-route-id="@id">
             <input type="hidden" name="returnUrl" value="@selfHref" />
             <button class="button" type="submit">@ui["admin.media.action.rescan"]</button>
         </form>
-        <form method="post" asp-page="/Library/AnimeRepair" asp-page-handler="Reanalyze" asp-route-id="@id">
+        <form method="post" asp-page="/Legacy/Library/AnimeRepair" asp-page-handler="Reanalyze" asp-route-id="@id">
             <input type="hidden" name="returnUrl" value="@selfHref" />
             <button class="button" type="submit" disabled="@(detail.Available == 0)">@ui["admin.media.action.reanalyze"]</button>
         </form>
-        <form method="post" asp-page="/Library/AnimeRepair" asp-page-handler="Optimize" asp-route-id="@id">
+        <form method="post" asp-page="/Legacy/Library/AnimeRepair" asp-page-handler="Optimize" asp-route-id="@id">
             <input type="hidden" name="returnUrl" value="@selfHref" />
             <button class="button" type="submit" disabled="@(detail.Available == 0)">@ui["admin.media.action.optimize"]</button>
         </form>
