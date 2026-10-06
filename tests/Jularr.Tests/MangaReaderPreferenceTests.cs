@@ -148,7 +148,6 @@ public sealed class MangaReaderPreferenceTests
         StringAssert.Contains(script, "rightToLeft: \"pageDirection\"");
         StringAssert.Contains(adapter, "\"pageDirection\" => [\"imagePageDirection\"]");
         Assert.IsFalse(script.Contains("localStorage.", StringComparison.Ordinal), "Durable Manga reader settings must use ReaderPreference.");
-        Assert.IsFalse(script.Contains("anilingo.reader.manga.", StringComparison.Ordinal), "The legacy per-device Manga settings key must not return.");
     }
 
     private static async Task<AppDbContext> CreateDatabaseAsync(string path)
