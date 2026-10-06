@@ -9,47 +9,6 @@ namespace Jularr.Tests;
 public sealed class ProwlarrSearchTests
 {
     [TestMethod]
-    public void PlannerBuildsSeasonEpisodeAndAbsoluteQueriesForAliases()
-    {
-        var queries = ProwlarrSearchPlanner.Build(
-            new ProwlarrAnimeSearchTarget(
-                "Sousou no Frieren",
-                ["Frieren: Beyond Journey's End", "Sousou no Frieren"],
-                ProwlarrAnimeSearchMode.Episode,
-                SeasonNumber: 2,
-                EpisodeNumber: 3,
-                AbsoluteEpisodeNumber: 31));
-
-        CollectionAssert.Contains(
-            queries.Select(item => item.Query).ToArray(),
-            "Sousou no Frieren S02E03");
-        CollectionAssert.Contains(
-            queries.Select(item => item.Query).ToArray(),
-            "Sousou no Frieren - 31");
-        CollectionAssert.Contains(
-            queries.Select(item => item.Query).ToArray(),
-            "Frieren: Beyond Journey's End S02E03");
-        Assert.AreEqual(
-            queries.Count,
-            queries.Select(item => item.Query).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-    }
-
-    [TestMethod]
-    public void PlannerBuildsSeasonPackQueries()
-    {
-        var queries = ProwlarrSearchPlanner.Build(
-            new ProwlarrAnimeSearchTarget(
-                "Anime",
-                [],
-                ProwlarrAnimeSearchMode.Season,
-                SeasonNumber: 2));
-
-        CollectionAssert.AreEquivalent(
-            new[] { "Anime S02", "Anime Season 2" },
-            queries.Select(item => item.Query).ToArray());
-    }
-
-    [TestMethod]
     public async Task ClientUsesApiKeyHeaderAndConfiguredSearchFilters()
     {
         HttpRequestMessage? captured = null;
@@ -161,57 +120,6 @@ public sealed class ProwlarrSearchTests
         Assert.AreEqual(1, releases.Count);
         Assert.AreEqual("Good", releases[0].Indexer);
         Assert.AreEqual(1, releases[0].ParsedRelease.AbsoluteEpisodeStart);
-    }
-
-    [TestMethod]
-    public async Task CoordinatorDeduplicatesAcrossAliasesAndPreservesMatchedQueries()
-    {
-        var candidate = Candidate("same-guid");
-        var client = new FakeProwlarrClient(
-            (_, _) => [candidate]);
-        var service = new ProwlarrAnimeSearchService(client);
-
-        var result = await service.SearchAsync(
-            Connection(),
-            new ProwlarrAnimeSearchTarget(
-                "Anime",
-                ["Anime English"],
-                ProwlarrAnimeSearchMode.Episode,
-                SeasonNumber: 1,
-                EpisodeNumber: 1),
-            CancellationToken.None);
-
-        Assert.AreEqual(1, result.Releases.Count);
-        Assert.IsTrue(result.Releases[0].MatchedQueries.Count >= 2);
-        Assert.AreEqual(0, result.Warnings.Count);
-    }
-
-    [TestMethod]
-    public async Task CoordinatorKeepsSuccessfulQueriesWhenAnotherQueryFails()
-    {
-        var client = new FakeProwlarrClient(
-            (query, _) =>
-            {
-                if (query.Query.Contains("English", StringComparison.Ordinal))
-                {
-                    throw new ProwlarrException("Indexer search failed.");
-                }
-
-                return [Candidate("ok-guid")];
-            });
-        var service = new ProwlarrAnimeSearchService(client);
-
-        var result = await service.SearchAsync(
-            Connection(),
-            new ProwlarrAnimeSearchTarget(
-                "Anime",
-                ["Anime English"],
-                ProwlarrAnimeSearchMode.Anime),
-            CancellationToken.None);
-
-        Assert.AreEqual(1, result.Releases.Count);
-        Assert.AreEqual(1, result.Warnings.Count);
-        StringAssert.Contains(result.Warnings[0].Query, "English");
     }
 
     [TestMethod]

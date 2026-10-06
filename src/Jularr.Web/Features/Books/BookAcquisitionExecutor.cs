@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
@@ -206,56 +207,30 @@ public sealed record BookUsenetSearchResult(
 }
 
 /// <summary>
-/// Searches the indexers for one book: "author title" and "title" in each indexer's Books
-/// categories and, when that finds nothing, once more without a category because many
-/// indexers file ebooks inconsistently.
+/// Searches the indexers for one book through the shared planner: the author and title as a book search where the indexer supports
+/// it, then author + title, the title and the full title as text in the Books categories and, when too little matches, once more
+/// without a category because many indexers file ebooks inconsistently.
 /// </summary>
 public static class BookUsenetSearch
 {
-    public static IReadOnlyList<string> Queries(string title, string? author)
-    {
-        var fullTitle = title.Trim();
-        var mainTitle = BookReleaseSelector.MainTitle(fullTitle);
-        var queries = new List<string>();
-        if (!string.IsNullOrWhiteSpace(author))
-        {
-            queries.Add($"{author.Trim()} {mainTitle}");
-        }
-
-        queries.Add(mainTitle);
-        if (!mainTitle.Equals(fullTitle, StringComparison.OrdinalIgnoreCase))
-        {
-            queries.Add(fullTitle);
-        }
-
-        return queries;
-    }
-
     public static async Task<BookUsenetSearchResult> SearchAsync(
         IndexerSearchCoordinator indexers,
         string title,
         string? author,
         QualityProfile profile,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SearchOptions? options = null)
     {
-        var queries = Queries(title, author);
-        var result = await indexers.SearchCategoriesAsync(queries, entry => entry.Settings.EffectiveBookCategories, cancellationToken);
-        var fallback = false;
-        if (result.Releases.Count == 0)
-        {
-            var anyCategory = await indexers.SearchCategoriesAsync(queries, _ => [], cancellationToken);
-            if (anyCategory.Releases.Count > 0)
-            {
-                result = anyCategory;
-                fallback = true;
-            }
-        }
-
+        var intent = new SearchIntent(MediaAcquisitionKind.Book, title.Trim()) { Creator = string.IsNullOrWhiteSpace(author) ? null : author.Trim() };
+        var result = await indexers.SearchAsync(
+            intent,
+            (options ?? new SearchOptions()) with { UsableCount = releases => BookReleaseSelector.Rank(releases, title, author, profile).Count(ranked => ranked.Score > 0) },
+            cancellationToken);
         return new BookUsenetSearchResult(
-            queries,
+            [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
             BookReleaseSelector.Rank(result.Releases, title, author, profile),
             result.Warnings,
-            fallback);
+            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0));
     }
 }
 
@@ -281,7 +256,7 @@ public static class BookReleaseSelector
         // Identity is always checked before quality. A custom profile can reject or prefer a format,
         // regex or scored term, but it can never make a release for another book eligible.
         var effectiveProfile = profile ?? BookQualityProfiles.CreateDefaultBook();
-        var titleWords = Words(MainTitle(title));
+        var titleWords = Words(SearchPlanner.MainTitle(title));
         var authorWords = Words(author);
         return releases
             .Select(release => Judge(
@@ -294,20 +269,6 @@ public static class BookReleaseSelector
             .ThenByDescending(candidate => candidate.Score)
             .ThenByDescending(candidate => candidate.Release.PublishedAt)
             .ToArray();
-    }
-
-    /// <summary>The title before a subtitle separator (":", ";" or " - ").</summary>
-    public static string MainTitle(string title)
-    {
-        var trimmed = title.Trim();
-        var cut = trimmed.IndexOfAny([':', ';']);
-        var dash = trimmed.IndexOf(" - ", StringComparison.Ordinal);
-        if (dash > 0 && (cut < 0 || dash < cut))
-        {
-            cut = dash;
-        }
-
-        return cut > 0 ? trimmed[..cut].Trim() : trimmed;
     }
 
     private static RankedBookRelease Judge(

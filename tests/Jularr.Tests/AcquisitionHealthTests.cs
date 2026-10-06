@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -63,11 +64,9 @@ public sealed class AcquisitionHealthTests
                 health,
                 NullLogger<IndexerSearchCoordinator>.Instance);
 
-            var result = await coordinator.SearchAsync(
-                new IndexerAnimeSearchTarget("Anime", [], IndexerAnimeSearchMode.Anime),
-                CancellationToken.None);
+            var result = await coordinator.SearchAsync(new SearchIntent(MediaAcquisitionKind.Anime, "Anime"), new SearchOptions(), CancellationToken.None);
 
-            CollectionAssert.AreEqual(new[] { "Healthy indexer" }, searched.ToArray());
+            CollectionAssert.AreEqual(new[] { "Healthy indexer" }, searched.Distinct().ToArray());
             Assert.IsTrue(result.Warnings.Any(warning => warning.IndexerName == "Unhealthy indexer" && warning.Message.Contains("auth failed")));
         }
         finally

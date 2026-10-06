@@ -77,7 +77,7 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
         }
 
         var settings = NormalizeAndValidate(connection.Settings);
-        var path = BuildSearchPath(settings, search.Query);
+        var path = BuildSearchPath(settings, search);
 
         using var request = CreateRequest(
             connection with { Settings = settings },
@@ -224,14 +224,14 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
 
     private static string BuildSearchPath(
         ProwlarrSettings settings,
-        string query)
+        ProwlarrSearchQuery search)
     {
         var parameters = new List<KeyValuePair<string, string>>
         {
-            new("query", query),
+            new("query", search.Query),
             new("type", "search"),
-            new("limit", settings.SearchLimit.ToString(CultureInfo.InvariantCulture)),
-            new("offset", "0")
+            new("limit", Math.Min(search.Limit ?? settings.SearchLimit, settings.SearchLimit).ToString(CultureInfo.InvariantCulture)),
+            new("offset", Math.Max(0, search.Offset).ToString(CultureInfo.InvariantCulture))
         };
 
         parameters.AddRange(

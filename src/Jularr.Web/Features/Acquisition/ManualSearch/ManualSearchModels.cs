@@ -1,4 +1,6 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Indexers;
+using Jularr.Web.Features.Acquisition.Search;
 
 namespace Jularr.Web.Features.Acquisition.ManualSearch;
 
@@ -61,7 +63,14 @@ public sealed record ManualSearchCandidate(
     IReadOnlyList<ManualSearchReason> Reasons,
     IReadOnlyList<string> ScoreBreakdown,
     bool IsTried,
-    bool CanGrab);
+    bool CanGrab)
+{
+    /// <summary>The queries that found the release, per indexer, so a row can say how it was found.</summary>
+    public IReadOnlyList<QueryProvenance> Provenance { get; init; } = [];
+
+    /// <summary>Every indexer that returned this release; a grab can fall back to another source.</summary>
+    public IReadOnlyList<string> Sources { get; init; } = [];
+}
 
 public sealed record ManualSearchUnit(Guid Id, string Label);
 
@@ -93,7 +102,19 @@ public sealed record ManualSearchResult(
     IReadOnlyList<ManualSearchIndexerWarning> Warnings,
     VideoAcquisitionSetupProblem SetupProblem,
     bool Searched,
-    bool TargetChanged = false);
+    bool TargetChanged = false)
+{
+    /// <summary>How the search ran: depth, raw versus distinct counts, one outcome per indexer and the trace.</summary>
+    public ManualSearchSummary? Summary { get; init; }
+}
+
+/// <summary>The honest accounting of one Manual Search; it never carries URLs or API keys.</summary>
+public sealed record ManualSearchSummary(
+    SearchDepth Depth,
+    int RawResults,
+    int DistinctCandidates,
+    IReadOnlyList<IndexerSearchOutcome> Outcomes,
+    IReadOnlyList<SearchTraceLine> Trace);
 
 public enum ManualGrabStatus
 {

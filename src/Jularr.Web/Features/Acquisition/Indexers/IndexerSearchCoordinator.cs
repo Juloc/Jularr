@@ -1,173 +1,296 @@
+using System.Net.Http;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Health;
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.Search;
 
 namespace Jularr.Web.Features.Acquisition.Indexers;
 
 /// <summary>
-/// Searches every enabled, healthy indexer entry (Prowlarr and direct
-/// Newznab alike) for an anime/episode/season target and merges the
-/// results the same way the single-connection Prowlarr search used to:
-/// de-duplicated by release identity, best first. Unhealthy entries are
-/// skipped and reported as a warning with the reason.
+/// The one executor of Automatic and Manual Search. It asks every participating, healthy indexer for the queries
+/// <see cref="SearchPlanner"/> planned for that indexer's capabilities, inside explicit budgets: indexers run side by side up to a
+/// bound, each with its own timeout, a bounded number of query variants and pages, and a rate-limited indexer is left alone until
+/// it asked to be asked again. One failed or slow indexer only costs its own share; the others' results stay. What comes back is
+/// evidence (merged logical candidates with every source and the query that found them), never a verdict.
 /// </summary>
 public sealed class IndexerSearchCoordinator(
     IReadOnlyDictionary<IndexerType, IIndexer> indexers,
     IndexerStore store,
     AcquisitionHealthStore health,
-    ILogger<IndexerSearchCoordinator> logger)
+    ILogger<IndexerSearchCoordinator> logger,
+    SearchEvidenceCache? evidence = null)
 {
+    private readonly SearchEvidenceCache cache = evidence ?? new SearchEvidenceCache();
+
     public async Task<bool> HasEnabledIndexerAsync(CancellationToken cancellationToken) =>
         (await store.LoadAllAsync(cancellationToken)).Any(entry => entry.Enabled);
 
-    /// <summary>The ids of every currently enabled indexer entry (Prowlarr and direct
-    /// Newznab alike), for callers that need to know whether a Guid-based restriction
-    /// (see <paramref name="allowedEntryIds"/> on <see cref="SearchAsync"/>) would leave anything
-    /// to search before committing to a search.</summary>
+    /// <summary>The ids of every currently enabled indexer entry, for callers that need to know whether a restriction would leave anything to search.</summary>
     public async Task<IReadOnlyList<Guid>> EnabledEntryIdsAsync(CancellationToken cancellationToken) =>
         (await store.LoadAllAsync(cancellationToken))
             .Where(entry => entry.Enabled)
             .Select(entry => entry.Id)
             .ToArray();
 
-    public async Task<IndexerAnimeSearchResult> SearchAsync(
-        IndexerAnimeSearchTarget target,
-        CancellationToken cancellationToken,
-        IReadOnlyList<int>? prowlarrIndexerIdOverride = null,
-        IReadOnlyCollection<Guid>? allowedEntryIds = null)
+    /// <summary>Searches for one canonical target; the planner shapes the queries for every indexer.</summary>
+    public Task<AcquisitionSearchResult> SearchAsync(SearchIntent intent, SearchOptions options, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(target);
-
-        var entries = (await store.LoadAllAsync(cancellationToken))
-            .Where(entry => entry.Enabled && (allowedEntryIds is null || allowedEntryIds.Contains(entry.Id)))
-            .OrderBy(entry => entry.Priority)
-            .ToArray();
-
-        var queries = IndexerSearchPlanner.Build(target);
-        return await SearchCoreAsync(
-            entries,
-            queries,
-            entry => entry.Type == IndexerType.Prowlarr && prowlarrIndexerIdOverride is { Count: > 0 }
-                ? entry with { Settings = entry.Settings with { IndexerIds = prowlarrIndexerIdOverride.ToArray() } }
-                : entry,
-            cancellationToken);
+        ArgumentNullException.ThrowIfNull(intent);
+        return ExecuteAsync(intent.Kind, capabilities => SearchPlanner.Plan(intent, capabilities, options.Depth), options, cancellationToken);
     }
 
-    /// <summary>
-    /// Searches every enabled, healthy indexer with free-text queries in the given Newznab
-    /// categories (for example 7000/7020 for books) instead of each entry's anime categories.
-    /// Same health handling, de-duplication and ordering as the anime search.
-    /// </summary>
-    public async Task<IndexerAnimeSearchResult> SearchCategoriesAsync(
-        IReadOnlyList<string> queries,
-        Func<IndexerEntry, IReadOnlyList<int>> categoriesFor,
-        CancellationToken cancellationToken)
+    /// <summary>Searches with free text a person typed (Discover search) in the categories of a media type; there is no target to plan from.</summary>
+    public Task<AcquisitionSearchResult> SearchTextAsync(MediaAcquisitionKind kind, IReadOnlyList<string> queries, SearchOptions options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(queries);
-        ArgumentNullException.ThrowIfNull(categoriesFor);
-
-        var entries = (await store.LoadAllAsync(cancellationToken))
-            .Where(entry => entry.Enabled)
-            .OrderBy(entry => entry.Priority)
-            .ToArray();
-        var planned = queries
-            .Select(query => query.Trim())
-            .Where(query => query.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(query => new IndexerSearchQuery(query))
-            .ToArray();
-
-        return await SearchCoreAsync(
-            entries,
-            planned,
-            entry => entry with { Settings = entry.Settings with { Categories = categoriesFor(entry).ToArray() } },
-            cancellationToken);
+        return ExecuteAsync(kind, _ => SearchPlanner.PlanText(queries), options, cancellationToken);
     }
 
-    private async Task<IndexerAnimeSearchResult> SearchCoreAsync(
-        IReadOnlyList<IndexerEntry> entries,
-        IReadOnlyList<IndexerSearchQuery> queries,
-        Func<IndexerEntry, IndexerEntry> effective,
+    private async Task<AcquisitionSearchResult> ExecuteAsync(MediaAcquisitionKind kind, Func<IndexerCapabilities?, IReadOnlyList<PlannedQuery>> planFor, SearchOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var budget = SearchBudget.For(options.Depth);
+        var entries = (await store.LoadAllAsync(cancellationToken))
+            .Where(entry => entry.Enabled
+                            && (options.AllowedEntryIds is null || options.AllowedEntryIds.Contains(entry.Id))
+                            && (options.Purpose == SearchPurpose.Automatic ? entry.Settings.AutomaticSearch : entry.Settings.InteractiveSearch))
+            .OrderBy(entry => entry.Priority)
+            .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (entries.Length == 0)
+        {
+            return AcquisitionSearchResult.Empty;
+        }
+
+        var session = new SearchSession(options);
+        using var gate = new SemaphoreSlim(budget.MaxConcurrentIndexers);
+        var runs = await Task.WhenAll(entries.Select(async entry =>
+        {
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                return await RunIndexerAsync(entry, kind, planFor, options, budget, session, cancellationToken);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }));
+
+        var hits = runs.SelectMany(run => run.Hits).ToArray();
+        return new AcquisitionSearchResult(
+            ReleaseDeduplicator.Merge(hits),
+            [.. runs.Select(run => run.Outcome)],
+            [.. runs.SelectMany(run => run.Trace)],
+            hits.Length);
+    }
+
+    private async Task<IndexerRun> RunIndexerAsync(
+        IndexerEntry entry,
+        MediaAcquisitionKind kind,
+        Func<IndexerCapabilities?, IReadOnlyList<PlannedQuery>> planFor,
+        SearchOptions options,
+        SearchBudget budget,
+        SearchSession session,
         CancellationToken cancellationToken)
     {
-        var warnings = new List<IndexerSearchWarning>();
-        var aggregated = new Dictionary<string, AggregatedCandidate>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var entry in entries)
+        if (entry.Settings.MediaKinds is { Length: > 0 } kinds && !kinds.Contains(kind))
         {
-            if (!await health.IsHealthyAsync(AcquisitionHealthKind.Indexer, entry.Id, cancellationToken))
-            {
-                var status = await health.GetAsync(AcquisitionHealthKind.Indexer, entry.Id, cancellationToken);
-                var reason = status?.LastError ?? "unhealthy";
-                logger.LogWarning("Skipped indexer '{Indexer}': {Reason}", entry.Name, reason);
-                warnings.Add(new IndexerSearchWarning(entry.Name, string.Empty, $"Skipped: {reason}"));
-                continue;
-            }
+            return IndexerRun.Skipped(entry, $"Not searched for {kind}.");
+        }
 
-            if (!indexers.TryGetValue(entry.Type, out var indexer))
-            {
-                continue;
-            }
+        if (!await health.IsHealthyAsync(AcquisitionHealthKind.Indexer, entry.Id, cancellationToken))
+        {
+            var reason = (await health.GetAsync(AcquisitionHealthKind.Indexer, entry.Id, cancellationToken))?.LastError ?? "unhealthy";
+            logger.LogWarning("Skipped indexer '{Indexer}': {Reason}", entry.Name, reason);
+            return IndexerRun.Skipped(entry, $"Skipped: {reason}");
+        }
 
-            var effectiveEntry = effective(entry);
+        if (cache.IsBackedOff(entry.Id, out var until, out var backoffReason))
+        {
+            return IndexerRun.Failed(entry, IndexerSearchState.RateLimited, $"Waiting until {until:HH:mm} UTC: {backoffReason}", until);
+        }
 
-            foreach (var query in queries)
+        if (!indexers.TryGetValue(entry.Type, out var indexer))
+        {
+            return IndexerRun.Skipped(entry, "No client is registered for this indexer type.");
+        }
+
+        var capabilities = entry.Type == IndexerType.Newznab ? entry.Settings.Capabilities : null;
+        var plan = planFor(capabilities);
+        var limit = Math.Min(entry.Settings.SearchLimit, capabilities?.MaximumLimit ?? int.MaxValue);
+        var effective = entry.Type == IndexerType.Prowlarr && options.ProwlarrIndexerIds is { Count: > 0 } prowlarrIds
+            ? entry with { Settings = entry.Settings with { IndexerIds = [.. prowlarrIds] } }
+            : entry;
+        var categories = SearchPlanner.Categories(kind, entry).ToArray();
+
+        var hits = new List<SearchHit>();
+        var trace = new List<SearchTraceLine>();
+        var queriesRun = 0;
+        string? failure = null;
+        var state = IndexerSearchState.Searched;
+        DateTimeOffset? retryAfter = null;
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var allowed = options.IndexerTimeout is { } shorter && shorter < budget.IndexerTimeout ? shorter : budget.IndexerTimeout;
+        timeout.CancelAfter(allowed);
+        try
+        {
+            for (var tier = 0; tier <= budget.MaxTier; tier++)
             {
-                try
+                if (tier > 0 && (session.UsableCount() >= budget.TargetUsable || session.RawCount >= budget.MaxResults))
                 {
-                    var candidates = await indexer.SearchAsync(effectiveEntry, query, cancellationToken);
-                    foreach (var candidate in candidates)
-                    {
-                        if (aggregated.TryGetValue(candidate.Identity, out var existing))
-                        {
-                            existing.AddQuery(query.Query);
-                            continue;
-                        }
-
-                        aggregated[candidate.Identity] = new AggregatedCandidate(candidate, query.Query);
-                    }
+                    break;
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+
+                foreach (var query in plan.Where(candidate => candidate.Tier == tier))
                 {
-                    throw;
-                }
-                catch (Exception exception) when (
-                    exception is IndexerException or ProwlarrException or HttpRequestException or TaskCanceledException)
-                {
-                    warnings.Add(new IndexerSearchWarning(entry.Name, query.Query, exception.Message));
+                    queriesRun++;
+                    await ReadQueryPagesAsync(indexer, effective, entry, query, categories, limit, options, budget, session, hits, trace, timeout.Token);
                 }
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            state = IndexerSearchState.TimedOut;
+            failure = $"No answer within {allowed.TotalSeconds:0.##} s.";
+        }
+        catch (IndexerRateLimitedException exception)
+        {
+            state = IndexerSearchState.RateLimited;
+            retryAfter = cache.BackOff(entry.Id, exception.RetryAfter, exception.Message);
+            failure = exception.Message;
+        }
+        catch (IndexerAuthenticationException exception)
+        {
+            state = IndexerSearchState.AuthenticationFailed;
+            failure = exception.Message;
+        }
+        catch (Exception exception) when (exception is IndexerException or ProwlarrException or HttpRequestException)
+        {
+            state = IndexerSearchState.Unavailable;
+            failure = exception.Message;
+        }
 
-        var releases = aggregated.Values
-            .Select(value => value.Build())
-            .OrderByDescending(value => value.Seeders ?? -1)
-            .ThenByDescending(value => value.PublishedAt)
-            .ThenBy(value => value.Title, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        // An indexer that answered some queries before it failed keeps what it returned and reports the problem next to it.
+        if (state != IndexerSearchState.Searched && hits.Count == 0)
+        {
+            return IndexerRun.Failed(entry, state, failure ?? state.ToString(), retryAfter) with { Trace = trace };
+        }
 
-        return new IndexerAnimeSearchResult(releases, warnings);
+        var outcome = new IndexerSearchOutcome(
+            entry.Id,
+            entry.Name,
+            hits.Count == 0 ? IndexerSearchState.NoResults : IndexerSearchState.Searched,
+            queriesRun,
+            hits.Count,
+            failure,
+            retryAfter);
+        return new IndexerRun(outcome, hits, trace);
     }
 
-    private sealed class AggregatedCandidate
+    private async Task ReadQueryPagesAsync(
+        IIndexer indexer,
+        IndexerEntry effective,
+        IndexerEntry original,
+        PlannedQuery query,
+        int[] categories,
+        int limit,
+        SearchOptions options,
+        SearchBudget budget,
+        SearchSession session,
+        List<SearchHit> hits,
+        List<SearchTraceLine> trace,
+        CancellationToken cancellationToken)
     {
-        private readonly ProwlarrReleaseCandidate candidate;
-        private readonly HashSet<string> queries = new(StringComparer.OrdinalIgnoreCase);
-
-        public AggregatedCandidate(ProwlarrReleaseCandidate candidate, string query)
+        var entry = effective with { Settings = effective.Settings with { Categories = query.AnyCategory ? [] : categories } };
+        for (var page = 0; page < budget.MaxPages; page++)
         {
-            this.candidate = candidate;
-            AddQuery(query);
-        }
-
-        public void AddQuery(string query)
-        {
-            if (!string.IsNullOrWhiteSpace(query))
+            var key = $"{original.Id:N}|{query.Key}|{string.Join(',', entry.Settings.Categories)}|{limit}|{page}";
+            IReadOnlyList<ProwlarrReleaseCandidate> results;
+            var cached = false;
+            if (!options.Refresh && cache.TryGet(key, out var remembered))
             {
-                queries.Add(query);
+                results = remembered;
+                cached = true;
+            }
+            else
+            {
+                results = await indexer.SearchAsync(entry, new IndexerSearchQuery(query.Text ?? string.Empty, query.Mode, query.Parameters, page * limit, limit), cancellationToken);
+                cache.Set(key, results);
+            }
+
+            var fresh = 0;
+            foreach (var release in results)
+            {
+                hits.Add(new SearchHit(release, original.Id, original.Priority, original.Name, query));
+                if (session.Add(release))
+                {
+                    fresh++;
+                }
+            }
+
+            trace.Add(new SearchTraceLine(original.Name, query.Stage, query.Provenance, query.Text ?? string.Join(' ', query.Parameters.Select(pair => $"{pair.Key}={pair.Value}")), page, results.Count, fresh, cached));
+
+            // The next page is only worth reading when this one was full, still brought something new and a bound allows it.
+            var wantsMore = options.Depth == SearchDepth.Deep || session.UsableCount() < budget.TargetUsable;
+            if (results.Count < limit || fresh == 0 || !wantsMore || session.RawCount >= budget.MaxResults)
+            {
+                return;
+            }
+        }
+    }
+
+    private sealed record IndexerRun(IndexerSearchOutcome Outcome, List<SearchHit> Hits, List<SearchTraceLine> Trace)
+    {
+        public static IndexerRun Skipped(IndexerEntry entry, string message) =>
+            new(new IndexerSearchOutcome(entry.Id, entry.Name, IndexerSearchState.Skipped, 0, 0, message), [], []);
+
+        public static IndexerRun Failed(IndexerEntry entry, IndexerSearchState state, string message, DateTimeOffset? retryAfter = null) =>
+            new(new IndexerSearchOutcome(entry.Id, entry.Name, state, 0, 0, message, retryAfter), [], []);
+    }
+
+    /// <summary>The running view of one search that all indexers share: how many distinct candidates exist and how many are usable, for the stop conditions.</summary>
+    private sealed class SearchSession(SearchOptions options)
+    {
+        private readonly object gate = new();
+        private readonly Dictionary<string, ProwlarrReleaseCandidate> distinct = new(StringComparer.Ordinal);
+        private int raw;
+
+        public int RawCount
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return raw;
+                }
             }
         }
 
-        public ProwlarrReleaseCandidate Build() =>
-            candidate with { MatchedQueries = queries.Order(StringComparer.OrdinalIgnoreCase).ToArray() };
+        public bool Add(ProwlarrReleaseCandidate release)
+        {
+            lock (gate)
+            {
+                raw++;
+                return distinct.TryAdd(ReleaseDeduplicator.ProvisionalKey(release), release);
+            }
+        }
+
+        public int UsableCount()
+        {
+            ProwlarrReleaseCandidate[] snapshot;
+            lock (gate)
+            {
+                snapshot = [.. distinct.Values];
+            }
+
+            return options.UsableCount is { } count ? count(snapshot) : snapshot.Length;
+        }
     }
 }

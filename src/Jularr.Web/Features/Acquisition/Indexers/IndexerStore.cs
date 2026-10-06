@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Jularr.Web.Features.Acquisition.Access;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Web.Features.Acquisition.Indexers;
@@ -59,6 +60,29 @@ public sealed class IndexerStore
     {
         var all = await LoadAllAsync(cancellationToken);
         return all.FirstOrDefault(entry => entry.Id == id);
+    }
+
+    /// <summary>
+    /// Stores the capabilities an indexer reported when it was tested. Only that one setting changes, so an edit made while the test ran
+    /// is not overwritten by a stale copy of the entry.
+    /// </summary>
+    public async Task UpdateCapabilitiesAsync(Guid id, IndexerCapabilities capabilities, CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var all = (await LoadUnlockedAsync(cancellationToken)).ToList();
+            var index = all.FindIndex(item => item.Id == id);
+            if (index >= 0)
+            {
+                all[index] = all[index] with { Settings = all[index].Settings with { Capabilities = capabilities } };
+                await WriteUnlockedAsync(all, cancellationToken);
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <summary>Adds or replaces the entry with the same Id.</summary>
@@ -205,7 +229,13 @@ public sealed class IndexerStore
                         item.Categories ?? [],
                         item.IndexerIds ?? [],
                         item.SearchLimit,
-                        item.BookCategories),
+                        item.BookCategories)
+                    {
+                        Capabilities = item.Capabilities,
+                        AutomaticSearch = item.AutomaticSearch ?? true,
+                        InteractiveSearch = item.InteractiveSearch ?? true,
+                        MediaKinds = item.MediaKinds
+                    },
                     apiKey));
         }
 
@@ -232,7 +262,11 @@ public sealed class IndexerStore
                 entry.Settings.IndexerIds,
                 entry.Settings.SearchLimit,
                 protector.Protect(entry.ApiKey),
-                entry.Settings.BookCategories))
+                entry.Settings.BookCategories,
+                entry.Settings.Capabilities,
+                entry.Settings.AutomaticSearch,
+                entry.Settings.InteractiveSearch,
+                entry.Settings.MediaKinds))
             .ToArray();
 
         var temporaryPath = $"{storePath}.tmp-{Guid.NewGuid():N}";
@@ -287,5 +321,9 @@ public sealed class IndexerStore
         int[]? IndexerIds,
         int SearchLimit,
         string ProtectedApiKey,
-        int[]? BookCategories = null);
+        int[]? BookCategories = null,
+        IndexerCapabilities? Capabilities = null,
+        bool? AutomaticSearch = null,
+        bool? InteractiveSearch = null,
+        MediaAcquisitionKind[]? MediaKinds = null);
 }

@@ -585,7 +585,6 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
             NullLogger<AcquisitionRequestService>.Instance));
         collection.AddScoped<SabnzbdDownloadService>();
         collection.AddScoped<SabnzbdAcquisitionService>();
-        collection.AddScoped<ProwlarrAnimeSearchService>();
         collection.AddScoped<AnimeAcquisitionInventory>();
         collection.AddScoped<AnimeAcquisitionPipeline>();
         collection.AddScoped<AnimeImportExecutor>();

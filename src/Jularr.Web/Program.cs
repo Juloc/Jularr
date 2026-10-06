@@ -535,6 +535,7 @@ builder.Services.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(servic
         [IndexerType.Prowlarr] = new ProwlarrIndexer(services.GetRequiredService<IProwlarrClient>()),
         [IndexerType.Newznab] = services.GetRequiredService<NewznabIndexer>()
     });
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Search.SearchEvidenceCache>();
 builder.Services.AddScoped<IndexerSearchCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService>();

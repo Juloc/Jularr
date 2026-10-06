@@ -9,6 +9,7 @@ using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.Sonarr;
@@ -269,10 +270,9 @@ public sealed class AnimeAcquisitionPipeline(
             }
 
             var result = await indexers.SearchAsync(
-                ToIndexerTarget(searchTarget),
-                cancellationToken,
-                ProwlarrIndexerIdsFor(state, animeKey),
-                allowedEntryIds);
+                ToSearchIntent(searchTarget),
+                new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(searchTarget, releases) },
+                cancellationToken);
             var snapshot = await observation.GetSnapshotAsync(forceRefresh: false, cancellationToken);
             var candidates = Evaluate(target, scope, wanted, episode?.Key, result.Releases, state, snapshot, policy, now);
             return new(target, episode?.Key, mode, candidates, result.Warnings, null);
@@ -894,11 +894,11 @@ public sealed class AnimeAcquisitionPipeline(
                 return false;
             }
 
+            var episodeTarget = SearchTargetFor(episode);
             var result = await indexers.SearchAsync(
-                ToIndexerTarget(SearchTargetFor(episode)),
-                cancellationToken,
-                ProwlarrIndexerIdsFor(state, target.Anime.Key),
-                allowedEntryIds);
+                ToSearchIntent(episodeTarget),
+                new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(episodeTarget, releases) },
+                cancellationToken);
             foreach (var warning in result.Warnings)
             {
                 await operations.AppendLogAsync(operationId, OperationLogLevel.Warning, LogModule, $"{warning.IndexerName}: {warning.Message}{(string.IsNullOrEmpty(warning.Query) ? "" : $" ({warning.Query})")}", cancellationToken);
@@ -1242,14 +1242,21 @@ public sealed class AnimeAcquisitionPipeline(
             .Take(MaxSearchAliases)
             .ToArray();
 
-    private static IndexerAnimeSearchTarget ToIndexerTarget(ProwlarrAnimeSearchTarget target) =>
-        new(
-            target.CanonicalTitle,
-            target.Aliases,
-            (IndexerAnimeSearchMode)target.Mode,
-            target.SeasonNumber,
-            target.EpisodeNumber,
-            target.AbsoluteEpisodeNumber);
+    private static SearchIntent ToSearchIntent(ProwlarrAnimeSearchTarget target) =>
+        new(MediaAcquisitionKind.Anime, target.CanonicalTitle)
+        {
+            Aliases = target.Aliases ?? [],
+            Season = target.Mode == ProwlarrAnimeSearchMode.Anime ? null : target.SeasonNumber,
+            Episode = target.Mode == ProwlarrAnimeSearchMode.Episode ? target.EpisodeNumber : null,
+            AbsoluteEpisode = target.Mode == ProwlarrAnimeSearchMode.Episode ? target.AbsoluteEpisodeNumber : null
+        };
+
+    /// <summary>The distinct releases that carry the anime title or one of its aliases, which is how many usable candidates the search has so far.</summary>
+    private static int AnimeUsableCount(ProwlarrAnimeSearchTarget target, IReadOnlyList<ProwlarrReleaseCandidate> releases)
+    {
+        var titles = new[] { target.CanonicalTitle }.Concat(target.Aliases ?? []).ToArray();
+        return releases.Count(release => TitleMatcher.MatchesAny(titles, release.ParsedRelease.SeriesTitle));
+    }
 
     // Per-anime restriction only applies to Prowlarr's own indexer aggregation.
     private static int[]? ProwlarrIndexerIdsFor(AnimeMonitoringState state, string animeKey) =>

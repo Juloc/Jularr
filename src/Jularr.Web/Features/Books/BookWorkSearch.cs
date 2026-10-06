@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Search;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
@@ -166,7 +167,7 @@ public static partial class BookWorkSearch
     }
 
     /// <summary>The title before a subtitle (":", ";" or " - ").</summary>
-    public static string MainTitle(string title) => BookReleaseSelector.MainTitle(title);
+    public static string MainTitle(string title) => SearchPlanner.MainTitle(title);
 
     private static List<Work> Merge(IReadOnlyList<BookCatalogItem>[] providers)
     {

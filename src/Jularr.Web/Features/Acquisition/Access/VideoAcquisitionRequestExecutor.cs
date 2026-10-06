@@ -7,6 +7,7 @@ using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -244,7 +245,7 @@ public sealed partial class VideoAcquisitionEngine(
     TimeProvider clock)
 {
     public const string OperationKind = "video-usenet-download";
-    private static readonly int[] MovieCategories = [2000];
+    private static readonly IReadOnlyDictionary<string, string> EmptyIds = new Dictionary<string, string>();
 
     public async Task<AcquisitionExecution> ExecuteAsync(
         AcquisitionRequest request,
@@ -332,7 +333,7 @@ public sealed partial class VideoAcquisitionEngine(
         }
 
         var profile = await profiles.ResolveAsync(request.Kind, target.WorkId, cancellationToken);
-        var evaluation = await SearchAndEvaluateAsync(request.Kind, payload, unit, profile, cancellationToken);
+        var evaluation = await SearchAndEvaluateAsync(request.Kind, payload, unit, target.ExternalIds ?? EmptyIds, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
         var ranked = Rank(evaluation.Releases);
 
         return await GrabAsync(request, payload, unit, ranked, FailureMessage(evaluation.Search, request.Kind), cancellationToken);
@@ -402,12 +403,23 @@ public sealed partial class VideoAcquisitionEngine(
         MediaAcquisitionKind kind,
         VideoRequestPayload payload,
         VideoUnit? unit,
+        IReadOnlyDictionary<string, string> externalIds,
         QualityProfile profile,
+        SearchOptions options,
         CancellationToken cancellationToken)
     {
-        var search = kind == MediaAcquisitionKind.Movie
-            ? await SearchMovieAsync(payload, cancellationToken)
-            : await SearchTvAsync(payload, unit!, cancellationToken);
+        var intent = new SearchIntent(kind, payload.Title)
+        {
+            Year = payload.Year,
+            ExternalIds = externalIds,
+            Season = unit?.SeasonNumber,
+            Episode = unit?.EpisodeNumber
+        };
+        var parser = registry.ParserFor(kind);
+        var search = await indexers.SearchAsync(
+            intent,
+            options with { UsableCount = releases => releases.Count(release => JudgeIdentity(parser, payload.Title, unit, release).Match is VideoIdentityMatch.Matches or VideoIdentityMatch.ContainsTarget) },
+            cancellationToken);
         return new VideoSearchEvaluation(profile, search, Evaluate(kind, payload.Title, unit, search.Releases, profile));
     }
 
@@ -655,36 +667,6 @@ public sealed partial class VideoAcquisitionEngine(
             .ToArray();
     }
 
-    private async Task<IndexerAnimeSearchResult> SearchMovieAsync(
-        VideoRequestPayload payload,
-        CancellationToken cancellationToken)
-    {
-        var query = payload.Year is int year ? $"{payload.Title} {year}" : payload.Title;
-        var result = await indexers.SearchCategoriesAsync(
-            [query],
-            _ => MovieCategories,
-            cancellationToken);
-        if (result.Releases.Count == 0)
-        {
-            result = await indexers.SearchCategoriesAsync([query], _ => [], cancellationToken);
-        }
-
-        return result;
-    }
-
-    private Task<IndexerAnimeSearchResult> SearchTvAsync(
-        VideoRequestPayload payload,
-        VideoUnit unit,
-        CancellationToken cancellationToken) =>
-        indexers.SearchAsync(
-            new IndexerAnimeSearchTarget(
-                payload.Title,
-                [],
-                IndexerAnimeSearchMode.Episode,
-                unit.SeasonNumber,
-                unit.EpisodeNumber),
-            cancellationToken);
-
     /// <summary>
     /// Parses and scores every returned candidate against the requested title and unit. Candidates that cannot be grabbed stay in the
     /// result with the reason, so Manual Search can explain them; automatic acquisition ranks only the grabbable ones. Identity is
@@ -701,27 +683,33 @@ public sealed partial class VideoAcquisitionEngine(
         var evaluations = new List<VideoReleaseEvaluation>(candidates.Count);
         foreach (var candidate in candidates)
         {
-            if (candidate.InternalDownloadUri is null)
-            {
-                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.NoDownload));
-            }
-            else if (candidate.Protocol is not null && !candidate.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
-            {
-                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.NotUsenet));
-            }
-            else if (!parser.TryParse(candidate.Title, out var parsed))
-            {
-                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.Unparseable));
-            }
-            else
-            {
-                var identity = !TitleMatches(title, parsed.SeriesTitle) ? VideoIdentityMatch.WrongTitle : unit is null ? VideoIdentityMatch.Matches : Coverage(parsed, unit);
-                var score = ReleaseScorer.Score(profile, new ReleaseCandidate(parsed, candidate.SizeBytes, candidate.Indexer, candidate.Identity));
-                evaluations.Add(new VideoReleaseEvaluation(candidate, parsed, score, identity));
-            }
+            var (match, parsed) = JudgeIdentity(parser, title, unit, candidate);
+            var score = parsed is null ? null : ReleaseScorer.Score(profile, new ReleaseCandidate(parsed, candidate.SizeBytes, candidate.Indexer, candidate.Identity));
+            evaluations.Add(new VideoReleaseEvaluation(candidate, parsed, score, match));
         }
 
         return evaluations;
+    }
+
+    /// <summary>Whether a candidate can be the requested title and unit at all; it is decided before any profile score is looked at.</summary>
+    private static (VideoIdentityMatch Match, ReleaseInfo? Parsed) JudgeIdentity(IReleaseParser parser, string title, VideoUnit? unit, ProwlarrReleaseCandidate candidate)
+    {
+        if (candidate.InternalDownloadUri is null)
+        {
+            return (VideoIdentityMatch.NoDownload, null);
+        }
+
+        if (candidate.Protocol is not null && !candidate.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
+        {
+            return (VideoIdentityMatch.NotUsenet, null);
+        }
+
+        if (!parser.TryParse(candidate.Title, out var parsed))
+        {
+            return (VideoIdentityMatch.Unparseable, null);
+        }
+
+        return (!TitleMatcher.Matches(title, parsed.SeriesTitle) ? VideoIdentityMatch.WrongTitle : unit is null ? VideoIdentityMatch.Matches : Coverage(parsed, unit), parsed);
     }
 
     private static IReadOnlyList<VideoReleaseEvaluation> Rank(IReadOnlyList<VideoReleaseEvaluation> evaluations) =>
@@ -750,34 +738,8 @@ public sealed partial class VideoAcquisitionEngine(
             : VideoIdentityMatch.WrongEpisode;
     }
 
-    private static bool TitleMatches(string requested, string candidate)
-    {
-        var wanted = SignificantWords(requested);
-        if (wanted.Count == 0)
-        {
-            return false;
-        }
-
-        var actual = SignificantWords(candidate);
-        return wanted.All(actual.Contains);
-    }
-
-    private static HashSet<string> SignificantWords(string value)
-    {
-        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "the", "a", "an", "of", "and", "der", "die", "das", "und"
-        };
-        return value.Split(
-                [' ', '.', '_', '-', ':', ',', '(', ')', '[', ']', '\'', '"', '!', '?', '&', '/'],
-                StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.ToLowerInvariant())
-            .Where(x => x.Length > 1 && !ignored.Contains(x))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
     private static string FailureMessage(
-        IndexerAnimeSearchResult search,
+        AcquisitionSearchResult search,
         MediaAcquisitionKind kind) =>
         search.Releases.Count == 0
             ? search.Warnings.Count > 0

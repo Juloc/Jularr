@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -179,7 +180,7 @@ public sealed class BookSearchCoordinator(
 
         return works
             .Take(ResultLimit)
-            .Select(work => BookUsenetSearch.Queries(work.Title, work.Author).First())
+            .Select(work => SearchPlanner.BookQuery(work.Title, work.Author))
             .Prepend(originalQuery.Trim())
             .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -243,30 +244,8 @@ public sealed class BookSearchCoordinator(
                     null);
             }
 
-            var result = await indexers.SearchCategoriesAsync(
-                queries,
-                entry => entry.Settings.EffectiveBookCategories,
-                cancellationToken);
-            var usedFallback = false;
-
-            if (result.Releases.Count == 0)
-            {
-                var fallback = await indexers.SearchCategoriesAsync(
-                    queries,
-                    _ => [],
-                    cancellationToken);
-                if (fallback.Releases.Count > 0)
-                {
-                    result = fallback;
-                    usedFallback = true;
-                }
-                else if (fallback.Warnings.Count > 0)
-                {
-                    result = new IndexerAnimeSearchResult(
-                        result.Releases,
-                        result.Warnings.Concat(fallback.Warnings).ToArray());
-                }
-            }
+            var result = await indexers.SearchTextAsync(MediaAcquisitionKind.Book, queries, new SearchOptions { Purpose = SearchPurpose.Interactive }, cancellationToken);
+            var usedFallback = result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0);
 
             return new SourceResult<UsenetPool>(
                 new UsenetPool(

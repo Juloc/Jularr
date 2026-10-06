@@ -1,8 +1,8 @@
-using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Instance;
 
 namespace Jularr.Web.Features.Acquisition.ManualSearch;
@@ -11,8 +11,8 @@ namespace Jularr.Web.Features.Acquisition.ManualSearch;
 /// Admin Manual Search for one Movie or TV request. Candidates come from the same indexer coordinator, parser and scorer as
 /// automatic acquisition (<see cref="VideoAcquisitionEngine"/>); a selected candidate is submitted through the same grab path and
 /// recorded on the request like an automatic grab. The browser only sends an opaque release identity: every grab runs a fresh
-/// search and re-validates the identity, so Manual Search is never an arbitrary download-URL endpoint. Search results are cached
-/// briefly so filtering and sorting do not hit the indexers again.
+/// search and re-validates the identity, so Manual Search is never an arbitrary download-URL endpoint. Filtering and sorting read the
+/// short-lived candidate evidence of the search executor, so they do not hit the indexers again; the evidence holds no profile score.
 /// </summary>
 public sealed partial class VideoManualSearchService(
     VideoAcquisitionEngine engine,
@@ -22,9 +22,6 @@ public sealed partial class VideoManualSearchService(
     ILogger<VideoManualSearchService> logger,
     IInstanceModuleService? instanceModules = null)
 {
-    private static readonly TimeSpan SearchCacheLifetime = TimeSpan.FromMinutes(2);
-    private static readonly ConcurrentDictionary<(Guid RequestId, Guid? UnitId), CachedSearch> SearchCache = new();
-
     // A striped lock is enough: it serializes grabs of the same request in this process without one lock object per request id.
     private static readonly SemaphoreSlim[] GrabLocks = Enumerable.Range(0, 32).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
 
@@ -44,7 +41,7 @@ public sealed partial class VideoManualSearchService(
         return target is null ? null : ToTarget(request, target);
     }
 
-    public async Task<ManualSearchResult?> SearchAsync(Guid requestId, Guid? unitId, bool refresh, CancellationToken cancellationToken)
+    public async Task<ManualSearchResult?> SearchAsync(Guid requestId, Guid? unitId, bool refresh, CancellationToken cancellationToken, SearchDepth depth = SearchDepth.Normal)
     {
         var request = await FindSupportedRequestAsync(requestId, cancellationToken);
         if (request is null || await engine.ResolveManualTargetAsync(request, unitId, cancellationToken) is not { } target)
@@ -64,14 +61,7 @@ public sealed partial class VideoManualSearchService(
             return new ManualSearchResult(shown, [], [], setupProblem, Searched: false);
         }
 
-        var now = clock.GetUtcNow();
-        var key = (requestId, target.Unit?.Id);
-        if (!refresh && SearchCache.TryGetValue(key, out var cached) && now - cached.StoredAt < SearchCacheLifetime && cached.TriedCount == shown.TriedReleases.Count)
-        {
-            return cached.Result with { Target = shown };
-        }
-
-        var evaluation = await engine.SearchManualAsync(request, target, cancellationToken);
+        var evaluation = await engine.SearchManualAsync(request, target, cancellationToken, depth, refresh);
         var tried = new HashSet<string>(shown.TriedReleases, StringComparer.OrdinalIgnoreCase);
         var bestResolution = HighestAllowedResolution(evaluation.Profile);
         var candidates = evaluation.Releases
@@ -81,15 +71,10 @@ public sealed partial class VideoManualSearchService(
             .ThenBy(candidate => candidate.Title, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var warnings = evaluation.Search.Warnings.Select(warning => new ManualSearchIndexerWarning(warning.IndexerName, Redact(warning.Message))).ToArray();
-        var result = new ManualSearchResult(shown, candidates, warnings, VideoAcquisitionSetupProblem.None, Searched: true);
-
-        foreach (var stale in SearchCache.Where(entry => now - entry.Value.StoredAt >= SearchCacheLifetime).Select(entry => entry.Key))
+        return new ManualSearchResult(shown, candidates, warnings, VideoAcquisitionSetupProblem.None, Searched: true)
         {
-            SearchCache.TryRemove(stale, out _);
-        }
-
-        SearchCache[key] = new CachedSearch(now, shown.TriedReleases.Count, result);
-        return result;
+            Summary = new ManualSearchSummary(depth, evaluation.Search.RawResultCount, evaluation.Search.Releases.Count, evaluation.Search.Outcomes, evaluation.Search.Trace)
+        };
     }
 
     /// <summary>
@@ -132,8 +117,8 @@ public sealed partial class VideoManualSearchService(
                 return new ManualGrabOutcome(ManualGrabStatus.NotSearchable, null, request);
             }
 
-            var evaluation = await engine.SearchManualAsync(request, target, cancellationToken);
-            SearchCache.TryRemove((requestId, target.Unit?.Id), out _);
+            // The grab never trusts what the list showed: it searches again past the evidence cache and validates the identity.
+            var evaluation = await engine.SearchManualAsync(request, target, cancellationToken, SearchDepth.Normal, refresh: true);
             var selected = evaluation.Releases.FirstOrDefault(release => release.Candidate.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
             if (selected is null || !selected.IsGrabbable)
             {
@@ -317,7 +302,11 @@ public sealed partial class VideoManualSearchService(
             reasons,
             evaluation.Score?.ScoreReasons ?? [],
             isTried,
-            CanGrab: evaluation.IsGrabbable && !isTried);
+            CanGrab: evaluation.IsGrabbable && !isTried)
+        {
+            Provenance = candidate.Provenance,
+            Sources = [.. candidate.Sources.Select(source => source.Indexer)]
+        };
     }
 
     private static ManualSearchReasonCode IdentityReason(VideoIdentityMatch identity) =>
@@ -379,5 +368,4 @@ public sealed partial class VideoManualSearchService(
 
     private static string Redact(string message) => SecretQueryValue().Replace(message, "$1=***");
 
-    private sealed record CachedSearch(DateTimeOffset StoredAt, int TriedCount, ManualSearchResult Result);
 }

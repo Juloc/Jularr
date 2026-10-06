@@ -24,7 +24,7 @@ public sealed class ProwlarrIndexer(IProwlarrClient client) : IIndexer
         IndexerEntry entry,
         IndexerSearchQuery query,
         CancellationToken cancellationToken) =>
-        client.SearchAsync(ToConnection(entry), new ProwlarrSearchQuery(query.Query), cancellationToken);
+        client.SearchAsync(ToConnection(entry), new ProwlarrSearchQuery(query.Query, query.Offset, query.Limit), cancellationToken);
 
     private static ProwlarrConnection ToConnection(IndexerEntry entry) =>
         new(

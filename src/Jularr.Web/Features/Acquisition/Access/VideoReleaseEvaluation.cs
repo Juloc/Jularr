@@ -2,6 +2,7 @@ using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Search;
 
 namespace Jularr.Web.Features.Acquisition.Access;
 
@@ -39,7 +40,7 @@ public sealed record VideoReleaseEvaluation(
 /// <summary>The result of one search: the profile it was scored with, per-indexer warnings and every evaluated release.</summary>
 public sealed record VideoSearchEvaluation(
     QualityProfile Profile,
-    IndexerAnimeSearchResult Search,
+    AcquisitionSearchResult Search,
     IReadOnlyList<VideoReleaseEvaluation> Releases);
 
 /// <summary>A configuration gap that stops video acquisition before any search runs.</summary>

@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Search;
 
 namespace Jularr.Web.Features.Acquisition.Access;
 
@@ -12,7 +13,11 @@ public sealed record VideoManualTarget(
     IReadOnlyList<VideoUnit> MissingUnits,
     QualityProfile Profile,
     bool HasLocalFile,
-    bool UnitChanged = false);
+    bool UnitChanged = false)
+{
+    /// <summary>The confirmed provider ids of the Work, sent to indexers that support them.</summary>
+    public IReadOnlyDictionary<string, string>? ExternalIds { get; init; }
+}
 
 // Manual Search entry points of the shared Movie/TV engine. They reuse the search, scoring and grab code of automatic acquisition
 // so the owner sees exactly what the scheduler would see and a manual grab is submitted through the same download path.
@@ -61,7 +66,7 @@ public sealed partial class VideoAcquisitionEngine
         var profile = await profiles.ResolveAsync(request.Kind, target.WorkId, cancellationToken);
         if (request.Kind == MediaAcquisitionKind.Movie)
         {
-            return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, null, [], profile, await HasMovieFileAsync(target.WorkId, cancellationToken));
+            return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, null, [], profile, await HasMovieFileAsync(target.WorkId, cancellationToken)) { ExternalIds = target.ExternalIds };
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
@@ -69,18 +74,21 @@ public sealed partial class VideoAcquisitionEngine
         if (requestedUnitId is not null)
         {
             var requested = missing.FirstOrDefault(x => x.Id == requestedUnitId);
-            return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, requested, missing, profile, HasLocalFile: false, UnitChanged: requested is null);
+            return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, requested, missing, profile, HasLocalFile: false, UnitChanged: requested is null) { ExternalIds = target.ExternalIds };
         }
 
         var unit = missing.FirstOrDefault(x => x.Id == payload.ActiveWorkEpisodeId)
                    ?? await FindNextTvUnitAsync(request, payload, cancellationToken)
                    ?? missing.FirstOrDefault();
-        return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, unit, missing, profile, HasLocalFile: false);
+        return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, unit, missing, profile, HasLocalFile: false) { ExternalIds = target.ExternalIds };
     }
 
-    /// <summary>Searches the configured indexers for the target and evaluates every candidate with the profile of the Work.</summary>
-    public Task<VideoSearchEvaluation> SearchManualAsync(AcquisitionRequest request, VideoManualTarget target, CancellationToken cancellationToken) =>
-        SearchAndEvaluateAsync(request.Kind, target.Payload, target.Unit, target.Profile, cancellationToken);
+    /// <summary>
+    /// Searches the configured indexers for the target and evaluates every candidate with the profile of the Work. The depth and a refresh
+    /// belong to this search only; they never change the persistent Acquisition Profile of the Work.
+    /// </summary>
+    public Task<VideoSearchEvaluation> SearchManualAsync(AcquisitionRequest request, VideoManualTarget target, CancellationToken cancellationToken, SearchDepth depth = SearchDepth.Normal, bool refresh = false) =>
+        SearchAndEvaluateAsync(request.Kind, target.Payload, target.Unit, target.ExternalIds ?? new Dictionary<string, string>(), target.Profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, cancellationToken);
 
     /// <summary>
     /// Submits the one release the owner selected through the shared grab path. The caller has already verified that it is grabbable

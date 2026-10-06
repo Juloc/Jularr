@@ -62,6 +62,14 @@
         <input asp-for="Enabled" type="checkbox" />
         <span>@ui["settings.connectionTable.enabled"]</span>
     </label>
+    <label class="usenet-form-check">
+        <input asp-for="AutomaticSearch" type="checkbox" />
+        <span>@ui["settings.indexers.field.automaticSearch"]</span>
+    </label>
+    <label class="usenet-form-check">
+        <input asp-for="InteractiveSearch" type="checkbox" />
+        <span>@ui["settings.indexers.field.interactiveSearch"]</span>
+    </label>
     <div class="usenet-form-actions is-wide">
         <button class="button button-primary" type="submit">@ui["common.save"]</button>
         <a class="button button-quiet" asp-page="/Admin/Usenet">@ui["common.cancel"]</a>

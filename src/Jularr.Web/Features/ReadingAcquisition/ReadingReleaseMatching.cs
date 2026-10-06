@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -416,92 +417,34 @@ public static class ReadingReleaseSelector
     }
 }
 
+/// <summary>
+/// Searches the indexers for one Manga or Light Novel target through the shared planner: the author + title (Light Novels), the
+/// title with the requested volume or chapter and the aliases, in the reading categories and, when too little matches, once more
+/// without a category.
+/// </summary>
 public static class ReadingUsenetSearch
 {
-    private static readonly int[] LightNovelCategories = [7020, 7000];
-    private static readonly int[] MangaCategories = [7030, 7000];
-
-    public static IReadOnlyList<string> Queries(ReadingAcquisitionTarget target)
-    {
-        var queries = new List<string>();
-        var names = new[] { target.Title }
-            .Concat(target.Aliases ?? [])
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(4)
-            .ToArray();
-
-        foreach (var name in names)
-        {
-            if (!string.IsNullOrWhiteSpace(target.Author) &&
-                target.Kind == MediaAcquisitionKind.LightNovel)
-            {
-                queries.Add($"{target.Author.Trim()} {name.Trim()}");
-            }
-
-            if (target.RequestedVolume is { } volume)
-            {
-                queries.Add($"{name.Trim()} vol {volume}");
-                queries.Add($"{name.Trim()} volume {volume}");
-            }
-            else if (target.RequestedChapterStart is { } chapter)
-            {
-                queries.Add($"{name.Trim()} ch {chapter.ToString(CultureInfo.InvariantCulture)}");
-            }
-
-            queries.Add(name.Trim());
-        }
-
-        return queries
-            .Where(query => query.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(12)
-            .ToArray();
-    }
-
     public static async Task<ReadingUsenetSearchResult> SearchAsync(
         IndexerSearchCoordinator indexers,
         ReadingAcquisitionTarget target,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SearchOptions? options = null)
     {
-        var queries = Queries(target);
-        var result = await indexers.SearchCategoriesAsync(
-            queries,
-            entry => Categories(entry, target.Kind),
-            cancellationToken);
-
-        var fallback = false;
-        if (result.Releases.Count == 0)
+        var intent = new SearchIntent(target.Kind, target.Title)
         {
-            var anyCategory = await indexers.SearchCategoriesAsync(
-                queries,
-                _ => [],
-                cancellationToken);
-            if (anyCategory.Releases.Count > 0)
-            {
-                result = anyCategory;
-                fallback = true;
-            }
-        }
-
+            Aliases = target.Aliases ?? [],
+            Creator = target.Author,
+            Volume = target.RequestedVolume,
+            Chapter = target.RequestedChapterStart is { } chapter ? (decimal)chapter : null
+        };
+        var result = await indexers.SearchAsync(
+            intent,
+            (options ?? new SearchOptions()) with { UsableCount = releases => ReadingReleaseSelector.Rank(releases, target).Count(ranked => ranked.Score > 0) },
+            cancellationToken);
         return new ReadingUsenetSearchResult(
-            queries,
+            [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
             ReadingReleaseSelector.Rank(result.Releases, target),
             result.Warnings,
-            fallback);
-    }
-
-    public static IReadOnlyList<int> Categories(
-        IndexerEntry entry,
-        MediaAcquisitionKind kind)
-    {
-        var defaults = kind == MediaAcquisitionKind.Manga
-            ? MangaCategories
-            : LightNovelCategories;
-
-        return entry.Settings.EffectiveBookCategories
-            .Concat(defaults)
-            .Distinct()
-            .ToArray();
+            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0));
     }
 }
