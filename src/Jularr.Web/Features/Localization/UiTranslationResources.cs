@@ -2341,6 +2341,7 @@ public static class UiTranslationResources
         M("admin.media.file.added", "Added", "Admin", "Label", "Label of the time a local file was first found.", "very short label", 12, null, null),
         M("admin.media.file.analysisFailed", "Analysis failed", "Admin", "Status", "Shown on a local file whose technical analysis failed; the reason follows when it is known.", "compact status", 20, null, null),
         M("admin.media.file.notAnalysed", "Not analysed yet", "Admin", "Status", "Shown on a local file whose technical analysis has not run yet.", "compact status", 24, null, null),
+        M("admin.media.file.analysisKept", "Stored analysis kept: the media tool could not re-check this file", "Admin", "Status", "A file keeps its earlier analysis because the media tool could not run; the reason follows.", "compact status", 70, null, null),
         M("admin.media.file.reanalyze", "Re-analyse", "Admin", "Button", "Reads the technical details of this one file again.", "short action", 14, null, null),
         M("admin.media.sidecars", "Subtitle files", "Admin", "Label", "Label of the subtitle files stored next to the episode files.", "very short label", 16, null, null),
         M("admin.media.acquisition.heading", "Acquisition", "Admin", "Heading", "Heading of the panel with the quality profile, monitoring state and imports of a title.", "very short heading", 16, null, null),

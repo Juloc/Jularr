@@ -284,6 +284,74 @@ public sealed class MediaInventoryTests
     }
 
     [TestMethod]
+    public async Task AnUnavailableProbeKeepsTheStoredAnalysisAndItsTracksAndSaysSo()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var media = await fixture.AddMediaAsync("episode.mkv", [1, 2, 3, 4]);
+        fixture.Runner.Returns(media.Path, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
+        await fixture.Inventory.EnsureAnalyzedAsync(media.Id, CancellationToken.None);
+        var tracksBefore = await fixture.Db.MediaTracks.Where(x => x.MediaFileId == media.Id).CountAsync();
+
+        // The file changed, so the stored analysis is stale, and ffprobe is missing: the tool says nothing about the file.
+        fixture.Runner.Returns(media.Path, new MediaProbeRun(MediaProbeRunStatus.Unavailable, Error: "ffprobe could not be started or timed out."));
+        var modified = File.GetLastWriteTimeUtc(media.Path);
+        await File.WriteAllBytesAsync(media.Path, [1, 2, 3, 4, 5]);
+        File.SetLastWriteTimeUtc(media.Path, modified);
+
+        var entry = await fixture.Inventory.EnsureAnalyzedAsync(media.Id, CancellationToken.None);
+        var repeated = await fixture.Inventory.EnsureAnalyzedAsync(media.Id, CancellationToken.None);
+
+        Assert.AreEqual(MediaAnalysisStatus.Pending, entry?.Status, "The re-check did not happen, so it is not reported as done.");
+        Assert.AreEqual("hevc", entry?.Technical?.Video?.Codec, "Playback keeps the last stored analysis.");
+        Assert.AreEqual(4, entry?.Technical?.Streams.Count);
+        StringAssert.Contains(entry?.Diagnostic, "ffprobe could not be started");
+        Assert.AreEqual(2, fixture.Runner.Calls.Count, "A tool that could not run is not retried by every reader of the file.");
+        Assert.AreEqual(MediaAnalysisStatus.Pending, repeated?.Status);
+
+        var stored = await fixture.Db.MediaAnalyses.AsNoTracking().SingleAsync(x => x.MediaFileId == media.Id);
+        Assert.AreEqual(MediaAnalysisStatus.Succeeded, stored.Status);
+        Assert.AreEqual("hevc", stored.VideoCodec);
+        Assert.AreEqual(10, stored.BitDepth);
+        Assert.AreEqual(tracksBefore, await fixture.Db.MediaTracks.Where(x => x.MediaFileId == media.Id).CountAsync());
+        Assert.AreEqual(4, stored.SourceSizeBytes, "The stored identity stays, so the file is analysed again once ffprobe answers.");
+    }
+
+    [TestMethod]
+    public async Task AnExplicitReanalysisTriesAMissingProbeAgainAtOnceAndReplacesTheKeptAnalysis()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var media = await fixture.AddMediaAsync("episode.mkv", [1, 2, 3, 4]);
+        fixture.Runner.Returns(media.Path, MediaProbeFixtures.H264Stereo);
+        await fixture.Inventory.EnsureAnalyzedAsync(media.Id, CancellationToken.None);
+        await fixture.Inventory.InvalidateAsync([media.Id], CancellationToken.None);
+        fixture.Runner.Returns(media.Path, new MediaProbeRun(MediaProbeRunStatus.Unavailable, Error: "ffprobe could not be started or timed out."));
+        var kept = await fixture.Inventory.EnsureAnalyzedAsync(media.Id, CancellationToken.None);
+
+        fixture.Runner.Returns(media.Path, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
+        await fixture.Inventory.InvalidateAsync([media.Id], CancellationToken.None);
+        var reanalysed = await fixture.Inventory.EnsureAnalyzedAsync(media.Id, CancellationToken.None);
+
+        Assert.AreEqual(MediaAnalysisStatus.Pending, kept?.Status);
+        Assert.AreEqual(MediaAnalysisStatus.Succeeded, reanalysed?.Status);
+        Assert.AreEqual("hevc", reanalysed?.Technical?.Video?.Codec);
+        Assert.IsNull(reanalysed?.Diagnostic);
+    }
+
+    [TestMethod]
+    public async Task AnUnavailableProbeOfAFileWithoutAnalysisStaysPendingWithTheReason()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var media = await fixture.AddMediaAsync("episode.mkv", [1, 2, 3, 4]);
+        fixture.Runner.Returns(media.Path, new MediaProbeRun(MediaProbeRunStatus.Unavailable, Error: "ffprobe could not be started or timed out."));
+
+        var entry = await fixture.Inventory.EnsureAnalyzedAsync(media.Id, CancellationToken.None);
+
+        Assert.AreEqual(MediaAnalysisStatus.Pending, entry?.Status);
+        Assert.IsNull(entry?.Technical);
+        StringAssert.Contains(entry?.Diagnostic, "ffprobe could not be started");
+    }
+
+    [TestMethod]
     public async Task PlaybackReadsTechnicalMetadataFromTheInventory()
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();

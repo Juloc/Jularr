@@ -416,7 +416,12 @@ else
                                                     }
                                                     else if (file.Analysis != MediaAnalysisStatus.Succeeded)
                                                     {
-                                                        <p class="admmd-file-pending">@ui["admin.media.file.notAnalysed"]</p>
+                                                        <p class="admmd-file-pending">@ui["admin.media.file.notAnalysed"]@(string.IsNullOrWhiteSpace(file.Diagnostic) ? "" : ": " + file.Diagnostic)</p>
+                                                    }
+                                                    else if (!string.IsNullOrWhiteSpace(file.Diagnostic))
+                                                    {
+                                                        @* A re-check that could not run (media tool missing or hanging) leaves the earlier analysis in place and says why. *@
+                                                        <p class="admmd-file-pending">@ui["admin.media.file.analysisKept"]: @file.Diagnostic</p>
                                                     }
                                                     <form method="post" asp-page-handler="ReanalyzeFile" asp-route-id="@id" class="admmd-file-actions">
                                                         <input type="hidden" name="fileId" value="@file.Id" />

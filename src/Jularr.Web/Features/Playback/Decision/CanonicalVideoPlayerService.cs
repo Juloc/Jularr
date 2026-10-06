@@ -39,6 +39,27 @@ public sealed record CanonicalVideoPlayerSnapshot(
     EpisodeSegmentDescriptor Segments,
     TrickplayDescriptor Trickplay);
 
+/// <summary>Why a video target has no player: nothing playable is stored, or its file could not be analysed.</summary>
+public enum CanonicalVideoPlayerGap
+{
+    None,
+
+    /// <summary>The target is unknown, has no file, or its file is gone from disk.</summary>
+    NoPlayableFile,
+
+    /// <summary>The media tool could not run (missing, hanging), so the file is neither confirmed nor rejected yet.</summary>
+    AnalysisUnavailable,
+
+    /// <summary>The media tool ran and rejected the file as unreadable.</summary>
+    AnalysisRejected
+}
+
+/// <summary>The player snapshot of a target, or the <see cref="Gap"/> that explains why there is none.</summary>
+public sealed record CanonicalVideoPlayerOutcome(CanonicalVideoPlayerSnapshot? Snapshot, CanonicalVideoPlayerGap Gap)
+{
+    public static CanonicalVideoPlayerOutcome NoPlayableFile { get; } = new(null, CanonicalVideoPlayerGap.NoPlayableFile);
+}
+
 /// <summary>
 /// Canonical Player bootstrap owner for every local video type. It resolves only
 /// Work/WorkEpisode -> Asset/File/Track identities; delivery policy remains in
@@ -51,7 +72,7 @@ public sealed class CanonicalVideoPlayerService(
     VideoProgressService progress,
     CanonicalPlayerNavigationAssetService? navigationAssets = null)
 {
-    public async Task<CanonicalVideoPlayerSnapshot?> GetAsync(
+    public async Task<CanonicalVideoPlayerOutcome> GetAsync(
         string profileId,
         PlaybackVideoTarget target,
         CancellationToken cancellationToken)
@@ -66,7 +87,7 @@ public sealed class CanonicalVideoPlayerService(
             .SingleOrDefaultAsync(cancellationToken);
         if (work is null || work.MediaType is not (WorkMediaType.Movie or WorkMediaType.Series or WorkMediaType.Anime))
         {
-            return null;
+            return CanonicalVideoPlayerOutcome.NoPlayableFile;
         }
 
         CanonicalVideoEpisode? episode = null;
@@ -74,7 +95,7 @@ public sealed class CanonicalVideoPlayerService(
         {
             if (work.MediaType == WorkMediaType.Movie)
             {
-                return null;
+                return CanonicalVideoPlayerOutcome.NoPlayableFile;
             }
 
             episode = await db.WorkEpisodes
@@ -88,12 +109,12 @@ public sealed class CanonicalVideoPlayerService(
                 .SingleOrDefaultAsync(cancellationToken);
             if (episode is null)
             {
-                return null;
+                return CanonicalVideoPlayerOutcome.NoPlayableFile;
             }
         }
         else if (work.MediaType != WorkMediaType.Movie)
         {
-            return null;
+            return CanonicalVideoPlayerOutcome.NoPlayableFile;
         }
 
         var file = await storage.ResolveVideoAsync(
@@ -102,7 +123,7 @@ public sealed class CanonicalVideoPlayerService(
             cancellationToken);
         if (file is null)
         {
-            return null;
+            return CanonicalVideoPlayerOutcome.NoPlayableFile;
         }
 
         // Unreachable storage must not read as "no video": the persisted analysis still describes the file, and the storage state
@@ -111,7 +132,13 @@ public sealed class CanonicalVideoPlayerService(
             ?? await inventory.GetAsync(file.StoredFileId, cancellationToken);
         if (technical?.Technical is null)
         {
-            return null;
+            var gap = technical?.Status switch
+            {
+                MediaAnalysisStatus.Pending => CanonicalVideoPlayerGap.AnalysisUnavailable,
+                MediaAnalysisStatus.Failed => CanonicalVideoPlayerGap.AnalysisRejected,
+                _ => CanonicalVideoPlayerGap.NoPlayableFile
+            };
+            return new CanonicalVideoPlayerOutcome(null, gap);
         }
 
         var progressSnapshot = await progress.GetAsync(
@@ -120,7 +147,7 @@ public sealed class CanonicalVideoPlayerService(
             cancellationToken);
         if (progressSnapshot is null)
         {
-            return null;
+            return CanonicalVideoPlayerOutcome.NoPlayableFile;
         }
 
         var preferenceRow = await db.ProfilePlaybackPreferences
@@ -148,18 +175,20 @@ public sealed class CanonicalVideoPlayerService(
                 queue: true,
                 cancellationToken);
 
-        return new CanonicalVideoPlayerSnapshot(
-            target,
-            work.MediaType,
-            work.CanonicalTitle,
-            episode,
-            file,
-            technical,
-            progressSnapshot,
-            preferences,
-            navigation,
-            segments,
-            trickplay);
+        return new CanonicalVideoPlayerOutcome(
+            new CanonicalVideoPlayerSnapshot(
+                target,
+                work.MediaType,
+                work.CanonicalTitle,
+                episode,
+                file,
+                technical,
+                progressSnapshot,
+                preferences,
+                navigation,
+                segments,
+                trickplay),
+            CanonicalVideoPlayerGap.None);
     }
 
     private async Task<CanonicalVideoNavigation> ResolveNavigationAsync(

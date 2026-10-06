@@ -190,10 +190,10 @@ public static class ClientApiPlaybackPlanEndpoints
             }
 
             var target = request.Target!;
-            var snapshot = await player.GetAsync(
+            var snapshot = (await player.GetAsync(
                 currentAccount.ProfileId,
                 new PlaybackVideoTarget(target.WorkId, target.WorkEpisodeId),
-                cancellationToken);
+                cancellationToken)).Snapshot;
             if (snapshot is null)
             {
                 return Results.NotFound(new ClientErrorResponse(
