@@ -58,7 +58,7 @@ public sealed class VideoDetailPageTests
         StringAssert.Contains(hero, "Moon Empire");
         StringAssert.Contains(hero, $"href=\"/Library/Watch/{movie.Id}\"");
         StringAssert.Contains(hero, ">Play<");
-        StringAssert.Contains(hero, "112 min");
+        StringAssert.Contains(hero, "1h 52m");
         StringAssert.Contains(hero, "ad-hero-strip");
         Assert.IsFalse(hero.Contains("data-dc-card-request", StringComparison.Ordinal), "Something playable offers Play, not Request.");
         Assert.IsFalse(html.Contains("data-dc-rq", StringComparison.Ordinal), "No Request dialog is needed for an available title.");

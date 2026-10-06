@@ -1,0 +1,26 @@
+@using Jularr.Web.Features.MediaCore
+@model VideoDetailPageModel
+@* The trailer of a Movie (docs/mockups/movie-detail, section 2): a click-to-load facade, never a third-party frame on load. Nothing
+   of YouTube is requested until the viewer starts it; work-metadata.js then adds one sandboxed no-cookie frame. The link works
+   without script and is built only from a key that has the shape of a YouTube id. The still is the Work's own backdrop. The section
+   does not exist without a playable trailer. *@
+@if (Model.Detail.Metadata?.Trailers.FirstOrDefault(x => x.IsPlayable) is { } trailer)
+{
+    var ui = Model.Ui;
+    var title = Model.Detail.Title;
+    var backdrop = Model.Detail.Metadata.Backdrop;
+    <section class="vd-trailer" aria-labelledby="vd-trailer-title">
+        <h2 id="vd-trailer-title">@ui["library.video.trailerHeading"]</h2>
+        <div class="vd-trailer-frame" data-vd-trailer data-key="@trailer.YouTubeKey" data-frame-title="@ui.Format("library.video.trailerFrameTitle", ("title", title))">
+            <a class="vd-trailer-play" href="@trailer.WatchUrl" target="_blank" rel="noopener noreferrer" aria-label="@ui.Format("library.video.playTrailer", ("title", title))">
+                @if (backdrop is not null)
+                {
+                    <img src="@backdrop.Url" alt="" width="@backdrop.Width" height="@backdrop.Height" loading="lazy" decoding="async" data-work-art />
+                }
+                <span class="vd-trailer-button" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="28" height="28" focusable="false"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg>
+                </span>
+            </a>
+        </div>
+    </section>
+}

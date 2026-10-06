@@ -3,9 +3,9 @@
 @using Jularr.Web.Features.Library
 @model Jularr.Web.Pages.Library.MovieDetailModel
 @* The canonical Movie detail (docs/mockups/movie-detail/SPEC.md, binding): one scrolling page, never tabs. The hero
-   carries the title, the state-derived primary action and the facts strip; Versions & Languages stays a compact card.
-   Trailer, Cast & Crew, Specials and More Like This need provider metadata Jularr does not persist yet; they are not
-   rendered at all instead of empty blocks. *@
+   carries the title, the state-derived primary action and the facts strip; the trailer, Versions & Languages, Cast & Crew,
+   Related Works and About follow in that order. Every section renders only when its data exists. Specials and More Like
+   This need data Jularr does not persist yet and are not rendered at all. *@
 @{
     Layout = "_VideoDetailLayout";
     var ui = Model.Ui;
@@ -20,6 +20,7 @@
     var hasHdr = detail.Versions.Any(x => x.IsHdr);
     var hasDolbyVision = detail.Versions.Any(x => x.IsDolbyVision);
     var preferredAvailable = detail.Preference.IsAvailableIn(audio, subtitles);
+    var hasTrailer = detail.Metadata?.Trailers.Any(x => x.IsPlayable) == true;
     string Codes(IEnumerable<string> languages) => string.Join(" · ", languages.Order(StringComparer.Ordinal).Select(x => x.ToUpperInvariant()));
     string VersionLabel(VideoDetailVersion version, int number)
     {
@@ -33,7 +34,8 @@
 <partial name="_VideoDetailHero" model="Model" />
 
 <div class="vd-body">
-    <div class="vd-top">
+    <div class="vd-top@(hasTrailer ? " has-trailer" : "")">
+        <partial name="_VideoDetailTrailer" model="Model" />
         @if (detail.Versions.Count > 0)
         {
             <section class="vd-card" aria-labelledby="vd-versions-title">
@@ -107,19 +109,9 @@
             </section>
         }
 
-        @if (detail.AlsoKnownAs.Count > 0)
-        {
-            <section class="vd-card" aria-labelledby="vd-about-title">
-                <h2 id="vd-about-title">@ui["library.video.aboutHeading"]</h2>
-                <dl class="vd-facts">
-                    <div>
-                        <dt>@ui["library.video.alsoKnownAs"]</dt>
-                        <dd>@string.Join(" · ", detail.AlsoKnownAs)</dd>
-                    </div>
-                </dl>
-            </section>
-        }
     </div>
 
+    <partial name="_VideoDetailCast" model="Model" />
     <partial name="_VideoDetailRelated" model="Model" />
+    <partial name="_VideoDetailAbout" model="Model" />
 </div>
