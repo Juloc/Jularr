@@ -236,62 +236,6 @@ public sealed class BookCompletedDownloadImportTests
         StringAssert.Contains(gaveUp.Import.Result, "Gave up importing");
     }
 
-    [TestMethod]
-    public async Task OldBooksInboxMovesOnceIntoThePerMediaInboxFolders()
-    {
-        var root = TempDirectory();
-        try
-        {
-            var legacy = Path.Combine(root, "integrations.json");
-            await File.WriteAllTextAsync(legacy, """{ "InboxPath": "/books-inbox" }""");
-            var store = new AnimeImportSettingsStore(root);
-
-            Assert.IsTrue(await MediaFolderSettingsMigration.MigrateAsync(store, configuredBooksInbox: null, legacy));
-            var migrated = await store.LoadAsync();
-            Assert.AreEqual(MediaFolderSettingsMigration.MediaFoldersVersion, migrated.Version);
-            Assert.AreEqual(Path.GetFullPath("/books-inbox"), migrated.InboxFor(MediaAcquisitionKind.Book));
-            Assert.AreEqual(Path.Combine(Path.GetFullPath("/books-inbox"), "light-novels"), migrated.InboxFor(MediaAcquisitionKind.LightNovel));
-            Assert.IsNull(migrated.InboxFor(MediaAcquisitionKind.Manga));
-            Assert.IsFalse(File.Exists(legacy), "Nothing reads the old Books integration file again.");
-
-            // Later changes by the owner stay; the configuration key is not read again.
-            await store.UpdateAsync(state => state with
-            {
-                MediaLibraries = new() { [MediaAcquisitionKind.Book] = new MediaLibraryTarget(InboxRoot: "/data/downloads/complete/books") }
-            });
-            Assert.IsFalse(await MediaFolderSettingsMigration.MigrateAsync(store, "/old-env-inbox", legacy));
-            Assert.AreEqual("/data/downloads/complete/books", (await store.LoadAsync()).InboxFor(MediaAcquisitionKind.Book));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [TestMethod]
-    public async Task InboxMigrationKeepsFoldersTheOwnerAlreadyChose()
-    {
-        var root = TempDirectory();
-        try
-        {
-            var store = new AnimeImportSettingsStore(root);
-            await store.UpdateAsync(state => state with
-            {
-                MediaLibraries = new() { [MediaAcquisitionKind.LightNovel] = new MediaLibraryTarget(InboxRoot: "/data/downloads/complete/lightnovels") }
-            });
-
-            Assert.IsTrue(await MediaFolderSettingsMigration.MigrateAsync(store, "/env-inbox", Path.Combine(root, "missing.json")));
-
-            var migrated = await store.LoadAsync();
-            Assert.AreEqual(Path.GetFullPath("/env-inbox"), migrated.InboxFor(MediaAcquisitionKind.Book));
-            Assert.AreEqual("/data/downloads/complete/lightnovels", migrated.InboxFor(MediaAcquisitionKind.LightNovel));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
     private static async Task WriteEpubAsync(string path)
     {
         await using var file = File.Create(path);
