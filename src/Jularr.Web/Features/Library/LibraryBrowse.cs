@@ -191,6 +191,7 @@ public sealed record LibraryCardView(
     string Href,
     string? PosterUrl,
     string Initial,
+    string? ScoreText,
     string? StatusText,
     int? ProgressPercent,
     string? ProgressAria,
@@ -212,7 +213,7 @@ public sealed record LibraryCardView(
 
         var card = entry.Card;
         var progress = card.Progress;
-        var culture = Culture(ui.Locale);
+        var culture = VideoDetailView.CultureOf(ui.Locale);
         var isMovie = entry.MediaType == WorkMediaType.Movie;
 
         string? statusText;
@@ -224,7 +225,7 @@ public sealed record LibraryCardView(
         var yearText = card.Year is > 0 ? card.Year.Value.ToString(culture) : null;
 
         // A Movie has no next unit: it shows what it is (year and runtime) until it is resumed or finished.
-        var movieFacts = string.Join(" · ", new[] { yearText, entry.RuntimeMinutes is > 0 ? FormatRuntime(entry.RuntimeMinutes.Value) : null }.Where(fact => fact is not null));
+        var movieFacts = string.Join(" · ", new[] { yearText, entry.RuntimeMinutes is > 0 ? VideoDetailView.RuntimeText(entry.RuntimeMinutes.Value) : null }.Where(fact => fact is not null));
         string? movieStatus = movieFacts.Length > 0 ? movieFacts : null;
 
         if (progress is null)
@@ -271,11 +272,15 @@ public sealed record LibraryCardView(
         var audio = AnimeDetailView.Chips(ToSet(card.AudioLanguages), preference.Audio);
         var subtitles = AnimeDetailView.Chips(ToSet(card.SubtitleLanguages), preference.Subtitle);
 
+        // The provider rating of the persisted Work metadata: a chip on Movie and Series posters (the card carries it on the 0-100 scale of AniList).
+        var scoreText = entry.MediaType is WorkMediaType.Movie or WorkMediaType.Series && card.AverageScore is > 0 ? VideoDetailView.RatingText(card.AverageScore.Value / 10d) : null;
+
         return new LibraryCardView(
             card.Title,
             card.Href,
             entry.PosterUrl,
             InitialOf(card.Title),
+            scoreText,
             statusText,
             percent,
             progressAria,
@@ -287,9 +292,6 @@ public sealed record LibraryCardView(
             action);
     }
 
-
-    private static string FormatRuntime(int minutes) =>
-        minutes >= 60 ? $"{minutes / 60}h {minutes % 60:00}m" : $"{minutes}m";
 
     private static string InitialOf(string title)
     {
@@ -318,17 +320,6 @@ public sealed record LibraryCardView(
         };
     }
 
-    private static CultureInfo Culture(string locale)
-    {
-        try
-        {
-            return string.IsNullOrWhiteSpace(locale) ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(locale);
-        }
-        catch (CultureNotFoundException)
-        {
-            return CultureInfo.InvariantCulture;
-        }
-    }
 }
 
 /// <summary>

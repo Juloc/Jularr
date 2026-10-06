@@ -283,6 +283,41 @@ public sealed class LibraryPageRenderTests
     }
 
     [TestMethod]
+    public async Task MovieAndSeriesCardsShowTheLocalPosterSizedAndLazyWithAFallbackAndTheRatingChipWhileAnimeStaysQuiet()
+    {
+        var (host, _, _) = await SeedAsync();
+        await using var _host = host;
+        var seed = new LibraryCanonicalSeed(host.Db);
+        var movie = await seed.AddWorkAsync(WorkMediaType.Movie, "Moon Empire", 2024);
+        await seed.AddVideoAsync(movie, null, audio: ["ger"], durationSeconds: 7440);
+        var plain = await seed.AddWorkAsync(WorkMediaType.Movie, "Plain Film", 2023);
+        await seed.AddVideoAsync(plain, null, audio: ["ger"]);
+        var store = new WorkMetadataStore(host.Db);
+        var key = Jularr.Web.Features.Artwork.WorkArtworkCache.CacheKey(movie.Id, WorkArtworkSlot.Poster, "", "tmdb", "/p.jpg");
+        var poster = new WorkArtworkCandidate(WorkArtworkSlot.Poster, "", "/p.jpg", new Uri("https://image.tmdb.org/t/p/w780/p.jpg"), 500, 750, 5, 1);
+        await store.UpsertArtworkAsync(movie.Id, poster, "tmdb", key, DateTime.UtcNow, CancellationToken.None);
+        await store.UpsertFactsAsync(new WorkMetadataFacts { WorkId = movie.Id, Rating = 7.7, RatingCount = 10, UpdatedAt = DateTime.UtcNow }, CancellationToken.None);
+
+        var html = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library", asOwner: false));
+
+        var cards = html.Split("<article class=\"lib-card", StringSplitOptions.RemoveEmptyEntries).Skip(1).ToArray();
+        var movieCard = cards.Single(x => x.Contains("Moon Empire", StringComparison.Ordinal));
+        var posterAttributes = @"alt="""" width=""300"" height=""450"" loading=""lazy"" decoding=""async"" referrerpolicy=""no-referrer"" data-lib-poster data-initial=""M""";
+        StringAssert.Matches(movieCard, new Regex($@"<img src=""/works/{movie.Id:D}/artwork/[0-9]+\?v=[0-9a-f]{{12}}"" {posterAttributes}"));
+        StringAssert.Matches(movieCard, new Regex(@"<span class=""lib-score"">[\s\S]*lib-score-label"">Rating </span>7\.7"));
+        Assert.IsFalse(movieCard.Contains("lib-card-initial", StringComparison.Ordinal), "A title with a poster has no placeholder.");
+        Assert.IsFalse(movieCard.Contains("image.tmdb.org", StringComparison.Ordinal), "The CDN is never hot-linked.");
+
+        var plainCard = cards.Single(x => x.Contains("Plain Film", StringComparison.Ordinal));
+        StringAssert.Contains(plainCard, "lib-card-initial");
+        Assert.IsFalse(plainCard.Contains("lib-score", StringComparison.Ordinal), "No rating, no chip.");
+        Assert.IsFalse(plainCard.Contains("<img", StringComparison.Ordinal));
+
+        var starfallCard = cards.Single(x => x.Contains("Starfall Chronicle", StringComparison.Ordinal));
+        Assert.IsFalse(starfallCard.Contains("lib-score", StringComparison.Ordinal), "Anime cards carry no rating chip.");
+    }
+
+    [TestMethod]
     public async Task AScopeWithoutTitlesSaysSoWhileTheLibraryHasOthers()
     {
         var (host, _, _) = await SeedAsync();
