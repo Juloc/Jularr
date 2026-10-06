@@ -39,6 +39,19 @@ public interface IWantedRequestHandler
 }
 
 /// <summary>
+/// A media type whose Wanted items do not all come from a person requesting them: it keeps its own record of what is monitored (artists
+/// and albums) and, at the start of every Wanted pass, creates the requests for what is missing. It only prepares; searching, downloading and
+/// importing stay with the shared lifecycle of the requests it created.
+/// </summary>
+public interface IWantedSource
+{
+    MediaAcquisitionKind Kind { get; }
+
+    /// <summary>Refreshes monitored titles and creates the requests that are missing; returns how many requests it created.</summary>
+    Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Generic durable Wanted lifecycle for request-backed media.
 ///
 /// It deliberately does not talk to SABnzbd directly. The shared download monitor projects
@@ -126,6 +139,17 @@ public sealed class WantedAcquisitionService(
             }
         }
 
+        var advanced = 0;
+        foreach (var source in services.GetServices<IWantedSource>())
+        {
+            if (instance is not null && !instance.IsEnabled(AcquisitionInstanceModules.For(source.Kind)))
+            {
+                continue;
+            }
+
+            advanced += await source.PrepareAsync(nowUtc, cancellationToken);
+        }
+
         var handlers = services
             .GetServices<IWantedRequestHandler>()
             .GroupBy(handler => handler.Kind)
@@ -136,7 +160,6 @@ public sealed class WantedAcquisitionService(
                     : throw new InvalidOperationException(
                         $"More than one Wanted handler is registered for {group.Key}."));
 
-        var advanced = 0;
         foreach (var handler in handlers.Values)
         {
             if (instance is not null && !instance.IsEnabled(AcquisitionInstanceModules.For(handler.Kind)))

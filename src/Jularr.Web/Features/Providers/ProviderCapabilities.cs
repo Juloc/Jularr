@@ -71,6 +71,7 @@ public static class ProviderKeys
     public const string Tmdb = "tmdb";
     public const string Tvdb = "tvdb";
     public const string Imdb = "imdb";
+    public const string MusicBrainz = "musicbrainz";
     public const string Newznab = "newznab";
     public const string Prowlarr = "prowlarr";
     public const string OpenSubtitles = "opensubtitles";

@@ -788,6 +788,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.Name).HasMaxLength(300);
             entity.Property(x => x.SortName).HasMaxLength(300);
             entity.Property(x => x.MusicBrainzId).HasMaxLength(64);
+            entity.Property(x => x.AddedByProfileId).HasMaxLength(64);
             entity.Property(x => x.Monitor).HasConversion<int>();
             entity.HasIndex(x => x.MusicBrainzId).IsUnique().HasFilter("\"MusicBrainzId\" IS NOT NULL");
             entity.HasIndex(x => x.SortName);

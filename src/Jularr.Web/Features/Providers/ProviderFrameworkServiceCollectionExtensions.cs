@@ -27,6 +27,10 @@ public static class ProviderFrameworkServiceCollectionExtensions
                 "TMDB",
                 ProviderCapabilities.Metadata | ProviderCapabilities.Search | ProviderCapabilities.ReleaseSchedule));
             catalog.Register(new ExternalProviderDescriptor(
+                ProviderKeys.MusicBrainz,
+                "MusicBrainz",
+                ProviderCapabilities.Metadata | ProviderCapabilities.Search));
+            catalog.Register(new ExternalProviderDescriptor(
                 ProviderKeys.Newznab,
                 "Newznab indexer",
                 ProviderCapabilities.Search));

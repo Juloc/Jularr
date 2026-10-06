@@ -40,6 +40,9 @@ public sealed class MusicArtist
 
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>The profile that added the artist; the requests monitoring creates for its albums are attributed to it.</summary>
+    public string? AddedByProfileId { get; set; }
+
     /// <summary>When the discography was last read from the provider; the shared Wanted pass refreshes artists whose value is old.</summary>
     public DateTime? LastRefreshedAt { get; set; }
 }

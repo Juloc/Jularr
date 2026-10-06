@@ -381,16 +381,10 @@ public sealed partial class VideoAcquisitionEngine(
                 // A release several indexers returned is one candidate with several sources: when the download client refuses the first
                 // source, the next one is offered before the release counts as failed.
                 var sources = byIdentity[release.Identity].Sources.Select(source => source.DownloadUri).OfType<Uri>().Distinct().ToArray();
-                var outcome = default(DownloadSubmissionOutcome)!;
-                foreach (var uri in sources.Length == 0 ? [release.DownloadUri] : sources)
-                {
-                    var spec = new DownloadSubmissionSpec(OperationKind, downloadTitle, payload.Title, request.RequestedByProfileId, uri, release.Title, request.Kind, MediaTargetKey: mediaTarget, Priority: priority);
-                    outcome = await downloads.SubmitAsync(spec, cancellationToken);
-                    if (outcome.Accepted)
-                    {
-                        break;
-                    }
-                }
+                var outcome = await downloads.SubmitFirstAcceptedAsync(
+                    sources.Length == 0 ? [release.DownloadUri] : sources,
+                    uri => new DownloadSubmissionSpec(OperationKind, downloadTitle, payload.Title, request.RequestedByProfileId, uri, release.Title, request.Kind, MediaTargetKey: mediaTarget, Priority: priority),
+                    cancellationToken);
 
                 if (outcome.Accepted && progress is not null)
                 {

@@ -529,6 +529,13 @@ builder.Services.AddProviderFramework();
 // usenet-only; torrent indexers (Torznab) are intentionally unsupported.
 builder.Services.AddSingleton<IndexerStore>();
 builder.Services.AddHttpClient<NewznabIndexer>(client => client.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddHttpClient<Jularr.Web.Features.Music.MusicBrainzProvider>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/0.1 (+https://github.com/Juloc/Jularr)");
+});
+builder.Services.AddScoped<Jularr.Web.Features.Music.IMusicMetadataProvider>(services => services.GetRequiredService<Jularr.Web.Features.Music.MusicBrainzProvider>());
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicLibraryService>();
 builder.Services.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(services =>
     new Dictionary<IndexerType, IIndexer>
     {
@@ -567,6 +574,11 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequest
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.MangaWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.LightNovelWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Books.BookWantedRequestHandler>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Music.MusicWantedRequestHandler>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, Jularr.Web.Features.Music.MusicWantedSource>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicMonitoringService>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Music.MusicAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.ReleaseRequestTracker>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.ICompletedDownloadImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>());
