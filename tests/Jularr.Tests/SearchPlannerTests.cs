@@ -279,7 +279,7 @@ public sealed class SearchPlannerTests
     }
 
     [TestMethod]
-    public async Task EvidenceIsCachedWithoutProfileScoresAndARefreshReadsPastIt()
+    public async Task ManualSearchReadsCachedEvidenceAndAnAutomaticSearchNeverDoes()
     {
         using var host = new SearchHost();
         await host.AddAsync("Cached", 1);
@@ -290,7 +290,7 @@ public sealed class SearchPlannerTests
             return [Release("Cached", "Dune.2021.1080p.WEB.H264-GRP", 4_000_000_000, "c-1")];
         };
         var intent = new SearchIntent(MediaAcquisitionKind.Movie, "Dune") { Year = 2021 };
-        var options = new SearchOptions { Depth = SearchDepth.Fast };
+        var options = new SearchOptions { Depth = SearchDepth.Fast, Purpose = SearchPurpose.Interactive };
 
         await host.Coordinator.SearchAsync(intent, options, CancellationToken.None);
         var afterFirst = calls;
@@ -301,6 +301,10 @@ public sealed class SearchPlannerTests
         Assert.AreEqual(afterFirst, cached, "The same search reads the short-lived evidence.");
         Assert.IsTrue(again.Trace.All(line => line.FromCache));
         Assert.IsTrue(calls > cached, "An explicit refresh asks the indexer again.");
+
+        var beforeAutomatic = calls;
+        await host.Coordinator.SearchAsync(intent, new SearchOptions { Depth = SearchDepth.Fast }, CancellationToken.None);
+        Assert.IsTrue(calls > beforeAutomatic, "A Wanted search never reads remembered answers.");
     }
 
     [TestMethod]

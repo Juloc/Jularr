@@ -212,9 +212,12 @@ public sealed class IndexerSearchCoordinator(
         for (var page = 0; page < budget.MaxPages; page++)
         {
             var key = $"{original.Id:N}|{query.Key}|{string.Join(',', entry.Settings.Categories)}|{limit}|{page}";
+            // Only a person browsing candidates reads the evidence cache. Wanted searches run hours apart and must see what appeared since
+            // the last one, so an automatic search always asks the indexer and never hides new content behind a remembered answer.
+            var useCache = options.Purpose == SearchPurpose.Interactive && !options.Refresh;
             IReadOnlyList<ProwlarrReleaseCandidate> results;
             var cached = false;
-            if (!options.Refresh && cache.TryGet(key, out var remembered))
+            if (useCache && cache.TryGet(key, out var remembered))
             {
                 results = remembered;
                 cached = true;
@@ -222,7 +225,10 @@ public sealed class IndexerSearchCoordinator(
             else
             {
                 results = await indexer.SearchAsync(entry, new IndexerSearchQuery(query.Text ?? string.Empty, query.Mode, query.Parameters, page * limit, limit), cancellationToken);
-                cache.Set(key, results);
+                if (options.Purpose == SearchPurpose.Interactive)
+                {
+                    cache.Set(key, results);
+                }
             }
 
             var fresh = 0;
