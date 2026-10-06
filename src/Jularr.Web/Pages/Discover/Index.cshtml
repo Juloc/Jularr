@@ -222,7 +222,7 @@
             <ul class="dc-track dc-ghosts">
                 @for (var i = 0; i < DiscoverSectionView.TrackGhosts; i++)
                 {
-                    <li class="dc-track-item"><span class="dc-ghost"><span class="dc-ghost-art"></span><span class="dc-ghost-body"><span class="dc-ghost-line"></span><span class="dc-ghost-line dc-ghost-short"></span></span></span></li>
+                    <li class="dc-track-item"><partial name="_DiscoverGhost" /></li>
                 }
             </ul>
         </div>

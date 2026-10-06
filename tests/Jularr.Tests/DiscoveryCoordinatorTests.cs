@@ -23,9 +23,15 @@ public sealed class DiscoveryCoordinatorTests
 
     private static DiscoveryRequest Request(DiscoveryCategory category, DiscoveryMode mode = DiscoveryMode.Trending, string query = "") => new(query, category, mode);
 
-    private static string Results(string prefix, int count, bool movie) =>
-        "{\"results\":[" + string.Join(',', Enumerable.Range(1, count).Select(index =>
-            $"{{\"id\":{index + (movie ? 100 : 200)},\"{(movie ? "title" : "name")}\":\"{prefix} {index}\",\"overview\":\"x\",\"poster_path\":\"/p{index}.jpg\",\"{(movie ? "release_date" : "first_air_date")}\":\"2024-01-01\",\"genre_ids\":[],\"vote_average\":7.1}}")) + "]}";
+    private static string Results(string prefix, int count, bool movie)
+    {
+        var title = movie ? "title" : "name";
+        var date = movie ? "release_date" : "first_air_date";
+        var rows = Enumerable.Range(1, count).Select(index =>
+            $"{{\"id\":{index + (movie ? 100 : 200)},\"{title}\":\"{prefix} {index}\",\"overview\":\"x\",\"poster_path\":\"/p{index}.jpg\","
+            + $"\"{date}\":\"2024-01-01\",\"genre_ids\":[],\"vote_average\":7.1}}");
+        return "{\"results\":[" + string.Join(',', rows) + "]}";
+    }
 
     private static async Task<(DiscoveryCoordinator Coordinator, AppDbContext Db)> CoordinatorAsync(Func<HttpRequestMessage, Task<HttpResponseMessage>> tmdbHandler, DiscoveryTestSupport.MovableClock? clock = null)
     {

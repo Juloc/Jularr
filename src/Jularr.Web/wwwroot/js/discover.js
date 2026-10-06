@@ -104,19 +104,25 @@
         };
     }
 
-    // The card the viewer is looking at or aiming at: the one under the pointer, else the first card in view.
+    // What the viewer is looking at or aiming at: the card under the pointer, else the first card in view, else the first section in view. The section
+    // is kept as a second reference, since a replaced section takes its cards with it.
     function findAnchor() {
-        const hovered = interaction.x < 0 ? null : document.elementFromPoint(interaction.x, interaction.y)?.closest("[data-dc-card]");
-        const card = hovered || [...body.querySelectorAll("[data-dc-card]")].find(item => {
+        const inView = item => {
             const rect = item.getBoundingClientRect();
             return rect.bottom > 0 && rect.top < window.innerHeight;
-        });
-        return card ? { card, top: card.getBoundingClientRect().top } : null;
+        };
+        const hovered = interaction.x < 0 ? null : document.elementFromPoint(interaction.x, interaction.y)?.closest("[data-dc-card]");
+        const element = hovered || [...body.querySelectorAll("[data-dc-card]")].find(inView) || [...body.querySelectorAll("[data-dc-section]")].find(inView);
+        const section = element?.closest("[data-dc-section]");
+        return element ? { element, top: element.getBoundingClientRect().top, sectionId: section?.dataset.dcSection, sectionTop: section?.getBoundingClientRect().top } : null;
     }
 
     function restoreAnchor(anchor) {
-        if (!anchor?.card.isConnected) return;
-        const shift = anchor.card.getBoundingClientRect().top - anchor.top;
+        if (!anchor) return;
+        const kept = anchor.element.isConnected;
+        const target = kept ? anchor.element : anchor.sectionId ? sectionIn(bodyRoot(), anchor.sectionId) : null;
+        if (!target) return;
+        const shift = target.getBoundingClientRect().top - (kept ? anchor.top : anchor.sectionTop);
         if (Math.abs(shift) >= 1) window.scrollBy(0, shift);
     }
 
@@ -132,7 +138,9 @@
         if (nextTrack && scrolled) nextTrack.scrollLeft = scrolled;
     }
 
-    const sectionIn = (container, id) => container.querySelector(`:scope > [data-dc-section="${CSS.escape(id)}"]`);
+    function sectionIn(container, id) {
+        return container.querySelector(`:scope > [data-dc-section="${CSS.escape(id)}"]`);
+    }
 
     function applyOperations(operations, payload) {
         const anchor = findAnchor();

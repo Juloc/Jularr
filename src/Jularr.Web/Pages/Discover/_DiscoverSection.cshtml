@@ -43,7 +43,7 @@
             <ul class="@layoutClass dc-ghosts" aria-hidden="true">
                 @for (var index = 0; index < block.Ghosts; index++)
                 {
-                    <li class="@itemClass"><span class="dc-ghost"><span class="dc-ghost-art"></span><span class="dc-ghost-body"><span class="dc-ghost-line"></span><span class="dc-ghost-line dc-ghost-short"></span></span></span></li>
+                    <li class="@itemClass"><partial name="_DiscoverGhost" /></li>
                 }
             </ul>
         }

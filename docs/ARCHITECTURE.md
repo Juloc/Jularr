@@ -186,6 +186,8 @@ Games remains deliberately outside MediaCore. Games discovery resolves through a
 
 A discovery result is not automatically a library item.
 
+Provider calls of Discover run as single flights per source (`DiscoverySourceFlights`): one call per source, mode, genre, text and locale, shared by every request that needs it, with a hard timeout, a short-lived cache of successful answers and no cache of failures as empty answers. The coordinator waits for the sources only within the budget it is given, so a first paint shows what is ready, a source that has not answered keeps a reserved place, and a follow-up request is held open until one more source has answered. Titles and sections are ordered by the fixed source order, never by the order in which sources answered (see `docs/mockups/discover/SPEC.md`, staged late results).
+
 ### Collections
 Owns profile-scoped Collection metadata and canonical Work membership.
 

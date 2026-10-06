@@ -98,6 +98,17 @@ public sealed class DiscoverPageTests
     }
 
     [TestMethod]
+    public void TheDiscoverHandlersAreRateLimitedPerAccountBecauseEveryRequestCanStartProviderCalls()
+    {
+        var attribute = (Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute?)Attribute.GetCustomAttribute(
+            typeof(Jularr.Web.Pages.Discover.IndexModel),
+            typeof(Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute));
+
+        Assert.IsNotNull(attribute);
+        Assert.AreEqual(DiscoveryRegistration.RateLimitPolicy, attribute.PolicyName);
+    }
+
+    [TestMethod]
     public void MyAniListCountsAsAFilterOnlyWithoutASearchText()
     {
         Assert.AreEqual(1, Parse("mode=my-list").ActiveFilterCount);

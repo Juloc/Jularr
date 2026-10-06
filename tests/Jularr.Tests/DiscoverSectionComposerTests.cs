@@ -75,7 +75,13 @@ public sealed class DiscoverSectionComposerTests
     public void ARowWithTitlesAndAFailedSourceKeepsTheTitlesAndNamesTheGapOnce()
     {
         var sections = DiscoverSectionComposer.Landing(
-            [Row("trending-books-light-novels", "Books", Source(DiscoverySource.Reading, DiscoverySourceState.Ready, Item("light-novel", "anilist", "7", "Overlord")), Source(DiscoverySource.Books, DiscoverySourceState.Unavailable))],
+            [
+                Row(
+                    "trending-books-light-novels",
+                    "Books",
+                    Source(DiscoverySource.Reading, DiscoverySourceState.Ready, Item("light-novel", "anilist", "7", "Overlord")),
+                    Source(DiscoverySource.Books, DiscoverySourceState.Unavailable))
+            ],
             Context());
 
         Assert.AreEqual(DiscoverySectionState.Ready, sections.Single().State);

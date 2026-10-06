@@ -511,9 +511,7 @@ Books-only profile sees a pure book app.
   at least browse the type gets **404** (the type does not exist for them) before the page model is
   constructed; the owner is unrestricted through the capability policy. The gate is not a second
   policy: it reads the same `MediaCapabilityView`.
-- **Not yet media-scoped (follow-ups).** Home type chips and Continue rows, the `/Discover` category
-  tab strip and browse grid (the provider-driven shelf board #595 is capability-scoped; the manual
-  category tabs/grid are not yet), Watchlist/Calendar/Franchise content, and the ClientApi surface
+- **Not yet media-scoped (follow-ups).** Home type chips and Continue rows, Watchlist/Calendar/Franchise content, and the ClientApi surface
   (`/api/client/v1/...`) still list every media type the data contains; they should narrow by
   `ShellMediaAccess`.
 
