@@ -35,6 +35,9 @@ public sealed partial class WorkMetadataRefresher(
     /// <summary>When a title the provider does not know is asked about again (the negative result expires).</summary>
     public static readonly TimeSpan PermanentFailureRecheck = TimeSpan.FromDays(7);
 
+    /// <summary>The first retry of a failed run; each further failure doubles it, up to <see cref="MaxBackoff"/>.</summary>
+    public static readonly TimeSpan BaseBackoff = TimeSpan.FromMinutes(1);
+
     public static readonly TimeSpan MaxBackoff = TimeSpan.FromHours(6);
 
     /// <summary>How long the spool waits after the provider's circuit opened.</summary>
@@ -47,13 +50,17 @@ public sealed partial class WorkMetadataRefresher(
 
     public bool IsProviderConfigured => tmdb.IsConfigured;
 
-    /// <summary>The first transient retry waits a minute; each further failure doubles it, up to <see cref="MaxBackoff"/>.</summary>
+    /// <summary>The wait after <paramref name="attempts"/> consecutive failed runs: <see cref="BaseBackoff"/> doubling up to <see cref="MaxBackoff"/>.</summary>
     public static TimeSpan Backoff(int attempts)
     {
-        var minutes = Math.Pow(2, Math.Clamp(attempts - 1, 0, 16));
-        return TimeSpan.FromMinutes(Math.Min(minutes, MaxBackoff.TotalMinutes));
+        var factor = Math.Pow(2, Math.Clamp(attempts - 1, 0, 16));
+        return TimeSpan.FromTicks((long)Math.Min(BaseBackoff.Ticks * factor, MaxBackoff.Ticks));
     }
 
+    /// <summary>
+    /// Runs one claimed entry. <see cref="WorkMetadataRefreshClaim.Attempts"/> already counts this run (see
+    /// <see cref="WorkMetadataStore.ClaimNextDueAsync"/>): a failure keeps it, a provider pause gives it back, a success clears it.
+    /// </summary>
     public async Task<WorkMetadataRunOutcome> RunAsync(WorkMetadataRefreshClaim claim, CancellationToken cancellationToken)
     {
         try
@@ -64,8 +71,7 @@ public sealed partial class WorkMetadataRefresher(
         {
             // A failure outside the provider call (storage, a bug) must not turn into a hot loop on one entry: back off like a
             // transient failure and keep the cause for diagnostics.
-            var attempts = claim.Attempts + 1;
-            await RecordAsync(claim, WorkMetadataRefreshStatus.Queued, claim.Priority, attempts, Backoff(attempts), exception, cancellationToken);
+            await RecordAsync(claim, WorkMetadataRefreshStatus.Queued, claim.Priority, claim.Attempts, Backoff(claim.Attempts), Describe(exception), cancellationToken);
             return new WorkMetadataRunOutcome(WorkMetadataRefreshStatus.Queued, null);
         }
         finally
@@ -89,39 +95,23 @@ public sealed partial class WorkMetadataRefresher(
             var mediaType = claim.MediaType == WorkMediaType.Movie ? TmdbDiscoveryMediaType.Movie : TmdbDiscoveryMediaType.Series;
             snapshot = await tmdb.GetWorkMetadataAsync(mediaType, tmdbId, claim.Locale, cancellationToken);
         }
-        catch (ProviderRateLimitedException exception)
+        catch (Exception exception) when (ProviderPause(exception) is { } pause)
         {
-            await RecordAsync(claim, claim.Status, claim.Priority, claim.Attempts, exception.RetryAfter, exception, cancellationToken);
-            return new WorkMetadataRunOutcome(claim.Status, exception.RetryAfter);
-        }
-        catch (ProviderUnavailableException exception)
-        {
-            await RecordAsync(claim, claim.Status, claim.Priority, claim.Attempts, UnavailablePause, exception, cancellationToken);
-            return new WorkMetadataRunOutcome(claim.Status, UnavailablePause);
-        }
-        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.TooManyRequests)
-        {
-            await RecordAsync(claim, claim.Status, claim.Priority, claim.Attempts, UnavailablePause, exception, cancellationToken);
-            return new WorkMetadataRunOutcome(claim.Status, UnavailablePause);
-        }
-        catch (HttpRequestException exception) when (exception.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-        {
-            // The credentials, not the title, are the problem: every other entry would fail the same way.
-            await RecordAsync(claim, claim.Status, claim.Priority, claim.Attempts, CredentialsPause, exception, cancellationToken);
-            return new WorkMetadataRunOutcome(claim.Status, CredentialsPause);
+            // The provider cannot take requests now (rate limit, open circuit, refused credentials): the entry is not to blame.
+            await RecordAsync(claim, claim.Status, claim.Priority, Math.Max(0, claim.Attempts - 1), pause, Describe(exception), cancellationToken);
+            return new WorkMetadataRunOutcome(claim.Status, pause);
         }
         catch (Exception exception) when (exception is HttpRequestException { StatusCode: HttpStatusCode.NotFound or HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity }
             or JsonException or InvalidDataException or ArgumentException)
         {
             // The provider answered (or the stored id cannot be asked about): the title is gone, the request is invalid or the answer is
             // unusable. A valid negative result, not an outage.
-            await RecordAsync(claim, WorkMetadataRefreshStatus.Failed, WorkMetadataRefreshPriority.Library, claim.Attempts + 1, PermanentFailureRecheck, exception, cancellationToken);
+            await RecordAsync(claim, WorkMetadataRefreshStatus.Failed, WorkMetadataRefreshPriority.Library, claim.Attempts, PermanentFailureRecheck, Describe(exception), cancellationToken);
             return new WorkMetadataRunOutcome(WorkMetadataRefreshStatus.Failed, null);
         }
         catch (Exception exception) when (exception is HttpRequestException or TimeoutException or IOException || (exception is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
-            var attempts = claim.Attempts + 1;
-            await RecordAsync(claim, WorkMetadataRefreshStatus.Queued, claim.Priority, attempts, Backoff(attempts), exception, cancellationToken);
+            await RecordAsync(claim, WorkMetadataRefreshStatus.Queued, claim.Priority, claim.Attempts, Backoff(claim.Attempts), Describe(exception), cancellationToken);
             return new WorkMetadataRunOutcome(WorkMetadataRefreshStatus.Queued, null);
         }
 
@@ -130,14 +120,24 @@ public sealed partial class WorkMetadataRefresher(
         if (artworkFailure is not null)
         {
             // The text is stored; only the images are retried, with the same backoff as any transient failure.
-            var attempts = claim.Attempts + 1;
-            await RecordAsync(claim, WorkMetadataRefreshStatus.Queued, claim.Priority, attempts, Backoff(attempts), artworkFailure, cancellationToken);
+            await RecordAsync(claim, WorkMetadataRefreshStatus.Queued, claim.Priority, claim.Attempts, Backoff(claim.Attempts), Describe(artworkFailure), cancellationToken);
             return new WorkMetadataRunOutcome(WorkMetadataRefreshStatus.Queued, null);
         }
 
-        await RecordAsync(claim, WorkMetadataRefreshStatus.Fresh, WorkMetadataRefreshPriority.Stale, 0, StaleAfter, lastError: (string?)null, cancellationToken);
+        await RecordAsync(claim, WorkMetadataRefreshStatus.Fresh, WorkMetadataRefreshPriority.Stale, 0, StaleAfter, lastError: null, cancellationToken);
         return new WorkMetadataRunOutcome(WorkMetadataRefreshStatus.Fresh, null);
     }
+
+    /// <summary>How long the whole spool must leave the provider alone after <paramref name="exception"/>; null when only this entry failed.</summary>
+    private static TimeSpan? ProviderPause(Exception exception) => exception switch
+    {
+        ProviderRateLimitedException rateLimited => rateLimited.RetryAfter,
+        ProviderUnavailableException => UnavailablePause,
+        HttpRequestException { StatusCode: HttpStatusCode.TooManyRequests } => UnavailablePause,
+        // The credentials, not the title, are the problem: every other entry would fail the same way.
+        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } => CredentialsPause,
+        _ => null
+    };
 
     /// <summary>Facts, localized text and credits in one transaction, so a reader never sees half of a refresh.</summary>
     private async Task PersistTextAsync(Guid workId, WorkMetadataSnapshot snapshot, CancellationToken cancellationToken)
@@ -253,7 +253,7 @@ public sealed partial class WorkMetadataRefresher(
                     continue;
                 }
             }
-            catch (Exception exception) when (exception is HttpRequestException or IOException || (exception is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+            catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException || (exception is TaskCanceledException && !cancellationToken.IsCancellationRequested))
             {
                 failure ??= exception;
                 continue;
@@ -268,9 +268,6 @@ public sealed partial class WorkMetadataRefresher(
 
         return failure;
     }
-
-    private Task RecordAsync(WorkMetadataRefreshClaim claim, WorkMetadataRefreshStatus status, WorkMetadataRefreshPriority priority, int attempts, TimeSpan due, Exception exception, CancellationToken cancellationToken) =>
-        RecordAsync(claim, status, priority, attempts, due, Describe(exception), cancellationToken);
 
     private Task RecordAsync(WorkMetadataRefreshClaim claim, WorkMetadataRefreshStatus status, WorkMetadataRefreshPriority priority, int attempts, TimeSpan due, string? lastError, CancellationToken cancellationToken)
     {

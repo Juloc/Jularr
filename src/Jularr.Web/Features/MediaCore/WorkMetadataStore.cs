@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NpgsqlTypes;
@@ -22,8 +23,14 @@ public sealed record WorkMetadataRows(
     IReadOnlyList<WorkArtworkRow> Artwork,
     DateTime? LastSucceededAt);
 
-/// <summary>The card-sized metadata of one Work in a Library page: a locally cached poster or backdrop variant and the rating.</summary>
-public sealed record WorkCardMetadataRow(Guid WorkId, long? ArtworkId, WorkArtworkSlot? Slot, string? Language, string? CacheKey, double? VoteAverage, double? Rating);
+/// <summary>The card-sized metadata of the Works of a Library page: cached poster/backdrop variants, localized titles and facts.</summary>
+public sealed record WorkCardMetadataRows(IReadOnlyList<WorkCardArtwork> Artwork, IReadOnlyList<WorkCardTitle> Titles, IReadOnlyList<WorkCardFacts> Facts);
+
+public sealed record WorkCardArtwork(Guid WorkId, long ArtworkId, WorkArtworkSlot Slot, string Language, string CacheKey, double? VoteAverage);
+
+public sealed record WorkCardTitle(Guid WorkId, string Locale, string Value);
+
+public sealed record WorkCardFacts(Guid WorkId, string? OriginalLanguage, double? Rating);
 
 /// <summary>
 /// The persistence owner of Work metadata and artwork (#820): explicit, parameterized PostgreSQL for the localized values, the
@@ -88,22 +95,29 @@ public sealed class WorkMetadataStore(AppDbContext db)
               AND EXISTS (
                   SELECT 1
                   FROM "WorkExternalIdentities" AS identity
-                  WHERE identity."WorkId" = work."Id" AND identity."Provider" = 'tmdb' AND identity."MediaType" = work."MediaType")
+                  WHERE identity."WorkId" = work."Id" AND identity."Provider" = {ProviderKeys.Tmdb} AND identity."MediaType" = work."MediaType")
+              AND NOT EXISTS (SELECT 1 FROM "WorkMetadataRefreshes" AS existing WHERE existing."WorkId" = work."Id" AND existing."Locale" = {locale})
             ON CONFLICT ("WorkId", "Locale") DO NOTHING
             """,
             cancellationToken);
 
     /// <summary>
-    /// Claims the most urgent due entry of an enabled media type and leases it until <paramref name="leaseUntilUtc"/>: a run that dies
-    /// with the process becomes due again when the lease ends. <c>SKIP LOCKED</c> keeps two claimers from taking the same entry.
+    /// Claims the most urgent due entry of an enabled media type and counts the attempt before it runs, so a run that kills the process
+    /// is not free: the entry is leased for <paramref name="lease"/>, or for the backoff of its attempts when that is longer (the same
+    /// ladder as the refresher's, <paramref name="backoffBase"/> doubling up to <paramref name="maxBackoff"/>). A run that dies
+    /// with the process becomes due again when the lease ends. <c>SKIP LOCKED</c> keeps two claimers from taking the same entry. The
+    /// returned <see cref="WorkMetadataRefreshClaim.Attempts"/> already includes this run.
     /// </summary>
-    public async Task<WorkMetadataRefreshClaim?> ClaimNextDueAsync(IReadOnlyCollection<WorkMediaType> mediaTypes, DateTime nowUtc, DateTime leaseUntilUtc, CancellationToken cancellationToken)
+    public async Task<WorkMetadataRefreshClaim?> ClaimNextDueAsync(IReadOnlyCollection<WorkMediaType> mediaTypes, DateTime nowUtc, TimeSpan lease, TimeSpan backoffBase, TimeSpan maxBackoff, CancellationToken cancellationToken)
     {
         var types = mediaTypes.Select(x => (int)x).ToArray();
         var rows = await db.Database.SqlQuery<ClaimRow>(
                 $"""
                 UPDATE "WorkMetadataRefreshes" AS refresh
-                SET "NextAttemptAt" = {leaseUntilUtc}, "LastAttemptAt" = {nowUtc}, "UpdatedAt" = {nowUtc}
+                SET "Attempts" = refresh."Attempts" + 1,
+                    "NextAttemptAt" = {nowUtc} + GREATEST({lease}, LEAST({backoffBase} * power(2, LEAST(refresh."Attempts", 16)), {maxBackoff})),
+                    "LastAttemptAt" = {nowUtc},
+                    "UpdatedAt" = {nowUtc}
                 FROM (
                     SELECT candidate."Id", work."MediaType"
                     FROM "WorkMetadataRefreshes" AS candidate
@@ -158,7 +172,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
                 $"""
                 SELECT "ExternalId" AS "Value"
                 FROM "WorkExternalIdentities"
-                WHERE "WorkId" = {workId} AND "MediaType" = {(int)mediaType} AND "Provider" = 'tmdb'
+                WHERE "WorkId" = {workId} AND "MediaType" = {(int)mediaType} AND "Provider" = {ProviderKeys.Tmdb}
                 ORDER BY "IsPrimary" DESC, "ExternalId"
                 LIMIT 1
                 """)
@@ -329,31 +343,39 @@ public sealed class WorkMetadataStore(AppDbContext db)
     }
 
     /// <summary>
-    /// The locally cached poster and backdrop variants plus the rating of every given Work in one query, for a Library page. Works
-    /// without any persisted metadata yield no row.
+    /// What the Library cards of the given Works need, in one query for the whole page: the locally cached poster and backdrop
+    /// variants, the localized titles of every locale and the facts the fallback and the score use. Works without persisted metadata
+    /// yield nothing.
     /// </summary>
-    public async Task<IReadOnlyList<WorkCardMetadataRow>> LoadCardMetadataAsync(IReadOnlyCollection<Guid> workIds, CancellationToken cancellationToken)
+    public async Task<WorkCardMetadataRows> LoadCardMetadataAsync(IReadOnlyCollection<Guid> workIds, CancellationToken cancellationToken)
     {
         if (workIds.Count == 0)
         {
-            return [];
+            return new WorkCardMetadataRows([], [], []);
         }
 
         var ids = workIds.ToArray();
         var rows = await db.Database.SqlQuery<CardDbRow>(
                 $"""
-                SELECT requested.work_id AS "WorkId", artwork."Id" AS "ArtworkId", artwork."Slot", artwork."Language", artwork."CacheKey", artwork."VoteAverage",
-                    facts."Rating"
-                FROM unnest({ids}::uuid[]) AS requested(work_id)
-                LEFT JOIN "WorkMetadataFacts" AS facts ON facts."WorkId" = requested.work_id
-                LEFT JOIN "WorkArtwork" AS artwork
-                    ON artwork."WorkId" = requested.work_id
-                   AND artwork."CacheKey" IS NOT NULL
-                   AND artwork."Slot" IN ({(int)WorkArtworkSlot.Poster}, {(int)WorkArtworkSlot.Backdrop})
-                WHERE facts."Id" IS NOT NULL OR artwork."Id" IS NOT NULL
+                SELECT artwork."WorkId", 0 AS "Kind", artwork."Id" AS "ArtworkId", artwork."Slot", artwork."Language" AS "Locale", artwork."CacheKey" AS "Text",
+                    artwork."VoteAverage" AS "Number"
+                FROM "WorkArtwork" AS artwork
+                WHERE artwork."WorkId" = ANY({ids}) AND artwork."CacheKey" IS NOT NULL
+                  AND artwork."Slot" IN ({(int)WorkArtworkSlot.Poster}, {(int)WorkArtworkSlot.Backdrop})
+                UNION ALL
+                SELECT title."WorkId", 1, NULL, NULL, title."Locale", title."Value", NULL
+                FROM "WorkLocalizedValues" AS title
+                WHERE title."WorkId" = ANY({ids}) AND title."Field" = {(int)WorkLocalizedField.Title} AND title."Position" = 0
+                UNION ALL
+                SELECT facts."WorkId", 2, NULL, NULL, facts."OriginalLanguage", NULL, facts."Rating"
+                FROM "WorkMetadataFacts" AS facts
+                WHERE facts."WorkId" = ANY({ids})
                 """)
             .ToListAsync(cancellationToken);
-        return [.. rows.Select(x => new WorkCardMetadataRow(x.WorkId, x.ArtworkId, (WorkArtworkSlot?)x.Slot, x.Language, x.CacheKey, x.VoteAverage, x.Rating))];
+        return new WorkCardMetadataRows(
+            [.. rows.Where(x => x.Kind == 0).Select(x => new WorkCardArtwork(x.WorkId, x.ArtworkId!.Value, (WorkArtworkSlot)x.Slot!.Value, x.Locale!, x.Text!, x.Number))],
+            [.. rows.Where(x => x.Kind == 1).Select(x => new WorkCardTitle(x.WorkId, x.Locale!, x.Text!))],
+            [.. rows.Where(x => x.Kind == 2).Select(x => new WorkCardFacts(x.WorkId, x.Locale, x.Number))]);
     }
 
     /// <summary>The media type and local derivative of one artwork variant of a Work; null when the Work has no such cached variant.</summary>
@@ -443,7 +465,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
 
     private sealed record ArtworkDbRow(long Id, int Slot, string Language, string Source, string ProviderFilePath, int? Width, int? Height, double? VoteAverage, string? CacheKey, bool IsManualOverride);
 
-    private sealed record CardDbRow(Guid WorkId, long? ArtworkId, int? Slot, string? Language, string? CacheKey, double? VoteAverage, double? Rating);
+    private sealed record CardDbRow(Guid WorkId, int Kind, long? ArtworkId, int? Slot, string? Locale, string? Text, double? Number);
 
     private sealed record ArtworkFileRow(int MediaType, string CacheKey);
 }

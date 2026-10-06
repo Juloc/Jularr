@@ -8,9 +8,13 @@ using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jularr.Tests;
 
@@ -75,12 +79,14 @@ public sealed class WorkMetadataReadTests
     {
         Assert.IsTrue(TmdbDiscoveryProvider.TryBuildImageUri("/abc_DEF-1.jpg", "w780", out var uri));
         Assert.AreEqual("https://image.tmdb.org/t/p/w780/abc_DEF-1.jpg", uri.AbsoluteUri);
-        foreach (var path in new[] { null, "", "abc.jpg", "/../etc/passwd.jpg", "/a/b.jpg", "//evil.example/x.jpg", "http://evil.example/x.jpg", "/x.jpg?y=1", "/x.svg", "/x.jpg#f", "/x%2F.jpg" })
+        string?[] hostile = [null, "", "abc.jpg", "/../etc/passwd.jpg", "/a/b.jpg", "//evil.example/x.jpg", "http://evil.example/x.jpg", "/x.jpg?y=1", "/x.svg", "/x.jpg#f", "/x%2F.jpg", "/x.jpg\n", "/x.jpg\r\n"];
+        foreach (var path in hostile)
         {
             Assert.IsFalse(TmdbDiscoveryProvider.TryBuildImageUri(path, "w780", out _), path);
         }
 
         Assert.IsFalse(TmdbDiscoveryProvider.TryBuildImageUri("/x.jpg", "../w780", out _));
+        Assert.IsFalse(TmdbDiscoveryProvider.TryBuildImageUri("/x.jpg", "w780\n", out _), "A trailing newline is not a valid end of the size.");
     }
 
     [TestMethod]
@@ -277,6 +283,87 @@ public sealed class WorkMetadataReadTests
 
         await host.Capabilities.SetRoleDefaultAsync(AccountRole.User, WorkMediaType.Movie, MediaCapability.Hidden);
         Assert.AreEqual(HttpStatusCode.NotFound, (await host.GetAsync(url)).Status, "A hidden media type has no artwork either.");
+    }
+
+    [TestMethod]
+    public async Task AnImageDownloadThatStallsAfterItsHeadersTimesOutAsATransientFailure()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"jularr-work-artwork-{Guid.NewGuid():N}");
+        var stalling = new WorkMetadataFixture.StubHandler(request => StallingResponse("image/png", request));
+        var cache = new WorkArtworkCache(root, ["image.tmdb.org"], new WorkMetadataFixture.StubHttpClientFactory(stalling, TimeSpan.FromSeconds(1)));
+        var key = WorkArtworkCache.CacheKey(Guid.NewGuid(), WorkArtworkSlot.Poster, "en", "tmdb", "/a.jpg");
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        await Assert.ThrowsExactlyAsync<TimeoutException>(() => cache.EnsureAsync(new Uri("https://image.tmdb.org/t/p/w780/a.jpg"), WorkArtworkSlot.Poster, key, CancellationToken.None));
+
+        Assert.IsTrue(watch.Elapsed < TimeSpan.FromSeconds(20), $"The client timeout bounds the body read, took {watch.Elapsed}.");
+        Assert.IsFalse(File.Exists(cache.PathFor(key)));
+    }
+
+    [TestMethod]
+    public async Task ATmdbAnswerThatStallsAfterItsHeadersFailsAsANetworkError()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var http = new HttpClient(new WorkMetadataFixture.StubHandler(_ => StallingResponse("application/json")))
+        {
+            BaseAddress = new Uri("https://api.themoviedb.org/3/"),
+            Timeout = TimeSpan.FromSeconds(1)
+        };
+        var provider = new TmdbDiscoveryProvider(
+            http,
+            new ConfigurationManager { ["Providers:Tmdb:ApiKey"] = "test-key" },
+            new ProviderExecutor(new(), new(TimeProvider.System), TimeProvider.System, NullLogger<ProviderExecutor>.Instance),
+            new ProviderResponseCache(TimeProvider.System),
+            new WorkService(db),
+            new WorkStructureService(db),
+            db,
+            new LegacyWorkBridge(db, new WorkService(db), new WorkStructureService(db)),
+            new WorkMetadataRefreshQueue(new WorkMetadataStore(db), new WorkMetadataRefreshSignal(), TimeProvider.System));
+
+        var failure = await Assert.ThrowsExactlyAsync<HttpRequestException>(() => provider.GetWorkMetadataAsync(TmdbDiscoveryMediaType.Movie, "550", "en", CancellationToken.None));
+
+        Assert.IsInstanceOfType<TimeoutException>(failure.InnerException);
+    }
+
+    /// <summary>Headers arrive at once; the body never does (until the reader gives up).</summary>
+    private static HttpResponseMessage StallingResponse(string mediaType, HttpRequestMessage? request = null)
+    {
+        var content = new StreamContent(new StallingStream());
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mediaType);
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = content, RequestMessage = request };
+    }
+
+    private sealed class StallingStream : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return 0;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private static async Task SeedArtworkAsync(WorkMetadataFixture fixture, Guid workId)

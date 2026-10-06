@@ -185,13 +185,14 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
             select new LanguageRow(languageGroup.Key.WorkId, languageGroup.Key.Kind, languageGroup.Key.Language!, languageGroup.Count(), languageGroup.Min(x => x.StreamIndex)))
             .ToListAsync(cancellationToken);
 
-        // Movie and Series cards show the locally persisted artwork and rating (#820); Anime keeps its own artwork until it moves to the Work.
+        // Movie and Series cards show the locally persisted title, artwork and rating (#820); Anime keeps its own until it moves to the Work.
         IReadOnlyDictionary<Guid, WorkCardMetadata> cardMetadata = new Dictionary<Guid, WorkCardMetadata>();
         var videoWorkIds = works.Where(x => x.MediaType is WorkMediaType.Movie or WorkMediaType.Series).Select(x => x.Id).ToArray();
         if (videoWorkIds.Length > 0)
         {
             var rows = await new WorkMetadataStore(db).LoadCardMetadataAsync(videoWorkIds, cancellationToken);
-            cardMetadata = rows.Count == 0 ? cardMetadata : WorkMetadataPresentation.ResolveCards(rows, await WorkMetadataLocales.ForProfileAsync(db, profileId, cancellationToken));
+            var empty = rows.Artwork.Count == 0 && rows.Titles.Count == 0 && rows.Facts.Count == 0;
+            cardMetadata = empty ? cardMetadata : WorkMetadataPresentation.ResolveCards(rows, await WorkMetadataLocales.ForProfileAsync(db, profileId, cancellationToken));
         }
 
         var progress = await new VideoProgressService(db).ListAsync(profileId, workIds, cancellationToken);
@@ -297,7 +298,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
         var fanart = anime is null ? metadata?.BackdropUrl : AnimeArtworkStore.ResolveFanartUrl(anime.AnimeId, anime.BannerImageUrl);
         var card = new MediaBannerCardData(
             anime is null ? MediaBannerKind.Series : MediaBannerKind.Anime,
-            anime?.Title ?? work.Title,
+            anime?.Title ?? metadata?.Title ?? work.Title,
             href,
             fanart ?? poster,
             anime?.Status,
@@ -334,7 +335,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
         context.CardMetadata.TryGetValue(work.Id, out var metadata);
         var card = new MediaBannerCardData(
             MediaBannerKind.Movie,
-            work.Title,
+            metadata?.Title ?? work.Title,
             href,
             BackdropUrl: metadata?.BackdropUrl ?? metadata?.PosterUrl,
             Year: work.Year,

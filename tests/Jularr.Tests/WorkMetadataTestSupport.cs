@@ -89,7 +89,7 @@ internal sealed class WorkMetadataFixture : IAsyncDisposable
     public Task<Work> AddMovieAsync(string tmdbId = "550", string title = "Fight Club") =>
         new WorkService(Db).EnsureWorkByExternalIdentityAsync(WorkMediaType.Movie, ProviderKeys.Tmdb, tmdbId, title, 1999, CancellationToken.None);
 
-    public Task<TimeSpan?> RunSpoolAsync() => WorkMetadataRefreshService.ProcessDueAsync(services, 50, CancellationToken.None);
+    public Task<WorkMetadataPass> RunSpoolAsync() => WorkMetadataRefreshService.ProcessDueAsync(services, 50, CancellationToken.None);
 
     public async Task<WorkMetadataRefresh> RefreshEntryAsync(Guid workId) =>
         await Db.Set<WorkMetadataRefresh>().AsNoTracking().SingleAsync(x => x.WorkId == workId);
@@ -180,8 +180,8 @@ internal sealed class WorkMetadataFixture : IAsyncDisposable
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(handler(request));
     }
 
-    internal sealed class StubHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    internal sealed class StubHttpClientFactory(HttpMessageHandler handler, TimeSpan? timeout = null) : IHttpClientFactory
     {
-        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false) { Timeout = timeout ?? TimeSpan.FromSeconds(100) };
     }
 }

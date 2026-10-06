@@ -182,6 +182,12 @@ namespace Jularr.Web.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_WorkArtwork_CacheKey",
+                table: "WorkArtwork",
+                column: "CacheKey",
+                filter: "\"CacheKey\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_WorkCredits_WorkId_Kind_Position",
                 table: "WorkCredits",
                 columns: new[] { "WorkId", "Kind", "Position" },
@@ -203,6 +209,11 @@ namespace Jularr.Web.Data.Migrations
                 name: "IX_WorkMetadataRefreshes_NextAttemptAt",
                 table: "WorkMetadataRefreshes",
                 column: "NextAttemptAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkMetadataRefreshes_Priority_NextAttemptAt",
+                table: "WorkMetadataRefreshes",
+                columns: new[] { "Priority", "NextAttemptAt" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_WorkMetadataRefreshes_WorkId_Locale",

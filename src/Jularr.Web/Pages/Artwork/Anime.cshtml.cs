@@ -20,6 +20,7 @@ public sealed class AnimeModel : PageModel
         }
 
         Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+        Response.Headers.XContentTypeOptions = "nosniff";
         return PhysicalFile(
             path,
             AnimeArtworkFiles.GetContentType(path));

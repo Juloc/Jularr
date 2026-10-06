@@ -41,8 +41,8 @@ public sealed record WorkMetadataView(
     WorkArtworkImage? Logo,
     DateTime? RefreshedAt);
 
-/// <summary>The card-sized metadata of one Work: what a Library card shows besides its own facts.</summary>
-public sealed record WorkCardMetadata(string? PosterUrl, string? BackdropUrl, double? Rating);
+/// <summary>The card-sized metadata of one Work: what a Library card shows from the persisted metadata, resolved for the viewer.</summary>
+public sealed record WorkCardMetadata(string? Title, string? PosterUrl, string? BackdropUrl, double? Rating);
 
 /// <summary>
 /// Turns persisted metadata rows into what pages show, applying <see cref="WorkMetadataLocales"/> and <see cref="WorkArtworkSelection"/>.
@@ -103,22 +103,32 @@ public static class WorkMetadataPresentation
             rows.LastSucceededAt);
     }
 
-    /// <summary>The card metadata of every Work of a Library page, keyed by Work; Works without persisted metadata are absent.</summary>
-    public static IReadOnlyDictionary<Guid, WorkCardMetadata> ResolveCards(IEnumerable<WorkCardMetadataRow> rows, string viewerLocale)
+    /// <summary>
+    /// The card metadata of every Work of a Library page, keyed by Work; Works without persisted metadata are absent. The title follows
+    /// the same fallback as <see cref="Resolve"/>, so a card and its detail page always show the same title.
+    /// </summary>
+    public static IReadOnlyDictionary<Guid, WorkCardMetadata> ResolveCards(WorkCardMetadataRows rows, string viewerLocale)
     {
         var artworkLanguages = WorkMetadataLocales.ArtworkLanguages(viewerLocale, configuredFallback: null);
-        return rows
-            .GroupBy(x => x.WorkId)
+        var artwork = rows.Artwork.ToLookup(x => x.WorkId);
+        var titles = rows.Titles.ToLookup(x => x.WorkId);
+        var facts = rows.Facts.ToDictionary(x => x.WorkId);
+        return rows.Artwork.Select(x => x.WorkId)
+            .Concat(rows.Titles.Select(x => x.WorkId))
+            .Concat(facts.Keys)
+            .Distinct()
             .ToDictionary(
-                work => work.Key,
-                work =>
+                workId => workId,
+                workId =>
                 {
-                    var variants = work.Where(x => x is { ArtworkId: not null, CacheKey: not null, Slot: not null }).ToArray();
+                    facts.TryGetValue(workId, out var workFacts);
+                    var order = WorkMetadataLocales.ResolutionOrder(viewerLocale, configuredFallback: null, workFacts?.OriginalLanguage);
+                    var locale = WorkMetadataLocales.Pick([.. titles[workId].Select(x => x.Locale).Distinct(StringComparer.Ordinal)], order);
                     string? Url(WorkArtworkSlot slot) =>
-                        WorkArtworkSelection.Pick(variants.Where(x => x.Slot == slot), slot, artworkLanguages, x => x.Language ?? "", x => x.VoteAverage) is { } chosen
-                            ? ArtworkUrl(work.Key, chosen.ArtworkId!.Value, chosen.CacheKey!)
+                        WorkArtworkSelection.Pick(artwork[workId].Where(x => x.Slot == slot), slot, artworkLanguages, x => x.Language, x => x.VoteAverage) is { } chosen
+                            ? ArtworkUrl(workId, chosen.ArtworkId, chosen.CacheKey)
                             : null;
-                    return new WorkCardMetadata(Url(WorkArtworkSlot.Poster), Url(WorkArtworkSlot.Backdrop), work.Select(x => x.Rating).FirstOrDefault(x => x is not null));
+                    return new WorkCardMetadata(titles[workId].FirstOrDefault(x => x.Locale == locale)?.Value, Url(WorkArtworkSlot.Poster), Url(WorkArtworkSlot.Backdrop), workFacts?.Rating);
                 });
     }
 }

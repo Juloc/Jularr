@@ -21,12 +21,24 @@ public sealed class WorkModel(WorkMetadataStore store, WorkArtworkCache cache, I
         }
 
         var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
-        if (!access.IsVisible(variant.MediaType) || cache.PathFor(variant.CacheKey) is not { } path || !System.IO.File.Exists(path))
+        if (!access.IsVisible(variant.MediaType) || cache.PathFor(variant.CacheKey) is not { } path)
+        {
+            return NotFound();
+        }
+
+        // Opened rather than checked: the orphan sweep or a replaced variant may delete the file at any moment, which is a 404, not a 500.
+        FileStream image;
+        try
+        {
+            image = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 64 * 1024, FileOptions.Asynchronous);
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
         {
             return NotFound();
         }
 
         Response.Headers.CacheControl = "private,max-age=31536000,immutable";
-        return PhysicalFile(path, "image/webp");
+        Response.Headers.XContentTypeOptions = "nosniff";
+        return File(image, "image/webp");
     }
 }

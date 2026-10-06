@@ -1001,6 +1001,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.CacheKey).HasMaxLength(32);
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.WorkId, x.Slot, x.Language }).IsUnique();
+            // The orphan sweep asks which cached files a variant still references.
+            entity.HasIndex(x => x.CacheKey).HasFilter("\"CacheKey\" IS NOT NULL");
         });
 
         modelBuilder.Entity<WorkMetadataRefresh>(entity =>
@@ -1017,7 +1019,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.LastError).HasMaxLength(2000);
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.WorkId, x.Locale }).IsUnique();
-            // The worker's due-list: only rows whose time has come are read, then ordered by priority.
+            // The worker's claim reads due rows in priority order; the next-due lookup reads the earliest row.
+            entity.HasIndex(x => new { x.Priority, x.NextAttemptAt });
             entity.HasIndex(x => x.NextAttemptAt);
         });
     }

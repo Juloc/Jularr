@@ -5,6 +5,7 @@ using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jularr.Tests;
 
@@ -22,7 +23,7 @@ public sealed class WorkMetadataSpoolTests
         var work = await fixture.AddMovieAsync();
         await fixture.Queue.RequestMetadataRefreshAsync(work.Id, interactive: false, CancellationToken.None);
 
-        Assert.IsNull(await fixture.RunSpoolAsync(), "Nothing is left once the only entry ran.");
+        Assert.AreEqual(new WorkMetadataPass(null, null), await fixture.RunSpoolAsync(), "Nothing is left once the only entry ran.");
 
         var facts = await fixture.Db.Set<WorkMetadataFacts>().AsNoTracking().SingleAsync();
         Assert.AreEqual(work.Id, facts.WorkId);
@@ -84,6 +85,103 @@ public sealed class WorkMetadataSpoolTests
     }
 
     [TestMethod]
+    public async Task ATrailerKeyWithATrailingNewlineIsNotStored()
+    {
+        await using var fixture = await WorkMetadataFixture.CreateAsync();
+        var work = await fixture.AddMovieAsync();
+        await fixture.Queue.RequestMetadataRefreshAsync(work.Id, interactive: false, CancellationToken.None);
+        fixture.Tmdb = _ => WorkMetadataFixture.Json(WorkMetadataFixture.MovieJson().Replace("\"BdJKm16Co6M\"", "\"BdJKm16Co6M\\n\"", StringComparison.Ordinal));
+
+        await fixture.RunSpoolAsync();
+
+        Assert.AreEqual(WorkMetadataRefreshStatus.Fresh, (await fixture.RefreshEntryAsync(work.Id)).Status);
+        Assert.IsFalse(await fixture.Db.Set<WorkLocalizedValue>().AnyAsync(x => x.Field == WorkLocalizedField.Trailer));
+    }
+
+    [TestMethod]
+    public async Task AClaimCountsTheAttemptSoARunThatKillsTheProcessBacksOff()
+    {
+        await using var fixture = await WorkMetadataFixture.CreateAsync();
+        var work = await fixture.AddMovieAsync();
+        await fixture.Queue.RequestMetadataRefreshAsync(work.Id, interactive: false, CancellationToken.None);
+        var now = fixture.Clock.GetUtcNow().UtcDateTime;
+        var lease = TimeSpan.FromMinutes(10);
+        WorkMediaType[] types = [WorkMediaType.Movie];
+
+        // Every claim below is a run that died with the process: nothing records its outcome.
+        var first = await fixture.Store.ClaimNextDueAsync(types, now, lease, WorkMetadataRefresher.BaseBackoff, WorkMetadataRefresher.MaxBackoff, CancellationToken.None);
+        Assert.AreEqual(1, first!.Attempts);
+        Assert.AreEqual(now + lease, (await fixture.RefreshEntryAsync(work.Id)).NextAttemptAt, "Early crashes wait for the lease.");
+
+        await fixture.Db.Database.ExecuteSqlAsync($"""UPDATE "WorkMetadataRefreshes" SET "Attempts" = 6, "NextAttemptAt" = {now}""");
+        var later = await fixture.Store.ClaimNextDueAsync(types, now, lease, WorkMetadataRefresher.BaseBackoff, WorkMetadataRefresher.MaxBackoff, CancellationToken.None);
+        Assert.AreEqual(7, later!.Attempts);
+        Assert.AreEqual(now + WorkMetadataRefresher.Backoff(7), (await fixture.RefreshEntryAsync(work.Id)).NextAttemptAt, "A crash loop backs off like any failure.");
+
+        fixture.Clock.Advance(WorkMetadataRefresher.Backoff(7));
+        await fixture.RunSpoolAsync();
+        var entry = await fixture.RefreshEntryAsync(work.Id);
+        Assert.AreEqual(WorkMetadataRefreshStatus.Fresh, entry.Status);
+        Assert.AreEqual(0, entry.Attempts, "A successful run clears the count.");
+    }
+
+    [TestMethod]
+    public async Task AWakeDoesNotCutAProviderPauseShort()
+    {
+        await using var fixture = await WorkMetadataFixture.CreateAsync();
+        var first = await fixture.AddMovieAsync("550", "First");
+        var second = await fixture.AddMovieAsync("551", "Second");
+        await fixture.Queue.RequestMetadataRefreshAsync(first.Id, interactive: true, CancellationToken.None);
+        await fixture.Queue.RequestMetadataRefreshAsync(second.Id, interactive: false, CancellationToken.None);
+        var answered = 0;
+        fixture.Tmdb = _ =>
+        {
+            if (Interlocked.Increment(ref answered) > 1)
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            var limited = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+            limited.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(4));
+            return limited;
+        };
+        var signal = fixture.Services.GetRequiredService<WorkMetadataRefreshSignal>();
+        var service = new WorkMetadataRefreshService(fixture.Services.GetRequiredService<IServiceScopeFactory>(), signal, TimeProvider.System, NullLogger<WorkMetadataRefreshService>.Instance);
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            signal.Wake();
+            await WaitUntilAsync(() => Volatile.Read(ref answered) >= 1, TimeSpan.FromSeconds(20));
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+            // Requests keep waking the worker while the provider asked for a pause: no further provider call may happen.
+            for (var wake = 0; wake < 5; wake++)
+            {
+                signal.Wake();
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+            }
+
+            Assert.AreEqual(1, Volatile.Read(ref answered), "A wake ended the provider pause.");
+            await WaitUntilAsync(() => Volatile.Read(ref answered) >= 2, TimeSpan.FromSeconds(20));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            Assert.IsTrue(DateTime.UtcNow < deadline, "The condition was not reached in time.");
+            await Task.Delay(50);
+        }
+    }
+
+    [TestMethod]
     public async Task FreshMetadataIsNotRefetchedWhenAWorkIsOpenedAgain()
     {
         await using var fixture = await WorkMetadataFixture.CreateAsync();
@@ -137,7 +235,7 @@ public sealed class WorkMetadataSpoolTests
 
         fixture.Tmdb = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
         await fixture.MakeDueAsync();
-        Assert.AreEqual(WorkMetadataRefresher.Backoff(1), await fixture.RunSpoolAsync(), "The worker wakes when the backoff ends, not a whole interval later.");
+        Assert.AreEqual(new WorkMetadataPass(null, WorkMetadataRefresher.Backoff(1)), await fixture.RunSpoolAsync(), "The worker wakes when the backoff ends, not an interval later.");
 
         var entry = await fixture.RefreshEntryAsync(work.Id);
         Assert.AreEqual(WorkMetadataRefreshStatus.Queued, entry.Status, "A transient failure is retried.");
@@ -150,7 +248,7 @@ public sealed class WorkMetadataSpoolTests
 
         // Three failed attempts opened the provider circuit: the next run pauses the spool without counting against the entry.
         await fixture.MakeDueAsync();
-        Assert.AreEqual(WorkMetadataRefresher.UnavailablePause, await fixture.RunSpoolAsync());
+        Assert.AreEqual(new WorkMetadataPass(WorkMetadataRefresher.UnavailablePause, null), await fixture.RunSpoolAsync());
         Assert.AreEqual(1, (await fixture.RefreshEntryAsync(work.Id)).Attempts);
     }
 
@@ -219,7 +317,7 @@ public sealed class WorkMetadataSpoolTests
             return response;
         };
 
-        var pause = await fixture.RunSpoolAsync();
+        var pause = (await fixture.RunSpoolAsync()).ProviderPause;
 
         Assert.IsNotNull(pause);
         Assert.IsTrue(pause > TimeSpan.FromSeconds(60), $"The provider's Retry-After is honoured, got {pause}.");
@@ -253,9 +351,9 @@ public sealed class WorkMetadataSpoolTests
 
         await fixture.Queue.RequestMetadataRefreshAsync(library.Id, interactive: true, CancellationToken.None);
 
-        var lease = now + TimeSpan.FromMinutes(10);
+        var lease = TimeSpan.FromMinutes(10);
         var order = new List<Guid>();
-        while (await fixture.Store.ClaimNextDueAsync([WorkMediaType.Movie, WorkMediaType.Series], now, lease, CancellationToken.None) is { } claim)
+        while (await fixture.Store.ClaimNextDueAsync([WorkMediaType.Movie, WorkMediaType.Series], now, lease, WorkMetadataRefresher.BaseBackoff, WorkMetadataRefresher.MaxBackoff, CancellationToken.None) is { } claim)
         {
             order.Add(claim.WorkId);
         }
@@ -271,7 +369,7 @@ public sealed class WorkMetadataSpoolTests
         await fixture.Queue.RequestMetadataRefreshAsync(work.Id, interactive: false, CancellationToken.None);
         var now = fixture.Clock.GetUtcNow().UtcDateTime;
 
-        Assert.IsNull(await fixture.Store.ClaimNextDueAsync([WorkMediaType.Series], now, now.AddMinutes(10), CancellationToken.None));
+        Assert.IsNull(await fixture.Store.ClaimNextDueAsync([WorkMediaType.Series], now, TimeSpan.FromMinutes(10), WorkMetadataRefresher.BaseBackoff, WorkMetadataRefresher.MaxBackoff, CancellationToken.None));
         Assert.AreEqual(WorkMetadataRefreshStatus.Queued, (await fixture.RefreshEntryAsync(work.Id)).Status);
     }
 

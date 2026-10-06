@@ -419,6 +419,9 @@ namespace Jularr.Web.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CacheKey")
+                        .HasFilter("\"CacheKey\" IS NOT NULL");
+
                     b.HasIndex("WorkId", "Slot", "Language")
                         .IsUnique();
 
@@ -662,6 +665,8 @@ namespace Jularr.Web.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("NextAttemptAt");
+
+                    b.HasIndex("Priority", "NextAttemptAt");
 
                     b.HasIndex("WorkId", "Locale")
                         .IsUnique();

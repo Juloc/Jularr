@@ -168,17 +168,19 @@ with `MetadataFieldSources`. `WorkArtworkCache` (Features/Artwork) owns the loca
   and the best neutral one (else the best of any language). Ties break by votes, vote count, width, file identity.
 - Artwork is untrusted input: the adapter accepts only single-segment `/[A-Za-z0-9_-]+.(jpg|jpeg|png|webp)` TMDB paths and builds
   `https://image.tmdb.org/t/p/{size}{path}`; the cache fetches only HTTPS on allow-listed hosts with a client that follows no redirects,
-  requires an image content type, at most 20 MB and decodable JPEG/PNG/WebP, and writes `/data/cache/artwork/work/{key[..2]}/{key}.webp`
+  requires an image content type, at most 20 MB, a whole download (headers and body) within the client timeout, a decodable
+  JPEG/PNG/WebP header of at most 8000 px per side and 40 MP (checked before decoding), and writes `/data/cache/artwork/work/{key[..2]}/{key}.webp`
   where the key is a SHA-256 of the variant identity; no provider or user text becomes part of a path.
 - Retention: metadata lives as long as the Work; artwork is bounded by the unique key (a replaced variant's file is deleted when the
   new one is stored); derivatives are compressed WebP (posters ≤512 px, wide art ≤1600 px); orphaned files are swept on reconcile.
 
 **Spool.** `WorkMetadataRefreshService` is a hosted worker following the durable due-list pattern of the franchise refresh
 (`BackgroundWakeSignal` + due rows read from the database; a wake only shortens the wait). One entry runs at a time, bulk entries
-are spaced, claims are leased (`FOR UPDATE SKIP LOCKED`, 10 min lease) so a crash only delays an entry. Outcomes: success → `Fresh`,
+are spaced, claims are leased (`FOR UPDATE SKIP LOCKED`) and count the attempt before the run, so a run that kills the process
+backs off like any failure (lease = max(10 min, backoff)). Outcomes: success → `Fresh`,
 due again after 30 days (`Stale` priority); network/5xx/timeouts and busy-CDN (408/429/5xx) artwork downloads → `Queued` with exponential backoff (1 min doubling
 to 6 h; the worker wakes when a backoff ends); 400/404/422/unusable answers → `Failed`, re-probed after 7 days (negative result); 429 / open circuit / refused credentials pause the
-whole pass without penalizing the entry. Nothing runs on startup; the first pass waits a minute. Works of a disabled Movie/TV module
+whole pass without penalizing the entry; a wake never shortens such a pause, only the idle wait. Nothing runs on startup; the first pass waits a minute. Works of a disabled Movie/TV module
 are not claimed.
 
 **Entry points.** `TmdbDiscoveryProvider.EnsureCanonicalWorkAsync` (the Request materialization) queues the Work at `Requested`
@@ -191,9 +193,15 @@ record) or `Library`.
 **Reads.** `VideoDetail.Metadata` (`WorkMetadataView`) carries title, original title, synopsis, tagline, genres, release date,
 runtime, rating, certification, studios, production countries, trailers (YouTube keys with watch/embed URLs), cast, crew and the
 poster/backdrop/logo as `/works/{workId}/artwork/{artworkId}?v=…` URLs; `VideoDetail.Title` is the localized title when one exists.
-Library Movie/Series cards get poster, backdrop and rating from one query for the whole page. Reads never call a provider and never
+Library Movie/Series cards get the localized title (same fallback as the detail page), poster, backdrop and rating from one query
+for the whole page. Reads never call a provider and never
 write. The artwork endpoint (`Pages/Artwork/Work`) serves only cached files, 404s for a media type the profile cannot browse, and
-answers `private, immutable`.
+answers `private, immutable` with `nosniff`.
+
+**Single-locale assumptions to rework in slice 2.** `WorkMetadataFacts` is one row per Work: its certification is the region of
+the locale that was fetched last, and every locale's fetch overwrites the neutral facts (last locale wins). With several required
+metadata locales, certification must become per-region (its own rows) and only one locale (the instance default) may own the
+neutral facts.
 
 **Instance locale.** Until the Admin General language policy exists, the spool fetches `WorkMetadataLocales.InstanceDefault` (the UI
 source locale) and readers resolve from the profile's UI locale.

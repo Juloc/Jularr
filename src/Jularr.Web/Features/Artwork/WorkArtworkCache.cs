@@ -59,39 +59,46 @@ public sealed class WorkArtworkCache(string rootPath, IReadOnlyCollection<string
         }
 
         using var client = httpClients.CreateClient(HttpClientName);
-        using var response = await client.GetAsync(source, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        if (response.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || (int)response.StatusCode >= 500)
+
+        // HttpClient.Timeout ends once the headers arrived when the body is streamed: the same budget must cover the body too, or a
+        // CDN that stalls after its headers holds the single spool worker forever.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(client.Timeout);
+        byte[]? bytes;
+        try
         {
-            // The CDN is busy or failing, not the image: the caller retries with backoff instead of keeping the slot empty.
-            throw new HttpRequestException($"The image CDN answered {(int)response.StatusCode}.", null, response.StatusCode);
+            using var response = await client.GetAsync(source, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            if (response.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || (int)response.StatusCode >= 500)
+            {
+                // The CDN is busy or failing, not the image: the caller retries with backoff instead of keeping the slot empty.
+                throw new HttpRequestException($"The image CDN answered {(int)response.StatusCode}.", null, response.StatusCode);
+            }
+
+            if (!response.IsSuccessStatusCode
+                || response.RequestMessage?.RequestUri is not { } finalUri
+                || !IsHostAllowed(finalUri)
+                || response.Content.Headers.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true
+                || response.Content.Headers.ContentLength > AnimeArtworkFiles.MaxImageBytes)
+            {
+                return false;
+            }
+
+            await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
+            bytes = await AnimeArtworkFiles.ReadLimitedAsync(body, timeout.Token);
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"The image download did not finish within {client.Timeout.TotalSeconds:0} s.", exception);
         }
 
-        if (!response.IsSuccessStatusCode
-            || response.RequestMessage?.RequestUri is not { } finalUri
-            || !IsHostAllowed(finalUri)
-            || response.Content.Headers.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true
-            || response.Content.Headers.ContentLength > AnimeArtworkFiles.MaxImageBytes)
-        {
-            return false;
-        }
-
-        await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var bytes = await AnimeArtworkFiles.ReadLimitedAsync(body, cancellationToken);
-        if (bytes is null || AnimeArtworkFiles.DetectExtension(bytes) is null)
-        {
-            return false;
-        }
-
-        await using var input = new MemoryStream(bytes, writable: false);
-        await using var output = new MemoryStream();
         var kind = slot == WorkArtworkSlot.Poster ? AnimeArtworkKind.Poster : AnimeArtworkKind.Fanart;
-        if (!await AnimeArtworkStore.CreateOptimizedDerivativeAsync(kind, input, output, cancellationToken))
+        if (bytes is null || AnimeArtworkStore.CreateOptimizedDerivative(kind, bytes) is not { } derivative)
         {
             return false;
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await AnimeArtworkFiles.WriteAtomicAsync(path, output.ToArray(), cancellationToken);
+        await AnimeArtworkFiles.WriteAtomicAsync(path, derivative, cancellationToken);
         return true;
     }
 

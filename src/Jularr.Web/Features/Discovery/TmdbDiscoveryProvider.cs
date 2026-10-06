@@ -409,13 +409,13 @@ public sealed partial class TmdbDiscoveryProvider(
         return true;
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex("^/[A-Za-z0-9_-]{1,120}\\.(jpg|jpeg|png|webp)$")]
+    [System.Text.RegularExpressions.GeneratedRegex(@"^/[A-Za-z0-9_-]{1,120}\.(jpg|jpeg|png|webp)\z")]
     private static partial System.Text.RegularExpressions.Regex ImageFilePath();
 
-    [System.Text.RegularExpressions.GeneratedRegex("^(w[0-9]{2,4}|original)$")]
+    [System.Text.RegularExpressions.GeneratedRegex(@"^(w[0-9]{2,4}|original)\z")]
     private static partial System.Text.RegularExpressions.Regex ImageSize();
 
-    [System.Text.RegularExpressions.GeneratedRegex("^[A-Za-z0-9_-]{6,32}$")]
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[A-Za-z0-9_-]{6,32}\z")]
     private static partial System.Text.RegularExpressions.Regex YouTubeKey();
 
     private static IReadOnlyList<WorkCreditCandidate> Credits(TmdbMetadataDetails details, bool movie)
@@ -616,9 +616,21 @@ public sealed partial class TmdbDiscoveryProvider(
             },
             cancellationToken: cancellationToken);
         response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, cancellationToken)
-            ?? throw new InvalidDataException("TMDB returned an empty JSON response.");
+
+        // The executor reads only the headers, where HttpClient.Timeout ends; the body gets the same budget, so a stalled answer fails
+        // as a transient network error instead of hanging its caller.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(client.Timeout);
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+            return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, timeout.Token)
+                ?? throw new InvalidDataException("TMDB returned an empty JSON response.");
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new HttpRequestException($"The TMDB response did not finish within {client.Timeout.TotalSeconds:0} s.", new TimeoutException(exception.Message, exception));
+        }
     }
 
     private string BuildUri(string path, IReadOnlyList<(string Key, string Value)> query)

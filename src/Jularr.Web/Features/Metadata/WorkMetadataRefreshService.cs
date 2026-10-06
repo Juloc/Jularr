@@ -5,6 +5,9 @@ using Jularr.Web.Infrastructure;
 
 namespace Jularr.Web.Features.Metadata;
 
+/// <summary>What one spool pass leaves the worker with: a provider pause that nothing may shorten, or when the next entry falls due.</summary>
+public sealed record WorkMetadataPass(TimeSpan? ProviderPause, TimeSpan? NextDueIn);
+
 /// <summary>Wakes the Work metadata spool worker after something was queued for it.</summary>
 public sealed class WorkMetadataRefreshSignal : BackgroundWakeSignal;
 
@@ -59,7 +62,7 @@ public sealed class WorkMetadataRefreshService(
             DateTime? reconciledAt = null;
             while (!stoppingToken.IsCancellationRequested)
             {
-                var wait = Interval;
+                var pass = new WorkMetadataPass(null, null);
                 try
                 {
                     await using var scope = scopes.CreateAsyncScope();
@@ -69,14 +72,22 @@ public sealed class WorkMetadataRefreshService(
                         reconciledAt = clock.GetUtcNow().UtcDateTime;
                     }
 
-                    wait = await ProcessDueAsync(scope.ServiceProvider, MaxRunsPerPass, stoppingToken) ?? Interval;
+                    pass = await ProcessDueAsync(scope.ServiceProvider, MaxRunsPerPass, stoppingToken);
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {
                     logger.LogWarning(exception, "The Work metadata spool pass failed.");
                 }
 
-                await signal.WaitAsync(wait, stoppingToken);
+                if (pass.ProviderPause is { } pause)
+                {
+                    // A wake must not cut a provider pause short: every Request wakes the worker, and each extra pass would ask the
+                    // provider again (re-probing refused credentials, pushing the next entry back).
+                    await Task.Delay(pause, clock, stoppingToken);
+                    continue;
+                }
+
+                await signal.WaitAsync(pass.NextDueIn ?? Interval, stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -85,19 +96,20 @@ public sealed class WorkMetadataRefreshService(
     }
 
     /// <summary>
-    /// Runs due entries, most urgent first, until none is due or <paramref name="maxRuns"/> ran. Returns how long to wait before the
-    /// next pass: the provider's pause, <see cref="TimeSpan.Zero"/> when the pass stopped at its bound with work left, or the time until
-    /// the next entry falls due (a backoff) when that is sooner than <see cref="Interval"/>. Null when nothing falls due before then (or
-    /// no provider is configured / no Movie or TV module is enabled).
+    /// Runs due entries, most urgent first, until none is due or <paramref name="maxRuns"/> ran. The result says whether the provider
+    /// asked for a pause (nothing may run until it ends) or when the next entry falls due: <see cref="TimeSpan.Zero"/> when the pass
+    /// stopped at its bound with work left, the time until a backoff ends when that is sooner than <see cref="Interval"/>, else null
+    /// (also when no provider is configured or no Movie or TV module is enabled).
     /// </summary>
-    public static async Task<TimeSpan?> ProcessDueAsync(IServiceProvider services, int maxRuns, CancellationToken cancellationToken)
+    public static async Task<WorkMetadataPass> ProcessDueAsync(IServiceProvider services, int maxRuns, CancellationToken cancellationToken)
     {
         var refresher = services.GetRequiredService<WorkMetadataRefresher>();
         var store = services.GetRequiredService<WorkMetadataStore>();
         var clock = services.GetRequiredService<TimeProvider>();
+        var idle = new WorkMetadataPass(null, null);
         if (!refresher.IsProviderConfigured)
         {
-            return null;
+            return idle;
         }
 
         WorkMediaType[] mediaTypes = [WorkMediaType.Movie, WorkMediaType.Series];
@@ -109,27 +121,28 @@ public sealed class WorkMetadataRefreshService(
 
         if (mediaTypes.Length == 0)
         {
-            return null;
+            return idle;
         }
 
         for (var runs = 0; runs < maxRuns; runs++)
         {
             var now = clock.GetUtcNow().UtcDateTime;
-            if (await store.ClaimNextDueAsync(mediaTypes, now, now + Lease, cancellationToken) is not { } claim)
+            var claim = await store.ClaimNextDueAsync(mediaTypes, now, Lease, WorkMetadataRefresher.BaseBackoff, WorkMetadataRefresher.MaxBackoff, cancellationToken);
+            if (claim is null)
             {
                 // A backoff shorter than the regular interval wakes the worker when it ends, not a whole interval later.
                 if (await store.FindNextDueAtAsync(mediaTypes, cancellationToken) is not { } due || due - now >= Interval)
                 {
-                    return null;
+                    return idle;
                 }
 
-                return due > now ? due - now : TimeSpan.Zero;
+                return new WorkMetadataPass(null, due > now ? due - now : TimeSpan.Zero);
             }
 
             var outcome = await refresher.RunAsync(claim, cancellationToken);
             if (outcome.ProviderPause is { } pause)
             {
-                return pause;
+                return new WorkMetadataPass(pause, null);
             }
 
             if (claim.Priority >= WorkMetadataRefreshPriority.Imported)
@@ -138,7 +151,7 @@ public sealed class WorkMetadataRefreshService(
             }
         }
 
-        return TimeSpan.Zero;
+        return new WorkMetadataPass(null, TimeSpan.Zero);
     }
 
     /// <summary>
