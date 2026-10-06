@@ -414,10 +414,10 @@ internal static class DiscoverPageFactory
         var works = new WorkService(db);
         var structure = new WorkStructureService(db);
         var http = new HttpClient(handler, disposeHandler: false) { BaseAddress = new Uri("https://api.themoviedb.org/3/") };
-        var configuration = new ConfigurationManager { ["Providers:Tmdb:ApiKey"] = "test-key" };
-        var executor = new ProviderExecutor(new ProviderRateLimiter(), new ProviderHealthTracker(clock), clock, NullLogger<ProviderExecutor>.Instance);
+        var health = new ProviderHealthTracker(clock);
+        var executor = new ProviderExecutor(new ProviderRateLimiter(), health, clock, NullLogger<ProviderExecutor>.Instance);
         var metadata = new Jularr.Web.Features.Metadata.WorkMetadataRefreshQueue(new WorkMetadataStore(db), new Jularr.Web.Features.Metadata.WorkMetadataRefreshSignal(), clock);
-        return new TmdbDiscoveryProvider(http, configuration, executor, new ProviderResponseCache(clock), works, structure, db, new LegacyWorkBridge(db, works, structure), metadata);
+        return new TmdbDiscoveryProvider(http, TmdbTestSupport.Credentials(), executor, health, new ProviderResponseCache(clock), works, structure, db, new LegacyWorkBridge(db, works, structure), metadata);
     }
 
     /// <param name="tmdb">Only Movie and TV requests resolve through TMDB; the Anime request does not need it.</param>

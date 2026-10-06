@@ -1,0 +1,27 @@
+@page
+@model Jularr.Web.Pages.Admin.ProvidersModel
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-providers.css" asp-append-version="true" />
+}
+@{
+    var ui = Model.View.Ui;
+    ViewData["Title"] = ui["admin.providers.title"];
+}
+
+<header class="page-header">
+    <div>
+        <h1>@ui["admin.providers.title"]</h1>
+        <p>@ui["admin.providers.description"]</p>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="ui" />
+
+<partial name="_ProviderTable" model="Model.View" />
+
+@if (Model.View.Selected is not null)
+{
+    <partial name="_ProviderDetail" model="Model.View" />
+}

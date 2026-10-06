@@ -1,4 +1,4 @@
-@page
+@page "/Settings/Naming"
 @using Jularr.Web.Features.Acquisition.Naming
 @model Jularr.Web.Pages.Settings.NamingModel
 @{
@@ -12,7 +12,7 @@
         <h1>@ui["settings.naming.title"]</h1>
         <p>@ui["settings.naming.pageDescription"]</p>
     </div>
-    <a class="button" asp-page="/Settings/ReadingNaming">@ui["settings.naming.readingNamingLink"]</a>
+    <a class="button" asp-page="/Legacy/Settings/ReadingNaming">@ui["settings.naming.readingNamingLink"]</a>
 </header>
 
 @if (!string.IsNullOrWhiteSpace(Model.Notice))
@@ -36,7 +36,7 @@
                 var isDefault = profile.Id.Equals(Model.State.DefaultProfileId, StringComparison.OrdinalIgnoreCase);
                 var usage = Model.UsageCount(profile.Id);
                 <li>
-                    <a asp-page="/Settings/Naming" asp-route-edit="@profile.Id"><strong>@profile.Name</strong></a>
+                    <a asp-page="/Legacy/Settings/Naming" asp-route-edit="@profile.Id"><strong>@profile.Name</strong></a>
                     <span class="muted">@profile.Id@(isDefault ? $" · {ui["settings.naming.default"]}" : "")@(usage > 0 ? $" · {ui.Format("settings.naming.assignments", ("count", usage))}" : "")</span>
                 </li>
             }
@@ -44,7 +44,7 @@
         <div class="inline-actions">
             @foreach (var preset in AnimeNamingPresets.All)
             {
-                <a class="button" asp-page="/Settings/Naming" asp-route-preset="@preset.Id">@ui.Format("settings.naming.newFromPreset", ("name", preset.Name))</a>
+                <a class="button" asp-page="/Legacy/Settings/Naming" asp-route-preset="@preset.Id">@ui.Format("settings.naming.newFromPreset", ("name", preset.Name))</a>
             }
         </div>
     </section>

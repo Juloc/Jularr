@@ -559,6 +559,22 @@
   window.addEventListener("online", () =>
     showToast(shellLabel("pwa.online")));
 
+  // Ctrl/Cmd+K focuses the global search. Discover owns a search of its own and leaves the header
+  // field out, so the shortcut lands there instead; a hidden field (a phone without it) is skipped.
+  document.addEventListener("keydown", event => {
+    if (event.key.toLowerCase() !== "k" || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
+      return;
+    }
+
+    const target = [...document.querySelectorAll("[data-dc-search], [data-app-search]")]
+      .find(field => field.getClientRects().length > 0);
+    if (target) {
+      event.preventDefault();
+      target.focus();
+      target.select();
+    }
+  });
+
   // Admin and Settings reopen on the page last used inside them. The server
   // decides which section is expanded; this only remembers the child link.
   const NAV_LAST_PAGE_KEY = "jularr.nav.lastPage.";

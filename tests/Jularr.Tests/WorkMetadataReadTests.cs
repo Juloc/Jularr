@@ -309,10 +309,12 @@ public sealed class WorkMetadataReadTests
             BaseAddress = new Uri("https://api.themoviedb.org/3/"),
             Timeout = TimeSpan.FromSeconds(1)
         };
+        var health = new ProviderHealthTracker(TimeProvider.System);
         var provider = new TmdbDiscoveryProvider(
             http,
-            new ConfigurationManager { ["Providers:Tmdb:ApiKey"] = "test-key" },
-            new ProviderExecutor(new(), new(TimeProvider.System), TimeProvider.System, NullLogger<ProviderExecutor>.Instance),
+            TmdbTestSupport.Credentials(),
+            new ProviderExecutor(new(), health, TimeProvider.System, NullLogger<ProviderExecutor>.Instance),
+            health,
             new ProviderResponseCache(TimeProvider.System),
             new WorkService(db),
             new WorkStructureService(db),

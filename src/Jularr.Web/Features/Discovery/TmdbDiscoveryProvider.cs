@@ -1,3 +1,4 @@
+using System.Net;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -41,8 +42,9 @@ public sealed record TmdbDiscoveryCandidate(
 /// </summary>
 public sealed partial class TmdbDiscoveryProvider(
     HttpClient client,
-    IConfiguration configuration,
+    TmdbCredentialStore credentials,
     ProviderExecutor executor,
+    ProviderHealthTracker health,
     ProviderResponseCache cache,
     WorkService works,
     WorkStructureService structure,
@@ -92,9 +94,8 @@ public sealed partial class TmdbDiscoveryProvider(
             ["Sci-Fi"] = 10765
         };
 
-    public bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(configuration["Providers:Tmdb:ReadAccessToken"])
-        || !string.IsNullOrWhiteSpace(configuration["Providers:Tmdb:ApiKey"]);
+    /// <summary>How long a connection test waits in total; the provider call is never retried, so the admin sees the first answer.</summary>
+    public static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(8);
 
     public static bool TryNormalizeExternalId(string? value, out string normalized)
     {
@@ -601,22 +602,20 @@ public sealed partial class TmdbDiscoveryProvider(
         IReadOnlyList<(string Key, string Value)> query,
         CancellationToken cancellationToken)
     {
-        EnsureConfigured();
-        using var response = await executor.SendAsync(
-            ProviderKey,
-            client,
-            () =>
-            {
-                var request = new HttpRequestMessage(HttpMethod.Get, BuildUri(path, query));
-                var token = configuration["Providers:Tmdb:ReadAccessToken"];
-                if (!string.IsNullOrWhiteSpace(token))
-                {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Trim());
-                }
+        var configuration = await credentials.GetAsync(cancellationToken);
+        if (configuration.Availability != TmdbAvailability.Ready)
+        {
+            throw new ProviderNotConfiguredException(ProviderKey);
+        }
 
-                return request;
-            },
-            cancellationToken: cancellationToken);
+        using var response = await executor.SendAsync(ProviderKey, client, () => BuildRequest(path, query, configuration.Credential!), cancellationToken: cancellationToken);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            // The executor counts an answered 4xx as a healthy provider; a refused credential is the one 4xx the admin must see as such.
+            health.RecordAuthenticationFailure(ProviderKey);
+            throw new ProviderAuthenticationException(ProviderKey, new HttpRequestException($"TMDB answered HTTP {(int)response.StatusCode}.", null, response.StatusCode));
+        }
+
         response.EnsureSuccessStatusCode();
 
         // The executor reads only the headers, where HttpClient.Timeout ends; the body gets the same budget, so a stalled answer fails
@@ -635,29 +634,60 @@ public sealed partial class TmdbDiscoveryProvider(
         }
     }
 
-    private string BuildUri(string path, IReadOnlyList<(string Key, string Value)> query)
+    /// <summary>One request signed with exactly one credential: the Read Access Token as a Bearer header, an API key as the <c>api_key</c> query value.</summary>
+    private static HttpRequestMessage BuildRequest(string path, IReadOnlyList<(string Key, string Value)> query, TmdbCredential credential)
     {
         var values = new List<(string Key, string Value)>(query);
-        var apiKey = configuration["Providers:Tmdb:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(apiKey))
+        if (credential.Kind == TmdbCredentialKind.ApiKey)
         {
-            values.Add(("api_key", apiKey.Trim()));
+            values.Add(("api_key", credential.Secret));
         }
 
-        var encoded = string.Join(
-            '&',
-            values
-                .Where(x => !string.IsNullOrWhiteSpace(x.Value))
-                .Select(x => $"{Uri.EscapeDataString(x.Key)}={Uri.EscapeDataString(x.Value)}"));
-        return encoded.Length == 0 ? path : $"{path}?{encoded}";
+        var encoded = string.Join('&', values.Where(x => !string.IsNullOrWhiteSpace(x.Value)).Select(x => $"{Uri.EscapeDataString(x.Key)}={Uri.EscapeDataString(x.Value)}"));
+        var request = new HttpRequestMessage(HttpMethod.Get, encoded.Length == 0 ? path : $"{path}?{encoded}");
+        if (credential.Kind == TmdbCredentialKind.ReadAccessToken)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential.Secret);
+        }
+
+        return request;
     }
 
-    private void EnsureConfigured()
+    /// <summary>
+    /// One lightweight authenticated call (<c>configuration</c>) that answers whether <paramref name="credential"/> is accepted, with a short total
+    /// timeout and no retry. A test of the saved credential records the provider's health; a test of an unsaved one never touches it.
+    /// </summary>
+    public async Task<TmdbTestOutcome> TestConnectionAsync(TmdbCredential credential, bool recordHealth, CancellationToken cancellationToken)
     {
-        if (!IsConfigured)
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TestTimeout);
+        var policy = new ProviderExecutionPolicy { MaxAttempts = 1, TrackHealth = recordHealth, ShortCircuitWhenUnavailable = false };
+        try
         {
-            throw new InvalidOperationException(
-                "TMDB is not configured. Set Providers:Tmdb:ReadAccessToken or Providers:Tmdb:ApiKey.");
+            using var response = await executor.SendAsync(ProviderKey, client, () => BuildRequest("configuration", [], credential), policy, timeout.Token);
+            switch (response.StatusCode)
+            {
+                case HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden:
+                    if (recordHealth)
+                    {
+                        health.RecordAuthenticationFailure(ProviderKey);
+                    }
+
+                    return TmdbTestOutcome.AuthenticationFailed;
+                case HttpStatusCode.TooManyRequests:
+                    return TmdbTestOutcome.RateLimited;
+                default:
+                    return response.IsSuccessStatusCode ? TmdbTestOutcome.Succeeded : TmdbTestOutcome.Unreachable;
+            }
+        }
+        catch (ProviderRateLimitedException)
+        {
+            return TmdbTestOutcome.RateLimited;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TimeoutException or IOException || (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            // The executor already recorded the failure when it is tracked; the admin only needs to know the provider could not be reached.
+            return TmdbTestOutcome.Unreachable;
         }
     }
 

@@ -17,6 +17,8 @@ public sealed record DiscoverLandingRow(
 /// </summary>
 public static class DiscoverSectionComposer
 {
+    private const string TmdbSettingsPage = "/Admin/Providers";
+
     /// <summary>The media groups of an all-types search, in the order they are shown.</summary>
     private static readonly DiscoveryCategory[] Groups =
     [
@@ -34,10 +36,10 @@ public static class DiscoverSectionComposer
     public static IReadOnlyList<DiscoverSectionView> Landing(IReadOnlyList<DiscoverLandingRow> rows, DiscoverContext context)
     {
         var ui = context.Ui;
-        var failedLabels = rows
+        var failedRows = rows
             .Where(row => FailureKey(row) is not null && row.Items.Count == 0)
             .GroupBy(row => FailureKey(row)!)
-            .ToDictionary(group => group.Key, group => group.Select(row => row.MediaLabel).OfType<string>().Distinct(StringComparer.Ordinal).ToArray());
+            .ToDictionary(group => group.Key, group => group.ToArray());
         var announced = new HashSet<string>(StringComparer.Ordinal);
         var sections = new List<DiscoverSectionView>(rows.Count);
 
@@ -54,10 +56,18 @@ public static class DiscoverSectionComposer
                 case DiscoverySectionState.Pending:
                     sections.Add(Pending(row.Id, row.Heading, row.SeeAllUrl, DiscoverSectionLayout.Track));
                     break;
-                case DiscoverySectionState.Unavailable or DiscoverySectionState.Busy when failure is not null && announced.Add(failure):
-                    var media = string.Join(", ", failedLabels[failure]);
+                case not (DiscoverySectionState.Ready or DiscoverySectionState.Pending or DiscoverySectionState.Empty) when failure is not null && announced.Add(failure):
+                    var sharing = failedRows[failure];
+                    var retry = FailedSources([.. sharing.SelectMany(shared => shared.Sources)]);
+                    if (TmdbNotice(state, row.Sources, context) is { } notice)
+                    {
+                        sections.Add(new DiscoverSectionView($"notice-{failure}", null, null, DiscoverSectionLayout.Track, state, [], null, null, retry) { Notice = notice });
+                        break;
+                    }
+
+                    var media = string.Join(", ", sharing.Select(shared => shared.MediaLabel).OfType<string>().Distinct(StringComparer.Ordinal));
                     var message = ui.Format(state == DiscoverySectionState.Busy ? "discover.section.busyFor" : "discover.section.unavailableFor", ("media", media));
-                    sections.Add(new DiscoverSectionView($"notice-{failure}", null, null, DiscoverSectionLayout.Track, state, [], null, message, FailedSources(row.Sources)));
+                    sections.Add(new DiscoverSectionView($"notice-{failure}", null, null, DiscoverSectionLayout.Track, state, [], null, message, retry));
                     break;
             }
         }
@@ -86,7 +96,7 @@ public static class DiscoverSectionComposer
             {
                 DiscoverySectionState.Ready when shown.Count > 0 => Filled("results", null, null, DiscoverSectionLayout.Grid, shown, count, batch.Sources, ui),
                 DiscoverySectionState.Pending => Pending("results", null, null, DiscoverSectionLayout.Grid),
-                DiscoverySectionState.Unavailable or DiscoverySectionState.Busy => Failed("results", null, DiscoverSectionLayout.Grid, state, batch.Sources, ui),
+                _ when DiscoverySections.HasFailed(state) => Failed("results", null, DiscoverSectionLayout.Grid, state, batch.Sources, context),
                 _ => null
             };
 
@@ -113,7 +123,7 @@ public static class DiscoverSectionComposer
             {
                 DiscoverySectionState.Ready when shown.Count > 0 => Filled(SectionId(group), heading, seeAll, DiscoverSectionLayout.Track, shown, null, sources, ui) with { Collapsible = true },
                 DiscoverySectionState.Pending => Pending(SectionId(group), heading, seeAll, DiscoverSectionLayout.Track),
-                DiscoverySectionState.Unavailable or DiscoverySectionState.Busy => Failed(SectionId(group), heading, DiscoverSectionLayout.Track, state, sources, ui),
+                _ when DiscoverySections.HasFailed(state) => Failed(SectionId(group), heading, DiscoverSectionLayout.Track, state, sources, context),
                 _ => null
             };
 
@@ -174,18 +184,67 @@ public static class DiscoverSectionComposer
         DiscoverSectionLayout layout,
         DiscoverySectionState state,
         IReadOnlyList<DiscoverySourceResult> sources,
-        Localization.UiTextBundle ui) =>
-        new(id, heading, null, layout, state, [], null, ui[state == DiscoverySectionState.Busy ? "discover.section.busy" : "discover.section.unavailable"], FailedSources(sources));
+        DiscoverContext context)
+    {
+        var notice = TmdbNotice(state, sources, context);
+        var message = notice is null ? context.Ui[state == DiscoverySectionState.Busy ? "discover.section.busy" : "discover.section.unavailable"] : null;
+        return new DiscoverSectionView(id, heading, null, layout, state, [], null, message, FailedSources(sources)) { Notice = notice };
+    }
 
     private static IReadOnlyList<DiscoverySource> FailedSources(IReadOnlyList<DiscoverySourceResult> sources) =>
-        [.. sources.Where(source => source.State is DiscoverySourceState.Unavailable or DiscoverySourceState.Busy).Select(source => source.Source)];
+        [.. sources.Where(source => source.State is DiscoverySourceState.Unavailable or DiscoverySourceState.Busy or DiscoverySourceState.AuthFailed).Select(source => source.Source).Distinct()];
 
-    /// <summary>The cause shared by rows that failed together, or null for a row that did not fail.</summary>
+    /// <summary>
+    /// What a section says when TMDB, the provider behind Movies and Series, cannot answer: the owner sees the cause and the way to fix it, everybody
+    /// else only that an administrator has to act (not configured, disabled, refused) or that it is temporary. Null for any other provider or cause,
+    /// which keep their generic sentence.
+    /// </summary>
+    private static DiscoverProviderNotice? TmdbNotice(DiscoverySectionState state, IReadOnlyList<DiscoverySourceResult> sources, DiscoverContext context)
+    {
+        var failed = sources.Where(source => DiscoverySections.HasFailed(source.State)).ToArray();
+        if (failed.Length == 0 || !failed.All(source => source.Source is DiscoverySource.Movies or DiscoverySource.Series))
+        {
+            return null;
+        }
+
+        var ui = context.Ui;
+        var admin = context.CanConfigureProviders;
+        var configure = admin ? ui["discover.tmdb.configure"] : null;
+        var url = admin ? TmdbSettingsPage : null;
+        return state switch
+        {
+            DiscoverySectionState.NotConfigured => admin
+                ? new DiscoverProviderNotice(ui["discover.tmdb.notConfigured.title"], ui["discover.tmdb.notConfigured.body"], configure, url)
+                : new DiscoverProviderNotice(ui["discover.tmdb.setupPending.title"], ui["discover.tmdb.setupPending.body"], null, null),
+            DiscoverySectionState.Disabled => admin
+                ? new DiscoverProviderNotice(ui["discover.tmdb.disabled.title"], ui["discover.tmdb.disabled.body"], configure, url)
+                : new DiscoverProviderNotice(ui["discover.tmdb.setupPending.title"], ui["discover.tmdb.setupPending.body"], null, null),
+            DiscoverySectionState.AuthFailed => admin
+                ? new DiscoverProviderNotice(ui["discover.tmdb.authFailed.title"], ui["discover.tmdb.authFailed.body"], configure, url)
+                : new DiscoverProviderNotice(ui["discover.tmdb.temporary.title"], ui["discover.tmdb.temporary.body"], null, null),
+            DiscoverySectionState.Unavailable or DiscoverySectionState.Busy => admin
+                ? new DiscoverProviderNotice(ui["discover.tmdb.unavailable.title"], ui["discover.tmdb.unavailable.body"], null, null)
+                : new DiscoverProviderNotice(ui["discover.tmdb.temporary.title"], ui["discover.tmdb.temporary.body"], null, null),
+            _ => null
+        };
+    }
+
+    /// <summary>The cause shared by rows that failed together, or null for a row that did not fail. Rows of the TMDB-backed Movies and Series share one cause per kind.</summary>
     private static string? FailureKey(DiscoverLandingRow row)
     {
-        var failed = row.Sources.Where(source => source.State is DiscoverySourceState.Unavailable or DiscoverySourceState.Busy).ToArray();
-        return failed.Length == 0
-            ? null
-            : (failed.Any(source => source.State == DiscoverySourceState.Unavailable) ? "unavailable-" : "busy-") + string.Join('-', failed.Select(source => DiscoverySources.Name(source.Source)));
+        var failed = row.Sources.Where(source => DiscoverySections.HasFailed(source.State)).ToArray();
+        if (failed.Length == 0)
+        {
+            return null;
+        }
+
+        // A paused provider (circuit open, rate limited) is as temporary as a failing one: both are one cause for TMDB.
+        var state = DiscoverySections.StateOf(0, failed);
+        if (failed.All(source => source.Source is DiscoverySource.Movies or DiscoverySource.Series))
+        {
+            return "tmdb-" + (state == DiscoverySectionState.Busy ? DiscoverySectionState.Unavailable : state).ToString().ToLowerInvariant();
+        }
+
+        return (failed.Any(source => source.State == DiscoverySourceState.Unavailable) ? "unavailable-" : "busy-") + string.Join('-', failed.Select(source => DiscoverySources.Name(source.Source)));
     }
 }

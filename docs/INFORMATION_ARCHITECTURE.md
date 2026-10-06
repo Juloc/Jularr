@@ -40,19 +40,22 @@ Consumer and Admin use the same design system but remain structurally distinct.
 
 ### Desktop / wide Tablet
 
+A top header carries the brand, the global Search (centre) and theme, notifications and the account menu; the sidebar is navigation only.
+
 Persistent consumer navigation:
 
 - Home;
 - Library;
 - Games;
 - Calendar;
-- Learning;
-- global Search/Discover access.
+- Learning, while it is finished (it is Unfinished today);
+- global Search/Discover access in the header.
 
 Bottom/account area:
 - Profile;
 - Settings;
-- Admin only when authorized.
+- Admin only when authorized;
+- Unfinished: the one subordinate section for destinations whose feature is still incomplete (#870; see `docs/UX.md` section 2).
 
 Do not create permanent top-level destinations for:
 - individual media types;
@@ -71,10 +74,10 @@ Primary bottom navigation:
 - Home;
 - Library;
 - Calendar;
-- Learning;
+- Learning, once it is no longer Unfinished (until then Profile -> Unfinished);
 - Profile.
 
-Search remains globally accessible from the top/app bar.
+Search remains globally accessible from the top/app bar and never takes a bottom-navigation slot; neither does Unfinished.
 
 Library is a real destination and is not merged into Home.
 
@@ -140,6 +143,23 @@ Consumer Library has no generic Add/import menu. New media is found through Disc
 
 Watchlist/Reading List is represented as profile-state filtering/deep-linking inside Library rather than another top-level destination or a fake Collection.
 
+### UI maturity classes and the Legacy page subtree
+
+Every Razor Page belongs to exactly one maturity class. The class follows from the page's binding `docs/mockups/<surface>/SPEC.md`, its approved mockup image and whether the implementation was reconciled against both; there is no separate status document.
+
+| Class | Meaning | Lives in |
+| --- | --- | --- |
+| A, approved | SPEC and mockup exist and the page was reconciled against them | its feature folder (`Pages/Library`, `Pages/Admin`, ...) |
+| B, unfinished | the SPEC direction exists but the implementation is materially incomplete, or the surface has no own SPEC yet | its feature folder |
+| C, legacy | old UI that was never reconciled with the current SPEC/mockup direction | `Pages/Legacy/<mirrored feature folder>` when cleanly separable, otherwise in place until detangled |
+
+- A page is created in its feature folder and starts as B; it becomes A only after its SPEC and mockup exist and the page was reconciled. A new page is never created under `Pages/Legacy`.
+- When two classes fit, the lower one applies.
+- A legacy page keeps its URL: it declares an explicit absolute `@page "/original/route"` (route parameters unchanged), keeps its PageModel namespace, and a `_ViewImports.cshtml` in its `Pages/Legacy/<Folder>` pins that namespace. `asp-page`, `RedirectToPage` and `Url.Page` use the new page name `/Legacy/<Folder>/<Page>`. Shared partials stay in `Pages/Shared` or their feature folder and are referenced by explicit path.
+- A page that shares page-private partials, or is linked through page names from shared shell code, with approved pages stays in place. Class A and B directories never reference partials under `Pages/Legacy`.
+- A legacy page leaves `Pages/Legacy` when it is rebuilt per its SPEC (back into the feature folder) or when its owning surface replaces it (deleted, with a redirect where the URL had users).
+- `LegacyPagesTests` guards the explicit routes, the unchanged URLs, the namespaces and the partial direction.
+
 ## 2. Media model
 
 Four layers per #510. Mapped to what exists in `src/Jularr.Web/Data` and `Features/` today:
@@ -203,7 +223,7 @@ entry; `AnimeSpecialMapping.cs` covers specials/OVA/ONA separately. `NovelAnimeM
 **Exists** for the planning/automatic-match mechanics; **partial** for the owner-facing workflow
 (below).
 
-**`/Settings/MappingReview`** (`Pages/Settings/MappingReview.cshtml(.cs)`, backed by
+**`/Settings/MappingReview`** (`Pages/Legacy/Settings/MappingReview.cshtml(.cs)`, backed by
 `MediaMappingReviewStore`) still lists `MediaMappingReviewTask` items (provider, external id, title,
 score and evidence per candidate) and keeps **Dismiss**, but it is now also the anime range-mapping
 apply workspace (`?animeId=`). For a selected anime it shows the match candidates with confidence,
@@ -218,7 +238,7 @@ progress-safe: watch progress keys on the stable `EpisodeId` while mappings key 
 range, so changing a mapping only rewrites provider coordinates. **Exists**
 ([#525](https://github.com/Juloc/Jularr/issues/525)).
 
-**`/Settings/MappingSegments`** (`Pages/Settings/MappingSegments.cshtml(.cs)`, backed by
+**`/Settings/MappingSegments`** (`Pages/Legacy/Settings/MappingSegments.cshtml(.cs)`, backed by
 `ReadingSegmentMappingStore`) maps local chapter ranges (`LocalChapterStart`/`End`) to an external
 provider's chapter numbering (`RemoteChapterStart`) for Manga/Light Novels. It is **not** an anime
 episode-range mapping tool despite the adjacent name — anime range mapping now has its own owner-facing
@@ -359,7 +379,7 @@ each row's Where.
 | Forced/SDH detection | Exists — owner-facing forced/SDH preference per wanted language, on top of the existing extraction-ordering detection | `SubtitleLanguageProfileItem` (`Forced`/`Sdh`), `EmbeddedSubtitleExtractor.cs` (`IsForced`), `Settings/Subtitles.cshtml(.cs)` | — |
 | Missing-subtitle tracking | Exists — per-episode complete/cutoff-met/missing-N state against the resolved language profile, from embedded + external tracks (a provider import carries the searched item's language/forced/SDH, so it satisfies exactly that item) | `SubtitleCompletenessService.cs`, `/Admin/Subtitles` completeness panel | — |
 | Subtitle language profiles | Exists — owner-managed ordered wanted-language profiles with forced/SDH preference and a cutoff, assignable per media type and per library root (fallback media-type → global default) | `SubtitleLanguageProfile(Item)`, `SubtitleLanguageProfileService.cs`, `Settings/Subtitles.cshtml(.cs)` | — |
-| External subtitle provider search/download | Partial — Jimaku still covers only the Japanese learning subtitle; the general `ISubtitleProvider` abstraction and owner-only manual-search UI now have one concrete provider, OpenSubtitles (search + download through the #438 provider framework: retries, Retry-After, response cache, health; the owner's API key and account are protected under `/data/integrations/opensubtitles.json`). A provider is offered through an `ISubtitleProviderSource` only while configured, so an unconfigured server still shows "no providers configured"; further account-based providers plug in the same way | `SubtitleProviders.cs`, `Subtitles/OpenSubtitles/*`, `SubtitleProviderServiceCollectionExtensions.cs`, `Pages/Settings/Subtitles.cshtml(.cs)` (connection panel), `Pages/Admin/Subtitles.cshtml.cs` (manual search panel) | #560 |
+| External subtitle provider search/download | Partial — Jimaku still covers only the Japanese learning subtitle; the general `ISubtitleProvider` abstraction and owner-only manual-search UI now have one concrete provider, OpenSubtitles (search + download through the #438 provider framework: retries, Retry-After, response cache, health; the owner's API key and account are protected under `/data/integrations/opensubtitles.json`). A provider is offered through an `ISubtitleProviderSource` only while configured, so an unconfigured server still shows "no providers configured"; further account-based providers plug in the same way | `SubtitleProviders.cs`, `Subtitles/OpenSubtitles/*`, `SubtitleProviderServiceCollectionExtensions.cs`, `Pages/Legacy/Settings/Subtitles.cshtml(.cs)` (connection panel), `Pages/Legacy/Admin/Subtitles.cshtml.cs` (manual search panel) | #560 |
 | Subtitle sync/validation | Missing — no timing-sync or validation tool; not part of #526's scope | — | — |
 | Replace/remove subtitle | Exists | Rename/repair "Refresh subtitles" path re-imports; per-track removal via subtitle sources | — |
 | Per-media subtitle diagnostics | Exists | Episode subtitle sources partial (`_EpisodeSubtitleSources.cshtml`) | — |
@@ -374,8 +394,8 @@ each row's Where.
 | Acquisition (search/download/import) | Exists | `Features/ReadingAcquisition`, `AcquisitionRequestService` | — |
 | Monitoring/wanted | Exists | `WantedAcquisitionService` | — |
 | Metadata/provider mapping | Exists (AniList) | Manga/Novel AniList match services | — |
-| Configurable Light Novel search sources | Exists for current enable/disable + priority — Narou, AniList, BOOK☆WALKER, WebNovel and Internet Archive are configured at `/Admin/ReadingSources`, with capability/licensing/health and rights-aware Internet Archive filtering. **Target:** consolidate this into `Admin → Providers → Reading Sources`, add explicit Normal vs Fallback-only participation (including Internet Archive as a configurable fallback), media/language applicability and schema-driven future adapters without new pages. Acquisition Profiles may narrow/prefer the configured providers but cannot override adapter rights/capability limits. See [READING_ACQUISITION.md](READING_ACQUISITION.md#reading-sources) and [admin-providers/SPEC.md](mockups/admin-providers/SPEC.md). | `Features/ReadingSources`, `Features/ReadingDiscovery`, `Pages/Admin/ReadingSources.cshtml` | #477, #438 |
-| Naming/organization | Exists — one naming-template profile per reading media type (Books, Manga, Light Novels), applied when a release is placed into its NAS library root; live preview and token reference on `/Settings/ReadingNaming` (sibling of anime's `/Settings/Naming`) | `Features/Naming`, `Pages/Settings/ReadingNaming.cshtml(.cs)` | — |
+| Configurable Light Novel search sources | Exists for current enable/disable + priority — Narou, AniList, BOOK☆WALKER, WebNovel and Internet Archive are configured at `/Admin/ReadingSources`, with capability/licensing/health and rights-aware Internet Archive filtering. **Target:** consolidate this into `Admin → Providers → Reading Sources`, add explicit Normal vs Fallback-only participation (including Internet Archive as a configurable fallback), media/language applicability and schema-driven future adapters without new pages. Acquisition Profiles may narrow/prefer the configured providers but cannot override adapter rights/capability limits. See [READING_ACQUISITION.md](READING_ACQUISITION.md#reading-sources) and [admin-providers/SPEC.md](mockups/admin-providers/SPEC.md). | `Features/ReadingSources`, `Features/ReadingDiscovery`, `Pages/Legacy/Admin/ReadingSources.cshtml` | #477, #438 |
+| Naming/organization | Exists — one naming-template profile per reading media type (Books, Manga, Light Novels), applied when a release is placed into its NAS library root; live preview and token reference on `/Settings/ReadingNaming` (sibling of anime's `/Settings/Naming`) | `Features/Naming`, `Pages/Legacy/Settings/ReadingNaming.cshtml(.cs)` | — |
 | Reading progress | Exists | `NovelProgress`, `MangaProgressItem`, bookmarks/highlights | — |
 | Multiple editions/formats | Exists (Books) | `BookEdition`/`BookFile` (EPUB, PDF) | — |
 | Chapter-range provider mapping | Exists | `ReadingSegmentMappingStore`, `/Settings/MappingSegments` | — |

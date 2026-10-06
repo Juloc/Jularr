@@ -1,0 +1,35 @@
+@using System.Globalization
+@using Jularr.Web.Features.Appearance
+@using Jularr.Web.Features.Localization
+@{
+    var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
+    var appVersion = ViewData["AppBuildVersion"] as string ?? AppBuildInfo.Version;
+    var isOwner = User.IsInRole(Jularr.Web.Features.Auth.AccountRoles.Owner);
+    var name = User.Identity?.Name ?? string.Empty;
+    var initial = name.Length > 0 ? new StringInfo(name).SubstringByTextElements(0, 1).ToUpperInvariant() : string.Empty;
+}
+@* Account menu in the header: identity, Profile, Settings, the offline-download indicator and sign out. A native popover, so Escape,
+   outside click and focus return need no script. *@
+<button class="app-avatar" type="button" popovertarget="app-user-menu" aria-label="@ui["nav.userMenu"]">
+    <span aria-hidden="true">@initial</span>
+</button>
+<div class="user-menu" id="app-user-menu" popover>
+    <p class="user-menu-name">@name</p>
+    <nav class="user-menu-links" aria-label="@ui["nav.userMenu"]">
+        <a class="user-menu-item" href="/Profile">
+            <partial name="_AppIcon" model="@("profile")" />
+            <span>@ui["nav.profile"]</span>
+        </a>
+        <a class="user-menu-item" href="/Settings">
+            <partial name="_AppIcon" model="@("settings")" />
+            <span>@ui["nav.settings"]</span>
+        </a>
+    </nav>
+    @* Compact global offline-download indicator (#221): hidden until offline-library-ui.js reports a running download. *@
+    <a class="user-menu-offline" href="/Settings/Offline" data-offline-download-indicator hidden></a>
+    <partial name="_AppSignOut" model="@("user-menu-item")" />
+    @if (isOwner)
+    {
+        <span class="user-menu-version" title="@appVersion">@ui["shell.version"] @appVersion</span>
+    }
+</div>

@@ -1,0 +1,26 @@
+@using Jularr.Web.Features.Providers
+@model ProviderPageModel
+@* The provider list of the Setup provider step (docs/mockups/setup-wizard "6. Provider"): one row per provider with its name, family, state and the
+   action that fits the state. The Admin overview is the table of the same providers (_ProviderTable); both use the same row actions and state tag.
+   Styles: wwwroot/css/admin-providers.css. *@
+@{
+    var ui = Model.Ui;
+}
+<ul class="prov-rows">
+    @foreach (var provider in Model.Providers)
+    {
+        <li class="prov-row">
+            <span class="admset-tile prov-logo" aria-hidden="true">@provider.Initials</span>
+            <span class="prov-row-name">
+                <strong>@provider.DisplayName</strong>
+                <small>@ui["admin.providers.family." + provider.Family.ToString().ToLowerInvariant()]</small>
+            </span>
+            @if (provider.RequiredReasonKey is not null)
+            {
+                <span class="admin-tag admin-tag-info">@ui["admin.providers.required"]</span>
+            }
+            <partial name="_ProviderStatus" model="(ui, provider.State)" />
+            <span class="prov-row-actions"><partial name="_ProviderActions" model="(Model, provider)" /></span>
+        </li>
+    }
+</ul>

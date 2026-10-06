@@ -1,0 +1,120 @@
+@using Jularr.Web.Features.Providers
+@model ProviderPageModel
+@* The provider detail of the shared Provider UI (docs/mockups/admin-providers, "Provider - Details"): header with name, enabled switch and state, the
+   masked connection fields of the provider's schema, what it is used for, and the Test / Cancel / Save row. Admin → Providers and the Setup provider
+   step render this same partial and post to the same handlers. A saved value is never rendered back, not even a fragment of it: a field that holds
+   one only says so. Styles: wwwroot/css/admin-providers.css. *@
+@{
+    var ui = Model.Ui;
+    var provider = Model.Selected!;
+    var feedback = Model.FeedbackFor(provider);
+    var feedbackKey = ProviderPageModel.MessageKey(feedback);
+    var key = provider.Key;
+    string Time(DateTimeOffset? at) => at is { } value ? value.ToLocalTime().ToString("g") : ui["admin.providers.fact.none"];
+}
+<section class="admset-section prov-detail" id="provider-@key" aria-labelledby="provider-@key-heading">
+    <form method="post" asp-page="/Admin/Providers" asp-page-handler="Save" asp-route-provider="@key" class="prov-form">
+        <input type="hidden" name="returnUrl" value="@Model.DetailUrl(key)" />
+        @* Pressing Enter in a field presses the first submit button of the form, and that must save, not test. *@
+        <button type="submit" class="admset-visually-hidden" tabindex="-1" aria-hidden="true" asp-page="/Admin/Providers" asp-page-handler="Save" asp-route-provider="@key"></button>
+
+        <div class="admset-head">
+            <span class="admset-tile prov-logo" aria-hidden="true">@provider.Initials</span>
+            <div>
+                <h2 id="provider-@key-heading">@provider.DisplayName</h2>
+                <p>@ui["admin.providers.family." + provider.Family.ToString().ToLowerInvariant()] · @ui[provider.SummaryKey]</p>
+            </div>
+            <span class="prov-head-state">
+                <label class="prov-enabled" for="provider-@key-enabled">
+                    <span>@ui["admin.providers.enabledSwitch"]</span>
+                    <input id="provider-@key-enabled" type="checkbox" class="admin-switch" role="switch" name="enabled" value="true" checked="@provider.Enabled" />
+                    <input type="hidden" name="enabled" value="false" />
+                </label>
+                <partial name="_ProviderStatus" model="(ui, provider.State)" />
+            </span>
+        </div>
+
+        @if (provider.RequiredReasonKey is { } reasonKey)
+        {
+            <p class="prov-required">@ui[reasonKey]</p>
+        }
+
+        @if (feedbackKey is not null)
+        {
+            <p class="admset-notice" role="@(ProviderPageModel.IsFailure(feedback) ? "alert" : "status")" data-provider-feedback="@feedback.ToString().ToLowerInvariant()">@ui[feedbackKey]</p>
+        }
+
+        <h3 class="prov-subheading">@ui["admin.providers.connectionHeading"]</h3>
+        @if (provider.ExternallyManaged)
+        {
+            <div class="prov-external">
+                <strong>@ui["admin.providers.external.title"]</strong>
+                <p>@ui["admin.providers.external.body"]</p>
+                @if (provider.HasSavedValue)
+                {
+                    <p class="admset-hint">@ui["admin.providers.external.ignored"]</p>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="admset-fields">
+                @foreach (var field in provider.Fields)
+                {
+                    <div class="admset-field">
+                        <label for="provider-@key-@field.Name">
+                            @ui[field.LabelKey]
+                            @if (field.HasSavedValue)
+                            {
+                                <span class="admin-tag admin-tag-success">@ui["admin.providers.field.saved"]</span>
+                            }
+                        </label>
+                        <input id="provider-@key-@field.Name" name="@field.Name" type="password" autocomplete="new-password" spellcheck="false" autocapitalize="off"
+                               maxlength="@field.MaxLength" aria-describedby="provider-@key-@field.Name-hint"
+                               placeholder="@(field.HasSavedValue ? ui["admin.providers.field.savedPlaceholder"] : "")" />
+                        <span id="provider-@key-@field.Name-hint" class="admset-hint">@ui[field.HintKey]</span>
+                    </div>
+                }
+            </div>
+            @if (provider.SavedValueUnreadable)
+            {
+                <p class="admset-notice" role="alert">@ui["admin.providers.unreadable"]</p>
+            }
+        }
+
+        <dl class="prov-facts">
+            <div>
+                <dt>@ui["admin.providers.fact.source"]</dt>
+                <dd>@ui[provider.CredentialSourceKey]</dd>
+            </div>
+            <div>
+                <dt>@ui["admin.providers.fact.lastSuccess"]</dt>
+                <dd>@Time(provider.LastSuccessUtc)</dd>
+            </div>
+            <div>
+                <dt>@ui["admin.providers.fact.lastFailure"]</dt>
+                <dd>@Time(provider.LastFailureUtc)</dd>
+            </div>
+        </dl>
+
+        <div class="prov-capabilities">
+            <h3 class="prov-subheading">@ui["admin.providers.capabilitiesHeading"]</h3>
+            <ul>
+                @foreach (var capability in provider.CapabilityKeys)
+                {
+                    <li><partial name="~/Pages/Admin/_AdminIcon.cshtml" model='"check"' />@ui[capability]</li>
+                }
+            </ul>
+        </div>
+
+        <div class="admset-actions prov-actions">
+            <button type="submit" class="button" asp-page="/Admin/Providers" asp-page-handler="Test" asp-route-provider="@key" formnovalidate>@ui["admin.providers.test"]</button>
+            @if (provider.HasSavedValue && !provider.ExternallyManaged)
+            {
+                <button type="submit" class="button button-quiet" asp-page="/Admin/Providers" asp-page-handler="Remove" asp-route-provider="@key" formnovalidate>@ui["admin.providers.removeCredential"]</button>
+            }
+            <a class="button button-quiet prov-cancel" href="@Model.ReturnUrl">@ui["common.cancel"]</a>
+            <button type="submit" class="button button-primary prov-save" asp-page="/Admin/Providers" asp-page-handler="Save" asp-route-provider="@key">@ui["admin.providers.save"]</button>
+        </div>
+    </form>
+</section>

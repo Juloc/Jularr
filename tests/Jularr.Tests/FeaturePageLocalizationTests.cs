@@ -54,7 +54,7 @@ public sealed partial class FeaturePageLocalizationTests
         "Books", "Manga", "Discover", "Admin", "Reading", "Kana",
         "Settings", "Acquisition", "Appearance", "Artwork", "Companion",
         "LocalizationAdmin", "LocalizationPreferences", "Statistics", "Library",
-        "Novels"
+        "Novels", "Legacy"
     ];
 
     // Folders scanned with the wider h1/h2/h3/button/label element set because
@@ -64,8 +64,11 @@ public sealed partial class FeaturePageLocalizationTests
         "Library",
         "Novels",
         "Calendar",
+        Path.Combine("Legacy", "Library"),
         Path.Combine("Settings", "DownloadClients"),
-        Path.Combine("Settings", "Indexers")
+        Path.Combine("Settings", "Indexers"),
+        Path.Combine("Legacy", "Settings", "DownloadClients"),
+        Path.Combine("Legacy", "Settings", "Indexers")
     ];
 
     // Shared partials (outside any single feature folder) migrated alongside

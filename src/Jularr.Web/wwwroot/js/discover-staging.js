@@ -13,7 +13,7 @@
     const keyQuietMs = 1200;
     const evaluateEveryMs = 300;
 
-    const failedStates = new Set(["unavailable", "busy"]);
+    const failedStates = new Set(["unavailable", "busy", "authfailed", "notconfigured", "disabled"]);
 
     /**
      * What changes between the body the viewer sees and the next generation. A section that is kept as it is needs nothing. A ghost row that

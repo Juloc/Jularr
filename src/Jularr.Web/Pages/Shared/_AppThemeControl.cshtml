@@ -1,14 +1,19 @@
 @using Jularr.Web.Features.Appearance
 @using Jularr.Web.Features.Localization
+@model string?
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
     var appTheme = AppTheme.NormalizeOrSystem(ViewData["AppThemeMode"] as string);
     var currentThemeLabel = ui["theme." + appTheme];
     var themeAria = ui.Format("theme.switchAria", ("mode", currentThemeLabel));
 }
+@* The model "header" renders the compact icon button of the application header; otherwise the labelled control of the phone Profile page. *@
+@{
+    var isHeader = Model == "header";
+}
 <form method="post" asp-page="/Appearance/Theme" class="theme-cycle-form" data-theme-form>
     <input type="hidden" name="theme" value="@appTheme" data-theme-input />
-    <button class="theme-cycle-button"
+    <button class="@(isHeader ? "app-header-button theme-icon-button" : "theme-cycle-button")"
             type="button"
             data-theme-cycle
             data-theme-mode="@appTheme"
@@ -17,12 +22,21 @@
             data-label-dark="@ui["theme.dark"]"
             data-aria-template="@ui["theme.switchAria"]"
             aria-label="@themeAria">
-        <span class="theme-cycle-copy">
-            <span>@ui["theme.label"]</span>
-            <strong data-theme-current>@currentThemeLabel</strong>
-        </span>
-        <span class="theme-state-dots" aria-hidden="true">
-            <i></i><i></i><i></i>
-        </span>
+        @if (isHeader)
+        {
+            <partial name="_AppIcon" model="@("themeSystem")" />
+            <partial name="_AppIcon" model="@("themeLight")" />
+            <partial name="_AppIcon" model="@("themeDark")" />
+        }
+        @if (!isHeader)
+        {
+            <span class="theme-cycle-copy">
+                <span>@ui["theme.label"]</span>
+                <strong data-theme-current>@currentThemeLabel</strong>
+            </span>
+            <span class="theme-state-dots" aria-hidden="true">
+                <i></i><i></i><i></i>
+            </span>
+        }
     </button>
 </form>

@@ -7,7 +7,8 @@ namespace Jularr.Web.Features.Localization;
 /// <summary>
 /// One rendered link. <see cref="Groups"/> is set on a section anchor (Admin, Settings) whose
 /// child pages are listed beneath it, either expanded in the sidebar or on a drill-in screen.
-/// <see cref="IsSection"/> marks Admin and Settings even while they are collapsed.
+/// <see cref="IsSection"/> marks Admin and Settings even while they are collapsed. <see cref="AreaKey"/> names the area
+/// (Settings, Admin) of a destination listed outside it, so two pages called AI stay distinguishable in the Unfinished list.
 /// </summary>
 public sealed record UiNavigationItem(
     string Id,
@@ -16,13 +17,20 @@ public sealed record UiNavigationItem(
     string Icon,
     bool IsActive,
     IReadOnlyList<UiNavigationGroup>? Groups = null,
-    bool IsSection = false)
+    bool IsSection = false,
+    string? AreaKey = null)
 {
     public bool IsExpanded => Groups is not null;
 
+    /// <summary>
+    /// Set on an open section whose current page is listed in the Unfinished section instead of among its own children, so the
+    /// section anchor does not claim the current page as well.
+    /// </summary>
+    public bool CurrentPageListedElsewhere { get; init; }
+
     /// <summary>True when this link itself is the current page, not only its section.</summary>
     public bool IsCurrentPage =>
-        IsActive && !(Groups?.SelectMany(group => group.Items).Any(item => item.IsActive) ?? false);
+        IsActive && !CurrentPageListedElsewhere && !(Groups?.SelectMany(group => group.Items).Any(item => item.IsActive) ?? false);
 }
 
 /// <summary>A titled group of child pages inside Admin or Settings.</summary>
@@ -35,7 +43,9 @@ public sealed record UiNavigationGroup(string TitleKey, IReadOnlyList<UiNavigati
 /// <see cref="JularrPolicies"/> policy an account needs to see the entry; null means every account.
 /// <see cref="MediaRoutes"/> tie the entry to the media types its routes serve: it is absent for a
 /// profile that cannot browse any of them (#598). <see cref="Tabs"/> makes the entry the hub of
-/// those tabs: it is shown while at least one tab is, and opens the first visible one.
+/// those tabs: it is shown while at least one tab is, and opens the first visible one. <see cref="Unfinished"/> marks a
+/// destination whose core feature is still incomplete or deferred (#870): the shell lists it only in the one subordinate
+/// Unfinished section and never beside the finished destinations of its own area.
 /// </summary>
 public sealed record UiNavigationEntry(
     string Id,
@@ -50,7 +60,8 @@ public sealed record UiNavigationEntry(
     UiMediaRoute[]? MediaRoutes = null,
     UiNavigationEntry[]? Tabs = null,
     InstanceModule? Module = null,
-    InstanceModule[]? Modules = null);
+    InstanceModule[]? Modules = null,
+    bool Unfinished = false);
 
 /// <summary>
 /// A consumer route root (the URL prefix of a page folder) and the media types it serves. A
@@ -114,15 +125,17 @@ public static class UiNavigationCatalog
         [
             new("admin-overview", "admin.nav.overview", "/Admin", "admin", Exact: true, Policy: JularrPolicies.AdminMedia),
             new("admin-users", "admin.nav.users", "/Admin/Users", "users", ["/Admin/Users", "/Admin/User", "/Admin/Roles", "/Admin/Capabilities"], Policy: JularrPolicies.AdminSystem),
-            new("admin-requests", "admin.nav.requests", "/Admin/Requests", "requests", Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition)
+            new("admin-requests", "admin.nav.requests", "/Admin/Requests", "requests", Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition),
+            new("admin-wanted", "admin.nav.wanted", "/Admin/Wanted", "download", Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition)
         ]),
         new("nav.group.adminMedia",
         [
             new("admin-usenet", "admin.nav.usenet", "/Admin/Usenet", "download", ["/Admin/Usenet", "/Settings/Indexers", "/Settings/DownloadClients"], Policy: JularrPolicies.AcquisitionSettings, Module: InstanceModule.Acquisition),
+            new("admin-providers", "admin.nav.providers", "/Admin/Providers", "providers", Policy: JularrPolicies.AdminSystem),
             new("admin-anime-acquisition", "admin.nav.animeAcquisition", "/Acquisition", "library", ["/Acquisition"], Policy: JularrPolicies.AdminMedia, Modules: [InstanceModule.Anime, InstanceModule.Acquisition]),
             new("admin-import", "admin.nav.importSettings", "/Settings/Acquisition", "folder", ["/Settings/Acquisition", "/Settings/Naming", "/Settings/ReadingNaming"], Policy: JularrPolicies.AcquisitionSettings, Module: InstanceModule.Acquisition),
             new("admin-mapping", "admin.nav.mapping", "/Settings/MappingReview", "link", ["/Settings/MappingReview", "/Settings/MappingSegments"], Policy: JularrPolicies.MappingEdit),
-            new("admin-subtitles", "admin.nav.subtitles", "/Admin/Subtitles", "subtitles", ["/Admin/Subtitles", "/Settings/Subtitles"], Policy: JularrPolicies.AdminMedia),
+            new("admin-subtitles", "admin.nav.subtitles", "/Admin/Subtitles", "subtitles", ["/Admin/Subtitles", "/Settings/Subtitles"], Policy: JularrPolicies.AdminMedia, Unfinished: true),
             new("admin-sonarr", "admin.nav.sonarr", "/Admin/Sonarr", "sync", ["/Admin/Sonarr", "/Settings/Sonarr", "/Settings/SonarrMigration"], Policy: JularrPolicies.AdminSystem, Module: InstanceModule.Acquisition)
         ]),
         new("nav.group.adminSystem",
@@ -132,7 +145,7 @@ public static class UiNavigationCatalog
             new("admin-devices", "admin.devices.navLabel", "/Admin/Devices", "devices", Policy: JularrPolicies.AdminSystem),
             new("admin-scans", "admin.nav.scans", "/Admin/Scans", "scan", Policy: JularrPolicies.AdminMedia),
             new("admin-logs", "admin.nav.logs", "/Admin/Logs", "logs", Policy: JularrPolicies.AdminMedia),
-            new("admin-ai", "admin.nav.ai", "/Admin/Ai", "spark", Policy: JularrPolicies.AdminSystem),
+            new("admin-ai", "admin.nav.ai", "/Admin/Ai", "spark", Policy: JularrPolicies.AdminSystem, Unfinished: true),
             new("admin-localization", "admin.nav.localization", "/LocalizationAdmin", "globe", Policy: JularrPolicies.AdminSystem),
             new("admin-api-keys", "admin.nav.apiKeys", "/Settings/ApiKeys", "key", Policy: JularrPolicies.AdminSystem),
             new("admin-instance", "admin.nav.instance", "/Admin/Instance", "settings", Policy: JularrPolicies.AdminSystem),
@@ -155,13 +168,13 @@ public static class UiNavigationCatalog
         ]),
         new("nav.group.settingsLearning",
         [
-            new("settings-learning", "settings.nav.learning", "/Settings/Learning", "learn", ["/Settings/Learning", "/Settings/LearningCourses", "/Settings/LearningScope"], Module: InstanceModule.Learning),
-            new("settings-ai", "settings.nav.ai", "/Settings/Ai", "spark")
+            new("settings-learning", "settings.nav.learning", "/Settings/Learning", "learn", ["/Settings/Learning", "/Settings/LearningCourses", "/Settings/LearningScope"], Module: InstanceModule.Learning, Unfinished: true),
+            new("settings-ai", "settings.nav.ai", "/Settings/Ai", "spark", Unfinished: true)
         ]),
         new("nav.group.settingsConnections",
         [
             new("settings-anilist", "settings.nav.anilist", "/Settings/AniList", "sync", Module: InstanceModule.Tracking),
-            new("settings-offline", "settings.nav.offline", "/Settings/Offline", "download")
+            new("settings-offline", "settings.nav.offline", "/Settings/Offline", "download", Unfinished: true)
         ])
     ];
 
@@ -171,7 +184,7 @@ public static class UiNavigationCatalog
         new("library", "nav.library", "/Library", "library", Tabs: LibraryTabs),
         new("watchlist", "nav.watchlist", "/Watchlist", "watchlist", ["/Watchlist", "/Franchises"]),
         new("calendar", "nav.calendar", "/Calendar", "calendar"),
-        new("learn", "nav.learn", "/Learn", "learn", ["/Learn", "/Statistics", "/Kana"], RequiresLearning: true, Module: InstanceModule.Learning),
+        new("learn", "nav.learn", "/Learn", "learn", ["/Learn", "/Statistics", "/Kana"], RequiresLearning: true, Module: InstanceModule.Learning, Unfinished: true),
         new("activity", "nav.activity", "/Activity", "history")
     ];
 
@@ -191,15 +204,33 @@ public static class UiNavigationCatalog
     public static readonly UiNavigationEntry ProfileDevices =
         new("profile-devices", "nav.devices", "/Profile/Devices", "devices");
 
-    /// <summary>The Profile page list, in order, by catalog id.</summary>
-    public static readonly string[] ProfileLinkIds =
-        ["settings-account", "activity", "settings-offline", "profile-devices", "settings", "admin"];
+    /// <summary>The Profile page list, in order, by catalog id. The Unfinished entry closes it when the account has any unfinished destination.</summary>
+    public static readonly string[] ProfileLinkIds = ["settings-account", "activity", "profile-devices", "settings", "admin"];
 
     /// <summary>
-    /// Phone bottom bar, in order (docs/UX.md, INFORMATION_ARCHITECTURE.md, mockups/home): Home, Library, Calendar, Learning and
-    /// Profile; Learning is absent for a profile without it. Everything else is reached from Profile or search.
+    /// The Profile drill-in (<c>/Profile/unfinished</c>) that lists every unfinished destination on a phone. It is a section anchor
+    /// of the shell, not a page of its own, so it is not part of <see cref="All"/>.
     /// </summary>
-    public static readonly string[] MobilePrimaryIds = ["home", "library", "calendar", "learn", "profile"];
+    public static readonly UiNavigationEntry UnfinishedSection = new("unfinished", "nav.unfinished", "/Profile/unfinished", "unfinished");
+
+    /// <summary>
+    /// Phone bottom bar, in order (docs/UX.md, INFORMATION_ARCHITECTURE.md, mockups/home): Home, Library, Calendar and Profile.
+    /// Learning returns between Calendar and Profile once it is no longer flagged <see cref="UiNavigationEntry.Unfinished"/>.
+    /// Everything else is reached from Profile or search; a bottom-bar slot is never given to search or to Unfinished.
+    /// </summary>
+    public static readonly string[] MobilePrimaryIds = ["home", "library", "calendar", "profile"];
+
+    /// <summary>
+    /// Every destination flagged <see cref="UiNavigationEntry.Unfinished"/>, in the order the Unfinished section lists it: consumer
+    /// destinations, then personal Settings pages, then Admin pages. The area key names Settings or Admin for the pages that live there.
+    /// </summary>
+    public static IEnumerable<(UiNavigationEntry Entry, string? AreaKey)> UnfinishedEntries =>
+        App.Where(entry => entry.Unfinished).Select(entry => (entry, (string?)null))
+            .Concat(UnfinishedOf(Settings, "nav.settings"))
+            .Concat(UnfinishedOf(Admin, "nav.admin"));
+
+    private static IEnumerable<(UiNavigationEntry Entry, string? AreaKey)> UnfinishedOf(UiNavigationSection[] sections, string areaKey) =>
+        sections.SelectMany(section => section.Entries).Where(entry => entry.Unfinished).Select(entry => (entry, (string?)areaKey));
 
     /// <summary>Readers whose sidebar shows the open book, novel or manga with its progress.</summary>
     public static readonly string[] CurrentReadingRoots = ["/Books/Read", "/Novels/Read", "/Manga/Read"];
@@ -245,17 +276,21 @@ public static class UiNavigationCatalog
 /// Canonical destination model for the shared app shell, built from
 /// <see cref="UiNavigationCatalog"/>. The desktop sidebar renders <see cref="Primary"/> and
 /// <see cref="Secondary"/>; inside Admin or Settings that item carries its grouped child pages
-/// and the rest of the sidebar stays. The phone bottom bar renders <see cref="MobilePrimary"/>;
-/// every other destination is on the Profile page (<see cref="BuildProfile"/>) or behind search.
-/// Labels are UI catalog keys.
+/// and the rest of the sidebar stays. <see cref="Unfinished"/> is the one subordinate section that closes the sidebar (#870).
+/// The phone bottom bar renders <see cref="MobilePrimary"/>; every other destination is on the Profile page
+/// (<see cref="BuildProfile"/>, with Unfinished behind it) or behind search. Labels are UI catalog keys.
 /// </summary>
 public sealed record UiShellNavigation(
     IReadOnlyList<UiNavigationItem> Primary,
     IReadOnlyList<UiNavigationItem> Secondary,
     IReadOnlyList<UiNavigationItem> MobilePrimary,
+    IReadOnlyList<UiNavigationItem> Unfinished,
     bool ShowCurrentReading = false)
 {
     public const int MaxMobilePrimaryItems = 5;
+
+    /// <summary>Title key of the Unfinished group that closes the Admin and Settings drill-in lists.</summary>
+    public const string UnfinishedGroupTitleKey = "nav.group.unfinished";
 
     /// <summary>The section expanded in the sidebar, if any. Never more than one.</summary>
     public UiNavigationItem? Expanded => Secondary.FirstOrDefault(item => item.IsExpanded);
@@ -280,7 +315,7 @@ public sealed record UiShellNavigation(
         var inSettings = !inAdmin && IsUnder(path, UiNavigationCatalog.Roots(UiNavigationCatalog.Settings));
 
         var primary = UiNavigationCatalog.App
-            .Where(entry => Visible(entry, learningVisible, can, media, modules))
+            .Where(entry => !entry.Unfinished && Visible(entry, learningVisible, can, media, modules))
             .Select(entry => ToItem(entry, IsActive(entry, path), media))
             .ToArray();
         var secondary = UiNavigationCatalog.Secondary
@@ -293,8 +328,10 @@ public sealed record UiShellNavigation(
             })
             .ToArray();
 
+        var unfinished = UnfinishedItems(path, learningVisible, can, media, modules);
+
         // On a phone, every destination outside the bottom bar is reached through Profile.
-        var all = primary.Concat(secondary).ToArray();
+        var all = primary.Concat(secondary).Concat(unfinished).ToArray();
         var elsewhereActive = all.Any(item => item.IsActive && !UiNavigationCatalog.MobilePrimaryIds.Contains(item.Id));
         var mobilePrimary = UiNavigationCatalog.MobilePrimaryIds
             .Select(id => all.FirstOrDefault(item => item.Id == id))
@@ -304,7 +341,7 @@ public sealed record UiShellNavigation(
             .ToArray();
 
         var showCurrentReading = !inAdmin && !inSettings && IsUnder(path, UiNavigationCatalog.CurrentReadingRoots);
-        return new UiShellNavigation(primary, secondary, mobilePrimary, showCurrentReading);
+        return new UiShellNavigation(primary, secondary, mobilePrimary, unfinished, showCurrentReading);
     }
 
     /// <summary>
@@ -327,10 +364,16 @@ public sealed record UiShellNavigation(
             .Select(entry => entry.Sections is null
                 ? ToItem(entry, false, media)
                 : ToItem(entry, false, media) with { Href = DrillInHref(entry.Id) })
-            .ToArray();
+            .ToList();
+
+        // Unfinished closes the list; a phone has no sidebar section, so this row is its only way in.
+        if (UnfinishedItems(PathString.Empty, learningVisible, can, media, modules).Length > 0)
+        {
+            links.Add(ToItem(UiNavigationCatalog.UnfinishedSection, false) with { Href = DrillInHref(UiNavigationCatalog.UnfinishedSection.Id) });
+        }
 
         var elsewhere = UiNavigationCatalog.App.Concat(UiNavigationCatalog.Secondary)
-            .Where(entry => Visible(entry, learningVisible, can, media, modules))
+            .Where(entry => !entry.Unfinished && Visible(entry, learningVisible, can, media, modules))
             .Where(entry => !UiNavigationCatalog.MobilePrimaryIds.Contains(entry.Id)
                 && !UiNavigationCatalog.ProfileLinkIds.Contains(entry.Id))
             .Select(entry => ToItem(entry, false, media))
@@ -339,19 +382,32 @@ public sealed record UiShellNavigation(
         return (links, elsewhere);
     }
 
-    /// <summary>The drill-in list of Admin or Settings, or null when the section is not available.</summary>
+    /// <summary>
+    /// The drill-in list of Admin or Settings (each ends with its own Unfinished group) or the Unfinished list itself, or null when the
+    /// section is not available to the account.
+    /// </summary>
     public static UiNavigationItem? BuildSection(
         string? sectionId,
         Func<string, bool> can,
-        IReadOnlySet<InstanceModule>? enabledInstanceModules = null)
+        IReadOnlySet<InstanceModule>? enabledInstanceModules = null,
+        bool learningVisible = true,
+        IReadOnlyCollection<WorkMediaType>? visibleMediaTypes = null)
     {
         var modules = enabledInstanceModules ?? AllInstanceModules;
+        if (string.Equals(sectionId, UiNavigationCatalog.UnfinishedSection.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            var items = UnfinishedItems(PathString.Empty, learningVisible, can, visibleMediaTypes ?? WorkMediaTypes.All, modules);
+            return items.Length == 0
+                ? null
+                : ToItem(UiNavigationCatalog.UnfinishedSection, false) with { Groups = [new UiNavigationGroup(UnfinishedGroupTitleKey, items)] };
+        }
+
         var entry = UiNavigationCatalog.Secondary.FirstOrDefault(candidate =>
             candidate.Sections is not null
             && string.Equals(candidate.Id, sectionId, StringComparison.OrdinalIgnoreCase));
         return entry is null || !Allowed(entry, learningVisible: true, can, modules)
             ? null
-            : Expand(entry, PathString.Empty, can, modules);
+            : Expand(entry, PathString.Empty, can, modules, includeUnfinished: true);
     }
 
     public static string DrillInHref(string sectionId) => $"/Profile/{sectionId}";
@@ -397,11 +453,27 @@ public sealed record UiShellNavigation(
         return types.Length == 0 || types.Any(media.Contains);
     }
 
+    /// <summary>
+    /// Every unfinished destination the account may reach, in catalog order. The sidebar shows it as the one Unfinished section
+    /// and the phone reaches it through Profile; Admin and Settings sidebar sections never list these entries themselves.
+    /// </summary>
+    private static UiNavigationItem[] UnfinishedItems(
+        PathString path,
+        bool learningVisible,
+        Func<string, bool> can,
+        IReadOnlyCollection<WorkMediaType> media,
+        IReadOnlySet<InstanceModule> enabledInstanceModules) =>
+        UiNavigationCatalog.UnfinishedEntries
+            .Where(candidate => Visible(candidate.Entry, learningVisible, can, media, enabledInstanceModules))
+            .Select(candidate => ToItem(candidate.Entry, IsActive(candidate.Entry, path), media) with { AreaKey = candidate.AreaKey })
+            .ToArray();
+
     private static UiNavigationItem Expand(
         UiNavigationEntry anchor,
         PathString path,
         Func<string, bool> can,
-        IReadOnlySet<InstanceModule> enabledInstanceModules)
+        IReadOnlySet<InstanceModule> enabledInstanceModules,
+        bool includeUnfinished = false)
     {
         // Admin and Settings pages are account-level, never scoped to a media type.
         var entries = anchor.Sections!
@@ -421,13 +493,23 @@ public sealed record UiShellNavigation(
             .Select(section => new UiNavigationGroup(
                 section.TitleKey,
                 section.Entries
-                    .Where(entries.Contains)
+                    .Where(entry => !entry.Unfinished && entries.Contains(entry))
                     .Select(entry => ToItem(entry, entry.Id == active))
                     .ToArray()))
             .Where(group => group.Items.Count > 0)
-            .ToArray();
+            .ToList();
 
-        return ToItem(anchor, path.HasValue) with { Groups = groups };
+        var unfinished = entries.Where(entry => entry.Unfinished).Select(entry => ToItem(entry, entry.Id == active)).ToArray();
+        if (includeUnfinished && unfinished.Length > 0)
+        {
+            groups.Add(new UiNavigationGroup(UnfinishedGroupTitleKey, unfinished));
+        }
+
+        return ToItem(anchor, path.HasValue) with
+        {
+            Groups = groups,
+            CurrentPageListedElsewhere = !includeUnfinished && unfinished.Any(item => item.IsActive)
+        };
     }
 
     private static UiNavigationItem ToItem(UiNavigationEntry entry, bool isActive) =>

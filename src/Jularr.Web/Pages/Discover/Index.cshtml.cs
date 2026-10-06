@@ -237,14 +237,14 @@ public sealed class IndexModel(
         batch = batch.Select(item => overlay[item.Id]);
         var context = await BuildContextAsync(batch.Items, cancellationToken);
         var (sections, total) = DiscoverSectionComposer.Results(batch, Query, context);
-        var failed = batch.Sources.Any(source => source.State is DiscoverySourceState.Unavailable or DiscoverySourceState.Busy);
+        var failed = batch.Sources.Any(source => DiscoverySections.HasFailed(source.State));
         return new DiscoverBodyView(Ui, Query, BodyStateOf(sections, total, failed), sections, total, load.Settled, load.Pending);
     }
 
     /// <summary>Sections that hold titles or wait for them make the body; otherwise the body says why there is nothing: filtered away, not answered or nothing found.</summary>
     private static DiscoverBodyState BodyStateOf(IReadOnlyList<DiscoverSectionView> sections, int total, bool failed)
     {
-        var alive = sections.Any(section => section.State is DiscoverySectionState.Ready or DiscoverySectionState.Pending);
+        var alive = sections.Any(section => section.State is DiscoverySectionState.Ready or DiscoverySectionState.Pending || section.Notice is not null);
         if (alive)
         {
             return DiscoverBodyState.Sections;
@@ -316,7 +316,8 @@ public sealed class IndexModel(
             open,
             await LoadLocalFactsAsync(list, cancellationToken),
             followed,
-            RequestableCategories);
+            RequestableCategories,
+            account.IsOwner);
     }
 
     private async Task<IReadOnlyDictionary<string, DiscoverLocalFacts>> LoadLocalFactsAsync(

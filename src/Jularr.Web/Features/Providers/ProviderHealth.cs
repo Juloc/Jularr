@@ -15,7 +15,10 @@ public enum ProviderHealthStatus
     Degraded,
 
     /// <summary>The circuit is open; calls are being short-circuited until it recovers.</summary>
-    Unavailable
+    Unavailable,
+
+    /// <summary>The provider answered but refused the configured credential; a success or a new credential clears it.</summary>
+    AuthenticationFailed
 }
 
 /// <summary>A point-in-time snapshot of one provider's health, safe to expose to admin views.</summary>
@@ -95,6 +98,32 @@ public sealed class ProviderHealthTracker
                 entry.Status = ProviderHealthStatus.Degraded;
             }
         }
+    }
+
+    /// <summary>
+    /// The provider answered but refused the credential. This is not an outage: it neither counts toward the circuit nor
+    /// opens it, and the next successful call clears it.
+    /// </summary>
+    public void RecordAuthenticationFailure(string key)
+    {
+        var entry = EntryFor(key);
+        lock (entry.Sync)
+        {
+            entry.Status = ProviderHealthStatus.AuthenticationFailed;
+            entry.LastError = "Authentication failed.";
+            entry.LastFailureUtc = clock.GetUtcNow();
+        }
+    }
+
+    /// <summary>Forgets everything observed about a provider, so a changed configuration is judged by its own calls and not by the old one.</summary>
+    public void Reset(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new ArgumentException("Provider key is required.", nameof(key));
+        }
+
+        entries.TryRemove(key, out _);
     }
 
     /// <summary>False only while the circuit is open (recently tripped); true otherwise.</summary>

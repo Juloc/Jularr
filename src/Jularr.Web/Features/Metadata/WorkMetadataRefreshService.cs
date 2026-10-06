@@ -113,7 +113,7 @@ public sealed class WorkMetadataRefreshService(
         var store = services.GetRequiredService<WorkMetadataStore>();
         var clock = services.GetRequiredService<TimeProvider>();
         var idle = new WorkMetadataPass(null, null);
-        if (!refresher.IsProviderConfigured)
+        if (!await refresher.IsProviderReadyAsync(cancellationToken))
         {
             return idle;
         }

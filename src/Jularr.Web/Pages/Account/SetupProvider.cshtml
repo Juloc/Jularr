@@ -1,0 +1,49 @@
+@page
+@model Jularr.Web.Pages.Account.SetupProviderModel
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-providers.css" asp-append-version="true" />
+}
+@{
+    var ui = Model.View.Ui;
+    ViewData["Title"] = ui["setup.provider.title"];
+}
+
+<header class="page-header">
+    <div>
+        <h1>@ui["setup.provider.title"]</h1>
+        <p>@ui["setup.provider.description"]</p>
+    </div>
+</header>
+
+@foreach (var blocking in Model.Blocking)
+{
+    <section class="prov-blocked" role="alert" aria-labelledby="prov-blocked-@blocking.Key">
+        <div>
+            <h2 id="prov-blocked-@blocking.Key">@ui[blocking.Blocking!.TitleKey]</h2>
+            <p>@ui[blocking.Blocking.BodyKey]</p>
+        </div>
+        <div class="admset-actions">
+            <a class="button button-primary" href="@Model.View.DetailUrl(blocking.Key)#provider-@blocking.Key">@ui[blocking.Blocking.ConfigureActionKey]</a>
+            <form method="post" asp-page-handler="DisableFeatures" asp-route-provider="@blocking.Key">
+                <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+                <button type="submit" class="button">@ui[blocking.Blocking.DisableActionKey]</button>
+            </form>
+        </div>
+    </section>
+}
+
+<section class="admset-section prov-family" aria-label="@ui["setup.provider.title"]">
+    <partial name="_ProviderRows" model="Model.View" />
+</section>
+
+@if (Model.View.Selected is not null)
+{
+    <partial name="_ProviderDetail" model="Model.View" />
+}
+
+<form method="post" asp-page-handler="Finish" class="prov-finish">
+    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+    <button type="submit" class="button button-primary">@ui["setup.provider.finish"]</button>
+</form>

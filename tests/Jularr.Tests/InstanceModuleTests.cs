@@ -173,7 +173,7 @@ public sealed class InstanceModuleTests
             can: _ => true,
             enabledInstanceModules: enabled);
 
-        Assert.IsFalse(shell.Primary.Any(item => item.Id == "learn"));
+        Assert.IsFalse(shell.Primary.Concat(shell.Unfinished).Any(item => item.Id is "learn" or "settings-learning"));
 
         var settings = UiShellNavigation.BuildSection(
             "settings",
@@ -225,6 +225,7 @@ public sealed class InstanceModuleTests
             .ToArray();
 
         CollectionAssert.DoesNotContain(ids, "admin-requests");
+        CollectionAssert.DoesNotContain(ids, "admin-wanted");
         CollectionAssert.DoesNotContain(ids, "admin-usenet");
         CollectionAssert.DoesNotContain(ids, "admin-anime-acquisition");
         CollectionAssert.DoesNotContain(ids, "admin-import");

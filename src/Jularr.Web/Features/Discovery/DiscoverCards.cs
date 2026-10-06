@@ -105,7 +105,8 @@ public sealed record DiscoverContext(
     IReadOnlyDictionary<(MediaAcquisitionKind Kind, string ExternalId), AcquisitionRequest> OpenRequests,
     IReadOnlyDictionary<string, DiscoverLocalFacts> Local,
     IReadOnlyDictionary<string, Guid?> Followed,
-    IReadOnlySet<string> RequestableCategories);
+    IReadOnlySet<string> RequestableCategories,
+    bool CanConfigureProviders = false);
 
 public static partial class DiscoverCardFactory
 {

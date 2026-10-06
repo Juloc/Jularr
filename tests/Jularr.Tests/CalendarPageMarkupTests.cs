@@ -64,8 +64,8 @@ public sealed class CalendarPageMarkupTests
     [TestMethod]
     public void WatchlistPagesHaveNoHelperTextOrClientSuppliedLinks()
     {
-        var watchlist = Read("src", "Jularr.Web", "Pages", "Watchlist", "Index.cshtml");
-        var franchise = Read("src", "Jularr.Web", "Pages", "Franchises", "Details.cshtml");
+        var watchlist = Read("src", "Jularr.Web", "Pages", "Legacy", "Watchlist", "Index.cshtml");
+        var franchise = Read("src", "Jularr.Web", "Pages", "Legacy", "Franchises", "Details.cshtml");
         foreach (var key in new[] { "watchlist.subtitle", "watchlist.franchiseHint", "watchlist.directFollow", "franchise.relationsHint" })
         {
             Assert.IsFalse(watchlist.Contains(key, StringComparison.Ordinal) || franchise.Contains(key, StringComparison.Ordinal), key);

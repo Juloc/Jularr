@@ -39,7 +39,7 @@ public sealed class DiscoveryCoordinatorTests
         var db = await MediaCoreTestSupport.CreateDbAsync();
         var tmdb = TmdbDiscoveryTests.Provider(db, TmdbDiscoveryTests.AsyncClient(tmdbHandler));
         var time = (TimeProvider?)clock ?? TimeProvider.System;
-        var coordinator = new DiscoveryCoordinator(tmdb, null!, db, DiscoveryTestSupport.Flights(time, providers: [tmdb]), time, NullLogger<DiscoveryCoordinator>.Instance);
+        var coordinator = new DiscoveryCoordinator(TmdbTestSupport.Credentials(), null!, db, DiscoveryTestSupport.Flights(time, providers: [tmdb]), time, NullLogger<DiscoveryCoordinator>.Instance);
         return (coordinator, db);
     }
 

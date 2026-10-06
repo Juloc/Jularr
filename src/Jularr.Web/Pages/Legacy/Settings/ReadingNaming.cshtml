@@ -1,4 +1,4 @@
-@page
+@page "/Settings/ReadingNaming"
 @using Jularr.Web.Features.Acquisition.Access
 @model Jularr.Web.Pages.Settings.ReadingNamingModel
 @{
@@ -26,7 +26,7 @@
 <nav class="inline-actions" aria-label="@ui["settings.readingNaming.kindTabsAria"]">
     @foreach (var kind in Model.Kinds)
     {
-        <a class="button @(kind == Model.Kind ? "button-primary" : "")" asp-page="/Settings/ReadingNaming" asp-route-kind="@kind">
+        <a class="button @(kind == Model.Kind ? "button-primary" : "")" asp-page="/Legacy/Settings/ReadingNaming" asp-route-kind="@kind">
             @ui[$"settings.readingNaming.kind.{kind}"]
         </a>
     }
@@ -70,8 +70,8 @@
     </form>
 
     <div class="inline-actions">
-        <a class="button" asp-page="/Settings/ReadingNaming" asp-route-kind="@Model.Kind" asp-route-preset="default">@ui["settings.readingNaming.useDefaultPreset"]</a>
-        <a class="button" asp-page="/Settings/ReadingNaming" asp-route-kind="@Model.Kind" asp-route-preset="structured">@ui["settings.readingNaming.useStructuredPreset"]</a>
+        <a class="button" asp-page="/Legacy/Settings/ReadingNaming" asp-route-kind="@Model.Kind" asp-route-preset="default">@ui["settings.readingNaming.useDefaultPreset"]</a>
+        <a class="button" asp-page="/Legacy/Settings/ReadingNaming" asp-route-kind="@Model.Kind" asp-route-preset="structured">@ui["settings.readingNaming.useStructuredPreset"]</a>
     </div>
 </section>
 

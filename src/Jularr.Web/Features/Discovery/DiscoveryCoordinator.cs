@@ -18,7 +18,7 @@ namespace Jularr.Web.Features.Discovery;
 /// library state of the titles that came back. The order of the titles follows the sources, never the order in which they answered.
 /// </summary>
 public sealed class DiscoveryCoordinator(
-    TmdbDiscoveryProvider tmdb,
+    TmdbCredentialStore tmdbCredentials,
     AniListAccountService aniListAccount,
     AppDbContext db,
     DiscoverySourceFlights flights,
@@ -34,11 +34,13 @@ public sealed class DiscoveryCoordinator(
     private static readonly TimeSpan BrowseFreshness = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan SearchFreshness = TimeSpan.FromSeconds(45);
 
-    private sealed record SourceCall(DiscoverySource Source, string Key, TimeSpan Freshness, DiscoverySourceFetch Fetch);
+    /// <param name="Blocked">Set when the source cannot be asked at all (TMDB has no usable credential): the call has no fetch and settles at once with this state.</param>
+    private sealed record SourceCall(DiscoverySource Source, string Key, TimeSpan Freshness, DiscoverySourceFetch? Fetch, DiscoverySourceState? Blocked = null);
 
     public async Task<DiscoveryLoad> LoadAsync(IReadOnlyList<DiscoveryRequest> requests, DiscoveryAudience audience, DiscoveryWait wait, CancellationToken cancellationToken)
     {
         var instance = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
+        var tmdbAvailability = (await tmdbCredentials.GetAsync(cancellationToken)).Availability;
         var started = new Dictionary<string, DiscoverySourceFlight>(StringComparer.Ordinal);
         var plans = new List<(DiscoveryRequest Request, IReadOnlyList<SourceCall> Calls)>(requests.Count);
         var personal = new Dictionary<int, DiscoveryBatch>();
@@ -53,12 +55,12 @@ public sealed class DiscoveryCoordinator(
                 continue;
             }
 
-            var calls = CallsFor(request, audience, instance);
+            var calls = CallsFor(request, audience, instance, tmdbAvailability);
             foreach (var call in calls)
             {
-                if (!started.ContainsKey(call.Key))
+                if (call.Blocked is null && !started.ContainsKey(call.Key))
                 {
-                    started[call.Key] = flights.Start(call.Source, call.Key, call.Freshness, wait.Refresh?.Contains(call.Source) == true, call.Fetch);
+                    started[call.Key] = flights.Start(call.Source, call.Key, call.Freshness, wait.Refresh?.Contains(call.Source) == true, call.Fetch!);
                 }
             }
 
@@ -66,7 +68,9 @@ public sealed class DiscoveryCoordinator(
         }
 
         // A retry waits for the sources the viewer asked about and for nothing else: a slow source elsewhere on the page must not hold its answer back.
-        var awaited = wait.Refresh is null ? [.. started.Values] : plans.SelectMany(plan => plan.Calls).Where(call => wait.Refresh.Contains(call.Source)).Select(call => started[call.Key]).Distinct().ToArray();
+        var awaited = wait.Refresh is null
+            ? [.. started.Values]
+            : plans.SelectMany(plan => plan.Calls).Where(call => call.Blocked is null && wait.Refresh.Contains(call.Source)).Select(call => started[call.Key]).Distinct().ToArray();
         await WaitForSourcesAsync(awaited, wait, cancellationToken);
 
         var batches = new List<DiscoveryBatch>(requests.Count);
@@ -80,13 +84,21 @@ public sealed class DiscoveryCoordinator(
         return new DiscoveryLoad(batches, settled, started.Count - settled);
     }
 
-    private IReadOnlyList<SourceCall> CallsFor(DiscoveryRequest request, DiscoveryAudience audience, InstanceModuleSettings instance)
+    private IReadOnlyList<SourceCall> CallsFor(DiscoveryRequest request, DiscoveryAudience audience, InstanceModuleSettings instance, TmdbAvailability tmdbAvailability)
     {
         var calls = new List<SourceCall>();
         foreach (var source in DiscoverySources.For(request.Category))
         {
+            // A disabled module or a media type the profile may not browse does not exist for the viewer: nothing is shown for it, not even a notice.
             if (!SourceAvailable(source, audience, instance))
             {
+                continue;
+            }
+
+            // A source whose provider has no usable credential still shows up, as a settled failure of its own kind, so it can never pass for zero results.
+            if (source is DiscoverySource.Movies or DiscoverySource.Series && tmdbAvailability != TmdbAvailability.Ready)
+            {
+                calls.Add(new SourceCall(source, "", TimeSpan.Zero, null, tmdbAvailability == TmdbAvailability.Disabled ? DiscoverySourceState.Disabled : DiscoverySourceState.NotConfigured));
                 continue;
             }
 
@@ -104,8 +116,8 @@ public sealed class DiscoveryCoordinator(
         && source switch
         {
             DiscoverySource.Anime => instance.IsEnabled(InstanceModule.Anime),
-            DiscoverySource.Movies => instance.IsEnabled(InstanceModule.Movie) && tmdb.IsConfigured,
-            DiscoverySource.Series => instance.IsEnabled(InstanceModule.Tv) && tmdb.IsConfigured,
+            DiscoverySource.Movies => instance.IsEnabled(InstanceModule.Movie),
+            DiscoverySource.Series => instance.IsEnabled(InstanceModule.Tv),
             DiscoverySource.Reading => instance.IsEnabled(InstanceModule.Manga) || instance.IsEnabled(InstanceModule.Novel),
             _ => instance.IsEnabled(InstanceModule.Book)
         };
@@ -199,6 +211,12 @@ public sealed class DiscoveryCoordinator(
         var results = new List<DiscoverySourceResult>(calls.Count);
         foreach (var call in calls)
         {
+            if (call.Blocked is { } blocked)
+            {
+                results.Add(new DiscoverySourceResult(call.Source, blocked, []));
+                continue;
+            }
+
             var flight = started[call.Key];
             if (!flight.IsSettled)
             {

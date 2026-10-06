@@ -84,7 +84,7 @@
     <section class="panel" aria-labelledby="usenet-indexers-heading">
         <div class="panel-heading">
             <h2 id="usenet-indexers-heading">@ui["admin.system.indexers"]</h2>
-            <a class="button button-small" asp-page="/Settings/Indexers/Edit">@ui["settings.indexers.add"]</a>
+            <a class="button button-small" asp-page="/Legacy/Settings/Indexers/Edit">@ui["settings.indexers.add"]</a>
         </div>
         @if (Model.Indexers.Count == 0)
         {
@@ -121,7 +121,7 @@
                         <form method="post" asp-page-handler="TestIndexer" asp-route-id="@card.Entry.Id">
                             <button class="button button-small" type="submit">@ui["settings.connectionTable.test"]</button>
                         </form>
-                        <a class="button button-small button-quiet" asp-page="/Settings/Indexers/Edit" asp-route-id="@card.Entry.Id">@ui["settings.connectionTable.edit"]</a>
+                        <a class="button button-small button-quiet" asp-page="/Legacy/Settings/Indexers/Edit" asp-route-id="@card.Entry.Id">@ui["settings.connectionTable.edit"]</a>
                         <form method="post" asp-page-handler="ToggleIndexer" asp-route-id="@card.Entry.Id">
                             <button class="button button-small button-quiet" type="submit">@(card.Entry.Enabled ? ui["admin.usenet.disable"] : ui["admin.usenet.enable"])</button>
                         </form>
@@ -137,7 +137,7 @@
     <section class="panel" aria-labelledby="usenet-clients-heading">
         <div class="panel-heading">
             <h2 id="usenet-clients-heading">@ui["admin.system.downloadClients"]</h2>
-            <a class="button button-small" asp-page="/Settings/DownloadClients/Edit">@ui["settings.downloadClients.add"]</a>
+            <a class="button button-small" asp-page="/Legacy/Settings/DownloadClients/Edit">@ui["settings.downloadClients.add"]</a>
         </div>
         @if (Model.Clients.Count == 0)
         {
@@ -171,7 +171,7 @@
                         <form method="post" asp-page-handler="TestClient" asp-route-id="@card.Entry.Id">
                             <button class="button button-small" type="submit">@ui["settings.connectionTable.test"]</button>
                         </form>
-                        <a class="button button-small button-quiet" asp-page="/Settings/DownloadClients/Edit" asp-route-id="@card.Entry.Id">@ui["settings.connectionTable.edit"]</a>
+                        <a class="button button-small button-quiet" asp-page="/Legacy/Settings/DownloadClients/Edit" asp-route-id="@card.Entry.Id">@ui["settings.connectionTable.edit"]</a>
                         <form method="post" asp-page-handler="ToggleClient" asp-route-id="@card.Entry.Id">
                             <button class="button button-small button-quiet" type="submit">@(card.Entry.Enabled ? ui["admin.usenet.disable"] : ui["admin.usenet.enable"])</button>
                         </form>

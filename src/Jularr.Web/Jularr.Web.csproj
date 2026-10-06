@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Canonical application/release version. Bump on dev before the single dev -> main promotion; that main diff is release intent. -->
-    <Version>0.1.0-alpha.86</Version>
+    <Version>0.1.0-alpha.87</Version>
   </PropertyGroup>
 
   <ItemGroup>

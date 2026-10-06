@@ -512,14 +512,17 @@ public sealed class LocalFirstPageGetTests
                 configuration);
             var works = new Jularr.Web.Features.MediaCore.WorkService(Db);
             var structure = new Jularr.Web.Features.MediaCore.WorkStructureService(Db);
+            var tmdbCredentials = TmdbTestSupport.Credentials(apiKey: null);
+            var tmdbHealth = new Jularr.Web.Features.Providers.ProviderHealthTracker(TimeProvider.System);
             var tmdb = new Jularr.Web.Features.Discovery.TmdbDiscoveryProvider(
                 Guard.CreateClient(),
-                configuration,
+                tmdbCredentials,
                 new Jularr.Web.Features.Providers.ProviderExecutor(
                     new Jularr.Web.Features.Providers.ProviderRateLimiter(),
-                    new Jularr.Web.Features.Providers.ProviderHealthTracker(TimeProvider.System),
+                    tmdbHealth,
                     TimeProvider.System,
                     NullLogger<Jularr.Web.Features.Providers.ProviderExecutor>.Instance),
+                tmdbHealth,
                 new Jularr.Web.Features.Providers.ProviderResponseCache(TimeProvider.System),
                 works,
                 structure,
@@ -527,7 +530,7 @@ public sealed class LocalFirstPageGetTests
                 new Jularr.Web.Features.MediaCore.LegacyWorkBridge(Db, works, structure),
                 new Jularr.Web.Features.Metadata.WorkMetadataRefreshQueue(new Jularr.Web.Features.MediaCore.WorkMetadataStore(Db), new Jularr.Web.Features.Metadata.WorkMetadataRefreshSignal(), TimeProvider.System));
             var coordinator = new Jularr.Web.Features.Discovery.DiscoveryCoordinator(
-                tmdb,
+                tmdbCredentials,
                 AniListAccount(),
                 Db,
                 DiscoveryTestSupport.Flights(providers: [animeProvider, readingProvider, books, tmdb]),

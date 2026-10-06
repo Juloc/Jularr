@@ -58,7 +58,7 @@ public sealed class PermissionDerivedShellTests
         var nav = UiShellNavigation.Build("/", learningVisible: true, User, visibleMediaTypes: []);
 
         CollectionAssert.AreEqual(
-            new[] { "home", "watchlist", "calendar", "learn", "activity", "settings", "profile" },
+            new[] { "home", "watchlist", "calendar", "activity", "settings", "profile" },
             nav.Primary.Concat(nav.Secondary).Select(item => item.Id).ToArray());
         Assert.AreEqual(0, UiShellNavigation.BuildLibraryTabs("/", []).Count);
 

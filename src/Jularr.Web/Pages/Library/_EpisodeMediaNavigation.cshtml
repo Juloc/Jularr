@@ -20,6 +20,6 @@
 @if (Model.CanEdit)
 {
     <p class="player-segments-edit">
-        <a href="@Url.Page("/Library/EpisodeSegments", new { id = Model.EpisodeId })">@ui["library.episodeSegments.editLink"]</a>
+        <a href="@Url.Page("/Legacy/Library/EpisodeSegments", new { id = Model.EpisodeId })">@ui["library.episodeSegments.editLink"]</a>
     </p>
 }

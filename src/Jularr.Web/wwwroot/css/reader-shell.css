@@ -688,6 +688,7 @@
    Pages opt in with data-reader-frame; source readers only style content. */
 
 /* The reader is immersive: it owns the whole viewport, so the app sidebar and page padding step aside. */
+body:has([data-reader-frame]) .app-header,
 body:has([data-reader-frame]) .sidebar,
 body:has([data-reader-frame]) .mobile-nav {
     display: none;

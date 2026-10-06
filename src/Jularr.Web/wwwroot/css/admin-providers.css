@@ -1,0 +1,76 @@
+/* Admin → Providers and the Setup provider step (docs/mockups/admin-providers/SPEC.md, docs/mockups/setup-wizard/SPEC.md): the provider table of a
+   family and the provider detail with its connection form. Built on the shared Admin settings blocks (admin-settings.css, admin-controls.css), so Light,
+   Dark and every accent work unchanged. Never a coloured edge on a card or row. */
+
+.prov-family + .prov-detail, .prov-blocked + .prov-detail { margin-top: 16px; }
+
+.prov-name { display: flex; align-items: center; gap: 12px; }
+.prov-name > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.prov-logo { font-size: 10px; font-weight: 800; letter-spacing: .02em; }
+.prov-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+
+.prov-table .prov-row-actions { justify-content: flex-end; }
+
+.prov-detail { scroll-margin-top: 16px; }
+.prov-form { display: grid; gap: 16px; }
+.prov-form .admset-field > label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.prov-required { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; color: var(--muted); font-size: 13px; }
+.prov-external {
+    display: grid; gap: 4px; padding: 14px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface-2);
+}
+.prov-external p { margin: 0; color: var(--muted); font-size: 13px; }
+
+.prov-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 18px; margin: 0; }
+.prov-facts > div { display: grid; gap: 2px; min-width: 0; }
+.prov-facts dt { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.prov-facts dd { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+
+.prov-actions .prov-cancel { margin-inline-start: auto; }
+
+.prov-capabilities { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border); }
+.prov-capabilities h3 { margin: 0; font-size: 14px; }
+.prov-capabilities ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 18px; margin: 0; padding: 0; list-style: none; }
+.prov-capabilities li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.prov-capabilities li .admin-icon { color: var(--success-text); }
+
+/* The blocking result of Setup: it names the problem and the two ways out, and it is the one thing on the page that is not a form field. */
+.prov-blocked {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 18px; margin: 0 0 16px; padding: 18px;
+    border: 1px solid color-mix(in srgb, var(--danger-text) 40%, var(--border)); border-radius: var(--radius-card); background: var(--surface);
+}
+.prov-blocked h2 { margin: 0; font-size: 17px; }
+.prov-blocked p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.prov-blocked .admset-actions form { margin: 0; }
+
+.prov-finish { display: flex; justify-content: flex-end; margin: 16px 0 0; }
+
+@media (max-width: 760px) {
+    .prov-actions .prov-save { margin-inline-start: 0; }
+    .prov-blocked .admset-actions { width: 100%; }
+    .prov-blocked .admset-actions > *, .prov-blocked .admset-actions .button { flex: 1 1 100%; min-height: 44px; }
+    .prov-finish .button { width: 100%; min-height: 44px; }
+}
+
+/* The provider rows of Setup and the header of a provider detail. */
+.prov-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.prov-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2);
+}
+.prov-row-name { display: grid; flex: 1 1 160px; gap: 2px; min-width: 0; }
+.prov-row-name small { color: var(--muted); font-size: 12px; }
+.prov-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-inline-start: auto; }
+.prov-row-actions form { margin: 0; }
+.prov-head-state { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 16px; margin-inline-start: auto; }
+.prov-enabled { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.prov-subheading { margin: 0; font-size: 14px; }
+
+@container (max-width: 560px) {
+    .prov-table .prov-row-actions { display: grid; grid-template-columns: minmax(0, 1fr); margin-inline-start: 0; }
+    .prov-table .prov-row-actions .button { width: 100%; min-height: 44px; justify-content: center; text-align: center; }
+}
+
+@media (max-width: 760px) {
+    .prov-detail .admset-head { flex-wrap: wrap; }
+    .prov-head-state { width: 100%; justify-content: space-between; margin-inline-start: 0; }
+}

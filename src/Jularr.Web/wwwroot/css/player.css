@@ -404,9 +404,9 @@
 
 /* The Watch route: the player owns the whole viewport, so the app navigation and the page padding step aside, the same way
    they do for the readers. The way back is the arrow in the stage's top chrome. */
+body:has([data-player-frame]) .app-header,
 body:has([data-player-frame]) .sidebar,
-body:has([data-player-frame]) .mobile-nav,
-body:has([data-player-frame]) .mobile-topbar {
+body:has([data-player-frame]) .mobile-nav {
     display: none;
 }
 .app-shell:has([data-player-frame]) .app-main {

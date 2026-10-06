@@ -21,7 +21,7 @@ Games has a dedicated consumer destination and is not a type tab inside the norm
 Platform navigation:
 - Desktop/wide Tablet: Games may be a permanent primary/sidebar destination alongside Home and Library.
 - TV: Games may be a primary destination when available.
-- Mobile: Games is **not** a permanent bottom-navigation item. The fixed bottom bar is `Home · Library · Calendar · Learning · Profile`.
+- Mobile: Games is **not** a permanent bottom-navigation item. The fixed bottom bar is `Home · Library · Calendar · Learning · Profile`; Learning joins it once it is no longer Unfinished (#870).
 
 Mobile enters the dedicated Games destination contextually through Home Games/Continue Playing surfaces, global Search/Discover with Games context, Game Detail/back-navigation and deep links. Home must keep Games reachable even when there is no recent play activity, without replacing the Learning bottom-nav slot.
 

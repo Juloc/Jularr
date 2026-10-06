@@ -18,7 +18,7 @@ public sealed partial class AppShellNavigationTests
     {
         var owner = UiShellNavigation.Build("/", learningVisible: true, can: Owner);
         CollectionAssert.AreEqual(
-            new[] { "home", "library", "watchlist", "calendar", "learn", "activity", "admin", "settings", "profile" },
+            new[] { "home", "library", "watchlist", "calendar", "activity", "admin", "settings", "profile" },
             owner.Primary.Concat(owner.Secondary).Select(item => item.Id).ToArray());
 
         var user = UiShellNavigation.Build("/", learningVisible: false, can: User);
@@ -75,9 +75,7 @@ public sealed partial class AppShellNavigationTests
     {
         var nav = UiShellNavigation.Build("/", learningVisible, isOwner ? Owner : User);
 
-        CollectionAssert.AreEqual(
-            learningVisible ? new[] { "home", "library", "calendar", "learn", "profile" } : new[] { "home", "library", "calendar", "profile" },
-            nav.MobilePrimary.Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(new[] { "home", "library", "calendar", "profile" }, nav.MobilePrimary.Select(item => item.Id).ToArray());
         Assert.IsTrue(nav.MobilePrimary.Count <= UiShellNavigation.MaxMobilePrimaryItems);
 
         var (links, elsewhere) = UiShellNavigation.BuildProfile(learningVisible, isOwner ? Owner : User);
@@ -86,7 +84,14 @@ public sealed partial class AppShellNavigationTests
         CollectionAssert.IsSubsetOf(desktop, mobile, "Every sidebar destination is reachable on a phone.");
         Assert.AreEqual(mobile.Length, mobile.Distinct(StringComparer.Ordinal).Count(), "A destination is listed twice on a phone.");
         Assert.AreEqual(isOwner, mobile.Contains("admin"));
-        Assert.AreEqual(learningVisible, mobile.Contains("learn"));
+
+        var unfinished = UiShellNavigation.BuildSection(UiNavigationCatalog.UnfinishedSection.Id, isOwner ? Owner : User, learningVisible: learningVisible);
+        Assert.IsNotNull(unfinished, "Unfinished destinations are reachable behind Profile.");
+        CollectionAssert.AreEqual(
+            nav.Unfinished.Select(item => item.Id).ToArray(),
+            unfinished.Groups!.SelectMany(group => group.Items).Select(item => item.Id).ToArray(),
+            "The phone lists the same Unfinished destinations as the sidebar.");
+        Assert.AreEqual(learningVisible, unfinished.Groups!.SelectMany(group => group.Items).Any(item => item.Id == "learn"));
     }
 
     [TestMethod]
@@ -94,15 +99,15 @@ public sealed partial class AppShellNavigationTests
     {
         var (owner, _) = UiShellNavigation.BuildProfile(learningVisible: true, can: Owner);
         var expected = UiNavigationCatalog.DevicesPageAvailable
-            ? new[] { "settings-account", "activity", "settings-offline", "profile-devices", "settings", "admin" }
-            : new[] { "settings-account", "activity", "settings-offline", "settings", "admin" };
+            ? new[] { "settings-account", "activity", "profile-devices", "settings", "admin", "unfinished" }
+            : new[] { "settings-account", "activity", "settings", "admin", "unfinished" };
         CollectionAssert.AreEqual(expected, owner.Select(item => item.Id).ToArray());
 
         var (user, _) = UiShellNavigation.BuildProfile(learningVisible: true, can: User);
         CollectionAssert.AreEqual(expected.Where(id => id != "admin").ToArray(), user.Select(item => item.Id).ToArray());
 
         Assert.AreEqual("/Profile/Account", owner.Single(item => item.Id == "settings-account").Href);
-        Assert.AreEqual("/Settings/Offline", owner.Single(item => item.Id == "settings-offline").Href);
+        Assert.AreEqual(UiShellNavigation.DrillInHref("unfinished"), owner.Single(item => item.Id == "unfinished").Href);
         Assert.AreEqual(UiShellNavigation.DrillInHref("settings"), owner.Single(item => item.Id == "settings").Href);
         Assert.AreEqual(UiShellNavigation.DrillInHref("admin"), owner.Single(item => item.Id == "admin").Href);
     }
@@ -123,10 +128,10 @@ public sealed partial class AppShellNavigationTests
         var settings = UiShellNavigation.BuildSection("settings", can: User);
         Assert.IsNotNull(settings);
         CollectionAssert.AreEqual(
-            UiNavigationCatalog.Settings.Select(section => section.TitleKey).ToArray(),
+            UiNavigationCatalog.Settings.Where(section => section.Entries.Any(entry => !entry.Unfinished)).Select(section => section.TitleKey).Append(UiShellNavigation.UnfinishedGroupTitleKey).ToArray(),
             settings.Groups!.Select(group => group.TitleKey).ToArray());
         CollectionAssert.AreEqual(
-            UiNavigationCatalog.Settings.SelectMany(section => section.Entries).Select(entry => entry.Id).ToArray(),
+            UiNavigationCatalog.Settings.SelectMany(section => section.Entries).OrderBy(entry => entry.Unfinished).Select(entry => entry.Id).ToArray(),
             settings.Groups!.SelectMany(group => group.Items).Select(item => item.Id).ToArray());
         Assert.IsFalse(settings.Groups!.SelectMany(group => group.Items).Any(item => item.IsActive));
 
@@ -148,8 +153,8 @@ public sealed partial class AppShellNavigationTests
     [DataRow("/Franchises/7", "watchlist", "profile")]
     [DataRow("/Calendar", "calendar", "calendar")]
     [DataRow("/Activity", "activity", "profile")]
-    [DataRow("/Learn/Kana", "learn", "learn")]
-    [DataRow("/Statistics", "learn", "learn")]
+    [DataRow("/Learn/Kana", "learn", "profile")]
+    [DataRow("/Statistics", "learn", "profile")]
     [DataRow("/Profile", "profile", "profile")]
     [DataRow("/Profile/settings", "profile", "profile")]
     [DataRow("/Profile/Account", "settings", "profile")]
@@ -160,7 +165,7 @@ public sealed partial class AppShellNavigationTests
     {
         var nav = UiShellNavigation.Build(path, learningVisible: true, can: Owner);
 
-        var active = nav.Primary.Concat(nav.Secondary).Where(item => item.IsActive).ToArray();
+        var active = nav.Primary.Concat(nav.Secondary).Concat(nav.Unfinished).Where(item => item.IsActive).ToArray();
         Assert.AreEqual(1, active.Length, path);
         Assert.AreEqual(expectedId, active[0].Id);
         Assert.AreEqual(expectedMobileId, nav.MobilePrimary.Single(item => item.IsActive).Id);
@@ -196,7 +201,7 @@ public sealed partial class AppShellNavigationTests
         Assert.IsFalse(nav.Expanded.IsCurrentPage, "The child page is current, not the section anchor.");
 
         CollectionAssert.AreEqual(
-            new[] { "home", "library", "watchlist", "calendar", "learn", "activity" },
+            new[] { "home", "library", "watchlist", "calendar", "activity" },
             nav.Primary.Select(item => item.Id).ToArray(),
             "The base navigation stays visible inside Admin.");
         Assert.IsFalse(nav.ShowCurrentReading);
@@ -207,7 +212,7 @@ public sealed partial class AppShellNavigationTests
     [DataRow("/Settings/Appearance", "settings-appearance")]
     [DataRow("/Appearance/Accent", "settings-appearance")]
     [DataRow("/Profile/Account", "settings-account")]
-    [DataRow("/Settings/Offline", "settings-offline")]
+    [DataRow("/Settings/Language", "settings-language")]
     public void SettingsExpandsInlineWithExactlyOneActivePage(string path, string expectedId)
     {
         foreach (var isOwner in new[] { true, false })
@@ -217,7 +222,7 @@ public sealed partial class AppShellNavigationTests
             Assert.AreEqual("settings", nav.Expanded?.Id, path);
             Assert.AreEqual(1, nav.Secondary.Count(item => item.IsExpanded));
             Assert.AreEqual(expectedId, nav.Expanded!.Groups!.SelectMany(group => group.Items).Single(item => item.IsActive).Id);
-            Assert.AreEqual(isOwner ? 9 : 8, nav.Primary.Count + nav.Secondary.Count, "The base navigation stays visible inside Settings.");
+            Assert.AreEqual(isOwner ? 8 : 7, nav.Primary.Count + nav.Secondary.Count, "The base navigation stays visible inside Settings.");
         }
     }
 
@@ -240,7 +245,7 @@ public sealed partial class AppShellNavigationTests
         foreach (var path in new[] { "/", "/Admin", "/Admin/Users", "/Settings/Acquisition", "/Settings" })
         {
             var nav = UiShellNavigation.Build(path, learningVisible: true, can: User);
-            var ids = nav.Primary.Concat(nav.Secondary).Concat(nav.MobilePrimary)
+            var ids = nav.Primary.Concat(nav.Secondary).Concat(nav.MobilePrimary).Concat(nav.Unfinished)
                 .SelectMany(item => (item.Groups?.SelectMany(group => group.Items) ?? []).Prepend(item))
                 .Select(item => item.Id)
                 .ToArray();
@@ -367,7 +372,7 @@ public sealed partial class AppShellNavigationTests
         }
 
         StringAssert.Contains(navigation, "nav-children");
-        StringAssert.Contains(navigation, "_AppSearch");
+        StringAssert.Contains(File.ReadAllText(Path.Combine(web, "Pages", "Shared", "_AppHeader.cshtml")), "_AppSearch");
     }
 
     private static Type? PageModelFor(Type[] pages, string href)

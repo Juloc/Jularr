@@ -1,0 +1,12 @@
+@using Jularr.Web.Features.Localization
+@model string
+@{
+    var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
+}
+@* Sign out of the shell: the header account menu and the phone Profile page share this form. The model is the button's CSS class. *@
+<form method="post" asp-page="/Account/Logout" data-offline-logout>
+    <button class="@Model" type="submit">
+        <partial name="_AppIcon" model="@("signOut")" />
+        <span>@ui["nav.signOut"]</span>
+    </button>
+</form>

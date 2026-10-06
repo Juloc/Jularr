@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Providers;
 using Jularr.Web.Features.Localization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -11,7 +12,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace Jularr.Web.Pages.Account;
 
 [AllowAnonymous]
-public sealed class SetupModel(OwnerAuthService ownerAuth) : PageModel
+public sealed class SetupModel(OwnerAuthService ownerAuth, IEnumerable<IProviderSettings> providers) : PageModel
 {
     [BindProperty]
     [Required]
@@ -93,6 +94,16 @@ public sealed class SetupModel(OwnerAuthService ownerAuth) : PageModel
             OwnerAuthService.CreatePrincipal(owner));
 
         TempData["Status"] = Ui["account.setup.created"];
+
+        // An enabled feature that needs a provider cannot work without it: while one is unusable, Setup is not complete yet.
+        foreach (var settings in providers)
+        {
+            if ((await settings.GetViewAsync(cancellationToken)).Blocking is not null)
+            {
+                return RedirectToPage("/Account/SetupProvider", new { returnUrl = ReturnUrl });
+            }
+        }
+
         return LocalRedirect(ReturnUrl);
     }
 
