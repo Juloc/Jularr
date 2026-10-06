@@ -119,12 +119,13 @@ public sealed class PermissionDerivedShellTests
     {
         var covered = UiNavigationCatalog.LibraryTabs.SelectMany(UiNavigationCatalog.MediaTypesOf).Distinct().ToArray();
 
+        // Music is managed under Admin Music until it has a consumer surface (docs/mockups/admin-music/SPEC.md).
         CollectionAssert.AreEquivalent(
-            WorkMediaTypes.All.ToArray(),
+            WorkMediaTypes.All.Where(type => type != WorkMediaType.Music).ToArray(),
             covered,
             "A media type gained or lost its consumer destination; update the shell tests.");
 
-        foreach (var type in WorkMediaTypes.All)
+        foreach (var type in WorkMediaTypes.All.Where(type => type != WorkMediaType.Music))
         {
             var nav = UiShellNavigation.Build("/", learningVisible: false, User, [type]);
             Assert.IsTrue(nav.Primary.Any(item => item.Id == "library"), $"{type} must open Library.");
