@@ -62,9 +62,6 @@ internal static class SabnzbdTestSupport
     {
         var directory = CreateTemporaryDirectory();
         var protection = new EphemeralDataProtectionProvider();
-        var settings = new SabnzbdSettingsStore(protection, directory);
-        await settings.SaveAsync(
-            new SabnzbdStoredSettings("http://sabnzbd:8080", "secret-key", "books", "anime"));
 
         var clients = new DownloadClientStore(protection, directory);
         await clients.SaveAsync(
@@ -78,24 +75,19 @@ internal static class SabnzbdTestSupport
                 "secret-key"));
 
         var db = await CreateDatabaseAsync(Path.Combine(directory.FullName, "jularr.db"));
-        return new SabnzbdTestEnvironment(directory, protection, settings, db);
+        return new SabnzbdTestEnvironment(directory, protection, db);
     }
 }
 
 internal sealed class SabnzbdTestEnvironment(
     DirectoryInfo directory,
     IDataProtectionProvider protection,
-    SabnzbdSettingsStore settings,
     AppDbContext db) : IAsyncDisposable
 {
     public DirectoryInfo Directory { get; } = directory;
     public IDataProtectionProvider Protection { get; } = protection;
-    public SabnzbdSettingsStore Settings { get; } = settings;
     public AppDbContext Db { get; private set; } = db;
     public FakeSabnzbdClient Client { get; } = new();
-
-    public SabnzbdConnectionResolver Resolver =>
-        new(Settings, SabnzbdTestSupport.Configuration());
 
     /// <summary>A fresh store instance reads the persisted file, as after a restart.</summary>
     public SabnzbdAcquisitionStore NewAcquisitionStore() =>
