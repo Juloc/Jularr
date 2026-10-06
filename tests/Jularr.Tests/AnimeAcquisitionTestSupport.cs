@@ -531,7 +531,6 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
 
         var acquisition = AcquisitionDirectory;
         var integrations = new DirectoryInfo(Path.Combine(DataRoot, "integrations"));
-        collection.AddSingleton(new SabnzbdSettingsStore(Protection, acquisition));
         collection.AddSingleton(new SabnzbdAcquisitionStore(Protection, acquisition));
         collection.AddSingleton(new IndexerStore(Protection, acquisition));
         collection.AddSingleton(new DownloadClientStore(Protection, acquisition));
@@ -584,7 +583,6 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
             new AcquisitionRequestSettingsStore(DataRoot),
             provider.GetRequiredService<RecordingEventPublisher>(),
             NullLogger<AcquisitionRequestService>.Instance));
-        collection.AddScoped<SabnzbdConnectionResolver>();
         collection.AddScoped<SabnzbdDownloadService>();
         collection.AddScoped<SabnzbdAcquisitionService>();
         collection.AddScoped<ProwlarrAnimeSearchService>();
