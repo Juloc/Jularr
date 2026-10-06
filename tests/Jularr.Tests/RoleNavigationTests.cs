@@ -25,12 +25,6 @@ public sealed class RoleNavigationTests
     public static Func<string, bool> As(AccountRole role) =>
         policy => JularrPolicies.Roles[policy].Contains(role);
 
-    /// <summary>
-    /// Admin -> Providers is listed before its page exists: the page is built on its own branch (#872) and this entry only reserves its
-    /// place and label. Remove this exemption together with that page's merge.
-    /// </summary>
-    private const string PendingProvidersPageId = "admin-providers";
-
     private static IEnumerable<UiNavigationEntry> AdminEntries =>
         UiNavigationCatalog.Admin.SelectMany(section => section.Entries);
 
@@ -111,7 +105,7 @@ public sealed class RoleNavigationTests
             .Where(type => typeof(Microsoft.AspNetCore.Mvc.RazorPages.PageModel).IsAssignableFrom(type))
             .ToArray();
 
-        foreach (var entry in AdminEntries.Where(entry => entry.Id != PendingProvidersPageId))
+        foreach (var entry in AdminEntries)
         {
             var model = PageModelFor(pages, entry.Href);
             Assert.IsNotNull(model, $"No page model for {entry.Href}.");
