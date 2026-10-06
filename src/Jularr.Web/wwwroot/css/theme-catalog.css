@@ -44,12 +44,14 @@
     background: var(--clean-control-hover);
 }
 
-:root[data-app-theme-id^="clean-"] :is(.button, .chip, .review-button, .reader-inline-action, .reader-setting-reset) {
+/* The player stage is a dark surface in both themes and styles its own buttons and fields from the player tokens (player.css), so
+   the light fills of the theme never reach it. :where() keeps the exclusion from raising these rules above .button-primary. */
+:root[data-app-theme-id^="clean-"] :is(.button, .chip, .review-button, .reader-inline-action, .reader-setting-reset):not(:where(.player-panel *)) {
     border-color: var(--clean-border);
     background: var(--clean-control-bg);
 }
 
-:root[data-app-theme-id^="clean-"] :is(.button, .chip, .review-button, .reader-inline-action, .reader-setting-reset):hover {
+:root[data-app-theme-id^="clean-"] :is(.button, .chip, .review-button, .reader-inline-action, .reader-setting-reset):not(:where(.player-panel *)):hover {
     background: var(--clean-control-hover);
 }
 
@@ -67,7 +69,7 @@
     input[type="number"],
     input[type="password"],
     select,
-    textarea) {
+    textarea):not(:where(.player-panel *)) {
     border-color: var(--clean-border);
     background: var(--clean-control-bg);
 }

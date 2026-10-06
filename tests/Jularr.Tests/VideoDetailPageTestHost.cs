@@ -242,7 +242,11 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
     }
 
     /// <summary>Attaches a real (tiny) file the fake probe describes with <paramref name="probeJson"/>, exactly as an import does.</summary>
-    public async Task AttachVideoAsync(Work work, WorkEpisode? episode, string fileName, string probeJson = MediaProbeFixtures.H264Stereo)
+    public Task AttachVideoAsync(Work work, WorkEpisode? episode, string fileName, string probeJson = MediaProbeFixtures.H264Stereo) =>
+        AttachVideoAsync(work, episode, fileName, new MediaProbeRun(MediaProbeRunStatus.Completed, probeJson));
+
+    /// <summary>Attaches a real (tiny) file whose probe ends as <paramref name="probe"/>: a tool that could not run, or a file it rejected.</summary>
+    public async Task AttachVideoAsync(Work work, WorkEpisode? episode, string fileName, MediaProbeRun probe)
     {
         if (!Db.LibraryRoots.Any())
         {
@@ -252,7 +256,7 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
 
         var path = Path.Combine(MediaDirectory, fileName);
         await File.WriteAllBytesAsync(path, [1, 2, 3]);
-        Probe.Returns(path, probeJson);
+        Probe.Returns(path, probe);
         await new CanonicalMediaStorageService(Db).AttachVideoAsync(work.Id, episode?.Id, path, MediaDirectory, CancellationToken.None);
     }
 

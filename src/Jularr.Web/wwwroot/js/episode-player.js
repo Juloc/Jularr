@@ -62,6 +62,10 @@
     const storageActions = root.querySelector("[data-storage-actions]");
     const storageRetry = root.querySelector("[data-storage-retry]");
     const storageWake = root.querySelector("[data-storage-wake]");
+    const failureActions = root.querySelector("[data-failure-actions]");
+    const failureRetry = root.querySelector("[data-failure-retry]");
+    // The failure text names what is being played: a movie is not an episode.
+    const failedKey = root.dataset.videoKind === "movie" ? "playback.status.failedMovie" : "playback.status.failed";
 
     const nextUrl = root.dataset.nextUrl || "";
     const preferencesUrl = root.dataset.playbackPreferencesUrl || "";
@@ -823,6 +827,10 @@
 
         storageRecoveryActive = true;
         hideVideo();
+        if (failureActions) {
+            failureActions.hidden = true;
+        }
+
         playbackBadge.classList.remove("status-ok", "status-warning", "status-error");
 
         const sleeping = storageSleeping();
@@ -1238,6 +1246,17 @@
         }
     };
 
+    // The one final failure state: the centred status with Try again. A transient retry notice never stays above it, so the player
+    // never says "trying another way" and "cannot be played" at the same time.
+    const showFailure = (message) => {
+        hideVideo();
+        showPlayerError(null);
+        playbackStatus.textContent = message || "";
+        if (failureActions) {
+            failureActions.hidden = false;
+        }
+    };
+
     const installPlan = response => {
         plan = response.plan;
         planCapabilitiesInferred = response.capabilitiesInferred === true;
@@ -1256,15 +1275,16 @@
         const generation = ++planGeneration;
         plan = null;
         renderPlan();
+        if (failureActions) {
+            failureActions.hidden = true;
+        }
 
         let response;
         try {
             response = await requestPlan();
         } catch {
             if (generation === planGeneration) {
-                hideVideo();
-                playbackStatus.textContent = text["playback.status.planFailed"] || "";
-                showPlayerError(text["playback.status.planFailed"]);
+                showFailure(text["playback.status.planFailed"]);
             }
             return;
         }
@@ -1290,8 +1310,7 @@
                 return;
             }
 
-            hideVideo();
-            playbackStatus.textContent = text["playback.status.failed"] || "";
+            showFailure(text[failedKey]);
             return;
         }
 
@@ -2052,7 +2071,15 @@
             return;
         }
 
-        showPlayerError(text["playback.status.failed"]);
+        showFailure(text[failedKey]);
+    });
+
+    failureRetry?.addEventListener("click", () => {
+        failedModes.clear();
+        sessionRecoveries = 0;
+        pendingResumeTime = absoluteCurrentTime();
+        resumeShouldPlay = true;
+        void applyPlayback();
     });
 
     storageRetry?.addEventListener("click", () => {

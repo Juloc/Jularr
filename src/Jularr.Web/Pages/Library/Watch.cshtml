@@ -1,13 +1,13 @@
 @page "/Library/Watch/{workId:guid}/{episodeId:guid?}"
-@using Jularr.Web.Ui
+@using Jularr.Web.Features.Playback
 @model Jularr.Web.Pages.Library.WatchModel
 @* The web player of a Movie or one episode of a Series. It renders the same player stage and scripts as every other
-   video; only the canonical target and its routes differ (Features/Playback/VideoPlayerStageView). The stage owns the
-   title and episode line (docs/mockups/player/SPEC.md, top chrome), so the page adds only the way back. *@
+   video; only the canonical target and its routes differ (Features/Playback/VideoPlayerStageView). The player owns the
+   whole viewport (docs/mockups/player/SPEC.md sections 3 and 4): the app navigation steps aside (player.css) and the
+   way back is the arrow in the stage's top chrome, which also leads the unavailable state. *@
 @{
     var ui = Model.Ui;
     ViewData["Title"] = Model.EpisodeLine is { } line ? $"{Model.Title} · {line}" : Model.Title;
-    var backLink = new ContextBackLinkModel(Model.BackUrl, $"← {ui["library.video.backToDetails"]}", "back-link");
 }
 
 @section Head {
@@ -17,21 +17,29 @@
     <script src="~/js/context-back-link.js" asp-append-version="true"></script>
 }
 
-<partial name="_ContextBackLink" model="backLink" />
-<div class="watch-layout is-single">
-    <div class="watch-main">
-        @if (Model.Stage is { } stage)
-        {
-            <partial name="_VideoPlayerStage" model="stage" />
-            <partial name="_VideoPlayerScripts" />
-        }
-        else
-        {
-            <div class="empty-state">
-                <h1>@Model.Title</h1>
-                <h3>@ui["library.watch.noMediaTitle"]</h3>
-                <p>@ui["library.video.noMediaBody"]</p>
+<div class="player-frame watch-main" data-player-frame>
+    @if (Model.Stage is { } stage)
+    {
+        <partial name="_VideoPlayerStage" model="stage" />
+        <partial name="_VideoPlayerScripts" />
+    }
+    else if (Model.Unavailable is { } unavailable)
+    {
+        var heading = new VideoPlayerHeading(Model.Title, Model.EpisodeLine, null, Model.BackUrl, ui["library.video.backToDetails"]);
+        <section class="player-unavailable player-panel" aria-labelledby="player-unavailable-title">
+            <div class="player-top">
+                <partial name="_VideoPlayerHeading" model="heading" />
             </div>
-        }
-    </div>
+            <div class="playback-preparation">
+                <h1 id="player-unavailable-title">@unavailable.Title</h1>
+                <p>@unavailable.Body</p>
+                @if (unavailable.OffersRetry)
+                {
+                    <div class="playback-preparation-actions">
+                        <a class="button" href="@Request.Path">@ui["library.episode.tryAgain"]</a>
+                    </div>
+                }
+            </div>
+        </section>
+    }
 </div>

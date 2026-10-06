@@ -12,12 +12,14 @@
     var seekBack = PlayerDesign.SeekBackSeconds;
     var seekForward = PlayerDesign.SeekForwardSeconds;
     var invariant = System.Globalization.CultureInfo.InvariantCulture;
+    var heading = new VideoPlayerHeading(Model.Title, Model.EpisodeLine, Model.NativeTitle, Model.BackUrl, ui[Model.BackLabelKey]);
 }
 <section class="player-panel"
          data-episode-player
          data-episode-id="@Model.LegacyEpisodeId"
          data-video-target-work="@Model.Target?.WorkId"
          data-video-target-episode="@Model.Target?.WorkEpisodeId"
+         data-video-kind="@(Model.Target is { IsEpisode: false } ? "movie" : "episode")"
          data-duration-seconds="@(Model.DurationSeconds?.ToString("0.###", invariant) ?? "")"
          data-playback-plan-url="@Model.PlanUrl"
          data-app-version="@Jularr.Web.Features.Appearance.AppBuildInfo.Version"
@@ -74,26 +76,25 @@
         </div>
 
         <div class="playback-preparation" data-playback-placeholder>
-            <span class="eyebrow">@ui["library.episode.browserPlayback"]</span>
             <strong data-playback-status>@ui["library.episode.startingPlayback"]</strong>
             <div class="playback-preparation-actions" data-storage-actions hidden>
                 <button class="button" type="button" data-storage-retry>@ui["library.episode.tryAgain"]</button>
                 <button class="button button-primary" type="button" data-storage-wake hidden>@ui["player.play"]</button>
             </div>
+            @* The final state when no way of playing works: the status above is the only message, and Back is the arrow in the top chrome. *@
+            <div class="playback-preparation-actions" data-failure-actions hidden>
+                <button class="button" type="button" data-failure-retry>@ui["library.episode.tryAgain"]</button>
+            </div>
         </div>
 
         <div class="player-chrome" data-player-controls>
             <div class="player-top">
-                <div class="player-heading">
-                    <strong>@Model.Title</strong>
-                    @if (!string.IsNullOrWhiteSpace(Model.EpisodeLine))
-                    {
-                        <span>@Model.EpisodeLine</span>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(Model.NativeTitle))
-                    {
-                        <span lang="ja">@Model.NativeTitle</span>
-                    }
+                <partial name="_VideoPlayerHeading" model="heading" />
+                <div class="player-window-actions">
+                    <button class="player-icon-button" type="button" data-chrome-pip hidden
+                            aria-label="@ui["library.watch.pictureInPicture"]" title="@ui["library.watch.pictureInPicture"]">
+                        <partial name="_PlayerIcon" model="@("pictureInPicture")" />
+                    </button>
                 </div>
             </div>
 
@@ -105,6 +106,11 @@
                        aria-label="@Model.PreviousLabel" title="@Model.PreviousLabel">
                         <partial name="_PlayerIcon" model="@("next")" />
                     </a>
+                }
+                else if (Model.NextUrl is not null)
+                {
+                    @* Keeps Play/Pause in the middle when only one of the two steps exists. *@
+                    <span class="player-round-step" aria-hidden="true"></span>
                 }
                 <button class="player-round-button" type="button" data-player-action="seekBack10"
                         aria-label="@ui.Format("library.episode.seekBack", ("seconds", seekBack))">
@@ -128,6 +134,10 @@
                         <partial name="_PlayerIcon" model="@("next")" />
                     </a>
                 }
+                else if (Model.PreviousUrl is not null)
+                {
+                    <span class="player-round-step" aria-hidden="true"></span>
+                }
             </div>
 
             <div class="player-bottom">
@@ -142,65 +152,94 @@
                            aria-label="@ui["library.episode.seekTimelineAria"]"
                            data-playback-timeline />
                 </div>
-                <div class="player-bar">
-                    <div class="player-bar-group">
-                        <div class="player-volume">
-                            <button class="player-icon-button" type="button" data-chrome-mute
-                                    aria-label="@ui["library.watch.mute"]" title="@ui["library.watch.mute"]"
-                                    data-label-mute="@ui["library.watch.mute"]" data-label-unmute="@ui["library.watch.unmute"]">
-                                <partial name="_PlayerIcon" model="@("volume")" />
-                            </button>
-                            <input class="player-volume-slider" type="range" min="0" max="1" step="0.05" value="1"
-                                   aria-label="@ui["library.watch.volume"]" data-chrome-volume />
-                        </div>
-                        <span class="player-time">
-                            <span data-playback-current>0:00</span>
-                            <span aria-hidden="true">/</span>
-                            <span data-playback-duration>--:--</span>
-                        </span>
-                    </div>
-                    <div class="player-bar-group">
-                        @if (Model.Controls is { HasLearningCues: true })
+                <span class="player-time">
+                    <span data-playback-current>0:00</span>
+                    <span class="player-time-separator" aria-hidden="true">/</span>
+                    <span data-playback-duration>--:--</span>
+                </span>
+                <div class="player-volume">
+                    <button class="player-icon-button" type="button" data-chrome-mute
+                            aria-label="@ui["library.watch.mute"]" title="@ui["library.watch.mute"]"
+                            data-label-mute="@ui["library.watch.mute"]" data-label-unmute="@ui["library.watch.unmute"]">
+                        <partial name="_PlayerIcon" model="@("volume")" />
+                    </button>
+                    <input class="player-volume-slider" type="range" min="0" max="1" step="0.05" value="1"
+                           aria-label="@ui["library.watch.volume"]" data-chrome-volume />
+                </div>
+                @* Desktop and tablet name each setting on the bar; a phone keeps only the gear and full screen. Every one of them opens the one
+                   settings panel below, so there is a single place where the choices are made. *@
+                <div class="player-controls">
+                    @if (Model.Controls is { HasLearningCues: true })
+                    {
+                        <button class="player-control" type="button"
+                                data-player-action="repeatCurrentCue"
+                                data-repeat-line
+                                aria-label="@ui["library.episode.repeatCurrentLine"]"
+                                title="@ui["library.episode.repeatCurrentLine"]">
+                            <partial name="_PlayerIcon" model="@("replay")" />
+                            <span class="player-control-label">@ui["player.repeatLine"]</span>
+                        </button>
+                    }
+                    @if (Model.Controls is { } barControls)
+                    {
+                        <button class="player-control" type="button" data-chrome-open-setting="subtitles" hidden
+                                aria-haspopup="dialog" aria-controls="player-settings" aria-expanded="false">
+                            <partial name="_PlayerIcon" model="@("subtitles")" />
+                            <span class="player-control-label">@ui["library.episode.subtitles"]</span>
+                            <span class="player-control-value" data-chrome-setting-value></span>
+                        </button>
+                        @if (barControls.AudioTracks.Count > 1)
                         {
-                            <button class="player-icon-button" type="button"
-                                    data-player-action="repeatCurrentCue"
-                                    data-repeat-line
-                                    aria-label="@ui["library.episode.repeatCurrentLine"]"
-                                    title="@ui["library.episode.repeatCurrentLine"]">
-                                <partial name="_PlayerIcon" model="@("replay")" />
+                            <button class="player-control" type="button" data-chrome-open-setting="audio"
+                                    aria-haspopup="dialog" aria-controls="player-settings" aria-expanded="false">
+                                <partial name="_PlayerIcon" model="@("audioTrack")" />
+                                <span class="player-control-label">@ui["library.episode.audio"]</span>
+                                <span class="player-control-value" data-chrome-setting-value></span>
                             </button>
                         }
-                        <button class="player-icon-button" type="button" data-chrome-subtitles hidden
-                                aria-label="@ui["library.watch.subtitlesToggle"]" title="@ui["library.watch.subtitlesToggle"]" aria-pressed="false">
-                            <partial name="_PlayerIcon" model="@("subtitles")" />
+                        <button class="player-control" type="button" data-chrome-open-setting="quality"
+                                aria-haspopup="dialog" aria-controls="player-settings" aria-expanded="false">
+                            <partial name="_PlayerIcon" model="@("quality")" />
+                            <span class="player-control-label">@ui["library.episode.quality"]</span>
+                            <span class="player-control-value" data-chrome-setting-value></span>
                         </button>
-                        <button class="player-icon-button" type="button" data-chrome-settings-toggle
-                                aria-label="@ui["library.watch.settings"]" title="@ui["library.watch.settings"]" aria-expanded="false" aria-controls="player-settings">
-                            <partial name="_PlayerIcon" model="@("settings")" />
+                        <button class="player-control" type="button" data-chrome-open-setting="speed"
+                                aria-haspopup="dialog" aria-controls="player-settings" aria-expanded="false">
+                            <partial name="_PlayerIcon" model="@("speed")" />
+                            <span class="player-control-label">@ui["library.episode.speed"]</span>
+                            <span class="player-control-value" data-chrome-setting-value></span>
                         </button>
-                        <button class="player-icon-button" type="button" data-chrome-pip hidden
-                                aria-label="@ui["library.watch.pictureInPicture"]" title="@ui["library.watch.pictureInPicture"]">
-                            <partial name="_PlayerIcon" model="@("pictureInPicture")" />
-                        </button>
-                        <button class="player-icon-button" type="button" data-chrome-fullscreen
-                                aria-label="@ui["library.watch.fullscreen"]" title="@ui["library.watch.fullscreen"]"
-                                data-label-enter="@ui["library.watch.fullscreen"]" data-label-exit="@ui["library.watch.exitFullscreen"]">
-                            <partial name="_PlayerIcon" model="@("fullscreen")" />
-                        </button>
-                    </div>
+                    }
+                    <button class="player-control player-control-pip" type="button" data-chrome-pip hidden
+                            aria-label="@ui["library.watch.pictureInPicture"]" title="@ui["library.watch.pictureInPicture"]">
+                        <partial name="_PlayerIcon" model="@("pictureInPicture")" />
+                        <span class="player-control-label">@ui["library.watch.pictureInPictureShort"]</span>
+                    </button>
+                    <button class="player-control" type="button" data-chrome-fullscreen
+                            aria-label="@ui["library.watch.fullscreen"]" title="@ui["library.watch.fullscreen"]"
+                            data-label-enter="@ui["library.watch.fullscreen"]" data-label-exit="@ui["library.watch.exitFullscreen"]">
+                        <partial name="_PlayerIcon" model="@("fullscreen")" />
+                        <span class="player-control-label">@ui["library.watch.fullscreen"]</span>
+                    </button>
+                    <button class="player-control player-control-more" type="button" data-chrome-settings-toggle
+                            aria-label="@ui["library.watch.settings"]" title="@ui["library.watch.settings"]"
+                            aria-haspopup="dialog" aria-expanded="false" aria-controls="player-settings">
+                        <partial name="_PlayerIcon" model="@("settings")" />
+                        <span class="player-control-label">@ui["library.watch.more"]</span>
+                    </button>
                 </div>
             </div>
 
-            <div class="player-settings" id="player-settings" data-chrome-settings role="dialog" aria-label="@ui["library.watch.settings"]" hidden>
+            <div class="player-settings" id="player-settings" data-chrome-settings data-settings-mode="all" role="dialog" aria-label="@ui["library.watch.settings"]" hidden>
                 <div class="player-settings-header">
-                    <strong>@ui["library.watch.settings"]</strong>
+                    <strong data-settings-title data-title-all="@ui["library.watch.settings"]">@ui["library.watch.settings"]</strong>
                     <button class="player-icon-button" type="button" data-chrome-settings-close aria-label="@ui["library.watch.closeSettings"]">
                         <partial name="_PlayerIcon" model="@("close")" />
                     </button>
                 </div>
                 @if (Model.Controls is { } controls)
                 {
-                    <label class="player-setting">
+                    <label class="player-setting" data-setting-row="speed">
                         <span><partial name="_PlayerIcon" model="@("speed")" /> @ui["library.episode.speed"]</span>
                         <select data-playback-speed>
                             @foreach (var speed in controls.Speeds)
@@ -211,7 +250,7 @@
                         </select>
                     </label>
 
-                    <label class="player-setting">
+                    <label class="player-setting" data-setting-row="subtitles">
                         <span><partial name="_PlayerIcon" model="@("subtitles")" /> @ui["library.episode.subtitles"]</span>
                         <select data-subtitle-track>
                             <option value="@PlayerControls.SubtitleOff"
@@ -239,11 +278,11 @@
                             }
                         </select>
                     </label>
-                    <small class="player-setting-hint" data-subtitle-hint aria-live="polite"></small>
+                    <small class="player-setting-hint" data-setting-row="subtitles" data-subtitle-hint aria-live="polite"></small>
 
                     @if (controls.AudioTracks.Count > 1)
                     {
-                        <label class="player-setting">
+                        <label class="player-setting" data-setting-row="audio">
                             <span><partial name="_PlayerIcon" model="@("audioTrack")" /> @ui["library.episode.audio"]</span>
                             <select data-audio-track>
                                 @foreach (var track in controls.AudioTracks)
@@ -256,7 +295,7 @@
                         </label>
                     }
 
-                    <label class="player-setting">
+                    <label class="player-setting" data-setting-row="quality">
                         <span><partial name="_PlayerIcon" model="@("quality")" /> @ui["library.episode.quality"]</span>
                         <select data-quality-cap>
                             <option value="auto">@ui["playback.quality.auto"]</option>
@@ -267,10 +306,10 @@
                             }
                         </select>
                     </label>
-                    <small class="player-setting-hint" data-quality-hint aria-live="polite"></small>
+                    <small class="player-setting-hint" data-setting-row="quality" data-quality-hint aria-live="polite"></small>
                 }
 
-                <label class="player-setting">
+                <label class="player-setting" data-setting-row="more">
                     <span>@ui["library.episode.playbackLabel"]</span>
                     <select data-playback-mode>
                         <option value="auto">@ui["playback.preference.auto"]</option>
@@ -280,7 +319,7 @@
                 </label>
                 @* Compact status for everyone ("Direct Play · HEVC · 1080p · AAC"); the reasons only
                    appear when the original is not played untouched. *@
-                <div class="player-setting-status">
+                <div class="player-setting-status" data-setting-row="more">
                     <span class="status-pill" data-playback-badge>@ui["library.episode.checking"]</span>
                     <small data-playback-summary>@ui["playback.status.checking"]</small>
                     <div class="player-playback-reasons" data-playback-reasons hidden>
@@ -296,7 +335,7 @@
 
                 @if (Model.OffersAutoplay)
                 {
-                    <label class="player-setting player-setting-toggle">
+                    <label class="player-setting player-setting-toggle" data-setting-row="more">
                         <span>@ui["library.episode.autoplayNextEpisode"]</span>
                         <input type="checkbox"
                                data-autoplay-toggle
@@ -305,12 +344,12 @@
                 }
 
                 @* Only offered where the device exposes its own video player (iPhone/iPad); the normal full screen button never opens it. *@
-                <div class="player-setting-system" data-chrome-system-player-group hidden>
+                <div class="player-setting-system" data-setting-row="more" data-chrome-system-player-group hidden>
                     <button class="button" type="button" data-chrome-system-player>@ui["library.watch.systemPlayer"]</button>
                     <small class="player-setting-hint">@ui["library.watch.systemPlayerHint"]</small>
                 </div>
 
-                <div class="player-settings-actions">
+                <div class="player-settings-actions" data-setting-row="more">
                     <button class="button"
                             type="button"
                             data-restart

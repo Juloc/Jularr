@@ -37,3 +37,6 @@ public sealed record VideoPlayerStageView(
     bool ShowPlayerTools,
     string? PreviousUrl = null,
     string? PreviousLabel = null);
+
+/// <summary>The top chrome every video player surface shares: the way back and the title of what is open.</summary>
+public sealed record VideoPlayerHeading(string Title, string? EpisodeLine, string? NativeTitle, string BackUrl, string BackLabel);

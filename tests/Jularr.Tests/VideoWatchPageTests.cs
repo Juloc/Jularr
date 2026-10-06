@@ -58,6 +58,82 @@ public sealed class VideoWatchPageTests
     }
 
     [TestMethod]
+    public async Task TheEmptyStateNamesWhatIsMissingForAMovieAndForAnEpisode()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire");
+        var series = await AddTitleAsync(host, WorkMediaType.Series, "Dark Harbor");
+        var episode = await new LibraryCanonicalSeed(host.Db).AddEpisodeAsync(series, 1, 1);
+
+        var movieHtml = await host.GetOkAsync($"/Library/Watch/{movie.Id}");
+        var episodeHtml = await host.GetOkAsync($"/Library/Watch/{series.Id}/{episode.Id}");
+
+        StringAssert.Contains(movieHtml, "No video file has been found for this title yet.");
+        StringAssert.Contains(episodeHtml, "This episode is in the library but no video file has been found for it yet.");
+        StringAssert.Contains(episodeHtml, $"href=\"/Library/Series/{series.Id}\"");
+    }
+
+    // A media tool that could not run says nothing about the file: the viewer is not told there is no file.
+    [TestMethod]
+    public async Task AFileTheMediaToolCouldNotCheckIsNotReportedAsMissingAndMayBeTriedAgain()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire");
+        var series = await AddTitleAsync(host, WorkMediaType.Series, "Dark Harbor");
+        var episode = await new LibraryCanonicalSeed(host.Db).AddEpisodeAsync(series, 1, 1);
+        var unavailable = new MediaProbeRun(MediaProbeRunStatus.Unavailable, Error: "ffprobe could not be started or timed out.");
+        await host.AttachVideoAsync(movie, null, "moon-empire.mp4", unavailable);
+        await host.AttachVideoAsync(series, episode, "s01e01.mp4", unavailable);
+
+        var movieHtml = await host.GetOkAsync($"/Library/Watch/{movie.Id}");
+        var episodeHtml = await host.GetOkAsync($"/Library/Watch/{series.Id}/{episode.Id}");
+
+        StringAssert.Contains(movieHtml, "Couldn't prepare this movie");
+        StringAssert.Contains(episodeHtml, "Couldn't prepare this episode");
+        foreach (var html in new[] { movieHtml, episodeHtml })
+        {
+            StringAssert.Contains(html, "Jularr couldn't check this file yet.");
+            StringAssert.Contains(html, ">Try again</a>");
+            Assert.IsFalse(html.Contains("No playable file yet", StringComparison.Ordinal), "A tool failure is not an absent file.");
+            Assert.IsFalse(html.Contains("ffprobe", StringComparison.OrdinalIgnoreCase), "The diagnosis is for Admin, not for the viewer.");
+            Assert.IsFalse(html.Contains("data-episode-player", StringComparison.Ordinal));
+        }
+    }
+
+    [TestMethod]
+    public async Task AFileTheMediaToolRejectedHasNoRetryAndSaysItMayBeDamaged()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire");
+        await host.AttachVideoAsync(movie, null, "moon-empire.mp4", new MediaProbeRun(MediaProbeRunStatus.Failed, Error: "Invalid data found when processing input"));
+
+        var html = await host.GetOkAsync($"/Library/Watch/{movie.Id}");
+
+        StringAssert.Contains(html, "Couldn't prepare this movie");
+        StringAssert.Contains(html, "may be damaged");
+        Assert.IsFalse(html.Contains(">Try again</a>", StringComparison.Ordinal));
+        Assert.IsFalse(html.Contains("Invalid data", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task TheWatchRouteOwnsTheWholeViewportAndLeadsBackThroughTheTopChrome()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire");
+        var empty = await AddTitleAsync(host, WorkMediaType.Movie, "Empty Reel");
+        await host.AttachVideoAsync(movie, null, "moon-empire.mp4");
+
+        foreach (var work in new[] { movie, empty })
+        {
+            var html = await host.GetOkAsync($"/Library/Watch/{work.Id}");
+
+            StringAssert.Contains(html, "data-player-frame");
+            StringAssert.Contains(html, $"<a class=\"player-back\" href=\"/Library/Movie/{work.Id}\" data-context-back");
+            Assert.IsFalse(html.Contains("class=\"back-link\"", StringComparison.Ordinal), "The way back is the arrow in the player chrome.");
+        }
+    }
+
+    [TestMethod]
     public async Task AMoviePlaysThroughTheCanonicalRoutesAndExposesNoFilePath()
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();

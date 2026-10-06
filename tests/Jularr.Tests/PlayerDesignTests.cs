@@ -186,6 +186,32 @@ public sealed class PlayerDesignTests
         StringAssert.Contains(css, $"--player-playback-subtitle-size: {playbackSubtitle}px;");
     }
 
+    // docs/mockups/player section 19: the stage is a dark surface in both application themes. The clean themes colour every select and
+    // button light, so the player's own fields and buttons take player tokens and the theme rules leave the stage out; otherwise
+    // the settings read white text on a near-white field in the light theme.
+    [TestMethod]
+    public void PlayerFieldsAndButtonsReadPlayerTokensAndTheThemeLeavesThePlayerStageAlone()
+    {
+        var root = FindRepositoryRoot();
+        var css = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "css", "player.css"));
+        var themes = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "css", "theme-catalog.css"));
+
+        StringAssert.Contains(css, "color-scheme: dark;");
+        foreach (var token in new[] { "--player-field-bg", "--player-field-text", "--player-field-border", "--player-button-bg", "--player-popup-bg" })
+        {
+            StringAssert.Contains(css, $"{token}:", $"{token} is defined for the stage.");
+        }
+
+        var select = System.Text.RegularExpressions.Regex.Match(css, @"\.player-setting select \{(?<body>[^}]*)\}").Groups["body"].Value;
+        StringAssert.Contains(select, "background: var(--player-field-bg)");
+        StringAssert.Contains(select, "color: var(--player-field-text)");
+        StringAssert.Contains(css, ".player-panel .button { background: var(--player-button-bg)");
+
+        // :where() keeps the exclusion at zero specificity, so it never lifts a theme rule above .button-primary.
+        Assert.AreEqual(3, System.Text.RegularExpressions.Regex.Matches(themes, @":not\(:where\(\.player-panel \*\)\)").Count);
+        StringAssert.DoesNotMatch(themes, new System.Text.RegularExpressions.Regex(@":not\(\.player-panel \*\)"));
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

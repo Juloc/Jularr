@@ -29,8 +29,9 @@
     const timeline = stage.querySelector("[data-playback-timeline]");
     const volumeSlider = stage.querySelector("[data-chrome-volume]");
     const subtitleSelect = stage.querySelector("[data-subtitle-track]");
-    const subtitleButton = stage.querySelector("[data-chrome-subtitles]");
-    const pipButton = stage.querySelector("[data-chrome-pip]");
+    const subtitleControl = stage.querySelector('[data-chrome-open-setting="subtitles"]');
+    // One picture-in-picture button sits in the top chrome of a phone or tablet stage and one in the bar of a wide stage; the layout shows one.
+    const pipButtons = stage.querySelectorAll("[data-chrome-pip]");
     const volumeKey = "jularr.player.volume";
     const hideDelayMs = 3000;
     let hideTimer = 0;
@@ -241,7 +242,7 @@
             button.title = button.getAttribute("aria-label");
         }
 
-        if (pipButton) {
+        for (const pipButton of pipButtons) {
             pipButton.hidden = !state.supports.pictureInPicture;
             pipButton.setAttribute("aria-pressed", String(state.mode === presentationModes.pictureInPicture));
         }
@@ -279,44 +280,142 @@
         button.addEventListener("click", () => void presentation.toggleFullscreen());
     }
 
-    pipButton?.addEventListener("click", () => void presentation.togglePictureInPicture());
+    for (const pipButton of pipButtons) {
+        pipButton.addEventListener("click", () => void presentation.togglePictureInPicture());
+    }
     stage.querySelector("[data-chrome-system-player]")?.addEventListener("click", () => {
         setSettings(false);
         presentation.toggleNativeFullscreen();
     });
 
-    // --- settings menu --------------------------------------------------------------------
-    const settingsToggles = stage.querySelectorAll("[data-chrome-settings-toggle]");
-    const setSettings = (open) => {
-        if (!settings) return;
-        settings.hidden = !open;
-        for (const toggle of settingsToggles) toggle.setAttribute("aria-expanded", String(open));
-        if (open) {
-            stage.dataset.chromeState = "visible";
-            window.clearTimeout(hideTimer);
-            settings.querySelector("select, input, button:not([data-chrome-settings-close])")?.focus({ preventScroll: true });
-        } else {
-            show();
+    // --- settings panel ---------------------------------------------------------------------------
+    // The gear opens the whole panel. Subtitles, Audio, Quality and Speed on the bar open the same panel showing only that choice as
+    // a list of options; the options are read from the select of the panel, so choosing one is the change the select already handles.
+    const settingsToggles = stage.querySelectorAll("[data-chrome-settings-toggle], [data-chrome-open-setting]");
+    const settingsTitle = settings?.querySelector("[data-settings-title]");
+    const settingRows = settings ? [...settings.querySelectorAll("[data-setting-row]")] : [];
+    const settingSelects = {
+        subtitles: subtitleSelect,
+        audio: stage.querySelector("[data-audio-track]"),
+        quality: stage.querySelector("[data-quality-cap]"),
+        speed: stage.querySelector("[data-playback-speed]")
+    };
+    let optionList = null;
+    let settingsOpener = null;
+
+    const optionLabel = option => option.textContent.replace(/\s+/g, " ").trim();
+    const renderSettingValues = () => {
+        for (const control of stage.querySelectorAll("[data-chrome-open-setting]")) {
+            const value = control.querySelector("[data-chrome-setting-value]");
+            const option = settingSelects[control.dataset.chromeOpenSetting]?.selectedOptions[0];
+            if (value && option) value.textContent = optionLabel(option);
         }
     };
-    for (const toggle of settingsToggles) toggle.addEventListener("click", () => setSettings(settings.hidden));
+
+    const renderOptions = (mode, title) => {
+        optionList?.remove();
+        optionList = null;
+        const select = settingSelects[mode];
+        if (!select) return;
+        optionList = document.createElement("div");
+        optionList.className = "player-options";
+        optionList.setAttribute("role", "radiogroup");
+        optionList.setAttribute("aria-label", title);
+        for (const option of select.options) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "player-option";
+            button.setAttribute("role", "radio");
+            button.setAttribute("aria-checked", String(option.value === select.value));
+            if (option.disabled) button.setAttribute("aria-disabled", "true");
+            button.dataset.value = option.value;
+            button.textContent = optionLabel(option);
+            optionList.append(button);
+        }
+        settings.querySelector(".player-settings-header").after(optionList);
+    };
+
+    const setSettings = (open, mode = "all") => {
+        if (!settings) return;
+        settings.hidden = !open;
+        for (const toggle of settingsToggles) {
+            toggle.setAttribute("aria-expanded", String(open && (toggle.dataset.chromeOpenSetting || "all") === mode));
+        }
+
+        if (!open) {
+            // Focus goes back to the control that opened the panel instead of being lost with it.
+            const hadFocus = settings.contains(document.activeElement);
+            optionList?.remove();
+            optionList = null;
+            if (hadFocus) settingsOpener?.focus({ preventScroll: true });
+            show();
+            return;
+        }
+
+        const single = mode !== "all";
+        const title = single
+            ? stage.querySelector(`[data-chrome-open-setting="${mode}"] .player-control-label`)?.textContent || ""
+            : settingsTitle?.dataset.titleAll || "";
+        settings.dataset.settingsMode = mode;
+        if (settingsTitle) settingsTitle.textContent = title;
+        // In the single-choice view the select row is replaced by the option list; its hint (burn-in, quality limit) stays.
+        for (const row of settingRows) {
+            row.toggleAttribute("data-filtered", single && (row.dataset.settingRow !== mode || row.classList.contains("player-setting")));
+        }
+        renderOptions(single ? mode : "", title);
+        stage.dataset.chromeState = "visible";
+        window.clearTimeout(hideTimer);
+        const first = optionList
+            ? optionList.querySelector('[aria-checked="true"]') || optionList.querySelector(".player-option")
+            : settings.querySelector("select, input, button:not([data-chrome-settings-close])");
+        first?.focus({ preventScroll: true });
+    };
+
+    for (const toggle of settingsToggles) {
+        toggle.addEventListener("click", () => {
+            const mode = toggle.dataset.chromeOpenSetting || "all";
+            if (!settings.hidden && settings.dataset.settingsMode === mode) {
+                setSettings(false);
+                return;
+            }
+
+            settingsOpener = toggle;
+            setSettings(true, mode);
+        });
+    }
     stage.querySelector("[data-chrome-settings-close]")?.addEventListener("click", () => setSettings(false));
-    // Controls outside the menu (other than its toggle) close it too.
+    settings?.addEventListener("click", event => {
+        const button = event.target.closest(".player-option");
+        const select = settingSelects[settings.dataset.settingsMode];
+        if (!button || !select || button.getAttribute("aria-disabled") === "true") return;
+        select.value = button.dataset.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        setSettings(false);
+    });
+    settings?.addEventListener("keydown", event => {
+        if (!optionList || (event.key !== "ArrowDown" && event.key !== "ArrowUp")) return;
+        const options = [...optionList.querySelectorAll('.player-option:not([aria-disabled="true"])')];
+        const at = options.indexOf(document.activeElement);
+        if (at < 0) return;
+        event.preventDefault();
+        options[(at + (event.key === "ArrowDown" ? 1 : options.length - 1)) % options.length].focus();
+    });
+    for (const select of Object.values(settingSelects)) select?.addEventListener("change", renderSettingValues);
+    video.addEventListener("loadedmetadata", renderSettingValues);
+    renderSettingValues();
+    // Controls outside the panel (other than the ones that open it) close it too.
     stage.addEventListener("pointerdown", event => {
-        if (settingsOpen() && !isSurface(event.target) && !event.target.closest(".player-settings, [data-chrome-settings-toggle]")) {
+        if (settingsOpen() && !isSurface(event.target) && !event.target.closest(".player-settings, [data-chrome-settings-toggle], [data-chrome-open-setting]")) {
             setSettings(false);
         }
     });
 
-    // --- subtitle shortcut -------------------------------------------------------------------
-    const renderSubtitleButton = () => {
-        if (!subtitleButton) return;
-        const on = Boolean(subtitleSelect) && subtitleSelect.value !== "off";
-        subtitleButton.setAttribute("aria-pressed", String(on));
-        subtitleButton.hidden = !subtitleSelect || subtitleSelect.options.length < 2;
-        if (on) lastSubtitleChoice = subtitleSelect.value;
+    // --- subtitle shortcut (the C key) ------------------------------------------------------------
+    const renderSubtitleControl = () => {
+        if (subtitleControl) subtitleControl.hidden = !subtitleSelect || subtitleSelect.options.length < 2;
+        if (subtitleSelect && subtitleSelect.value !== "off") lastSubtitleChoice = subtitleSelect.value;
     };
-    subtitleButton?.addEventListener("click", () => {
+    const toggleSubtitles = () => {
         if (!subtitleSelect) return;
         const enabled = [...subtitleSelect.options].filter(option => option.value !== "off" && !option.disabled);
         const next = subtitleSelect.value !== "off"
@@ -328,9 +427,9 @@
         if (!next) return;
         subtitleSelect.value = next;
         subtitleSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    subtitleSelect?.addEventListener("change", renderSubtitleButton);
-    renderSubtitleButton();
+    };
+    subtitleSelect?.addEventListener("change", renderSubtitleControl);
+    renderSubtitleControl();
 
     // --- keyboard (when focus is in the player and not in a form control) -------------------
     stage.addEventListener("keydown", event => {
@@ -338,10 +437,11 @@
             if (event.key === "Escape" && settingsOpen()) {
                 event.preventDefault();
                 setSettings(false);
-                stage.focus({ preventScroll: true });
             }
             return;
         }
+        // Space on a focused button or link activates it instead of toggling playback.
+        if (event.key === " " && event.target.closest("button, a[href]")) return;
         const dispatch = action => design ? design.dispatch(root, action) : null;
         switch (event.key) {
             case " ":
@@ -375,7 +475,7 @@
                 void presentation.toggleFullscreen();
                 break;
             case "c":
-                subtitleButton?.click();
+                toggleSubtitles();
                 break;
             case "Escape":
                 // Closing the menu uses the key; the next Escape leaves Theater (player-presentation.js).

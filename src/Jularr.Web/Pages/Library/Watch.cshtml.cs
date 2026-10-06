@@ -15,6 +15,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Pages.Library;
 
+/// <summary>The consumer message shown in place of the player, and whether trying again can change it.</summary>
+public sealed record PlayerUnavailableView(string Title, string Body, bool OffersRetry);
+
 /// <summary>
 /// The web player of a Movie (<c>/Library/Watch/{workId}</c>) or one episode of a Series
 /// (<c>/Library/Watch/{workId}/{episodeId}</c>). It resolves only the canonical Work/WorkEpisode target through the
@@ -32,12 +35,17 @@ public sealed class WatchModel(
 
     public string Title { get; private set; } = "";
 
-    /// <summary>The player stage; null when the target is known but has no playable file, which shows an empty state.</summary>
+    /// <summary>The player stage; null when the target is known but cannot be played, which shows <see cref="Unavailable"/> instead.</summary>
     public VideoPlayerStageView? Stage { get; private set; }
+
+    /// <summary>What the page says instead of a player: no file at all, or a file the media tool could not check or rejected.</summary>
+    public PlayerUnavailableView? Unavailable { get; private set; }
 
     public string BackUrl { get; private set; } = "";
 
     public string? EpisodeLine { get; private set; }
+
+    public bool IsMovie { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(Guid workId, Guid? episodeId, CancellationToken cancellationToken)
     {
@@ -56,6 +64,7 @@ public sealed class WatchModel(
         }
 
         Title = work.CanonicalTitle;
+        IsMovie = work.MediaType == WorkMediaType.Movie;
         BackUrl = LibraryBrowse.DetailHref(work.MediaType, workId);
         if (episodeId is { } id)
         {
@@ -71,13 +80,30 @@ public sealed class WatchModel(
         }
 
         var target = episodeId is { } episodeTarget ? PlaybackVideoTarget.Episode(workId, episodeTarget) : PlaybackVideoTarget.Movie(workId);
-        var snapshot = await player.GetAsync(account.ProfileId, target, cancellationToken);
-        if (snapshot is not null)
+        var outcome = await player.GetAsync(account.ProfileId, target, cancellationToken);
+        if (outcome.Snapshot is { } snapshot)
         {
             Stage = await BuildStageAsync(snapshot, cancellationToken);
         }
+        else
+        {
+            Unavailable = DescribeGap(outcome.Gap);
+        }
 
         return Page();
+    }
+
+    // A media tool that could not run is not "no file": the viewer is told the file could not be prepared and may try again, while the
+    // diagnosis (tool output) stays on the Admin file row. A file the tool rejected cannot be fixed by retrying.
+    private PlayerUnavailableView DescribeGap(CanonicalVideoPlayerGap gap)
+    {
+        var prepareFailed = Ui[IsMovie ? "library.watch.prepareFailedMovie" : "library.watch.prepareFailedEpisode"];
+        return gap switch
+        {
+            CanonicalVideoPlayerGap.AnalysisUnavailable => new PlayerUnavailableView(prepareFailed, Ui["library.watch.analysisPendingBody"], OffersRetry: true),
+            CanonicalVideoPlayerGap.AnalysisRejected => new PlayerUnavailableView(prepareFailed, Ui["library.watch.analysisRejectedBody"], OffersRetry: false),
+            _ => new PlayerUnavailableView(Ui["library.watch.noMediaTitle"], IsMovie ? Ui["library.video.noMediaBody"] : Ui["library.watch.noMediaBody"], OffersRetry: false)
+        };
     }
 
     private async Task<VideoPlayerStageView> BuildStageAsync(CanonicalVideoPlayerSnapshot snapshot, CancellationToken cancellationToken)
