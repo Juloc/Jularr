@@ -13,17 +13,6 @@ public static class SabnzbdConfigurationKeys
     public const string BooksCategory = "Sabnzbd:Categories:Books";
     public const string AnimeCategory = "Sabnzbd:Categories:Anime";
 
-    /// <summary>
-    /// Keys that earlier builds read for the Books-only integration and the
-    /// canonical key that replaces each of them. They are no longer read.
-    /// </summary>
-    public static IReadOnlyDictionary<string, string> Retired { get; } =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Books:SABnzbd:BaseUrl"] = BaseUrl,
-            ["Books:SABnzbd:ApiKey"] = ApiKey,
-            ["Books:SABnzbd:Category"] = BooksCategory
-        };
 }
 
 public sealed record SabnzbdResolvedSettings(
