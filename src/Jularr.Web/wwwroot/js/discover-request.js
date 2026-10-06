@@ -1,6 +1,6 @@
 // The one Request dialog of Discover (docs/mockups/add-request-flow/SPEC.md). A card or preview button opens it with
 // the identity of the picked title; the server resolves that identity and returns only the settings groups its media
-// kind has (Scope + Included content for series, language for anime). Submitting shows the success state in place and
+// kind has (Scope + Included content for series, Language & Edition for series and anime). Submitting shows the success state in place and
 // tells the host (dc:request-created) so the card or page behind the dialog shows the persisted request. The host is the
 // Discover page or a media detail page ([data-request-host]); a detail page names its one title with data-dc-* attributes
 // on the host and can preselect episodes of a series with data-dc-preselect on the Request trigger.
@@ -25,6 +25,8 @@
     let opener = null;
     let loading = null;
     let submitting = false;
+    // Request can only be sent while the settings of the current title are loaded: loading, a failed load and a refusal all leave it unavailable.
+    let ready = false;
 
     const element = (tag, className, content) => {
         const node = document.createElement(tag);
@@ -126,6 +128,7 @@
         const signal = loading.signal;
         body.setAttribute("aria-busy", "true");
         body.replaceChildren(element("p", "dc-rq-loading", text("loading")));
+        ready = false;
         submit.disabled = true;
 
         try {
@@ -149,7 +152,7 @@
             // Same-origin, server-rendered and HTML-encoded by Razor; the settings of the dialog.
             body.innerHTML = await response.text();
             prepare();
-            if (identity.preselect && scopeSelect()) preselectEpisodes(identity.preselect);
+            if (identity.preselect && hasScope()) preselectEpisodes(identity.preselect);
         } catch (error) {
             if (error?.name === "AbortError") return;
             showMessage(text("loadFailed"), true);
@@ -160,7 +163,11 @@
 
     // ---- Scope and Included content: one control, a derived tree ---------------------------------------
 
-    const scopeSelect = () => body.querySelector("[data-dc-rq-scope]");
+    const scopeRadios = () => [...body.querySelectorAll("[data-dc-rq-scope]")];
+    const hasScope = () => scopeRadios().length > 0;
+    const scopeValue = () => scopeRadios().find(radio => radio.checked)?.value ?? null;
+    const scopePicker = () => body.querySelector("[data-dc-rq-scope-picker]");
+    const includedToggle = () => body.querySelector("[data-dc-rq-included-toggle]");
     const futureBox = () => body.querySelector("[data-dc-rq-future]");
     const seasonRows = () => [...body.querySelectorAll("[data-dc-rq-season]:not(.dc-rq-future)")];
     const episodeBoxes = row => [...row.querySelectorAll("[data-dc-rq-episode]")];
@@ -176,8 +183,45 @@
         }
 
         submit.hidden = false;
-        if (scopeSelect()) applyScope(scopeSelect().value);
+        ready = true;
+        if (hasScope()) applyScope(scopeValue());
         refreshSubmit();
+    }
+
+    // The scope card shows what the chosen option shows, so the closed selector always names the current scope.
+    function showScope() {
+        const checked = scopeRadios().find(radio => radio.checked);
+        const current = body.querySelector("[data-dc-rq-scope-current]");
+        const option = checked?.closest("label")?.querySelector(".dc-rq-choice-body");
+        if (current && option) current.replaceChildren(...option.cloneNode(true).childNodes);
+    }
+
+    function setIncludedOpen(open) {
+        includedToggle().setAttribute("aria-expanded", String(open));
+        body.querySelector("#dc-rq-tree").hidden = !open;
+    }
+
+    // Included content is the result of the scope written as one line; the tree below it is the same selection in detail.
+    function showIncluded() {
+        const value = scopeValue();
+        const episodes = seasonRows().flatMap(episodeBoxes);
+        const title = body.querySelector("[data-dc-rq-included-title]");
+        const count = body.querySelector("[data-dc-rq-count]");
+        if (value === "all") {
+            title.textContent = text("includedAll");
+            count.textContent = text("includedAllCount")
+                .replace("{seasons}", String(seasonRows().filter(row => row.dataset.special !== "true").length))
+                .replace("{episodes}", String(episodes.length));
+        } else if (value === "future") {
+            title.textContent = text("includedFuture");
+            count.textContent = text("includedFutureHint");
+        } else {
+            title.textContent = text("includedCustom");
+            const selected = text("selected")
+                .replace("{selected}", String(episodes.filter(box => box.checked).length))
+                .replace("{total}", String(episodes.length));
+            count.textContent = futureBox().checked ? selected + " · " + text("futureReleases") : selected;
+        }
     }
 
     function applyScope(value) {
@@ -193,8 +237,9 @@
             futureBox().checked = true;
         }
 
-        body.querySelector("[data-dc-rq-scope-hint]").textContent = text(`scope${value.charAt(0).toUpperCase()}${value.slice(1)}`);
-        refreshCount();
+        showScope();
+        showIncluded();
+        setIncludedOpen(value === "custom");
         refreshSubmit();
     }
 
@@ -211,28 +256,15 @@
         }
 
         futureBox().checked = false;
-        scopeSelect().value = "custom";
-        body.querySelector("[data-dc-rq-scope-hint]").textContent = text("scopeCustom");
-        refreshCount();
-        refreshSubmit();
-    }
-
-    function refreshCount() {
-        const count = body.querySelector("[data-dc-rq-count]");
-        if (!count) return;
-        const boxes = seasonRows().flatMap(episodeBoxes);
-        count.hidden = boxes.length === 0;
-        count.textContent = text("selected")
-            .replace("{selected}", String(boxes.filter(box => box.checked).length))
-            .replace("{total}", String(boxes.length));
+        scopeRadios().find(radio => radio.value === "custom").checked = true;
+        applyScope("custom");
     }
 
     function refreshSubmit() {
-        const select = scopeSelect();
-        const empty = select?.value === "custom"
+        const empty = scopeValue() === "custom"
             && !futureBox().checked
             && !seasonRows().some(row => row.querySelector("[data-dc-rq-season-check]").checked || row.querySelector("[data-dc-rq-season-check]").indeterminate);
-        submit.disabled = submitting || empty;
+        submit.disabled = !ready || submitting || empty;
     }
 
     // Any manual change of the tree makes the Scope Custom; parents and children stay consistent.
@@ -249,13 +281,10 @@
             check.indeterminate = checked > 0 && checked < episodes.length;
         }
 
-        const select = scopeSelect();
-        if (select.value !== "custom") {
-            select.value = "custom";
-            body.querySelector("[data-dc-rq-scope-hint]").textContent = text("scopeCustom");
-        }
-
-        refreshCount();
+        if (scopeValue() !== "custom") scopeRadios().find(radio => radio.value === "custom").checked = true;
+        setIncludedOpen(true);
+        showScope();
+        showIncluded();
         refreshSubmit();
     }
 
@@ -263,6 +292,9 @@
         const target = event.target;
         if (target.matches("[data-dc-rq-scope]")) {
             applyScope(target.value);
+            const picker = scopePicker();
+            picker.open = false;
+            picker.querySelector("summary").focus();
         } else if (target.matches("[data-dc-rq-season-check], [data-dc-rq-episode], [data-dc-rq-future]")) {
             treeChanged(target);
         }
@@ -270,8 +302,13 @@
 
     body.addEventListener("click", event => {
         const target = event.target instanceof Element ? event.target : null;
+        const picker = scopePicker();
+        if (picker?.open && !target?.closest("[data-dc-rq-scope-picker]")) picker.open = false;
         const expand = target?.closest("[data-dc-rq-expand]");
-        if (expand) {
+        const included = target?.closest("[data-dc-rq-included-toggle]");
+        if (included) {
+            setIncludedOpen(included.getAttribute("aria-expanded") !== "true");
+        } else if (expand) {
             const open = expand.getAttribute("aria-expanded") !== "true";
             expand.setAttribute("aria-expanded", String(open));
             document.getElementById(expand.getAttribute("aria-controls")).hidden = !open;
@@ -286,10 +323,10 @@
 
     function submissionFields() {
         const data = identityFields();
-        const select = scopeSelect();
-        if (select) {
-            data.set("scope", select.value);
-            if (select.value === "custom") {
+        const scope = scopeValue();
+        if (scope) {
+            data.set("scope", scope);
+            if (scope === "custom") {
                 for (const row of seasonRows()) {
                     const check = row.querySelector("[data-dc-rq-season-check]");
                     const seasonId = row.dataset.seasonId;
@@ -348,6 +385,7 @@
             if (response.status === 403 || response.status === 404) {
                 if (identity === current) {
                     showMessage(text("forbidden"), false);
+                    ready = false;
                     submit.hidden = true;
                 }
 
@@ -409,6 +447,7 @@
 
     dialog.addEventListener("close", () => {
         loading?.abort();
+        ready = false;
         body.replaceChildren();
         const card = [...root.querySelectorAll("[data-dc-card]")].find(item =>
             item.dataset.dcCategory === identity?.category && item.dataset.dcExternalId === identity?.externalId);

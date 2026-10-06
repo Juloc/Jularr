@@ -2,11 +2,19 @@
 @using Jularr.Web.Features.Discovery
 @using Jularr.Web.Features.Localization
 @model DiscoverRequestSettingsView
-@* The settings groups of the Request dialog for one resolved title. Only the groups that apply to the media kind are
-   rendered: a series has one Scope control with the Included content derived from it, anime has its language
-   preference, every other kind is just the identity and Request. Scope and ids are re-validated by the server. *@
+@* The settings groups of the Request dialog for one resolved title (docs/mockups/add-request-flow). Only the groups that
+   apply to the media kind are rendered: a series has one Scope card selector with the Included content derived from it,
+   series and anime have Language & Edition, every other kind is just the identity and Request. Scope and ids are
+   re-validated by the server. The language group is two plain preference selects: Edition choices belong to the shared
+   Language & Edition dialog of a detail page, and a video has no user-facing Edition to request here. *@
 @{
     var ui = Model.Ui;
+    (string Value, string Title, string Hint, string Icon)[] scopes =
+    [
+        ("all", "discover.request.scope.all", "discover.request.scope.all.hint", "requested"),
+        ("future", "discover.request.scope.future", "discover.request.scope.future.hint", "calendar"),
+        ("custom", "discover.request.scope.custom", "discover.request.scope.custom.hint", "sliders")
+    ];
     string SeasonLabel(VideoRequestSeason season) =>
         season.IsSpecial ? ui["discover.request.specials"] : ui.Format("discover.request.season", ("number", season.Number));
     string EpisodeCount(VideoRequestSeason season)
@@ -31,23 +39,47 @@
 @if (Model.OffersScope)
 {
     <div class="dc-rq-field">
-        <label for="dc-rq-scope">@ui["discover.request.scope"]</label>
-        <select id="dc-rq-scope" name="scope" data-dc-rq-scope aria-describedby="dc-rq-scope-hint">
-            <option value="all">@ui["discover.request.scope.all"]</option>
-            <option value="future">@ui["discover.request.scope.future"]</option>
-            <option value="custom">@ui["discover.request.scope.custom"]</option>
-        </select>
-        <p id="dc-rq-scope-hint" class="dc-rq-hint" data-dc-rq-scope-hint>@ui["discover.request.scope.all.hint"]</p>
+        <span class="dc-rq-label" id="dc-rq-scope-label">@ui["discover.request.scope"]</span>
+        @* One control: the chosen scope is the card, opening it lists the three scopes as cards. The radios are the real controls. *@
+        <details class="dc-rq-scope" data-dc-rq-scope-picker>
+            <summary class="dc-rq-choice" aria-labelledby="dc-rq-scope-label">
+                <span class="dc-rq-choice-body" data-dc-rq-scope-current>
+                    <span class="dc-rq-choice-icon"><partial name="_DiscoverIcon" model='scopes[0].Icon' /></span>
+                    <span class="dc-rq-choice-text"><strong>@ui[scopes[0].Title]</strong><small>@ui[scopes[0].Hint]</small></span>
+                </span>
+                <span class="dc-rq-chevron"><partial name="_DiscoverIcon" model='"chevron"' /></span>
+            </summary>
+            <div class="dc-rq-choices" role="radiogroup" aria-labelledby="dc-rq-scope-label">
+                @foreach (var scope in scopes)
+                {
+                    <label class="dc-rq-choice">
+                        <input type="radio" name="scope" value="@scope.Value" checked="@(scope.Value == "all")" data-dc-rq-scope />
+                        <span class="dc-rq-choice-body">
+                            <span class="dc-rq-choice-icon"><partial name="_DiscoverIcon" model='scope.Icon' /></span>
+                            <span class="dc-rq-choice-text"><strong>@ui[scope.Title]</strong><small>@ui[scope.Hint]</small></span>
+                        </span>
+                        <span class="dc-rq-radio" aria-hidden="true"></span>
+                    </label>
+                }
+            </div>
+        </details>
     </div>
 
     <fieldset class="dc-rq-field dc-rq-content" data-dc-rq-content>
         <legend>@ui["discover.request.included"]</legend>
-        <p class="dc-rq-hint" data-dc-rq-count></p>
-        <ul class="dc-rq-tree">
+        @* The derived result of the scope, collapsed to one summary; the tree is the same selection in detail and editing it makes the scope Custom. *@
+        <button type="button" class="dc-rq-choice dc-rq-included" aria-expanded="false" aria-controls="dc-rq-tree" data-dc-rq-included-toggle>
+            <span class="dc-rq-choice-body">
+                <span class="dc-rq-choice-icon"><partial name="_DiscoverIcon" model='"library"' /></span>
+                <span class="dc-rq-choice-text"><strong data-dc-rq-included-title></strong><small data-dc-rq-count></small></span>
+            </span>
+            <span class="dc-rq-chevron"><partial name="_DiscoverIcon" model='"chevron"' /></span>
+        </button>
+        <ul class="dc-rq-tree" id="dc-rq-tree" hidden>
             @for (var index = 0; index < Model.Seasons.Count; index++)
             {
                 var season = Model.Seasons[index];
-                <li class="dc-rq-season" data-dc-rq-season data-season-id="@season.Id">
+                <li class="dc-rq-season" data-dc-rq-season data-season-id="@season.Id" data-special="@(season.IsSpecial ? "true" : null)">
                     <div class="dc-rq-row">
                         <input type="checkbox" id="dc-rq-s-@index" data-dc-rq-season-check />
                         <label for="dc-rq-s-@index">
@@ -102,7 +134,7 @@
 @if (Model.OffersLanguage)
 {
     <fieldset class="dc-rq-field">
-        <legend>@ui["discover.request.language"]</legend>
+        <legend>@ui["discover.request.languageEdition"]</legend>
         <div class="dc-rq-pair">
             <label>
                 <span>@ui["requests.new.audio"]</span>

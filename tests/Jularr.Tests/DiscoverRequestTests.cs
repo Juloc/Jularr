@@ -22,7 +22,7 @@ namespace Jularr.Tests;
 
 /// <summary>
 /// The Discover Request dialog end to end on the server: one Request action for every capability, scope that only
-/// series have and that is validated against the selected Work's own structure, language for anime, and the states
+/// series have and that is validated against the selected Work's own structure, language for series and anime, and the states
 /// the dialog shows (resolved settings, success, already requested, forbidden).
 /// </summary>
 [TestClass]
@@ -165,7 +165,9 @@ public sealed class DiscoverRequestTests
         var page = host.Page(Alice);
 
         Assert.IsInstanceOfType<ForbidResult>(await page.OnPostResolveAsync("tv", "tmdb", BreakingBad, CancellationToken.None));
+        Assert.IsInstanceOfType<ForbidResult>(await page.OnPostOpenAsync("tv", "tmdb", BreakingBad, CancellationToken.None));
         Assert.IsInstanceOfType<ForbidResult>(await page.OnPostRequestAsync(Form("tv", BreakingBad, scope: "all"), CancellationToken.None));
+        Assert.AreEqual(0, await host.Fixture.Db.Works.CountAsync(), "A refused profile creates no Work by opening a card.");
         Assert.AreEqual(0, (await host.Fixture.Store.ListAsync(null, null, openOnly: false, 10, CancellationToken.None)).Count);
         await page.OnGetAsync(CancellationToken.None);
         Assert.IsFalse(page.RequestableCategories.Contains("tv"));
@@ -262,17 +264,15 @@ public sealed class DiscoverRequestTests
         var emptyCustom = Form("tv", BreakingBad, scope: "custom");
         var idsWithAll = Form("tv", BreakingBad, scope: "all");
         idsWithAll.SeasonIds = [own.Seasons[0].Id!.Value];
-        var language = Form("tv", BreakingBad, scope: "all");
-        language.Audio = "ja";
 
-        foreach (var form in new[] { noScope, unknownScope, emptyCustom, idsWithAll, language })
+        foreach (var form in new[] { noScope, unknownScope, emptyCustom, idsWithAll })
         {
             Assert.IsInstanceOfType<BadRequestResult>(await page.OnPostRequestAsync(form, CancellationToken.None));
         }
     }
 
     [TestMethod]
-    public async Task AMovieAndTheOtherKindsRejectAScopeAndOnlyAnimeTakesLanguages()
+    public async Task AMovieAndTheOtherKindsRejectAScopeAndOnlySeriesAndAnimeTakeLanguages()
     {
         await using var host = await RequestHost.CreateAsync();
         var page = host.Page(Alice);
@@ -288,6 +288,55 @@ public sealed class DiscoverRequestTests
         Assert.AreEqual("ja", anime.Request.Options.AudioLanguage);
         Assert.AreEqual("de", anime.Request.Options.SubtitleLanguage);
         CollectionAssert.AreEqual(new[] { "All current + future", "Audio: 日本語", "Subtitles: Deutsch" }, anime.Summary.ToArray());
+    }
+
+    [TestMethod]
+    public async Task ASeriesRequestKeepsTheLanguageChoiceNextToItsScopeAndRejectsAnUnknownLanguage()
+    {
+        await using var host = await RequestHost.CreateAsync();
+        var page = host.Page(Alice);
+
+        var invalid = await page.OnPostRequestAsync(Form("tv", BreakingBad, scope: "all", audio: "not a language"), CancellationToken.None);
+        var result = ResultOf(await page.OnPostRequestAsync(Form("tv", BreakingBad, scope: "future", audio: "ja", subtitles: "de"), CancellationToken.None));
+
+        Assert.IsInstanceOfType<BadRequestResult>(invalid);
+        var payload = VideoRequestPayload.Parse(result.Request.PayloadJson)!;
+        Assert.AreEqual(VideoRequestScope.FutureOnly, payload.Scope);
+        Assert.AreEqual("ja", payload.AudioLanguage);
+        Assert.AreEqual("de", payload.SubtitleLanguage);
+        CollectionAssert.AreEqual(new[] { "Future only", "Audio: 日本語", "Subtitles: Deutsch" }, result.Summary.ToArray());
+        Assert.AreEqual(1, (await host.Fixture.Store.ListAsync(null, null, openOnly: false, 10, CancellationToken.None)).Count, "The rejected request created nothing.");
+    }
+
+    [TestMethod]
+    public async Task OpeningAMovieOrSeriesCreatesItsCanonicalWorkOnceAndNamesItsDetail()
+    {
+        await using var host = await RequestHost.CreateAsync();
+        var page = host.Page(Alice);
+
+        var series = await page.OnPostOpenAsync("tv", "tmdb", BreakingBad, CancellationToken.None);
+        var again = await page.OnPostOpenAsync("tv", "tmdb", "01396", CancellationToken.None);
+        var movie = await page.OnPostOpenAsync("movie", "tmdb", Movie, CancellationToken.None);
+
+        var seriesWork = await host.Fixture.Db.Works.SingleAsync(work => work.MediaType == WorkMediaType.Series);
+        var movieWork = await host.Fixture.Db.Works.SingleAsync(work => work.MediaType == WorkMediaType.Movie);
+        Assert.AreEqual($"/Library/Series/{seriesWork.Id}", UrlOf(series));
+        Assert.AreEqual(UrlOf(series), UrlOf(again), "Opening the same title twice is one Work.");
+        Assert.AreEqual($"/Library/Movie/{movieWork.Id}", UrlOf(movie));
+        Assert.AreEqual(0, (await host.Fixture.Store.ListAsync(null, null, openOnly: false, 10, CancellationToken.None)).Count, "Opening is never a request.");
+    }
+
+    [TestMethod]
+    public async Task OpeningATitleWithoutAProviderWorkIsRefusedAndFailuresAreRetryable()
+    {
+        await using var host = await RequestHost.CreateAsync();
+        var page = host.Page(Alice);
+
+        Assert.IsInstanceOfType<BadRequestResult>(await page.OnPostOpenAsync("anime", "anilist", "154587", CancellationToken.None), "AniList identities have no Work to open.");
+        Assert.IsInstanceOfType<BadRequestResult>(await page.OnPostOpenAsync("tv", "tmdb", "not-an-id", CancellationToken.None));
+        Assert.IsInstanceOfType<BadRequestResult>(await page.OnPostOpenAsync("tv", "anilist", BreakingBad, CancellationToken.None));
+        Assert.AreEqual(StatusCodes.Status503ServiceUnavailable, ((StatusCodeResult)await page.OnPostOpenAsync("movie", "tmdb", "404", CancellationToken.None)).StatusCode);
+        Assert.AreEqual(0, await host.Fixture.Db.Works.CountAsync());
     }
 
     [TestMethod]
@@ -340,17 +389,27 @@ public sealed class DiscoverRequestTests
             new DiscoverRequestSettingsView(ui, MediaAcquisitionKind.Anime, null, [], "ja", "off")));
         var dialog = await renderer.RenderAsync("/Pages/Discover/_DiscoverRequestDialog.cshtml", ui);
 
-        StringAssert.Contains(series, "<option value=\"all\">All current + future</option>");
-        StringAssert.Contains(series, "<option value=\"future\">Future only</option>");
-        StringAssert.Contains(series, "<option value=\"custom\">Custom</option>");
+        foreach (var scope in new[] { "all", "future", "custom" })
+        {
+            StringAssert.Contains(series, $"<input type=\"radio\" name=\"scope\" value=\"{scope}\"");
+        }
+
+        StringAssert.Contains(series, "<strong>All current + future</strong>");
+        StringAssert.Contains(series, "<strong>Future only</strong>");
+        StringAssert.Contains(series, "<strong>Custom</strong>");
         StringAssert.Contains(series, ">Request settings</h3>");
         StringAssert.Contains(series, "Included content");
         StringAssert.Contains(series, ">Ep 1<");
         StringAssert.Contains(series, "Season 1");
         StringAssert.Contains(series, "Specials");
         StringAssert.Contains(series, "Future seasons and episodes");
-        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(series, "data-dc-rq-scope[ >]").Count, "One Scope control, no second independent one.");
-        Assert.IsFalse(series.Contains("name=\"audio\"", StringComparison.Ordinal));
+        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(series, "role=\"radiogroup\"").Count, "One Scope control, no second independent one.");
+        Assert.IsFalse(series.Contains("<select id=\"dc-rq-scope\"", StringComparison.Ordinal), "Scope is the card selector, not a native select.");
+        StringAssert.Contains(series, "aria-controls=\"dc-rq-tree\"");
+        StringAssert.Contains(series, ">Language & Edition<");
+        StringAssert.Contains(series, "name=\"audio\"");
+        StringAssert.Contains(series, "name=\"subtitles\"");
+        StringAssert.Contains(anime, ">Language & Edition<");
         Assert.AreEqual(string.Empty, movie.Trim(), "A movie has no settings group, so not even the settings heading.");
         StringAssert.Contains(anime, "name=\"audio\"");
         StringAssert.Contains(anime, "<option value=\"ja\" selected=\"selected\">日本語</option>");
@@ -478,6 +537,9 @@ public sealed class DiscoverRequestTests
             Audio = audio,
             Subtitles = subtitles
         };
+
+    private static string UrlOf(IActionResult result) =>
+        (string)((JsonResult)result).Value!.GetType().GetProperty("url")!.GetValue(((JsonResult)result).Value)!;
 
     private static DiscoverRequestResultView ResultOf(IActionResult result) =>
         (DiscoverRequestResultView)((PartialViewResult)result).ViewData.Model!;

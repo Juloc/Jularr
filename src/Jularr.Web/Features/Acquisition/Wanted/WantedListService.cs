@@ -218,7 +218,7 @@ public sealed class WantedListService(
         var options = request.Options;
         var languages = isAnime
             ? options.AudioLanguage is { } audio ? [audio] : []
-            : (state.PreferredLanguages ?? [])
+            : (state.PreferredLanguages ?? (state.AudioLanguage is { } requested ? [requested] : []))
                 .Where(tag => !string.IsNullOrWhiteSpace(tag))
                 .Select(tag => tag.Trim().ToLowerInvariant())
                 .Distinct(StringComparer.Ordinal)
@@ -354,5 +354,8 @@ public sealed class WantedListService(
         public double? RequestedChapterEnd { get; init; }
 
         public IReadOnlyList<string>? PreferredLanguages { get; init; }
+
+        /// <summary>The audio language of a Series request (<c>audioLanguage</c> of its payload).</summary>
+        public string? AudioLanguage { get; init; }
     }
 }

@@ -5,7 +5,7 @@ namespace Jularr.Web.Features.Discovery;
 
 /// <summary>
 /// What the Discover Request dialog posts: the identity of the card (re-validated on the server) and the
-/// settings of the one dialog. Scope, season and episode choices exist for series only, languages for anime only.
+/// settings of the one dialog. Scope, season and episode choices exist for series only, languages for series and anime.
 /// </summary>
 public sealed class DiscoverRequestForm
 {
@@ -41,7 +41,7 @@ public sealed record DiscoverRequestSettingsView(
 {
     public bool OffersScope => Existing is null && Kind == MediaAcquisitionKind.Tv;
 
-    public bool OffersLanguage => Existing is null && Kind == MediaAcquisitionKind.Anime;
+    public bool OffersLanguage => Existing is null && Kind is MediaAcquisitionKind.Anime or MediaAcquisitionKind.Tv;
 }
 
 public static class DiscoverRequestSummary

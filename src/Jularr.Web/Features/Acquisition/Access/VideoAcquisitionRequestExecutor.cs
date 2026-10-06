@@ -72,6 +72,12 @@ public sealed record VideoRequestPayload(
     /// <summary>When an intent last reset the back-off of this request, so repeated intents cannot force a search every time.</summary>
     public DateTime? PlaybackResetUtc { get; init; }
 
+    /// <summary>The audio language the requester chose in Language &amp; Edition of the Request dialog: a preference the approver sees, as for an anime request; null for the release default.</summary>
+    public string? AudioLanguage { get; init; }
+
+    /// <summary>The subtitle language the requester chose, <see cref="Jularr.Web.Features.Playback.PlaybackLanguages.SubtitlesOff"/> for none, or null for the release default.</summary>
+    public string? SubtitleLanguage { get; init; }
+
     public const int MaxPlaybackMarkers = 16;
 
     public static readonly TimeSpan PlaybackTtl = TimeSpan.FromHours(2);

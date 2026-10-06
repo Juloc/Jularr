@@ -1,10 +1,10 @@
 /* The Discover Request dialog (docs/mockups/add-request-flow): one medium centered modal on desktop, one full-height
-   sheet on mobile. Identity header, the settings groups of the title, a sticky Cancel + Request footer; the same
-   dialog shows the success state. Surfaces use the shared theme tokens, so light, dark and every accent work
+   sheet on mobile. Identity header, the settings groups of the title (the Scope card selector, the Included content
+   summary with its tree, Language & Edition), a sticky Cancel + Request footer; the same dialog shows the success state. Surfaces use the shared theme tokens, so light, dark and every accent work
    unchanged. State is shown with icon, text and weight, never a coloured left edge (CssAccentStripeTests). */
 
 .dc-rq {
-    width: min(480px, 94vw); max-height: min(88vh, 760px); padding: 0; overflow: hidden;
+    width: min(520px, 94vw); max-height: min(90vh, 800px); padding: 0; overflow: hidden;
     border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text);
     box-shadow: 0 30px 80px rgb(0 0 0 / .4);
 }
@@ -32,15 +32,45 @@
 .dc-rq-section { margin: 0; font-size: 16px; line-height: 1.3; }
 
 .dc-rq-field { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
-.dc-rq-field > label, .dc-rq-field > legend, .dc-rq-pair label > span { padding: 0; color: var(--text); font-size: 13px; font-weight: 700; }
+.dc-rq-field > label, .dc-rq-field > legend, .dc-rq-label, .dc-rq-pair label > span { padding: 0; color: var(--text); font-size: 13px; font-weight: 700; }
 /* Floated, the legend is an ordinary grid item of the fieldset, so the group gap applies below it. */
 .dc-rq-field > legend { float: left; width: 100%; margin-bottom: 6px; }
 .dc-rq-field select, .dc-rq-pair select {
     width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
     background: var(--field-bg, var(--surface)); color: var(--text); font: inherit; font-size: 14px;
 }
-.dc-rq-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dc-rq-pair { display: grid; gap: 12px; }
 .dc-rq-pair label { display: grid; gap: 6px; min-width: 0; }
+
+/* A choice is a card: an icon, what it is and what it means, and a chevron or a radio. The Scope selector and the Included content summary share it. */
+.dc-rq-choice {
+    position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 14px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text);
+    font: inherit; text-align: start; cursor: pointer;
+}
+.dc-rq-choice:hover { background: var(--surface-2); }
+.dc-rq-choice:focus-visible, .dc-rq-choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dc-rq-choice-body { display: flex; align-items: center; flex: 1; gap: 12px; min-width: 0; }
+.dc-rq-choice-icon {
+    display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent-text);
+}
+.dc-rq-choice-icon .dc-icon { width: 20px; height: 20px; }
+.dc-rq-choice-text { display: grid; gap: 1px; min-width: 0; }
+.dc-rq-choice-text strong { font-size: 14px; line-height: 1.3; }
+.dc-rq-choice-text small { color: var(--muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.dc-rq-chevron { display: grid; flex: none; color: var(--muted); }
+.dc-rq-chevron .dc-icon { width: 18px; height: 18px; transition: transform .15s; }
+.dc-rq-scope[open] .dc-rq-chevron .dc-icon, .dc-rq-included[aria-expanded="true"] .dc-rq-chevron .dc-icon { transform: rotate(180deg); }
+.dc-rq-scope > summary { list-style: none; }
+.dc-rq-scope > summary::-webkit-details-marker { display: none; }
+.dc-rq-choices { display: grid; gap: 4px; margin-top: 6px; padding: 6px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.dc-rq-choices .dc-rq-choice { border-color: transparent; }
+.dc-rq-choices .dc-rq-choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.dc-rq-choice input[type="radio"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.dc-rq-radio { flex: none; width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 50%; background: var(--surface); }
+.dc-rq-choice:has(input:checked) .dc-rq-radio { border: 6px solid var(--accent); }
+.dc-rq-included + .dc-rq-tree { margin-top: 8px; }
 
 .dc-rq-tree, .dc-rq-episodes { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .dc-rq-tree { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
@@ -67,6 +97,8 @@
     border-top: 1px solid var(--border); background: var(--surface);
 }
 .dc-rq-foot .button { min-height: 44px; }
+/* While nothing can be sent (loading, a failed load, an empty custom selection) Request is neutral and plainly unavailable; a dimmed accent button reads as enabled, above all in Dark. */
+.dc-rq-foot .button-primary:disabled { border-color: var(--border); background: var(--surface-2); color: var(--muted); opacity: 1; }
 
 .dc-rq-result { display: grid; justify-items: center; gap: 10px; padding: 8px 0 4px; text-align: center; }
 .dc-rq-check { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: color-mix(in srgb, var(--success-text) 14%, transparent); color: var(--success-text); }
@@ -86,9 +118,8 @@
     .dc-rq-head { padding-top: calc(16px + env(safe-area-inset-top)); }
     .dc-rq-head .dc-icon-btn { width: 44px; min-height: 44px; }
     .dc-rq-foot .button { flex: 1; }
-    .dc-rq-pair { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .dc-rq-expand .dc-icon { transition: none; }
+    .dc-rq-expand .dc-icon, .dc-rq-chevron .dc-icon { transition: none; }
 }

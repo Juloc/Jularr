@@ -508,14 +508,16 @@ public sealed class IndexModel(
         {
             if (target.Kind == MediaAcquisitionKind.Tv)
             {
-                if (!VideoRequestScopeResolver.TryParseScope(form.Scope, out var scope) || target.Work is not { } work || form.HasLanguage)
+                if (!VideoRequestScopeResolver.TryParseScope(form.Scope, out var scope) || target.Work is not { } work)
                 {
                     return BadRequest();
                 }
 
                 var payload = await scopes.BuildTvPayloadAsync(work, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
-                draft = draft with { PayloadJson = payload.Serialize() };
+                var languages = new AcquisitionRequestOptions { AudioLanguage = form.Audio, SubtitleLanguage = form.Subtitles }.Validate();
+                draft = draft with { PayloadJson = (payload with { AudioLanguage = languages.AudioLanguage, SubtitleLanguage = languages.SubtitleLanguage }).Serialize() };
                 summary.Add(DiscoverRequestSummary.Scope(payload, Ui));
+                summary.AddRange(RequestOptionsSummary.Describe(languages, Ui));
             }
             else if (target.Kind == MediaAcquisitionKind.Anime)
             {
