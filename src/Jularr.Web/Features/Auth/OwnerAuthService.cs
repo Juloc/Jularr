@@ -13,8 +13,7 @@ public sealed class OwnerAuthService(
     AppDbContext db,
     IPasswordHasher<OwnerAccount> passwordHasher)
 {
-    // Legacy name kept after the Jularr rename: the claim lives inside existing sign-in cookies.
-    private const string SessionVersionClaimType = "anilingo:session-version";
+        private const string SessionVersionClaimType = "jularr:session-version";
 
     public Task<bool> HasOwnerAsync(CancellationToken cancellationToken = default) =>
         db.OwnerAccounts
