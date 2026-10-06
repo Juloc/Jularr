@@ -9,7 +9,6 @@ using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Tracking;
 using Microsoft.EntityFrameworkCore;
-using SourceFetch = System.Func<System.IServiceProvider, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Jularr.Web.Features.Discovery.DiscoveryItem>>>;
 
 namespace Jularr.Web.Features.Discovery;
 
@@ -23,6 +22,7 @@ public sealed class DiscoveryCoordinator(
     AniListAccountService aniListAccount,
     AppDbContext db,
     DiscoverySourceFlights flights,
+    TimeProvider clock,
     ILogger<DiscoveryCoordinator> logger,
     IInstanceModuleService? instanceModules = null) : IDiscoveryFeed
 {
@@ -34,13 +34,9 @@ public sealed class DiscoveryCoordinator(
     private static readonly TimeSpan BrowseFreshness = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan SearchFreshness = TimeSpan.FromSeconds(45);
 
-    private sealed record SourceCall(DiscoverySource Source, string Key, TimeSpan Freshness, SourceFetch Fetch);
+    private sealed record SourceCall(DiscoverySource Source, string Key, TimeSpan Freshness, DiscoverySourceFetch Fetch);
 
-    public async Task<DiscoveryLoad> LoadAsync(
-        IReadOnlyList<DiscoveryRequest> requests,
-        DiscoveryAudience audience,
-        DiscoveryWait wait,
-        CancellationToken cancellationToken)
+    public async Task<DiscoveryLoad> LoadAsync(IReadOnlyList<DiscoveryRequest> requests, DiscoveryAudience audience, DiscoveryWait wait, CancellationToken cancellationToken)
     {
         var instance = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
         var started = new Dictionary<string, DiscoverySourceFlight>(StringComparer.Ordinal);
@@ -62,14 +58,16 @@ public sealed class DiscoveryCoordinator(
             {
                 if (!started.ContainsKey(call.Key))
                 {
-                    started[call.Key] = flights.Start(call.Key, call.Freshness, wait.Refresh?.Contains(call.Source) == true, call.Fetch);
+                    started[call.Key] = flights.Start(call.Source, call.Key, call.Freshness, wait.Refresh?.Contains(call.Source) == true, call.Fetch);
                 }
             }
 
             plans.Add((request, calls));
         }
 
-        await WaitForSourcesAsync([.. started.Values], wait, cancellationToken);
+        // A retry waits for the sources the viewer asked about and for nothing else: a slow source elsewhere on the page must not hold its answer back.
+        var awaited = wait.Refresh is null ? [.. started.Values] : plans.SelectMany(plan => plan.Calls).Where(call => wait.Refresh.Contains(call.Source)).Select(call => started[call.Key]).Distinct().ToArray();
+        await WaitForSourcesAsync(awaited, wait, cancellationToken);
 
         var batches = new List<DiscoveryBatch>(requests.Count);
         for (var index = 0; index < plans.Count; index++)
@@ -112,7 +110,7 @@ public sealed class DiscoveryCoordinator(
             _ => instance.IsEnabled(InstanceModule.Book)
         };
 
-    private static SourceFetch FetchFor(DiscoverySource source, DiscoveryRequest request, bool isOwner) => source switch
+    private static DiscoverySourceFetch FetchFor(DiscoverySource source, DiscoveryRequest request, bool isOwner) => source switch
     {
         DiscoverySource.Anime => async (services, cancellationToken) =>
         {
@@ -139,17 +137,22 @@ public sealed class DiscoveryCoordinator(
             var rows = request.Mode == DiscoveryMode.Search
                 ? bookSearch is null
                     ? await books.SearchAsync(request.Query, cancellationToken)
-                    : (await bookSearch.SearchAsync(request.Query, cancellationToken)).Items.Select(result => result.Book).ToArray()
+                    : await SearchBooksAsync(bookSearch, request.Query, cancellationToken)
                 : await books.BrowseAsync(ToBookBrowseMode(request.Mode), cancellationToken);
             return rows.Where(row => MatchesGenre(row, request.Genre)).Take(BookLimit).Select(MapBook).ToArray();
         }
     };
 
-    private static async Task<IReadOnlyList<DiscoveryItem>> FetchTmdbAsync(
-        IServiceProvider services,
-        TmdbDiscoveryMediaType mediaType,
-        DiscoveryRequest request,
-        CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<BookCatalogItem>> SearchBooksAsync(BookSearchCoordinator bookSearch, string query, CancellationToken cancellationToken) =>
+        BooksOrFailure(await bookSearch.SearchAsync(query, cancellationToken));
+
+    /// <summary>The books of a search. Catalogs that did not answer and found nothing are a failure, never "no results".</summary>
+    public static IReadOnlyList<BookCatalogItem> BooksOrFailure(BookSearchResponse response) =>
+        response.Items.Count == 0 && response.Warnings.Any(warning => warning.Source == BookSearchCoordinator.CatalogSource)
+            ? throw new HttpRequestException("The book catalogs did not answer.")
+            : [.. response.Items.Select(result => result.Book)];
+
+    private static async Task<IReadOnlyList<DiscoveryItem>> FetchTmdbAsync(IServiceProvider services, TmdbDiscoveryMediaType mediaType, DiscoveryRequest request, CancellationToken cancellationToken)
     {
         var provider = services.GetRequiredService<TmdbDiscoveryProvider>();
         var rows = request.Mode == DiscoveryMode.Search
@@ -159,7 +162,7 @@ public sealed class DiscoveryCoordinator(
     }
 
     /// <summary>Waits for the pending sources until the budget is spent, every source settled or, for a follow-up load, one more source settled than the caller already knows.</summary>
-    private static async Task WaitForSourcesAsync(IReadOnlyList<DiscoverySourceFlight> started, DiscoveryWait wait, CancellationToken cancellationToken)
+    private async Task WaitForSourcesAsync(IReadOnlyList<DiscoverySourceFlight> started, DiscoveryWait wait, CancellationToken cancellationToken)
     {
         if (wait.Budget <= TimeSpan.Zero)
         {
@@ -167,7 +170,7 @@ public sealed class DiscoveryCoordinator(
         }
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var expired = Task.Delay(wait.Budget, budget.Token);
+        var expired = Task.Delay(wait.Budget, clock, budget.Token);
         try
         {
             while (true)
@@ -191,12 +194,7 @@ public sealed class DiscoveryCoordinator(
         }
     }
 
-    private static DiscoveryBatch ToBatch(
-        DiscoveryRequest request,
-        IReadOnlyList<SourceCall> calls,
-        IReadOnlyDictionary<string, DiscoverySourceFlight> started,
-        DiscoveryAudience audience,
-        InstanceModuleSettings instance)
+    private static DiscoveryBatch ToBatch(DiscoveryRequest request, IReadOnlyList<SourceCall> calls, IReadOnlyDictionary<string, DiscoverySourceFlight> started, DiscoveryAudience audience, InstanceModuleSettings instance)
     {
         var results = new List<DiscoverySourceResult>(calls.Count);
         foreach (var call in calls)
@@ -312,10 +310,7 @@ public sealed class DiscoveryCoordinator(
         return overlaid.ToDictionary(item => item.Id, StringComparer.Ordinal);
     }
 
-    private async Task<IReadOnlyList<DiscoveryItem>> ApplyLocalStateAsync(
-        IReadOnlyList<DiscoveryItem> items,
-        string profileId,
-        CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<DiscoveryItem>> ApplyLocalStateAsync(IReadOnlyList<DiscoveryItem> items, string profileId, CancellationToken cancellationToken)
     {
         if (items.Count == 0)
         {

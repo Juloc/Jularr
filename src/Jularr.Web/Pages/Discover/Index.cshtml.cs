@@ -177,7 +177,7 @@ public sealed class IndexModel(
 
     private async Task<DiscoverBodyView> BuildLandingAsync(DiscoveryAudience audience, DiscoveryWait wait, CancellationToken cancellationToken)
     {
-        var board = await shelves.GetBoardAsync(User, audience.ProfileId, audience.IsOwner, wait, cancellationToken);
+        var board = await shelves.GetBoardAsync(User, audience.ProfileId, audience.IsOwner, Query.Category, wait, cancellationToken);
         var rows = new List<DiscoverLandingRow>();
 
         // Personalized cross-media rows (#428) lead the board: explainable "Because you …" and
@@ -283,7 +283,9 @@ public sealed class IndexModel(
             new Dictionary<(MediaAcquisitionKind, string), AcquisitionRequest>();
         try
         {
-            open = (await requestStore.ListAsync(null, null, openOnly: true, limit: 500, cancellationToken))
+            var shown = list.Where(item => !item.IsLocal && DiscoverCardFactory.AcquisitionKindOf(item.Category) is not null).ToArray();
+            MediaAcquisitionKind[] kinds = [.. shown.Select(item => DiscoverCardFactory.AcquisitionKindOf(item.Category)!.Value).Distinct()];
+            open = (shown.Length == 0 ? [] : await requestStore.ListOpenForAsync(kinds, [.. shown.Select(item => item.ExternalId).Distinct()], limit: 500, cancellationToken))
                 .GroupBy(item => (item.Kind, item.ExternalId))
                 .ToDictionary(
                     group => group.Key,

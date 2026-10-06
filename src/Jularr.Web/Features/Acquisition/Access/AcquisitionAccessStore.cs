@@ -137,6 +137,24 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             },
             cancellationToken);
 
+    /// <summary>The open requests of the given titles (a kind and a provider id each), most recently changed first: a page reads only the requests of the cards it shows.</summary>
+    public Task<IReadOnlyList<AcquisitionRequest>> ListOpenForAsync(IReadOnlyCollection<MediaAcquisitionKind> kinds, IReadOnlyCollection<string> externalIds, int limit, CancellationToken cancellationToken) =>
+        QueryAsync(
+            $"""
+            SELECT {Columns} FROM "AcquisitionRequests"
+            WHERE "Kind" = ANY(@kinds) AND "ExternalId" = ANY(@externalIds)
+              AND "Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing')
+            ORDER BY "UpdatedAt" DESC
+            LIMIT @limit;
+            """,
+            command =>
+            {
+                Add(command, "@kinds", kinds.Select(AcquisitionAccessNames.Kind).ToArray());
+                Add(command, "@externalIds", externalIds.ToArray());
+                Add(command, "@limit", Math.Clamp(limit, 1, 500));
+            },
+            cancellationToken);
+
     /// <summary>Every request, waiting ones first, then most recently changed first; the owner's queue narrows them.</summary>
     public Task<IReadOnlyList<AcquisitionRequest>> ListAllAsync(int limit, CancellationToken cancellationToken) =>
         QueryAsync(

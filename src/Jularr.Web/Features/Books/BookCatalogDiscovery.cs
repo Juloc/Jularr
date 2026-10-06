@@ -35,6 +35,16 @@ public sealed partial class BookCatalogService
     private async Task<IReadOnlyList<BookCatalogItem>> CaptureCatalogAsync(
         Func<CancellationToken, Task<IReadOnlyList<BookCatalogItem>>> action,
         CancellationToken cancellationToken,
+        bool fallbackToEmpty = true) =>
+        (await CaptureCatalogResultAsync(action, cancellationToken, fallbackToEmpty)).Items;
+
+    /// <summary>
+    /// Runs one catalog call within the discovery timeout. A failure yields no titles and says so, so a caller that must tell "nothing found"
+    /// from "did not answer" (Discover) can; the others keep treating a failed catalog as one that contributes nothing.
+    /// </summary>
+    private async Task<(IReadOnlyList<BookCatalogItem> Items, bool Failed)> CaptureCatalogResultAsync(
+        Func<CancellationToken, Task<IReadOnlyList<BookCatalogItem>>> action,
+        CancellationToken cancellationToken,
         bool fallbackToEmpty = true)
     {
         using var timeout =
@@ -44,45 +54,49 @@ public sealed partial class BookCatalogService
 
         try
         {
-            return await action(timeout.Token);
+            return (await action(timeout.Token), false);
         }
         catch (TaskCanceledException)
             when (!cancellationToken.IsCancellationRequested)
         {
-            return [];
+            return ([], true);
         }
         catch (HttpRequestException)
         {
-            return [];
+            return ([], true);
         }
         catch (InvalidOperationException)
             when (fallbackToEmpty)
         {
-            return [];
+            return ([], true);
         }
     }
+
+    /// <summary>The titles of a browse row; a row whose catalog did not answer is a failure, never a row of nothing.</summary>
+    private static IReadOnlyList<BookCatalogItem> OrThrow((IReadOnlyList<BookCatalogItem> Items, bool Failed) result, string row) =>
+        result.Failed ? throw new HttpRequestException($"The {row} books listing did not answer.") : result.Items;
 
     private async Task<IReadOnlyList<BookCatalogItem>> BrowseTrendingBooksAsync(
         CancellationToken cancellationToken)
     {
-        var daily = await CaptureCatalogAsync(
+        var daily = await CaptureCatalogResultAsync(
             token => BrowseOpenLibraryTrendingAsync("daily", token),
             cancellationToken);
 
-        if (daily.Count > 0)
+        if (daily.Items.Count > 0)
         {
             return await EnrichTrendingWithGoogleAsync(
-                daily,
+                daily.Items,
                 cancellationToken);
         }
 
         // Still preserve trending semantics when the daily window happens to be
         // unavailable. Do not silently substitute all-time Gutenberg downloads.
-        var weekly = await CaptureCatalogAsync(
+        var weekly = await CaptureCatalogResultAsync(
             token => BrowseOpenLibraryTrendingAsync("weekly", token),
             cancellationToken);
         return await EnrichTrendingWithGoogleAsync(
-            weekly,
+            OrThrow(daily.Failed ? weekly : (weekly.Items, false), "trending"),
             cancellationToken);
     }
 
@@ -96,9 +110,7 @@ public sealed partial class BookCatalogService
     private async Task<IReadOnlyList<BookCatalogItem>> BrowseTopBooksAsync(
         CancellationToken cancellationToken)
     {
-        var items = await CaptureCatalogAsync(
-            SearchOpenLibraryPopularAsync,
-            cancellationToken);
+        var items = OrThrow(await CaptureCatalogResultAsync(SearchOpenLibraryPopularAsync, cancellationToken), "popular");
         return await EnrichTrendingWithGoogleAsync(items, cancellationToken);
     }
 
@@ -140,9 +152,7 @@ public sealed partial class BookCatalogService
     private async Task<IReadOnlyList<BookCatalogItem>> BrowseNewBooksAsync(
         CancellationToken cancellationToken)
     {
-        var items = await CaptureCatalogAsync(
-            token => SearchOpenLibraryRecentAsync("fiction", token),
-            cancellationToken);
+        var items = OrThrow(await CaptureCatalogResultAsync(token => SearchOpenLibraryRecentAsync("fiction", token), cancellationToken), "new");
         return await EnrichTrendingWithGoogleAsync(items, cancellationToken);
     }
 

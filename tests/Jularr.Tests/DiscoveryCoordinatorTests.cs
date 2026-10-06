@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
@@ -37,7 +38,8 @@ public sealed class DiscoveryCoordinatorTests
     {
         var db = await MediaCoreTestSupport.CreateDbAsync();
         var tmdb = TmdbDiscoveryTests.Provider(db, TmdbDiscoveryTests.AsyncClient(tmdbHandler));
-        var coordinator = new DiscoveryCoordinator(tmdb, null!, db, DiscoveryTestSupport.Flights(clock, providers: [tmdb]), NullLogger<DiscoveryCoordinator>.Instance);
+        var time = (TimeProvider?)clock ?? TimeProvider.System;
+        var coordinator = new DiscoveryCoordinator(tmdb, null!, db, DiscoveryTestSupport.Flights(time, providers: [tmdb]), time, NullLogger<DiscoveryCoordinator>.Instance);
         return (coordinator, db);
     }
 
@@ -102,13 +104,21 @@ public sealed class DiscoveryCoordinatorTests
     public async Task TheOrderOfTitlesFollowsTheSourcesNotTheOrderTheyAnswered()
     {
         var movies = new TaskCompletionSource<HttpResponseMessage>();
-        var (coordinator, db) = await CoordinatorAsync(request => request.RequestUri!.AbsolutePath.Contains("/movie", StringComparison.Ordinal)
-            ? movies.Task
-            : Answer(Results("Series", 2, movie: false)));
+        var movieStarted = new TaskCompletionSource();
+        var (coordinator, db) = await CoordinatorAsync(request =>
+        {
+            if (!request.RequestUri!.AbsolutePath.Contains("/movie", StringComparison.Ordinal))
+            {
+                return Answer(Results("Series", 2, movie: false));
+            }
+
+            movieStarted.TrySetResult();
+            return movies.Task;
+        });
         await using var database = db;
 
         var loading = coordinator.LoadAsync([Request(DiscoveryCategory.All)], Audience(WorkMediaType.Movie, WorkMediaType.Series), new DiscoveryWait(TimeSpan.FromSeconds(10)), CancellationToken.None);
-        await Task.Delay(300);
+        await movieStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.IsFalse(loading.IsCompleted, "A load that waits for every source does not return while one is pending.");
         movies.SetResult(TmdbDiscoveryTests.Json(Results("Movie", 2, movie: true)));
         var load = await loading;
@@ -119,28 +129,44 @@ public sealed class DiscoveryCoordinatorTests
     [TestMethod]
     public async Task AFirstPaintReturnsWhatIsReadyAndALaterLoadWaitsForTheNextArrival()
     {
+        var clock = new DiscoveryTestSupport.MovableClock(new DateTimeOffset(2026, 10, 6, 9, 0, 0, TimeSpan.Zero));
         var movies = new TaskCompletionSource<HttpResponseMessage>();
-        var (coordinator, db) = await CoordinatorAsync(request => request.RequestUri!.AbsolutePath.Contains("/movie", StringComparison.Ordinal)
-            ? movies.Task
-            : Answer(Results("Series", 1, movie: false)));
+        var movieStarted = new TaskCompletionSource();
+        var (coordinator, db) = await CoordinatorAsync(
+            request =>
+            {
+                if (!request.RequestUri!.AbsolutePath.Contains("/movie", StringComparison.Ordinal))
+                {
+                    return Answer(Results("Series", 1, movie: false));
+                }
+
+                movieStarted.TrySetResult();
+                return movies.Task;
+            },
+            clock);
         await using var database = db;
         var requests = new[] { Request(DiscoveryCategory.Movie), Request(DiscoveryCategory.Series) };
 
-        var first = await coordinator.LoadAsync(requests, Audience(), new DiscoveryWait(TimeSpan.FromMilliseconds(400)), CancellationToken.None);
+        var firstPaint = coordinator.LoadAsync(requests, Audience(), new DiscoveryWait(TimeSpan.FromMilliseconds(400)), CancellationToken.None);
+        await movieStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        while (!firstPaint.IsCompleted)
+        {
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            await Task.Yield();
+        }
+
+        var first = await firstPaint;
         var followUp = coordinator.LoadAsync(requests, Audience(), new DiscoveryWait(TimeSpan.FromSeconds(20), first.Settled), CancellationToken.None);
-        await Task.Delay(300);
         Assert.IsFalse(followUp.IsCompleted, "The follow-up holds the request open while nothing new has arrived.");
-        var clock = Stopwatch.StartNew();
         movies.SetResult(TmdbDiscoveryTests.Json(Results("Movie", 1, movie: true)));
-        var second = await followUp;
+        var second = await followUp.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.AreEqual(DiscoverySourceState.Pending, first.Batches[0].Sources.Single().State);
         Assert.AreEqual(1, first.Settled);
         Assert.AreEqual(1, first.Pending);
         Assert.IsTrue(first.Batches[0].HasPending);
         Assert.AreEqual(DiscoverySourceState.Ready, second.Batches[0].Sources.Single().State);
-        Assert.AreEqual(0, second.Pending);
-        Assert.IsTrue(clock.Elapsed < TimeSpan.FromSeconds(5), "It returns as soon as the next source has answered, not when the budget runs out.");
+        Assert.AreEqual(0, second.Pending, "It returns as soon as the next source has answered, not when its budget runs out.");
     }
 
     [TestMethod]
@@ -162,11 +188,67 @@ public sealed class DiscoveryCoordinatorTests
         var again = await coordinator.LoadAsync(requests, Audience(), wait, CancellationToken.None);
         healthy = true;
         var retried = await coordinator.LoadAsync(requests, Audience(), wait with { Refresh = new HashSet<DiscoverySource> { DiscoverySource.Movies } }, CancellationToken.None);
+        var callsAfterRetry = calls;
+        await coordinator.LoadAsync(requests, Audience(), wait with { Refresh = new HashSet<DiscoverySource> { DiscoverySource.Movies } }, CancellationToken.None);
 
         Assert.AreEqual(DiscoverySourceState.Unavailable, failed.Batches[0].Sources.Single().State);
         Assert.AreEqual(callsAfterFailure, calls - 1, "Only the retry called the provider again; the plain load reused the failure.");
         Assert.AreEqual(DiscoverySourceState.Unavailable, again.Batches[0].Sources.Single().State);
         Assert.AreEqual(DiscoverySourceState.Ready, retried.Batches[0].Sources.Single().State);
+        Assert.AreEqual(callsAfterRetry, calls, "A retry asked for a source that is healthy again costs the provider nothing.");
+    }
+
+    [TestMethod]
+    public async Task EveryDifferentGenreIsACallOfItsOwnAndAGenreDiscoverDoesNotOfferIsNone()
+    {
+        var calls = 0;
+        var (coordinator, db) = await CoordinatorAsync(_ =>
+        {
+            Interlocked.Increment(ref calls);
+            return Answer(Results("Movie", 1, movie: true));
+        });
+        await using var database = db;
+        var wait = new DiscoveryWait(TimeSpan.FromSeconds(10));
+
+        await coordinator.LoadAsync([DiscoveryRequest.Parse(null, "movie", "trending", "Drama")], Audience(), wait, CancellationToken.None);
+        await coordinator.LoadAsync([DiscoveryRequest.Parse(null, "movie", "trending", "Horror")], Audience(), wait, CancellationToken.None);
+        var afterTwoGenres = calls;
+        await coordinator.LoadAsync([DiscoveryRequest.Parse(null, "movie", "trending", "made up genre one")], Audience(), wait, CancellationToken.None);
+        await coordinator.LoadAsync([DiscoveryRequest.Parse(null, "movie", "trending", "made up genre two")], Audience(), wait, CancellationToken.None);
+
+        Assert.AreEqual(2, afterTwoGenres);
+        Assert.AreEqual(3, calls, "Both made-up genres are no genre at all, so they share one call instead of one each.");
+    }
+
+    [TestMethod]
+    public async Task ARetryAnswersAsSoonAsTheRetriedSourceHasAnsweredEvenWhileAnotherSourceIsStillSlow()
+    {
+        var slowMovies = new TaskCompletionSource<HttpResponseMessage>();
+        var seriesHealthy = false;
+        var (coordinator, db) = await CoordinatorAsync(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.Contains("/movie", StringComparison.Ordinal))
+            {
+                return slowMovies.Task;
+            }
+
+            return seriesHealthy ? Answer(Results("Series", 1, movie: false)) : Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        });
+        await using var database = db;
+        var requests = new[] { Request(DiscoveryCategory.Movie), Request(DiscoveryCategory.Series) };
+        await coordinator.LoadAsync(requests, Audience(), new DiscoveryWait(TimeSpan.FromMilliseconds(1)), CancellationToken.None);
+        while (!(await coordinator.LoadAsync(requests, Audience(), DiscoveryWait.None, CancellationToken.None)).Batches[1].Sources.Single().IsSettled)
+        {
+            await Task.Yield();
+        }
+
+        seriesHealthy = true;
+        var retry = new DiscoveryWait(TimeSpan.FromSeconds(20), null, new HashSet<DiscoverySource> { DiscoverySource.Series });
+        var retried = await coordinator.LoadAsync(requests, Audience(), retry, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.AreEqual(DiscoverySourceState.Ready, retried.Batches[1].Sources.Single().State);
+        Assert.AreEqual(DiscoverySourceState.Pending, retried.Batches[0].Sources.Single().State, "The slow movies are still on their way; the retry did not wait for them.");
+        slowMovies.SetResult(TmdbDiscoveryTests.Json(Results("Movie", 1, movie: true)));
     }
 
     [TestMethod]
@@ -190,7 +272,11 @@ public sealed class DiscoveryCoordinatorTests
             Audience(),
             new DiscoveryWait(TimeSpan.FromSeconds(10)),
             CancellationToken.None);
-        await Task.Delay(500);
+        while (Volatile.Read(ref running) < 4)
+        {
+            await Task.Yield();
+        }
+
         gate.SetResult();
         await loading;
 
@@ -224,6 +310,20 @@ public sealed class DiscoveryCoordinatorTests
         Assert.AreEqual("Provider 2", transient.Title);
         StringAssert.StartsWith(transient.CoverImageUrl, "https://image.tmdb.org/");
         Assert.AreEqual(1, await db.Works.CountAsync(), "Showing a candidate never creates a Work.");
+    }
+
+    [TestMethod]
+    public void ABookSearchWhoseCatalogsDidNotAnswerAndFoundNothingFailsAndAnyOtherAnswerIsKept()
+    {
+        var book = new BookCatalogItem("ol-1", "Dune", "Frank Herbert", null, null, [], 1965, null, null, "https://openlibrary.org/works/1", "Open Library", null);
+        var availability = new BookSearchAvailability(false, false, false, 0);
+        BookSearchResponse Response(BookCatalogItem[] items, params string[] warnings) =>
+            new([.. items.Select(item => new BookSearchItem(item, availability))], [.. warnings.Select(source => new BookSearchWarning(source, "down"))]);
+
+        Assert.ThrowsExactly<HttpRequestException>(() => DiscoveryCoordinator.BooksOrFailure(Response([], BookSearchCoordinator.CatalogSource)));
+        Assert.AreEqual(1, DiscoveryCoordinator.BooksOrFailure(Response([book], BookSearchCoordinator.CatalogSource)).Count, "A catalog that failed beside one that answered is not a failure.");
+        Assert.AreEqual(0, DiscoveryCoordinator.BooksOrFailure(Response([])).Count, "Nothing found is nothing found.");
+        Assert.AreEqual(0, DiscoveryCoordinator.BooksOrFailure(Response([], "Usenet")).Count, "A release indexer that failed says nothing about the catalogs.");
     }
 
     private static void InterlockedMax(ref int target, int value)

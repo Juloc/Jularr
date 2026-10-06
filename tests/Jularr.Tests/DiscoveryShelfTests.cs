@@ -139,7 +139,7 @@ public sealed class DiscoveryShelfTests
         var feed = new FakeFeed();
         var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Book));
 
-        var board = await service.GetBoardAsync(null, "cap-filter", isOwner: false, DiscoveryWait.None, CancellationToken.None);
+        var board = await service.GetBoardAsync(null, "cap-filter", isOwner: false, DiscoveryCategory.All, DiscoveryWait.None, CancellationToken.None);
 
         Assert.IsTrue(board.Rows.Count > 0);
         Assert.IsTrue(board.Rows.All(row => row.MediaType == WorkMediaType.Book), "A Books-only profile must see book rows only.");
@@ -152,11 +152,26 @@ public sealed class DiscoveryShelfTests
         var feed = new FakeFeed();
         var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Movie, WorkMediaType.Series));
 
-        var board = await service.GetBoardAsync(null, "tmdb-feed", isOwner: false, DiscoveryWait.None, CancellationToken.None);
+        var board = await service.GetBoardAsync(null, "tmdb-feed", isOwner: false, DiscoveryCategory.All, DiscoveryWait.None, CancellationToken.None);
 
         Assert.IsFalse(board.IsEmpty);
         Assert.IsTrue(board.Rows.All(row => row.MediaType is WorkMediaType.Movie or WorkMediaType.Series));
         Assert.AreEqual(1, feed.Loads, "Every row of the board is requested in one load, so the provider calls run side by side.");
+    }
+
+    [TestMethod]
+    public async Task OnlyTheRowsOfTheScopeTheViewerPickedAreRequestedSoNoOtherSourceIsCalledOrCounted()
+    {
+        var feed = new FakeFeed();
+        var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Book, WorkMediaType.LightNovel));
+
+        var anime = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.Anime, DiscoveryWait.None, CancellationToken.None);
+        var booksAndNovels = await service.GetBoardAsync(null, "scope", isOwner: false, DiscoveryCategory.BooksAndLightNovels, DiscoveryWait.None, CancellationToken.None);
+
+        Assert.IsTrue(anime.Rows.All(row => row.Category == DiscoveryCategory.Anime));
+        Assert.IsTrue(feed.Requested[0].All(request => request.Category == DiscoveryCategory.Anime), "The Anime tab starts no TMDB, books or reading call.");
+        Assert.IsTrue(booksAndNovels.Rows.All(row => row.Category is DiscoveryCategory.Book or DiscoveryCategory.LightNovel));
+        Assert.IsTrue(feed.Requested[1].All(request => request.Category is DiscoveryCategory.Book or DiscoveryCategory.LightNovel));
     }
 
     [TestMethod]
@@ -175,7 +190,7 @@ public sealed class DiscoveryShelfTests
         };
         var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Movie, WorkMediaType.Series));
 
-        var board = await service.GetBoardAsync(null, "waiting", isOwner: false, DiscoveryWait.None, CancellationToken.None);
+        var board = await service.GetBoardAsync(null, "waiting", isOwner: false, DiscoveryCategory.All, DiscoveryWait.None, CancellationToken.None);
 
         Assert.AreEqual(DiscoverySectionState.Pending, board.Rows.First(row => row.Id == "trending-movie").State);
         Assert.AreEqual(DiscoverySectionState.Unavailable, board.Rows.Single(row => row.Id == "top-series").State);
@@ -262,6 +277,9 @@ public sealed class DiscoveryShelfTests
     {
         public int Loads { get; private set; }
 
+        /// <summary>The requests of every load, in the order the loads were made.</summary>
+        public List<IReadOnlyList<DiscoveryRequest>> Requested { get; } = [];
+
         public Func<DiscoveryRequest, DiscoverySourceState> StateOf { get; init; } = _ => DiscoverySourceState.Ready;
 
         public Func<DiscoveryRequest, bool> NoItemsFor { get; init; } = _ => false;
@@ -273,6 +291,7 @@ public sealed class DiscoveryShelfTests
             CancellationToken cancellationToken)
         {
             Loads++;
+            Requested.Add(requests);
             var batches = requests.Select(request =>
             {
                 var category = request.Category switch

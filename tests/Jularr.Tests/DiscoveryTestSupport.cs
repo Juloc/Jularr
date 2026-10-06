@@ -49,12 +49,63 @@ internal static class DiscoveryTestSupport
         public void StopApplication() => stopping.Cancel();
     }
 
+    /// <summary>A clock the test moves. Timers and delays that use it fire only when the test advances it past their due time, so nothing waits in real time.</summary>
     public sealed class MovableClock(DateTimeOffset now) : TimeProvider
     {
+        private readonly List<ManualTimer> timers = [];
         private DateTimeOffset now = now;
 
         public override DateTimeOffset GetUtcNow() => now;
 
-        public void Advance(TimeSpan by) => now += by;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ManualTimer(this, callback, state, dueTime);
+            lock (timers)
+            {
+                timers.Add(timer);
+            }
+
+            return timer;
+        }
+
+        public void Advance(TimeSpan by)
+        {
+            now += by;
+            ManualTimer[] due;
+            lock (timers)
+            {
+                due = [.. timers.Where(timer => timer.DueAt is { } at && at <= now)];
+            }
+
+            foreach (var timer in due)
+            {
+                timer.Fire();
+            }
+        }
+
+        private sealed class ManualTimer(MovableClock clock, TimerCallback callback, object? state, TimeSpan dueTime) : ITimer
+        {
+            public DateTimeOffset? DueAt { get; private set; } = dueTime == Timeout.InfiniteTimeSpan ? null : clock.now + dueTime;
+
+            public bool Change(TimeSpan newDueTime, TimeSpan newPeriod)
+            {
+                DueAt = newDueTime == Timeout.InfiniteTimeSpan ? null : clock.now + newDueTime;
+                return true;
+            }
+
+            public void Fire()
+            {
+                DueAt = null;
+                callback(state);
+            }
+
+            public void Dispose() => DueAt = null;
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 }

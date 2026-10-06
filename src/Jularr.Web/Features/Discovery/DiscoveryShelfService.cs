@@ -256,16 +256,12 @@ public static class DiscoveryShelfComposer
 /// </summary>
 public sealed class DiscoveryShelfService(IDiscoveryFeed feed, IAppShellService shell)
 {
-    public async Task<DiscoveryShelfBoard> GetBoardAsync(
-        ClaimsPrincipal? user,
-        string profileId,
-        bool isOwner,
-        DiscoveryWait wait,
-        CancellationToken cancellationToken)
+    /// <param name="scope">The media types the viewer picked: only their rows are planned, so no other source is called or counted.</param>
+    public async Task<DiscoveryShelfBoard> GetBoardAsync(ClaimsPrincipal? user, string profileId, bool isOwner, DiscoveryCategory scope, DiscoveryWait wait, CancellationToken cancellationToken)
     {
         var access = await shell.GetMediaAccessAsync(user, cancellationToken);
-        var plans = DiscoveryShelfComposer.Plan(access.VisibleMediaTypes);
-        if (plans.Count == 0)
+        var plans = DiscoveryShelfComposer.Plan(access.VisibleMediaTypes).Where(plan => DiscoverScopes.Includes(scope, plan.Category)).ToArray();
+        if (plans.Length == 0)
         {
             return DiscoveryShelfBoard.Empty;
         }
@@ -274,8 +270,8 @@ public sealed class DiscoveryShelfService(IDiscoveryFeed feed, IAppShellService 
         var load = await feed.LoadAsync([.. plans.Select(plan => new DiscoveryRequest("", plan.Category, plan.Mode))], audience, wait, cancellationToken);
         var overlay = await feed.OverlayLocalStateAsync(load.Batches.SelectMany(batch => batch.Items), profileId, cancellationToken);
 
-        var rows = new List<DiscoveryShelfRow>(plans.Count);
-        for (var index = 0; index < plans.Count; index++)
+        var rows = new List<DiscoveryShelfRow>(plans.Length);
+        for (var index = 0; index < plans.Length; index++)
         {
             var plan = plans[index];
             var batch = load.Batches[index];

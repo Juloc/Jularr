@@ -528,6 +528,7 @@ public sealed class LocalFirstPageGetTests
                 AniListAccount(),
                 Db,
                 DiscoveryTestSupport.Flights(providers: [animeProvider, readingProvider, books, tmdb]),
+                TimeProvider.System,
                 NullLogger<Jularr.Web.Features.Discovery.DiscoveryCoordinator>.Instance);
             var shellService = new Jularr.Web.Features.Shell.AppShellService(
                 new MediaCapabilityService(new MediaCapabilityStore(root)));

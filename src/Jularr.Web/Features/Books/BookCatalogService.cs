@@ -128,13 +128,19 @@ public sealed partial class BookCatalogService(
     {
         if (string.IsNullOrWhiteSpace(query))
         {
-            return await BrowseTrendingBooksAsync(cancellationToken);
+            // The trending listing reports a catalog that did not answer (Discover shows that); this search has always meant "nothing".
+            try
+            {
+                return await BrowseTrendingBooksAsync(cancellationToken);
+            }
+            catch (HttpRequestException)
+            {
+                return [];
+            }
         }
 
         var normalizedQuery = query.Trim();
-        var works = await SearchPrimaryCatalogsAsync(
-            normalizedQuery,
-            cancellationToken);
+        var works = (await SearchPrimaryCatalogsCoreAsync(normalizedQuery, cancellationToken)).Items;
 
         if (works.Count > 0)
         {
@@ -156,14 +162,22 @@ public sealed partial class BookCatalogService(
         string query,
         CancellationToken cancellationToken)
     {
+        var result = await SearchPrimaryCatalogsCoreAsync(query, cancellationToken);
+        return result.AllFailed ? throw new HttpRequestException("None of the book catalogs answered.") : result.Items;
+    }
+
+    private async Task<(IReadOnlyList<BookCatalogItem> Items, bool AllFailed)> SearchPrimaryCatalogsCoreAsync(
+        string query,
+        CancellationToken cancellationToken)
+    {
         var normalizedQuery = query.Trim();
-        var openLibraryTask = CaptureCatalogAsync(
+        var openLibraryTask = CaptureCatalogResultAsync(
             token => SearchOpenLibraryAsync(normalizedQuery, token),
             cancellationToken);
-        var googleTask = CaptureCatalogAsync(
+        var googleTask = CaptureCatalogResultAsync(
             token => SearchGoogleBooksAsync(normalizedQuery, token),
             cancellationToken);
-        var wikisourceTask = CaptureCatalogAsync(
+        var wikisourceTask = CaptureCatalogResultAsync(
             token => SearchIndonesianWikisourceAsync(
                 normalizedQuery,
                 token),
@@ -175,13 +189,14 @@ public sealed partial class BookCatalogService(
             wikisourceTask);
 
         // A provider that failed or timed out contributes nothing; the others still answer.
-        return BookWorkSearch.Rank(
+        var works = BookWorkSearch.Rank(
                 normalizedQuery,
-                wikisourceTask.Result,
-                openLibraryTask.Result,
-                googleTask.Result)
+                wikisourceTask.Result.Items,
+                openLibraryTask.Result.Items,
+                googleTask.Result.Items)
             .Take(SearchLimit)
             .ToArray();
+        return (works, wikisourceTask.Result.Failed && openLibraryTask.Result.Failed && googleTask.Result.Failed);
     }
 
     /// <summary>Project Gutenberg results for the application-level multi-source search.</summary>

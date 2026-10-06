@@ -396,6 +396,79 @@ public sealed class BookCatalogDiscoveryTests
         }
     }
 
+    [TestMethod]
+    public async Task ABrowseRowWhoseCatalogDidNotAnswerFailsInsteadOfBeingAnEmptyRow()
+    {
+        var path = TempDatabasePath();
+        try
+        {
+            await using var db = await CreateDatabaseAsync(path);
+            using var client = new HttpClient(new DelegateHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))) { BaseAddress = new Uri("https://gutendex.com/") };
+            var service = NewService(db, client);
+
+            foreach (var mode in new[] { BookBrowseMode.Trending, BookBrowseMode.Popular, BookBrowseMode.New })
+            {
+                await Assert.ThrowsExactlyAsync<HttpRequestException>(() => service.BrowseAsync(mode, CancellationToken.None), mode.ToString());
+            }
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public async Task TrendingFallsBackToTheWeeklyWindowWhenTheDailyOneDidNotAnswer()
+    {
+        var path = TempDatabasePath();
+        try
+        {
+            await using var db = await CreateDatabaseAsync(path);
+            using var client = new HttpClient(new DelegateHttpMessageHandler(request =>
+            {
+                if (request.RequestUri?.Host == "openlibrary.org")
+                {
+                    return request.RequestUri.AbsolutePath.Contains("/daily", StringComparison.Ordinal) ? new HttpResponseMessage(HttpStatusCode.BadGateway) : JsonResponse(TrendingWorkJson());
+                }
+
+                return JsonResponse("""{ "items": [] }""");
+            })) { BaseAddress = new Uri("https://gutendex.com/") };
+
+            var books = await NewService(db, client).BrowseAsync(BookBrowseMode.Trending, CancellationToken.None);
+
+            Assert.AreEqual(1, books.Count);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public async Task ACatalogSearchFailsOnlyWhenNoCatalogAnsweredAndTheTextSearchKeepsItsGutenbergFallback()
+    {
+        var path = TempDatabasePath();
+        try
+        {
+            await using var db = await CreateDatabaseAsync(path);
+            using var down = new HttpClient(new DelegateHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))) { BaseAddress = new Uri("https://gutendex.com/") };
+            using var partial = new HttpClient(new DelegateHttpMessageHandler(request => request.RequestUri?.Host == "openlibrary.org"
+                ? JsonResponse("""{ "docs": [ { "key": "/works/OL1W", "title": "Dune", "author_name": ["Frank Herbert"], "first_publish_year": 1965 } ] }""")
+                : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))) { BaseAddress = new Uri("https://gutendex.com/") };
+
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(() => NewService(db, down).SearchPrimaryCatalogsAsync("dune", CancellationToken.None));
+            var fallback = await NewService(db, down).SearchAsync("dune", CancellationToken.None);
+            var answered = await NewService(db, partial).SearchPrimaryCatalogsAsync("dune", CancellationToken.None);
+
+            Assert.AreEqual(0, fallback.Count, "The plain search has always meant nothing found when every source failed.");
+            Assert.AreEqual(1, answered.Count, "One catalog that answers is enough: the others contribute nothing.");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static string TrendingWorkJson() => """
         {
           "works": [

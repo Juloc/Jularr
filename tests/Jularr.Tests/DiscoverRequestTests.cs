@@ -102,6 +102,23 @@ public sealed class DiscoverRequestTests
     }
 
     [TestMethod]
+    public async Task ThePageReadsOnlyTheOpenRequestsOfTheTitlesItShows()
+    {
+        await using var host = await RequestHost.CreateAsync();
+        var store = host.Fixture.Store;
+        await store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", "10", "Shown", null, null), Alice, AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        await store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", "11", "Elsewhere", null, null), Alice, AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        await store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", "10", "Another kind", null, null), Alice, AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        var finished = await store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", "12", "Done", null, null), Alice, AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        await store.UpdateStatusAsync(finished.Id, AcquisitionRequestStatus.Completed, null, null, null, null, CancellationToken.None);
+
+        var read = await store.ListOpenForAsync([MediaAcquisitionKind.Movie], ["10", "12", "99"], 500, CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { "10" }, read.Select(request => request.ExternalId).ToArray(), "Only open requests of the shown kind and ids; the page never loads the whole queue.");
+        Assert.AreEqual(0, (await store.ListOpenForAsync([MediaAcquisitionKind.Movie], [], 500, CancellationToken.None)).Count);
+    }
+
+    [TestMethod]
     public async Task TheStoreRefusesASecondOpenRequestForTheSameTitle()
     {
         await using var host = await RequestHost.CreateAsync();

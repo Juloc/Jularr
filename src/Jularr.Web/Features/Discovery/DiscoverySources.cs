@@ -42,7 +42,7 @@ public sealed record DiscoverySourceResult(DiscoverySource Source, DiscoverySour
 /// </summary>
 /// <param name="Budget">The longest the call waits for pending sources; zero returns the current state at once.</param>
 /// <param name="SettledBefore">The number of settled sources the caller has already seen; null waits for every source.</param>
-/// <param name="Refresh">Sources that are fetched again even when a fresh or failed answer is remembered: the explicit retry of a viewer.</param>
+/// <param name="Refresh">Sources the viewer asked to try again: honoured only for a source that failed, and not more often than <see cref="DiscoverySourceFlights.RetryInterval"/>.</param>
 public sealed record DiscoveryWait(TimeSpan Budget, int? SettledBefore = null, IReadOnlySet<DiscoverySource>? Refresh = null)
 {
     public static DiscoveryWait None { get; } = new(TimeSpan.Zero);

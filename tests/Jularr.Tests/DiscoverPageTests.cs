@@ -122,7 +122,7 @@ public sealed class DiscoverPageTests
     {
         Assert.AreEqual("Slice of Life", DiscoveryRequest.NormalizeGenre("slice of life"));
         Assert.AreEqual("Sci-Fi", DiscoveryRequest.NormalizeGenre("SCI-FI"));
-        Assert.AreEqual("Mahou Shoujo", DiscoveryRequest.NormalizeGenre("mahou shoujo"), "Unknown genres are title-cased as before.");
+        Assert.AreEqual("", DiscoveryRequest.NormalizeGenre("mahou shoujo"), "A genre Discover does not offer is ignored: free text would make every spelling a provider call.");
         foreach (var genre in DiscoveryRequest.KnownGenres)
         {
             Assert.IsNotNull(DiscoverGenres.Key(genre), $"{genre} needs a catalog key.");

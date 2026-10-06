@@ -60,30 +60,6 @@ public sealed class DiscoveryTests
     }
 
     [TestMethod]
-    public void GenreParticipatesInTheDiscoveryCacheKey()
-    {
-        var withoutGenre = DiscoveryRequest.Parse(null, "anime", "trending");
-        var withGenre = DiscoveryRequest.Parse(null, "anime", "trending", "Horror");
-
-        Assert.AreNotEqual(
-            withoutGenre.CacheKey("profile"),
-            withGenre.CacheKey("profile"));
-    }
-
-    [TestMethod]
-    public void PersonalDiscoveryCacheKeyIsProfileScoped()
-    {
-        var request = DiscoveryRequest.Parse(
-            null,
-            "all",
-            "my-list");
-
-        Assert.AreNotEqual(
-            request.CacheKey("owner"),
-            request.CacheKey("learner-1"));
-    }
-
-    [TestMethod]
     public void AniListReadingDiscoverySeparatesNovelsAndManga()
     {
         const string json = """
@@ -348,7 +324,6 @@ public sealed class DiscoveryTests
         Assert.AreEqual(DiscoveryMode.New, DiscoveryRequest.Parse(null, "book", "new").Mode);
         Assert.AreEqual(DiscoveryMode.New, DiscoveryRequest.Parse(null, "book", "recent").Mode);
         Assert.AreEqual(DiscoveryMode.New, DiscoveryRequest.Parse(null, "book", "recently-published").Mode);
-        Assert.AreEqual("new", DiscoveryRequest.Parse(null, "book", "new").CacheKey("profile").Split('|')[1]);
     }
 
     [TestMethod]
