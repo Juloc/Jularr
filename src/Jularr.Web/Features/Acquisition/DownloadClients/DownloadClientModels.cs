@@ -75,7 +75,8 @@ public sealed record DownloadClientSettings
                 [MediaAcquisitionKind.Movie] = "movies",
                 [MediaAcquisitionKind.Manga] = "manga",
                 [MediaAcquisitionKind.LightNovel] = "lightnovels",
-                [MediaAcquisitionKind.Book] = "books"
+                [MediaAcquisitionKind.Book] = "books",
+                [MediaAcquisitionKind.Music] = "music"
             });
 
     private static string? CleanCategory(string? value) =>

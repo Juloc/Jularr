@@ -168,6 +168,29 @@ public sealed class WorkVolume
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>
+/// A track of an album <see cref="Work"/>: logical content that exists without a file, the music equivalent of an episode or chapter.
+/// Not to be confused with the technical stream <c>Track</c> below an Asset.
+/// </summary>
+public sealed class WorkTrack
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid WorkId { get; set; }
+
+    public int Disc { get; set; } = 1;
+
+    public int Number { get; set; }
+
+    public string Title { get; set; } = "";
+
+    public int? DurationMs { get; set; }
+
+    /// <summary>The provider identity of the recording (MusicBrainz recording id), when known.</summary>
+    public string? MusicBrainzRecordingId { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 /// <summary>A chapter of a <see cref="Work"/>; <see cref="Number"/> is a decimal so "10.5" specials fit.</summary>
 public sealed class WorkChapter
 {

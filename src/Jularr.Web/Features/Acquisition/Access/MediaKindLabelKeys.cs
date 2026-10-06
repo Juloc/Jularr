@@ -21,6 +21,7 @@ public static class MediaKindLabelKeys
         MediaAcquisitionKind.Movie => "admin.operation.media.movie",
         MediaAcquisitionKind.Tv => "admin.operation.media.tv",
         MediaAcquisitionKind.Audiobook => "admin.operation.media.audiobook",
+        MediaAcquisitionKind.Music => "admin.operation.media.music",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -33,7 +34,8 @@ public static class MediaKindLabelKeys
         MediaAcquisitionKind.Anime
             or MediaAcquisitionKind.Movie
             or MediaAcquisitionKind.Tv
-            or MediaAcquisitionKind.Audiobook => Name(kind),
+            or MediaAcquisitionKind.Audiobook
+            or MediaAcquisitionKind.Music => Name(kind),
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -47,6 +49,7 @@ public static class MediaKindLabelKeys
         MediaAcquisitionKind.Movie => "admin.usenet.movieCategory",
         MediaAcquisitionKind.Tv => "admin.usenet.tvCategory",
         MediaAcquisitionKind.Audiobook => "admin.usenet.audiobookCategory",
+        MediaAcquisitionKind.Music => "admin.usenet.musicCategory",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 }

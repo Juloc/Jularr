@@ -24,7 +24,8 @@ public sealed class InstanceModel(
         InstanceModule.Manga,
         InstanceModule.Novel,
         InstanceModule.Book,
-        InstanceModule.Audiobook
+        InstanceModule.Audiobook,
+        InstanceModule.Music
     ];
 
     public static IReadOnlyList<InstanceModule> ConfigurableFeatureModules { get; } =
@@ -80,7 +81,7 @@ public sealed class InstanceModel(
             InstanceModule.Tv => "tv",
             InstanceModule.Manga or InstanceModule.Book => "book",
             InstanceModule.Novel => "document",
-            InstanceModule.Audiobook => "headphones",
+            InstanceModule.Audiobook or InstanceModule.Music => "headphones",
             InstanceModule.Learning => "cap",
             InstanceModule.Acquisition => "download",
             InstanceModule.Playback => "play",

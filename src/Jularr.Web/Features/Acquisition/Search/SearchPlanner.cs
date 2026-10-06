@@ -49,6 +49,9 @@ public static class SearchPlanner
             case MediaAcquisitionKind.LightNovel:
                 PlanReading(rungs, intent, titles);
                 break;
+            case MediaAcquisitionKind.Music:
+                PlanMusic(rungs, intent, titles, caps);
+                break;
             default:
                 Add(rungs, "title", 0, IndexerSearchMode.Search, titles[0], NoParameters, titles[0]);
                 break;
@@ -102,6 +105,7 @@ public static class SearchPlanner
             MediaAcquisitionKind.LightNovel => [.. entry.Settings.EffectiveBookCategories.Concat([7020, 7000]).Distinct()],
             MediaAcquisitionKind.Manga => [.. entry.Settings.EffectiveBookCategories.Concat([7030, 7000]).Distinct()],
             MediaAcquisitionKind.Audiobook => [3030, 3000],
+            MediaAcquisitionKind.Music => [3000, 3010, 3040],
             _ => []
         };
 
@@ -246,6 +250,44 @@ public static class SearchPlanner
         {
             var aliasMain = MainTitle(alias);
             Add(rungs, "alias", 1, IndexerSearchMode.Search, creator is null ? aliasMain : $"{creator} {aliasMain}", NoParameters, "Alias");
+        }
+    }
+
+    private static void PlanMusic(List<PlannedQuery> rungs, SearchIntent intent, IReadOnlyList<string> titles, IndexerCapabilities caps)
+    {
+        var artist = string.IsNullOrWhiteSpace(intent.Creator) ? null : Normalize(intent.Creator);
+        var album = titles[0];
+        var year = intent.Year?.ToString(CultureInfo.InvariantCulture);
+        if (artist is not null && caps.Supports(IndexerSearchMode.Music, "artist") && caps.Supports(IndexerSearchMode.Music, "album"))
+        {
+            var parameters = new List<KeyValuePair<string, string>> { new("artist", artist), new("album", album) };
+            if (year is not null && caps.Supports(IndexerSearchMode.Music, "year"))
+            {
+                parameters.Add(new("year", year));
+            }
+
+            Add(rungs, "title", 0, IndexerSearchMode.Music, null, parameters, "Artist + album (music search)");
+        }
+
+        Add(rungs, "title", 0, IndexerSearchMode.Search, artist is null ? album : $"{artist} {album}", NoParameters, artist is null ? "Album" : "Artist + album");
+        if (artist is not null)
+        {
+            Add(rungs, "title", 1, IndexerSearchMode.Search, $"{artist} {album} FLAC", NoParameters, "Artist + album + FLAC");
+            if (year is not null)
+            {
+                Add(rungs, "title", 1, IndexerSearchMode.Search, $"{artist} {album} {year}", NoParameters, "Artist + album + year");
+            }
+        }
+
+        foreach (var alias in titles.Skip(1).Take(3))
+        {
+            Add(rungs, "alias", 1, IndexerSearchMode.Search, artist is null ? alias : $"{artist} {alias}", NoParameters, "Artist + alternate album title");
+        }
+
+        // Without the artist the search finds compilations and covers: only the deepest search tries it.
+        if (artist is not null)
+        {
+            Add(rungs, "fallback", 2, IndexerSearchMode.Search, album, NoParameters, "Album title only");
         }
     }
 

@@ -14,7 +14,10 @@ public enum WorkMediaType
     Anime,
     Book,
     Manga,
-    LightNovel
+    LightNovel,
+
+    /// <summary>An album (the Work); its tracks are <see cref="WorkTrack"/> structure.</summary>
+    Music
 }
 
 /// <summary>Kind of a <see cref="WorkTitle"/>. A work can hold many titles of each kind, one primary per work.</summary>
@@ -134,6 +137,7 @@ public static class WorkMediaTypes
         "book" or "books" => WorkMediaType.Book,
         "manga" => WorkMediaType.Manga,
         "lightnovel" or "light-novel" or "light_novel" or "novel" => WorkMediaType.LightNovel,
+        "music" or "album" => WorkMediaType.Music,
         _ => null
     };
 

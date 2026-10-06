@@ -20,7 +20,8 @@ public enum MediaAcquisitionKind
     Book,
     Movie,
     Tv,
-    Audiobook
+    Audiobook,
+    Music
 }
 
 /// <summary>Who may use the manual add controls (file upload, URL, NZB, inbox import).</summary>
@@ -36,6 +37,7 @@ public static class AcquisitionInstanceModules
             MediaAcquisitionKind.Movie => InstanceModule.Movie,
             MediaAcquisitionKind.Tv => InstanceModule.Tv,
             MediaAcquisitionKind.Audiobook => InstanceModule.Audiobook,
+            MediaAcquisitionKind.Music => InstanceModule.Music,
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
 }
@@ -297,6 +299,7 @@ public static class AcquisitionAccessNames
         MediaAcquisitionKind.Movie => "movie",
         MediaAcquisitionKind.Tv => "tv",
         MediaAcquisitionKind.Audiobook => "audiobook",
+        MediaAcquisitionKind.Music => "music",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -309,6 +312,7 @@ public static class AcquisitionAccessNames
         "movie" => MediaAcquisitionKind.Movie,
         "tv" => MediaAcquisitionKind.Tv,
         "audiobook" => MediaAcquisitionKind.Audiobook,
+        "music" => MediaAcquisitionKind.Music,
         _ => throw new ArgumentException($"Unknown media kind '{value}'.", nameof(value))
     };
 
@@ -324,6 +328,7 @@ public static class AcquisitionAccessNames
         // An audiobook is an audio edition of a book, so it lives on the same Book capability matrix
         // (#436) and the media core represents it as a Book Work (#440).
         MediaAcquisitionKind.Audiobook => WorkMediaType.Book,
+        MediaAcquisitionKind.Music => WorkMediaType.Music,
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 

@@ -21,6 +21,10 @@ public sealed class MediaAsset
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid WorkId { get; set; }
     public Guid? WorkEpisodeId { get; set; }
+
+    /// <summary>The track of an album Work an Audio asset belongs to; null for every other asset.</summary>
+    public Guid? WorkTrackId { get; set; }
+
     public Guid WorkVersionId { get; set; }
     public MediaAssetKind Kind { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

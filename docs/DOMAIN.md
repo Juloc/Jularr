@@ -4,7 +4,7 @@ Status: planning baseline. This document defines the target domain before furthe
 
 ## 1. Principles
 
-- One canonical media model for Anime, TV, Movie, Manga, Light Novel, Book and Audiobook.
+- One canonical media model for Anime, TV, Movie, Manga, Light Novel, Book, Audiobook and Music.
 - Media-type-specific data exists only where the concept is genuinely different.
 - Provider metadata never defines identity by itself.
 - Physical files are separate from logical works, editions and releases.
@@ -38,7 +38,7 @@ Not every Work uses every level. A Movie can have no structural children. A TV/A
 
 Core fields:
 - `Id`
-- `MediaType`: Anime, TvSeries, Movie, Manga, LightNovel, Book, Audiobook
+- `MediaType`: Anime, TvSeries, Movie, Manga, LightNovel, Book, Audiobook, Music (an album)
 - `CanonicalTitle`
 - lifecycle/status fields only when universally meaningful
 - timestamps
@@ -82,6 +82,21 @@ Provider IDs must be unique within `(Provider, MediaType, ExternalId)` and must 
 - title
 
 Structure represents logical content. It must not depend on whether a local file exists.
+
+### Music (manager MVP)
+
+Music is a first-class media type for acquisition management (Lidarr replacement). It reuses the canonical model and adds no music-specific scheduler, scorer, downloader monitor, Operation store or retry engine.
+
+- **Album = Work** (`MediaType = Music`). `CanonicalTitle` is the album title, `Year` its release year. Its provider identity is a `WorkExternalIdentity` with provider `musicbrainz` (the release group id).
+- **Artist** is a small owning record (`MusicArtist`): name, sort name, MusicBrainz artist id, monitoring mode. An album belongs to exactly one primary artist through its `MusicAlbum` detail row (album type, release date, monitored). Artists are not Works; they group albums the way a Series groups episodes.
+- **Track = structure** (`WorkTrack`: disc, number, title, duration), the music equivalent of an episode or chapter. It is logical content and exists without a file. It is not the technical `Track` (stream) below an Asset.
+- **File side**: one `WorkVersion` per imported audio file, one `MediaAsset` (`Kind = Audio`, `WorkTrackId`) and one `StoredFile` per track file. An album is available when its tracks have files and partial while only some do.
+- **Monitoring**: artist `All` / `Future` / `None` plus an album-level switch. A monitored album without files is Wanted through the shared `AcquisitionRequest` lifecycle (Kind `Music`, provider `musicbrainz`, external id = release group id). Future albums appear through the periodic artist refresh of the shared Wanted pass.
+- **Quality**: the shared profile engine with document-style quality keys `FLAC`, `MP3-320`, `MP3-V0`, `MP3-256`, `MP3`; the default profile prefers FLAC and accepts lossy releases as temporary fallbacks.
+- **Search**: the shared Search Planner, the Newznab `music` function (artist/album) where advertised, text fallbacks, categories 3000/3010/3040. Identity (artist words, album words, no different release type such as live/remix/karaoke, discography packs need review) is decided before any profile rule.
+- **Import**: shared completed-download dispatcher; the destination is the default **Music** LibraryRoot (`LibraryContentType.Music`) resolved by Storage; files are matched to `WorkTrack` by disc/number or title and placed as `Artist/Album (Year)/NN - Title.ext`. Importing the same download twice never duplicates files.
+- **Metadata provider**: MusicBrainz (read-only, no key) behind `IMusicMetadataProvider`; one request per second and an identifying User-Agent.
+- **Out of scope**: streaming player, lyrics, scrobbling, recommendations, analysis, transcoding, multi-release (edition) management beyond what import correctness needs.
 
 ## 5. Edition
 

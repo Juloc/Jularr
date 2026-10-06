@@ -25,7 +25,10 @@ public enum InstanceModule
     /// Whether this instance plays media itself. Off is the manager-only mode (discovery, requests, monitoring and
     /// acquisition without a Jularr player): no Watch page, no player/plan/progress/stream API and no play action.
     /// </summary>
-    Playback = 11
+    Playback = 11,
+
+    /// <summary>Music (albums, artists) acquisition and library management.</summary>
+    Music = 12
 }
 
 public sealed record InstanceModuleSettings(
@@ -57,6 +60,7 @@ public static class InstanceModuleMedia
             WorkMediaType.Book => InstanceModule.Book,
             WorkMediaType.Manga => InstanceModule.Manga,
             WorkMediaType.LightNovel => InstanceModule.Novel,
+            WorkMediaType.Music => InstanceModule.Music,
             _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
         };
 

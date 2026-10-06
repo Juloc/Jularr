@@ -12,6 +12,7 @@ using Jularr.Web.Features.Learning.Courses;
 using Jularr.Web.Features.Learning.Curriculum;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Music;
 using Jularr.Web.Features.MediaSegments;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Movies;
@@ -135,6 +136,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<WorkRelation> WorkRelations => Set<WorkRelation>();
     public DbSet<WorkSeason> WorkSeasons => Set<WorkSeason>();
     public DbSet<WorkEpisode> WorkEpisodes => Set<WorkEpisode>();
+    public DbSet<WorkTrack> WorkTracks => Set<WorkTrack>();
+
+    // Music (manager MVP): artists own album Works; albums add their provider identity and monitoring to the Work row.
+    public DbSet<MusicArtist> MusicArtists => Set<MusicArtist>();
+    public DbSet<MusicAlbum> MusicAlbums => Set<MusicAlbum>();
     public DbSet<WorkVolume> WorkVolumes => Set<WorkVolume>();
     public DbSet<WorkChapter> WorkChapters => Set<WorkChapter>();
     public DbSet<WorkEdition> WorkEditions => Set<WorkEdition>();
@@ -177,7 +183,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<LibraryRootContentAssignment>(entity =>
         {
-            entity.ToTable("LibraryRootContentAssignments", table => table.HasCheckConstraint("CK_LibraryRootContentAssignments_ContentType", "\"ContentType\" >= 1 AND \"ContentType\" <= 8"));
+            entity.ToTable("LibraryRootContentAssignments", table => table.HasCheckConstraint("CK_LibraryRootContentAssignments_ContentType", "\"ContentType\" >= 1 AND \"ContentType\" <= 9"));
             entity.HasKey(x => new { x.LibraryRootId, x.ContentType });
             entity.Property(x => x.ContentType).HasConversion<int>();
             entity.HasOne<LibraryRoot>().WithMany().HasForeignKey(x => x.LibraryRootId).OnDelete(DeleteBehavior.NoAction);
@@ -305,6 +311,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.Kind).HasConversion<int>();
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<WorkEpisode>().WithMany().HasForeignKey(x => x.WorkEpisodeId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<WorkTrack>().WithMany().HasForeignKey(x => x.WorkTrackId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<WorkVersion>().WithMany().HasForeignKey(x => x.WorkVersionId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.WorkVersionId, x.Kind }).IsUnique();
             entity.HasIndex(x => new { x.WorkId, x.WorkEpisodeId, x.Kind });
@@ -764,6 +771,37 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasOne<WorkSeason>().WithMany().HasForeignKey(x => x.SeasonId).OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(x => new { x.WorkId, x.SeasonNumber, x.EpisodeNumber }).IsUnique();
             entity.HasIndex(x => new { x.WorkId, x.AbsoluteNumber });
+        });
+
+        modelBuilder.Entity<WorkTrack>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Title).HasMaxLength(500);
+            entity.Property(x => x.MusicBrainzRecordingId).HasMaxLength(64);
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.WorkId, x.Disc, x.Number }).IsUnique();
+        });
+
+        modelBuilder.Entity<MusicArtist>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(300);
+            entity.Property(x => x.SortName).HasMaxLength(300);
+            entity.Property(x => x.MusicBrainzId).HasMaxLength(64);
+            entity.Property(x => x.Monitor).HasConversion<int>();
+            entity.HasIndex(x => x.MusicBrainzId).IsUnique().HasFilter("\"MusicBrainzId\" IS NOT NULL");
+            entity.HasIndex(x => x.SortName);
+        });
+
+        modelBuilder.Entity<MusicAlbum>(entity =>
+        {
+            entity.HasKey(x => x.WorkId);
+            entity.Property(x => x.Type).HasConversion<int>();
+            entity.Property(x => x.MusicBrainzReleaseGroupId).HasMaxLength(64);
+            entity.HasOne<Work>().WithOne().HasForeignKey<MusicAlbum>(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<MusicArtist>().WithMany().HasForeignKey(x => x.ArtistId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => x.MusicBrainzReleaseGroupId).IsUnique().HasFilter("\"MusicBrainzReleaseGroupId\" IS NOT NULL");
+            entity.HasIndex(x => new { x.ArtistId, x.Monitored });
         });
 
         modelBuilder.Entity<WorkVolume>(entity =>
