@@ -143,7 +143,18 @@
                     @(snapshot.Ffprobe.IsAvailable ? ui["settings.connectionTable.healthy"] : ui["settings.connectionTable.unhealthy"])
                 </strong>
             </div>
+            <div>
+                <span>@ui["admin.health.japanese.label"]</span>
+                <strong class="status-pill @(Model.JapaneseAnalysis.IsAvailable ? "status-ok" : "status-error")">
+                    @(Model.JapaneseAnalysis.IsAvailable ? ui["settings.connectionTable.healthy"] : ui["settings.connectionTable.unhealthy"])
+                </strong>
+            </div>
         </div>
+
+        @if (!Model.JapaneseAnalysis.IsAvailable)
+        {
+            <p class="validation">@ui.Format("admin.health.japanese.unavailable", ("path", Model.JapaneseAnalysis.DictionaryPath ?? ""))</p>
+        }
 
         <div class="status-list admin-overview-list" aria-label="@ui["admin.health.services.title"]">
             <a asp-page="/Admin/Operations">

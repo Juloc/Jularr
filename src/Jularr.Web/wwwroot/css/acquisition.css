@@ -103,10 +103,11 @@
     display: flex; align-items: center; gap: 8px; min-height: 36px;
 }
 
-.acquisition-connection-list {
-    display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px 14px;
+.acquisition-connection-list { display: grid; gap: 12px; }
+.acquisition-connection {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 14px;
 }
-.acquisition-connection-list .status-pill { width: fit-content; }
+.acquisition-connection .muted { flex: 1 0 100%; font-size: 13px; }
 
 .acquisition-wrap,
 .acquisition-wrap strong,

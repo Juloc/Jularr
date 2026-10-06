@@ -72,6 +72,11 @@
     background: var(--clean-control-bg);
 }
 
+/* The global search field draws its own pill; its input stays transparent inside it instead of painting a second box. */
+:root[data-app-theme-id^="clean-"] .app-search input {
+    background: transparent;
+}
+
 :root[data-app-theme-id^="clean-"] :is(input, select, textarea):focus-visible {
     outline-color: var(--focus-ring);
     border-color: var(--accent-border);

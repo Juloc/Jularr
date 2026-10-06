@@ -166,6 +166,8 @@ button, input { font: inherit; }
     color: var(--muted);
     font-size: .82em;
 }
+/* display: block above would otherwise win over the hidden attribute and leave an empty focusable link in the tab order. */
+.sidebar-offline-indicator[hidden] { display: none; }
 .mobile-nav { display: none; }
 
 .app-main { margin-inline-start: var(--sidebar); min-height: 100vh; padding: 34px 42px 60px; }
@@ -316,11 +318,15 @@ button, input { font: inherit; }
 .review-button.primary { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
 
 .settings-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .7fr); gap: 16px; }
+/* Cards a page stacks straight under the layout main element keep the same 16px rhythm as the grid gap. */
+main > :is(.panel, .settings-grid) + :is(.panel, .settings-grid) { margin-top: 16px; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; box-shadow: var(--shadow-card); }
 .panel-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .panel-heading h2 { margin: 0; font-size: 17px; }
 .panel-heading > span { color: var(--muted); font-size: 12px; }
 .root-list { display: grid; gap: 8px; }
+.root-list + .button { display: inline-block; margin-top: 14px; }
+.root-row .status-pill { justify-self: start; }
 .root-row {
     display: flex; justify-content: space-between; align-items: center; gap: 20px;
     padding: 12px; border-radius: 9px; background: var(--row-bg);

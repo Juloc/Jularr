@@ -136,14 +136,22 @@
     <section class="panel">
         <div class="panel-heading"><h2>@ui["acquisition.connectionsHeading"]</h2></div>
         <div class="acquisition-connection-list">
-            <a asp-page="/Admin/Usenet">@ui["acquisition.indexersLink"]</a>
-            <span class="status-pill @(Model.ProwlarrConfigured ? "status-ok" : "status-warn")">@(Model.ProwlarrConfigured ? ui["acquisition.configured"] : ui["acquisition.notConfigured"])</span>
-            <a asp-page="/Admin/Usenet">@ui["acquisition.downloadClientsLink"]</a>
-            <span class="status-pill @(Model.SabnzbdConfigured ? "status-ok" : "status-warn")">@(Model.SabnzbdConfigured ? ui["acquisition.configured"] : ui["acquisition.notConfigured"])</span>
-            <a asp-page="/Settings/SonarrMigration">@ui["settings.sonarrMigration.title"]</a>
-            <span class="muted">@ui["acquisition.perAnimeManagementModeNote"]</span>
-            <a asp-page="/Settings/Acquisition">@ui["settings.acquisition.heading"]</a>
-            <span class="muted">@ui["acquisition.importModeNote"]</span>
+            <div class="acquisition-connection">
+                <a asp-page="/Admin/Usenet">@ui["acquisition.indexersLink"]</a>
+                <span class="status-pill @(Model.ProwlarrConfigured ? "status-ok" : "status-warn")">@(Model.ProwlarrConfigured ? ui["acquisition.configured"] : ui["acquisition.notConfigured"])</span>
+            </div>
+            <div class="acquisition-connection">
+                <a asp-page="/Admin/Usenet">@ui["acquisition.downloadClientsLink"]</a>
+                <span class="status-pill @(Model.SabnzbdConfigured ? "status-ok" : "status-warn")">@(Model.SabnzbdConfigured ? ui["acquisition.configured"] : ui["acquisition.notConfigured"])</span>
+            </div>
+            <div class="acquisition-connection">
+                <a asp-page="/Settings/SonarrMigration">@ui["settings.sonarrMigration.title"]</a>
+                <span class="muted">@ui["acquisition.perAnimeManagementModeNote"]</span>
+            </div>
+            <div class="acquisition-connection">
+                <a asp-page="/Settings/Acquisition">@ui["settings.acquisition.heading"]</a>
+                <span class="muted">@ui["acquisition.importModeNote"]</span>
+            </div>
         </div>
     </section>
 </div>
