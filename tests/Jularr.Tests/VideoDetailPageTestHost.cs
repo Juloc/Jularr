@@ -129,6 +129,9 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                     services.AddScoped<VideoProgressService>();
                     services.AddScoped<VideoDetailQuery>();
+                    services.AddScoped<WorkMetadataStore>();
+                    var noDownloads = new WorkMetadataFixture.StubHttpClientFactory(new WorkMetadataFixture.StubHandler(_ => throw new InvalidOperationException("The page tests never download artwork.")));
+                    services.AddSingleton(new Jularr.Web.Features.Artwork.WorkArtworkCache(Path.Combine(root, "artwork"), [], noDownloads));
                     services.AddSingleton<IInstanceModuleService>(modules);
                     services.AddSingleton(indexerStore);
                     services.AddSingleton(clientStore);
@@ -195,6 +198,9 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
         await DatabaseMigrationBridge.UpgradeAsync(db);
         return new VideoDetailPageTestHost(root, db, host, probe, capabilities, modules, indexerStore, clientStore);
     }
+
+    /// <summary>A client of the signed-in profile, for tests that need the response itself (headers, content type).</summary>
+    public HttpClient CreateClient() => server.CreateClient();
 
     public async Task<(HttpStatusCode Status, string Html)> GetAsync(string path, bool asOwner = false, string? profile = null)
     {
