@@ -2,7 +2,6 @@ using System.Net;
 using System.Text;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.Prowlarr;
-using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Tests;
 
@@ -216,41 +215,13 @@ public sealed class ProwlarrSearchTests
     }
 
     [TestMethod]
-    public async Task SettingsStoreProtectsApiKeyAtRestAndReloadsIt()
-    {
-        var directory = CreateTemporaryDirectory();
-        try
-        {
-            var provider = new EphemeralDataProtectionProvider();
-            var store = new ProwlarrSettingsStore(provider, directory);
-
-            await store.SaveAsync(Connection());
-
-            var raw = await File.ReadAllTextAsync(
-                Path.Combine(directory.FullName, "prowlarr.json"));
-            Assert.IsFalse(raw.Contains("secret-key", StringComparison.Ordinal));
-
-            var loaded = await store.LoadAsync();
-
-            Assert.IsNotNull(loaded);
-            Assert.AreEqual("secret-key", loaded.ApiKey);
-            Assert.AreEqual("https://prowlarr.example", loaded.Settings.BaseUrl);
-            CollectionAssert.AreEqual(new[] { 5000, 5070 }, loaded.Settings.Categories);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
-    }
-
-    [TestMethod]
     public void SettingsRejectCredentialsEmbeddedInBaseUrl()
     {
         var settings = ProwlarrSettings.CreateDefault(
             "http://user:password@prowlarr:9696");
 
         Assert.ThrowsExactly<ArgumentException>(() =>
-            ProwlarrSettingsStore.NormalizeAndValidate(settings));
+            ProwlarrClient.NormalizeAndValidate(settings));
     }
 
     private static ProwlarrConnection Connection(
