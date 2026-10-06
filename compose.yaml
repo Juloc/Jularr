@@ -1,29 +1,45 @@
 services:
-  jularr:
-    image: ghcr.io/juloc/jularr:latest
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jularr
+      POSTGRES_USER: jularr
+      POSTGRES_PASSWORD: ${JULARR_DB_PASSWORD:?Set JULARR_DB_PASSWORD in .env}
     volumes:
-      - anilingo-data:/data
+      - jularr-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jularr -d jularr"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     networks:
       - default
-    ports:
-      - "8097:8080"
+
+  jularr:
+    image: ghcr.io/juloc/jularr:${JULARR_VERSION:?Set JULARR_VERSION to an immutable release tag}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
-      # Optional local Light Novel translation (docs/TRANSLATEGEMMA.md). Empty endpoint = off.
-      # With the bundled model server: TRANSLATEGEMMA_ENDPOINT=http://translategemma:11434/v1/chat/completions
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=jularr;Username=jularr;Password=${JULARR_DB_PASSWORD:?Set JULARR_DB_PASSWORD in .env}
       TranslateGemma__Endpoint: ${TRANSLATEGEMMA_ENDPOINT:-}
       TranslateGemma__Model: ${TRANSLATEGEMMA_MODEL:-translategemma-12b-it}
       TranslateGemma__MaxChunkCharacters: ${TRANSLATEGEMMA_MAX_CHUNK_CHARACTERS:-1200}
       TranslateGemma__TimeoutMinutes: ${TRANSLATEGEMMA_TIMEOUT_MINUTES:-30}
+    volumes:
+      - jularr-data:/data
+    ports:
+      - "8097:8080"
+    networks:
+      - default
 
-  # Local TranslateGemma model server (Ollama, CPU, quantized Q4_K_M). Only started with
-  #   docker compose --profile translategemma up -d
-  # Not published on a host port: only Jularr reaches it on the compose network.
   translategemma:
     image: ollama/ollama:latest
     profiles: ["translategemma"]
     restart: unless-stopped
     entrypoint: ["/bin/sh", "-c"]
-    # Pulls the model once (kept in the volume) and names it like Jularr's TranslateGemma__Model.
     command:
       - |
         ollama serve &
@@ -41,8 +57,10 @@ services:
     volumes:
       - translategemma-models:/root/.ollama
     mem_limit: ${TRANSLATEGEMMA_MEMORY_LIMIT:-12g}
+    networks:
+      - default
 
 volumes:
-  # Legacy key kept after the Jularr rename: it determines the Docker volume name that holds /data.
-  anilingo-data:
+  jularr-data:
+  jularr-postgres:
   translategemma-models:
