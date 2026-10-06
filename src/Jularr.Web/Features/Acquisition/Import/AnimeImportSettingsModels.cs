@@ -77,15 +77,6 @@ public sealed record AnimeImportSettingsState(
     /// </summary>
     public Dictionary<MediaAcquisitionKind, MediaLibraryTarget> MediaLibraries { get; init; } = [];
 
-    /// <summary>
-    /// The pre-per-media-type global path mapping list, read only so
-    /// <see cref="RemotePathMappingMigration"/> can move it into <see cref="MediaLibraries"/>. It is
-    /// null in every migrated state, is never written back and never consulted by
-    /// <see cref="TranslatePath"/>.
-    /// </summary>
-    [JsonPropertyName("remotePathMappings")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<RemotePathMapping>? LegacyRemotePathMappings { get; init; }
 
     public static AnimeImportSettingsState Empty() =>
         new(1, ImportMode.Move, []);
