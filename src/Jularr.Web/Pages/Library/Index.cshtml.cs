@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Collections;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
@@ -16,7 +17,8 @@ public sealed class IndexModel(
     CurrentAccountContext currentAccount,
     CollectionService collections,
     IAppShellService appShell,
-    ILogger<IndexModel> logger) : PageModel
+    ILogger<IndexModel> logger,
+    IInstanceModuleService? instanceModules = null) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -118,7 +120,9 @@ public sealed class IndexModel(
         LibraryTotal = read.Entries.Count;
         Total = scoped.Count;
         Facets = LibraryBrowse.Facets([.. scoped], Preference);
-        Cards = [.. shown.Select(entry => LibraryCardView.Create(entry, Preference, Ui))];
+        // The play action of a card opens the player; an instance without Playback has none (docs/mockups/instant-play, section 11).
+        var playbackEnabled = instanceModules is null || await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken);
+        Cards = [.. shown.Select(entry => LibraryCardView.Create(entry, Preference, Ui)).Select(card => playbackEnabled ? card : card with { Action = null })];
         Degraded = degraded;
         State = LibraryBrowse.ResolveState(false, degraded, Total, Cards.Count);
     }

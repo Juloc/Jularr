@@ -48,6 +48,24 @@ public sealed class LibraryPageRenderTests
     }
 
     [TestMethod]
+    public async Task ALibraryCardOffersNoPlayActionOnAManagerOnlyInstance()
+    {
+        var (host, _, _) = await SeedAsync();
+        await using var _host = host;
+
+        StringAssert.Contains(WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library", asOwner: false)), "Continue watching");
+
+        await host.Modules.SetAsync(Jularr.Web.Features.Instance.InstanceModule.Playback, false);
+
+        var managerOnly = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library", asOwner: false));
+        StringAssert.Contains(managerOnly, "Starfall Chronicle");
+        foreach (var word in new[] { "Continue watching", "Start watching", "Watch again", "/Library/Watch" })
+        {
+            Assert.IsFalse(managerOnly.Contains(word, StringComparison.Ordinal), $"The Library must not show '{word}' without Playback.");
+        }
+    }
+
+    [TestMethod]
     public async Task LibraryShowsTheSwitchToolbarAndPosterCardsWithLanguagesAndAvailability()
     {
         var (host, starfall, _) = await SeedAsync();
