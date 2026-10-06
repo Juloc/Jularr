@@ -26,6 +26,26 @@
             <p class="sr-only">@ui["discover.results.loading"]</p>
         }
 
+        @if (block.Notice is { } notice)
+        {
+            <div class="dc-message" role="status">
+                <div>
+                    <p><strong>@notice.Title</strong></p>
+                    <p>@notice.Body</p>
+                </div>
+                <div class="dc-message-actions">
+                    @if (notice.ActionUrl is { Length: > 0 } actionUrl)
+                    {
+                        <a class="button button-primary" href="@actionUrl">@notice.ActionLabel</a>
+                    }
+                    @if (block.Retry.Count > 0)
+                    {
+                        <button type="button" class="button" data-dc-retry-sources="@string.Join(',', block.Retry.Select(DiscoverySources.Name))">@ui["library.browse.error.retry"]</button>
+                    }
+                </div>
+            </div>
+        }
+
         @if (block.Message is not null)
         {
             <p class="dc-section-note" role="status">

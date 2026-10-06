@@ -1,0 +1,15 @@
+@using Jularr.Web.Features.Localization
+@using Jularr.Web.Features.Providers
+@using Jularr.Web.Pages.Admin
+@model (UiTextBundle Ui, ProviderConnectionState State)
+@* The one connection-state tag of a provider: a label with an outline glyph, so the state never rests on colour alone. *@
+@{
+    var icon = AdminStatusTone.IconOf(Model.State);
+}
+<span class="admin-tag admin-tag-@AdminStatusTone.Of(Model.State)" data-provider-state="@Model.State.ToString().ToLowerInvariant()">
+    @if (icon.Length > 0)
+    {
+        <partial name="~/Pages/Admin/_AdminIcon.cshtml" model="icon" />
+    }
+    @Model.Ui[AdminStatusTone.KeyOf(Model.State)]
+</span>

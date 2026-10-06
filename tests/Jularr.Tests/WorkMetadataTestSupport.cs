@@ -38,11 +38,16 @@ internal sealed class WorkMetadataFixture : IAsyncDisposable
         collection.AddScoped<WorkMetadataStore>();
         collection.AddSingleton<WorkMetadataRefreshSignal>();
         collection.AddScoped<WorkMetadataRefreshQueue>();
-        collection.AddSingleton(new ProviderExecutor(new ProviderRateLimiter(), new ProviderHealthTracker(TimeProvider.System), TimeProvider.System, NullLogger<ProviderExecutor>.Instance));
+        var health = new ProviderHealthTracker(TimeProvider.System);
+        var credentials = TmdbTestSupport.Credentials("secret-test-key");
+        collection.AddSingleton(health);
+        collection.AddSingleton(credentials);
+        collection.AddSingleton(new ProviderExecutor(new ProviderRateLimiter(), health, TimeProvider.System, NullLogger<ProviderExecutor>.Instance));
         collection.AddScoped(provider => new TmdbDiscoveryProvider(
             new HttpClient(new StubHandler(request => Record(TmdbRequests, request, Tmdb))) { BaseAddress = new Uri("https://api.themoviedb.org/3/") },
-            new ConfigurationManager { ["Providers:Tmdb:ApiKey"] = "secret-test-key" },
+            credentials,
             provider.GetRequiredService<ProviderExecutor>(),
+            health,
             new ProviderResponseCache(TimeProvider.System),
             provider.GetRequiredService<WorkService>(),
             provider.GetRequiredService<WorkStructureService>(),

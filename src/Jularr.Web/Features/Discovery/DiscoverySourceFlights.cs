@@ -137,6 +137,17 @@ public sealed class DiscoverySourceFlights(IServiceScopeFactory scopes, TimeProv
             logger.LogWarning(exception, "Discovery source {Key} is unavailable.", key);
             return Failed(DiscoverySourceState.Busy);
         }
+        catch (ProviderAuthenticationException exception)
+        {
+            logger.LogWarning(exception, "Discovery source {Key} was refused its credential.", key);
+            return Failed(DiscoverySourceState.AuthFailed);
+        }
+        catch (ProviderNotConfiguredException exception)
+        {
+            // The credential was removed between the coordinator's check and the call.
+            logger.LogWarning(exception, "Discovery source {Key} has no usable credential.", key);
+            return Failed(DiscoverySourceState.NotConfigured);
+        }
         catch (Exception exception)
         {
             // The flight is the fault boundary of a provider: whatever it throws, the page keeps the other sources and the cause is logged once here.

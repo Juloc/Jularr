@@ -1,0 +1,63 @@
+@using Jularr.Web.Features.Providers
+@model ProviderPageModel
+@* The provider overview of Admin → Providers (docs/mockups/admin-providers/SPEC.md "Overview page"): one table per provider family with the columns that
+   exist for every provider. Columns Jularr cannot measure for a provider (priority, last response, rate limit) are not drawn.
+   Styles: wwwroot/css/admin-providers.css. *@
+@{
+    var ui = Model.Ui;
+}
+@foreach (var family in Model.Providers.GroupBy(provider => provider.Family))
+{
+    var headingId = $"prov-family-{family.Key.ToString().ToLowerInvariant()}";
+    <section class="admset-section prov-family" aria-labelledby="@headingId">
+        <div class="admset-head">
+            <div>
+                <h2 id="@headingId">@ui["admin.providers.family." + family.Key.ToString().ToLowerInvariant()]</h2>
+            </div>
+        </div>
+        <div class="admset-table-wrap">
+            <table class="admset-table prov-table">
+                <thead>
+                    <tr>
+                        <th scope="col">@ui["admin.providers.column.provider"]</th>
+                        <th scope="col">@ui["admin.providers.column.type"]</th>
+                        <th scope="col">@ui["admin.providers.column.enabled"]</th>
+                        <th scope="col">@ui["admin.providers.column.status"]</th>
+                        <th scope="col">@ui["admin.providers.column.capabilities"]</th>
+                        <th scope="col"><span class="admset-visually-hidden">@ui["admin.providers.column.actions"]</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var provider in family)
+                    {
+                        <tr>
+                            <td data-label="@ui["admin.providers.column.provider"]">
+                                <div class="admset-name prov-name">
+                                    <span class="admset-tile prov-logo" aria-hidden="true">@provider.Initials</span>
+                                    <span>
+                                        <strong>@provider.DisplayName</strong>
+                                        <small>@ui[provider.SummaryKey]</small>
+                                    </span>
+                                </div>
+                            </td>
+                            <td data-label="@ui["admin.providers.column.type"]">@ui["admin.providers.family." + family.Key.ToString().ToLowerInvariant()]</td>
+                            <td data-label="@ui["admin.providers.column.enabled"]">@(provider.Enabled ? ui["common.yes"] : ui["common.no"])</td>
+                            <td data-label="@ui["admin.providers.column.status"]"><partial name="_ProviderStatus" model="(ui, provider.State)" /></td>
+                            <td data-label="@ui["admin.providers.column.capabilities"]">
+                                <ul class="prov-chips">
+                                    @foreach (var capability in provider.CapabilityKeys.Take(4))
+                                    {
+                                        <li class="admin-tag admin-tag-text">@ui[capability]</li>
+                                    }
+                                </ul>
+                            </td>
+                            <td class="admset-cell-actions">
+                                <div class="prov-row-actions"><partial name="_ProviderActions" model="(Model, provider)" /></div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}

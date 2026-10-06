@@ -36,6 +36,39 @@ public static class ProviderCredentials
     }
 }
 
+/// <summary>The one way provider credential files reach disk: written whole to a temporary file first, owner-only on Linux, then moved over the old file.</summary>
+public static class ProviderCredentialFile
+{
+    public static async Task WriteAtomicAsync(string path, string content, CancellationToken cancellationToken)
+    {
+        var directory = Path.GetDirectoryName(path) ?? throw new InvalidOperationException("The provider settings path has no directory.");
+        Directory.CreateDirectory(directory);
+
+        var temporaryPath = $"{path}.tmp-{Guid.NewGuid():N}";
+        try
+        {
+            await File.WriteAllTextAsync(temporaryPath, content, cancellationToken);
+            if (OperatingSystem.IsLinux())
+            {
+                File.SetUnixFileMode(temporaryPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
+        {
+            // Best effort: the temporary file only exists here when the write or the move failed, and that failure is what propagates.
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+}
+
 /// <summary>
 /// A store that persists one provider family's credentials. Implementations encrypt
 /// secrets with a <see cref="ProviderCredentials.ProtectorFor"/> protector and keep

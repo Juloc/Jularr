@@ -28,7 +28,16 @@ public enum DiscoverySourceState
     Unavailable,
 
     /// <summary>The source refused the call because it is rate limited or its circuit is open.</summary>
-    Busy
+    Busy,
+
+    /// <summary>The source's provider has no credential: nothing was asked, and nothing found is not the same as nothing asked.</summary>
+    NotConfigured,
+
+    /// <summary>The source's provider is switched off by the admin.</summary>
+    Disabled,
+
+    /// <summary>The provider answered but refused the configured credential.</summary>
+    AuthFailed
 }
 
 public sealed record DiscoverySourceResult(DiscoverySource Source, DiscoverySourceState State, IReadOnlyList<DiscoveryItem> Items)
@@ -130,11 +139,22 @@ public enum DiscoverySectionState
     Empty,
 
     Unavailable,
-    Busy
+    Busy,
+    NotConfigured,
+    Disabled,
+    AuthFailed
 }
 
 public static class DiscoverySections
 {
+    /// <summary>A section without titles because a source did not answer, as opposed to one that waits or found nothing.</summary>
+    public static bool HasFailed(DiscoverySectionState state) =>
+        state is DiscoverySectionState.Unavailable or DiscoverySectionState.Busy or DiscoverySectionState.NotConfigured or DiscoverySectionState.Disabled or DiscoverySectionState.AuthFailed;
+
+    /// <summary>A source that settled without titles for a reason other than finding nothing.</summary>
+    public static bool HasFailed(DiscoverySourceState state) =>
+        state is DiscoverySourceState.Unavailable or DiscoverySourceState.Busy or DiscoverySourceState.NotConfigured or DiscoverySourceState.Disabled or DiscoverySourceState.AuthFailed;
+
     /// <summary>
     /// A section with titles is ready whatever else happens to its sources. Without titles it waits while any source is pending, and a
     /// failed source makes it unavailable rather than empty: nothing may claim "no results" when a source did not answer.
@@ -149,6 +169,22 @@ public static class DiscoverySections
         if (sources.Any(source => source.State == DiscoverySourceState.Pending))
         {
             return DiscoverySectionState.Pending;
+        }
+
+        // A provider that was never asked or refused its credential outranks a failure that may pass by itself: the admin has to act.
+        if (sources.Any(source => source.State == DiscoverySourceState.AuthFailed))
+        {
+            return DiscoverySectionState.AuthFailed;
+        }
+
+        if (sources.Any(source => source.State == DiscoverySourceState.NotConfigured))
+        {
+            return DiscoverySectionState.NotConfigured;
+        }
+
+        if (sources.Any(source => source.State == DiscoverySourceState.Disabled))
+        {
+            return DiscoverySectionState.Disabled;
         }
 
         if (sources.Any(source => source.State == DiscoverySourceState.Unavailable))

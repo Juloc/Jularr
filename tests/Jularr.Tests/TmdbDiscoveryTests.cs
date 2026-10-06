@@ -178,23 +178,23 @@ public sealed class TmdbDiscoveryTests
 
     internal static TmdbDiscoveryProvider Provider(
         Jularr.Web.Data.AppDbContext db,
-        HttpClient client)
+        HttpClient client,
+        TmdbCredentialStore? credentials = null,
+        ProviderHealthTracker? health = null)
     {
         var clock = TimeProvider.System;
-        var configuration = new ConfigurationManager
-        {
-            ["Providers:Tmdb:ApiKey"] = "test-key"
-        };
+        health ??= new ProviderHealthTracker(clock);
         var works = new WorkService(db);
         var structure = new WorkStructureService(db);
         return new TmdbDiscoveryProvider(
             client,
-            configuration,
+            credentials ?? TmdbTestSupport.Credentials(),
             new ProviderExecutor(
                 new ProviderRateLimiter(),
-                new ProviderHealthTracker(clock),
+                health,
                 clock,
                 NullLogger<ProviderExecutor>.Instance),
+            health,
             new ProviderResponseCache(clock),
             works,
             structure,

@@ -36,6 +36,9 @@ public enum DiscoverSectionLayout
     Grid
 }
 
+/// <summary>What a section says about a provider that cannot answer. The action is only given to a viewer who may act on it, and no text names a secret or a setting key.</summary>
+public sealed record DiscoverProviderNotice(string Title, string Body, string? ActionLabel, string? ActionUrl);
+
 /// <summary>
 /// One part of the Discover body that is replaced as a whole when it changes: a row, a result group or the grid of a scope. A section keeps its
 /// place while a source behind it is pending (reserved ghost cards the size of real ones), so the arrival of its titles moves nothing.
@@ -58,6 +61,9 @@ public sealed record DiscoverSectionView(
     /// <summary>A media group of an all-types search: its heading folds the group away.</summary>
     public bool Collapsible { get; init; }
 
+    /// <summary>Set for a section that is missing because its provider is not configured, refused its credential or is temporarily unavailable.</summary>
+    public DiscoverProviderNotice? Notice { get; init; }
+
     public const int TrackGhosts = 6;
     public const int GridGhosts = 12;
 
@@ -68,7 +74,7 @@ public sealed record DiscoverSectionView(
     {
         get
         {
-            var parts = new List<string> { Id, State.ToString(), Message ?? "", string.Join('+', Retry) };
+            var parts = new List<string> { Id, State.ToString(), Message ?? "", string.Join('+', Retry), Notice?.Title ?? "", Notice?.Body ?? "", Notice?.ActionUrl ?? "" };
             parts.AddRange(Cards.Select(card => $"{card.Key}~{card.State.Css}~{card.RequestStatus}~{card.IsFollowed}"));
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', parts))))[..16];
         }

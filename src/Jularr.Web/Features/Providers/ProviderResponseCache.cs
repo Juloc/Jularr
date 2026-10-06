@@ -77,5 +77,15 @@ public sealed class ProviderResponseCache(TimeProvider clock)
         entries[key] = new Entry(value, clock.GetUtcNow());
     }
 
+    /// <summary>Forgets every entry whose key starts with <paramref name="prefix"/>, so a provider whose configuration changed is asked again instead of answered from the old one.</summary>
+    public void RemoveByPrefix(string prefix)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
+        foreach (var key in entries.Keys.Where(key => key.StartsWith(prefix, StringComparison.Ordinal)))
+        {
+            entries.TryRemove(key, out _);
+        }
+    }
+
     private sealed record Entry(object Value, DateTimeOffset StoredAtUtc);
 }

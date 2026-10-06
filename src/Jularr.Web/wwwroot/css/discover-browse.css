@@ -105,6 +105,7 @@
 }
 .dc-message p { margin: 0; }
 .dc-message p + p { margin-top: 2px; color: var(--muted); font-size: 14px; }
+.dc-message-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .dc-message[role="alert"] {
     border-style: solid; border-color: color-mix(in srgb, var(--danger-text) 40%, var(--border));
 }

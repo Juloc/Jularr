@@ -439,7 +439,7 @@ public sealed class AdminDashboardService(
 
             var states = members.Select(descriptor => (Descriptor: descriptor, Health: providerHealth.Get(descriptor.Key))).ToArray();
             var healthy = states.Count(entry => entry.Health.Status == ProviderHealthStatus.Healthy);
-            var failing = states.Where(entry => entry.Health.Status is ProviderHealthStatus.Degraded or ProviderHealthStatus.Unavailable).ToArray();
+            var failing = states.Where(entry => entry.Health.Status is ProviderHealthStatus.Degraded or ProviderHealthStatus.Unavailable or ProviderHealthStatus.AuthenticationFailed).ToArray();
             var observed = states.Count(entry => entry.Health.Status != ProviderHealthStatus.Unknown);
 
             var state = failing.Any(entry => entry.Health.Status == ProviderHealthStatus.Unavailable)

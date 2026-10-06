@@ -1,0 +1,15 @@
+@using Jularr.Web.Features.Providers
+@model (ProviderPageModel Page, ProviderView Provider)
+@* The row actions of a provider in every list of the shared Provider UI: test the saved connection, or open its form. *@
+@{
+    var ui = Model.Page.Ui;
+    var provider = Model.Provider;
+}
+@if (provider.State != ProviderConnectionState.NotConfigured)
+{
+    <form method="post" asp-page="/Admin/Providers" asp-page-handler="Test" asp-route-provider="@provider.Key">
+        <input type="hidden" name="returnUrl" value="@Model.Page.DetailUrl(provider.Key)" />
+        <button type="submit" class="button button-small">@ui["admin.providers.test"]</button>
+    </form>
+}
+<a class="button button-small @(provider.State == ProviderConnectionState.NotConfigured ? "button-primary" : "button-quiet")" href="@Model.Page.DetailUrl(provider.Key)#provider-@provider.Key">@ui[provider.State == ProviderConnectionState.NotConfigured ? "admin.providers.setUp" : "admin.providers.edit"]</a>

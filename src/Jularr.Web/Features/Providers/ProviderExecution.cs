@@ -47,6 +47,20 @@ public sealed class ProviderUnavailableException(string providerKey)
     public string ProviderKey { get; } = providerKey;
 }
 
+/// <summary>Thrown when a call cannot start because the provider has no usable credential (not configured, or disabled by the admin).</summary>
+public sealed class ProviderNotConfiguredException(string providerKey)
+    : InvalidOperationException($"Provider '{providerKey}' has no usable credential.")
+{
+    public string ProviderKey { get; } = providerKey;
+}
+
+/// <summary>Thrown when the provider answered but refused the configured credential (HTTP 401 or 403). The cause carries the HTTP status.</summary>
+public sealed class ProviderAuthenticationException(string providerKey, Exception innerException)
+    : Exception($"Provider '{providerKey}' refused the configured credential.", innerException)
+{
+    public string ProviderKey { get; } = providerKey;
+}
+
 /// <summary>Thrown when a call is skipped because the provider is rate limited.</summary>
 public sealed class ProviderRateLimitedException(string providerKey, TimeSpan retryAfter)
     : Exception($"Provider '{providerKey}' is rate limited; retry in {retryAfter.TotalSeconds:F0}s.")

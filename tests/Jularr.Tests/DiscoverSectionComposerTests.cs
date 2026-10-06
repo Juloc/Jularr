@@ -64,10 +64,10 @@ public sealed class DiscoverSectionComposerTests
             ],
             Context());
 
-        CollectionAssert.AreEqual(new[] { "trending-anime", "notice-unavailable-movies", "top-anime", "notice-busy-series" }, sections.Select(section => section.Id).ToArray());
-        Assert.AreEqual("Couldn't load Movie right now.", sections[1].Message);
-        CollectionAssert.AreEqual(new[] { DiscoverySource.Movies }, sections[1].Retry.ToArray());
-        Assert.AreEqual("Couldn't load Series right now. Try again in a moment.", sections[3].Message);
+        CollectionAssert.AreEqual(new[] { "trending-anime", "notice-tmdb-unavailable", "top-anime" }, sections.Select(section => section.Id).ToArray());
+        Assert.IsNull(sections[1].Message, "A failed TMDB row names its provider cause, not the generic sentence.");
+        Assert.AreEqual("Movie & Series discovery is temporarily unavailable", sections[1].Notice!.Title);
+        CollectionAssert.AreEqual(new[] { DiscoverySource.Movies, DiscoverySource.Series }, sections[1].Retry.ToArray());
         Assert.IsNull(sections[1].Heading);
     }
 

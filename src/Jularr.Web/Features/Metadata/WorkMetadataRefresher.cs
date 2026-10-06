@@ -25,6 +25,7 @@ public sealed partial class WorkMetadataRefresher(
     WorkMetadataStore store,
     WorkService works,
     TmdbDiscoveryProvider tmdb,
+    TmdbCredentialStore tmdbCredentials,
     WorkArtworkCache artwork,
     TimeProvider clock,
     ILogger<WorkMetadataRefresher> logger)
@@ -48,7 +49,8 @@ public sealed partial class WorkMetadataRefresher(
 
     private const int MaxErrorLength = 2000;
 
-    public bool IsProviderConfigured => tmdb.IsConfigured;
+    /// <summary>Whether TMDB has a usable credential: without one nothing is claimed, so an entry never fails for a missing configuration.</summary>
+    public async Task<bool> IsProviderReadyAsync(CancellationToken cancellationToken) => (await tmdbCredentials.GetAsync(cancellationToken)).Availability == TmdbAvailability.Ready;
 
     /// <summary>The wait after <paramref name="attempts"/> consecutive failed runs: <see cref="BaseBackoff"/> doubling up to <see cref="MaxBackoff"/>.</summary>
     public static TimeSpan Backoff(int attempts)
@@ -133,9 +135,9 @@ public sealed partial class WorkMetadataRefresher(
     {
         ProviderRateLimitedException rateLimited => rateLimited.RetryAfter,
         ProviderUnavailableException => UnavailablePause,
+        ProviderAuthenticationException => CredentialsPause,
+        ProviderNotConfiguredException => UnavailablePause,
         HttpRequestException { StatusCode: HttpStatusCode.TooManyRequests } => UnavailablePause,
-        // The credentials, not the title, are the problem: every other entry would fail the same way.
-        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } => CredentialsPause,
         _ => null
     };
 

@@ -584,10 +584,12 @@ public sealed class DiscoverRequestTests
             var clock = TimeProvider.System;
             var works = new WorkService(Fixture.Db);
             var structure = new WorkStructureService(Fixture.Db);
+            var health = new ProviderHealthTracker(clock);
             var tmdb = new TmdbDiscoveryProvider(
                 client,
-                new ConfigurationManager { ["Providers:Tmdb:ApiKey"] = "test-key" },
-                new ProviderExecutor(new ProviderRateLimiter(), new ProviderHealthTracker(clock), clock, NullLogger<ProviderExecutor>.Instance),
+                TmdbTestSupport.Credentials(),
+                new ProviderExecutor(new ProviderRateLimiter(), health, clock, NullLogger<ProviderExecutor>.Instance),
+                health,
                 new ProviderResponseCache(clock),
                 works,
                 structure,
