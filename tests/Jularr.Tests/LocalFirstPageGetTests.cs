@@ -500,7 +500,8 @@ public sealed class LocalFirstPageGetTests
                 works,
                 structure,
                 Db,
-                new Jularr.Web.Features.MediaCore.LegacyWorkBridge(Db, works, structure));
+                new Jularr.Web.Features.MediaCore.LegacyWorkBridge(Db, works, structure),
+                new Jularr.Web.Features.Metadata.WorkMetadataRefreshQueue(new Jularr.Web.Features.MediaCore.WorkMetadataStore(Db), new Jularr.Web.Features.Metadata.WorkMetadataRefreshSignal(), TimeProvider.System));
             var coordinator = new Jularr.Web.Features.Discovery.DiscoveryCoordinator(
                 animeProvider,
                 readingProvider,

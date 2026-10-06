@@ -467,7 +467,8 @@ public sealed class DiscoverRequestTests
                 works,
                 structure,
                 Fixture.Db,
-                new LegacyWorkBridge(Fixture.Db, works, structure));
+                new LegacyWorkBridge(Fixture.Db, works, structure),
+                new Jularr.Web.Features.Metadata.WorkMetadataRefreshQueue(new WorkMetadataStore(Fixture.Db), new Jularr.Web.Features.Metadata.WorkMetadataRefreshSignal(), TimeProvider.System));
             var page = new DiscoverIndexModel(
                 null!,
                 null!,

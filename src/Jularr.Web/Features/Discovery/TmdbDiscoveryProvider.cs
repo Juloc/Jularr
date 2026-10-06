@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
 
@@ -37,7 +38,7 @@ public sealed record TmdbDiscoveryCandidate(
 /// provider executor and response cache. Browse/search candidates remain bounded runtime cache entries;
 /// durable state is created only by <see cref="EnsureCanonicalWorkAsync"/>.
 /// </summary>
-public sealed class TmdbDiscoveryProvider(
+public sealed partial class TmdbDiscoveryProvider(
     HttpClient client,
     IConfiguration configuration,
     ProviderExecutor executor,
@@ -45,10 +46,20 @@ public sealed class TmdbDiscoveryProvider(
     WorkService works,
     WorkStructureService structure,
     AppDbContext db,
-    LegacyWorkBridge legacyBridge)
+    LegacyWorkBridge legacyBridge,
+    WorkMetadataRefreshQueue metadataRefresh)
 {
     public const string ProviderKey = ProviderKeys.Tmdb;
+
+    /// <summary>The only host durable artwork is downloaded from.</summary>
+    public const string ImageHost = "image.tmdb.org";
+
     private const int MaxMaterializedSeasons = 100;
+    private const int MaxCast = 20;
+    private const int MaxCrew = 10;
+    private const int MaxTrailers = 3;
+
+    private static readonly string[] KeyCrewJobs = ["Director", "Screenplay", "Writer", "Story", "Novel", "Creator"];
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -279,32 +290,6 @@ public sealed class TmdbDiscoveryProvider(
                 cancellationToken);
         }
 
-        if (!string.IsNullOrWhiteSpace(details.Overview))
-        {
-            await works.SetFieldProvenanceAsync(
-                work.Id,
-                "description",
-                ProviderKey,
-                externalId,
-                confidence: 1.0,
-                isManualOverride: false,
-                preferredProvider: ProviderKey,
-                cancellationToken);
-        }
-
-        if (!string.IsNullOrWhiteSpace(details.PosterPath))
-        {
-            await works.SetFieldProvenanceAsync(
-                work.Id,
-                "cover",
-                ProviderKey,
-                externalId,
-                confidence: 1.0,
-                isManualOverride: false,
-                preferredProvider: ProviderKey,
-                cancellationToken);
-        }
-
         var imdbId = details.ImdbId ?? details.ExternalIds?.ImdbId;
         if (!string.IsNullOrWhiteSpace(imdbId))
         {
@@ -343,8 +328,155 @@ public sealed class TmdbDiscoveryProvider(
             await MaterializeSeriesStructureAsync(work.Id, tmdbId, details, locale, cancellationToken);
         }
 
+        // The Work is durable from here on: its synopsis, artwork and facts are persisted by the background metadata spool, never by
+        // this request.
+        await metadataRefresh.RequestMetadataRefreshAsync(work.Id, interactive: false, cancellationToken);
         return work;
     }
+
+    /// <summary>
+    /// The durable metadata of one TMDB title in one locale: details, images, credits, trailers and the regional age rating in a single
+    /// provider call, normalized to <see cref="WorkMetadataSnapshot"/>. Deliberately not served from the response cache: the caller is
+    /// the background spool, whose result is persisted. Provider failures propagate unchanged so the spool can classify them.
+    /// </summary>
+    public async Task<WorkMetadataSnapshot> GetWorkMetadataAsync(TmdbDiscoveryMediaType mediaType, string externalId, string locale, CancellationToken cancellationToken)
+    {
+        if (!TryNormalizeExternalId(externalId, out var tmdbId))
+        {
+            throw new ArgumentException("A positive TMDB id is required.", nameof(externalId));
+        }
+
+        var language = WorkMetadataLocales.BaseLanguage(locale);
+        var imageLanguages = string.Join(',', new[] { language, WorkMetadataLocales.English, "null" }.Distinct(StringComparer.Ordinal));
+        var movie = mediaType == TmdbDiscoveryMediaType.Movie;
+        var details = await GetJsonAsync<TmdbMetadataDetails>(
+            $"{(movie ? "movie" : "tv")}/{tmdbId}",
+            [
+                ("language", locale),
+                ("append_to_response", movie ? "images,credits,videos,release_dates" : "images,credits,videos,content_ratings"),
+                ("include_image_language", imageLanguages),
+                ("include_video_language", language)
+            ],
+            cancellationToken);
+
+        var country = WorkMetadataLocales.CertificationCountry(locale);
+        var certification = movie
+            ? details.ReleaseDates?.Results?.FirstOrDefault(x => x.Country == country)?.ReleaseDates?.Select(x => x.Certification?.Trim()).FirstOrDefault(x => !string.IsNullOrEmpty(x))
+            : details.ContentRatings?.Results?.FirstOrDefault(x => x.Country == country)?.Rating?.Trim();
+        var runtime = movie
+            ? details.Runtime
+            : details.EpisodeRunTime?.FirstOrDefault(x => x > 0) is int typical and > 0 ? typical : details.LastEpisodeToAir?.Runtime;
+        var studios = (details.ProductionCompanies ?? []).Select(x => x.Name).Concat(movie ? [] : (details.Networks ?? []).Select(x => x.Name));
+        var countries = (details.ProductionCountries ?? []).Select(x => x.Country).Concat(movie ? [] : details.OriginCountry ?? []);
+
+        return new WorkMetadataSnapshot(
+            ProviderKey,
+            tmdbId,
+            locale,
+            Trimmed(movie ? details.Title : details.Name),
+            Trimmed(details.Overview),
+            Trimmed(details.Tagline),
+            DistinctTexts((details.Genres ?? []).Select(x => x.Name), 10),
+            TrailerKeys(details.Videos?.Results),
+            Trimmed(movie ? details.OriginalTitle : details.OriginalName),
+            IsLanguageCode(details.OriginalLanguage) ? details.OriginalLanguage : null,
+            ParseDateOnly(movie ? details.ReleaseDate : details.FirstAirDate),
+            runtime is > 0 ? runtime : null,
+            details.VoteCount is > 0 && details.VoteAverage is >= 0 and <= 10 ? Math.Round(details.VoteAverage.Value, 1) : null,
+            details.VoteCount is >= 0 ? details.VoteCount : null,
+            string.IsNullOrEmpty(certification) || country is null ? null : certification,
+            string.IsNullOrEmpty(certification) ? null : country,
+            DistinctTexts(studios, 10),
+            DistinctTexts(countries.Where(x => x is { Length: 2 } && x.All(char.IsAsciiLetterUpper)), 10),
+            Credits(details, movie),
+            Artwork(details.Images));
+    }
+
+    /// <summary>
+    /// The TMDB image CDN address of a provider file path at a fixed rendition. The path is untrusted provider data: only a single
+    /// segment of letters, digits, <c>_</c> and <c>-</c> with a raster extension is accepted, so the result is always on
+    /// <see cref="ImageHost"/> and can never traverse or redirect the request elsewhere.
+    /// </summary>
+    public static bool TryBuildImageUri(string? filePath, string size, out Uri uri)
+    {
+        uri = null!;
+        if (filePath is null || !ImageFilePath().IsMatch(filePath) || !ImageSize().IsMatch(size))
+        {
+            return false;
+        }
+
+        uri = new Uri($"https://{ImageHost}/t/p/{size}{filePath}", UriKind.Absolute);
+        return true;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex("^/[A-Za-z0-9_-]{1,120}\\.(jpg|jpeg|png|webp)$")]
+    private static partial System.Text.RegularExpressions.Regex ImageFilePath();
+
+    [System.Text.RegularExpressions.GeneratedRegex("^(w[0-9]{2,4}|original)$")]
+    private static partial System.Text.RegularExpressions.Regex ImageSize();
+
+    [System.Text.RegularExpressions.GeneratedRegex("^[A-Za-z0-9_-]{6,32}$")]
+    private static partial System.Text.RegularExpressions.Regex YouTubeKey();
+
+    private static IReadOnlyList<WorkCreditCandidate> Credits(TmdbMetadataDetails details, bool movie)
+    {
+        var cast = (details.Credits?.Cast ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+            .OrderBy(x => x.Order)
+            .Take(MaxCast)
+            .Select(x => new WorkCreditCandidate(WorkCreditKind.Cast, x.Name!.Trim(), Trimmed(x.Character), PersonId(x.Id)));
+        var creators = movie ? [] : (details.CreatedBy ?? []).Where(x => !string.IsNullOrWhiteSpace(x.Name)).Select(x => new WorkCreditCandidate(WorkCreditKind.Crew, x.Name!.Trim(), "Creator", PersonId(x.Id)));
+        var crew = (details.Credits?.Crew ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && KeyCrewJobs.Contains(x.Job, StringComparer.Ordinal))
+            .OrderBy(x => Array.IndexOf(KeyCrewJobs, x.Job))
+            .Select(x => new WorkCreditCandidate(WorkCreditKind.Crew, x.Name!.Trim(), x.Job, PersonId(x.Id)));
+        return [.. cast, .. creators.Concat(crew).DistinctBy(x => (x.Name, x.Role)).Take(MaxCrew)];
+    }
+
+    private static string? PersonId(int id) => id > 0 ? id.ToString(CultureInfo.InvariantCulture) : null;
+
+    private static IReadOnlyList<string> TrailerKeys(IEnumerable<TmdbVideo>? videos) =>
+    [
+        .. (videos ?? [])
+            .Where(x => x.Site == "YouTube" && x.Type == "Trailer" && x.Key is not null && YouTubeKey().IsMatch(x.Key))
+            .OrderByDescending(x => x.Official)
+            .ThenBy(x => x.PublishedAt ?? "", StringComparer.Ordinal)
+            .Select(x => x.Key!)
+            .Distinct(StringComparer.Ordinal)
+            .Take(MaxTrailers)
+    ];
+
+    private static IReadOnlyList<WorkArtworkCandidate> Artwork(TmdbImages? images)
+    {
+        var result = new List<WorkArtworkCandidate>();
+        Add(WorkArtworkSlot.Poster, "w780", images?.Posters);
+        Add(WorkArtworkSlot.Backdrop, "w1280", images?.Backdrops);
+        Add(WorkArtworkSlot.Logo, "w500", images?.Logos);
+        return result;
+
+        void Add(WorkArtworkSlot slot, string size, IEnumerable<TmdbImage>? source)
+        {
+            foreach (var image in source ?? [])
+            {
+                // TMDB marks textless artwork with no language or "xx"; anything else that is not a two-letter code is unusable.
+                var language = image.Language is null or "xx" ? "" : image.Language;
+                if ((language.Length == 0 || IsLanguageCode(language)) && TryBuildImageUri(image.FilePath, size, out var uri))
+                {
+                    result.Add(new WorkArtworkCandidate(slot, language, image.FilePath!, uri, image.Width is > 0 ? image.Width : null, image.Height is > 0 ? image.Height : null, image.VoteAverage, image.VoteCount));
+                }
+            }
+        }
+    }
+
+    private static IReadOnlyList<string> DistinctTexts(IEnumerable<string?> values, int limit) =>
+        [.. values.Select(Trimmed).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Take(limit)];
+
+    private static bool IsLanguageCode(string? value) => value is { Length: 2 } && value.All(char.IsAsciiLetterLower);
+
+    private static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static DateOnly? ParseDateOnly(string? value) =>
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
     private async Task MaterializeSeriesStructureAsync(
         Guid workId,
@@ -663,12 +795,6 @@ public sealed class TmdbDiscoveryProvider(
         [JsonPropertyName("original_language")]
         public string? OriginalLanguage { get; set; }
 
-        [JsonPropertyName("overview")]
-        public string? Overview { get; set; }
-
-        [JsonPropertyName("poster_path")]
-        public string? PosterPath { get; set; }
-
         [JsonPropertyName("release_date")]
         public string? ReleaseDateValue { get; set; }
 
@@ -703,6 +829,210 @@ public sealed class TmdbDiscoveryProvider(
 
         [JsonPropertyName("tvdb_id")]
         public int? TvdbId { get; set; }
+    }
+
+    private sealed class TmdbMetadataDetails
+    {
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("original_title")]
+        public string? OriginalTitle { get; set; }
+
+        [JsonPropertyName("original_name")]
+        public string? OriginalName { get; set; }
+
+        [JsonPropertyName("original_language")]
+        public string? OriginalLanguage { get; set; }
+
+        [JsonPropertyName("overview")]
+        public string? Overview { get; set; }
+
+        [JsonPropertyName("tagline")]
+        public string? Tagline { get; set; }
+
+        [JsonPropertyName("release_date")]
+        public string? ReleaseDate { get; set; }
+
+        [JsonPropertyName("first_air_date")]
+        public string? FirstAirDate { get; set; }
+
+        [JsonPropertyName("runtime")]
+        public int? Runtime { get; set; }
+
+        [JsonPropertyName("episode_run_time")]
+        public List<int>? EpisodeRunTime { get; set; }
+
+        [JsonPropertyName("last_episode_to_air")]
+        public TmdbEpisodeRuntime? LastEpisodeToAir { get; set; }
+
+        [JsonPropertyName("vote_average")]
+        public double? VoteAverage { get; set; }
+
+        [JsonPropertyName("vote_count")]
+        public int? VoteCount { get; set; }
+
+        [JsonPropertyName("genres")]
+        public List<TmdbNamed>? Genres { get; set; }
+
+        [JsonPropertyName("production_companies")]
+        public List<TmdbNamed>? ProductionCompanies { get; set; }
+
+        [JsonPropertyName("networks")]
+        public List<TmdbNamed>? Networks { get; set; }
+
+        [JsonPropertyName("production_countries")]
+        public List<TmdbCountry>? ProductionCountries { get; set; }
+
+        [JsonPropertyName("origin_country")]
+        public List<string>? OriginCountry { get; set; }
+
+        [JsonPropertyName("created_by")]
+        public List<TmdbPerson>? CreatedBy { get; set; }
+
+        [JsonPropertyName("credits")]
+        public TmdbCredits? Credits { get; set; }
+
+        [JsonPropertyName("videos")]
+        public TmdbResults<TmdbVideo>? Videos { get; set; }
+
+        [JsonPropertyName("images")]
+        public TmdbImages? Images { get; set; }
+
+        [JsonPropertyName("release_dates")]
+        public TmdbResults<TmdbCountryReleases>? ReleaseDates { get; set; }
+
+        [JsonPropertyName("content_ratings")]
+        public TmdbResults<TmdbContentRating>? ContentRatings { get; set; }
+    }
+
+    private sealed class TmdbEpisodeRuntime
+    {
+        [JsonPropertyName("runtime")]
+        public int? Runtime { get; set; }
+    }
+
+    private sealed class TmdbNamed
+    {
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+    }
+
+    private sealed class TmdbCountry
+    {
+        [JsonPropertyName("iso_3166_1")]
+        public string? Country { get; set; }
+    }
+
+    private sealed class TmdbPerson
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("character")]
+        public string? Character { get; set; }
+
+        [JsonPropertyName("job")]
+        public string? Job { get; set; }
+
+        [JsonPropertyName("order")]
+        public int Order { get; set; }
+    }
+
+    private sealed class TmdbCredits
+    {
+        [JsonPropertyName("cast")]
+        public List<TmdbPerson>? Cast { get; set; }
+
+        [JsonPropertyName("crew")]
+        public List<TmdbPerson>? Crew { get; set; }
+    }
+
+    private sealed class TmdbResults<T>
+    {
+        [JsonPropertyName("results")]
+        public List<T>? Results { get; set; }
+    }
+
+    private sealed class TmdbVideo
+    {
+        [JsonPropertyName("key")]
+        public string? Key { get; set; }
+
+        [JsonPropertyName("site")]
+        public string? Site { get; set; }
+
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+
+        [JsonPropertyName("official")]
+        public bool Official { get; set; }
+
+        [JsonPropertyName("published_at")]
+        public string? PublishedAt { get; set; }
+    }
+
+    private sealed class TmdbImages
+    {
+        [JsonPropertyName("posters")]
+        public List<TmdbImage>? Posters { get; set; }
+
+        [JsonPropertyName("backdrops")]
+        public List<TmdbImage>? Backdrops { get; set; }
+
+        [JsonPropertyName("logos")]
+        public List<TmdbImage>? Logos { get; set; }
+    }
+
+    private sealed class TmdbImage
+    {
+        [JsonPropertyName("file_path")]
+        public string? FilePath { get; set; }
+
+        [JsonPropertyName("iso_639_1")]
+        public string? Language { get; set; }
+
+        [JsonPropertyName("width")]
+        public int? Width { get; set; }
+
+        [JsonPropertyName("height")]
+        public int? Height { get; set; }
+
+        [JsonPropertyName("vote_average")]
+        public double? VoteAverage { get; set; }
+
+        [JsonPropertyName("vote_count")]
+        public int? VoteCount { get; set; }
+    }
+
+    private sealed class TmdbCountryReleases
+    {
+        [JsonPropertyName("iso_3166_1")]
+        public string? Country { get; set; }
+
+        [JsonPropertyName("release_dates")]
+        public List<TmdbRelease>? ReleaseDates { get; set; }
+    }
+
+    private sealed class TmdbRelease
+    {
+        [JsonPropertyName("certification")]
+        public string? Certification { get; set; }
+    }
+
+    private sealed class TmdbContentRating
+    {
+        [JsonPropertyName("iso_3166_1")]
+        public string? Country { get; set; }
+
+        [JsonPropertyName("rating")]
+        public string? Rating { get; set; }
     }
 
     private sealed class TmdbSeasonSummary

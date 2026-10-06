@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Movies;
 using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
@@ -224,7 +225,8 @@ public sealed class TmdbDiscoveryTests
             works,
             structure,
             db,
-            new LegacyWorkBridge(db, works, structure));
+            new LegacyWorkBridge(db, works, structure),
+            new WorkMetadataRefreshQueue(new WorkMetadataStore(db), new WorkMetadataRefreshSignal(), clock));
     }
 
     private static HttpClient Client(Func<HttpRequestMessage, HttpResponseMessage> handler) =>

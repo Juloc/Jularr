@@ -1,35 +1,11 @@
-using System.Threading.Channels;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Infrastructure;
 
 namespace Jularr.Web.Features.Franchises;
 
-/// <summary>
-/// Wakes the franchise refresh worker, for example after a follow or a manual refresh. What to
-/// refresh is always read from the database, so a lost or repeated signal does no harm.
-/// </summary>
-public sealed class FranchiseRefreshSignal
-{
-    private readonly Channel<bool> channel = Channel.CreateBounded<bool>(
-        new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
-
-    public void Wake() => channel.Writer.TryWrite(true);
-
-    /// <summary>Waits until <see cref="Wake"/> is called or <paramref name="timeout"/> has passed.</summary>
-    public async Task WaitAsync(TimeSpan timeout, CancellationToken cancellationToken)
-    {
-        using var timer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timer.CancelAfter(timeout);
-        try
-        {
-            await channel.Reader.WaitToReadAsync(timer.Token);
-            channel.Reader.TryRead(out _);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-        }
-    }
-}
+/// <summary>Wakes the franchise refresh worker, for example after a follow or a manual refresh.</summary>
+public sealed class FranchiseRefreshSignal : BackgroundWakeSignal;
 
 /// <summary>
 /// Background refresh of followed franchises. Each run of <see cref="FranchiseService.RefreshAsync"/>

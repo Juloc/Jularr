@@ -450,6 +450,13 @@ builder.Services.AddScoped<AnimeMetadataService>();
 builder.Services.AddScoped<AnimeRepairService>();
 builder.Services.AddHttpClient(Jularr.Web.Features.Artwork.AnimeArtworkLibrary.HttpClientName, client =>
     client.Timeout = TimeSpan.FromSeconds(30));
+// Persisted Work metadata and artwork (#820): the spool worker fetches through the TMDB adapter and keeps artwork only from its CDN.
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.Artwork.WorkArtworkCache(Jularr.Web.Features.Artwork.WorkArtworkCache.DefaultRootPath, [TmdbDiscoveryProvider.ImageHost], services.GetRequiredService<IHttpClientFactory>()));
+builder.Services.AddSingleton<WorkMetadataRefreshSignal>();
+builder.Services.AddScoped<WorkMetadataRefreshQueue>();
+builder.Services.AddScoped<WorkMetadataRefresher>();
+builder.Services.AddHostedService<WorkMetadataRefreshService>();
 builder.Services.AddScoped<Jularr.Web.Features.Artwork.AnimeArtworkLibrary>();
 builder.Services.AddScoped<Jularr.Web.Features.Artwork.BesideMediaArtworkStore>();
 builder.Services.AddScoped<Jularr.Web.Features.Artwork.BesideMediaArtworkCache>();
