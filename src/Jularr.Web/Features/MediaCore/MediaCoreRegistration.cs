@@ -13,6 +13,7 @@ public static class MediaCoreRegistration
         services.AddScoped<WorkStructureService>();
         services.AddScoped<WorkQueryService>();
         services.AddScoped<LegacyWorkBridge>();
+        services.AddScoped<WorkMetadataStore>();
         return services;
     }
 }
