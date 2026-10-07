@@ -59,17 +59,27 @@
             <partial name="_DiscoverState" model="card.State" />
             @if (card.IsLocal && (card.PlayUrl ?? card.DetailUrl) is { Length: > 0 } actionUrl)
             {
-                <a class="button button-primary dc-card-action" href="@actionUrl">@(card.PlayUrl is not null ? card.PlayLabel : card.Category is "manga" or "light-novel" or "book" ? ui["discover.card.read"] : ui["discover.card.open"])</a>
+                var reads = card.PlayUrl is null && card.Category is "manga" or "light-novel" or "book";
+                <a class="button button-primary dc-card-action" href="@actionUrl">
+                    <partial name="_DiscoverIcon" model='card.PlayUrl is not null ? "play" : reads ? "read" : "library"' />
+                    <span>@(card.PlayUrl is not null ? card.PlayLabel : reads ? ui["discover.card.read"] : ui["discover.card.open"])</span>
+                </a>
             }
             else if (!card.IsLocal && card.RequestId is null && card.CanRequest)
             {
                 @if (card.StartsInstantly)
                 {
-                    <button type="button" class="button button-primary dc-card-action" data-dc-activate="open">@ui["discover.card.startWatching"]</button>
+                    <button type="button" class="button button-primary dc-card-action" data-dc-activate="open">
+                        <partial name="_DiscoverIcon" model='"play"' />
+                        <span>@ui["discover.card.startWatching"]</span>
+                    </button>
                 }
                 else
                 {
-                    <button type="button" class="button button-primary dc-card-action dc-card-request" data-dc-card-request>@ui["discover.card.request"]</button>
+                    <button type="button" class="button button-primary dc-card-action dc-card-request" data-dc-card-request>
+                        <partial name="_DiscoverIcon" model='"plus"' />
+                        <span>@ui["discover.card.request"]</span>
+                    </button>
                 }
             }
         </div>
@@ -125,8 +135,21 @@
                            aria-label="@ui.Format("library.video.playTrailer", ("title", card.Title))">
                             <span class="dc-pv-trailer-button" aria-hidden="true"><partial name="_DiscoverIcon" model='"play"' /></span>
                         </a>
+                        @* The badge is a second link of the facade: the same click starts the trailer in place. *@
+                        <a class="dc-pv-badge" href="https://www.youtube.com/watch?v=@trailerKey" target="_blank" rel="noopener noreferrer">
+                            <partial name="_DiscoverIcon" model='"play"' />
+                            <span>@ui["discover.preview.trailer"]</span>
+                        </a>
                     </div>
                 }
+
+                @* The arrows open the title before or after this one in its row; discover.js shows them only where there is one. *@
+                <button type="button" class="dc-pv-nav dc-pv-nav-prev" data-dc-sheet-nav="-1" aria-label="@ui["discover.preview.previous"]" hidden>
+                    <partial name="_DiscoverIcon" model='"chevron"' />
+                </button>
+                <button type="button" class="dc-pv-nav dc-pv-nav-next" data-dc-sheet-nav="1" aria-label="@ui["discover.preview.next"]" hidden>
+                    <partial name="_DiscoverIcon" model='"chevron"' />
+                </button>
             </div>
 
             <div class="dc-pv-poster">
@@ -146,8 +169,7 @@
                 {
                     <p class="dc-pv-native">@nativeTitle</p>
                 }
-                <p class="dc-pv-meta">@card.Meta</p>
-                <partial name="_DiscoverState" model="card.State" />
+                <p class="dc-pv-meta">@card.Meta.Replace(" · ", " • ")</p>
 
                 @if (card.Genres.Count > 0)
                 {
@@ -169,7 +191,16 @@
                     <dl class="dc-pv-facts">
                         @foreach (var fact in card.Facts)
                         {
-                            <div><dt>@fact.Label</dt><dd>@fact.Value</dd></div>
+                            <div>
+                                <dt>@fact.Label</dt>
+                                <dd>
+                                    @if (fact.Icon is { } factIcon)
+                                    {
+                                        <span class="dc-pv-fact-icon dc-pv-fact-@factIcon"><partial name="_DiscoverIcon" model="factIcon" /></span>
+                                    }
+                                    <span>@fact.Value</span>
+                                </dd>
+                            </div>
                         }
                         @if (card.Audio.Count > 0)
                         {
@@ -202,7 +233,8 @@
                     {
                         <span class="dc-pv-request" data-dc-request-slot>
                             <button type="button" class="button button-primary" data-dc-request>
-                                @ui["discover.card.request"]
+                                <partial name="_DiscoverIcon" model='"plus"' />
+                                <span>@ui["discover.card.request"]</span>
                             </button>
                         </span>
                     }
@@ -230,11 +262,17 @@
 
                     @if (card.DetailUrl is { } detailsUrl)
                     {
-                        <a class="button" href="@detailsUrl">@ui["discover.preview.details"]</a>
+                        <a class="button" href="@detailsUrl">
+                            <partial name="_DiscoverIcon" model='"details"' />
+                            <span>@ui["discover.preview.details"]</span>
+                        </a>
                     }
                     else if (card.ResolvesDetail)
                     {
-                        <button type="button" class="button" data-dc-activate="open">@ui["discover.preview.details"]</button>
+                        <button type="button" class="button" data-dc-activate="open">
+                            <partial name="_DiscoverIcon" model='"details"' />
+                            <span>@ui["discover.preview.details"]</span>
+                        </button>
                     }
                 </div>
             </div>

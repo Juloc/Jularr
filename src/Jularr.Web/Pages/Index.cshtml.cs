@@ -385,15 +385,17 @@ public sealed partial class IndexModel(
     {
         var watching = ContinueWatching.Select(item =>
         {
+            // The tile is a poster card: the backdrop is only the stand-in of a title that has no poster.
             var backdrop = item.Title.BackdropUrl;
             return (At: item.UpdatedAt, Tile: new HomeContinueTile(
                 item.Title.Title,
                 WatchingCaption(item),
                 item.PlayHref,
                 item.ResumePositionMs > 0 ? item.Percent : null,
-                backdrop ?? item.PosterUrl,
-                backdrop is not null,
-                Ui.Format("home.continueWatching.progressAria", ("percent", item.Percent))));
+                item.PosterUrl ?? backdrop,
+                item.PosterUrl is null && backdrop is not null,
+                Ui.Format("home.continueWatching.progressAria", ("percent", item.Percent)),
+                "play"));
         });
         var reading = ContinueReading.Select(item => (At: item.LastReadAt, Tile: new HomeContinueTile(
             item.Title,
@@ -402,7 +404,8 @@ public sealed partial class IndexModel(
             item.ProgressPercent,
             item.CoverImageUrl,
             false,
-            Ui.Format("home.continueReading.progressAria", ("percent", item.ProgressPercent)))));
+            Ui.Format("home.continueReading.progressAria", ("percent", item.ProgressPercent)),
+            "read")));
 
         return watching.Concat(reading)
             .OrderByDescending(row => row.At)
@@ -613,7 +616,8 @@ public sealed partial class IndexModel(
         int? ProgressPercent,
         string? ImageUrl,
         bool ImageIsBackdrop,
-        string ProgressAria);
+        string ProgressAria,
+        string ActionIcon);
 
     /// <summary>One text-free poster of the "For you" row; the title is its accessible name.</summary>
     public sealed record HomePosterItem(string Title, string? ImageUrl, string Href);

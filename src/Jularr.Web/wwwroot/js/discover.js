@@ -29,6 +29,28 @@
     // Changes the visitor made in a preview (follow, request), applied again when a card's preview reopens.
     const overrides = new Map();
 
+    // ---- Shelves: the native scrollbar is hidden, the chevrons move a row by one view -----------------------------------------------------
+
+    // A chevron shows only while there is more to see in its direction; a section replaced by a later generation is brought up to date when it is reached.
+    function syncShelf(shelf) {
+        const track = shelf.querySelector(".dc-track");
+        if (!track) return;
+        shelf.querySelector("[data-dc-shelf-nav='-1']").hidden = track.scrollLeft <= 1;
+        shelf.querySelector("[data-dc-shelf-nav='1']").hidden = track.scrollLeft >= track.scrollWidth - track.clientWidth - 1;
+    }
+
+    const shelfOf = target => target instanceof Element ? target.closest("[data-dc-shelf]") : null;
+    ["mouseover", "focusin", "scroll"].forEach(type => root.addEventListener(type, event => {
+        const shelf = shelfOf(event.target);
+        if (shelf) syncShelf(shelf);
+    }, true));
+    root.addEventListener("click", event => {
+        const nav = event.target.closest("[data-dc-shelf-nav]");
+        if (!nav) return;
+        const track = nav.closest("[data-dc-shelf]").querySelector(".dc-track");
+        track.scrollBy({ left: Number(nav.dataset.dcShelfNav) * track.clientWidth * 0.85, behavior: reducedMotion.matches ? "auto" : "smooth" });
+    });
+
     // ---- Address: the only state --------------------------------------------------------------
 
     // The canonical address of the form: defaults and empty fields are left out, so a bookmark stays short.
@@ -600,6 +622,33 @@
         }
     }
 
+    // The arrows of the preview open the title before or after the current one in its row or grid: the next card with a preview of its own.
+    let sheetCard = null;
+
+    function neighbourOf(card, step) {
+        let item = card.closest("li");
+        while (item) {
+            item = step < 0 ? item.previousElementSibling : item.nextElementSibling;
+            const next = item?.querySelector("[data-dc-card]");
+            if (next?.querySelector("template[data-dc-template]")) return next;
+        }
+
+        return null;
+    }
+
+    function syncSheetNav() {
+        sheetContent.querySelectorAll("[data-dc-sheet-nav]").forEach(button => {
+            button.hidden = !sheetCard || !neighbourOf(sheetCard, Number(button.dataset.dcSheetNav));
+        });
+    }
+
+    function stepSheet(step) {
+        const next = sheetCard ? neighbourOf(sheetCard, step) : null;
+        if (!next) return;
+        openSheet(next);
+        next.scrollIntoView({ block: "nearest", inline: "center" });
+    }
+
     function openSheet(card) {
         const content = cloneTemplate(card);
         if (!content) return false;
@@ -607,6 +656,8 @@
         keyOf(card);
         sheet.dataset.for = card.dataset.dcKey;
         sheetContent.replaceChildren(content);
+        sheetCard = card;
+        syncSheetNav();
         activateLiveRequests(sheetContent);
         sheet.setAttribute("aria-label", card.querySelector(".dc-card-title")?.textContent?.trim() || "");
         if (typeof sheet.showModal === "function") {
@@ -627,7 +678,19 @@
         else sheet.removeAttribute("open");
     }
 
-    sheet.addEventListener("close", () => sheetContent.replaceChildren());
+    sheet.addEventListener("close", () => {
+        sheetContent.replaceChildren();
+        sheetCard = null;
+    });
+    sheet.addEventListener("click", event => {
+        const nav = event.target instanceof Element ? event.target.closest("[data-dc-sheet-nav]") : null;
+        if (nav) stepSheet(Number(nav.dataset.dcSheetNav));
+    });
+    sheet.addEventListener("keydown", event => {
+        if ((event.key !== "ArrowLeft" && event.key !== "ArrowRight") || event.altKey || event.ctrlKey || event.metaKey || /input|textarea|select/i.test(document.activeElement?.tagName || "")) return;
+        event.preventDefault();
+        stepSheet(event.key === "ArrowLeft" ? -1 : 1);
+    });
     sheet.querySelector("[data-dc-sheet-close]")?.addEventListener("click", closeSheet);
     sheet.addEventListener("click", event => {
         if (event.target === sheet) closeSheet();

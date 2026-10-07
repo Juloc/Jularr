@@ -41,7 +41,8 @@ public enum DiscoverStateKind
 /// <param name="Label">The short text of the indicator; the icon and the text carry the state, never the colour alone.</param>
 public sealed record DiscoverStateView(DiscoverStateKind Kind, string Css, string Label, string? Hint);
 
-public sealed record DiscoverFact(string Label, string Value);
+/// <param name="Icon">The icon of the fact in the Quick View ("star" for a rating, "dot" for the release status), or none.</param>
+public sealed record DiscoverFact(string Label, string Value, string? Icon = null);
 
 /// <summary>The languages and the play link of a title that is already in the library.</summary>
 public sealed record DiscoverLocalFacts(
@@ -248,10 +249,16 @@ public static partial class DiscoverCardFactory
         string? requestLabel,
         UiTextBundle ui)
     {
+        // The Quick View shows the rating first, then the status, as the approved mockup does (docs/mockups/media-preview).
         var facts = new List<DiscoverFact>();
+        if (item.Rating is { } rating and > 0)
+        {
+            facts.Add(new(ui["library.mediaCard.rating"], rating.ToString("0.0", CultureInfo.InvariantCulture), "star"));
+        }
+
         if (release is { } status)
         {
-            facts.Add(new(ui["library.browse.filter.status"], ui[MediaBannerCardModel.StatusKey(status)]));
+            facts.Add(new(ui["library.browse.filter.status"], ui[MediaBannerCardModel.StatusKey(status)], "dot"));
         }
 
         if (requestLabel is not null)
@@ -274,11 +281,6 @@ public static partial class DiscoverCardFactory
         if (!string.IsNullOrWhiteSpace(item.Author))
         {
             facts.Add(new(ui["discover.fact.author"], item.Author));
-        }
-
-        if (item.Rating is { } rating and > 0)
-        {
-            facts.Add(new(ui["library.mediaCard.rating"], rating.ToString("0.0", CultureInfo.InvariantCulture)));
         }
 
         return facts;

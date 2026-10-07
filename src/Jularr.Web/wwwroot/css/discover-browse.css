@@ -131,8 +131,22 @@
 .dc-shelf-more { color: var(--accent-text); font-size: 13px; font-weight: 700; white-space: nowrap; }
 .dc-track {
     display: flex; gap: 16px; margin: 0; padding: 4px 8px 12px 2px; list-style: none;
-    overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin;
+    overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none;
 }
+.dc-track::-webkit-scrollbar { display: none; }
+.dc-shelf { position: relative; min-width: 0; }
+/* The chevrons sit on the edges of the covers, centred on the artwork (a 158px card is 237px tall), and only appear while the shelf is hovered or focused. */
+.dc-shelf-nav {
+    position: absolute; z-index: 3; top: 122px; display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+    border: 0; border-radius: 50%; background: rgb(12 10 18 / .74); backdrop-filter: blur(6px); color: #fff; cursor: pointer;
+    opacity: 0; transition: opacity .15s;
+}
+.dc-shelf-nav[hidden] { display: none; }
+.dc-shelf-prev { inset-inline-start: 6px; }
+.dc-shelf-next { inset-inline-end: 6px; }
+.dc-shelf-prev .dc-icon { transform: rotate(90deg); }
+.dc-shelf-next .dc-icon { transform: rotate(-90deg); }
+.dc-shelf:hover .dc-shelf-nav, .dc-shelf:focus-within .dc-shelf-nav { opacity: 1; }
 .dc-track-item { flex: 0 0 auto; width: 158px; scroll-snap-align: start; }
 .dc-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 24px 16px;
@@ -189,16 +203,42 @@
 .dc-card:hover .dc-card-title :is(a, button), .dc-card-title :is(a, button):focus-visible { color: var(--accent-text); }
 .dc-card-meta { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
 .dc-card-media { position: relative; }
-/* The fixed bottom area of the cover: the state rests there, the canonical action takes its place on hover and focus. */
-.dc-card-foot { position: absolute; z-index: 2; inset-inline: 8px; bottom: 8px; display: grid; justify-items: start; }
-.dc-card-foot > * { grid-area: 1 / 1; }
-.dc-card-foot .dc-state { background: color-mix(in srgb, var(--surface) 90%, transparent); backdrop-filter: blur(6px); transition: opacity .15s; }
-.dc-card-action { width: 100%; min-height: 34px; padding: 6px 10px; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s; }
-.dc-card:hover .dc-card-action, .dc-card:focus-within .dc-card-action { opacity: 1; pointer-events: auto; }
-.dc-card:hover .dc-card-foot:has(.dc-card-action) .dc-state, .dc-card:focus-within .dc-card-foot:has(.dc-card-action) .dc-state { opacity: 0; }
+/* The fixed bottom area of the cover: the state rests on its bottom edge; on hover or focus of the card it gives way to the canonical action, the pill
+   of the detail pages (.ad-primary: accent fill, full round, accent hover). The action rises a few pixels into place while it fades in. The state must
+   not catch the pointer: its backdrop blur paints it above the button, which would turn a click on the button into a text selection. */
+.dc-card-foot { position: absolute; z-index: 2; inset-inline: 8px; bottom: 8px; display: grid; align-items: end; justify-items: center; transition: filter .2s ease-out; }
+.dc-card-foot > * { grid-area: 1 / 1; min-width: 0; }
+.dc-card-foot .dc-state { transition: opacity .15s ease-out; }
+
+.dc-card-action {
+    position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-width: 0; min-height: 36px; padding: 6px 24px;
+    border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap;
+    opacity: 0; pointer-events: none; transform: translateY(6px);
+    transition: opacity .18s ease-out, transform .22s cubic-bezier(.22, 1, .36, 1), background-color .15s ease-out;
+}
+/* The label stays on one line whatever its length. */
+.dc-card-action > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The icon sits at the start edge and the label stays centred on the button. */
+.dc-card-action .dc-icon { position: absolute; inset-inline-start: 12px; width: 15px; height: 15px; transition: transform .2s cubic-bezier(.22, 1, .36, 1); }
+.dc-card:hover .dc-card-action, .dc-card:focus-within .dc-card-action { opacity: 1; pointer-events: auto; transform: none; }
+.dc-card:hover .dc-card-foot:has(.dc-card-action) .dc-state, .dc-card:focus-within .dc-card-foot:has(.dc-card-action) .dc-state { opacity: 0; pointer-events: none; }
+
+/* On the button itself: the shadow of a raised control, and the icon nudges (the plus turns, the others lean forward). */
+.dc-card:hover .dc-card-foot:has(.dc-card-action:hover), .dc-card:focus-within .dc-card-foot:has(.dc-card-action:focus-visible) { filter: drop-shadow(0 4px 6px rgb(0 0 0 / .35)); }
+.dc-card-action:hover .dc-icon, .dc-card-action:focus-visible .dc-icon { transform: translateX(2px); }
+.dc-card-request:hover .dc-icon, .dc-card-request:focus-visible .dc-icon { transform: rotate(90deg); }
+.dc-card:hover .dc-card-action:active { transform: scale(.98); }
+
+/* While the action runs the icon gives way to a spinner. */
+.dc-card[aria-busy="true"] .dc-card-action .dc-icon { display: none; }
+.dc-card[aria-busy="true"] .dc-card-action::before {
+    content: ""; position: absolute; inset-inline-start: 13px; width: 12px; height: 12px; border: 2px solid rgb(255 255 255 / .35); border-top-color: #fff;
+    border-radius: 50%; animation: dc-spin .7s linear infinite;
+}
+@keyframes dc-spin { to { transform: rotate(360deg); } }
 .dc-request-live {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    min-height: 36px; cursor: default; pointer-events: none;
+    min-height: 36px; border-radius: 999px; cursor: default; pointer-events: none;
 }
 .dc-request-ring {
     --dc-progress: 0%;
@@ -211,7 +251,7 @@
 }
 .dc-request-ring > span { position: relative; z-index: 1; }
 .dc-request-live-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dc-request-open { justify-content: center; min-height: 36px; }
+.dc-request-open { justify-content: center; min-height: 36px; border-radius: 999px; }
 .dc-card-preview {
     position: absolute; z-index: 2; top: 8px; inset-inline-end: 8px; display: grid; place-items: center;
     width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
@@ -220,68 +260,111 @@
 }
 .dc-card:hover .dc-card-preview, .dc-card:focus-within .dc-card-preview { opacity: 1; }
 
-/* The one language / request indicator: icon and text, tinted. */
+/* The one language / request indicator, in the look of the Library state: a small dark pill with white text; only the icon carries the tint. */
 .dc-state {
-    display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-height: 22px; padding: 2px 9px 2px 6px;
-    border: 1px solid transparent; border-radius: 999px; background: var(--surface-2); color: var(--muted);
-    font-size: 11px; font-weight: 700; line-height: 16px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; min-height: 20px; padding: 1px 8px 1px 5px;
+    border: 1px solid rgb(255 255 255 / .18); border-radius: 999px; background: rgb(12 10 18 / .74); backdrop-filter: blur(6px); color: #fff;
+    font-size: 11px; font-weight: 600; line-height: 16px;
 }
 .dc-state > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dc-state .dc-icon { width: 13px; height: 13px; }
-.dc-state-preferred { background: color-mix(in srgb, var(--success-text) 14%, transparent); color: var(--success-text); }
-.dc-state-other { background: color-mix(in srgb, var(--warning-text) 14%, transparent); color: var(--warning-text); }
-.dc-state-requested { background: var(--accent-soft); color: var(--accent-text); }
-.dc-state-requested-other { border-color: var(--accent-border); border-style: dashed; background: transparent; color: var(--accent-text); }
-.dc-state-library { color: var(--text); }
-.dc-state-none, .dc-state-unavailable { border-color: var(--border); border-style: dashed; background: transparent; }
+.dc-state-preferred .dc-icon { color: #8fe3b0; }
+.dc-state-other .dc-icon { color: #f4d98b; }
+.dc-state-requested .dc-icon, .dc-state-requested-other .dc-icon { color: #a9c0ff; }
+.dc-state-none .dc-icon, .dc-state-unavailable .dc-icon { color: rgb(255 255 255 / .7); }
 
-/* Preview (Quick View): a wide hero of backdrop or trailer, the cover anchoring the identity below it, then title, facts and actions
-   (docs/mockups/media-preview). Without a backdrop the hero is the cover blurred into one. -------------------------------------- */
+/* A request that is on its way has no action to offer: on hover its state takes the status look of the detail pages (light, dark text) and the icon
+   turns to say that Jularr is working on it. It is not a button, so a click on it does nothing. */
+.dc-card-foot .dc-state-requested { transition: background-color .2s ease-out, color .2s ease-out, border-color .2s ease-out; }
+.dc-card:hover .dc-card-foot:not(:has(.dc-card-action)) .dc-state-requested,
+.dc-card:focus-within .dc-card-foot:not(:has(.dc-card-action)) .dc-state-requested { border-color: transparent; background: var(--surface); color: var(--text); }
+.dc-card:hover .dc-card-foot:not(:has(.dc-card-action)) .dc-state-requested .dc-icon,
+.dc-card:focus-within .dc-card-foot:not(:has(.dc-card-action)) .dc-state-requested .dc-icon { color: var(--accent-text); animation: dc-spin 1.6s linear infinite; }
+
+/* Preview (Quick View), as in the approved mockup (docs/mockups/media-preview): a wide 2:1 hero of backdrop or trailer with the close button, the
+   arrows to the neighbouring titles and the trailer badge; the cover overlapping its lower left edge; beside it title, meta line, genres, description, the
+   facts in a row and the actions as pills. Without a backdrop the hero is the cover blurred into one. ---------------------------------------------- */
 .dc-pv { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-.dc-pv-media { position: relative; grid-column: 1 / -1; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
-.dc-pv-media::after {
-    content: ""; position: absolute; inset: auto 0 0; height: 38%; pointer-events: none;
-    background: linear-gradient(0deg, color-mix(in srgb, var(--surface) 70%, transparent), transparent);
-}
+.dc-pv-media { position: relative; grid-column: 1 / -1; aspect-ratio: 2 / 1; overflow: hidden; background: var(--surface-2); }
 .dc-pv-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dc-pv-backdrop.is-derived { filter: blur(22px) saturate(1.2) brightness(.7); transform: scale(1.25); }
 .dc-pv-trailer { position: absolute; inset: 0; z-index: 1; }
 .dc-pv-trailer-play { position: absolute; inset: 0; display: grid; place-items: center; color: #15121c; }
 .dc-pv-trailer-button {
     display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
-    background: rgb(255 255 255 / .92); box-shadow: 0 8px 22px rgb(0 0 0 / .32);
+    background: rgb(255 255 255 / .94); box-shadow: 0 8px 22px rgb(0 0 0 / .32); transition: transform .15s ease-out, background-color .15s ease-out;
 }
 .dc-pv-trailer-button .dc-icon { width: 28px; height: 28px; margin-inline-start: 3px; }
-.dc-pv-trailer-play:hover .dc-pv-trailer-button { background: #fff; }
+.dc-pv-trailer-play:hover .dc-pv-trailer-button { background: #fff; transform: scale(1.06); }
 .dc-pv-trailer-play:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
 .dc-pv-trailer-play:focus-visible .dc-pv-trailer-button { box-shadow: 0 0 0 4px var(--accent), 0 8px 22px rgb(0 0 0 / .32); }
 .dc-pv-trailer .vd-trailer-embed { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+
+/* The trailer badge at the lower right of the hero, a second link of the trailer facade. */
+.dc-pv-badge {
+    position: absolute; z-index: 2; inset-block-end: 20px; inset-inline-end: 24px; display: inline-flex; align-items: center; gap: 8px;
+    min-height: 32px; padding: 0 14px; border-radius: 10px; background: rgb(38 38 44 / .78); backdrop-filter: blur(6px);
+    color: #fff; font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.dc-pv-badge .dc-icon { width: 14px; height: 14px; }
+.dc-pv-badge:hover { background: rgb(38 38 44 / .92); color: #fff; }
+
+/* The arrows to the previous and the next title of the row, centred on the sides of the hero. */
+.dc-pv-nav {
+    position: absolute; z-index: 3; inset-block-start: 50%; display: grid; place-items: center; width: 48px; height: 48px; padding: 0;
+    border: 0; border-radius: 50%; background: rgb(12 10 18 / .55); backdrop-filter: blur(6px); color: #fff; cursor: pointer;
+    transform: translateY(-50%); transition: background-color .15s ease-out;
+}
+.dc-pv-nav[hidden] { display: none; }
+.dc-pv-nav:hover { background: rgb(12 10 18 / .78); }
+.dc-pv-nav .dc-icon { width: 22px; height: 22px; }
+.dc-pv-nav-prev { inset-inline-start: 24px; }
+.dc-pv-nav-next { inset-inline-end: 24px; }
+.dc-pv-nav-prev .dc-icon { transform: rotate(90deg); }
+.dc-pv-nav-next .dc-icon { transform: rotate(-90deg); }
+
 /* The cover overlaps the hero on a wide screen; a phone has no room for it, so its sheet goes from the hero straight to the title. */
 .dc-pv-poster {
-    display: none; position: relative; z-index: 2; grid-column: 1; align-self: start; width: 156px; aspect-ratio: 2 / 3;
-    margin: -72px 0 24px 24px; overflow: hidden; border-radius: 10px; background: var(--surface-2); box-shadow: 0 12px 32px rgb(0 0 0 / .4);
+    display: none; position: relative; z-index: 2; grid-column: 1; align-self: start; width: 190px; aspect-ratio: 19 / 30;
+    margin: -51px 0 28px 25px; overflow: hidden; border-radius: 12px; background: var(--surface-2); box-shadow: 0 12px 30px rgb(0 0 0 / .35);
+    transition: transform .45s cubic-bezier(.22, 1, .36, 1);
 }
+/* Once the trailer plays the cover drives down out of the video: by the overlap plus a margin, so it does not stop right at the edge of the picture. */
+.dc-pv:has([data-vd-trailer][data-started="true"]) .dc-pv-poster { transform: translateY(100px); }
 .dc-pv-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .dc-pv-poster .dc-initial { height: 100%; }
-.dc-pv-main { display: grid; grid-column: 1 / -1; gap: 8px; justify-items: start; min-width: 0; padding: 14px 16px 16px; }
-.dc-pv-title { margin: 0; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
-.dc-pv-native, .dc-pv-meta { margin: 0; color: var(--muted); font-size: 13px; }
-.dc-pv-genres { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.dc-pv-genres li {
-    padding: 1px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
-    font-size: 11px; font-weight: 700;
-}
+
+.dc-pv-main { display: grid; grid-column: 1 / -1; gap: 10px; justify-items: start; min-width: 0; padding: 16px 20px 20px; }
+.dc-pv-title { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.dc-pv-native, .dc-pv-meta { margin: 0; color: var(--muted); font-size: 14px; }
+.dc-pv-genres { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.dc-pv-genres li { padding: 4px 14px; border-radius: 999px; background: var(--surface-2); color: var(--text-secondary, var(--muted)); font-size: 13px; font-weight: 600; }
 .dc-pv-desc {
-    display: -webkit-box; margin: 0; overflow: hidden; color: var(--text); font-size: 13.5px; line-height: 1.5;
+    display: -webkit-box; margin: 2px 0 0; overflow: hidden; color: var(--muted); font-size: 14px; line-height: 1.55;
     -webkit-line-clamp: 4; -webkit-box-orient: vertical;
 }
 .dc-sheet .dc-pv-desc { display: block; }
-.dc-pv-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; width: 100%; margin: 0; }
-.dc-pv-facts > div { display: grid; gap: 1px; min-width: 0; }
-.dc-pv-facts dt { color: var(--muted); font-size: 11px; font-weight: 700; }
-.dc-pv-facts dd { margin: 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
-.dc-pv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; padding-top: 4px; }
-.dc-pv-actions .button { display: inline-flex; align-items: center; gap: 6px; }
+
+/* The facts stand in one row, set apart by thin lines, with a rule under them before the actions. */
+.dc-pv-facts { display: flex; flex-wrap: wrap; row-gap: 12px; width: 100%; margin: 4px 0 0; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.dc-pv-facts > div { position: relative; display: grid; gap: 4px; min-width: 0; padding-inline: 28px; }
+/* The thin line between two facts (a separator, not an accent edge). */
+.dc-pv-facts > div + div::before { content: ""; position: absolute; inset-block: 2px; inset-inline-start: 0; width: 1px; background: var(--border); }
+.dc-pv-facts > div:first-child { padding-inline-start: 0; }
+.dc-pv-facts dt { color: var(--muted); font-size: 13px; font-weight: 600; }
+.dc-pv-facts dd { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.dc-pv-fact-icon { display: inline-grid; flex: none; }
+.dc-pv-fact-icon .dc-icon { width: 18px; height: 18px; }
+.dc-pv-fact-star { color: #f5b301; }
+.dc-pv-fact-dot { color: var(--info-text, #2f6bff); }
+.dc-pv-fact-dot .dc-icon { width: 14px; height: 14px; }
+
+/* The actions are pills: the primary one filled with the accent, the others in a quiet fill. */
+.dc-pv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; width: 100%; padding-top: 4px; }
+.dc-pv-actions .button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 22px; border-radius: 999px; font-size: 14px; font-weight: 600; }
+.dc-pv-actions .button .dc-icon { width: 16px; height: 16px; }
+.dc-sheet .dc-pv-actions .button.button:not(.button-primary) { border-color: transparent; background: var(--surface-2); color: var(--text); }
+.dc-sheet .dc-pv-actions .button.button:not(.button-primary):hover { background: var(--surface-3); }
 .dc-pv-request { display: inline-flex; align-items: center; gap: 8px; }
 .dc-pv-request .dc-request-live { width: auto; min-width: 140px; }
 .dc-pv-status {
@@ -297,13 +380,13 @@
 @keyframes dc-pop-in { from { opacity: 0; transform: scale(.97); } }
 
 .dc-sheet {
-    width: min(780px, 94vw); max-height: 92vh; padding: 0; overflow: auto; overscroll-behavior: contain;
-    border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text);
+    width: min(764px, 94vw); max-height: 92vh; padding: 0; overflow: auto; overscroll-behavior: contain;
+    border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text);
     box-shadow: 0 30px 80px rgb(0 0 0 / .4);
 }
-.dc-sheet::backdrop { background: rgb(0 0 0 / .55); }
+.dc-sheet::backdrop { background: rgb(18 14 30 / .38); backdrop-filter: blur(6px); }
 .dc-sheet-close {
-    position: absolute; z-index: 3; top: 10px; inset-inline-end: 10px;
+    position: absolute; z-index: 4; top: 16px; inset-inline-end: 16px; width: 36px; min-height: 36px; border-radius: 50%;
     border-color: transparent; background: rgb(12 10 18 / .6); color: #fff;
 }
 .dc-sheet-close:hover { background: rgb(12 10 18 / .8); color: #fff; }
@@ -350,22 +433,27 @@
 }
 
 @media (min-width: 761px) {
-    .dc-pv { grid-template-columns: 180px minmax(0, 1fr); column-gap: 20px; }
+    .dc-pv { grid-template-columns: auto minmax(0, 1fr); column-gap: 25px; }
     .dc-pv-poster { display: block; }
-    .dc-pv-main { grid-column: 2; padding: 18px 24px 24px 0; }
-    .dc-pv-title { font-size: 22px; }
+    .dc-pv-main { grid-column: 2; padding: 22px 28px 26px 0; }
+    .dc-pv-title { font-size: 24px; }
 }
 
 /* Touch has no hover: a tap opens the Detail, so the secondary Quick View action stays visible on the artwork (docs/mockups/media-preview, section 3) and Request is made from there. */
 @media (hover: none), (pointer: coarse) {
     .dc-card-action { display: none; }
+    .dc-shelf-nav { display: none; }
     .dc-card-preview { opacity: 1; width: 40px; height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .dc-art img { transition: none; }
     .dc-results[aria-busy="true"]::before { animation: none; background-position: 30% 0; }
-    .dc-ghost-art, .dc-section[data-dc-staged] li:first-child::after, .dc-collapse > summary h2::after { animation: none; transition: none; }
+    .dc-pv-poster, .dc-pv-nav, .dc-pv-trailer-button { transition: none; }
+    .dc-ghost-art, .dc-section[data-dc-staged] li:first-child::after, .dc-collapse > summary h2::after, .dc-card-foot, .dc-card-foot .dc-state, .dc-card-action, .dc-card-action .dc-icon, .dc-card-foot .dc-state-requested, .dc-shelf-nav { transition: none; }
+        .dc-card[aria-busy="true"] .dc-card-action::before { animation: none; }
+    .dc-card:hover .dc-card-foot:not(:has(.dc-card-action)) .dc-state-requested .dc-icon,
+    .dc-card:focus-within .dc-card-foot:not(:has(.dc-card-action)) .dc-state-requested .dc-icon { animation: none; }
     .dc-hover { animation: none; }
 }
 
