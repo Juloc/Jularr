@@ -132,11 +132,13 @@ public sealed class DiscoveryCoordinatorTests
         var clock = new DiscoveryTestSupport.MovableClock(new DateTimeOffset(2026, 10, 6, 9, 0, 0, TimeSpan.Zero));
         var movies = new TaskCompletionSource<HttpResponseMessage>();
         var movieStarted = new TaskCompletionSource();
+        var seriesServed = new TaskCompletionSource();
         var (coordinator, db) = await CoordinatorAsync(
             request =>
             {
                 if (!request.RequestUri!.AbsolutePath.Contains("/movie", StringComparison.Ordinal))
                 {
+                    seriesServed.TrySetResult();
                     return Answer(Results("Series", 1, movie: false));
                 }
 
@@ -149,6 +151,10 @@ public sealed class DiscoveryCoordinatorTests
 
         var firstPaint = coordinator.LoadAsync(requests, Audience(), new DiscoveryWait(TimeSpan.FromMilliseconds(400)), CancellationToken.None);
         await movieStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await seriesServed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // The budget runs on the movable clock, so it must not be spent before the answered source has been read: give its response real time to settle.
+        await Task.Delay(300);
         while (!firstPaint.IsCompleted)
         {
             clock.Advance(TimeSpan.FromMilliseconds(500));
