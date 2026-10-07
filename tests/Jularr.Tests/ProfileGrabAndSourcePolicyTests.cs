@@ -155,7 +155,7 @@ public sealed class ProfileGrabAndSourcePolicyTests
         new(Guid.NewGuid(), name, IndexerType.Newznab, Enabled: true, priority, new IndexerSettings("https://indexer.example", [5030], [], 100), "indexer-key");
 
     private static ProwlarrReleaseCandidate Release(string title, string indexer) =>
-        new(title, indexer, null, "usenet", 100_000_000, null, null, Now, 1, 24, title, null, null, [], new Uri("http://indexer.example/nzb/" + Uri.EscapeDataString(title + indexer)), null);
+        new(title, indexer, null, "usenet", 100_000_000, null, null, Now, 1, 24, title, null, null!, [], new Uri("http://indexer.example/nzb/" + Uri.EscapeDataString(title + indexer)), null);
 
     private sealed class FakeIndexer(Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<ProwlarrReleaseCandidate>> search) : IIndexer
     {
