@@ -380,10 +380,14 @@ jobs:
 
           exit "${status}"
 
-      - name: Validate single-container Compose
+      - name: Validate Compose stack
+        # compose.yaml refuses to render without an immutable release tag and a database password; any values prove the shape.
+        env:
+          JULARR_VERSION: 0.0.0-ci
+          JULARR_DB_PASSWORD: ci-validation-only
         run: |
-          test "$(docker compose config --services)" = "jularr"
-          test "$(docker compose config --images)" = "ghcr.io/juloc/jularr:latest"
+          test "$(docker compose config --services | sort | paste -sd,)" = "jularr,postgres"
+          test "$(docker compose config --images | sort | paste -sd,)" = "ghcr.io/juloc/jularr:0.0.0-ci,postgres:18-alpine"
           ! docker compose config | grep -q '/media/anime'
 
   image:
