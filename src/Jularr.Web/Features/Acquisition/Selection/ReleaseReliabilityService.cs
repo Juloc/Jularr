@@ -1,5 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.DownloadClients;
+using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Operations;
 
 namespace Jularr.Web.Features.Acquisition.Selection;
@@ -47,6 +48,12 @@ public sealed class ReleaseReliabilityService(AppDbContext db, TimeProvider cloc
         foreach (var (status, json) in outcomes)
         {
             if (!DownloadOperationDetails.TryParse(json, out var details) || details is null)
+            {
+                continue;
+            }
+
+            // A failure counts only when it was the release's fault; a full disk, a lost job or an unclassified failure says nothing about the source.
+            if (status == OperationStatus.Failed && !SabnzbdFailureKinds.IsReleaseFault(details.FailureKind))
             {
                 continue;
             }

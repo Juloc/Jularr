@@ -56,7 +56,23 @@ public enum SabnzbdFailureKind
     Verification,
     Password,
     Script,
+
+    /// <summary>The client could not write or read its own storage (a full disk, permissions, a missing folder): a problem of this server, never of the release.</summary>
+    Storage,
     Unknown
+}
+
+public static class SabnzbdFailureKinds
+{
+    /// <summary>
+    /// Whether a failure says something about the release itself (missing articles, a corrupt or protected archive). Anything else (the client's own
+    /// storage, its scripts, a job that vanished, a removed client, an unclassified message) is a local or unknown problem and never counts against
+    /// an indexer or a release group.
+    /// </summary>
+    public static bool IsReleaseFault(SabnzbdFailureKind kind) => kind is SabnzbdFailureKind.Download or SabnzbdFailureKind.Unpack or SabnzbdFailureKind.Verification or SabnzbdFailureKind.Password;
+
+    /// <summary>The release-fault test for a kind stored by name in the operation's details; an unrecorded kind is not evidence.</summary>
+    public static bool IsReleaseFault(string? kind) => Enum.TryParse<SabnzbdFailureKind>(kind, ignoreCase: true, out var parsed) && IsReleaseFault(parsed);
 }
 
 public sealed record SabnzbdQueueJob(
@@ -119,6 +135,7 @@ public static class SabnzbdFailureDescriptions
             SabnzbdFailureKind.Verification => "release is corrupt and could not be repaired",
             SabnzbdFailureKind.Download => "download is incomplete (missing articles)",
             SabnzbdFailureKind.Script => "post-processing script failed",
+            SabnzbdFailureKind.Storage => "the download client could not use its storage (disk space or permissions)",
             _ => "download failed"
         };
 
