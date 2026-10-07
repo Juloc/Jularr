@@ -23,7 +23,8 @@
      data-ip-episode-id="@action.WorkEpisodeId"
      data-ip-watch-href="@VideoDetailView.WatchHref(workId, action.WorkEpisodeId)"
      data-ip-intent-url="@ClientApiPlaybackIntentRoutes.Intents"
-     data-ip-status-url="@ClientApiPlaybackIntentRoutes.RequestStatus">
+     data-ip-status-url="@ClientApiPlaybackIntentRoutes.RequestStatus"
+     data-ip-requests-href="@Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService.HistoryPath">
     <form method="post" asp-page-handler="Start" asp-route-workId="@workId" class="ad-inline-form ip-form" data-ip-form>
         <input type="hidden" name="episodeId" value="@action.WorkEpisodeId" />
         <button type="submit" class="@buttonClass" data-ip-button aria-disabled="false" aria-busy="false">

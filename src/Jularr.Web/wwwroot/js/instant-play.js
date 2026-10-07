@@ -708,6 +708,10 @@
                     hint.hidden = replacesAction || noticeInfo.hint === "";
                     for (const action of noticeBox.querySelectorAll("[data-ip-action]")) {
                         action.hidden = !noticeInfo.actions.includes(action.dataset.ipAction);
+                        // The details of the request this page made, not the list of every request.
+                        if (action.dataset.ipAction === "view" && snapshot.requestId && root.dataset.ipRequestsHref) {
+                            action.href = `${root.dataset.ipRequestsHref}/${encodeURIComponent(snapshot.requestId)}`;
+                        }
                     }
                 }
             }

@@ -132,7 +132,7 @@ public sealed class BookManualSearchService(
                     {
                         ["title"] = request.Title
                     },
-                    deepLink: execution.ResultUrl ?? AcquisitionRequestService.HistoryPath,
+                    deepLink: execution.ResultUrl ?? AcquisitionRequestService.StatusPath(request.Id),
                     dedupKey: $"acquisition-request:{request.Id}:release-available",
                     relatedOperationId: execution.OperationId),
                 cancellationToken);
