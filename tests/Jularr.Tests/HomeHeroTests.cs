@@ -117,8 +117,10 @@ public sealed class HomeHeroTests
 
         // Every row and the hero render only with content; no placeholders.
         StringAssert.Contains(view, "@if (Model.Hero.Count > 0)");
-        StringAssert.Contains(view, "@if (Model.ContinueTiles.Count > 0)");
-        StringAssert.Contains(view, "<partial name=\"_HomeContinueTile\"");
+        var continueRow = File.ReadAllText(Path.Combine(web, "Pages", "Shared", "_HomeContinueRow.cshtml"));
+        StringAssert.Contains(view, "<partial name=\"_HomeContinueRow\"");
+        StringAssert.Contains(continueRow, "@if (Model.ContinueTiles.Count > 0)");
+        StringAssert.Contains(continueRow, "<partial name=\"_HomeContinueTile\"");
 
         // One progress segment per slide, each a button; the fill duration is a single data attribute.
         StringAssert.Contains(view, "data-interval-ms=\"@IndexModel.HeroIntervalMs\"");
