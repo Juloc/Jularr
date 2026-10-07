@@ -17,6 +17,7 @@ using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Performance;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Providers;
 using Jularr.Web.Features.Shell;
@@ -356,6 +357,7 @@ public sealed class AdminDashboardPageRenderTests
                         services.AddSingleton(new AcquisitionHealthStore(acquisition));
                         services.AddProviderFramework();
                         services.AddSingleton<IStackResourceTelemetry>(telemetry);
+                        services.AddApplicationPerformance();
                         services.AddScoped<AdminDashboardService>();
                     })
                     .Configure(app =>

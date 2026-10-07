@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.NetworkInformation;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Performance;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Admin;
@@ -30,7 +31,8 @@ public sealed record StackServiceResource(
 public sealed record StackResourceSample(
     DateTimeOffset AtUtc,
     StackServiceResource? Jularr,
-    StackServiceResource? PostgreSql)
+    StackServiceResource? PostgreSql,
+    RuntimeHealthSample? Runtime = null)
 {
     public double? TotalCpuPercent => Jularr?.CpuPercent is { } web && PostgreSql?.CpuPercent is { } database
         ? web + database
@@ -237,7 +239,11 @@ public sealed class CgroupStackResourceSource(IServiceScopeFactory scopes, ILogg
     }
 }
 
-/// <summary>Samples only Jularr and PostgreSQL resource cgroups into the Admin dashboard's bounded history.</summary>
+/// <summary>
+/// Samples only Jularr and PostgreSQL resource cgroups (and the runtime's own counters) into the Admin dashboard's bounded history. It samples every
+/// <see cref="Interval"/> while an Admin page has asked for the snapshot recently and only once per <see cref="IdleInterval"/> otherwise, so an
+/// idle instance is not queried every few seconds for a page nobody is looking at; the first look wakes it and finds a baseline already there.
+/// </summary>
 public sealed class StackResourceTelemetrySampler(
     IStackResourceSource source,
     TimeProvider clock,
@@ -246,31 +252,65 @@ public sealed class StackResourceTelemetrySampler(
 {
     public const int Capacity = 60;
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan IdleInterval = TimeSpan.FromMinutes(1);
+
+    /// <summary>How long after the last look the sampler keeps the fast cadence.</summary>
+    public static readonly TimeSpan ObservationWindow = TimeSpan.FromMinutes(2);
 
     private readonly Lock gate = new();
     private readonly Queue<StackResourceSample> samples = new(Capacity);
+    private readonly SemaphoreSlim wake = new(0, 1);
+    private long lastObservedTicks;
     private DateTimeOffset? previousAt;
     private CgroupResourceUsage? previousJularr;
     private CgroupResourceUsage? previousPostgreSql;
 
     public StackResourceSnapshot GetSnapshot()
     {
+        var now = clock.GetUtcNow();
+        var wasIdle = !IsObserved(now);
+        Interlocked.Exchange(ref lastObservedTicks, now.UtcTicks);
+        if (wasIdle)
+        {
+            try
+            {
+                wake.Release();
+            }
+            catch (SemaphoreFullException)
+            {
+            }
+        }
+
         lock (gate)
         {
-            return new StackResourceSnapshot(samples.ToArray());
+            // The history window is the last Capacity * Interval; slower idle samples older than that only serve as the rate baseline.
+            var oldest = now - Interval * Capacity;
+            return new StackResourceSnapshot([.. samples.Where(sample => sample.AtUtc >= oldest)]);
         }
     }
 
+    private bool IsObserved(DateTimeOffset now) => now.UtcTicks - Interlocked.Read(ref lastObservedTicks) < ObservationWindow.Ticks;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(Interval);
         try
         {
-            do
+            while (true)
             {
                 Record(await SampleAsync(stoppingToken));
+                if (IsObserved(clock.GetUtcNow()))
+                {
+                    await Task.Delay(Interval, clock, stoppingToken);
+                }
+                else
+                {
+                    // Idle: one slow sample per IdleInterval, or sooner when an Admin page asks for the snapshot.
+                    using var idle = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                    await Task.WhenAny(Task.Delay(IdleInterval, clock, idle.Token), wake.WaitAsync(idle.Token));
+                    await idle.CancelAsync();
+                    stoppingToken.ThrowIfCancellationRequested();
+                }
             }
-            while (await timer.WaitForNextTickAsync(stoppingToken));
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -291,7 +331,8 @@ public sealed class StackResourceTelemetrySampler(
         var sample = new StackResourceSample(
             now,
             ToService(readings[0], previousJularr, elapsed),
-            ToService(readings[1], previousPostgreSql, elapsed));
+            ToService(readings[1], previousPostgreSql, elapsed),
+            RuntimeHealthSample.Capture());
 
         previousAt = now;
         previousJularr = readings[0];

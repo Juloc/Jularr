@@ -17,6 +17,8 @@ Owner-only administration:
 - `/Admin/Operations` — active work, queue, downloads and history
 - `/Admin/Scans` — library scan runs per media root with phase, counters and warnings
 - `/Admin/Logs` — structured operation logs
+- `/Admin/Resources` — stack CPU/RAM/disk, storage mounts and the application performance view (routes, background work, providers, budgets, runtime pressure)
+- `/Admin/Database` — read-only PostgreSQL evidence (connections, locks, statements, table and index size, vacuum state)
 - `/Admin/System` — media roots and server integrations
 - `/Admin/Subtitles`
 - `/Admin/Sonarr`
@@ -353,3 +355,13 @@ PostgreSQL is Jularr's canonical database. The connection string comes from `Con
 There is no built-in SQLite import or pre-Jularr upgrade path. The supported persistence boundary is the current epoch in `.agent/upgrade-policy.yaml`.
 
 Back up PostgreSQL with a logical dump such as `pg_dump -Fc` or a stopped-volume snapshot. Back up `/data` separately for non-database state.
+
+## Resource budgets and performance view
+
+Interactive requests win over background work (#857). Governed background work runs in four classes with bounded slots: Import (2 slots, never held back for requests), Provider refresh (2), Scan (1) and Maintenance (1). Every class below Import waits while three or more requests are in flight, for at most 10 s (provider refresh), 15 s (scan) or 30 s (maintenance); constant load therefore delays background work but never starves it. The Wanted pass, metadata refresh, calendar, franchise and AniList loops, the background job worker (library scans and the other queued operations) and the completed-download import run through this one governor; Admin → Resources shows each class's limit, running and waiting counts and how often work was deferred.
+
+The same page answers "what is making Jularr slow or busy" (#860) without an external collector: per route template, background operation and provider client name it shows calls, failures, mean, P95, maximum and total time over the last hour of the running process, plus requests in flight, GC pause share, allocation rate, heap, ThreadPool queue and refused rate-limited calls. Keys are fixed identities (route templates, operation names, registered client names), never URLs, ids or titles, and each category is capped at 200 keys.
+
+Idle cost: the stack resource sampler (cgroup reads of Jularr and PostgreSQL) samples every 5 s only while an Admin page has asked for it in the last two minutes and once a minute otherwise; instances with Playback off do not probe ffmpeg or sweep the HLS cache.
+
+Admin → Database (#859) reads PostgreSQL in a read-only transaction with a statement timeout; it never writes, explains or runs a statement, and shows query text without its literals. Table and index sizes are skipped while a table is exclusively locked. Statement statistics need `pg_stat_statements`: the bundled `compose.yaml` preloads it, then run `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` once as the database owner; without it the section says what is missing.

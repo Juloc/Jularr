@@ -3,6 +3,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
+using Jularr.Web.Features.Performance;
 using Jularr.Web.Features.Tracking;
 using Jularr.Web.Features.Watchlist;
 using Microsoft.EntityFrameworkCore;
@@ -244,7 +245,8 @@ public sealed class ReleaseCalendarRefresher(
 /// </summary>
 public sealed class ReleaseCalendarRefreshService(
     IServiceScopeFactory scopes,
-    ILogger<ReleaseCalendarRefreshService> logger) : BackgroundService
+    ILogger<ReleaseCalendarRefreshService> logger,
+    BackgroundWorkGovernor? governor = null) : BackgroundService
 {
     public static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(2);
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(20);
@@ -260,7 +262,11 @@ public sealed class ReleaseCalendarRefreshService(
                 try
                 {
                     await using var scope = scopes.CreateAsyncScope();
-                    var result = await scope.ServiceProvider.GetRequiredService<ReleaseCalendarRefresher>().RefreshDueAsync(stoppingToken);
+                    var result = await governor.RunGovernedAsync(
+                        BackgroundWorkClass.ProviderRefresh,
+                        "Calendar.Refresh",
+                        token => scope.ServiceProvider.GetRequiredService<ReleaseCalendarRefresher>().RefreshDueAsync(token),
+                        stoppingToken);
                     if (result.RetryAfter is { } retryAfter && retryAfter > wait)
                     {
                         wait = retryAfter;

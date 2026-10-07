@@ -40,6 +40,7 @@ using Jularr.Web.Features.Pairing;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.PlaybackSessions;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Features.Performance;
 using Jularr.Web.Features.Providers;
 using Jularr.Web.Features.ReaderThemes;
 using Jularr.Web.Features.Shell;
@@ -121,6 +122,7 @@ builder.Services.AddScoped<AdminUserProgressService>();
 builder.Services.AddScoped<AdminOverviewService>();
 builder.Services.AddScoped<AdminSessionsService>();
 builder.Services.AddScoped<AdminDashboardService>();
+builder.Services.AddApplicationPerformance();
 builder.Services.AddSingleton<IStackResourceSource, CgroupStackResourceSource>();
 builder.Services.AddSingleton<StackResourceTelemetrySampler>();
 builder.Services.AddSingleton<IStackResourceTelemetry>(services => services.GetRequiredService<StackResourceTelemetrySampler>());
@@ -781,6 +783,7 @@ if (app.Environment.IsDevelopment())
 app.UseForwardedHeaders();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseApplicationPerformance();
 // Authentication runs first so the per-account rate-limit policies ("wake", "playbackStart", "playbackIntent", ...) see the signed-in
 // account; behind it they would all fall back to the shared client IP. The anonymous policies partition by IP either way.
 app.UseAuthentication();

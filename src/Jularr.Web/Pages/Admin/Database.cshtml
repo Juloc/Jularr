@@ -1,0 +1,245 @@
+@page "/Admin/Database"
+@model Jularr.Web.Pages.Admin.DatabaseModel
+@using System.Globalization
+@using Jularr.Web.Features.Performance
+@using Jularr.Web.Features.Storage
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-resources.css" asp-append-version="true" />
+}
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.database.title"];
+    var report = Model.Report;
+
+    string Bytes(long value) => StorageHealth.FormatBytes(value);
+    string Count(long value) => value.ToString("N0", CultureInfo.CurrentCulture);
+    string Seconds(double value) => ui.Format("admin.performance.seconds", ("value", value.ToString("0.0", CultureInfo.InvariantCulture)));
+    string Milliseconds(double value) => value >= 1000 ? Seconds(value / 1000) : ui.Format("admin.performance.milliseconds", ("value", Math.Round(value).ToString("0", CultureInfo.InvariantCulture)));
+    string When(DateTime? value) => value is { } time ? time.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
+    string Percent(double value) => ui.Format("admin.dashboard.percent", ("value", Math.Round(value).ToString("0", CultureInfo.InvariantCulture)));
+}
+
+<header class="page-header resources-header">
+    <div>
+        <h1>@ui["admin.database.title"]</h1>
+        <p>@ui["admin.database.subtitle"]</p>
+    </div>
+    <div class="resources-header-actions">
+        <a class="text-link" asp-page="/Admin/Resources">@ui["admin.nav.resources"]</a>
+        <a class="button" asp-page="/Admin/Database" asp-route-rank="@Model.Rank">@ui["admin.activity.refresh"]</a>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+@if (report is null)
+{
+    <section class="panel resources-empty" data-database-unavailable>
+        <h2>@ui["admin.database.unavailable.title"]</h2>
+        <p class="muted">@ui["admin.database.unavailable.detail"]</p>
+    </section>
+}
+else
+{
+    var overview = report.Overview;
+    <div class="resources-page" data-database-diagnostics>
+        @if (report.Warnings.Count > 0)
+        {
+            <ul class="perf-warnings" data-database-warnings>
+                @foreach (var warning in report.Warnings)
+                {
+                    <li data-database-warning="@warning">@ui["admin.database.warning." + warning]</li>
+                }
+            </ul>
+        }
+
+        <section class="panel perf-panel" aria-labelledby="database-overview-title">
+            <h2 id="database-overview-title">@ui["admin.database.overview"]</h2>
+            <dl class="perf-tiles">
+                <div><dt>@ui["admin.database.version"]</dt><dd>@overview.Version</dd><small>@ui.Format("admin.database.size", ("value", Bytes(overview.SizeBytes)))</small></div>
+                <div data-database-tile="connections"><dt>@ui["admin.database.connections"]</dt><dd>@(overview.ActiveConnections + overview.IdleConnections + overview.IdleInTransaction) / @overview.MaxConnections</dd><small>@ui.Format("admin.database.connectionStates", ("active", overview.ActiveConnections.ToString(CultureInfo.InvariantCulture)), ("idle", overview.IdleConnections.ToString(CultureInfo.InvariantCulture)), ("open", overview.IdleInTransaction.ToString(CultureInfo.InvariantCulture)))</small></div>
+                <div data-database-tile="cache"><dt>@ui["admin.database.cacheHit"]</dt><dd>@(overview.CacheHitPercent is { } hit ? Percent(hit) : "—")</dd><small>@ui.Format("admin.database.blocks", ("hit", Count(overview.BlocksHit)), ("read", Count(overview.BlocksRead)))</small></div>
+                <div data-database-tile="transactions"><dt>@ui["admin.database.transactions"]</dt><dd>@Count(overview.CommittedTransactions)</dd><small>@ui.Format("admin.database.rolledBack", ("value", Count(overview.RolledBackTransactions)))</small></div>
+                <div data-database-tile="temp"><dt>@ui["admin.database.tempFiles"]</dt><dd>@Count(overview.TempFiles)</dd><small>@Bytes(overview.TempBytes)</small></div>
+                <div data-database-tile="deadlocks"><dt>@ui["admin.database.deadlocks"]</dt><dd>@Count(overview.Deadlocks)</dd>@if (overview.StatsResetAtUtc is { } reset) { <small>@ui.Format("admin.database.since", ("value", reset.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))</small> }</div>
+            </dl>
+        </section>
+
+        <section class="panel perf-panel" aria-labelledby="database-activity-title" data-database-activity>
+            <h2 id="database-activity-title">@ui["admin.database.activity"]</h2>
+            @if (report.LockWaits.Count == 0 && report.LongRunning.Count == 0)
+            {
+                <p class="muted">@ui["admin.database.activity.none"]</p>
+            }
+            else
+            {
+                <div class="perf-scroll">
+                    <table class="perf-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">@ui["admin.database.query"]</th>
+                                <th scope="col">@ui["admin.database.state"]</th>
+                                <th scope="col" class="num">@ui["admin.database.age"]</th>
+                                <th scope="col">@ui["admin.database.blockedBy"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var wait in report.LockWaits)
+                            {
+                                <tr data-database-lock-wait>
+                                    <th scope="row" class="perf-query"><code>@wait.Query</code></th>
+                                    <td>@ui["admin.database.lockWait"]</td>
+                                    <td class="num">@Seconds(wait.WaitSeconds)</td>
+                                    <td>@string.Join(", ", wait.BlockerPids)</td>
+                                </tr>
+                            }
+                            @foreach (var row in report.LongRunning)
+                            {
+                                <tr>
+                                    <th scope="row" class="perf-query"><code>@row.Query</code></th>
+                                    <td>@row.State@(row.WaitEvent is null ? "" : " · " + row.WaitEvent)</td>
+                                    <td class="num">@Seconds(row.AgeSeconds)</td>
+                                    <td>—</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="panel perf-panel" aria-labelledby="database-statements-title" data-database-statements="@report.StatementsState">
+            <div class="panel-heading">
+                <h2 id="database-statements-title">@ui["admin.database.statements"]</h2>
+                @if (report.StatementsState == DatabaseStatementsState.Available)
+                {
+                    <nav class="perf-tabs" aria-label="@ui["admin.database.statements"]">
+                        @foreach (var (ranking, label) in new[]
+                        {
+                            (DatabaseStatementRanking.TotalTime, ui["admin.database.rank.total"]),
+                            (DatabaseStatementRanking.MeanTime, ui["admin.database.rank.mean"]),
+                            (DatabaseStatementRanking.Calls, ui["admin.database.rank.calls"])
+                        })
+                        {
+                            <a asp-page="/Admin/Database" asp-route-rank="@ranking" aria-current="@(report.Ranking == ranking ? "true" : null)">@label</a>
+                        }
+                    </nav>
+                }
+            </div>
+            @if (report.StatementsState != DatabaseStatementsState.Available)
+            {
+                <p class="muted">@ui["admin.database.statements." + report.StatementsState.ToString().ToLowerInvariant()]</p>
+                <pre><code>shared_preload_libraries = 'pg_stat_statements'
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;</code></pre>
+            }
+            else if (report.Statements.Count == 0)
+            {
+                <p class="muted">@ui["admin.performance.empty"]</p>
+            }
+            else
+            {
+                <div class="perf-scroll">
+                    <table class="perf-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">@ui["admin.database.query"]</th>
+                                <th scope="col" class="num">@ui["admin.performance.calls"]</th>
+                                <th scope="col" class="num">@ui["admin.performance.mean"]</th>
+                                <th scope="col" class="num">@ui["admin.performance.max"]</th>
+                                <th scope="col" class="num">@ui["admin.performance.total"]</th>
+                                <th scope="col" class="num">@ui["admin.database.rows"]</th>
+                                <th scope="col" class="num">@ui["admin.database.diskReads"]</th>
+                                <th scope="col" class="num">@ui["admin.database.tempBlocks"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var statement in report.Statements)
+                            {
+                                <tr>
+                                    <th scope="row" class="perf-query"><code>@statement.Query</code></th>
+                                    <td class="num">@Count(statement.Calls)</td>
+                                    <td class="num">@Milliseconds(statement.MeanMilliseconds)</td>
+                                    <td class="num">@Milliseconds(statement.MaxMilliseconds)</td>
+                                    <td class="num">@Milliseconds(statement.TotalMilliseconds)</td>
+                                    <td class="num">@Count(statement.Rows)</td>
+                                    <td class="num">@Count(statement.SharedBlocksRead)</td>
+                                    <td class="num">@Count(statement.TempBlocks)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="panel perf-panel" aria-labelledby="database-tables-title" data-database-tables>
+            <h2 id="database-tables-title">@ui["admin.database.tables"]</h2>
+            @if (report.RelationsSkipped)
+            {
+                <p class="muted" data-database-relations-skipped>@ui["admin.database.relationsSkipped"]</p>
+            }
+            <div class="perf-scroll">
+                <table class="perf-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">@ui["admin.database.table"]</th>
+                            <th scope="col" class="num">@ui["admin.database.totalSize"]</th>
+                            <th scope="col" class="num">@ui["admin.database.liveRows"]</th>
+                            <th scope="col" class="num">@ui["admin.database.deadRows"]</th>
+                            <th scope="col" class="num">@ui["admin.database.seqScans"]</th>
+                            <th scope="col" class="num">@ui["admin.database.indexScans"]</th>
+                            <th scope="col">@ui["admin.database.vacuumed"]</th>
+                            <th scope="col">@ui["admin.database.analyzed"]</th>
+                            <th scope="col">@ui["admin.database.review"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var table in report.Tables)
+                        {
+                            <tr>
+                                <th scope="row"><code>@table.Name</code></th>
+                                <td class="num">@Bytes(table.TotalBytes)</td>
+                                <td class="num">@Count(table.LiveTuples)</td>
+                                <td class="num">@Count(table.DeadTuples)</td>
+                                <td class="num">@Count(table.SequentialScans)</td>
+                                <td class="num">@Count(table.IndexScans)</td>
+                                <td>@When(table.LastVacuumUtc)</td>
+                                <td>@When(table.LastAnalyzeUtc)</td>
+                                <td>@if (table.Hint is { } hint) { <span class="perf-hint" data-database-hint="@hint">@ui["admin.database.hint." + hint]</span> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel perf-panel" aria-labelledby="database-indexes-title" data-database-indexes>
+            <h2 id="database-indexes-title">@ui["admin.database.indexes"]</h2>
+            <div class="perf-scroll">
+                <table class="perf-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">@ui["admin.database.index"]</th>
+                            <th scope="col">@ui["admin.database.table"]</th>
+                            <th scope="col" class="num">@ui["admin.database.totalSize"]</th>
+                            <th scope="col" class="num">@ui["admin.database.scans"]</th>
+                            <th scope="col">@ui["admin.database.review"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var index in report.Indexes)
+                        {
+                            <tr>
+                                <th scope="row"><code>@index.Name</code></th>
+                                <td><code>@index.Table</code></td>
+                                <td class="num">@Bytes(index.SizeBytes)</td>
+                                <td class="num">@Count(index.Scans)</td>
+                                <td>@if (index.Hint is { } hint) { <span class="perf-hint" data-database-hint="@hint">@ui["admin.database.hint." + hint]</span> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+}

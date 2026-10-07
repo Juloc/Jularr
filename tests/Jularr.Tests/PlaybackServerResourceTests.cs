@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Playback.Transcoding;
@@ -481,6 +482,37 @@ public sealed class PlaybackServerResourceTests
         finally
         {
             await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [TestMethod]
+    public async Task AnInstanceThatDoesNotPlayMediaNeitherProbesFfmpegNorSweepsTheCache()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var stale = await cache.StartAsync("profile-0", segmentBytes: 10);
+        cache.Time.Advance(HlsPlaybackSessionManager.IdleLifetime + TimeSpan.FromMinutes(1));
+        var runner = new CountingRunner();
+        var hardware = new PlaybackHardwareService(new PlaybackHardwareProbe(runner, cache.Time, () => []), cache.Kit.Breaker, cache.Time, NullLogger<PlaybackHardwareService>.Instance);
+        var modules = new InstanceModuleStore(cache.Kit.DataRoot);
+        await modules.SetAsync(InstanceModule.Playback, false);
+        var off = new PlaybackServerResourceService(cache.Kit.Settings, hardware, cache.Manager, cache.Kit.Sessions, cache.Time, NullLogger<PlaybackServerResourceService>.Instance, modules);
+        await off.StartAsync(CancellationToken.None);
+        await Task.Delay(500);
+        await off.StopAsync(CancellationToken.None);
+
+        Assert.AreEqual(0, runner.Calls, "No ffmpeg probe runs while Playback is off.");
+        Assert.IsTrue(cache.Manager.IsActive(stale.SessionId, "profile-0"), "No cache sweep runs while Playback is off.");
+
+        var on = new PlaybackServerResourceService(cache.Kit.Settings, hardware, cache.Manager, cache.Kit.Sessions, cache.Time, NullLogger<PlaybackServerResourceService>.Instance);
+        await on.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitUntilAsync(() => !cache.Manager.IsActive(stale.SessionId, "profile-0"));
+            await WaitUntilAsync(() => runner.Calls > 0);
+        }
+        finally
+        {
+            await on.StopAsync(CancellationToken.None);
         }
     }
 
@@ -971,6 +1003,19 @@ public sealed class PlaybackServerResourceTests
         }
 
         public void Dispose() => Disposed = true;
+    }
+
+    private sealed class CountingRunner : IMediaProcessRunner
+    {
+        private int calls;
+
+        public int Calls => Volatile.Read(ref calls);
+
+        public Task<MediaProcessResult?> RunAsync(string executable, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult<MediaProcessResult?>(new MediaProcessResult(0, "", ""));
+        }
     }
 
     private sealed class BlockingRunner(Task gate) : IMediaProcessRunner

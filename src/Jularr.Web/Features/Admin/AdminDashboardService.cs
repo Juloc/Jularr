@@ -543,5 +543,5 @@ public sealed class AdminDashboardService(
     private static bool IsExpected(Exception exception) =>
         exception is DbException or InvalidOperationException or IOException or JsonException
             or InvalidDataException or UnauthorizedAccessException or TimeoutException or FormatException
-            or NotSupportedException;
+            or NotSupportedException or System.Security.Cryptography.CryptographicException;
 }

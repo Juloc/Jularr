@@ -1,6 +1,7 @@
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Performance;
 using Jularr.Web.Infrastructure;
 
 namespace Jularr.Web.Features.Metadata;
@@ -40,7 +41,8 @@ public sealed class WorkMetadataRefreshService(
     IServiceScopeFactory scopes,
     WorkMetadataRefreshSignal signal,
     TimeProvider clock,
-    ILogger<WorkMetadataRefreshService> logger) : BackgroundService
+    ILogger<WorkMetadataRefreshService> logger,
+    BackgroundWorkGovernor? governor = null) : BackgroundService
 {
     public static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(1);
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
@@ -78,7 +80,11 @@ public sealed class WorkMetadataRefreshService(
                         reconciledAt = clock.GetUtcNow().UtcDateTime;
                     }
 
-                    pass = await ProcessDueAsync(scope.ServiceProvider, MaxRunsPerPass, stoppingToken);
+                    pass = await governor.RunGovernedAsync(
+                        BackgroundWorkClass.ProviderRefresh,
+                        "Metadata.Refresh",
+                        token => ProcessDueAsync(scope.ServiceProvider, MaxRunsPerPass, token),
+                        stoppingToken);
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {

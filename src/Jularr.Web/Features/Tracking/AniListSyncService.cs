@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Performance;
 
 namespace Jularr.Web.Features.Tracking;
 
@@ -111,7 +112,8 @@ public sealed class AniListSyncBackgroundService(
     AniListSyncStateStore states,
     AniListRateLimitGate rateLimit,
     TimeProvider timeProvider,
-    ILogger<AniListSyncBackgroundService> logger) : BackgroundService
+    ILogger<AniListSyncBackgroundService> logger,
+    BackgroundWorkGovernor? governor = null) : BackgroundService
 {
     public static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(30);
 
@@ -123,7 +125,7 @@ public sealed class AniListSyncBackgroundService(
             using var timer = new PeriodicTimer(AniListSyncReconciler.Interval, timeProvider);
             do
             {
-                await RunPassAsync(stoppingToken);
+                await governor.RunGovernedAsync(BackgroundWorkClass.ProviderRefresh, "AniList.Sync", RunPassAsync, stoppingToken);
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));
         }

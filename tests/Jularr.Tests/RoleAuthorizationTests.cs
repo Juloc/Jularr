@@ -33,6 +33,7 @@ public sealed class RoleAuthorizationTests
         ["Jularr.Web.Pages.Admin.AcquisitionProfilesModel"] = JularrPolicies.AcquisitionSettings,
         ["Jularr.Web.Pages.Admin.LogsModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.MediaDetailModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.DatabaseModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.MediaWorkModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.OperationModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.OperationsModel"] = JularrPolicies.AdminMedia,

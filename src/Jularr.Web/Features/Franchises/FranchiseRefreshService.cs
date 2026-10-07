@@ -1,5 +1,6 @@
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Performance;
 using Jularr.Web.Infrastructure;
 
 namespace Jularr.Web.Features.Franchises;
@@ -17,7 +18,8 @@ public sealed class FranchiseRefreshService(
     IServiceScopeFactory scopes,
     FranchiseRefreshSignal signal,
     ILogger<FranchiseRefreshService> logger,
-    TimeProvider clock) : BackgroundService
+    TimeProvider clock,
+    BackgroundWorkGovernor? governor = null) : BackgroundService
 {
     public static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(1);
     public static readonly TimeSpan Interval = TimeSpan.FromHours(1);
@@ -35,7 +37,7 @@ public sealed class FranchiseRefreshService(
                 var wait = Interval;
                 try
                 {
-                    wait = await RefreshDueAsync(stoppingToken) ?? Interval;
+                    wait = await governor.RunGovernedAsync(BackgroundWorkClass.ProviderRefresh, "Franchise.Refresh", RefreshDueAsync, stoppingToken) ?? Interval;
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {

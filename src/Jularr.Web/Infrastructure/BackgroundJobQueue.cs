@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Threading.Channels;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Performance;
 
 namespace Jularr.Web.Infrastructure;
 
@@ -290,9 +292,9 @@ public abstract class BackgroundJobWorkerBase<TQueue>(
 
             try
             {
-                await runtime.Work(
-                    context,
-                    scope.ServiceProvider,
+                await RunWorkAsync(
+                    operation,
+                    token => runtime.Work(context, scope.ServiceProvider, token),
                     executionCancellation.Token);
 
                 await store.MarkSucceededAsync(
@@ -343,6 +345,13 @@ public abstract class BackgroundJobWorkerBase<TQueue>(
             }
         }
     }
+
+    /// <summary>Runs one operation's work; a worker that shares the server with interactive requests overrides this to yield to them.</summary>
+    protected virtual Task RunWorkAsync(
+        OperationSnapshot operation,
+        Func<CancellationToken, Task> work,
+        CancellationToken cancellationToken) =>
+        work(cancellationToken);
 
     // The next job to run: the highest priority among the queued work (read fresh, so a change made
     // while the job waited counts), the earliest first among equals. Null once the queue is closed.
@@ -400,15 +409,28 @@ public abstract class BackgroundJobWorkerBase<TQueue>(
     }
 }
 
+/// <summary>
+/// The worker of the background lanes. It runs one operation at a time already; through the governor each one also yields to interactive
+/// requests (scans as <see cref="BackgroundWorkClass.Scan"/>, the maintenance lane as <see cref="BackgroundWorkClass.Maintenance"/>, the rest as
+/// provider/AI work) and is timed under its operation kind.
+/// </summary>
 public sealed class BackgroundJobWorker(
     BackgroundJobQueue queue,
     IServiceScopeFactory scopeFactory,
-    ILogger<BackgroundJobWorker> logger)
+    ILogger<BackgroundJobWorker> logger,
+    BackgroundWorkGovernor? governor = null)
     : BackgroundJobWorkerBase<BackgroundJobQueue>(
         queue,
         scopeFactory,
         logger)
 {
+    protected override Task RunWorkAsync(OperationSnapshot operation, Func<CancellationToken, Task> work, CancellationToken cancellationToken)
+    {
+        var workClass = operation.Kind == LibraryScanCoordinator.OperationKind
+            ? BackgroundWorkClass.Scan
+            : operation.Lane == OperationLane.Maintenance ? BackgroundWorkClass.Maintenance : BackgroundWorkClass.ProviderRefresh;
+        return governor.RunGovernedAsync(workClass, $"Operation.{operation.Kind}", work, cancellationToken);
+    }
 }
 
 public sealed class PlaybackJobWorker(

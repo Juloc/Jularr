@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgres:18-alpine
+    # Loads the statement statistics module so Admin → Database can rank statements once `CREATE EXTENSION pg_stat_statements` has been run.
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
     restart: unless-stopped
     environment:
       POSTGRES_DB: jularr

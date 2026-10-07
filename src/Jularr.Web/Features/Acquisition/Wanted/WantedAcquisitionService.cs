@@ -4,6 +4,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Performance;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
@@ -136,9 +137,10 @@ public sealed class WantedAcquisitionService(
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
-                await ProcessOnceAsync(
-                    scope.ServiceProvider,
-                    clock.GetUtcNow().UtcDateTime,
+                await scope.ServiceProvider.GetService<BackgroundWorkGovernor>().RunGovernedAsync(
+                    BackgroundWorkClass.ProviderRefresh,
+                    "Wanted.Pass",
+                    token => ProcessOnceAsync(scope.ServiceProvider, clock.GetUtcNow().UtcDateTime, token),
                     stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
