@@ -1,14 +1,30 @@
 # Juloc Agent Bootstrap
 
-Before doing substantial work in this repository:
+Do not ask the user to repeat the Agent Control protocol, test budget, context rules or visual rules in their prompt; they live in the skills below.
+
+## Skill routing
+
+| Work | Skills |
+| --- | --- |
+| Normal implementation, bug, issue | `jularr-task` |
+| UI, Razor, CSS, visual component | `jularr-task` + `jularr-ui` |
+| Acquisition, Wanted, Arr, Search, Selection, Import | `jularr-task` + `jularr-acquisition` |
+| Schema, EF, PostgreSQL | add `jularr-db-change` |
+| Playback, player, streaming | add `jularr-playback-work` |
+| Unattended ordered run | `jularr-task` + specialist skill + `jularr-overnight` |
+| Before a substantial commit | `jularr-review` (own diff, no subagent by default) |
+
+## Startup cost
+
+Once per continuous session, before the first substantial work:
 
 1. Read `.agent/project.yaml` for repository-specific commands, protected paths and related repositories.
-2. Read the canonical current operating rules from `Juloc/agent-control/AGENTS.md` on `main` using the available GitHub access.
-3. Read `docs/MAINTAINABILITY_CONVENTIONS.md` and the canonical maintainability document it references before implementation work.
-4. Follow those rules, including resolving the active coordination ledger through `Juloc/agent-control` issue #1 before checking or creating claims.
+2. Read the canonical operating rules from `Juloc/agent-control/AGENTS.md` on `main` using the available GitHub access, plus the engineering and maintainability documents it names.
+3. Read `docs/MAINTAINABILITY_CONVENTIONS.md`.
+4. Resolve the active coordination ledger through `Juloc/agent-control` issue #1 and claim the smallest necessary scope according to the central protocol.
 5. Read any additional repository-specific instruction file named in `.agent/project.yaml` notes.
 
-Do not ask the user to repeat the Agent Control protocol in their prompt.
+Per slice, read only: the current request, the directly relevant issue, the binding SPEC, the canonical owner and its directly related tests. Do not reread unchanged central rules or inventory unrelated branches, PRs, worktrees or ledger history for every slice. Re-check coordination when the scope changes, `origin/dev` moved unexpectedly, concurrent work appears, or before push. The ordinary test budget is focused tests only; the `validation` list in `.agent/project.yaml` is the release gate or explicit-request validation, not the per-slice completion step (see `jularr-task`).
 
 ## Mandatory AI implementation discipline
 
@@ -39,6 +55,7 @@ The central `Juloc/agent-control` engineering and C# conventions are binding for
 
 - Commits must use the configured real contributor identity. AI, agent and service identities or attribution trailers are prohibited.
 - Run `npm ci` before committing to activate the repository-local authorship hooks. Do not bypass them with `--no-verify`.
+- Never force push and never modify `main` for ordinary work; ordinary work lands on `dev`.
 - CI verifies authorship again for every pull request and push; the protected `main` branch requires that verification to pass.
 
 ## Fallback if the central repository cannot be read
@@ -47,7 +64,7 @@ Continue safely without blocking repository recovery:
 - inspect this repository's open Issues and PRs before editing,
 - avoid work that overlaps an active branch/PR,
 - use GitHub Issues as the backlog instead of creating manual status/backlog Markdown,
-- keep changes scoped and run the repository's configured validation,
+- keep changes scoped and run focused validation for the changed area (`jularr-task` test policy),
 - never put credentials or secrets in code, docs, issues or comments,
 - record that cross-agent coordination could not be verified.
 
