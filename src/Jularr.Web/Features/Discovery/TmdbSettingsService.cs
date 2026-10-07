@@ -98,7 +98,16 @@ public sealed class TmdbSettingsService(
 
         await store.SaveAsync(new TmdbSettingsUpdate(enabled, token, key), cancellationToken);
         Reevaluate();
-        return ProviderFeedback.Saved;
+
+        // One lightweight call on the credential now in effect, so the state and the answer are known at once instead of after the first Discover visit.
+        // A provider that is switched off or has nothing to send is only saved; a failed test leaves the values saved and reports why it failed.
+        if (!enabled || (await store.GetAsync(cancellationToken)).Credential is null)
+        {
+            return ProviderFeedback.Saved;
+        }
+
+        var test = await TestAsync(new Dictionary<string, string?>(), cancellationToken);
+        return test == ProviderFeedback.TestSucceeded ? ProviderFeedback.SavedConnectionWorks : test;
     }
 
     /// <summary>
