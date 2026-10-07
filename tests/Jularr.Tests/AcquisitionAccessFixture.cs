@@ -120,7 +120,7 @@ internal sealed class AcquisitionAccessFixture : IAsyncDisposable
 }
 
 /// <summary>Counts how often a media type's acquisition ran and what it was asked to run.</summary>
-internal sealed class RecordingExecutor(MediaAcquisitionKind kind, bool fail = false) : IAcquisitionRequestExecutor
+internal sealed class RecordingExecutor(MediaAcquisitionKind kind, bool fail = false, Exception? error = null) : IAcquisitionRequestExecutor
 {
     public int Runs { get; private set; }
     public List<AcquisitionRequest> Requests { get; } = [];
@@ -130,7 +130,9 @@ internal sealed class RecordingExecutor(MediaAcquisitionKind kind, bool fail = f
     {
         Runs++;
         Requests.Add(request);
-        return fail
+        return error is not null
+            ? throw error
+            : fail
             ? throw new InvalidOperationException("indexer down")
             : Task.FromResult(new AcquisitionExecution(AcquisitionRequestStatus.Downloading, "release", Guid.NewGuid()));
     }

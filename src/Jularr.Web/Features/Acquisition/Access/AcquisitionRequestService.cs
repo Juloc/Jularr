@@ -418,7 +418,9 @@ public sealed class AcquisitionRequestService(
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(exception, "Acquisition request {RequestId} ({Kind}) failed.", request.Id, request.Kind);
-            result = new AcquisitionExecution(AcquisitionRequestStatus.Failed, exception.Message);
+            result = TransientAcquisitionFailure.Describe(exception) is { } problem
+                ? new AcquisitionExecution(AcquisitionRequestStatus.Approved, $"{problem} Trying again soon.")
+                : new AcquisitionExecution(AcquisitionRequestStatus.Failed, exception.Message);
             threw = true;
         }
 
