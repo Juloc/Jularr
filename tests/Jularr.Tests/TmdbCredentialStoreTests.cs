@@ -101,6 +101,62 @@ public sealed class TmdbCredentialStoreTests
     }
 
     [TestMethod]
+    public async Task ASavedCredentialStillCountsAfterARestartWithTheSameKeys()
+    {
+        var directory = NewDirectory();
+        var keys = new DirectoryInfo(NewDirectory());
+        await TmdbTestSupport.Credentials(apiKey: null, directory: directory, protection: DataProtectionProvider.Create(keys))
+            .SaveAsync(new TmdbSettingsUpdate(true, Token, null), CancellationToken.None);
+
+        var afterRestart = await TmdbTestSupport.Credentials(apiKey: null, directory: directory, protection: DataProtectionProvider.Create(keys)).GetAsync(CancellationToken.None);
+
+        Assert.AreEqual(TmdbCredentialKind.ReadAccessToken, afterRestart.Credential!.Kind);
+        Assert.AreEqual(Token, afterRestart.Credential.Secret);
+        Assert.AreEqual(TmdbCredentialSource.Stored, afterRestart.Source);
+        Assert.AreNotEqual(TmdbAvailability.NotConfigured, afterRestart.Availability);
+    }
+
+    [TestMethod]
+    public async Task SwitchingBetweenTheTokenAndTheApiKeyAlwaysLeavesTheOneEnteredLastInEffect()
+    {
+        var store = TmdbTestSupport.Credentials(apiKey: null, directory: NewDirectory());
+
+        await store.SaveAsync(new TmdbSettingsUpdate(true, Token, null), CancellationToken.None);
+        var viaToken = await store.GetAsync(CancellationToken.None);
+        await store.SaveAsync(new TmdbSettingsUpdate(true, null, "api-key-789"), CancellationToken.None);
+        var viaKey = await store.GetAsync(CancellationToken.None);
+        await store.SaveAsync(new TmdbSettingsUpdate(true, Token, null), CancellationToken.None);
+        var backToToken = await store.GetAsync(CancellationToken.None);
+        await store.SaveAsync(new TmdbSettingsUpdate(false, null, null), CancellationToken.None);
+        var edited = await store.GetAsync(CancellationToken.None);
+
+        Assert.AreEqual(TmdbCredentialKind.ReadAccessToken, viaToken.Credential!.Kind);
+        Assert.AreEqual(TmdbCredentialKind.ApiKey, viaKey.Credential!.Kind, "A newly entered API key is not ignored behind a token saved earlier.");
+        Assert.IsFalse(viaKey.HasStoredReadAccessToken);
+        Assert.AreEqual(TmdbCredentialKind.ReadAccessToken, backToToken.Credential!.Kind);
+        Assert.IsFalse(backToToken.HasStoredApiKey);
+        Assert.AreEqual(TmdbCredentialKind.ReadAccessToken, edited.Credential!.Kind, "An edit that gives no secret keeps what is stored.");
+        Assert.IsFalse(edited.Enabled);
+    }
+
+    [TestMethod]
+    public async Task ACredentialThatCannotBeDecryptedDoesNotPreventEnteringANewOne()
+    {
+        var directory = NewDirectory();
+        await TmdbTestSupport.Credentials(apiKey: null, directory: directory, protection: DataProtectionProvider.Create(new DirectoryInfo(NewDirectory())))
+            .SaveAsync(new TmdbSettingsUpdate(true, Token, null), CancellationToken.None);
+        var store = TmdbTestSupport.Credentials(apiKey: null, directory: directory, protection: DataProtectionProvider.Create(new DirectoryInfo(NewDirectory())));
+        Assert.IsTrue((await store.GetAsync(CancellationToken.None)).StoredCredentialUnreadable);
+
+        await store.SaveAsync(new TmdbSettingsUpdate(true, null, "replacement-key"), CancellationToken.None);
+
+        var replaced = await store.GetAsync(CancellationToken.None);
+        Assert.IsFalse(replaced.StoredCredentialUnreadable);
+        Assert.AreEqual(TmdbCredentialKind.ApiKey, replaced.Credential!.Kind);
+        Assert.AreEqual("replacement-key", replaced.Credential.Secret);
+    }
+
+    [TestMethod]
     public async Task AnInvalidSecretIsRefusedBeforeItIsStored()
     {
         var store = TmdbTestSupport.Credentials(apiKey: null, directory: NewDirectory());

@@ -29,6 +29,9 @@ public enum ProviderFeedback
     Removed,
     InvalidInput,
     TestSucceeded,
+
+    /// <summary>A credential that was typed (and not saved) works: the answer says so and that it still needs Save.</summary>
+    TestSucceededUnsaved,
     TestAuthenticationFailed,
     TestUnreachable,
     TestRateLimited,
@@ -114,6 +117,7 @@ public sealed record ProviderPageModel(UiTextBundle Ui, IReadOnlyList<ProviderVi
         ProviderFeedback.Removed => "admin.providers.removed",
         ProviderFeedback.InvalidInput => "admin.providers.invalidInput",
         ProviderFeedback.TestSucceeded => "admin.providers.test.succeeded",
+        ProviderFeedback.TestSucceededUnsaved => "admin.providers.test.succeededUnsaved",
         ProviderFeedback.TestAuthenticationFailed => "admin.providers.test.authFailed",
         ProviderFeedback.TestUnreachable => "admin.providers.test.unreachable",
         ProviderFeedback.TestRateLimited => "admin.providers.test.rateLimited",
@@ -121,7 +125,7 @@ public sealed record ProviderPageModel(UiTextBundle Ui, IReadOnlyList<ProviderVi
         _ => null
     };
 
-    public static bool IsFailure(ProviderFeedback feedback) => feedback is not (ProviderFeedback.None or ProviderFeedback.Saved or ProviderFeedback.Removed or ProviderFeedback.TestSucceeded);
+    public static bool IsFailure(ProviderFeedback feedback) => feedback is not (ProviderFeedback.None or ProviderFeedback.Saved or ProviderFeedback.Removed or ProviderFeedback.TestSucceeded or ProviderFeedback.TestSucceededUnsaved);
 
     /// <summary>Keeps the feedback for the one page load after the redirect that follows a post.</summary>
     public static void Remember(ITempDataDictionary tempData, string providerKey, ProviderFeedback feedback)

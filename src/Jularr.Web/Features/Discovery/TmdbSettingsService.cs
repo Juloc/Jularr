@@ -132,7 +132,7 @@ public sealed class TmdbSettingsService(
 
         return await provider.TestConnectionAsync(credential, recordHealth, cancellationToken) switch
         {
-            TmdbTestOutcome.Succeeded => ProviderFeedback.TestSucceeded,
+            TmdbTestOutcome.Succeeded => recordHealth ? ProviderFeedback.TestSucceeded : ProviderFeedback.TestSucceededUnsaved,
             TmdbTestOutcome.AuthenticationFailed => ProviderFeedback.TestAuthenticationFailed,
             TmdbTestOutcome.RateLimited => ProviderFeedback.TestRateLimited,
             _ => ProviderFeedback.TestUnreachable

@@ -5896,6 +5896,7 @@ public static class UiTranslationResources
         M("admin.providers.saved", "Provider settings saved.", "Admin", "Status", "Confirmation after the provider settings were saved.", "short status", 36),
         M("admin.providers.removed", "The saved credential was removed.", "Admin", "Status", "Confirmation after the saved credential was removed.", "short status", 40),
         M("admin.providers.test.succeeded", "Connection works. The provider accepted the credential.", "Admin", "Status", "Result of a connection test that succeeded.", "short status", 70),
+        M("admin.providers.test.succeededUnsaved", "Connection works. This credential is not saved yet: choose Save to use it.", "Admin", "Status", "Result of a connection test of a typed credential that has not been saved.", "short status", 100),
         M("admin.providers.test.authFailed", "The provider refused the credential. Check it and test again.", "Admin", "Error", "Result of a connection test that the provider answered with a refusal.", "short status", 70),
         M("admin.providers.test.unreachable", "The provider could not be reached. Try again shortly.", "Admin", "Error", "Result of a connection test that got no usable answer in time.", "short status", 70),
         M("admin.providers.test.rateLimited", "The provider is limiting requests. Try again in a moment.", "Admin", "Error", "Result of a connection test that hit the provider rate limit.", "short status", 70),

@@ -129,11 +129,30 @@ public sealed class TmdbProviderSettingsTests
     {
         await using var rig = await CreateAsync();
 
-        Assert.AreEqual(ProviderFeedback.TestSucceeded, await rig.Service.TestAsync(Typed(ValidToken), CancellationToken.None));
+        Assert.AreEqual(ProviderFeedback.TestSucceededUnsaved, await rig.Service.TestAsync(Typed(ValidToken), CancellationToken.None), "A typed credential that works still needs Save, and the answer says so.");
         Assert.AreEqual(ProviderFeedback.TestAuthenticationFailed, await rig.Service.TestAsync(Typed(WrongToken), CancellationToken.None));
-        Assert.AreEqual(ProviderFeedback.TestSucceeded, await rig.Service.TestAsync(Typed(apiKey: ValidToken), CancellationToken.None));
+        Assert.AreEqual(ProviderFeedback.TestSucceededUnsaved, await rig.Service.TestAsync(Typed(apiKey: ValidToken), CancellationToken.None));
+        Assert.AreEqual(ProviderConnectionState.NotConfigured, (await rig.Service.GetViewAsync(CancellationToken.None)).State, "Testing alone configures nothing.");
+        Assert.IsFalse(ProviderPageModel.IsFailure(ProviderFeedback.TestSucceededUnsaved));
+        Assert.AreEqual("admin.providers.test.succeededUnsaved", ProviderPageModel.MessageKey(ProviderFeedback.TestSucceededUnsaved));
 
         Assert.AreEqual(ProviderHealthStatus.Unknown, rig.Health.Get(ProviderKeys.Tmdb).Status, "A candidate that was never saved says nothing about the configured provider.");
+    }
+
+    [TestMethod]
+    public async Task SavingAWorkingCredentialMovesTheProviderAwayFromNotConfiguredAndTheSavedTestIsASavedAnswer()
+    {
+        await using var rig = await CreateAsync();
+        Assert.AreEqual(ProviderConnectionState.NotConfigured, (await rig.Service.GetViewAsync(CancellationToken.None)).State);
+
+        Assert.AreEqual(ProviderFeedback.Saved, await rig.Service.SaveAsync(true, Typed(ValidToken), CancellationToken.None));
+
+        var saved = await rig.Service.GetViewAsync(CancellationToken.None);
+        Assert.AreNotEqual(ProviderConnectionState.NotConfigured, saved.State);
+        Assert.IsTrue(saved.HasSavedValue);
+        Assert.IsNull(saved.Blocking, "A configured provider no longer blocks Setup.");
+        Assert.AreEqual(ProviderFeedback.TestSucceeded, await rig.Service.TestAsync(Typed(), CancellationToken.None), "Testing what is saved is a saved answer.");
+        Assert.AreEqual(ProviderConnectionState.Healthy, (await rig.Service.GetViewAsync(CancellationToken.None)).State);
     }
 
     [TestMethod]
