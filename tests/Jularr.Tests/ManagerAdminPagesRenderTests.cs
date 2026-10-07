@@ -36,7 +36,14 @@ public sealed class ManagerAdminPagesRenderTests
         Assert.AreEqual(HttpStatusCode.Redirect, saved);
         Assert.AreEqual("BLURAY-1080p", (await store.ResolveAsync(MediaAcquisitionKind.Movie, null)).UpgradeCutoffQuality, "The saved cutoff is what the engine resolves next.");
 
-        form.ScoreRules = "Prefer | NoSuchField | Equals | x | 5 | broken";
+        form.Rules.Add(new ScoreRuleRow { Effect = "Reject", Field = "ReleaseGroup", Match = "Equals", Value = "BAD" });
+        form.Tiers.Add(new FallbackTierRow { Minutes = "120", Qualities = [form.QualityOrder[^1]] });
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Save", FormFields(form)));
+        var stored = await store.ResolveAsync(MediaAcquisitionKind.Movie, null);
+        Assert.AreEqual(ReleaseRuleEffect.Reject, stored.ScoreRules.Single(rule => rule.Value == "BAD").EffectiveEffect, "A rule row the owner added is stored with its effect.");
+        Assert.AreEqual(120, stored.FallbackTiers.Single().AfterMinutes);
+
+        form.Rules = [new ScoreRuleRow { Effect = "Prefer", Field = "NoSuchField", Match = "Equals", Value = "x", Score = "5", Name = "broken" }];
         var rejected = await host.PostAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Save", FormFields(form));
         Assert.AreEqual(HttpStatusCode.OK, rejected, "An invalid rule is explained on the page, not stored.");
         Assert.AreEqual(0, (await store.ResolveAsync(MediaAcquisitionKind.Movie, null)).ScoreRules.Count(rule => rule.Name == "Rule 1"));
@@ -51,13 +58,13 @@ public sealed class ManagerAdminPagesRenderTests
 
         var html = await host.GetHtmlAsync("/Admin/Instance");
         StringAssert.Contains(html, "Media Manager");
-        StringAssert.Contains(html, "Current: Full Jularr.");
+        StringAssert.Contains(html, "admin-tag admin-tag-accent\">Current</span>", "The preset the switches match is marked on its card.");
 
         Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync("/Admin/Instance", "/Admin/Instance?handler=Preset", [new("preset", "MediaManager")]));
         var manager = await host.Modules.GetAsync();
         Assert.IsFalse(manager.IsEnabled(InstanceModule.Playback));
         Assert.IsTrue(manager.IsEnabled(InstanceModule.Acquisition));
-        StringAssert.Contains(await host.GetHtmlAsync("/Admin/Instance"), "Current: Media Manager.");
+        StringAssert.Contains(await host.GetHtmlAsync("/Admin/Instance"), "admin-tag admin-tag-accent\">Current</span>");
 
         Assert.AreEqual(HttpStatusCode.BadRequest, await host.PostAsync("/Admin/Instance", "/Admin/Instance?handler=Preset", [new("preset", "Custom")]));
         Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync("/Admin/Instance", "/Admin/Instance?handler=Preset", [new("preset", "Full")]));
@@ -107,31 +114,54 @@ public sealed class ManagerAdminPagesRenderTests
         StringAssert.Contains(albumPage, "Request album");
         Assert.IsFalse(albumPage.Contains("Play", StringComparison.Ordinal), "There is no Play action until Jularr plays music.");
 
+        var adminLibrary = await host.GetHtmlAsync("/Admin/Music");
+        StringAssert.Contains(adminLibrary, "Daft Punk");
+        var adminArtist = await host.GetHtmlAsync($"/Admin/Music/Artist/{artist.Id:D}");
+        StringAssert.Contains(adminArtist, "Homework");
+        var adminAlbum = await host.GetHtmlAsync($"/Admin/Music/Album/{work.Id:D}");
+        StringAssert.Contains(adminAlbum, "Daftendirekt");
+        StringAssert.Contains(adminAlbum, "Manual search");
+
         Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync($"/Music/Album/{work.Id:D}", $"/Music/Album/{work.Id:D}?handler=Request", []));
         var request = (await video.Get<AcquisitionAccessStore>().ListAsync(MediaAcquisitionKind.Music, null, openOnly: false, 10, CancellationToken.None)).Single();
         Assert.AreEqual("rg-hw", request.ExternalId);
         Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync($"/Music/Album/{Guid.NewGuid():D}"));
     }
 
-    private static List<KeyValuePair<string, string>> FormFields(QualityProfileForm form) =>
-    [
-        new("Id", form.Id),
-        new("Name", form.Name),
-        new("QualityOrder", form.QualityOrder),
-        new("AllowedQualities", form.AllowedQualities),
-        new("FallbackTiers", form.FallbackTiers),
-        new("UpgradeAllowed", form.UpgradeAllowed ? "true" : "false"),
-        new("UpgradeCutoffQuality", form.UpgradeCutoffQuality ?? ""),
-        new("UpgradeMinimumQualitySteps", form.UpgradeMinimumQualitySteps ?? ""),
-        new("UpgradeMinimumScoreDelta", form.UpgradeMinimumScoreDelta ?? ""),
-        new("UpgradeUntilScore", form.UpgradeUntilScore ?? ""),
-        new("MinimumScore", form.MinimumScore ?? ""),
-        new("MinimumSizeMegabytes", form.MinimumSizeMegabytes ?? ""),
-        new("MaximumSizeMegabytes", form.MaximumSizeMegabytes ?? ""),
-        new("MustContain", form.MustContain),
-        new("MustNotContain", form.MustNotContain),
-        new("RequiredRegex", form.RequiredRegex),
-        new("RejectedRegex", form.RejectedRegex),
-        new("ScoreRules", form.ScoreRules)
-    ];
+    private static List<KeyValuePair<string, string>> FormFields(QualityProfileForm form)
+    {
+        List<KeyValuePair<string, string>> fields =
+        [
+            new("Id", form.Id),
+            new("Name", form.Name),
+            new("UpgradeAllowed", form.UpgradeAllowed ? "true" : "false"),
+            new("UpgradeCutoffQuality", form.UpgradeCutoffQuality ?? ""),
+            new("UpgradeMinimumQualitySteps", form.UpgradeMinimumQualitySteps ?? ""),
+            new("UpgradeMinimumScoreDelta", form.UpgradeMinimumScoreDelta ?? ""),
+            new("UpgradeUntilScore", form.UpgradeUntilScore ?? ""),
+            new("MinimumScore", form.MinimumScore ?? ""),
+            new("MinimumSizeMegabytes", form.MinimumSizeMegabytes ?? ""),
+            new("MaximumSizeMegabytes", form.MaximumSizeMegabytes ?? ""),
+            new("MustContain", form.MustContain),
+            new("MustNotContain", form.MustNotContain),
+            new("RequiredRegex", form.RequiredRegex),
+            new("RejectedRegex", form.RejectedRegex)
+        ];
+        fields.AddRange(form.QualityOrder.Select(quality => new KeyValuePair<string, string>("QualityOrder", quality)));
+        fields.AddRange(form.AllowedQualities.Select(quality => new KeyValuePair<string, string>("AllowedQualities", quality)));
+        for (var index = 0; index < form.Rules.Count; index++)
+        {
+            var rule = form.Rules[index];
+            fields.AddRange([new("Rules.Index", index.ToString()), new($"Rules[{index}].Effect", rule.Effect ?? ""), new($"Rules[{index}].Field", rule.Field ?? ""), new($"Rules[{index}].Match", rule.Match ?? ""), new($"Rules[{index}].Value", rule.Value ?? ""), new($"Rules[{index}].Score", rule.Score ?? ""), new($"Rules[{index}].Name", rule.Name ?? "")]);
+        }
+
+        for (var index = 0; index < form.Tiers.Count; index++)
+        {
+            fields.Add(new("Tiers.Index", index.ToString()));
+            fields.Add(new($"Tiers[{index}].Minutes", form.Tiers[index].Minutes ?? ""));
+            fields.AddRange(form.Tiers[index].Qualities.Select(quality => new KeyValuePair<string, string>($"Tiers[{index}].Qualities", quality)));
+        }
+
+        return fields;
+    }
 }

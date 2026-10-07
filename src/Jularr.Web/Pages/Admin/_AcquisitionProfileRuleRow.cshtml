@@ -1,0 +1,41 @@
+@model Jularr.Web.Pages.Admin.ProfileRuleRowView
+@using Jularr.Web.Features.Acquisition.Quality
+@* One rule of an Acquisition Profile: the same markup renders the stored rules and the template the editor clones to add one. *@
+@{
+    var ui = Model.Ui;
+    var row = Model.Row;
+    var gate = row.Effect is nameof(ReleaseRuleEffect.Require) or nameof(ReleaseRuleEffect.Reject) or nameof(ReleaseRuleEffect.Info);
+}
+<tr data-rule-row>
+    <td data-label="@ui["admin.profiles.rule.effect"]">
+        <input type="hidden" name="Rules.Index" value="@Model.Index" />
+        <select class="admset-control admset-control-fit" name="Rules[@(Model.Index)].Effect" data-rule-effect aria-label="@ui["admin.profiles.rule.effect"]">
+            @foreach (var effect in Enum.GetValues<ReleaseRuleEffect>())
+            {
+                <option value="@effect" selected="@(row.Effect == effect.ToString())">@ui["admin.profiles.effect." + effect.ToString().ToLowerInvariant()]</option>
+            }
+        </select>
+    </td>
+    <td data-label="@ui["admin.profiles.rule.field"]">
+        <select class="admset-control admset-control-fit" name="Rules[@(Model.Index)].Field" aria-label="@ui["admin.profiles.rule.field"]">
+            @foreach (var field in Model.Fields)
+            {
+                <option value="@field" selected="@(row.Field == field.ToString())">@ui["admin.profiles.ruleField." + field.ToString().ToLowerInvariant()]</option>
+            }
+        </select>
+    </td>
+    <td data-label="@ui["admin.profiles.rule.match"]">
+        <select class="admset-control admset-control-fit" name="Rules[@(Model.Index)].Match" aria-label="@ui["admin.profiles.rule.match"]">
+            @foreach (var match in Enum.GetValues<ReleaseRuleMatch>())
+            {
+                <option value="@match" selected="@(row.Match == match.ToString())">@ui["admin.profiles.match." + match.ToString().ToLowerInvariant()]</option>
+            }
+        </select>
+    </td>
+    <td data-label="@ui["admin.profiles.rule.value"]"><input class="admset-control" type="text" name="Rules[@(Model.Index)].Value" value="@row.Value" spellcheck="false" aria-label="@ui["admin.profiles.rule.value"]" /></td>
+    <td data-label="@ui["admin.profiles.rule.score"]"><input class="admset-control admprofiles-score" type="number" name="Rules[@(Model.Index)].Score" value="@row.Score" data-rule-score disabled="@gate" aria-label="@ui["admin.profiles.rule.score"]" /></td>
+    <td data-label="@ui["admin.profiles.rule.name"]"><input class="admset-control" type="text" name="Rules[@(Model.Index)].Name" value="@row.Name" maxlength="80" aria-label="@ui["admin.profiles.rule.name"]" /></td>
+    <td class="admset-cell-actions">
+        <button type="button" class="admin-icon-button" data-remove-row aria-label="@ui["admin.profiles.rule.remove"]"><partial name="_AdminIcon" model='"close"' /></button>
+    </td>
+</tr>

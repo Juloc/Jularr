@@ -1,0 +1,23 @@
+@model Jularr.Web.Pages.Admin.ProfileQualityRowView
+@* One ranked quality of an Acquisition Profile: its place is its position in the list, the switch says whether it is taken at once and the radio whether upgrading stops here. *@
+@{
+    var ui = Model.Ui;
+}
+<li class="admprofiles-quality" data-quality="@Model.Quality">
+    <input type="hidden" name="QualityOrder" value="@Model.Quality" />
+    <span class="admprofiles-rank" aria-hidden="true"></span>
+    <strong class="admprofiles-quality-name">@Model.Quality</strong>
+    <label class="admprofiles-quality-take" data-label="@ui["admin.profiles.order.col.takeNow"]">
+        <input type="checkbox" class="admin-switch" role="switch" name="AllowedQualities" value="@Model.Quality" checked="@Model.TakenAtOnce" />
+        <span class="visually-hidden">@ui.Format("admin.profiles.order.takeNow", ("quality", Model.Quality))</span>
+    </label>
+    <label class="admprofiles-quality-final" data-label="@ui["admin.profiles.order.col.final"]">
+        <input type="radio" name="UpgradeCutoffQuality" value="@Model.Quality" checked="@Model.IsFinal" />
+        <span class="visually-hidden">@ui.Format("admin.profiles.order.final", ("quality", Model.Quality))</span>
+    </label>
+    <span class="admprofiles-quality-actions">
+        <button type="button" class="admin-icon-button" data-move="up" aria-label="@ui.Format("admin.profiles.order.moveUp", ("quality", Model.Quality))"><partial name="_AdminIcon" model='"arrow-up"' /></button>
+        <button type="button" class="admin-icon-button" data-move="down" aria-label="@ui.Format("admin.profiles.order.moveDown", ("quality", Model.Quality))"><partial name="_AdminIcon" model='"arrow-down"' /></button>
+        <button type="button" class="admin-icon-button" data-rank-remove aria-label="@ui.Format("admin.profiles.order.remove", ("quality", Model.Quality))"><partial name="_AdminIcon" model='"close"' /></button>
+    </span>
+</li>

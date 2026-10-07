@@ -28,17 +28,30 @@
     <div class="admset-head">
         <div>
             <h2 id="instance-preset">@ui["admin.instance.preset.title"]</h2>
-            <p>@ui.Format("admin.instance.preset.current", ("preset", Model.PresetName(Model.Preset)))</p>
+            <p>@ui["admin.instance.preset.hint"]</p>
         </div>
+        @if (Model.Preset == InstancePreset.Custom)
+        {
+            <span class="admin-tag admin-tag-text">@Model.PresetName(InstancePreset.Custom)</span>
+        }
     </div>
     <div class="admin-module-grid">
         @foreach (var preset in new[] { InstancePreset.MediaManager, InstancePreset.Full })
         {
             <form method="post" asp-page-handler="Preset" class="admin-module-card">
                 <input type="hidden" name="preset" value="@preset" />
-                <strong>@Model.PresetName(preset)</strong>
+                <div class="admin-module-head">
+                    <strong>@Model.PresetName(preset)</strong>
+                    @if (Model.Preset == preset)
+                    {
+                        <span class="admin-tag admin-tag-accent">@ui["admin.instance.preset.currentTag"]</span>
+                    }
+                </div>
                 <p>@Model.PresetDescription(preset)</p>
-                <button class="button" type="submit" disabled="@(Model.Preset == preset)">@ui["admin.instance.preset.apply"]</button>
+                @if (Model.Preset != preset)
+                {
+                    <button class="button" type="submit">@ui["admin.instance.preset.apply"]</button>
+                }
             </form>
         }
     </div>

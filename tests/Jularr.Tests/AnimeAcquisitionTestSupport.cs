@@ -120,6 +120,13 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         return await action(scope.ServiceProvider.GetRequiredService<AcquisitionApiService>());
     }
 
+    /// <summary>One pass of the shared Wanted lifecycle, the only thing that decides when Anime searches.</summary>
+    public async Task<int> RunWantedPassAsync(DateTime nowUtc)
+    {
+        await using var scope = services.CreateAsyncScope();
+        return await Jularr.Web.Features.Acquisition.Wanted.WantedAcquisitionService.ProcessOnceAsync(scope.ServiceProvider, nowUtc, CancellationToken.None);
+    }
+
     public async Task<AnimeLibraryLocation?> GetLibraryLocationAsync(Guid animeId, Guid? preferredRootId = null)
     {
         await using var scope = services.CreateAsyncScope();
@@ -608,6 +615,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddSingleton(new MediaOptimizationJournal(Path.Combine(DataRoot, "media-optimization")));
         collection.AddSingleton<MediaOptimizationQueue>();
         collection.AddSingleton<AnimeAcquisitionScheduler>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeWantedSource>();
         collection.AddScoped<AcquisitionApiKeyService>();
         collection.AddScoped<AcquisitionApiService>();
         collection.AddHttpClient();

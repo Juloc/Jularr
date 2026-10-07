@@ -1,0 +1,90 @@
+@model Jularr.Web.Pages.Admin.ManualReleaseTableView
+@* The release table of the Manga, Light Novel and Music Manual Search: the dense table on a wide container and the cards of the shared Manual Search on a narrow one. *@
+@using Jularr.Web.Pages.Admin
+@{
+    var ui = Model.Ui;
+}
+<div class="bms-results">
+    <table class="bms-table">
+        <thead>
+            <tr>
+                <th scope="col">@ui["admin.manualSearch.col.score"]</th>
+                <th scope="col">@ui["admin.manualSearch.col.release"]</th>
+                <th scope="col">@ui["admin.manualSearch.col.details"]</th>
+                <th scope="col">@ui["admin.manualSearch.col.match"]</th>
+                <th scope="col"><span class="bms-sr">@ui["admin.wanted.col.actions"]</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model.Rows)
+            {
+                var verdict = ManualReleaseRows.VerdictName(row.Verdict);
+                <tr data-verdict="@verdict">
+                    <td class="bms-score bms-score-@verdict">@(row.Score?.ToString() ?? "–")</td>
+                    <td class="bms-release">
+                        <span class="bms-release-title">@row.Title</span>
+                        <small><span>@row.Meta</span></small>
+                        <ul class="bms-reasons">
+                            @foreach (var reason in row.Reasons)
+                            {
+                                <li>@reason</li>
+                            }
+                        </ul>
+                    </td>
+                    <td>
+                        <span class="bms-facts-inline">
+                            @foreach (var fact in row.Facts)
+                            {
+                                <span class="admin-tag admin-tag-text">@fact</span>
+                            }
+                        </span>
+                    </td>
+                    <td><span class="admin-tag admin-tag-@ManualReleaseRows.VerdictTone(row.Verdict)" data-verdict="@verdict"><partial name="_ManualSearchIcon" model="verdict" />@ManualReleaseRows.VerdictText(ui, row)</span></td>
+                    <td class="bms-col-action">
+                        @if (row.CanGrab)
+                        {
+                            <form method="post" asp-page-handler="Grab" asp-all-route-data="Model.GrabRoute">
+                                <input type="hidden" name="releaseIdentity" value="@row.Identity" />
+                                <button class="button button-small" type="submit">@ui["admin.manualSearch.selectAndDownload"]</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="bms-cards">
+        @foreach (var row in Model.Rows)
+        {
+            var verdict = ManualReleaseRows.VerdictName(row.Verdict);
+            <article class="bms-card" data-verdict="@verdict">
+                <div class="bms-card-head">
+                    <strong>@row.Title</strong>
+                    <span class="bms-score bms-score-@verdict">@(row.Score?.ToString() ?? "–")</span>
+                </div>
+                <small>@row.Meta</small>
+                <div class="bms-card-tags">
+                    @foreach (var fact in row.Facts)
+                    {
+                        <span class="admin-tag admin-tag-text">@fact</span>
+                    }
+                    <span class="admin-tag admin-tag-@ManualReleaseRows.VerdictTone(row.Verdict)"><partial name="_ManualSearchIcon" model="verdict" />@ManualReleaseRows.VerdictText(ui, row)</span>
+                </div>
+                <ul class="bms-reasons">
+                    @foreach (var reason in row.Reasons)
+                    {
+                        <li>@reason</li>
+                    }
+                </ul>
+                @if (row.CanGrab)
+                {
+                    <form method="post" asp-page-handler="Grab" asp-all-route-data="Model.GrabRoute">
+                        <input type="hidden" name="releaseIdentity" value="@row.Identity" />
+                        <button class="button button-small" type="submit">@ui["admin.manualSearch.selectAndDownload"]</button>
+                    </form>
+                }
+            </article>
+        }
+    </div>
+</div>

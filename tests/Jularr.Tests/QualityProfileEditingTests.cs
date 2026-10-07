@@ -27,7 +27,7 @@ public sealed class QualityProfileEditingTests
             Assert.IsTrue(result.IsValid, $"{kind}: {string.Join("; ", result.Errors.Select(error => $"{error.Field} {error.Code} {error.Detail}"))}");
             var parsed = result.Profile!;
             CollectionAssert.AreEqual(profile.QualityOrder, parsed.QualityOrder, kind.ToString());
-            CollectionAssert.AreEqual(profile.AllowedQualities, parsed.AllowedQualities, kind.ToString());
+            CollectionAssert.AreEqual(profile.AllowedQualities.Length == 0 ? profile.QualityOrder : profile.AllowedQualities, parsed.AllowedQualities, "A profile without allowed qualities takes the whole order, which the form shows ticked: " + kind);
             Assert.AreEqual(profile.UpgradeAllowed, parsed.UpgradeAllowed, kind.ToString());
             Assert.AreEqual(profile.UpgradeCutoffQuality, parsed.UpgradeCutoffQuality, kind.ToString());
             Assert.AreEqual(profile.ScoreRules.Length, parsed.ScoreRules.Length, kind.ToString());
@@ -43,7 +43,7 @@ public sealed class QualityProfileEditingTests
         var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultManga());
         foreach (var preferred in new[] { "AAA", "GOOD" })
         {
-            form.ScoreRules = $"Prefer | ReleaseGroup | Equals | {preferred} | 20 | Preferred group";
+            form.Rules = [new ScoreRuleRow { Effect = "Prefer", Field = "ReleaseGroup", Match = "Equals", Value = preferred, Score = "20", Name = "Preferred group" }];
             var edited = QualityProfileEditing.Parse(form);
 
             Assert.IsTrue(edited.IsValid);
@@ -56,7 +56,7 @@ public sealed class QualityProfileEditingTests
     {
         var target = new ReadingAcquisitionTarget(MediaAcquisitionKind.Manga, "Frieren", []);
         var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultManga());
-        form.ScoreRules = "Reject | ReleaseGroup | Equals | BAD | 0 | Never this group";
+        form.Rules = [new ScoreRuleRow { Effect = "Reject", Field = "ReleaseGroup", Match = "Equals", Value = "BAD", Score = "0", Name = "Never this group" }];
         form.MaximumSizeMegabytes = "50";
 
         var profile = QualityProfileEditing.Parse(form).Profile!;
@@ -71,27 +71,44 @@ public sealed class QualityProfileEditingTests
     public void WhateverCannotBeReadIsReportedWithItsFieldAndLineAndNothingIsStored()
     {
         var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultManga());
-        form.ScoreRules = "Prefer | ReleaseGroup | Equals | GOOD | 20 | fine\nPrefer | NoSuchField | Equals | x | 1 | broken";
-        form.FallbackTiers = "soon: ZIP\n30: PDF";
+        form.Rules =
+        [
+            new ScoreRuleRow { Effect = "Prefer", Field = "ReleaseGroup", Match = "Equals", Value = "GOOD", Score = "20", Name = "fine" },
+            new ScoreRuleRow { Effect = "Prefer", Field = "NoSuchField", Match = "Equals", Value = "x", Score = "1", Name = "broken" },
+            new ScoreRuleRow()
+        ];
+        form.Tiers = [new FallbackTierRow { Minutes = "soon", Qualities = ["ZIP"] }, new FallbackTierRow { Minutes = "30", Qualities = ["PDF"] }];
         form.UpgradeMinimumScoreDelta = "many";
 
         var result = QualityProfileEditing.Parse(form);
 
         Assert.IsFalse(result.IsValid);
         Assert.IsNull(result.Profile);
-        Assert.Contains(error => error is { Field: nameof(QualityProfileForm.ScoreRules), Line: 2, Code: "rule" }, result.Errors);
-        Assert.Contains(error => error is { Field: nameof(QualityProfileForm.FallbackTiers), Line: 1, Code: "tier" }, result.Errors);
+        Assert.Contains(error => error is { Field: nameof(QualityProfileForm.Rules), Line: 2, Code: "rule" }, result.Errors);
+        Assert.Contains(error => error is { Field: nameof(QualityProfileForm.Tiers), Line: 1, Code: "tier" }, result.Errors);
+        Assert.DoesNotContain(error => error.Field == nameof(QualityProfileForm.Rules) && error.Line == 3, result.Errors, "The blank row the editor offers for adding a rule is not an error.");
         Assert.Contains(error => error is { Field: nameof(QualityProfileForm.UpgradeMinimumScoreDelta), Code: "number" }, result.Errors);
+    }
+
+    [TestMethod]
+    public void AProfileThatTakesNoQualityAtOnceIsRefusedInsteadOfBecomingOneThatTakesEveryQuality()
+    {
+        var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultManga());
+        form.AllowedQualities = [];
+
+        var result = QualityProfileEditing.Parse(form);
+
+        Assert.Contains(error => error is { Field: nameof(QualityProfileForm.AllowedQualities), Code: "allowed" }, result.Errors);
     }
 
     [TestMethod]
     public void AWaitingStepMayOnlyNameQualitiesOfTheOrderAndTheCutoffMustBeInIt()
     {
         var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultLightNovel());
-        form.FallbackTiers = "60: MOBI";
+        form.Tiers = [new FallbackTierRow { Minutes = "60", Qualities = ["MOBI"] }];
         Assert.Contains(error => error.Code == "quality" && error.Detail == "MOBI", QualityProfileEditing.Parse(form).Errors);
 
-        form.FallbackTiers = "60: ZIP";
+        form.Tiers = [new FallbackTierRow { Minutes = "60", Qualities = ["ZIP"] }];
         form.UpgradeCutoffQuality = "AZW3";
 
         var result = QualityProfileEditing.Parse(form);

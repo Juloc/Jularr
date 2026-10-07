@@ -90,14 +90,4 @@ public sealed class ArtistModel(AppDbContext db, MusicQuery query, MusicLibraryS
     public string StateLabel(MusicAlbumState state) => Ui[$"admin.music.state.{state.ToString().ToLowerInvariant()}"];
 
     public string TypeLabel(MusicAlbumType type) => Ui[$"admin.music.type.{type.ToString().ToLowerInvariant()}"];
-
-    /// <summary>The Admin tag tone of an album state; the state's name always sits next to it.</summary>
-    public static string StateTone(MusicAlbumState state) =>
-        state switch
-        {
-            MusicAlbumState.Available => "success",
-            MusicAlbumState.Partial or MusicAlbumState.Requested or MusicAlbumState.Downloading => "warning",
-            MusicAlbumState.Failed => "danger",
-            _ => "text"
-        };
 }

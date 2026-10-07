@@ -70,7 +70,7 @@ public sealed class AlbumModel(AppDbContext db, MusicQuery query, AcquisitionReq
         return RedirectToPage(new { workId });
     }
 
-    public string StateLabel(MusicAlbumState state) => Ui[$"admin.music.state.{state.ToString().ToLowerInvariant()}"];
+    public string StateLabel(MusicAlbumState state) => Ui[$"admin.music.state.{MusicAlbumPresentation.ForLibrary(state).ToString().ToLowerInvariant()}"];
 
     public string TypeLabel(MusicAlbumType type) => Ui[$"admin.music.type.{type.ToString().ToLowerInvariant()}"];
 }

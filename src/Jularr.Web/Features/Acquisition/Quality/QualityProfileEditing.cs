@@ -3,8 +3,8 @@ using System.Globalization;
 namespace Jularr.Web.Features.Acquisition.Quality;
 
 /// <summary>
-/// The editable text of one Acquisition Profile as the Admin editor posts it. Lists are one entry per line so the order the owner types is the
-/// order the engine ranks by; nothing here is a second profile model, it is only the form of <see cref="QualityProfile"/>.
+/// One Acquisition Profile as the Admin editor posts it: the ranked qualities in the order of their rows, one row per rule and per waiting step,
+/// and one term per line for the plain term lists. Nothing here is a second profile model, it is only the form of <see cref="QualityProfile"/>.
 /// </summary>
 public sealed class QualityProfileForm
 {
@@ -13,13 +13,13 @@ public sealed class QualityProfileForm
     public string Name { get; set; } = "";
 
     /// <summary>Quality keys, best first.</summary>
-    public string QualityOrder { get; set; } = "";
+    public List<string> QualityOrder { get; set; } = [];
 
-    /// <summary>The qualities taken at once; empty means every quality of the order.</summary>
-    public string AllowedQualities { get; set; } = "";
+    /// <summary>The qualities taken at once; a profile that stores none takes every quality of the order, so the form shows them all.</summary>
+    public List<string> AllowedQualities { get; set; } = [];
 
-    /// <summary>One fallback step per line, <c>minutes: quality, quality</c>: after that wait the qualities are allowed too and taken as temporary.</summary>
-    public string FallbackTiers { get; set; } = "";
+    /// <summary>The fallback steps: after the wait of a step its qualities are allowed too and taken as temporary.</summary>
+    public List<FallbackTierRow> Tiers { get; set; } = [];
 
     public bool UpgradeAllowed { get; set; }
 
@@ -47,13 +47,41 @@ public sealed class QualityProfileForm
 
     public string RejectedRegex { get; set; } = "";
 
-    /// <summary>One rule per line, <c>Effect | Field | Match | Value | Score | Name</c>, for example <c>Prefer | ReleaseGroup | Equals | GRP | 20 | Preferred group</c>.</summary>
-    public string ScoreRules { get; set; } = "";
+    public List<ScoreRuleRow> Rules { get; set; } = [];
+}
+
+/// <summary>One waiting step as posted: the wait in minutes and the qualities that join the allowed ones after it.</summary>
+public sealed class FallbackTierRow
+{
+    public string? Minutes { get; set; }
+
+    public List<string> Qualities { get; set; } = [];
+
+    public bool IsBlank => string.IsNullOrWhiteSpace(Minutes) && Qualities.Count == 0;
+}
+
+/// <summary>One preference or gate as posted, every part as the owner chose or typed it.</summary>
+public sealed class ScoreRuleRow
+{
+    public string? Effect { get; set; }
+
+    public string? Field { get; set; }
+
+    public string? Match { get; set; }
+
+    public string? Value { get; set; }
+
+    public string? Score { get; set; }
+
+    public string? Name { get; set; }
+
+    /// <summary>An untouched row (the one the editor offers for adding a rule) is not a rule and not an error.</summary>
+    public bool IsBlank => string.IsNullOrWhiteSpace(Value) && string.IsNullOrWhiteSpace(Name);
 }
 
 /// <param name="Field">The form field that is wrong.</param>
-/// <param name="Line">The 1-based line of a list field, or null for a single value.</param>
-/// <param name="Code">What is wrong: <c>number</c>, <c>rule</c>, <c>tier</c>, <c>quality</c> or <c>profile</c> (the profile as a whole is invalid; <paramref name="Detail"/> says why).</param>
+/// <param name="Line">The 1-based row of a list field (a rule or a waiting step), or null for a single value.</param>
+/// <param name="Code">What is wrong: <c>number</c>, <c>rule</c>, <c>tier</c>, <c>quality</c>, <c>allowed</c> (no quality is taken at once) or <c>profile</c> (the profile as a whole is invalid; <paramref name="Detail"/> says why).</param>
 public sealed record ProfileEditError(string Field, int? Line, string Code, string? Detail = null);
 
 public sealed record ProfileEditResult(QualityProfile? Profile, IReadOnlyList<ProfileEditError> Errors)
@@ -71,9 +99,9 @@ public static class QualityProfileEditing
         {
             Id = profile.Id,
             Name = profile.Name,
-            QualityOrder = string.Join('\n', profile.QualityOrder),
-            AllowedQualities = string.Join('\n', profile.AllowedQualities),
-            FallbackTiers = string.Join('\n', profile.FallbackTiers.Select(tier => $"{tier.AfterMinutes}: {string.Join(", ", tier.AddedQualities)}")),
+            QualityOrder = [.. profile.QualityOrder],
+            AllowedQualities = [.. profile.AllowedQualities.Length == 0 ? profile.QualityOrder : profile.AllowedQualities],
+            Tiers = [.. profile.FallbackTiers.Select(tier => new FallbackTierRow { Minutes = tier.AfterMinutes.ToString(CultureInfo.InvariantCulture), Qualities = [.. tier.AddedQualities] })],
             UpgradeAllowed = profile.UpgradeAllowed,
             UpgradeCutoffQuality = profile.UpgradeCutoffQuality,
             UpgradeMinimumQualitySteps = profile.UpgradeMinimumQualitySteps.ToString(CultureInfo.InvariantCulture),
@@ -87,7 +115,18 @@ public static class QualityProfileEditing
             MustNotContain = string.Join('\n', profile.MustNotContain),
             RequiredRegex = string.Join('\n', profile.RequiredRegex),
             RejectedRegex = string.Join('\n', profile.RejectedRegex),
-            ScoreRules = string.Join('\n', profile.ScoreRules.Select(rule => $"{rule.EffectiveEffect} | {rule.Field} | {rule.Match} | {rule.Value} | {rule.Score} | {rule.Name}"))
+            Rules = [.. profile.ScoreRules.Select(ToRow)]
+        };
+
+    private static ScoreRuleRow ToRow(ReleaseScoreRule rule) =>
+        new()
+        {
+            Effect = rule.EffectiveEffect.ToString(),
+            Field = rule.Field.ToString(),
+            Match = rule.Match.ToString(),
+            Value = rule.Value,
+            Score = rule.Score.ToString(CultureInfo.InvariantCulture),
+            Name = rule.Name
         };
 
     /// <summary>
@@ -99,17 +138,22 @@ public static class QualityProfileEditing
         ArgumentNullException.ThrowIfNull(form);
 
         var errors = new List<ProfileEditError>();
-        var order = Lines(form.QualityOrder);
-        var allowed = Lines(form.AllowedQualities);
-        var tiers = new List<FallbackTier>();
-        var tierLines = Lines(form.FallbackTiers);
-        for (var index = 0; index < tierLines.Length; index++)
+        var order = Distinct(form.QualityOrder);
+        var allowed = Distinct(form.AllowedQualities);
+        if (order.Length > 0 && allowed.Length == 0)
         {
-            var separator = tierLines[index].IndexOf(':');
-            var qualities = separator < 0 ? [] : tierLines[index][(separator + 1)..].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (separator < 0 || !int.TryParse(tierLines[index][..separator].Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) || minutes < 1 || qualities.Length == 0)
+            // A profile that stores no allowed quality takes every one, so "none ticked" must not silently turn into "all".
+            errors.Add(new ProfileEditError(nameof(QualityProfileForm.AllowedQualities), null, "allowed"));
+        }
+
+        var tiers = new List<FallbackTier>();
+        var tierRows = form.Tiers.Where(row => !row.IsBlank).ToArray();
+        for (var index = 0; index < tierRows.Length; index++)
+        {
+            var qualities = Distinct(tierRows[index].Qualities);
+            if (!int.TryParse(tierRows[index].Minutes?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) || minutes < 1 || qualities.Length == 0)
             {
-                errors.Add(new ProfileEditError(nameof(QualityProfileForm.FallbackTiers), index + 1, "tier"));
+                errors.Add(new ProfileEditError(nameof(QualityProfileForm.Tiers), index + 1, "tier"));
                 continue;
             }
 
@@ -117,13 +161,13 @@ public static class QualityProfileEditing
         }
 
         var rules = new List<ReleaseScoreRule>();
-        var ruleLines = Lines(form.ScoreRules);
-        for (var index = 0; index < ruleLines.Length; index++)
+        var ruleRows = form.Rules.Where(row => !row.IsBlank).ToArray();
+        for (var index = 0; index < ruleRows.Length; index++)
         {
-            var rule = ParseRule(ruleLines[index], index + 1);
+            var rule = ParseRule(ruleRows[index], index + 1);
             if (rule is null)
             {
-                errors.Add(new ProfileEditError(nameof(QualityProfileForm.ScoreRules), index + 1, "rule"));
+                errors.Add(new ProfileEditError(nameof(QualityProfileForm.Rules), index + 1, "rule"));
                 continue;
             }
 
@@ -173,34 +217,36 @@ public static class QualityProfileEditing
         {
             foreach (var quality in tier.AddedQualities.Where(quality => !order.Contains(quality, StringComparer.OrdinalIgnoreCase)))
             {
-                errors.Add(new ProfileEditError(nameof(QualityProfileForm.FallbackTiers), null, "quality", quality));
+                errors.Add(new ProfileEditError(nameof(QualityProfileForm.Tiers), null, "quality", quality));
             }
         }
 
         return errors.Count == 0 ? new ProfileEditResult(profile, []) : new ProfileEditResult(null, errors);
     }
 
-    private static ReleaseScoreRule? ParseRule(string line, int number)
+    private static ReleaseScoreRule? ParseRule(ScoreRuleRow row, int number)
     {
-        var parts = line.Split('|', 6, StringSplitOptions.TrimEntries);
-        if (parts.Length < 5
-            || !Enum.TryParse<ReleaseRuleEffect>(parts[0], ignoreCase: true, out var effect)
-            || !Enum.TryParse<ReleaseRuleField>(parts[1], ignoreCase: true, out var field)
-            || !Enum.TryParse<ReleaseRuleMatch>(parts[2], ignoreCase: true, out var match)
-            || string.IsNullOrWhiteSpace(parts[3])
-            || !int.TryParse(parts[4], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var score))
+        if (!Enum.TryParse<ReleaseRuleEffect>(row.Effect, ignoreCase: true, out var effect)
+            || !Enum.TryParse<ReleaseRuleField>(row.Field, ignoreCase: true, out var field)
+            || !Enum.TryParse<ReleaseRuleMatch>(row.Match, ignoreCase: true, out var match)
+            || string.IsNullOrWhiteSpace(row.Value))
         {
             return null;
         }
 
         // A rule of a gate effect has no score of its own: it only keeps a release in or out.
-        if (effect is ReleaseRuleEffect.Require or ReleaseRuleEffect.Reject or ReleaseRuleEffect.Info)
+        var score = 0;
+        if (effect is ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid && !int.TryParse(row.Score?.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out score))
         {
-            score = 0;
+            return null;
         }
 
-        return new ReleaseScoreRule(parts.Length > 5 && parts[5].Length > 0 ? parts[5] : $"Rule {number}", field, match, parts[3], score) { Effect = effect };
+        var name = string.IsNullOrWhiteSpace(row.Name) ? $"Rule {number}" : row.Name.Trim();
+        return new ReleaseScoreRule(name, field, match, row.Value.Trim(), score) { Effect = effect };
     }
+
+    private static string[] Distinct(IEnumerable<string>? values) =>
+        [.. (values ?? []).Select(value => value.Trim()).Where(value => value.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
 
     private static string[] Lines(string? text) =>
         (text ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

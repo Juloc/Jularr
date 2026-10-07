@@ -20,16 +20,7 @@ public sealed class ArtistModel(AppDbContext db, MusicQuery query) : PageModel
         return View is null ? NotFound() : Page();
     }
 
-    public string StateLabel(MusicAlbumState state) => Ui[$"admin.music.state.{state.ToString().ToLowerInvariant()}"];
+    public string StateLabel(MusicAlbumState state) => Ui[$"admin.music.state.{MusicAlbumPresentation.ForLibrary(state).ToString().ToLowerInvariant()}"];
 
     public string TypeLabel(MusicAlbumType type) => Ui[$"admin.music.type.{type.ToString().ToLowerInvariant()}"];
-
-    public static string StateTone(MusicAlbumState state) =>
-        state switch
-        {
-            MusicAlbumState.Available => "success",
-            MusicAlbumState.Partial or MusicAlbumState.Downloading or MusicAlbumState.Requested => "warning",
-            MusicAlbumState.Failed => "danger",
-            _ => "neutral"
-        };
 }

@@ -1,0 +1,51 @@
+/* Admin Music (artists, one artist, one album): the Admin settings cards and tables (admin-settings.css), the outlined tags and switches
+   (admin-controls.css) and the Manual Search table (manual-search.css). This file only adds the artist avatar, the album header and
+   the monitor switch button. Theme tokens only. */
+
+.admmusic { display: grid; gap: 16px; }
+
+.admmusic-search { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.admmusic-search input[type="search"] { flex: 1 1 260px; width: auto; }
+.admmusic-search .button .admin-icon, .admmusic-hero .button .admin-icon { width: 14px; height: 14px; margin-inline-end: 6px; }
+
+.admmusic-hits { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.admmusic-hit {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+}
+.admmusic-add { display: flex; gap: 8px; align-items: center; margin: 0; }
+.admmusic-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.admmusic-hit .admmusic-tags { margin-top: 4px; }
+
+/* A letter stands in until a provider supplies artwork; MusicBrainz has none. */
+.admmusic-avatar, .admmusic-cover {
+    display: inline-grid; flex: none; place-items: center; border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--muted); font-weight: 800;
+}
+.admmusic-avatar { width: 36px; height: 36px; border-radius: 10px; font-size: 15px; }
+.admmusic-cover { width: 96px; height: 96px; border-radius: var(--radius-card); font-size: 38px; }
+.admmusic-artist { display: inline-flex; align-items: center; gap: 12px; min-width: 0; color: var(--text); }
+.admmusic-artist:hover strong { color: var(--accent-text); }
+.admmusic-num { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.admmusic-hero { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 18px; }
+.admmusic-hero-copy { display: grid; gap: 12px; min-width: 0; }
+.admmusic-hero-copy > p { margin: 0; }
+.admmusic-monitor { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+.admmusic-monitor label { color: var(--muted); font-size: 13px; font-weight: 700; }
+
+/* The monitor switch of an album: the shared switch track inside a button, so it posts without a script. */
+.admmusic-toggle {
+    display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 0; border: 0; background: none; color: var(--text);
+    font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.admmusic-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+
+@media (max-width: 760px) {
+    .admmusic-hit { grid-template-columns: auto minmax(0, 1fr); }
+    .admmusic-add { grid-column: 1 / -1; }
+    .admmusic-add select { flex: 1; }
+    .admmusic-hero { align-items: start; gap: 14px; }
+    .admmusic-cover { width: 56px; height: 56px; font-size: 24px; }
+    .admmusic-toggle { min-height: 44px; }
+}

@@ -17,7 +17,4 @@ public sealed class IndexModel(AppDbContext db, MusicQuery query) : PageModel
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         Artists = await query.ListArtistsAsync(cancellationToken);
     }
-
-    /// <summary>The initial of an artist as the cover tile shows it: MusicBrainz provides no artwork, so a letter stands in.</summary>
-    public static string Initial(string name) => name.Length == 0 ? "♪" : char.ToUpperInvariant(name.TrimStart()[0]).ToString();
 }

@@ -32,6 +32,27 @@ public sealed class AnimeSharedManagerTests
     }
 
     [TestMethod]
+    public async Task AMonitoredAnimeIsSearchedByTheSharedWantedPassAndImportedIntoTheAnimeLibraryRoot()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync();
+        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
+        var start = new DateTime(2026, 10, 7, 8, 0, 0, DateTimeKind.Utc);
+
+        await environment.RunWantedPassAsync(start);
+        Assert.AreEqual(0, environment.Sabnzbd.Grabs.Count, "The first pass after startup only recovers.");
+        await environment.RunWantedPassAsync(start.Add(AnimeAcquisitionScheduler.StartupDelay).AddSeconds(1));
+
+        Assert.AreEqual(Best, environment.Sabnzbd.Grabs.Single().NzbName);
+        var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
+        var record = await environment.ImportCompletedAsync(await environment.CompleteLatestDownloadAsync(download), download);
+        Assert.AreEqual(AnimeImportStatus.Imported, record!.Status, record.Message);
+        var imported = await environment.MediaFileAsync(1, 2);
+        Assert.IsTrue(imported!.Path.StartsWith(environment.Root.Path, StringComparison.Ordinal), "The episode lands in the Anime LibraryRoot.");
+        Assert.IsFalse(File.Exists(Path.Combine(download, $"{Best}.mkv")), "The root's placement policy (Move) moved the file.");
+    }
+
+    [TestMethod]
     public async Task ADownloadRecordsTheIndexerAndReleaseGroupOnItsOperation()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();

@@ -14,6 +14,12 @@ namespace Jularr.Web.Pages.Admin;
 
 public sealed record AcquisitionProfileRow(QualityProfile Profile, IReadOnlyList<MediaAcquisitionKind> DefaultKinds, int Titles);
 
+public sealed record ProfileQualityRowView(string Quality, bool TakenAtOnce, bool IsFinal, UiTextBundle Ui);
+
+public sealed record ProfileRuleRowView(ScoreRuleRow Row, string Index, IReadOnlyList<ReleaseRuleField> Fields, UiTextBundle Ui);
+
+public sealed record ProfileTierRowView(FallbackTierRow Row, string Index, IReadOnlyList<string> Qualities, UiTextBundle Ui);
+
 /// <summary>
 /// The one Admin editor of Acquisition Profiles, for every media type that has an acquisition kind: the profile list with where each is used,
 /// and the selected profile's quality order, upgrade policy, release rules and waiting steps. It edits the generic <see cref="QualityProfile"/>
@@ -73,7 +79,7 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
             {
                 if (!allowed.Contains(profile.ScoreRules[index].Field))
                 {
-                    errors.Add(new ProfileEditError(nameof(QualityProfileForm.ScoreRules), index + 1, "ruleField", profile.ScoreRules[index].Field.ToString()));
+                    errors.Add(new ProfileEditError(nameof(QualityProfileForm.Rules), index + 1, "ruleField", profile.ScoreRules[index].Field.ToString()));
                 }
             }
 
@@ -163,12 +169,24 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
         return string.Join(" · ", parts);
     }
 
-    /// <summary>Where a quality order starts for a media type: the qualities its importer and parser can tell apart.</summary>
-    public string KnownQualities(AcquisitionProfileRow row) =>
-        string.Join(", ", (row.DefaultKinds.Count == 0 ? Kinds : row.DefaultKinds).SelectMany(kind => registry.DefaultProfileFor(kind).QualityOrder).Distinct(StringComparer.OrdinalIgnoreCase));
+    /// <summary>The qualities the importer and parser of the media types of a profile can tell apart: what its order may rank.</summary>
+    public IReadOnlyList<string> KnownQualities(AcquisitionProfileRow row) =>
+        [.. KindsOf(row).SelectMany(kind => registry.DefaultProfileFor(kind).QualityOrder).Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    public string RuleFieldNames(AcquisitionProfileRow row) =>
-        string.Join(", ", (row.DefaultKinds.Count == 0 ? Kinds : row.DefaultKinds).SelectMany(RuleFieldsOf).Distinct().Select(field => field.ToString()));
+    public IReadOnlyList<ReleaseRuleField> RuleFields(AcquisitionProfileRow row) =>
+        [.. KindsOf(row).SelectMany(RuleFieldsOf).Distinct()];
+
+    /// <summary>The media types a profile serves: those it is the default of, or else those whose default profile ranks any of its qualities (so a copy of a video profile is not offered audio formats), or all of them.</summary>
+    private IReadOnlyList<MediaAcquisitionKind> KindsOf(AcquisitionProfileRow row)
+    {
+        if (row.DefaultKinds.Count > 0)
+        {
+            return row.DefaultKinds;
+        }
+
+        var related = Kinds.Where(kind => registry.DefaultProfileFor(kind).QualityOrder.Intersect(row.Profile.QualityOrder, StringComparer.OrdinalIgnoreCase).Any()).ToArray();
+        return related.Length > 0 ? related : Kinds;
+    }
 
     public string ErrorText(ProfileEditError error) =>
         error.Code switch
@@ -178,6 +196,7 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
             "rule" => Ui.Format("admin.profiles.error.rule", ("line", error.Line ?? 0)),
             "ruleField" => Ui.Format("admin.profiles.error.ruleField", ("line", error.Line ?? 0), ("field", error.Detail ?? "")),
             "quality" => Ui.Format("admin.profiles.error.quality", ("quality", error.Detail ?? "")),
+            "allowed" => Ui["admin.profiles.error.allowed"],
             _ => Ui.Format("admin.profiles.error.profile", ("detail", error.Detail ?? ""))
         };
 

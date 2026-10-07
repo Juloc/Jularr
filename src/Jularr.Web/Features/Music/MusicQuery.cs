@@ -175,3 +175,20 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
 
     private sealed record AlbumBase(Guid WorkId, string Title, int? Year, MusicAlbumType Type, DateTime? ReleaseDate, bool Monitored, string? GroupId);
 }
+
+/// <summary>How the Admin and the Library pages say what state an album is in, so both read the same derived state the same way.</summary>
+public static class MusicAlbumPresentation
+{
+    /// <summary>The tone of the outlined tag of a state (<c>admin-tag-*</c>); the state's name always sits next to it.</summary>
+    public static string Tone(MusicAlbumState state) =>
+        state switch
+        {
+            MusicAlbumState.Available => "success",
+            MusicAlbumState.Partial or MusicAlbumState.Requested or MusicAlbumState.Downloading => "warning",
+            MusicAlbumState.Failed => "danger",
+            _ => "text"
+        };
+
+    /// <summary>A request that ended without files is a matter for the owner; a Library visitor sees an album that is missing and can be requested again.</summary>
+    public static MusicAlbumState ForLibrary(MusicAlbumState state) => state == MusicAlbumState.Failed ? MusicAlbumState.Missing : state;
+}

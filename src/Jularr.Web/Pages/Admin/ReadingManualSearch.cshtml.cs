@@ -90,16 +90,6 @@ public sealed class ReadingManualSearchModel(AppDbContext db, ReadingManualSearc
         return settings.IsEnabled(InstanceModule.Acquisition) && settings.IsEnabled(AcquisitionInstanceModules.For(kind));
     }
 
-    /// <summary>The catalog key of an identity finding of the reading judge, or null for a finding that only has its own sentence (it names the numbers).</summary>
-    public static string? IdentityKey(string code) =>
-        code switch
-        {
-            "Title" => "admin.reading.reason.title",
-            "VolumeOrChapter" => "admin.reading.reason.volumeOrChapter",
-            "TitleDoesNotMatch" => "admin.reading.reason.titleDoesNotMatch",
-            _ => null
-        };
-
     public string Coverage(ReadingManualCandidate candidate)
     {
         var parts = new List<string>();
@@ -121,26 +111,23 @@ public sealed class ReadingManualSearchModel(AppDbContext db, ReadingManualSearc
         return parts.Count == 0 ? "—" : string.Join(" · ", parts);
     }
 
-    public static string Size(long? bytes) =>
-        bytes switch
-        {
-            null => "—",
-            >= 1024L * 1024 * 1024 => $"{bytes.Value / (1024d * 1024 * 1024):0.0} GB",
-            >= 1024L * 1024 => $"{bytes.Value / (1024d * 1024):0.0} MB",
-            _ => $"{bytes.Value / 1024d:0} KB"
-        };
+    /// <summary>The rows of the shared release table: what the release is, how it was found and why it is or is not taken.</summary>
+    public ManualReleaseTableView ReleaseTable(ReadingManualSearchResult manual) =>
+        new([.. manual.Candidates.Select(ToRow)], new Dictionary<string, string> { ["id"] = Target!.RequestId.ToString() }, Ui);
 
-    /// <summary>How a release was found, in the words of the planner: "Title + author · Indexer".</summary>
-    public static string FoundVia(ReadingManualCandidate candidate) =>
-        candidate.Provenance.Count == 0 ? string.Empty : $"{candidate.Provenance[0].Description} · {candidate.Provenance[0].IndexerName}";
-
-    public static string VerdictTone(ManualSearchVerdict verdict) =>
-        verdict switch
+    private ManualReleaseRow ToRow(ReadingManualCandidate candidate)
+    {
+        var reasons = new List<string> { ConfidenceLabel(candidate.IdentityConfidence) };
+        reasons.AddRange(candidate.Reasons.Where(reason => reason.Kind != SelectionReasonKind.Identity).Select(reason => reason.Detail));
+        if (candidate.RejectedBecause is not null && candidate.Verdict == ManualSearchVerdict.Rejected)
         {
-            ManualSearchVerdict.Eligible => "success",
-            ManualSearchVerdict.Warning => "warning",
-            _ => "danger"
-        };
+            reasons.Add(candidate.RejectedBecause);
+        }
+
+        var facts = new[] { candidate.Format, candidate.Language ?? "", Coverage(candidate) }.Where(fact => fact.Length > 0 && fact != "—" && !fact.StartsWith("UNKNOWN", StringComparison.Ordinal)).ToArray();
+        var meta = ManualReleaseRows.Meta(Ui, candidate.Sources, candidate.Provenance, candidate.SizeBytes, candidate.AgeDays);
+        return new ManualReleaseRow(candidate.Score, candidate.Title, meta, facts, reasons, candidate.Verdict, candidate.IsTried, candidate.Identity, candidate.CanGrab);
+    }
 
     public string ConfidenceLabel(IdentityConfidence confidence) => Ui[$"admin.reading.confidence.{confidence.ToString().ToLowerInvariant()}"];
 }

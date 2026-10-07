@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Selection;
 using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.ManualSearch;
@@ -128,24 +129,18 @@ public sealed class AlbumModel(AppDbContext db, MusicQuery query, MusicManualSea
             _ => null
         };
 
-    public static string Size(long? bytes) =>
-        bytes switch
-        {
-            null => "—",
-            >= 1024L * 1024 * 1024 => $"{bytes.Value / (1024d * 1024 * 1024):0.0} GB",
-            >= 1024L * 1024 => $"{bytes.Value / (1024d * 1024):0.0} MB",
-            _ => $"{bytes.Value / 1024d:0} KB"
-        };
+    /// <summary>The rows of the shared release table: what the release is, how it was found and why it is or is not taken.</summary>
+    public ManualReleaseTableView ReleaseTable(MusicManualSearchResult manual) =>
+        new([.. manual.Candidates.Select(ToRow)], new Dictionary<string, string> { ["workId"] = View!.Album.WorkId.ToString() }, Ui);
 
-    /// <summary>How a release was found, in the words of the planner: "Artist + album · Indexer".</summary>
-    public static string FoundVia(MusicManualCandidate candidate) =>
-        candidate.Provenance.Count == 0 ? string.Empty : $"{candidate.Provenance[0].Description} · {candidate.Provenance[0].IndexerName}";
-
-    public static string VerdictTone(Jularr.Web.Features.Acquisition.ManualSearch.ManualSearchVerdict verdict) =>
-        verdict switch
-        {
-            Jularr.Web.Features.Acquisition.ManualSearch.ManualSearchVerdict.Eligible => "success",
-            Jularr.Web.Features.Acquisition.ManualSearch.ManualSearchVerdict.Warning => "warning",
-            _ => "danger"
-        };
+    private ManualReleaseRow ToRow(MusicManualCandidate candidate)
+    {
+        var reasons = candidate.Reasons
+            .Where(reason => reason.Kind != SelectionReasonKind.Identity || reason.Code != "Matches")
+            .Select(reason => reason.Kind == SelectionReasonKind.Identity && IdentityKey(reason.Code) is { } key ? Ui[key] : reason.Detail)
+            .ToArray();
+        var sources = candidate.Sources.Count > 0 ? candidate.Sources : [candidate.Indexer ?? "—"];
+        var meta = ManualReleaseRows.Meta(Ui, sources, candidate.Provenance, candidate.SizeBytes, candidate.AgeDays);
+        return new ManualReleaseRow(candidate.Score, candidate.Title, meta, candidate.Quality is null ? [] : [candidate.Quality], reasons, candidate.Verdict, candidate.IsTried, candidate.Identity, candidate.CanGrab);
+    }
 }

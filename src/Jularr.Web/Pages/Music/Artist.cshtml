@@ -1,19 +1,25 @@
 @page "/Music/Artist/{id:guid}"
 @model Jularr.Web.Pages.Music.ArtistModel
+@using Jularr.Web.Features.Music
+@using Jularr.Web.Features.Watchlist
 @{
     var ui = Model.Ui;
     var view = Model.View!;
     ViewData["Title"] = view.Artist.Name;
 }
 @section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/music.css" asp-append-version="true" />
 }
 
 <partial name="_LibraryTypeTabs" model="ui" />
 
-<header class="music-header">
-    <h1>@view.Artist.Name</h1>
-    <p class="music-sub">@ui.Format("music.summary", ("albums", view.Albums.Count), ("available", view.Albums.Count(album => album.State == Jularr.Web.Features.Music.MusicAlbumState.Available)))</p>
+<header class="music-hero">
+    <span class="music-cover" aria-hidden="true">@WatchlistLabels.Initial(view.Artist.Name)</span>
+    <div class="music-hero-copy">
+        <h1>@view.Artist.Name</h1>
+        <p class="music-sub">@ui.Format("music.summary", ("albums", view.Albums.Count), ("available", view.Albums.Count(album => album.State == MusicAlbumState.Available)))</p>
+    </div>
 </header>
 
 @if (view.Albums.Count == 0)
@@ -27,10 +33,10 @@ else
         {
             <li>
                 <a class="music-tile" asp-page="Album" asp-route-workId="@album.WorkId">
-                    <span class="music-cover" aria-hidden="true">@Jularr.Web.Pages.Music.IndexModel.Initial(album.Title)</span>
+                    <span class="music-cover" aria-hidden="true">@WatchlistLabels.Initial(album.Title)</span>
                     <span class="music-title">@album.Title</span>
                     <span class="music-sub">@(album.Year is { } year ? $"{year} · " : "")@Model.TypeLabel(album.Type)</span>
-                    <span class="music-tag music-tag-@ArtistModel.StateTone(album.State)">@Model.StateLabel(album.State)</span>
+                    <span class="admin-tag admin-tag-@MusicAlbumPresentation.Tone(MusicAlbumPresentation.ForLibrary(album.State))">@Model.StateLabel(album.State)</span>
                 </a>
             </li>
         }

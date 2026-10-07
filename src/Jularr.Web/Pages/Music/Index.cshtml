@@ -25,7 +25,7 @@ else
         {
             <li>
                 <a class="music-tile" asp-page="Artist" asp-route-id="@artist.Id">
-                    <span class="music-cover" aria-hidden="true">@Jularr.Web.Pages.Music.IndexModel.Initial(artist.Name)</span>
+                    <span class="music-cover" aria-hidden="true">@Jularr.Web.Features.Watchlist.WatchlistLabels.Initial(artist.Name)</span>
                     <span class="music-title">@artist.Name</span>
                     <span class="music-sub">@ui.Format("music.summary", ("albums", artist.Albums), ("available", artist.Available))</span>
                 </a>

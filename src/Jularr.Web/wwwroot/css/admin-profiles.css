@@ -1,0 +1,101 @@
+/* Admin Acquisition Profiles: the profile list beside the editor of the selected profile. The sections reuse the Admin settings cards, fields,
+   switches and tables (admin-settings.css); this file only adds the ranked quality list, the profile list items and the waiting steps. Theme
+   tokens only; selection is an outline, never a coloured edge. */
+
+.admprofiles { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.admprofiles-editor, .admprofiles-form { display: grid; gap: 16px; min-width: 0; }
+
+.admprofiles-items { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.admprofiles-item { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid transparent; border-radius: 10px; color: var(--text); }
+.admprofiles-item:hover { background: var(--surface-2); }
+.admprofiles-item[aria-current="page"] { border-color: var(--accent); background: var(--surface-2); }
+.admprofiles-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.admprofiles-new { align-items: end; }
+.admprofiles-new-kind { display: grid; flex: 1 1 160px; gap: 6px; min-width: 0; }
+.admset-head > .admprofiles-profile-actions { margin-inline-start: auto; }
+.admprofiles-errors { margin: 0; padding-inline-start: 30px; }
+
+/* The ranked qualities: position is the rank, the switch takes a quality at once and the radio marks where upgrading stops. */
+.admprofiles-order { display: grid; gap: 8px; min-width: 0; }
+.admprofiles-order-head, .admprofiles-quality {
+    display: grid; grid-template-columns: 28px minmax(0, 1fr) 84px 64px auto; gap: 10px; align-items: center;
+}
+.admprofiles-order-head { padding: 0 12px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.admprofiles-order-head > span:first-child { grid-column: 1 / 3; }
+.admprofiles-order-head > span:not(:first-child) { text-align: center; }
+.admprofiles-order-head::after { content: ""; width: 124px; }
+.admprofiles-quality-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: rank; }
+.admprofiles-quality { padding: 6px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.admprofiles-rank::before { counter-increment: rank; content: counter(rank); color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 800; }
+.admprofiles-quality-name { overflow-wrap: anywhere; }
+.admprofiles-quality-take, .admprofiles-quality-final { display: grid; justify-items: center; min-height: 36px; align-content: center; cursor: pointer; }
+.admprofiles-quality-final input, .admprofiles-quality-none input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
+.admprofiles-quality-actions { display: inline-flex; gap: 6px; }
+.admprofiles-quality-none { display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--muted); font-size: 13px; cursor: pointer; }
+.admprofiles-unranked { display: grid; gap: 8px; }
+.admprofiles-unranked[hidden] { display: none; }
+.admprofiles-unranked h3 { margin: 0; }
+
+/* Quality chips: the unranked qualities that can be added and the qualities a waiting step lets in. */
+.admprofiles-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; list-style: none; min-width: 0; }
+.admprofiles-chip {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.admprofiles-chip:hover { background: var(--surface-2); }
+.admprofiles-chip:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.admprofiles-chip input { accent-color: var(--accent); margin: 0; }
+.admprofiles-chip .admin-icon { width: 14px; height: 14px; }
+
+.admprofiles-score { width: 5rem; }
+.admprofiles-rules td { vertical-align: middle; }
+.admprofiles-rules .admset-control { min-width: 7rem; }
+
+/* Seven columns need more room than the generic table stacks at: below it a rule becomes two compact lines (what it matches, then what it is worth). */
+@container (max-width: 780px) {
+    .admprofiles-rules, .admprofiles-rules tbody { display: grid; }
+    .admprofiles-rules thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .admprofiles-rules tr { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px 12px; align-items: end; padding: 14px 0; border-top: 1px solid var(--border); }
+    .admprofiles-rules tbody tr:first-child { border-top: 0; }
+    .admprofiles-rules td { min-width: 0; padding: 0; border: 0; }
+    .admprofiles-rules td::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .admprofiles-rules td:nth-child(1) { grid-column: span 3; }
+    .admprofiles-rules td:nth-child(2) { grid-column: span 4; }
+    .admprofiles-rules td:nth-child(3) { grid-column: span 3; }
+    .admprofiles-rules td:nth-child(4) { grid-column: span 6; }
+    .admprofiles-rules td:nth-child(5) { grid-column: span 2; }
+    .admprofiles-rules td:nth-child(6) { grid-column: span 4; }
+    .admprofiles-rules td:nth-child(7) { grid-column: span 2; grid-row: 1; grid-column-start: 11; text-align: end; }
+    .admprofiles-rules td:nth-child(7)::before { content: none; }
+    .admprofiles-rules .admset-control, .admprofiles-rules .admset-control-fit { width: 100%; min-width: 0; }
+}
+[data-repeat] > .button { margin-top: 12px; }
+[data-repeat] > .button .admin-icon { width: 14px; height: 14px; margin-inline-end: 6px; }
+
+.admprofiles-tiers { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.admprofiles-tiers:empty { display: none; }
+.admprofiles-tier {
+    display: grid; grid-template-columns: 9rem minmax(0, 1fr) auto; gap: 12px; align-items: start;
+    padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+}
+.admprofiles-tier-wait input { width: 100%; }
+.admprofiles-tier .admset-label { display: block; margin-bottom: 6px; padding: 0; }
+
+@media (max-width: 860px) {
+    .admprofiles { grid-template-columns: minmax(0, 1fr); }
+    /* The profile list is a row to scroll through, so the editor is not pushed a screen down. */
+    .admprofiles-items { display: flex; gap: 8px; margin-inline: -4px; padding: 4px; overflow-x: auto; scroll-snap-type: x proximity; }
+    .admprofiles-items > li { flex: 0 0 auto; max-width: 240px; scroll-snap-align: start; }
+    .admprofiles-item { height: 100%; border-color: var(--border); }
+}
+@media (max-width: 560px) {
+    .admprofiles-order-head { display: none; }
+    .admprofiles-quality { grid-template-columns: 24px minmax(0, 1fr) auto; row-gap: 8px; }
+    .admprofiles-quality-actions { grid-row: 1; grid-column: 3; }
+    .admprofiles-quality-take, .admprofiles-quality-final { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+    .admprofiles-quality-take { grid-row: 2; grid-column: 2; }
+    .admprofiles-quality-final { grid-row: 2; grid-column: 3; }
+    .admprofiles-quality-take::after, .admprofiles-quality-final::after { content: attr(data-label); }
+    .admprofiles-tier { grid-template-columns: minmax(0, 1fr) auto; }
+    .admprofiles-tier .admprofiles-chips { grid-column: 1 / -1; }
+}
