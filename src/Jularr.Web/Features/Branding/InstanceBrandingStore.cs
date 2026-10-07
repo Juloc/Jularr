@@ -29,18 +29,18 @@ public sealed class InstanceBrandingStore(IServiceScopeFactory scopes, TimeProvi
         var settings = await WithDbAsync(async (connection, _) =>
         {
             await using var command = connection.CreateCommand();
-            command.CommandText = """SELECT "Name", "HueBranding", "Hue", "Logo" IS NOT NULL, "LogoVersion" FROM "InstanceBranding" WHERE "Id" = 1;""";
+            command.CommandText = """SELECT "Name", "HueBranding", "Hue", "Logo" IS NOT NULL, "LogoVersion", "RecolourLogo", "LogoRecolourable" FROM "InstanceBranding" WHERE "Id" = 1;""";
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             return await reader.ReadAsync(cancellationToken)
-                ? new InstanceBrandingSettings(reader.IsDBNull(0) ? null : reader.GetString(0), reader.GetBoolean(1), reader.IsDBNull(2) ? null : reader.GetInt16(2), reader.GetBoolean(3), reader.GetInt64(4))
+                ? new InstanceBrandingSettings(reader.IsDBNull(0) ? null : reader.GetString(0), reader.GetBoolean(1), reader.IsDBNull(2) ? null : reader.GetInt16(2), reader.GetBoolean(3), reader.GetInt64(4), reader.GetBoolean(5), reader.GetBoolean(6))
                 : InstanceBrandingSettings.Default;
         }, cancellationToken);
         Remember(settings);
         return settings;
     }
 
-    /// <summary>Saves the name and the hue branding; the logo is untouched. The name must already be normalized (<see cref="BrandingValidation.TryNormalizeName"/>).</summary>
-    public async Task SaveIdentityAsync(string? name, bool hueBranding, int? hue, CancellationToken cancellationToken)
+    /// <summary>Saves the name, the brand colour switch and colour and whether the logo is recoloured; the logo itself is untouched. The name must already be normalized (<see cref="BrandingValidation.TryNormalizeName"/>).</summary>
+    public async Task SaveIdentityAsync(string? name, bool hueBranding, int? hue, bool recolourLogo, CancellationToken cancellationToken)
     {
         if (name is not null && (!BrandingValidation.TryNormalizeName(name, out var normalized) || normalized != name))
         {
@@ -54,14 +54,15 @@ public sealed class InstanceBrandingStore(IServiceScopeFactory scopes, TimeProvi
 
         await UpsertAsync(
             """
-            INSERT INTO "InstanceBranding" ("Id", "Name", "HueBranding", "Hue", "UpdatedAt") VALUES (1, @name, @hueBranding, @hue, @now)
-            ON CONFLICT ("Id") DO UPDATE SET "Name" = excluded."Name", "HueBranding" = excluded."HueBranding", "Hue" = excluded."Hue", "UpdatedAt" = excluded."UpdatedAt";
+            INSERT INTO "InstanceBranding" ("Id", "Name", "HueBranding", "Hue", "RecolourLogo", "UpdatedAt") VALUES (1, @name, @hueBranding, @hue, @recolour, @now)
+            ON CONFLICT ("Id") DO UPDATE SET "Name" = excluded."Name", "HueBranding" = excluded."HueBranding", "Hue" = excluded."Hue", "RecolourLogo" = excluded."RecolourLogo", "UpdatedAt" = excluded."UpdatedAt";
             """,
             command =>
             {
                 Add(command, "@name", name);
                 Add(command, "@hueBranding", hueBranding);
                 Add(command, "@hue", hue is { } value ? (short)value : null);
+                Add(command, "@recolour", recolourLogo);
             },
             cancellationToken);
     }
@@ -77,13 +78,14 @@ public sealed class InstanceBrandingStore(IServiceScopeFactory scopes, TimeProvi
 
         await UpsertAsync(
             """
-            INSERT INTO "InstanceBranding" ("Id", "Logo", "LogoContentType", "LogoVersion", "UpdatedAt") VALUES (1, @logo, @type, 1, @now)
-            ON CONFLICT ("Id") DO UPDATE SET "Logo" = excluded."Logo", "LogoContentType" = excluded."LogoContentType", "LogoVersion" = "InstanceBranding"."LogoVersion" + 1, "UpdatedAt" = excluded."UpdatedAt";
+            INSERT INTO "InstanceBranding" ("Id", "Logo", "LogoContentType", "LogoRecolourable", "LogoVersion", "UpdatedAt") VALUES (1, @logo, @type, @recolourable, 1, @now)
+            ON CONFLICT ("Id") DO UPDATE SET "Logo" = excluded."Logo", "LogoContentType" = excluded."LogoContentType", "LogoRecolourable" = excluded."LogoRecolourable", "LogoVersion" = "InstanceBranding"."LogoVersion" + 1, "UpdatedAt" = excluded."UpdatedAt";
             """,
             command =>
             {
                 Add(command, "@logo", bytes);
                 Add(command, "@type", contentType);
+                Add(command, "@recolourable", BrandingValidation.CanRecolour(bytes, contentType));
             },
             cancellationToken);
         return BrandingLogoProblem.None;
@@ -91,7 +93,7 @@ public sealed class InstanceBrandingStore(IServiceScopeFactory scopes, TimeProvi
 
     public Task RemoveLogoAsync(CancellationToken cancellationToken) => UpsertAsync(
         """
-        UPDATE "InstanceBranding" SET "Logo" = NULL, "LogoContentType" = NULL, "LogoVersion" = "LogoVersion" + 1, "UpdatedAt" = @now WHERE "Id" = 1;
+        UPDATE "InstanceBranding" SET "Logo" = NULL, "LogoContentType" = NULL, "LogoRecolourable" = false, "LogoVersion" = "LogoVersion" + 1, "UpdatedAt" = @now WHERE "Id" = 1;
         """,
         _ => { },
         cancellationToken);

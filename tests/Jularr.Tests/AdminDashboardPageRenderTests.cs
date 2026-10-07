@@ -212,7 +212,7 @@ public sealed class AdminDashboardPageRenderTests
         StringAssert.Contains(plain, "<title>Resources - Jularr</title>");
         Assert.IsFalse(plain.Contains("by Jularr", StringComparison.Ordinal), "Plain Jularr is not \"Jularr by Jularr\".");
 
-        await store.SaveIdentityAsync("Casa Media", true, 160, CancellationToken.None);
+        await store.SaveIdentityAsync("Casa Media", true, 160, false, CancellationToken.None);
         await store.SetLogoAsync([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0], CancellationToken.None);
         var branded = await host.GetHtmlAsync("/Admin/Resources");
 
@@ -223,6 +223,16 @@ public sealed class AdminDashboardPageRenderTests
         StringAssert.Contains(branded, "src=\"/branding/logo?v=1\"");
         StringAssert.Contains(branded, "<link rel=\"icon\" href=\"/branding/logo?v=1\" />");
         StringAssert.Contains(branded, $"data-accent=\"{BrandingColor.SeedOf(160)}\"", "Hue branding replaces the accent.");
+
+        Assert.IsFalse(branded.Contains("brand-logo-tint", StringComparison.Ordinal), "The logo keeps its own colours until recolouring is chosen.");
+        await store.SetLogoAsync([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0, 0, 0, 0], CancellationToken.None);
+        await store.SaveIdentityAsync("Casa Media", true, 160, true, CancellationToken.None);
+        var recoloured = await host.GetHtmlAsync("/Admin/Resources");
+        StringAssert.Contains(recoloured, "brand-logo-tint");
+        StringAssert.Contains(recoloured, "brand-logo brand-logo-original");
+        StringAssert.Contains(recoloured, "--brand-logo: url('/branding/logo?v=2')");
+        await store.SaveIdentityAsync("Casa Media", false, 160, true, CancellationToken.None);
+        Assert.IsFalse((await host.GetHtmlAsync("/Admin/Resources")).Contains("brand-logo-tint", StringComparison.Ordinal), "Without the brand colour the original logo is shown.");
 
         await store.ResetAsync(CancellationToken.None);
         var reset = await host.GetHtmlAsync("/Admin/Resources");

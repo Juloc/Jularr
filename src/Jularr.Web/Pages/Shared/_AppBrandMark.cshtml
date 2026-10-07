@@ -11,7 +11,13 @@
    while the app shell, routes and navigation remain identical. The logo sits in the same square as the mark, so loading it moves nothing. *@
 @if (brand.LogoUrl is { } logoUrl)
 {
-    <img class="brand-mark brand-logo" src="@logoUrl" alt="" width="36" height="36" />
+    @* The uploaded logo, as it is. With recolouring on, the same file is also drawn as a mask over the brand colour (alpha, edges and shape kept);
+       the stylesheet shows that mark instead of the image wherever masks are supported, so the logo falls back to its own colours elsewhere. *@
+    <img class="brand-mark brand-logo@(brand.RecolourLogoActive ? " brand-logo-original" : "")" src="@logoUrl" alt="" width="36" height="36" />
+    @if (brand.RecolourLogoActive)
+    {
+        <span class="brand-mark brand-logo-tint" aria-hidden="true" style="--brand-logo: url('@logoUrl')"></span>
+    }
 }
 @if (!brand.HasLogo && theme.UsesOriginalArtwork)
 {

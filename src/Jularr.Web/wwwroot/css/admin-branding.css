@@ -3,14 +3,17 @@
 .brand-panel .panel-heading { align-items: end; }
 .brand-panel h2, .brand-panel p { margin: 0; }
 .brand-panel small { display: block; margin-top: 4px; font-weight: 400; }
-.brand-hue-range {
-    width: min(100%, 420px);
-    height: 12px;
-    padding: 0;
-    border-radius: 999px;
-    background: linear-gradient(90deg, hsl(0 62% 46%), hsl(60 62% 46%), hsl(120 62% 46%), hsl(180 62% 46%), hsl(240 62% 46%), hsl(300 62% 46%), hsl(360 62% 46%));
-    accent-color: var(--accent);
-}
+.brand-panel small[hidden] { display: none; }
+.brand-colour-form { gap: 14px; }
+.brand-colour-choice { display: grid; justify-items: start; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.brand-colour-choice[hidden] { display: none; }
+.brand-colour-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.brand-colour-picker input[type="color"] { width: 48px; height: 36px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.brand-colour-picker code { color: var(--muted); font-size: 12px; }
+.brand-logo-preview-pair { display: grid; place-items: center; width: 72px; height: 72px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface); }
+.brand-logo-preview-pair > [hidden] { display: none; }
+.brand-logo-tint-preview { display: inline-block; width: 56px; height: 56px; background-color: var(--accent); -webkit-mask: var(--brand-logo) center / contain no-repeat; mask: var(--brand-logo) center / contain no-repeat; mask-mode: alpha; }
+.brand-colour-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .brand-logo-form { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
 .brand-logo-form .inline-actions { grid-column: 2; }
 .brand-logo-current { display: grid; place-items: center; width: 72px; height: 72px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface-2); }

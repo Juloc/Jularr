@@ -89,7 +89,7 @@ public sealed class SetupInstanceModel(
         await modules.SaveAsync(Start == InstancePreset.Custom ? chosen : InstanceModulePresets.Apply(Start, chosen), cancellationToken);
 
         var current = await branding.GetAsync(cancellationToken);
-        await branding.SaveIdentityAsync(name, current.HueBranding, current.Hue, cancellationToken);
+        await branding.SaveIdentityAsync(name, current.HueBranding, current.Hue, current.RecolourLogo, cancellationToken);
 
         var appearance = new ProfileAppearanceStore(db);
         await appearance.SetThemeAsync(ProfileId, themeMode, cancellationToken);

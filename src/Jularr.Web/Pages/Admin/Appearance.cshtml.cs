@@ -36,22 +36,49 @@ public sealed class AppearanceModel(AppDbContext db, InstanceBrandingStore brand
     [BindProperty]
     public int? Hue { get; set; }
 
+    [BindProperty]
+    public bool RecolourLogo { get; set; }
+
+    /// <summary>The violet of the Jularr accent, where the colour picker starts before a colour was ever chosen.</summary>
+    public const int DefaultBrandHue = 262;
+
+    /// <summary>The accent the stored hue stands for; the picker opens on it and the preview starts from it.</summary>
+    public string BrandColour => BrandingColor.SeedOf(Hue ?? DefaultBrandHue);
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         await LoadAsync(cancellationToken);
     }
 
-    /// <summary>The instance name and hue branding; the logo has its own form because it is a file.</summary>
+    /// <summary>The instance name; the logo and the brand colour have their own forms.</summary>
     public async Task<IActionResult> OnPostBrandingAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        if (!BrandingValidation.TryNormalizeName(BrandName, out var name) || Hue is < 0 or > 359)
+        if (!BrandingValidation.TryNormalizeName(BrandName, out var name))
         {
             TempData["Status"] = Ui["admin.branding.invalid"];
             return RedirectToPage();
         }
 
-        await branding.SaveIdentityAsync(name, HueBranding && Hue is not null, Hue, cancellationToken);
+        var current = await branding.GetAsync(cancellationToken);
+        await branding.SaveIdentityAsync(name, current.HueBranding, current.Hue, current.RecolourLogo, cancellationToken);
+        TempData["Status"] = Ui["admin.branding.saved"];
+        return RedirectToPage();
+    }
+
+    /// <summary>The brand colour switch and the colour. The colour is kept while the switch is off, so turning it on again needs no new choice.</summary>
+    public async Task<IActionResult> OnPostColourAsync(CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        var current = await branding.GetAsync(cancellationToken);
+        var hue = Hue ?? current.Hue;
+        if (hue is < 0 or > 359 || HueBranding && hue is null)
+        {
+            TempData["Status"] = Ui["admin.branding.colour.invalid"];
+            return RedirectToPage();
+        }
+
+        await branding.SaveIdentityAsync(current.Name, HueBranding, hue, RecolourLogo && current.LogoRecolourable, cancellationToken);
         TempData["Status"] = Ui["admin.branding.saved"];
         return RedirectToPage();
     }
@@ -126,6 +153,7 @@ public sealed class AppearanceModel(AppDbContext db, InstanceBrandingStore brand
         Branding = await branding.GetAsync(cancellationToken);
         BrandName = Branding.Name;
         HueBranding = Branding.HueBranding;
-        Hue = Branding.Hue ?? 270;
+        RecolourLogo = Branding.RecolourLogo;
+        Hue = Branding.Hue ?? DefaultBrandHue;
     }
 }

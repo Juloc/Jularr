@@ -8,7 +8,7 @@ namespace Jularr.Web.Features.Branding;
 /// The instance's own identity (#876): an optional display name, an optional logo and whether its hue replaces the accent. Everything here is
 /// optional; an instance without any of it is plain Jularr. The logo bytes are not part of this value, only whether one exists and its version.
 /// </summary>
-public sealed record InstanceBrandingSettings(string? Name, bool HueBranding, int? Hue, bool HasLogo, long LogoVersion)
+public sealed record InstanceBrandingSettings(string? Name, bool HueBranding, int? Hue, bool HasLogo, long LogoVersion, bool RecolourLogo = false, bool LogoRecolourable = false)
 {
     public const string ProductName = "Jularr";
 
@@ -16,6 +16,12 @@ public sealed record InstanceBrandingSettings(string? Name, bool HueBranding, in
     public const string Attribution = "by Jularr";
 
     public static InstanceBrandingSettings Default { get; } = new(null, false, null, false, 0);
+
+    /// <summary>
+    /// Whether the logo is shown as a one-colour mark in the brand colour. It needs the brand colour on and a logo whose alpha channel can give the silhouette;
+    /// otherwise the logo is shown as it was uploaded.
+    /// </summary>
+    public bool RecolourLogoActive => RecolourLogo && LogoRecolourable && HasLogo && HueSeed is not null;
 
     /// <summary>The name every surface shows: the instance's own, else the product's.</summary>
     public string DisplayName => Name ?? ProductName;
@@ -113,6 +119,69 @@ public static partial class BrandingValidation
 
         contentType = "image/svg+xml";
         return BrandingLogoProblem.None;
+    }
+
+    /// <summary>
+    /// Whether a validated logo has a real alpha channel to take a silhouette from: an SVG always does, a PNG or WebP only when it declares transparency, a
+    /// JPEG never. A fully opaque raster would turn into a solid square, so it is not offered for recolouring (the logo then stays as uploaded).
+    /// </summary>
+    public static bool CanRecolour(ReadOnlySpan<byte> bytes, string? contentType) => contentType switch
+    {
+        "image/svg+xml" => true,
+        "image/png" => PngHasAlpha(bytes),
+        "image/webp" => WebpHasAlpha(bytes),
+        _ => false
+    };
+
+    private static bool PngHasAlpha(ReadOnlySpan<byte> bytes)
+    {
+        // IHDR starts at byte 8; its colour type is at byte 25. Types 4 and 6 carry alpha; palette (3) and greyscale/truecolour (0, 2) only through a tRNS chunk.
+        if (bytes.Length < 26)
+        {
+            return false;
+        }
+
+        var colourType = bytes[25];
+        if (colourType is 4 or 6)
+        {
+            return true;
+        }
+
+        for (var offset = 8; offset + 8 <= bytes.Length;)
+        {
+            var length = (long)bytes[offset] << 24 | (long)bytes[offset + 1] << 16 | (long)bytes[offset + 2] << 8 | bytes[offset + 3];
+            var type = bytes.Slice(offset + 4, 4);
+            if (type.SequenceEqual("tRNS"u8))
+            {
+                return true;
+            }
+
+            if (type.SequenceEqual("IDAT"u8) || type.SequenceEqual("IEND"u8))
+            {
+                return false;
+            }
+
+            offset += (int)Math.Min(length + 12, int.MaxValue - offset);
+        }
+
+        return false;
+    }
+
+    private static bool WebpHasAlpha(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length < 21)
+        {
+            return false;
+        }
+
+        var format = bytes.Slice(12, 4);
+        if (format.SequenceEqual("VP8X"u8))
+        {
+            return (bytes[20] & 0x10) != 0;
+        }
+
+        // Lossless WebP keeps an "alpha is used" bit in the byte after its signature; lossy plain VP8 has no alpha.
+        return format.SequenceEqual("VP8L"u8) && bytes.Length > 24 && (bytes[24] & 0x10) != 0;
     }
 
     [GeneratedRegex(@"<\s*(script|foreignObject|iframe|embed|object)\b|\son[a-z]+\s*=|javascript:|<!ENTITY|<!DOCTYPE[^>]*\[", RegexOptions.IgnoreCase)]

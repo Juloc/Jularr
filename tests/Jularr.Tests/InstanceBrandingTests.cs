@@ -70,6 +70,58 @@ public sealed class InstanceBrandingTests
     }
 
     [TestMethod]
+    public void OnlyALogoWithARealAlphaChannelCanBeRecolouredAndTheDecisionNeverChangesTheFile()
+    {
+        Assert.IsTrue(BrandingValidation.CanRecolour(PngOf(6), "image/png"), "Truecolour with alpha.");
+        Assert.IsTrue(BrandingValidation.CanRecolour(PngOf(4), "image/png"), "Greyscale with alpha.");
+        Assert.IsTrue(BrandingValidation.CanRecolour(PngOf(3, transparency: true), "image/png"), "A palette image with a transparency chunk.");
+        Assert.IsFalse(BrandingValidation.CanRecolour(PngOf(3), "image/png"), "An opaque palette image would become a solid square.");
+        Assert.IsFalse(BrandingValidation.CanRecolour(PngOf(2), "image/png"));
+        Assert.IsFalse(BrandingValidation.CanRecolour(Png, "image/png"), "A truncated header proves nothing.");
+        Assert.IsFalse(BrandingValidation.CanRecolour([0xFF, 0xD8, 0xFF, 0xE0], "image/jpeg"), "A JPEG has no alpha.");
+        Assert.IsTrue(BrandingValidation.CanRecolour(Encoding.UTF8.GetBytes(CleanSvg), "image/svg+xml"));
+        Assert.IsTrue(BrandingValidation.CanRecolour(WebpOf("VP8X", 0x10), "image/webp"), "Extended WebP with the alpha flag.");
+        Assert.IsFalse(BrandingValidation.CanRecolour(WebpOf("VP8X", 0x00), "image/webp"));
+        Assert.IsFalse(BrandingValidation.CanRecolour(WebpOf("VP8 ", 0x10), "image/webp"), "Lossy plain WebP has no alpha.");
+        Assert.IsFalse(BrandingValidation.CanRecolour(Png, null));
+    }
+
+    [TestMethod]
+    public void TheLogoIsOnlyRecolouredWhileTheBrandColourIsOnTheChoiceIsMadeAndTheLogoCanBe()
+    {
+        var all = new InstanceBrandingSettings("Casa", true, 160, true, 1, RecolourLogo: true, LogoRecolourable: true);
+
+        Assert.IsTrue(all.RecolourLogoActive);
+        Assert.IsFalse((all with { HueBranding = false }).RecolourLogoActive, "Without the brand colour the logo keeps its own colours.");
+        Assert.IsFalse((all with { RecolourLogo = false }).RecolourLogoActive, "The brand colour alone leaves the logo as it is.");
+        Assert.IsFalse((all with { LogoRecolourable = false }).RecolourLogoActive, "A logo that cannot give a silhouette falls back to the original.");
+        Assert.IsFalse((all with { HasLogo = false }).RecolourLogoActive);
+    }
+
+    [TestMethod]
+    public async Task TheStoreRemembersWhetherTheUploadCanBeRecolouredAndKeepsTheChoiceWhenTheLogoChanges()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var store = fixture.Store;
+
+        await store.SetLogoAsync(PngOf(6), CancellationToken.None);
+        await store.SaveIdentityAsync("Casa", true, 160, true, CancellationToken.None);
+        var coloured = await store.GetAsync(CancellationToken.None);
+        Assert.IsTrue(coloured.LogoRecolourable);
+        Assert.IsTrue(coloured.RecolourLogoActive);
+        CollectionAssert.AreEqual(PngOf(6), (await store.GetLogoAsync(CancellationToken.None))!.Bytes, "The uploaded file is never changed by recolouring.");
+
+        await store.SetLogoAsync([0xFF, 0xD8, 0xFF, 0xE0, 0, 0], CancellationToken.None);
+        var jpeg = await store.GetAsync(CancellationToken.None);
+        Assert.IsFalse(jpeg.LogoRecolourable);
+        Assert.IsTrue(jpeg.RecolourLogo, "The owner's choice is kept; it simply cannot apply to this logo.");
+        Assert.IsFalse(jpeg.RecolourLogoActive);
+
+        await store.RemoveLogoAsync(CancellationToken.None);
+        Assert.IsFalse((await store.GetAsync(CancellationToken.None)).LogoRecolourable);
+    }
+
+    [TestMethod]
     public void AHueIsASeedColourOnlyWhileHueBrandingIsOn()
     {
         var on = new InstanceBrandingSettings(null, true, 160, false, 0);
@@ -91,7 +143,7 @@ public sealed class InstanceBrandingTests
 
         Assert.AreEqual(InstanceBrandingSettings.Default, await store.GetAsync(CancellationToken.None));
 
-        await store.SaveIdentityAsync("Casa Media", true, 160, CancellationToken.None);
+        await store.SaveIdentityAsync("Casa Media", true, 160, false, CancellationToken.None);
         var named = await store.GetAsync(CancellationToken.None);
         Assert.AreEqual("Casa Media", named.Name);
         Assert.IsTrue(named.HueBranding);
@@ -113,7 +165,7 @@ public sealed class InstanceBrandingTests
         Assert.AreEqual(BrandingLogoProblem.UnsupportedType, await store.SetLogoAsync("plain text"u8.ToArray(), CancellationToken.None), "A refused upload changes nothing.");
         Assert.AreEqual(2, (await store.GetAsync(CancellationToken.None)).LogoVersion);
 
-        await store.SaveIdentityAsync(null, false, null, CancellationToken.None);
+        await store.SaveIdentityAsync(null, false, null, false, CancellationToken.None);
         var unnamed = await store.GetAsync(CancellationToken.None);
         Assert.IsNull(unnamed.Name);
         Assert.IsTrue(unnamed.HasLogo, "Saving the identity does not drop the logo.");
@@ -122,7 +174,7 @@ public sealed class InstanceBrandingTests
         Assert.IsFalse((await store.GetAsync(CancellationToken.None)).HasLogo);
         Assert.IsNull(await store.GetLogoAsync(CancellationToken.None));
 
-        await store.SaveIdentityAsync("Again", true, 10, CancellationToken.None);
+        await store.SaveIdentityAsync("Again", true, 10, false, CancellationToken.None);
         await store.ResetAsync(CancellationToken.None);
         Assert.AreEqual(InstanceBrandingSettings.Default, await store.GetAsync(CancellationToken.None));
     }
@@ -167,7 +219,7 @@ public sealed class InstanceBrandingTests
         using var plain = await client.GetAsync(BrandingEndpoints.ManifestPath);
         Assert.AreEqual("Jularr", JsonDocument.Parse(await plain.Content.ReadAsStringAsync()).RootElement.GetProperty("name").GetString(), "Without branding the manifest is the file as it ships.");
 
-        await fixture.Store.SaveIdentityAsync("Casa Media Center Of Everything", false, null, CancellationToken.None);
+        await fixture.Store.SaveIdentityAsync("Casa Media Center Of Everything", false, null, false, CancellationToken.None);
         await fixture.Store.SetLogoAsync(Encoding.UTF8.GetBytes(CleanSvg), CancellationToken.None);
 
         using var logo = await client.GetAsync(BrandingEndpoints.LogoPath);
@@ -189,6 +241,24 @@ public sealed class InstanceBrandingTests
         Assert.AreEqual("Casa Media C", manifest.GetProperty("short_name").GetString());
         Assert.AreEqual("application/manifest+json", branded.Content.Headers.ContentType!.MediaType);
         Assert.IsTrue(manifest.GetProperty("icons").GetArrayLength() > 0, "Everything else of the manifest is kept.");
+    }
+
+    private static byte[] PngOf(byte colourType, bool transparency = false)
+    {
+        var header = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, colourType, 0, 0, 0, 0, 0, 0, 0 };
+        var chunks = transparency ? new byte[] { 0, 0, 0, 1, (byte)'t', (byte)'R', (byte)'N', (byte)'S', 0, 0, 0, 0, 0 } : [];
+        return [.. header, .. chunks, 0, 0, 0, 0, (byte)'I', (byte)'D', (byte)'A', (byte)'T', 0, 0, 0, 0];
+    }
+
+    private static byte[] WebpOf(string format, byte flags)
+    {
+        var bytes = new byte[32];
+        "RIFF"u8.CopyTo(bytes);
+        "WEBP"u8.CopyTo(bytes.AsSpan(8));
+        Encoding.ASCII.GetBytes(format).CopyTo(bytes, 12);
+        bytes[20] = flags;
+        bytes[24] = flags;
+        return bytes;
     }
 
     private sealed class Fixture : IAsyncDisposable
