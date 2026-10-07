@@ -11,6 +11,8 @@ namespace Jularr.Web.Pages.Admin;
 
 /// <summary>Controls the instance default and which personal appearance overrides are permitted.</summary>
 [Authorize(Policy = JularrPolicies.AdminSystem)]
+// The only upload on this page is the logo (at most BrandingValidation.MaxLogoBytes), so nothing larger is accepted or buffered.
+[RequestSizeLimit(1_048_576)]
 public sealed class AppearanceModel(AppDbContext db, InstanceBrandingStore branding) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
