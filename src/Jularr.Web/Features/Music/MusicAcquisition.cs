@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Search;
@@ -153,16 +154,6 @@ public sealed record MusicReleaseEvaluation(ProwlarrReleaseCandidate Candidate, 
     public bool IsManuallyGrabbable => (IsGrabbable || Selection.Decision == SelectionDecision.ManualReview) && Candidate.InternalDownloadUri is not null;
 }
 
-/// <summary>What a manual grab got through before it stopped, so a caller that sees an exception knows whether a download exists.</summary>
-public sealed class MusicGrabProgress
-{
-    public bool SubmitStarted { get; set; }
-
-    public bool Accepted { get; set; }
-
-    public Guid? OperationId { get; set; }
-}
-
 public sealed record MusicSearchEvaluation(QualityProfile Profile, AcquisitionSearchResult Search, IReadOnlyList<MusicReleaseEvaluation> Releases, SelectionResult Selection)
 {
     public IReadOnlyList<MusicReleaseEvaluation> Grabbable => [.. Releases.Where(release => release.IsGrabbable)];
@@ -242,7 +233,7 @@ public sealed class MusicAcquisitionEngine(
         IReadOnlyList<MusicReleaseEvaluation> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
-        MusicGrabProgress? progress = null)
+        ManualGrabProgress? progress = null)
     {
         var workId = payload.WorkId;
         var candidates = releases

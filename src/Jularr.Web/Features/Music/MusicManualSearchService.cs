@@ -29,31 +29,6 @@ public sealed record MusicManualCandidate(
 
 public sealed record MusicManualSearchResult(IReadOnlyList<MusicManualCandidate> Candidates, ManualSearchSummary Summary, string? WinnerReason);
 
-public enum MusicGrabStatus
-{
-    /// <summary>The release was sent to the download client.</summary>
-    Submitted,
-
-    /// <summary>The release was sent before; nothing new was submitted.</summary>
-    AlreadySubmitted,
-
-    /// <summary>The album's request is moving on (grabbed by the scheduler, ended by the owner); nothing was grabbed.</summary>
-    NotSearchable,
-
-    NotFound,
-
-    /// <summary>The candidate is rejected, tried or no longer returned by the indexers.</summary>
-    NotAvailable,
-
-    /// <summary>The download client refused the release; it stays tried and the request searches again later.</summary>
-    ClientRejected,
-
-    /// <summary>The release was sent but the request could not be updated; the download is visible under Operations.</summary>
-    Unrecorded
-}
-
-public sealed record MusicGrabOutcome(MusicGrabStatus Status, string? Message);
-
 /// <summary>
 /// Admin Manual Search for one album. Candidates come from the same search, selection engine and grab path as automatic acquisition
 /// (<see cref="MusicAcquisitionEngine"/>); the browser only sends an opaque release identity and every grab searches again past the evidence
@@ -65,13 +40,10 @@ public sealed class MusicManualSearchService(
     MusicAcquisitionEngine engine,
     AcquisitionAccessStore requests,
     AcquisitionRequestService requestService,
+    ManualGrabCoordinator coordinator,
     QualityProfileStore profiles,
-    TimeProvider clock,
-    ILogger<MusicManualSearchService> logger)
+    TimeProvider clock)
 {
-    private const string SentMessage = "The release was sent to the download client. Follow it under Operations.";
-    private const string InterruptedMessage = "Submitting the release was interrupted. Check Operations before choosing another release.";
-
     public async Task<MusicManualSearchResult?> SearchAsync(Guid workId, bool refresh, SearchDepth depth, CancellationToken cancellationToken)
     {
         if (await LoadAsync(workId, cancellationToken) is not { } album)
@@ -121,12 +93,12 @@ public sealed class MusicManualSearchService(
             : open.StatusMessage;
     }
 
-    public async Task<MusicGrabOutcome> GrabAsync(Guid workId, string requestedByProfileId, string releaseIdentity, CancellationToken cancellationToken)
+    public async Task<ManualGrabOutcome> GrabAsync(Guid workId, string requestedByProfileId, string releaseIdentity, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseIdentity);
         if (await LoadAsync(workId, cancellationToken) is not { } album)
         {
-            return new MusicGrabOutcome(MusicGrabStatus.NotFound, null);
+            return new ManualGrabOutcome(ManualGrabStatus.NotFound, null, null);
         }
 
         var request = await requests.FindOpenAsync(MediaAcquisitionKind.Music, ProviderKeys.MusicBrainz, album.GroupId, cancellationToken)
@@ -134,7 +106,7 @@ public sealed class MusicManualSearchService(
         var payload = MusicRequestPayload.Of(request) with { WorkId = workId };
         if ((payload.TriedReleases ?? []).Contains(releaseIdentity, StringComparer.OrdinalIgnoreCase))
         {
-            return new MusicGrabOutcome(MusicGrabStatus.AlreadySubmitted, null);
+            return new ManualGrabOutcome(ManualGrabStatus.AlreadySubmitted, null, null);
         }
 
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId, cancellationToken);
@@ -142,60 +114,19 @@ public sealed class MusicManualSearchService(
         var selected = evaluation.Releases.FirstOrDefault(release => release.Candidate.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
         if (selected is null || !selected.IsManuallyGrabbable)
         {
-            return new MusicGrabOutcome(MusicGrabStatus.NotAvailable, null);
+            return new ManualGrabOutcome(ManualGrabStatus.NotAvailable, null, null);
         }
 
-        var waiting = new[] { AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending };
-        if (await requests.TryTransitionStatusAsync(request.Id, waiting, AcquisitionRequestStatus.Searching, null, null, cancellationToken) is not { } claimedFrom)
-        {
-            return new MusicGrabOutcome(MusicGrabStatus.NotSearchable, null);
-        }
-
-        var progress = new MusicGrabProgress();
-        AcquisitionExecution execution;
-        try
-        {
-            var claimed = await requests.GetAsync(request.Id, cancellationToken) ?? request;
-            var fresh = MusicRequestPayload.Of(claimed) with { WorkId = workId };
-            if ((fresh.TriedReleases ?? []).Contains(releaseIdentity, StringComparer.OrdinalIgnoreCase))
+        return await coordinator.GrabAsync(
+            request,
+            async (claimed, progress) =>
             {
-                await ReleaseClaimAsync(request.Id, claimedFrom);
-                return new MusicGrabOutcome(MusicGrabStatus.AlreadySubmitted, null);
-            }
-
-            execution = await engine.GrabAsync(claimed, fresh, [selected], "The selected release is no longer available.", cancellationToken, progress);
-        }
-        catch (Exception exception) when (progress.SubmitStarted)
-        {
-            // The release may be at the download client already: never hand the request back to the scheduler.
-            logger.LogError(exception, "Manual grab for album {WorkId} stopped after the release was submitted.", workId);
-            var message = progress.Accepted ? SentMessage : InterruptedMessage;
-            var recorded = await TryFinishClaimAsync(request.Id, progress.Accepted ? AcquisitionRequestStatus.Downloading : AcquisitionRequestStatus.Failed, message, progress.OperationId);
-            if (exception is OperationCanceledException && !progress.Accepted)
-            {
-                throw;
-            }
-
-            return new MusicGrabOutcome(recorded && progress.Accepted ? MusicGrabStatus.Submitted : MusicGrabStatus.Unrecorded, message);
-        }
-        catch
-        {
-            await ReleaseClaimAsync(request.Id, claimedFrom);
-            throw;
-        }
-
-        try
-        {
-            await requestService.ApplyManualExecutionAsync(request.Id, execution, cancellationToken);
-            return new MusicGrabOutcome(execution.Status == AcquisitionRequestStatus.Downloading ? MusicGrabStatus.Submitted : MusicGrabStatus.ClientRejected, execution.Message);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            logger.LogError(exception, "Manual grab for album {WorkId} was submitted but the request could not be updated.", workId);
-            var accepted = execution.Status == AcquisitionRequestStatus.Downloading;
-            await TryFinishClaimAsync(request.Id, accepted ? AcquisitionRequestStatus.Downloading : AcquisitionRequestStatus.Failed, accepted ? SentMessage : execution.Message, execution.OperationId);
-            return new MusicGrabOutcome(MusicGrabStatus.Unrecorded, execution.Message);
-        }
+                var fresh = MusicRequestPayload.Of(claimed) with { WorkId = workId };
+                return (fresh.TriedReleases ?? []).Contains(releaseIdentity, StringComparer.OrdinalIgnoreCase)
+                    ? null
+                    : await engine.GrabAsync(claimed, fresh, [selected], "The selected release is no longer available.", cancellationToken, progress);
+            },
+            cancellationToken);
     }
 
     private async Task<AlbumRef?> LoadAsync(Guid workId, CancellationToken cancellationToken)
@@ -241,32 +172,6 @@ public sealed class MusicManualSearchService(
             evaluation.IsManuallyGrabbable && !isTried,
             candidate.Provenance,
             [.. candidate.Sources.Select(source => source.Indexer)]);
-    }
-
-    // Best effort and never throws: it runs while another failure is being handled and must not replace it.
-    private async Task ReleaseClaimAsync(Guid requestId, AcquisitionStatusTransition claimedFrom)
-    {
-        try
-        {
-            await requests.TryTransitionStatusAsync(requestId, [AcquisitionRequestStatus.Searching], claimedFrom.PreviousStatus, claimedFrom.PreviousMessage, null, CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "Could not give request {RequestId} back after a manual grab stopped.", requestId);
-        }
-    }
-
-    private async Task<bool> TryFinishClaimAsync(Guid requestId, AcquisitionRequestStatus status, string? message, Guid? operationId)
-    {
-        try
-        {
-            return await requests.TryTransitionStatusAsync(requestId, [AcquisitionRequestStatus.Searching], status, message, operationId, CancellationToken.None) is not null;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "Could not record the manual grab of request {RequestId}.", requestId);
-            return false;
-        }
     }
 
     private sealed record AlbumRef(string GroupId, MusicRequestPayload Payload, AcquisitionRequestDraft Draft);

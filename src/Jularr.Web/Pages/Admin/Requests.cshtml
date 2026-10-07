@@ -218,6 +218,7 @@
                                     var viewUrl = request.Status != AcquisitionRequestStatus.Pending ? Model.ViewUrl(request) : null;
                                     var manualUrl = waiting && isVideo ? Url.Page("/Admin/ManualSearch", new { id = request.Id })
                                         : waiting && request.Kind == MediaAcquisitionKind.Book ? Url.Page("/Admin/BookManualSearch", new { id = request.Id })
+                                        : waiting && request.Kind is MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel ? Url.Page("/Admin/ReadingManualSearch", new { id = request.Id })
                                         : null;
                                     var manageUrl = Model.VideoWorks.TryGetValue(request.Id, out var work) && request.Status != AcquisitionRequestStatus.Pending
                                         ? VideoWorkLinks.AdminPath(request.Kind, work.WorkId)

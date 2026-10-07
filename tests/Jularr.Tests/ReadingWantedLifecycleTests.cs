@@ -175,6 +175,63 @@ public sealed class ReadingWantedLifecycleTests
         Assert.AreEqual(operation, stored.OperationId);
     }
 
+    [TestMethod]
+    public async Task ManualSearchExplainsEveryReleaseAndGrabsOnlyAnAcceptedOneOnce()
+    {
+        const string Wrong = "Another Series Vol 01 CBZ";
+        await using var host = await Host.CreateAsync(First, Wrong);
+        var created = await host.CreateWaitingRequestAsync();
+        var manual = host.Services.GetRequiredService<ReadingManualSearchService>();
+
+        var result = (await manual.SearchAsync(created.Id, refresh: true, Jularr.Web.Features.Acquisition.Search.SearchDepth.Normal, CancellationToken.None))!;
+
+        Assert.AreEqual(2, result.Candidates.Count);
+        Assert.AreEqual(2, result.Summary.DistinctCandidates);
+        var accepted = result.Candidates.Single(candidate => candidate.Title == First);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualSearchVerdict.Eligible, accepted.Verdict);
+        Assert.IsTrue(accepted.CanGrab);
+        Assert.AreEqual("CBZ", accepted.Format);
+        Assert.AreEqual(1, accepted.Volume);
+        Assert.IsNotNull(accepted.Score);
+        var rejected = result.Candidates.Single(candidate => candidate.Title == Wrong);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualSearchVerdict.Rejected, rejected.Verdict);
+        Assert.IsFalse(rejected.CanGrab);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.Selection.IdentityConfidence.Conflict, rejected.IdentityConfidence);
+        StringAssert.Contains(rejected.RejectedBecause, "title does not match");
+        Assert.AreEqual(accepted.Title, result.Candidates[0].Title, "The release the engine prefers comes first.");
+
+        // A rejected release can never be taken, whatever identity the browser sends.
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.NotAvailable, (await manual.GrabAsync(created.Id, rejected.Identity, CancellationToken.None)).Status);
+        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
+
+        var first = await manual.GrabAsync(created.Id, accepted.Identity, CancellationToken.None);
+        var again = await manual.GrabAsync(created.Id, accepted.Identity, CancellationToken.None);
+
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.Submitted, first.Status, first.Message);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.AlreadySubmitted, again.Status);
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "The same release is never submitted twice.");
+        Assert.AreEqual(First, host.Environment.Client.Grabs.Single().NzbName);
+        var stored = await host.GetAsync(created.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, stored.Status);
+        Assert.IsNotNull(stored.OperationId);
+        Assert.IsFalse((await manual.GetTargetAsync(created.Id, CancellationToken.None))!.CanSearch, "A request that is downloading is read-only context.");
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.NotFound, (await manual.GrabAsync(Guid.NewGuid(), accepted.Identity, CancellationToken.None)).Status);
+    }
+
+    [TestMethod]
+    public async Task APublicWebNovelRequestIsNeverSearchedOnUsenet()
+    {
+        await using var host = await Host.CreateAsync(First);
+        var created = await host.Requests.CreateAsync(
+            new AcquisitionRequestDraft(MediaAcquisitionKind.LightNovel, "syosetu", "n1234ab", "Some Web Novel", null, null),
+            "owner",
+            AcquisitionRequestStatus.Approved,
+            "owner",
+            CancellationToken.None);
+
+        Assert.IsNull(await host.Services.GetRequiredService<ReadingManualSearchService>().GetTargetAsync(created.Id, CancellationToken.None));
+    }
+
     private static int CountOccurrences(string text, string value)
     {
         var count = 0;
@@ -220,6 +277,7 @@ public sealed class ReadingWantedLifecycleTests
         }
 
         public SabnzbdTestEnvironment Environment { get; }
+        public IServiceProvider Services => services;
         public RecordingImporter Importer { get; }
         public AnimeImportSettingsStore ImportSettings { get; }
         public OperationStore Operations => new(Environment.Db);
@@ -258,9 +316,13 @@ public sealed class ReadingWantedLifecycleTests
                 .AddSingleton<IDownloadClient>(new SabnzbdDownloadClient(environment.Client))
                 .AddSingleton(new AnimeImportSettingsStore(directory.FullName))
                 .AddSingleton(_ => new AcquisitionAccessStore(environment.Db))
-                .AddSingleton(new CurrentAccountContext(new HttpContextAccessor()))
+                .AddSingleton(AcquisitionAccessFixture.Account("owner", AccountRole.Owner))
                 .AddSingleton<ReleaseRequestTracker>()
+                .AddSingleton(new Jularr.Web.Features.Acquisition.Release.MediaAcquisitionRegistry([new MangaAcquisitionRegistration(), new LightNovelAcquisitionRegistration()]))
+                .AddSingleton(provider => new Jularr.Web.Features.Acquisition.Quality.QualityProfileStore(new DirectoryInfo(Path.Combine(directory.FullName, "quality-profiles")), provider.GetRequiredService<Jularr.Web.Features.Acquisition.Release.MediaAcquisitionRegistry>()))
                 .AddSingleton<ReadingAcquisitionEngine>()
+                .AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>()
+                .AddSingleton<ReadingManualSearchService>()
                 .AddSingleton<IAcquisitionRequestExecutor, MangaAcquisitionRequestExecutor>()
                 .AddSingleton<Jularr.Web.Features.Events.IJularrEventPublisher, RecordingEventPublisher>()
                 .AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(new MediaCapabilityStore(directory.FullName)))
@@ -276,6 +338,10 @@ public sealed class ReadingWantedLifecycleTests
 
             return new Host(environment, provider, importer);
         }
+
+        /// <summary>An approved Manga request nothing has searched for yet: it waits, so Manual Search may act on it.</summary>
+        public Task<AcquisitionRequest> CreateWaitingRequestAsync() =>
+            Requests.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Manga, "anilist", "154587", "Frieren", null, null), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
 
         /// <summary>Creates an approved Manga request and lets Wanted run its first search.</summary>
         public async Task<AcquisitionRequest> StartAsync()

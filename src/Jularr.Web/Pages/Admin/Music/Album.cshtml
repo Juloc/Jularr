@@ -13,7 +13,7 @@
 }
 @section Head {
     <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-manage.css" asp-append-version="true" />
 }
 @section Scripts {
     <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
@@ -37,9 +37,9 @@
     <p class="metadata-error" role="alert">@Model.Error</p>
 }
 
-<div class="admmusic">
-    <section class="admmusic-panel" aria-label="@ui["admin.music.albums"]">
-        <dl class="admmusic-facts">
+<div class="admmanage">
+    <section class="admmanage-panel" aria-label="@ui["admin.music.albums"]">
+        <dl class="admmanage-facts">
             <div><dt>@ui["admin.music.col.state"]</dt><dd><span class="admin-tag admin-tag-@ArtistModel.StateTone(album.State)">@Model.StateLabel(album.State)</span></dd></div>
             <div><dt>@ui["admin.music.col.type"]</dt><dd>@Model.TypeLabel(album.Type)</dd></div>
             @if (album.Year is { } year)
@@ -50,32 +50,32 @@
         </dl>
         @if (album.RequestMessage is not null)
         {
-            <p class="admmusic-summary">@album.RequestMessage</p>
+            <p class="admmanage-summary">@album.RequestMessage</p>
         }
-        <div class="admmusic-toolbar">
-            <form method="post" asp-page-handler="Monitor" asp-route-workId="@album.WorkId" class="admmusic-inline">
+        <div class="admmanage-toolbar">
+            <form method="post" asp-page-handler="Monitor" asp-route-workId="@album.WorkId" class="admmanage-inline">
                 <input type="hidden" name="monitored" value="@((!album.Monitored).ToString().ToLowerInvariant())" />
                 <button class="button" type="submit" aria-pressed="@(album.Monitored ? "true" : "false")">@(album.Monitored ? ui["admin.music.monitored"] : ui["admin.music.unmonitored"])</button>
             </form>
             @if (album.State is not (MusicAlbumState.Available or MusicAlbumState.Downloading))
             {
-                <form method="post" asp-page-handler="SearchNow" asp-route-workId="@album.WorkId" class="admmusic-inline">
+                <form method="post" asp-page-handler="SearchNow" asp-route-workId="@album.WorkId" class="admmanage-inline">
                     <button class="button button-primary" type="submit">@ui["admin.music.searchNow"]</button>
                 </form>
             }
         </div>
     </section>
 
-    <section class="admmusic-panel" aria-labelledby="admmusic-tracks-heading">
-        <h2 id="admmusic-tracks-heading">@ui["admin.music.tracks"]</h2>
+    <section class="admmanage-panel" aria-labelledby="admmanage-tracks-heading">
+        <h2 id="admmanage-tracks-heading">@ui["admin.music.tracks"]</h2>
         @if (view.Tracks.Count == 0)
         {
-            <p class="admmusic-empty">@ui["admin.music.noTracks"]</p>
+            <p class="admmanage-empty">@ui["admin.music.noTracks"]</p>
         }
         else
         {
-            <div class="admmusic-table-wrap">
-                <table class="admmusic-table">
+            <div class="admmanage-table-wrap">
+                <table class="admmanage-table">
                     <thead>
                         <tr>
                             <th scope="col" class="is-numeric">@ui["admin.music.col.disc"]</th>
@@ -100,9 +100,9 @@
         }
     </section>
 
-    <section class="admmusic-panel" id="manual-search" aria-labelledby="admmusic-manual-heading">
-        <h2 id="admmusic-manual-heading">@ui["admin.music.manualSearch"]</h2>
-        <div class="admmusic-toolbar">
+    <section class="admmanage-panel" id="manual-search" aria-labelledby="admmanage-manual-heading">
+        <h2 id="admmanage-manual-heading">@ui["admin.music.manualSearch"]</h2>
+        <div class="admmanage-toolbar">
             <a class="button" asp-page="Album" asp-route-workId="@album.WorkId" asp-route-search="normal" asp-fragment="manual-search">@ui["admin.music.manual.run"]</a>
             <a class="button button-quiet" asp-page="Album" asp-route-workId="@album.WorkId" asp-route-search="deep" asp-route-refresh="true" asp-fragment="manual-search">@ui["admin.music.manual.deep"]</a>
             @if (Model.ManualDepth is not null)
@@ -112,23 +112,23 @@
         </div>
         @if (Model.Manual is { } manual)
         {
-            <p class="admmusic-summary">@ui.Format("admin.music.manual.summary", ("raw", manual.Summary.RawResults), ("distinct", manual.Summary.DistinctCandidates))</p>
+            <p class="admmanage-summary">@ui.Format("admin.music.manual.summary", ("raw", manual.Summary.RawResults), ("distinct", manual.Summary.DistinctCandidates))</p>
             @foreach (var outcome in manual.Summary.Outcomes.Where(outcome => outcome.Message is not null))
             {
-                <p class="admmusic-summary">@outcome.IndexerName: @outcome.Message</p>
+                <p class="admmanage-summary">@outcome.IndexerName: @outcome.Message</p>
             }
             @if (manual.WinnerReason is not null && manual.Candidates.Any(candidate => candidate.CanGrab))
             {
-                <p class="admmusic-summary">@ui.Format("admin.music.manual.winner", ("reason", manual.WinnerReason))</p>
+                <p class="admmanage-summary">@ui.Format("admin.music.manual.winner", ("reason", manual.WinnerReason))</p>
             }
             @if (manual.Candidates.Count == 0)
             {
-                <p class="admmusic-empty">@ui["admin.music.manual.noCandidates"]</p>
+                <p class="admmanage-empty">@ui["admin.music.manual.noCandidates"]</p>
             }
             else
             {
-                <div class="admmusic-table-wrap">
-                    <table class="admmusic-table">
+                <div class="admmanage-table-wrap">
+                    <table class="admmanage-table">
                         <thead>
                             <tr>
                                 <th scope="col">@ui["admin.manualSearch.col.release"]</th>
@@ -146,9 +146,9 @@
                                 var verdict = candidate.Verdict.ToString().ToLowerInvariant();
                                 <tr>
                                     <td>
-                                        <span class="admmusic-title">@candidate.Title</span>
-                                        <span class="admmusic-sub">@string.Join(" · ", new[] { string.Join(", ", candidate.Sources.DefaultIfEmpty(candidate.Indexer ?? "—")), AlbumModel.FoundVia(candidate) }.Where(part => part.Length > 0))</span>
-                                        <ul class="admmusic-reasons">
+                                        <span class="admmanage-title">@candidate.Title</span>
+                                        <span class="admmanage-sub">@string.Join(" · ", new[] { string.Join(", ", candidate.Sources.DefaultIfEmpty(candidate.Indexer ?? "—")), AlbumModel.FoundVia(candidate) }.Where(part => part.Length > 0))</span>
+                                        <ul class="admmanage-reasons">
                                             @foreach (var reason in candidate.Reasons.Where(reason => reason.Kind != Jularr.Web.Features.Acquisition.Selection.SelectionReasonKind.Identity || reason.Code != "Matches"))
                                             {
                                                 <li>@ReasonText(reason)</li>
@@ -165,7 +165,7 @@
                                     <td class="is-actions">
                                         @if (candidate.CanGrab)
                                         {
-                                            <form method="post" asp-page-handler="Grab" asp-route-workId="@album.WorkId" class="admmusic-inline">
+                                            <form method="post" asp-page-handler="Grab" asp-route-workId="@album.WorkId" class="admmanage-inline">
                                                 <input type="hidden" name="releaseIdentity" value="@candidate.Identity" />
                                                 <button class="button button-small" type="submit">@ui["admin.music.manual.grab"]</button>
                                             </form>

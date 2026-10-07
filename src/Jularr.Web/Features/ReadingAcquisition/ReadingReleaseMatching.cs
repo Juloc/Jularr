@@ -41,7 +41,14 @@ public sealed record RankedReadingRelease(
     ProwlarrReleaseCandidate Release,
     ReadingReleaseInfo Parsed,
     int Score,
-    string? RejectedBecause);
+    string? RejectedBecause)
+{
+    /// <summary>What the shared selection engine concluded: identity confidence, decision, the profile score and every reason.</summary>
+    public CandidateEvaluation? Selection { get; init; }
+}
+
+/// <summary>Every release judged by the shared selection engine, best first, and in words why the best one wins.</summary>
+public sealed record ReadingRanking(IReadOnlyList<RankedReadingRelease> Ranked, string? WinnerReason);
 
 public sealed record ReadingUsenetSearchResult(
     IReadOnlyList<string> Queries,
@@ -49,6 +56,11 @@ public sealed record ReadingUsenetSearchResult(
     IReadOnlyList<IndexerSearchWarning> Warnings,
     bool UsedCategoryFallback)
 {
+    /// <summary>The complete search with its per-indexer outcomes, provenance and trace; Manual Search reports from it.</summary>
+    public AcquisitionSearchResult? Search { get; init; }
+
+    public string? WinnerReason { get; init; }
+
     public ProwlarrReleaseCandidate? Picked =>
         Ranked.FirstOrDefault(candidate => candidate.Score > 0)?.Release;
 
@@ -195,6 +207,12 @@ public static class ReadingReleaseSelector
     public static IReadOnlyList<RankedReadingRelease> Rank(
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
         ReadingAcquisitionTarget target,
+        QualityProfile? profile = null) =>
+        Evaluate(releases, target, profile).Ranked;
+
+    public static ReadingRanking Evaluate(
+        IReadOnlyList<ProwlarrReleaseCandidate> releases,
+        ReadingAcquisitionTarget target,
         QualityProfile? profile = null)
     {
         var judged = releases
@@ -202,7 +220,7 @@ public static class ReadingReleaseSelector
             .ToDictionary(group => group.Key, group => ToJudgement(group.First(), target), StringComparer.Ordinal);
         var now = DateTimeOffset.UtcNow;
         var selection = ReleaseSelectionEngine.Select(profile ?? ReadingQualityProfiles.For(target.Kind), new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)]);
-        return [.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))];
+        return new ReadingRanking([.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))], selection.WinnerReason);
     }
 
     public static RankedReadingRelease Judge(
@@ -334,12 +352,12 @@ public static class ReadingReleaseSelector
                           ?? (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict
                               ? evaluation.Candidate.Identity.Detail
                               : string.Join("; ", evaluation.Score?.RejectionReasons ?? []));
-            return new RankedReadingRelease(judged.Release, judged.Parsed, 0, because);
+            return new RankedReadingRelease(judged.Release, judged.Parsed, 0, because) { Selection = evaluation };
         }
 
         // The displayed score keeps one scale: a base, a step per format tier and the request's preference points, minus the storage cost.
         var tierPoints = (3 - Math.Min(evaluation.QualityRank, 3)) * 10;
-        return new RankedReadingRelease(judged.Release, judged.Parsed, Math.Max(1, 100 + tierPoints + evaluation.PreferenceScore - evaluation.Candidate.Coverage.Cost), null);
+        return new RankedReadingRelease(judged.Release, judged.Parsed, Math.Max(1, 100 + tierPoints + evaluation.PreferenceScore - evaluation.Candidate.Coverage.Cost), null) { Selection = evaluation };
     }
 
     internal static bool TitleMatches(string releaseTitle, string expectedTitle)
@@ -440,10 +458,15 @@ public static class ReadingUsenetSearch
             intent,
             (options ?? new SearchOptions()) with { UsableCount = releases => ReadingReleaseSelector.Rank(releases, target, profile).Count(ranked => ranked.Score > 0) },
             cancellationToken);
+        var ranking = ReadingReleaseSelector.Evaluate(result.Releases, target, profile);
         return new ReadingUsenetSearchResult(
             [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
-            ReadingReleaseSelector.Rank(result.Releases, target, profile),
+            ranking.Ranked,
             result.Warnings,
-            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0));
+            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0))
+        {
+            Search = result,
+            WinnerReason = ranking.WinnerReason
+        };
     }
 }

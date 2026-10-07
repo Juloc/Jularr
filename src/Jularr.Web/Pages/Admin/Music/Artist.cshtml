@@ -8,7 +8,7 @@
 }
 @section Head {
     <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-manage.css" asp-append-version="true" />
 }
 @section Scripts {
     <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
@@ -32,10 +32,10 @@
     <p class="metadata-error" role="alert">@Model.Error</p>
 }
 
-<div class="admmusic">
-    <section class="admmusic-panel" aria-label="@ui["admin.music.monitor.label"]">
-        <div class="admmusic-toolbar">
-            <form method="post" asp-page-handler="Monitor" asp-route-id="@artist.Id" class="admmusic-inline">
+<div class="admmanage">
+    <section class="admmanage-panel" aria-label="@ui["admin.music.monitor.label"]">
+        <div class="admmanage-toolbar">
+            <form method="post" asp-page-handler="Monitor" asp-route-id="@artist.Id" class="admmanage-inline">
                 <label for="monitor-mode">@ui["admin.music.monitor.label"]</label>
                 <select id="monitor-mode" name="mode">
                     @foreach (var mode in new[] { MusicMonitorMode.All, MusicMonitorMode.Future, MusicMonitorMode.None })
@@ -45,22 +45,22 @@
                 </select>
                 <button class="button" type="submit">@ui["common.save"]</button>
             </form>
-            <form method="post" asp-page-handler="Refresh" asp-route-id="@artist.Id" class="admmusic-inline">
+            <form method="post" asp-page-handler="Refresh" asp-route-id="@artist.Id" class="admmanage-inline">
                 <button class="button" type="submit">@ui["admin.music.refresh"]</button>
             </form>
         </div>
     </section>
 
-    <section class="admmusic-panel" aria-labelledby="admmusic-albums-heading">
-        <h2 id="admmusic-albums-heading">@ui["admin.music.albums"]</h2>
+    <section class="admmanage-panel" aria-labelledby="admmanage-albums-heading">
+        <h2 id="admmanage-albums-heading">@ui["admin.music.albums"]</h2>
         @if (Model.View.Albums.Count == 0)
         {
-            <p class="admmusic-empty">@ui["admin.music.noAlbums"]</p>
+            <p class="admmanage-empty">@ui["admin.music.noAlbums"]</p>
         }
         else
         {
-            <div class="admmusic-table-wrap">
-                <table class="admmusic-table">
+            <div class="admmanage-table-wrap">
+                <table class="admmanage-table">
                     <thead>
                         <tr>
                             <th scope="col">@ui["admin.music.col.album"]</th>
@@ -75,14 +75,14 @@
                         {
                             <tr id="album-@album.WorkId">
                                 <td>
-                                    <a class="admmusic-title" asp-page="Album" asp-route-workId="@album.WorkId">@album.Title</a>
-                                    <span class="admmusic-sub">@(album.ReleaseDate is { } released ? released.ToString("yyyy-MM-dd") : album.Year?.ToString())</span>
+                                    <a class="admmanage-title" asp-page="Album" asp-route-workId="@album.WorkId">@album.Title</a>
+                                    <span class="admmanage-sub">@(album.ReleaseDate is { } released ? released.ToString("yyyy-MM-dd") : album.Year?.ToString())</span>
                                 </td>
                                 <td>@Model.TypeLabel(album.Type)</td>
                                 <td><span class="admin-tag admin-tag-@ArtistModel.StateTone(album.State)">@Model.StateLabel(album.State)</span></td>
                                 <td class="is-numeric">@(album.Tracks == 0 ? "—" : $"{album.TracksWithFiles}/{album.Tracks}")</td>
                                 <td>
-                                    <form method="post" asp-page-handler="Album" asp-route-id="@artist.Id" class="admmusic-inline">
+                                    <form method="post" asp-page-handler="Album" asp-route-id="@artist.Id" class="admmanage-inline">
                                         <input type="hidden" name="workId" value="@album.WorkId" />
                                         <input type="hidden" name="monitored" value="@((!album.Monitored).ToString().ToLowerInvariant())" />
                                         <button class="button button-small button-quiet" type="submit" aria-pressed="@(album.Monitored ? "true" : "false")" aria-label="@ui["admin.music.monitorAlbum"]">@(album.Monitored ? ui["admin.music.monitored"] : ui["admin.music.unmonitored"])</button>

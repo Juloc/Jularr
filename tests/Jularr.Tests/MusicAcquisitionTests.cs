@@ -191,10 +191,10 @@ public sealed class MusicAcquisitionTests
         var again = await service.GrabAsync(work, "owner", mp3, CancellationToken.None);
         var unknown = await service.GrabAsync(Guid.NewGuid(), "owner", mp3, CancellationToken.None);
 
-        Assert.AreEqual(MusicGrabStatus.NotAvailable, refused.Status);
-        Assert.AreEqual(MusicGrabStatus.Submitted, first.Status, first.Message);
-        Assert.AreEqual(MusicGrabStatus.AlreadySubmitted, again.Status);
-        Assert.AreEqual(MusicGrabStatus.NotFound, unknown.Status);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.NotAvailable, refused.Status);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.Submitted, first.Status, first.Message);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.AlreadySubmitted, again.Status);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.NotFound, unknown.Status);
         var grab = host.Environment.Client.Grabs.Single();
         StringAssert.Contains(grab.NzbName!, "MP3 320", "The owner's choice is grabbed, not the automatic favourite.");
         Assert.AreEqual("music", grab.Category);
@@ -329,6 +329,7 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton<MusicLibraryService>()
                 .AddSingleton<MusicMonitoringService>()
                 .AddSingleton<MusicAcquisitionEngine>()
+                .AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>()
                 .AddSingleton<MusicManualSearchService>()
                 .AddSingleton<MusicAdminQuery>()
                 .AddSingleton<IAcquisitionRequestExecutor, MusicAcquisitionRequestExecutor>()

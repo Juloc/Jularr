@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Localization;
@@ -91,19 +92,19 @@ public sealed class AlbumModel(AppDbContext db, MusicAdminQuery query, MusicManu
         }
 
         var outcome = await manualSearch.GrabAsync(workId, ProfileId, releaseIdentity, cancellationToken);
-        if (outcome.Status == MusicGrabStatus.NotFound)
+        if (outcome.Status == ManualGrabStatus.NotFound)
         {
             return NotFound();
         }
 
         logger.LogInformation("Manual grab for album {WorkId} ended as {Status}.", workId, outcome.Status);
-        TempData[outcome.Status is MusicGrabStatus.Submitted ? "MusicNotice" : "MusicError"] = Ui[outcome.Status switch
+        TempData[outcome.Status is ManualGrabStatus.Submitted ? "MusicNotice" : "MusicError"] = Ui[outcome.Status switch
         {
-            MusicGrabStatus.Submitted => "admin.manualSearch.grabQueued",
-            MusicGrabStatus.AlreadySubmitted => "admin.manualSearch.grabAlreadySent",
-            MusicGrabStatus.NotSearchable => "admin.manualSearch.grabNotSearchable",
-            MusicGrabStatus.ClientRejected => "admin.manualSearch.grabClientRejected",
-            MusicGrabStatus.Unrecorded => "admin.manualSearch.grabUnrecorded",
+            ManualGrabStatus.Submitted => "admin.manualSearch.grabQueued",
+            ManualGrabStatus.AlreadySubmitted => "admin.manualSearch.grabAlreadySent",
+            ManualGrabStatus.NotSearchable => "admin.manualSearch.grabNotSearchable",
+            ManualGrabStatus.ClientRejected => "admin.manualSearch.grabClientRejected",
+            ManualGrabStatus.Unrecorded => "admin.manualSearch.grabUnrecorded",
             _ => "admin.manualSearch.grabNotAvailable"
         }];
         return RedirectToPage(new { workId });

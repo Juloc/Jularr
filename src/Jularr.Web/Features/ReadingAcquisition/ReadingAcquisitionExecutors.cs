@@ -2,6 +2,7 @@ using System.Text.Json;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
+using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Novels;
@@ -65,13 +66,28 @@ public sealed class ReadingAcquisitionEngine(
         var profile = profiles is null ? null : await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
         var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile);
 
-        return await tracker.ContinueAsync(
+        return await GrabAsync(request, payload, Candidates(search), search.FailureMessage, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the tracker lifecycle over the given releases (best first) and submits the first untried one through the shared download-client path.
+    /// Automatic acquisition passes every accepted release; Manual Search passes the one the owner selected.
+    /// </summary>
+    public async Task<AcquisitionExecution> GrabAsync(
+        AcquisitionRequest request,
+        ReadingRequestPayload payload,
+        IReadOnlyList<ReleaseRequestCandidate> candidates,
+        string noReleaseReason,
+        CancellationToken cancellationToken,
+        ManualGrabProgress? progress = null) =>
+        await tracker.ContinueAsync(
             request,
             payload,
-            Candidates(search),
-            search.FailureMessage,
+            candidates,
+            noReleaseReason,
             async release =>
             {
+                progress?.SubmitStarted = true;
                 var outcome = await downloads.SubmitAsync(
                     new DownloadSubmissionSpec(
                         OperationKind,
@@ -84,13 +100,18 @@ public sealed class ReadingAcquisitionEngine(
                         release.Title,
                         request.Kind),
                     cancellationToken);
+                if (outcome.Accepted && progress is not null)
+                {
+                    progress.Accepted = true;
+                    progress.OperationId = outcome.OperationId;
+                }
+
                 return new ReleaseRequestSubmission(
                     outcome.Accepted,
                     outcome.OperationId,
                     outcome.Message);
             },
             cancellationToken);
-    }
 
     /// <summary>The releases the reading matcher accepted, best first; each is tried once by its identity.</summary>
     public static IReadOnlyList<ReleaseRequestCandidate> Candidates(
@@ -159,6 +180,12 @@ public sealed class ReadingAcquisitionEngine(
                 string.IsNullOrWhiteSpace(author) ? null : author.Trim()),
             JsonSerializerOptions.Web);
 
+    /// <summary>What a request without a stored payload searches for: a Manga request carries its native title as the alias, a Light Novel request its author.</summary>
+    public static ReadingAcquisitionTarget FallbackTarget(AcquisitionRequest request) =>
+        request.Kind == MediaAcquisitionKind.LightNovel
+            ? new ReadingAcquisitionTarget(MediaAcquisitionKind.LightNovel, request.Title, [], request.Subtitle)
+            : new ReadingAcquisitionTarget(MediaAcquisitionKind.Manga, request.Title, string.IsNullOrWhiteSpace(request.Subtitle) ? [] : [request.Subtitle.Trim()]);
+
     public static ReadingAcquisitionTarget ToTarget(
         MediaAcquisitionKind kind,
         ReadingRequestPayload payload) =>
@@ -182,17 +209,7 @@ public sealed class MangaAcquisitionRequestExecutor(
         AcquisitionRequest request,
         CancellationToken cancellationToken)
     {
-        var aliases = string.IsNullOrWhiteSpace(request.Subtitle)
-            ? Array.Empty<string>()
-            : new[] { request.Subtitle.Trim() };
-
-        return engine.ExecuteAsync(
-            request,
-            new ReadingAcquisitionTarget(
-                MediaAcquisitionKind.Manga,
-                request.Title,
-                aliases),
-            cancellationToken);
+        return engine.ExecuteAsync(request, ReadingAcquisitionEngine.FallbackTarget(request), cancellationToken);
     }
 }
 
@@ -218,13 +235,7 @@ public sealed class LightNovelAcquisitionRequestExecutor(
             return await ImportWebNovelAsync(request, cancellationToken);
         }
 
-        var payload = ReadingAcquisitionEngine.ReadPayload(
-            request,
-            new ReadingAcquisitionTarget(
-                MediaAcquisitionKind.LightNovel,
-                request.Title,
-                [],
-                request.Subtitle));
+        var payload = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request));
 
         if (payload.Searches == 0)
         {

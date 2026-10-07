@@ -565,6 +565,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AnimeAcquisiti
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IMonitoredAcquisitionExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoAcquisitionEngine>();
@@ -585,6 +586,7 @@ foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.Media
 }
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicMonitoringService>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicAdminQuery>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.ICompletedDownloadImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>());
