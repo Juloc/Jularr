@@ -8,6 +8,7 @@ using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Events;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Media.Optimization;
 using Jularr.Web.Features.Operations;
@@ -48,7 +49,8 @@ public sealed class AnimeImportExecutor(
     ILogger<AnimeImportExecutor> logger,
     MediaOptimizationQueue? optimizationQueue = null,
     LibraryRootAvailabilityService? storage = null,
-    IJularrEventPublisher? events = null) : ICompletedDownloadImportAdapter
+    IJularrEventPublisher? events = null,
+    IInstanceModuleService? instanceModules = null) : ICompletedDownloadImportAdapter
 {
     public const string OperationKind = "anime-import";
     public const string OperationCategory = "Library";
@@ -837,7 +839,8 @@ public sealed class AnimeImportExecutor(
         Guid? importOperationId,
         CancellationToken cancellationToken)
     {
-        if (optimizationQueue is null)
+        // Remuxing for Direct Play spawns ffmpeg and only serves the player: an instance without Playback never starts it.
+        if (optimizationQueue is null || (instanceModules is not null && !await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken)))
         {
             return;
         }

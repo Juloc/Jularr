@@ -49,6 +49,26 @@ public sealed class InstanceModel(
         await LoadAsync(cancellationToken);
     }
 
+    public InstancePreset Preset => InstanceModulePresets.Detect(Settings);
+
+    public string PresetName(InstancePreset preset) => Ui[$"admin.instance.preset.{preset.ToString().ToLowerInvariant()}"];
+
+    public string PresetDescription(InstancePreset preset) => Ui[$"admin.instance.preset.{preset.ToString().ToLowerInvariant()}.description"];
+
+    /// <summary>A preset only sets the module switches below it; it adds no runtime of its own.</summary>
+    public async Task<IActionResult> OnPostPresetAsync(InstancePreset preset, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (preset == InstancePreset.Custom || !Enum.IsDefined(preset))
+        {
+            return BadRequest();
+        }
+
+        await modules.SaveAsync(InstanceModulePresets.Apply(preset, await modules.GetAsync(cancellationToken)), cancellationToken);
+        TempData["Status"] = Ui["admin.instance.saved"];
+        return RedirectToPage();
+    }
+
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
