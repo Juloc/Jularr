@@ -106,7 +106,7 @@ public sealed class BookPdfAcquisitionTests
         Assert.AreEqual(BookFileFormats.Pdf, file.Format);
         Assert.AreEqual(BookFileFormats.PdfMediaType, file.MediaType);
         Assert.IsTrue(File.Exists(file.StoragePath));
-        StringAssert.StartsWith(file.StoragePath, environment.FilesPath);
+        StringAssert.StartsWith(file.StoragePath, Path.Combine(environment.Root, "library-books"));
 
         var state = await environment.AddStateAsync();
         Assert.AreEqual(work.Id, state.LibraryWorkId, "The Add book dialog shows the book in the library, not Downloading.");
@@ -682,6 +682,7 @@ public sealed class BookPdfAcquisitionTests
                 configuration));
             collection.AddSingleton(provider => new OperationRunner(db, provider));
             collection.AddSingleton(new AnimeImportSettingsStore(data.FullName));
+            collection.AddSingleton<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
             collection.AddSingleton<IHardLinkCreator, FileSystemHardLinkCreator>();
             collection.AddSingleton(new AcquisitionAccessStore(db));
             collection.AddSingleton<FakeProwlarrClient>();
@@ -744,6 +745,7 @@ public sealed class BookPdfAcquisitionTests
                 state => state.WithRemotePathMappings(MediaAcquisitionKind.Book, [new RemotePathMapping("/data/downloads/complete", Path.Combine(root, "mnt", "complete"))]),
                 CancellationToken.None);
 
+            await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Book, Path.Combine(root, "library-books"), ImportMode.Copy);
             return new BookAcquisitionEnvironment(root, services, db);
         }
 
