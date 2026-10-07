@@ -201,38 +201,9 @@ public static class MonitoringEngine
             return new(false, "Candidate is rejected by the assigned quality profile.", candidate);
         }
 
-        var release = candidate.Candidate.Release;
-        if (!MatchesUnit(wanted.Key, release))
+        if (FindGrabBlock(wanted, candidate.Candidate.Release, state, ownership, now) is { } blocked)
         {
-            return new(false, "Candidate does not match the wanted unit.", candidate);
-        }
-
-        if (state.Attempts.Values.Any(attempt =>
-                attempt.ReleaseKey is not null &&
-                attempt.ReleaseKey.Equals(release.ReleaseKey, StringComparison.OrdinalIgnoreCase) &&
-                attempt.Status is AcquisitionAttemptStatus.Pending or AcquisitionAttemptStatus.Grabbed))
-        {
-            return new(false, "Release is already pending or was already grabbed.", candidate);
-        }
-
-        if (ownership is not null)
-        {
-            var key = wanted.Key;
-            var ownershipDecision = SonarrParallelSafety.CanGrab(
-                ownership,
-                new AcquisitionGrabRequest(
-                    key.AnimeKey,
-                    release.ReleaseKey,
-                    release.SeasonNumber ?? key.SeasonNumber,
-                    release.EpisodeStart ?? key.EpisodeNumber,
-                    release.EpisodeEnd ?? key.EpisodeNumber,
-                    release.AbsoluteEpisodeStart ?? key.AbsoluteEpisodeNumber,
-                    release.AbsoluteEpisodeEnd ?? key.AbsoluteEpisodeNumber),
-                now ?? DateTimeOffset.UtcNow);
-            if (!ownershipDecision.Allowed)
-            {
-                return new(false, $"Ownership: {ownershipDecision.Reason}", candidate);
-            }
+            return new(false, blocked, candidate);
         }
 
         if (wanted.Reason == WantedReason.Missing)
@@ -248,6 +219,51 @@ public static class MonitoringEngine
         return ReleaseScorer.IsUpgrade(profile, currentFile, candidate)
             ? new(true, "Accepted candidate is an upgrade over the current file.", candidate)
             : new(false, "Candidate is not an upgrade over the current file.", candidate);
+    }
+
+    /// <summary>
+    /// Why a release must not be grabbed for the wanted unit whatever its quality: it is for another unit, it is already pending or grabbed, or
+    /// another owner (Sonarr running in parallel) holds it. Null when nothing blocks it. The shared selection engine treats this as a hard
+    /// rejection, not as a preference.
+    /// </summary>
+    public static string? FindGrabBlock(
+        WantedUnit wanted,
+        ReleaseInfo release,
+        MonitoringState state,
+        AcquisitionOwnershipSnapshot? ownership = null,
+        DateTimeOffset? now = null)
+    {
+        if (!MatchesUnit(wanted.Key, release))
+        {
+            return "Candidate does not match the wanted unit.";
+        }
+
+        if (state.Attempts.Values.Any(attempt =>
+                attempt.ReleaseKey is not null &&
+                attempt.ReleaseKey.Equals(release.ReleaseKey, StringComparison.OrdinalIgnoreCase) &&
+                attempt.Status is AcquisitionAttemptStatus.Pending or AcquisitionAttemptStatus.Grabbed))
+        {
+            return "Release is already pending or was already grabbed.";
+        }
+
+        if (ownership is null)
+        {
+            return null;
+        }
+
+        var key = wanted.Key;
+        var ownershipDecision = SonarrParallelSafety.CanGrab(
+            ownership,
+            new AcquisitionGrabRequest(
+                key.AnimeKey,
+                release.ReleaseKey,
+                release.SeasonNumber ?? key.SeasonNumber,
+                release.EpisodeStart ?? key.EpisodeNumber,
+                release.EpisodeEnd ?? key.EpisodeNumber,
+                release.AbsoluteEpisodeStart ?? key.AbsoluteEpisodeNumber,
+                release.AbsoluteEpisodeEnd ?? key.AbsoluteEpisodeNumber),
+            now ?? DateTimeOffset.UtcNow);
+        return ownershipDecision.Allowed ? null : $"Ownership: {ownershipDecision.Reason}";
     }
 
     public static MonitoringState MarkPending(
@@ -429,21 +445,8 @@ public static class MonitoringEngine
 
     public static bool IsCutoffMet(
         QualityProfile profile,
-        ReleaseScoreResult current)
-    {
-        if (string.IsNullOrWhiteSpace(profile.UpgradeCutoffQuality))
-        {
-            return false;
-        }
-
-        var cutoffRank = QualityRank(profile, profile.UpgradeCutoffQuality);
-        if (cutoffRank == int.MaxValue)
-        {
-            return false;
-        }
-
-        return current.QualityRank <= cutoffRank;
-    }
+        ReleaseScoreResult current) =>
+        Selection.UpgradePolicy.IsCutoffMet(profile, current.QualityKey);
 
     public static string EpisodeOverrideKey(int season, int episode) =>
         $"S{season:00}E{episode:00}";
@@ -481,19 +484,6 @@ public static class MonitoringEngine
         }
 
         return false;
-    }
-
-    private static int QualityRank(QualityProfile profile, string quality)
-    {
-        for (var i = 0; i < profile.QualityOrder.Length; i++)
-        {
-            if (profile.QualityOrder[i].Equals(quality, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
-        }
-
-        return int.MaxValue;
     }
 
     private static Dictionary<string, AcquisitionAttempt> CloneAttempts(MonitoringState state) =>

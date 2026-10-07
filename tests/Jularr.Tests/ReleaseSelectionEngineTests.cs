@@ -1,5 +1,6 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Search;
@@ -178,9 +179,33 @@ public sealed class ReleaseSelectionEngineTests
     }
 
     [TestMethod]
+    public void ADelayProfileIsTheSharedEnginesTimedFallbackLadder()
+    {
+        var ladder = AcquisitionDelayEngine.WithDelayAsFallbackTier(AnimeQualityProfiles.CreateDefaultAnime1080p(), new AnimeDelayProfile("delay-1", "Wait for BluRay", 60, null, [], false));
+        var web = Candidate("web", "Show.S01E01.1080p.WEB-DL.H264-GRP");
+        var bluRay = Candidate("bluray", "Show.S01E01.1080p.BluRay.H264-GRP");
+
+        CollectionAssert.AreEqual(new[] { "BLURAY-1080p" }, ladder.AllowedQualities, "Only the qualities that reach the cutoff are allowed at once.");
+        Assert.AreEqual(60, Assert.ContainsSingle(ladder.FallbackTiers).AfterMinutes);
+        Assert.AreEqual(SelectionOutcome.ProfileRejected, ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now), [web]).Outcome, "A release below the cutoff waits.");
+        Assert.AreEqual("bluray", ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now), [web, bluRay]).Winner!.Candidate.Id, "A release that meets the cutoff bypasses the wait.");
+        var afterWait = ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now.AddMinutes(-61)), [web]);
+        Assert.AreEqual(SelectionDecision.Temporary, afterWait.Winner!.Decision, "After the wait the lower quality is taken, and the target stays wanted for an upgrade.");
+    }
+
+    [TestMethod]
+    public void AFileWhoseQualityCannotBeReadIsReplacedByAnyKnownQualityOnlyWhereTheMediaTypeAsksForIt()
+    {
+        var profile = Profile() with { UpgradeCutoffQuality = "BLURAY-1080p" };
+
+        Assert.IsTrue(UpgradePolicy.IsUpgrade(profile, "UNKNOWN-UNKNOWN", "WEB-720p", upgradeUnknownInstalled: true));
+        Assert.IsFalse(UpgradePolicy.IsUpgrade(profile, "UNKNOWN-UNKNOWN", "WEB-720p"), "A scanned file of unknown quality is not churned.");
+    }
+
+    [TestMethod]
     public void UpgradeNeedsAMeaningfulBenefit()
     {
-        var profile = Profile() with { UpgradeMinimumScoreDelta = 10, UpgradeUntilScore = 40 };
+        var profile = Profile() with { UpgradeMinimumScoreDelta = 10, UpgradeUntilScore = 40, UpgradeCutoffQuality = "BLURAY-1080p" };
         ReleaseScoreResult Result(string quality, int rank, int score) => new(new ReleaseCandidate(ReleaseParser.Parse("Show.S01E01.1080p.WEB-DL.H264-GRP")), true, score, quality, rank, [], []);
         var current = Result("WEB-1080p", 1, 10);
 
@@ -189,7 +214,7 @@ public sealed class ReleaseSelectionEngineTests
         Assert.IsTrue(ReleaseScorer.IsUpgrade(profile, current, Result("BLURAY-1080p", 0, 10)), "A better quality tier is an upgrade.");
         Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, Result("WEB-1080p", 1, 45), Result("WEB-1080p", 1, 90)), "Upgrades stop at the configured score.");
         Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, current, Result("HDTV-1080p", 2, 99)), "Never a downgrade.");
-        Assert.IsFalse(ReleaseScorer.IsUpgrade(Profile() with { UpgradeMinimumQualitySteps = 2 }, current, Result("BLURAY-1080p", 0, 10)), "One step is not enough when two are required.");
+        Assert.IsFalse(ReleaseScorer.IsUpgrade(Profile() with { UpgradeMinimumQualitySteps = 2, UpgradeCutoffQuality = "BLURAY-1080p" }, current, Result("BLURAY-1080p", 0, 10)), "One step is not enough when two are required.");
     }
 
     [TestMethod]

@@ -18,7 +18,8 @@ public sealed class LibraryScanner(
     ILogger<LibraryScanner> logger,
     AnimeMetadataService? metadataService = null,
     MediaSegmentSidecarImporter? segmentSidecars = null,
-    AnimeArtworkLibrary? artworkLibrary = null)
+    AnimeArtworkLibrary? artworkLibrary = null,
+    CanonicalVideoStorageBackfillService? canonicalVideoBackfill = null)
 {
     private readonly AnimeArtworkLibrary artwork =
         artworkLibrary ?? new AnimeArtworkLibrary(db, Microsoft.Extensions.Logging.Abstractions.NullLogger<AnimeArtworkLibrary>.Instance);
@@ -413,6 +414,12 @@ public sealed class LibraryScanner(
 
         await db.SaveChangesAsync(cancellationToken);
 
+        // Anime files still enter through the scanner as legacy rows; each scan gives the new ones their canonical Work, episode and Asset, so an
+        // imported or dropped episode is playable through the canonical Library without any startup or background backfill.
+        if (canonicalVideoBackfill is not null)
+        {
+            await canonicalVideoBackfill.BackfillLegacyAnimeAsync(rootId, cancellationToken);
+        }
 
         if (metadataService is not null)
         {

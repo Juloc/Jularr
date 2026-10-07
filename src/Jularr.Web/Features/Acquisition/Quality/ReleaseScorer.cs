@@ -150,6 +150,7 @@ public static class ReleaseScorer
             .ThenBy(result => result.Candidate.Release.RawTitle, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+    /// <summary>Whether a scored release is a meaningful upgrade of the scored current file: the shared <see cref="Selection.UpgradePolicy"/>, where a file whose quality cannot be read is replaced by any release of a known quality.</summary>
     public static bool IsUpgrade(
         QualityProfile profile,
         ReleaseScoreResult current,
@@ -159,35 +160,8 @@ public static class ReleaseScorer
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(candidate);
 
-        if (!profile.UpgradeAllowed || !candidate.Accepted)
-        {
-            return false;
-        }
-
-        var cutoffRank = string.IsNullOrWhiteSpace(profile.UpgradeCutoffQuality)
-            ? int.MinValue
-            : IndexOf(profile.QualityOrder, profile.UpgradeCutoffQuality);
-
-        if (cutoffRank != int.MaxValue &&
-            current.QualityRank <= cutoffRank)
-        {
-            return false;
-        }
-
-        if (profile.UpgradeUntilScore is { } untilScore && current.Score >= untilScore)
-        {
-            return false;
-        }
-
-        // A better quality tier is an upgrade by the configured number of steps; unknown ranks never count as a step. Within one
-        // quality the preference score has to improve by the configured delta, so tiny differences never churn files.
-        if (candidate.QualityRank < current.QualityRank)
-        {
-            return current.QualityRank == int.MaxValue || current.QualityRank - candidate.QualityRank >= Math.Max(1, profile.UpgradeMinimumQualitySteps);
-        }
-
-        return candidate.QualityRank == current.QualityRank &&
-               candidate.Score - current.Score >= Math.Max(1, profile.UpgradeMinimumScoreDelta);
+        return candidate.Accepted
+            && Selection.UpgradePolicy.IsUpgrade(profile, current.QualityKey, candidate.QualityKey, current.Score, candidate.Score, upgradeUnknownInstalled: true);
     }
 
     public static IReadOnlyList<string> ValidateProfile(QualityProfile profile)

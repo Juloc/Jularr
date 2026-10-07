@@ -338,6 +338,7 @@ builder.Services.AddSingleton<MediaProcessRunner>();
 builder.Services.AddSingleton<IMediaProcessRunner>(services => services.GetRequiredService<MediaProcessRunner>());
 builder.Services.AddScoped<LibraryScanner>();
 builder.Services.AddScoped<CanonicalMediaStorageService>();
+builder.Services.AddScoped<CanonicalVideoStorageBackfillService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Selection.InstalledVideoVersions>();
 builder.Services.AddSingleton<IMediaProbeRunner, FfprobeMediaProbeRunner>();
 builder.Services.AddSingleton<MediaInventoryService>();

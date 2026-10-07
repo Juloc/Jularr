@@ -22,6 +22,7 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Media.Optimization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Operations;
@@ -610,6 +611,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         {
             var db = provider.GetRequiredService<AppDbContext>();
             var sonarrStore = provider.GetRequiredService<SonarrConnectionStore>();
+            var storage = new CanonicalMediaStorageService(db);
             return new LibraryScanner(
                 db,
                 new SubtitleImportService(db, new VocabularyService(db, new JapaneseTermExtractor(new NoMorphology()), new JapaneseDictionary(dictionary))),
@@ -619,7 +621,8 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
                     sonarrStore,
                     new SonarrArtworkImportService(db, new NoHttpClientFactory(), NullLogger<SonarrArtworkImportService>.Instance),
                     NullLogger<SonarrArtworkSyncService>.Instance),
-                NullLogger<LibraryScanner>.Instance);
+                NullLogger<LibraryScanner>.Instance,
+                canonicalVideoBackfill: new CanonicalVideoStorageBackfillService(db, new LegacyWorkBridge(db, new WorkService(db), new WorkStructureService(db)), storage, NullLogger<CanonicalVideoStorageBackfillService>.Instance));
         });
 
         return collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

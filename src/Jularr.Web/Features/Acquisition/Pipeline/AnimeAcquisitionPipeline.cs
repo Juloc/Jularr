@@ -10,6 +10,7 @@ using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.Sonarr;
@@ -1070,7 +1071,9 @@ public sealed class AnimeAcquisitionPipeline(
         return chosen;
     }
 
-    // Scores every Prowlarr result with the profile and records the reason for each decision.
+    // Anime supplies the facts of every result (does it carry this anime, which wanted episodes does it cover, may it be grabbed at all) and the
+    // shared selection engine decides: identity before profile, the profile's timed fallback ladder (a delay profile is one), quality tier,
+    // preference score, coverage and the stable winner. Whether a candidate may replace an installed file stays the shared upgrade policy.
     private static IReadOnlyList<AnimeSearchCandidate> Evaluate(
         AnimeAcquisitionTarget target,
         IReadOnlyList<AnimeAcquisitionEpisode> scope,
@@ -1087,75 +1090,139 @@ public sealed class AnimeAcquisitionPipeline(
         var byIdentity = releases
             .GroupBy(release => release.Identity, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-        var ranked = AnimeReleaseScorer.Rank(
-            target.Profile,
-            byIdentity.Values.Select(release => new AnimeReleaseCandidate(
-                release.ParsedRelease,
-                release.SizeBytes,
-                release.Indexer,
-                release.Identity)));
         var aliases = scope
             .SelectMany(episode => new[] { episode.SearchTitle }.Concat(episode.SearchAliases))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        var judged = byIdentity.Values.ToDictionary(
+            release => release.Identity,
+            release => Judge(release, aliases, wanted, primary, state, snapshot, now),
+            StringComparer.OrdinalIgnoreCase);
+        var wantedSince = (primary is not null ? wanted.FirstOrDefault(item => item.Key == primary) : wanted.OrderBy(item => item.BecameWantedAtUtc).FirstOrDefault())?.BecameWantedAtUtc ?? now;
+        var selection = ReleaseSelectionEngine.Select(
+            AcquisitionDelayEngine.WithDelayAsFallbackTier(target.Profile, delayProfile),
+            new SelectionContext(now, wantedSince),
+            [.. judged.Values.Select(item => item.Candidate)]);
+
         var candidates = new List<AnimeSearchCandidate>();
-        foreach (var score in ranked)
+        foreach (var evaluation in selection.Ranked)
         {
-            var release = byIdentity[score.Candidate.SourceId!];
-            var parsed = release.ParsedRelease;
-            var covered = wanted
-                .Where(item => Covers(parsed, item.Key))
-                .Select(item => item.Key)
-                .ToArray();
-            var wantedEpisode = primary is not null
-                ? wanted.FirstOrDefault(item => item.Key == primary)
-                : covered.Length > 0
-                    ? wanted.First(item => item.Key == covered[0])
-                    : null;
-
-            AnimeAutoGrabDecision decision;
-            if (release.InternalDownloadUri is null ||
-                !string.Equals(release.Protocol, "usenet", StringComparison.OrdinalIgnoreCase))
-            {
-                decision = new(false, "Not a usenet release with an NZB link; only SABnzbd downloads are supported.", score);
-            }
-            else if (!AnimeImportPlanner.SeriesMatches(aliases, parsed.SeriesTitle))
-            {
-                decision = new(false, $"Series title '{parsed.SeriesTitle}' does not match this anime.", score);
-            }
-            else if (covered.Length == 0 || wantedEpisode is null || (primary is not null && !covered.Contains(primary)))
-            {
-                decision = new(false, "Release does not cover the requested episode.", score);
-            }
-            else
-            {
-                var current = scope.FirstOrDefault(item => item.Key == wantedEpisode.Key) is { } slot
-                    ? AnimeAcquisitionInventory.ToInventory(slot, target.Profile).CurrentFile
-                    : null;
-                decision = AnimeMonitoringEngine.EvaluateCandidate(target.Profile, wantedEpisode, score, current, state, snapshot, now);
-                if (decision.Grab)
-                {
-                    var delay = AcquisitionDelayEngine.Evaluate(delayProfile, target.Profile, score, wantedEpisode.BecameWantedAtUtc, now);
-                    if (!delay.Grab)
-                    {
-                        decision = new AnimeAutoGrabDecision(false, delay.Reason!, score, delay.DelayedUntilUtc);
-                    }
-                }
-            }
-
-            candidates.Add(new AnimeSearchCandidate(release, score, decision, covered));
+            var release = byIdentity[evaluation.Candidate.Id];
+            var fact = judged[release.Identity];
+            // The score shown is the profile's own, so a release that only waits for a later fallback tier still reads as accepted.
+            var score = AnimeReleaseScorer.Score(target.Profile, new AnimeReleaseCandidate(release.ParsedRelease, release.SizeBytes, release.Indexer, release.Identity));
+            candidates.Add(new AnimeSearchCandidate(release, score, Decide(target, scope, evaluation, fact, score, delayProfile), fact.Covered));
         }
 
-        return candidates
-            .OrderByDescending(candidate => candidate.Decision.Grab)
-            .ThenByDescending(candidate => candidate.Score.Accepted)
-            .ThenBy(candidate => candidate.Score.QualityRank)
-            .ThenByDescending(candidate => candidate.Score.Score)
-            .ThenBy(candidate => candidate.Release.Sources.FirstOrDefault()?.Priority ?? 0)
-            .ThenByDescending(candidate => candidate.Release.PublishedAt)
-            .ThenBy(candidate => candidate.Release.Identity, StringComparer.Ordinal)
-            .ToArray();
+        return candidates.OrderByDescending(candidate => candidate.Decision.Grab).ToArray();
+    }
+
+    private sealed record AnimeReleaseFact(SelectionCandidate Candidate, IReadOnlyList<AnimeEpisodeKey> Covered, AnimeWantedEpisode? WantedEpisode);
+
+    private static AnimeReleaseFact Judge(
+        ProwlarrReleaseCandidate release,
+        IReadOnlyList<string> aliases,
+        IReadOnlyList<AnimeWantedEpisode> wanted,
+        AnimeEpisodeKey? primary,
+        AnimeMonitoringState state,
+        AcquisitionOwnershipSnapshot snapshot,
+        DateTimeOffset now)
+    {
+        var parsed = release.ParsedRelease;
+        var covered = wanted.Where(item => Covers(parsed, item.Key)).Select(item => item.Key).ToArray();
+        var wantedEpisode = primary is not null
+            ? wanted.FirstOrDefault(item => item.Key == primary)
+            : covered.Length > 0 ? wanted.First(item => item.Key == covered[0]) : null;
+
+        ReleaseIdentityEvidence identity;
+        if (!AnimeImportPlanner.SeriesMatches(aliases, parsed.SeriesTitle))
+        {
+            identity = ReleaseIdentityEvidence.Conflict("TitleDoesNotMatch", $"Series title '{parsed.SeriesTitle}' does not match this anime.");
+        }
+        else if (covered.Length == 0 || wantedEpisode is null || (primary is not null && !covered.Contains(primary)))
+        {
+            identity = ReleaseIdentityEvidence.Conflict("EpisodeNotCovered", "Release does not cover the requested episode.");
+        }
+        else
+        {
+            // Season and episode numbers are the release's own statement; an absolute number only agrees through the AniList mapping.
+            identity = parsed.SeasonNumber is not null && parsed.EpisodeStart is not null
+                ? ReleaseIdentityEvidence.Exact("EpisodeCovered", "The release names the wanted season and episode.")
+                : ReleaseIdentityEvidence.Strong("AbsoluteEpisodeCovered", "The release's absolute episode number covers the wanted episode.");
+        }
+
+        string? safety = null;
+        if (release.InternalDownloadUri is null || !string.Equals(release.Protocol, "usenet", StringComparison.OrdinalIgnoreCase))
+        {
+            safety = "Not a usenet release with an NZB link; only SABnzbd downloads are supported.";
+        }
+        else if (identity.Confidence != IdentityConfidence.Conflict)
+        {
+            safety = AnimeMonitoringEngine.FindGrabBlock(wantedEpisode!, parsed, state, snapshot, now);
+        }
+
+        var span = parsed.EpisodeStart is { } first && parsed.EpisodeEnd is { } last
+            ? last - first + 1
+            : parsed.AbsoluteEpisodeStart is { } absoluteFirst && parsed.AbsoluteEpisodeEnd is { } absoluteLast ? absoluteLast - absoluteFirst + 1 : 1;
+        var candidate = new SelectionCandidate(
+            release.Identity,
+            parsed,
+            release.SizeBytes,
+            release.Indexer,
+            release.Sources.FirstOrDefault()?.Priority ?? 0,
+            release.PublishedAt,
+            identity,
+            new SelectionCoverage(covered.Length, Math.Max(wanted.Count, covered.Length), Math.Max(0, span - covered.Length)))
+        {
+            SafetyRejection = safety
+        };
+        return new AnimeReleaseFact(candidate, covered, wantedEpisode);
+    }
+
+    // The engine's verdict as the grab decision the pipeline and the interactive search show, with the reasons people already read.
+    private static AnimeAutoGrabDecision Decide(
+        AnimeAcquisitionTarget target,
+        IReadOnlyList<AnimeAcquisitionEpisode> scope,
+        CandidateEvaluation evaluation,
+        AnimeReleaseFact fact,
+        AnimeReleaseScoreResult score,
+        AnimeDelayProfile? delayProfile)
+    {
+        if (!evaluation.IsSelectable)
+        {
+            if (evaluation.Reasons.FirstOrDefault(reason => reason.Kind == SelectionReasonKind.Safety) is { } safety)
+            {
+                return new(false, safety.Detail, score);
+            }
+
+            if (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict)
+            {
+                return new(false, evaluation.Candidate.Identity.Detail, score);
+            }
+
+            if (delayProfile is not null && fact.WantedEpisode is { } waiting && evaluation.Reasons.Any(reason => reason.Code == "WaitingForFallbackTier"))
+            {
+                var until = waiting.BecameWantedAtUtc + TimeSpan.FromMinutes(delayProfile.DelayMinutes);
+                return new(false, $"Delayed by profile '{delayProfile.Name}' until {until:u}, waiting for a preferred release.", score, until);
+            }
+
+            return new(false, "Candidate is rejected by the assigned quality profile.", score);
+        }
+
+        if (fact.WantedEpisode!.Reason == AnimeWantedReason.Missing)
+        {
+            return new(true, "Accepted candidate satisfies a missing monitored unit.", score);
+        }
+
+        var current = scope.FirstOrDefault(item => item.Key == fact.WantedEpisode.Key) is { } slot
+            ? AnimeAcquisitionInventory.ToInventory(slot, target.Profile).CurrentFile
+            : null;
+        return current is null
+            ? new(false, "Upgrade decision requires the current file score.", score)
+            : AnimeReleaseScorer.IsUpgrade(target.Profile, current, score)
+                ? new(true, "Accepted candidate is an upgrade over the current file.", score)
+                : new(false, "Candidate is not an upgrade over the current file.", score);
     }
 
     private static async Task LogDecisionsAsync(
