@@ -21,6 +21,9 @@ public sealed class IndexerStore
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly string storePath;
 
+    // Every indexer search and health check loads the entries: the decrypted entries are kept until the file changes (its write time and length).
+    private (DateTime WrittenAt, long Length, IReadOnlyList<IndexerEntry> Entries)? cached;
+
     public IndexerStore(IDataProtectionProvider dataProtectionProvider)
         : this(dataProtectionProvider, new DirectoryInfo("/data/acquisition"))
     {
@@ -216,6 +219,12 @@ public sealed class IndexerStore
             return [];
         }
 
+        var info = new FileInfo(storePath);
+        if (cached is { } hit && hit.WrittenAt == info.LastWriteTimeUtc && hit.Length == info.Length)
+        {
+            return hit.Entries;
+        }
+
         PersistedIndexerEntry[]? persisted;
         try
         {
@@ -259,6 +268,7 @@ public sealed class IndexerStore
                     apiKey));
         }
 
+        cached = (info.LastWriteTimeUtc, info.Length, result);
         return result;
     }
 
@@ -266,6 +276,7 @@ public sealed class IndexerStore
         IReadOnlyList<IndexerEntry> entries,
         CancellationToken cancellationToken)
     {
+        cached = null;
         var directory = Path.GetDirectoryName(storePath)
             ?? throw new InvalidOperationException("Indexer settings path has no directory.");
         Directory.CreateDirectory(directory);

@@ -16,6 +16,9 @@ public sealed class QualityProfileStore
         new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     private readonly SemaphoreSlim gate = new(1, 1);
+
+    // Every search of a Wanted pass resolves its profile: the parsed file is kept until the file changes (its write time and length), so a pass reads it once.
+    private (DateTime WrittenAt, long Length, QualityProfileState State)? cached;
     private readonly string storePath;
     private readonly MediaAcquisitionRegistry registry;
 
@@ -225,6 +228,12 @@ public sealed class QualityProfileStore
             return (DefaultState(), false);
         }
 
+        var info = new FileInfo(storePath);
+        if (cached is { } hit && hit.WrittenAt == info.LastWriteTimeUtc && hit.Length == info.Length)
+        {
+            return (hit.State, false);
+        }
+
         var json = await File.ReadAllTextAsync(storePath, cancellationToken);
         try
         {
@@ -245,6 +254,7 @@ public sealed class QualityProfileStore
                 ?? throw new InvalidDataException("Quality profile file is empty.");
 
             ValidateState(state);
+            cached = (info.LastWriteTimeUtc, info.Length, state);
             return (state, false);
         }
         catch (JsonException exception)
@@ -315,6 +325,7 @@ public sealed class QualityProfileStore
         CancellationToken cancellationToken)
     {
         ValidateState(state);
+        cached = null;
 
         var directory = Path.GetDirectoryName(storePath)
             ?? throw new InvalidOperationException("Quality profile path has no directory.");
