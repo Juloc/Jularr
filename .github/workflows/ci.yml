@@ -557,7 +557,7 @@ jobs:
           fi
           cat "${RUNNER_TEMP}/legacy.log"
           grep -q "Jularr startup aborted" "${RUNNER_TEMP}/legacy.log"
-          grep -qF "chown -v <jularr-data>:/data ghcr.io/juloc/jularr:latest -R 1654:1654 /data" "${RUNNER_TEMP}/legacy.log"
+          grep -qF "chown -v <jularr-data>:/data ghcr.io/juloc/jularr:<release-tag> -R 1654:1654 /data" "${RUNNER_TEMP}/legacy.log"
 
           # The documented one-time fix (with the image under test instead of :latest).
           docker run --rm --user 0:0 --entrypoint chown -v jularr-legacy-data:/data "${IMAGE}:${GITHUB_SHA}" -R 1654:1654 /data

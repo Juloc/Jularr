@@ -177,6 +177,13 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         var alreadyPlaced = LibraryFilePlacer.FindDestinationConflict(destination, []) is not null;
         var incomingQuality = upgrades?.QualityOfDownload(MediaAcquisitionKind.Tv, videoPath);
 
+        // A different file at the destination is only ever replaced as an upgrade of a series the library already has, so for an unknown series
+        // it is refused before any record exists.
+        if (alreadyPlaced && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination) && !await series.SeriesExistsAsync(meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, cancellationToken))
+        {
+            throw new DestinationMismatchException(destination);
+        }
+
         // The records come first so a database failure cannot happen after the file already left the source.
         var entry = await series.EnsureSeriesAsync(meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, seriesFolder, cancellationToken);
         var workEpisode = await series.EnsureEpisodeAsync(entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);

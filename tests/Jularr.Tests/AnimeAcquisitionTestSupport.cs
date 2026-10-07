@@ -125,6 +125,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
     /// <summary>One pass of the shared Wanted lifecycle, the only thing that decides when Anime searches.</summary>
     public async Task<int> RunWantedPassAsync(DateTime nowUtc)
     {
+        services.GetRequiredService<AnimeWantedSwitch>().On = true;
         await using var scope = services.CreateAsyncScope();
         return await Jularr.Web.Features.Acquisition.Wanted.WantedAcquisitionService.ProcessOnceAsync(scope.ServiceProvider, nowUtc, CancellationToken.None);
     }
@@ -618,7 +619,8 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddSingleton<MediaOptimizationQueue>();
         collection.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.WantedPassTrigger>();
         collection.AddSingleton<AnimeAcquisitionScheduler>();
-        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeWantedSource>();
+        collection.AddSingleton<AnimeWantedSwitch>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(provider => new SwitchedAnimeWantedSource(provider.GetRequiredService<AnimeWantedSwitch>(), new AnimeWantedSource(provider.GetRequiredService<AnimeAcquisitionScheduler>())));
         collection.AddScoped<AcquisitionApiKeyService>();
         collection.AddScoped<AcquisitionApiService>();
         collection.AddHttpClient();
@@ -714,4 +716,17 @@ internal sealed class FakeProwlarrClient : IProwlarrClient
         Connections.Add(connection);
         return Task.FromResult<IReadOnlyList<ProwlarrReleaseCandidate>>([.. Releases]);
     }
+}
+
+/// <summary>Whether the shared Wanted pass of a test also runs the Anime pipeline; the request lifecycle tests follow requests only and keep the queue as the request left it.</summary>
+public sealed class AnimeWantedSwitch
+{
+    public bool On { get; set; }
+}
+
+public sealed class SwitchedAnimeWantedSource(AnimeWantedSwitch gate, AnimeWantedSource inner) : Jularr.Web.Features.Acquisition.Wanted.IWantedSource
+{
+    public MediaAcquisitionKind Kind => inner.Kind;
+
+    public Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken) => gate.On ? inner.PrepareAsync(nowUtc, cancellationToken) : Task.FromResult(0);
 }

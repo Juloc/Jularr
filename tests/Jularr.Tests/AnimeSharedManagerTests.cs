@@ -17,18 +17,18 @@ public sealed class AnimeSharedManagerTests
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
-        var source = new AnimeWantedSource(environment.Scheduler);
         var start = new DateTime(2026, 10, 7, 8, 0, 0, DateTimeKind.Utc);
 
-        Assert.AreEqual(0, await source.PrepareAsync(start, CancellationToken.None), "Right after startup the monitored anime are not searched yet.");
+        Assert.AreEqual(0, await environment.Scheduler.AdvanceAsync(new DateTimeOffset(start, TimeSpan.Zero), CancellationToken.None), "Right after startup the monitored anime are not searched yet.");
         Assert.IsNull(environment.Scheduler.LastRun);
-        Assert.AreEqual(1, await source.PrepareAsync(start.Add(AnimeAcquisitionScheduler.StartupDelay).AddSeconds(1), CancellationToken.None));
+        Assert.AreEqual(1, await environment.Scheduler.AdvanceAsync(new DateTimeOffset(start.Add(AnimeAcquisitionScheduler.StartupDelay).AddSeconds(1), TimeSpan.Zero), CancellationToken.None));
         Assert.IsNotNull(environment.Scheduler.LastRun);
 
-        Assert.AreEqual(0, await source.PrepareAsync(start.AddMinutes(10), CancellationToken.None), "The canonical interval has not elapsed.");
+        Assert.AreEqual(0, await environment.Scheduler.AdvanceAsync(new DateTimeOffset(start.AddMinutes(10), TimeSpan.Zero), CancellationToken.None), "The canonical interval has not elapsed.");
         Assert.IsTrue(environment.Scheduler.RequestRun());
-        Assert.AreEqual(1, await source.PrepareAsync(start.AddMinutes(10), CancellationToken.None), "A search the owner asked for does not wait for the interval.");
-        Assert.AreEqual(1, await source.PrepareAsync(start.AddMinutes(90), CancellationToken.None), "The periodic search runs again once the interval elapsed.");
+        Assert.AreEqual(1, await environment.Scheduler.AdvanceAsync(new DateTimeOffset(start.AddMinutes(10), TimeSpan.Zero), CancellationToken.None), "A search the owner asked for does not wait for the interval.");
+        Assert.AreEqual(1, await environment.Scheduler.AdvanceAsync(new DateTimeOffset(start.AddMinutes(90), TimeSpan.Zero), CancellationToken.None), "The periodic search runs again once the interval elapsed.");
+        Assert.AreEqual(0, await new AnimeWantedSource(environment.Scheduler).PrepareAsync(start.AddMinutes(200), CancellationToken.None), "Anime creates no requests, so the Wanted pass counts nothing for it.");
     }
 
     [TestMethod]

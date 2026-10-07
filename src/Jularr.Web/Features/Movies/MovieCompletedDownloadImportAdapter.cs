@@ -145,6 +145,13 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
         var alreadyPlaced = LibraryFilePlacer.FindDestinationConflict(destination, []) is not null;
         var incomingQuality = upgrades?.QualityOfDownload(MediaAcquisitionKind.Movie, videoPath);
 
+        // A different file at the destination is only ever replaced as an upgrade of a movie the library already has, so for an unknown movie
+        // it is refused before any record exists.
+        if (alreadyPlaced && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination) && !await movies.ExistsAsync(metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, cancellationToken))
+        {
+            throw new DestinationMismatchException(destination);
+        }
+
         // The records come first so a database failure cannot happen after the file already left the source.
         var entry = await movies.EnsureAsync(metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, folder, cancellationToken);
         var judgement = upgrades is null || canonicalStorage is null

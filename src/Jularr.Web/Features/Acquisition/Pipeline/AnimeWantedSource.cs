@@ -12,6 +12,10 @@ public sealed class AnimeWantedSource(AnimeAcquisitionScheduler scheduler) : IWa
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Anime;
 
-    public Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken) =>
-        scheduler.AdvanceAsync(new DateTimeOffset(nowUtc, TimeSpan.Zero), cancellationToken);
+    /// <summary>Anime creates no requests of its own (people request it), so nothing is counted: the pipeline runs are not requests that advanced.</summary>
+    public async Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        await scheduler.AdvanceAsync(new DateTimeOffset(nowUtc, TimeSpan.Zero), cancellationToken);
+        return 0;
+    }
 }

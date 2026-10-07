@@ -39,7 +39,7 @@ public sealed partial class AppShellNavigationTests
         }
 
         CollectionAssert.AreEqual(
-            new[] { "/Library", "/Reading", "/Books" },
+            new[] { "/Library", "/Reading", "/Books", "/Music" },
             UiNavigationCatalog.LibraryTabs.Select(tab => tab.Href).ToArray());
 
         var search = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Shared", "_AppSearch.cshtml"));
