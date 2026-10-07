@@ -1,0 +1,161 @@
+@page
+@model Jularr.Web.Pages.Admin.AcquisitionProfilesModel
+@using Jularr.Web.Features.Acquisition.Access
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.profiles.title"];
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-manage.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<header class="page-header">
+    <div>
+        <h1>@ui["admin.profiles.title"]</h1>
+        <p>@ui["admin.profiles.intro"]</p>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+@if (Model.Notice is not null)
+{
+    <p class="metadata-notice" role="status">@Model.Notice</p>
+}
+@if (Model.Warning is not null)
+{
+    <p class="metadata-error" role="alert">@Model.Warning</p>
+}
+
+<div class="admmanage admprofiles">
+    <aside class="admmanage-panel" aria-labelledby="admprofiles-list-heading">
+        <h2 id="admprofiles-list-heading">@ui["admin.profiles.list"]</h2>
+        <ul class="admprofiles-list">
+            @foreach (var row in Model.Rows)
+            {
+                var current = Model.Selected is not null && row.Profile.Id == Model.Selected.Profile.Id;
+                <li>
+                    <a class="admprofiles-item" asp-page="AcquisitionProfiles" asp-route-id="@row.Profile.Id" aria-current="@(current ? "page" : null)">
+                        <span class="admmanage-title">@row.Profile.Name</span>
+                        <span class="admmanage-sub">@Model.UsageText(row)</span>
+                    </a>
+                </li>
+            }
+        </ul>
+        <form method="post" asp-page-handler="New" class="admmanage-inline admprofiles-new">
+            <label>
+                <span class="visually-hidden">@ui["admin.profiles.newLabel"]</span>
+                <select name="kind">
+                    @foreach (var kind in Model.Kinds)
+                    {
+                        <option value="@kind">@Model.KindLabel(kind)</option>
+                    }
+                </select>
+            </label>
+            <button class="button" type="submit">@ui["admin.profiles.new"]</button>
+        </form>
+    </aside>
+
+    @if (Model.Selected is { } selected)
+    {
+        var profile = selected.Profile;
+        <section class="admmanage-panel" aria-labelledby="admprofiles-edit-heading">
+            <h2 id="admprofiles-edit-heading">@profile.Name</h2>
+            @if (Model.Errors.Count > 0)
+            {
+                <ul class="metadata-error" role="alert">
+                    @foreach (var error in Model.Errors)
+                    {
+                        <li>@Model.ErrorText(error)</li>
+                    }
+                </ul>
+            }
+            <form method="post" asp-page-handler="Save" class="admprofiles-form">
+                <input type="hidden" name="Id" value="@profile.Id" />
+
+                <fieldset>
+                    <legend>@ui["admin.profiles.section.general"]</legend>
+                    <label class="admprofiles-field"><span>@ui["admin.profiles.field.name"]</span><input type="text" name="Name" value="@Model.Form.Name" required maxlength="80" /></label>
+                    <label class="admprofiles-check"><input type="checkbox" name="AllowAmbiguousIdentity" value="true" checked="@Model.Form.AllowAmbiguousIdentity" /><span>@ui["admin.profiles.field.allowAmbiguousIdentity"]</span></label>
+                </fieldset>
+
+                <fieldset>
+                    <legend>@ui["admin.profiles.section.quality"]</legend>
+                    <label class="admprofiles-field">
+                        <span>@ui["admin.profiles.field.qualityOrder"]</span>
+                        <textarea name="QualityOrder" rows="6" spellcheck="false">@Model.Form.QualityOrder</textarea>
+                        <small>@ui.Format("admin.profiles.hint.qualityOrder", ("known", Model.KnownQualities(selected)))</small>
+                    </label>
+                    <label class="admprofiles-field">
+                        <span>@ui["admin.profiles.field.allowedQualities"]</span>
+                        <textarea name="AllowedQualities" rows="4" spellcheck="false">@Model.Form.AllowedQualities</textarea>
+                        <small>@ui["admin.profiles.hint.allowedQualities"]</small>
+                    </label>
+                    <label class="admprofiles-check"><input type="checkbox" name="UpgradeAllowed" value="true" checked="@Model.Form.UpgradeAllowed" /><span>@ui["admin.profiles.field.upgradeAllowed"]</span></label>
+                    <div class="admprofiles-row">
+                        <label class="admprofiles-field"><span>@ui["admin.profiles.field.upgradeCutoffQuality"]</span><input type="text" name="UpgradeCutoffQuality" value="@Model.Form.UpgradeCutoffQuality" spellcheck="false" /></label>
+                        <label class="admprofiles-field"><span>@ui["admin.profiles.field.upgradeMinimumQualitySteps"]</span><input type="text" inputmode="numeric" name="UpgradeMinimumQualitySteps" value="@Model.Form.UpgradeMinimumQualitySteps" /></label>
+                        <label class="admprofiles-field"><span>@ui["admin.profiles.field.upgradeMinimumScoreDelta"]</span><input type="text" inputmode="numeric" name="UpgradeMinimumScoreDelta" value="@Model.Form.UpgradeMinimumScoreDelta" /></label>
+                        <label class="admprofiles-field"><span>@ui["admin.profiles.field.upgradeUntilScore"]</span><input type="text" inputmode="numeric" name="UpgradeUntilScore" value="@Model.Form.UpgradeUntilScore" /></label>
+                    </div>
+                    <div class="admprofiles-row">
+                        <label class="admprofiles-field"><span>@ui["admin.profiles.field.minimumScore"]</span><input type="text" inputmode="numeric" name="MinimumScore" value="@Model.Form.MinimumScore" /></label>
+                        <label class="admprofiles-field"><span>@ui["admin.profiles.field.minimumSizeMegabytes"]</span><input type="text" inputmode="numeric" name="MinimumSizeMegabytes" value="@Model.Form.MinimumSizeMegabytes" /></label>
+                        <label class="admprofiles-field"><span>@ui["admin.profiles.field.maximumSizeMegabytes"]</span><input type="text" inputmode="numeric" name="MaximumSizeMegabytes" value="@Model.Form.MaximumSizeMegabytes" /></label>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>@ui["admin.profiles.section.rules"]</legend>
+                    <label class="admprofiles-field"><span>@ui["admin.profiles.field.mustContain"]</span><textarea name="MustContain" rows="3" spellcheck="false">@Model.Form.MustContain</textarea><small>@ui["admin.profiles.hint.terms"]</small></label>
+                    <label class="admprofiles-field"><span>@ui["admin.profiles.field.mustNotContain"]</span><textarea name="MustNotContain" rows="3" spellcheck="false">@Model.Form.MustNotContain</textarea></label>
+                    <label class="admprofiles-field"><span>@ui["admin.profiles.field.requiredRegex"]</span><textarea name="RequiredRegex" rows="2" spellcheck="false">@Model.Form.RequiredRegex</textarea></label>
+                    <label class="admprofiles-field"><span>@ui["admin.profiles.field.rejectedRegex"]</span><textarea name="RejectedRegex" rows="2" spellcheck="false">@Model.Form.RejectedRegex</textarea></label>
+                    <label class="admprofiles-field">
+                        <span>@ui["admin.profiles.field.scoreRules"]</span>
+                        <textarea name="ScoreRules" rows="5" spellcheck="false">@Model.Form.ScoreRules</textarea>
+                        <small>@ui.Format("admin.profiles.hint.scoreRules", ("fields", Model.RuleFieldNames(selected)))</small>
+                    </label>
+                </fieldset>
+
+                <fieldset>
+                    <legend>@ui["admin.profiles.section.waiting"]</legend>
+                    <label class="admprofiles-field">
+                        <span>@ui["admin.profiles.field.fallbackTiers"]</span>
+                        <textarea name="FallbackTiers" rows="3" spellcheck="false">@Model.Form.FallbackTiers</textarea>
+                        <small>@ui["admin.profiles.hint.fallbackTiers"]</small>
+                    </label>
+                </fieldset>
+
+                <div class="admmanage-toolbar">
+                    <button class="button button-primary" type="submit">@ui["admin.profiles.save"]</button>
+                </div>
+            </form>
+
+            <div class="admmanage-toolbar">
+                <form method="post" asp-page-handler="SetDefault" asp-route-id="@profile.Id" class="admmanage-inline">
+                    <label>
+                        <span class="visually-hidden">@ui["admin.profiles.setDefaultLabel"]</span>
+                        <select name="kind">
+                            @foreach (var kind in Model.Kinds)
+                            {
+                                <option value="@kind">@Model.KindLabel(kind)</option>
+                            }
+                        </select>
+                    </label>
+                    <button class="button" type="submit">@ui["admin.profiles.setDefault"]</button>
+                </form>
+                <form method="post" asp-page-handler="Duplicate" asp-route-id="@profile.Id" class="admmanage-inline">
+                    <button class="button" type="submit">@ui["admin.profiles.duplicate"]</button>
+                </form>
+                <form method="post" asp-page-handler="Delete" asp-route-id="@profile.Id" class="admmanage-inline">
+                    <button class="button button-danger" type="submit">@ui["admin.profiles.delete"]</button>
+                </form>
+            </div>
+        </section>
+    }
+</div>

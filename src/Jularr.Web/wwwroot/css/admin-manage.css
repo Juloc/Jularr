@@ -32,3 +32,21 @@ a.admmanage-title:hover { color: var(--accent-text); }
 .admmanage-summary { margin: 0; color: var(--muted); font-size: 13px; }
 .admmanage-reasons { margin: 4px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; }
 .admmanage-empty { margin: 0; color: var(--muted); }
+
+/* Admin Acquisition Profiles: the profile list beside the selected profile's editor. */
+.admprofiles { grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); align-items: start; }
+.admprofiles-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.admprofiles-item { display: block; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--radius-control, 8px); }
+.admprofiles-item:hover { background: var(--surface-2); }
+.admprofiles-item[aria-current="page"] { border-color: var(--border); background: var(--surface); }
+.admprofiles-new { margin-top: 8px; }
+.admprofiles-form { display: grid; gap: 20px; }
+.admprofiles-form fieldset { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
+.admprofiles-form legend { margin: 0 0 4px; padding: 0; font-size: 14px; font-weight: 800; }
+.admprofiles-field { display: grid; gap: 4px; font-size: 13px; }
+.admprofiles-field > span { color: var(--muted); font-weight: 700; }
+.admprofiles-field small { color: var(--muted); }
+.admprofiles-field textarea { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
+.admprofiles-check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.admprofiles-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+@media (max-width: 860px) { .admprofiles { grid-template-columns: 1fr; } }

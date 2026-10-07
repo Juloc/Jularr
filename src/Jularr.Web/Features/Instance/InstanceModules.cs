@@ -318,6 +318,7 @@ public static class InstanceModuleRoutes
                 "/Admin/ManualSearch",
                 "/Admin/BookManualSearch",
                 "/Admin/ReadingManualSearch",
+                "/Admin/AcquisitionProfiles",
                 "/Admin/Usenet",
                 "/Admin/ReadingSources",
                 "/Admin/Sonarr",
