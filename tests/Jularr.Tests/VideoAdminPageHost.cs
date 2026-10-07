@@ -91,6 +91,15 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
                     services.AddScoped<Jularr.Web.Features.Operations.OperationRunner>();
                     services.AddScoped<MediaFileReanalysisService>();
                     services.AddScoped<WantedListService>();
+                    services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.Release.MediaAcquisitionRegistry>());
+                    services.AddScoped<Jularr.Web.Features.Music.MusicQuery>();
+                    services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.Indexers.IndexerSearchCoordinator>());
+                    services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.DownloadClientStore>());
+                    services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.DownloadClientSubmissionService>());
+                    services.AddSingleton(video.Get<ReleaseRequestTracker>());
+                    services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
+                    services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
+                    services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
                 })
                 .Configure(app =>
                 {

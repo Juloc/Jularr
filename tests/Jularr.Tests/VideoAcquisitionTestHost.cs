@@ -179,7 +179,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
             NullLogger<IndexerSearchCoordinator>.Instance);
 
         var registry = new MediaAcquisitionRegistry(
-            [new MovieAcquisitionRegistration(), new TvAcquisitionRegistration()]);
+            [new MovieAcquisitionRegistration(), new TvAcquisitionRegistration(), new Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRegistration(), new Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRegistration(), new MusicAcquisitionRegistration()]);
         var importer = new RecordingVideoImporter(db, kind);
         var services = new ServiceCollection()
             .AddSingleton(db)
