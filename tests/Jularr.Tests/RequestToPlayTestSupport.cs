@@ -347,7 +347,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(registry)
             .AddSingleton(profileStore)
             .AddSingleton(installed)
-            .AddSingleton<IWantedSource>(new VideoUpgradeWantedSource(Kind, Db, new AcquisitionAccessStore(Db), installed, profileStore, new VideoUpgradeScanState()))
+            .AddSingleton<IWantedSource>(new VideoUpgradeWantedSource(Kind, Db, new AcquisitionAccessStore(Db), installed, profileStore, new UpgradeScanState()))
             .AddSingleton(downloadClients)
             .AddSingleton(new DownloadClientSubmissionService(downloadClient, new DownloadClientSelector(downloadClients, health), Db, NullLogger<DownloadClientSubmissionService>.Instance))
             .AddSingleton<IDownloadClient>(downloadClient)

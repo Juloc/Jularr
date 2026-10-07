@@ -59,6 +59,9 @@ public sealed record CanonicalAudioAttachment(Guid WorkId, Guid WorkTrackId, str
 /// <summary>One video file of a Work as the canonical Version/Asset/File chain holds it; <see cref="Quality"/> is the Version's recorded quality, null when none was recorded.</summary>
 public sealed record InstalledVideoFile(Guid StoredFileId, Guid? WorkEpisodeId, string Path, string? Quality);
 
+/// <summary>One audio file of an album Work as the canonical Version/Asset/File chain holds it; <see cref="Quality"/> is the Version's recorded quality, null when none was recorded.</summary>
+public sealed record InstalledAudioFile(Guid StoredFileId, Guid WorkTrackId, string Path, string? Quality);
+
 public sealed record CanonicalAudioFile(Guid MediaAssetId, Guid StoredFileId, Guid WorkTrackId, string Path);
 
 public sealed record CanonicalPlayableFile(
@@ -395,12 +398,23 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
             select new InstalledVideoFile(file.Id, asset.WorkEpisodeId, file.Path, version.Quality))
         .ToListAsync(cancellationToken);
 
+    /// <summary>Every audio file of the album Work with the quality its Version recorded.</summary>
+    public async Task<IReadOnlyList<InstalledAudioFile>> ListAudioFilesAsync(Guid workId, CancellationToken cancellationToken) =>
+        await (
+            from asset in db.MediaAssets.AsNoTracking()
+            join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
+            join version in db.WorkVersions.AsNoTracking() on asset.WorkVersionId equals version.Id
+            where asset.Kind == MediaAssetKind.Audio && asset.WorkId == workId && asset.WorkTrackId != null
+            orderby file.Path
+            select new InstalledAudioFile(file.Id, asset.WorkTrackId!.Value, file.Path, version.Quality))
+        .ToListAsync(cancellationToken);
+
     /// <summary>
     /// Forgets stored files a better version replaced: their file rows go (probe results follow with them) and the files are deleted from disk when
     /// they are still there. The Assets and Versions stay as history; nothing resolves them without a file. A file that cannot be deleted stays
     /// on disk for the library scan and is reported in the returned notes, it never blocks the replacement.
     /// </summary>
-    public async Task<IReadOnlyList<string>> RemoveVideoFilesAsync(IReadOnlyCollection<Guid> storedFileIds, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<string>> RemoveFilesAsync(IReadOnlyCollection<Guid> storedFileIds, CancellationToken cancellationToken)
     {
         if (storedFileIds.Count == 0)
         {

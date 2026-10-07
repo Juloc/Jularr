@@ -213,6 +213,30 @@ public sealed class ReleaseRequestTracker(
     }
 
     /// <summary>
+    /// The upgrade pass of an installed target: when every release that would improve it was tried or none exists, the request waits a bounded
+    /// <see cref="Selection.UpgradePolicy.SearchInterval"/> instead of counting a failed search (nothing is missing), and the wait is stored so it
+    /// survives a restart. Returns null while an untried improvement exists, so the caller grabs it through <see cref="ContinueAsync{TPayload}"/>.
+    /// </summary>
+    public async Task<AcquisitionExecution?> WaitForUpgradeAsync<TPayload>(
+        AcquisitionRequest request,
+        TPayload payload,
+        IReadOnlyList<ReleaseRequestCandidate> improvements,
+        string message,
+        CancellationToken cancellationToken)
+        where TPayload : ReleaseRequestPayload
+    {
+        var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
+        if (improvements.Any(candidate => !tried.Contains(candidate.Identity)))
+        {
+            return null;
+        }
+
+        var next = Now + Selection.UpgradePolicy.SearchInterval;
+        await SaveAsync(request, payload with { Searches = 0, LastProblem = null, NextSearchUtc = next }, cancellationToken);
+        return new AcquisitionExecution(AcquisitionRequestStatus.Approved, $"{message} Looking again {next:yyyy-MM-dd HH:mm} UTC.");
+    }
+
+    /// <summary>
     /// Stores the search state of a payload; fields another owner changed meanwhile survive (see <see cref="ReleaseRequestPayload.Reconcile"/>).
     /// Returns the payload as stored, which a later save of the same run continues from so it is not treated as older than the edit this one met.
     /// </summary>

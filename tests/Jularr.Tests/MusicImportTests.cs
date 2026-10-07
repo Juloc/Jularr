@@ -2,6 +2,8 @@ using Jularr.Tests.Infrastructure;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Music;
@@ -87,6 +89,56 @@ public sealed class MusicImportTests
         Assert.AreEqual(3, await world.Db.StoredFiles.CountAsync());
         Assert.AreEqual(3, await world.Db.MediaAssets.CountAsync(asset => asset.Kind == MediaAssetKind.Audio));
         Assert.AreEqual(3, await world.Db.WorkVersions.CountAsync(version => version.WorkId == world.WorkId));
+    }
+
+    [TestMethod]
+    public async Task ACompleteLosslessReleaseReplacesALossyAlbumOnceItIsRecordedAndTheVersionsRecordTheirQuality()
+    {
+        using var world = await World.CreateAsync(LibraryPlacementPolicy.Copy);
+        var lossy = world.Download("Daft.Punk-Random.Access.Memories-2013-MP3-320", ["01 - Give Life Back to Music.mp3", "02 - The Game of Love.mp3", "03 - Giorgio by Moroder.mp3"]);
+        await world.ImportAsync(lossy);
+        var installed = await new CanonicalMediaStorageService(world.Db).ListAudioFilesAsync(world.WorkId, CancellationToken.None);
+        Assert.IsTrue(installed.All(file => file.Quality == "MP3-320"), "The import records the quality of the release.");
+
+        var lossless = world.Download("Daft.Punk-Random.Access.Memories-2013-FLAC", ["01 - Give Life Back to Music.flac", "02 - The Game of Love.flac", "03 - Giorgio by Moroder.flac"]);
+        var result = await world.ImportAsync(lossless);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, result.Disposition, result.Message);
+        var folder = Path.Combine(world.LibraryPath, "Daft Punk", "Random Access Memories (2013)");
+        CollectionAssert.AreEqual(
+            new[] { "01 - Give Life Back to Music.flac", "02 - The Game of Love.flac", "03 - Giorgio by Moroder.flac" },
+            Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray(),
+            "The replaced files are gone from the album folder.");
+        var after = await new CanonicalMediaStorageService(world.Db).ListAudioFilesAsync(world.WorkId, CancellationToken.None);
+        Assert.HasCount(3, after);
+        Assert.IsTrue(after.All(file => file.Quality == "FLAC" && file.Path.EndsWith(".flac", StringComparison.Ordinal)));
+        Assert.AreEqual(3, await world.Db.StoredFiles.CountAsync(), "One canonical file per track after the upgrade.");
+    }
+
+    [TestMethod]
+    public async Task APartialBetterReleaseNeverReplacesTheCompleteAlbumAndALesserOneOnlyFillsTheGaps()
+    {
+        using var world = await World.CreateAsync(LibraryPlacementPolicy.Copy);
+        await world.ImportAsync(world.Download("Daft.Punk-Random.Access.Memories-2013-MP3-320", ["01 - Give Life Back to Music.mp3", "02 - The Game of Love.mp3", "03 - Giorgio by Moroder.mp3"]));
+
+        var partial = await world.ImportAsync(world.Download("Daft.Punk-Random.Access.Memories-2013-FLAC", ["01 - Give Life Back to Music.flac", "02 - The Game of Love.flac"]));
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.RejectedRelease, partial.Disposition, partial.Message);
+        StringAssert.Contains(partial.Message, "cannot replace the complete album");
+        var folder = Path.Combine(world.LibraryPath, "Daft Punk", "Random Access Memories (2013)");
+        Assert.AreEqual(3, Directory.GetFiles(folder, "*.mp3").Length, "The installed album is untouched.");
+        Assert.AreEqual(0, Directory.GetFiles(folder, "*.flac").Length);
+
+        // A release of equal or lower quality does not replace anything either: it only fills tracks that have no file.
+        using var gap = await World.CreateAsync(LibraryPlacementPolicy.Copy);
+        await gap.ImportAsync(gap.Download("Daft.Punk-Random.Access.Memories-2013-FLAC", ["01 - Give Life Back to Music.flac", "02 - The Game of Love.flac"]));
+        var lesser = await gap.ImportAsync(gap.Download("Daft.Punk-Random.Access.Memories-2013-MP3-320", ["01 - Give Life Back to Music.mp3", "02 - The Game of Love.mp3", "03 - Giorgio by Moroder.mp3"]));
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, lesser.Disposition, lesser.Message);
+        var gapFolder = Path.Combine(gap.LibraryPath, "Daft Punk", "Random Access Memories (2013)");
+        CollectionAssert.AreEqual(
+            new[] { "01 - Give Life Back to Music.flac", "02 - The Game of Love.flac", "03 - Giorgio by Moroder.mp3" },
+            Directory.GetFiles(gapFolder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray());
     }
 
     [TestMethod]
@@ -258,7 +310,8 @@ public sealed class MusicImportTests
                 new LibraryRootAvailabilityService(db, new StorageAvailabilityCoordinator()),
                 new FileSystemHardLinkCreator(),
                 new CanonicalMediaStorageService(db),
-                NullLogger<MusicCompletedDownloadImportAdapter>.Instance);
+                NullLogger<MusicCompletedDownloadImportAdapter>.Instance,
+                new QualityProfileStore(new DirectoryInfo(Path.Combine(root, "profiles")), new MediaAcquisitionRegistry([new MusicAcquisitionRegistration()])));
             var payload = new MusicRequestPayload(work.Id, "Daft Punk", "Random Access Memories", 2013);
             var request = await new AcquisitionAccessStore(db).CreateAsync(
                 new AcquisitionRequestDraft(MediaAcquisitionKind.Music, "musicbrainz", Group, "Random Access Memories", "Daft Punk", null, payload.Serialize()),

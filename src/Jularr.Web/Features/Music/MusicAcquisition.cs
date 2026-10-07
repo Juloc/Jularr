@@ -174,7 +174,8 @@ public sealed class MusicAcquisitionEngine(
     ReleaseRequestTracker tracker,
     MusicLibraryService library,
     TimeProvider clock,
-    ILogger<MusicAcquisitionEngine> logger)
+    ILogger<MusicAcquisitionEngine> logger,
+    CanonicalMediaStorageService? storage = null)
 {
     public const string OperationKind = "music-usenet-download";
 
@@ -193,9 +194,14 @@ public sealed class MusicAcquisitionEngine(
         }
 
         payload = payload with { WorkId = workId.Value };
+        string? installedQuality = null;
         if (await HasAudioFilesAsync(workId.Value, cancellationToken))
         {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "The album is already in the library.", ResultUrl: MusicLinks.AlbumPath(workId.Value));
+            installedQuality = await FindUpgradeAsync(workId.Value, cancellationToken);
+            if (installedQuality is null)
+            {
+                return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "The album is already in the library.", ResultUrl: MusicLinks.AlbumPath(workId.Value));
+            }
         }
 
         if (!await indexers.HasEnabledIndexerAsync(cancellationToken))
@@ -220,7 +226,35 @@ public sealed class MusicAcquisitionEngine(
 
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId.Value, cancellationToken);
         var evaluation = await SearchAsync(request.CreatedAt, payload, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
-        return await GrabAsync(request, payload, evaluation.Grabbable, FailureMessage(evaluation), cancellationToken);
+        if (installedQuality is null)
+        {
+            return await GrabAsync(request, payload, evaluation.Grabbable, FailureMessage(evaluation), cancellationToken);
+        }
+
+        // The album is installed below its cutoff: only a release that is a meaningful upgrade is taken, and a complete album is judged again at import.
+        var better = evaluation.Grabbable.Where(release => release.Selection.Score is { } score && UpgradePolicy.IsUpgrade(profile, installedQuality, score.QualityKey)).ToArray();
+        var waiting = await tracker.WaitForUpgradeAsync(
+            request,
+            payload,
+            [.. better.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!))],
+            $"The album is in the library as {installedQuality} ({UpgradePolicy.Assess(profile, installedQuality).Reason}) and no better release is known yet.",
+            cancellationToken);
+        return waiting is null
+            ? await GrabAsync(request, payload, better, string.Empty, cancellationToken)
+            : waiting with { ResultUrl = MusicLinks.AlbumPath(workId.Value) };
+    }
+
+    /// <summary>The installed quality of an album that its profile still wants to upgrade, or null when the album is final (or its quality cannot be compared).</summary>
+    private async Task<string?> FindUpgradeAsync(Guid workId, CancellationToken cancellationToken)
+    {
+        if (storage is null)
+        {
+            return null;
+        }
+
+        var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId, cancellationToken);
+        var quality = MusicInstalledQuality.OfAlbum(profile, await storage.ListAudioFilesAsync(workId, cancellationToken));
+        return UpgradePolicy.Assess(profile, quality).IsUpgradable ? quality : null;
     }
 
     /// <summary>
@@ -358,4 +392,23 @@ public sealed class MusicWantedRequestHandler(AcquisitionAccessStore store, Acqu
     public override MediaAcquisitionKind Kind => MediaAcquisitionKind.Music;
 
     protected override ReleaseRequestPayload ReadPayload(AcquisitionRequest request) => MusicRequestPayload.Of(request);
+}
+
+/// <summary>The installed quality of an album for the shared upgrade policy: an album is only as good as its weakest track.</summary>
+public static class MusicInstalledQuality
+{
+    /// <summary>The worst of the best quality of every track; null when there is no file or a track's quality cannot be compared, so such an album is never replaced automatically.</summary>
+    public static string? OfAlbum(QualityProfile profile, IEnumerable<InstalledAudioFile> files)
+    {
+        var perTrack = files
+            .GroupBy(file => file.WorkTrackId)
+            .Select(group => UpgradePolicy.Best(profile, group.Select(file => file.Quality ?? OfExtension(file.Path))))
+            .ToArray();
+        return perTrack.Length == 0 || perTrack.Any(quality => quality is null)
+            ? null
+            : perTrack.OrderByDescending(quality => UpgradePolicy.RankOf(profile, quality)).First();
+    }
+
+    /// <summary>What a file name alone proves: only FLAC says its quality; a lossy file's bitrate is not in its name.</summary>
+    public static string? OfExtension(string path) => Path.GetExtension(path).Equals(".flac", StringComparison.OrdinalIgnoreCase) ? "FLAC" : null;
 }

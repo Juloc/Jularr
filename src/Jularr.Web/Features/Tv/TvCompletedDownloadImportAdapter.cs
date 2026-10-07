@@ -257,7 +257,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         {
             episode.Replaced?.Commit();
             var kept = episode.Attachment.Path;
-            await canonicalStorage.RemoveVideoFilesAsync([.. episode.Superseded.Where(file => !LibraryFilePlacer.SamePath(file.Path, kept)).Select(file => file.StoredFileId)], CancellationToken.None);
+            await canonicalStorage.RemoveFilesAsync([.. episode.Superseded.Where(file => !LibraryFilePlacer.SamePath(file.Path, kept)).Select(file => file.StoredFileId)], CancellationToken.None);
         }
     }
 

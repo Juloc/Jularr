@@ -10,8 +10,11 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Acquisition.Wanted;
 
 /// <summary>When each media type's upgrade scan last ran in this process; a scan is cheap to repeat after a restart, so nothing is persisted.</summary>
-public sealed class VideoUpgradeScanState
+public sealed class UpgradeScanState
 {
+    /// <summary>How often the installed titles of a media type are looked at for upgrades; an idle library costs one query per interval.</summary>
+    public static readonly TimeSpan Interval = TimeSpan.FromHours(1);
+
     private readonly ConcurrentDictionary<MediaAcquisitionKind, DateTime> next = new();
 
     /// <summary>Claims the scan of <paramref name="kind"/> when it is due and schedules the next one.</summary>
@@ -32,7 +35,7 @@ public sealed class VideoUpgradeScanState
 /// below what the current profile wants (a profile or cutoff changed after the import) becomes Wanted again, so the same request lifecycle
 /// searches, grabs and imports the better release. It only reopens requests; it reads the installed quality from the canonical Version and
 /// the policy from <see cref="UpgradePolicy"/>, and stores nothing of its own. It looks at acquired titles only (a Version with a recorded
-/// quality) and at most once per <see cref="ScanInterval"/>, so an idle library costs one query an hour.
+/// quality) and at most once per <see cref="UpgradeScanState.Interval"/>, so an idle library costs one query an hour.
 /// </summary>
 public sealed class VideoUpgradeWantedSource(
     MediaAcquisitionKind kind,
@@ -40,10 +43,9 @@ public sealed class VideoUpgradeWantedSource(
     AcquisitionAccessStore requests,
     InstalledVideoVersions installed,
     QualityProfileStore profiles,
-    VideoUpgradeScanState scans) : IWantedSource
+    UpgradeScanState scans) : IWantedSource
 {
     public const int MaxTitlesPerPass = 200;
-    public static readonly TimeSpan ScanInterval = TimeSpan.FromHours(1);
 
     private static readonly string[] RequestProviders = [ProviderKeys.Tmdb, ProviderKeys.Tvdb, ProviderKeys.Imdb];
 
@@ -51,7 +53,7 @@ public sealed class VideoUpgradeWantedSource(
 
     public async Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
-        if (!scans.TryStart(kind, nowUtc, ScanInterval))
+        if (!scans.TryStart(kind, nowUtc, UpgradeScanState.Interval))
         {
             return 0;
         }

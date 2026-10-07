@@ -369,19 +369,16 @@ public sealed partial class VideoAcquisitionEngine(
     private async Task<AcquisitionExecution> UpgradeOrWaitAsync(AcquisitionRequest request, VideoRequestPayload payload, VideoUnit? unit, VideoSearchEvaluation evaluation, string installedQuality, CancellationToken cancellationToken)
     {
         var better = evaluation.Grabbable.Where(release => release.Score is { } score && UpgradePolicy.IsUpgrade(evaluation.Profile, installedQuality, score.QualityKey)).ToArray();
-        var tried = (payload.TriedReleases ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (better.Any(release => !tried.Contains(release.Candidate.Identity)))
-        {
-            return await GrabAsync(request, payload, unit, better, string.Empty, cancellationToken);
-        }
-
-        var next = clock.GetUtcNow().UtcDateTime + UpgradePolicy.SearchInterval;
-        await tracker.SaveAsync(request, payload with { Searches = 0, LastProblem = null, NextSearchUtc = next, ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null }, cancellationToken);
         var what = unit is null ? "Movie" : $"S{unit.SeasonNumber:00}E{unit.EpisodeNumber:00}";
-        return new AcquisitionExecution(
-            AcquisitionRequestStatus.Approved,
-            $"{what} is available as {installedQuality} ({UpgradePolicy.Assess(evaluation.Profile, installedQuality).Reason}) and no better release is known yet. Looking again {next:yyyy-MM-dd HH:mm} UTC.",
-            ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
+        var waiting = await tracker.WaitForUpgradeAsync(
+            request,
+            payload with { ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null },
+            [.. better.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!))],
+            $"{what} is available as {installedQuality} ({UpgradePolicy.Assess(evaluation.Profile, installedQuality).Reason}) and no better release is known yet.",
+            cancellationToken);
+        return waiting is null
+            ? await GrabAsync(request, payload, unit, better, string.Empty, cancellationToken)
+            : waiting with { ResultUrl = VideoWorkLinks.DetailPath(request.Kind, payload.WorkId) };
     }
 
     /// <summary>The installed quality of a Movie that its profile still wants to upgrade, or null when the Movie is final (or its quality cannot be compared).</summary>

@@ -201,7 +201,7 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
         if (isUpgrade && canonicalStorage is not null)
         {
             var kept = Path.GetFullPath(destination);
-            await canonicalStorage.RemoveVideoFilesAsync([.. judgement.Superseded.Where(file => !LibraryFilePlacer.SamePath(file.Path, kept)).Select(file => file.StoredFileId)], cancellationToken);
+            await canonicalStorage.RemoveFilesAsync([.. judgement.Superseded.Where(file => !LibraryFilePlacer.SamePath(file.Path, kept)).Select(file => file.StoredFileId)], cancellationToken);
         }
 
         return (entry.Movie, folder);

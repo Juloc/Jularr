@@ -124,6 +124,60 @@ public sealed class MusicAcquisitionTests
     }
 
     [TestMethod]
+    public async Task AnAlbumInstalledBelowItsCutoffTakesAMeaningfullyBetterReleaseAndWaitsWhenThereIsNone()
+    {
+        await using var better = await MusicHost.CreateAsync("Daft Punk - Homework (1997) MP3 320", "Daft Punk - Homework (1997) [FLAC]");
+        var work = await better.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
+        await better.AttachAudioAsync(work, 1, "MP3-320");
+        await better.CreateRequestAsync(work, "rg-a", "Homework");
+
+        await better.ProcessAsync();
+
+        Assert.AreEqual("Daft Punk - Homework (1997) [FLAC]", better.Environment.Client.Grabs.Single().NzbName, "Only the lossless release improves on the installed 320 kbit MP3.");
+
+        await using var same = await MusicHost.CreateAsync("Daft Punk - Homework (1997) MP3 320");
+        var owned = await same.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
+        await same.AttachAudioAsync(owned, 1, "MP3-320");
+        var request = await same.CreateRequestAsync(owned, "rg-a", "Homework");
+
+        await same.ProcessAsync();
+
+        var waiting = (await same.Requests.GetAsync(request.Id, CancellationToken.None))!;
+        Assert.AreEqual(0, same.Environment.Client.Grabs.Count);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, waiting.Status, waiting.StatusMessage);
+        StringAssert.Contains(waiting.StatusMessage, "no better release");
+        var payload = MusicRequestPayload.Of(waiting);
+        Assert.AreEqual(0, payload.Searches, "Waiting for a better release is not a failed search.");
+        Assert.IsTrue(payload.NextSearchUtc > same.Clock.GetUtcNow().UtcDateTime);
+    }
+
+    [TestMethod]
+    public async Task AFinalAlbumStaysCompletedAndARaisedCutoffReopensItsRequestWithoutForgettingTriedReleases()
+    {
+        await using var host = await MusicHost.CreateAsync("Daft Punk - Homework (1997) MP3 320");
+        var work = await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
+        await host.AttachAudioAsync(work, 1, "MP3-320");
+        var request = await host.CreateRequestAsync(work, "rg-a", "Homework");
+        var tried = MusicRequestPayload.Of(request) with { TriedReleases = ["earlier-release"] };
+        await host.Requests.UpdatePayloadAsync(request.Id, tried.Serialize(), CancellationToken.None);
+        await host.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Completed, "Imported.", null, null, null, CancellationToken.None);
+        var store = host.Get<QualityProfileStore>();
+        await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Music, null)) with { UpgradeCutoffQuality = "MP3-320" });
+
+        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(new UpgradeScanState(), host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "320 kbit meets the cutoff now.");
+
+        await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Music, null)) with { UpgradeCutoffQuality = "FLAC" });
+        var scans = new UpgradeScanState();
+        var reopened = await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(scans, host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None);
+
+        Assert.AreEqual(1, reopened);
+        var stored = (await host.Requests.GetAsync(request.Id, CancellationToken.None))!;
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, stored.Status);
+        CollectionAssert.AreEqual(new[] { "earlier-release" }, MusicRequestPayload.Of(stored).TriedReleases!.ToArray());
+        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(scans, host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "The scan runs once per interval.");
+    }
+
+    [TestMethod]
     public async Task OnlyOtherAlbumsOrManualReviewReleasesMeanNothingIsGrabbedAndTheReasonIsExplained()
     {
         await using var host = await MusicHost.CreateAsync("Daft Punk - Discovery (2001) [FLAC]", "Daft Punk - Homework Karaoke (1997) [FLAC]");
@@ -327,6 +381,8 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton<IMusicMetadataProvider, MusicLibraryTests.FakeMusicProvider>()
                 .AddSingleton(new WorkService(db))
                 .AddSingleton<MusicLibraryService>()
+                .AddSingleton<CanonicalMediaStorageService>()
+                .AddSingleton<UpgradeScanState>()
                 .AddSingleton<MusicMonitoringService>()
                 .AddSingleton<MusicAcquisitionEngine>()
                 .AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>()
@@ -361,16 +417,20 @@ public sealed class MusicAcquisitionTests
             return work.Id;
         }
 
-        public async Task AttachAudioAsync(Guid workId, int number)
+        public async Task AttachAudioAsync(Guid workId, int number, string? quality = null)
         {
             var db = Environment.Db;
             var root = await db.LibraryRoots.FirstOrDefaultAsync() ?? db.LibraryRoots.Add(new LibraryRoot { Name = "Music", Path = "/music" }).Entity;
             var track = new WorkTrack { WorkId = workId, Number = number, Title = $"Track {number}" };
-            var version = new WorkVersion { WorkId = workId, VersionKey = $"audio-file:{Guid.NewGuid():N}", Source = "test" };
+            var version = new WorkVersion { WorkId = workId, VersionKey = $"audio-file:{Guid.NewGuid():N}", Source = "test", Quality = quality };
             var asset = new MediaAsset { WorkId = workId, WorkTrackId = track.Id, WorkVersionId = version.Id, Kind = MediaAssetKind.Audio };
-            db.AddRange(track, version, asset, new StoredFile { MediaAssetId = asset.Id, LibraryRootId = root.Id, Path = $"/music/{Guid.NewGuid():N}.flac", SizeBytes = 1000, LastWriteTimeUtc = DateTime.UtcNow });
+            db.AddRange(track, version, asset, new StoredFile { MediaAssetId = asset.Id, LibraryRootId = root.Id, Path = $"/music/{Guid.NewGuid():N}.{(quality is null or "FLAC" ? "flac" : "mp3")}", SizeBytes = 1000, LastWriteTimeUtc = DateTime.UtcNow });
             await db.SaveChangesAsync();
         }
+
+        /// <summary>An approved request for the album, nothing searched yet.</summary>
+        public Task<AcquisitionRequest> CreateRequestAsync(Guid workId, string groupId, string title) =>
+            Requests.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Music, "musicbrainz", groupId, title, "Daft Punk", null, new MusicRequestPayload(workId, "Daft Punk", title, 1997).Serialize()), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
 
         public Task<int> ProcessAsync() => WantedAcquisitionService.ProcessOnceAsync(services, Clock.GetUtcNow().UtcDateTime, CancellationToken.None);
 
