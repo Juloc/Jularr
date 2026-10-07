@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Jularr.Web.Features.Acquisition.AniListAutoMonitor;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Instance;
 
 namespace Jularr.Web.Features.Acquisition.Pipeline;
@@ -16,7 +17,8 @@ namespace Jularr.Web.Features.Acquisition.Pipeline;
 public sealed class AnimeAcquisitionScheduler(
     IServiceScopeFactory scopeFactory,
     AnimeMonitoringStore monitoring,
-    ILogger<AnimeAcquisitionScheduler> logger)
+    ILogger<AnimeAcquisitionScheduler> logger,
+    WantedPassTrigger? wanted = null)
 {
     public static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(45);
     private const int MaxQueuedRequests = 50;
@@ -33,8 +35,8 @@ public sealed class AnimeAcquisitionScheduler(
     public int QueuedRequests => requests.Count;
 
     /// <summary>
-    /// Queues a run (all monitored anime when <paramref name="animeKey"/> is null) for the next Wanted pass. Returns false when too many
-    /// requests are already waiting.
+    /// Queues a run (all monitored anime when <paramref name="animeKey"/> is null) and asks the Wanted pass to take it now. Returns false when
+    /// too many requests are already waiting.
     /// </summary>
     public bool RequestRun(string? animeKey = null, AnimeSearchTrigger trigger = AnimeSearchTrigger.Manual)
     {
@@ -44,6 +46,7 @@ public sealed class AnimeAcquisitionScheduler(
         }
 
         requests.Enqueue(new AnimeAcquisitionRunRequest(animeKey, trigger));
+        wanted?.Request();
         return true;
     }
 

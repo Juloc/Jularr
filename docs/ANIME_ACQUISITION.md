@@ -96,7 +96,7 @@ whose quality cannot be parsed is never offered for upgrade.
 
 Anime has no loop of its own. The shared Wanted pass (every 2 minutes, `WantedAcquisitionService`) calls
 `AnimeWantedSource`, which asks `AnimeAcquisitionScheduler` to advance: it recovers after startup once, runs the
-queued owner requests, and otherwise runs the pipeline for all monitored anime when the one canonical interval
+queued owner requests (a requested search wakes the pass at once, so Search now and search-on-add do not wait for its next turn), and otherwise runs the pipeline for all monitored anime when the one canonical interval
 (`AnimeMonitoringSchedule`, default every 30 minutes, 5 minutes to 24 hours, editable on
 `/Acquisition`) has elapsed; switching it off keeps owner-requested searches working. The first run starts
 45 seconds after startup. Because the pass owns the cadence, an interval is honoured to the pass granularity

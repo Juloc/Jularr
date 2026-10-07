@@ -53,6 +53,19 @@ public sealed class AnimeSharedManagerTests
     }
 
     [TestMethod]
+    public async Task ASearchTheOwnerAsksForCutsTheWaitOfTheSharedWantedPassShort()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        var waiting = environment.WantedTrigger.WaitAsync(TimeSpan.FromMinutes(5), CancellationToken.None);
+        Assert.IsFalse(waiting.IsCompleted, "Nothing asked for a pass yet.");
+
+        Assert.IsTrue(environment.Scheduler.RequestRun());
+
+        await waiting.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.AreEqual(1, environment.Scheduler.QueuedRequests, "The queued search is what the woken pass runs.");
+    }
+
+    [TestMethod]
     public async Task ADownloadRecordsTheIndexerAndReleaseGroupOnItsOperation()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();

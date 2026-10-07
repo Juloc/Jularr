@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
@@ -52,6 +53,33 @@ public interface IWantedSource
 }
 
 /// <summary>
+/// Lets whoever just changed what is wanted (a request approved with search on add, a Search now) ask the shared Wanted pass to run at once instead of
+/// at its next turn. The pass stays the only loop; this is only a way to cut its wait short.
+/// </summary>
+public sealed class WantedPassTrigger
+{
+    private readonly SemaphoreSlim signal = new(0, 1);
+
+    public void Request()
+    {
+        if (signal.CurrentCount == 0)
+        {
+            try
+            {
+                signal.Release();
+            }
+            catch (SemaphoreFullException)
+            {
+                // Another request already woke the pass.
+            }
+        }
+    }
+
+    /// <summary>Waits for the next request or until the interval has passed.</summary>
+    public async Task WaitAsync(TimeSpan interval, CancellationToken cancellationToken) => await signal.WaitAsync(interval, cancellationToken);
+}
+
+/// <summary>
 /// Generic durable Wanted lifecycle for request-backed media.
 ///
 /// It deliberately does not talk to SABnzbd directly. The shared download monitor projects
@@ -63,7 +91,8 @@ public interface IWantedSource
 public sealed class WantedAcquisitionService(
     IServiceScopeFactory scopes,
     TimeProvider clock,
-    ILogger<WantedAcquisitionService> logger) : BackgroundService
+    ILogger<WantedAcquisitionService> logger,
+    WantedPassTrigger? trigger = null) : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(2);
     public const int MaxRequestsPerKindPerPass = 25;
@@ -73,6 +102,11 @@ public sealed class WantedAcquisitionService(
     /// tried again by the next pass, so one slow provider cannot hold up the requests of every other media type.
     /// </summary>
     public static readonly TimeSpan SourceBudget = TimeSpan.FromMinutes(5);
+
+    /// <summary>A pass that takes longer than this says which media types and steps took the time (the answer to "what is consuming resources"); a quick pass logs nothing.</summary>
+    public static readonly TimeSpan SlowPass = TimeSpan.FromSeconds(10);
+
+    private static readonly TimeSpan SlowStep = TimeSpan.FromSeconds(1);
 
     /// <summary>How many open requests of a monitored media type are read from the store at a time; a pass walks every batch.</summary>
     public const int FollowBatchSize = 50;
@@ -120,7 +154,7 @@ public sealed class WantedAcquisitionService(
 
             try
             {
-                await Task.Delay(Interval, stoppingToken);
+                await (trigger?.WaitAsync(Interval, stoppingToken) ?? Task.Delay(Interval, stoppingToken));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -147,6 +181,8 @@ public sealed class WantedAcquisitionService(
         }
 
         var advanced = 0;
+        var pass = Stopwatch.StartNew();
+        var slowSteps = new List<string>();
         foreach (var source in services.GetServices<IWantedSource>())
         {
             if (instance is not null && !instance.IsEnabled(AcquisitionInstanceModules.For(source.Kind)))
@@ -156,9 +192,11 @@ public sealed class WantedAcquisitionService(
 
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(sourceBudget ?? SourceBudget);
+            var started = Stopwatch.GetTimestamp();
             try
             {
                 advanced += await source.PrepareAsync(nowUtc, budget.Token);
+                NoteIfSlow(slowSteps, $"prepare {source.Kind}", started);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -183,6 +221,7 @@ public sealed class WantedAcquisitionService(
                 continue;
             }
 
+            var started = Stopwatch.GetTimestamp();
             advanced += await RecoverInFlightAsync(
                 services,
                 handler,
@@ -194,6 +233,7 @@ public sealed class WantedAcquisitionService(
                 handler,
                 nowUtc,
                 cancellationToken);
+            NoteIfSlow(slowSteps, $"follow {handler.Kind}", started);
         }
 
         // Media types whose own monitoring pipeline searches, grabs and imports (Anime) have no download lifecycle of their own to
@@ -205,16 +245,34 @@ public sealed class WantedAcquisitionService(
                 continue;
             }
 
+            var started = Stopwatch.GetTimestamp();
             advanced += await RecoverStaleSearchingAsync(services, executor.Kind, nowUtc, cancellationToken);
             advanced += await FollowMonitoredAsync(services, executor, nowUtc, cancellationToken);
+            NoteIfSlow(slowSteps, $"follow {executor.Kind}", started);
         }
 
         // Manual downloads (no request) go through the same importer.
+        var importsStarted = Stopwatch.GetTimestamp();
         advanced += await services
             .GetRequiredService<CompletedDownloadImportService>()
             .ImportManualDownloadsAsync(nowUtc, cancellationToken);
+        NoteIfSlow(slowSteps, "manual imports", importsStarted);
+
+        if (pass.Elapsed >= SlowPass && slowSteps.Count > 0)
+        {
+            services.GetService<ILogger<WantedAcquisitionService>>()?.LogInformation("The Wanted pass took {Total:0.#} s; slowest steps: {Steps}.", pass.Elapsed.TotalSeconds, string.Join(", ", slowSteps));
+        }
 
         return advanced;
+    }
+
+    private static void NoteIfSlow(List<string> slowSteps, string step, long started)
+    {
+        var elapsed = Stopwatch.GetElapsedTime(started);
+        if (elapsed >= SlowStep)
+        {
+            slowSteps.Add($"{step} {elapsed.TotalSeconds:0.#} s");
+        }
     }
 
     private static async Task<int> RecoverInFlightAsync(

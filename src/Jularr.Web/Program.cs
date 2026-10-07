@@ -642,6 +642,7 @@ builder.Services.AddScoped<SabnzbdDownloadService>();
 builder.Services.AddScoped<IOperationActions, OperationActions>();
 builder.Services.AddScoped<SabnzbdAcquisitionService>();
 builder.Services.AddHostedService<SabnzbdOperationMonitorService>();
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.WantedPassTrigger>();
 builder.Services.AddHostedService<Jularr.Web.Features.Acquisition.Wanted.WantedAcquisitionService>();
 
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcquisitionRegistration, Jularr.Web.Features.Acquisition.Release.AnimeAcquisitionRegistration>();

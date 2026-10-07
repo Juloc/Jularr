@@ -83,6 +83,8 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
     public Guid AnimeId { get; private set; }
     public Guid ProwlarrIndexerEntryId { get; private set; }
 
+    public Jularr.Web.Features.Acquisition.Wanted.WantedPassTrigger WantedTrigger => services.GetRequiredService<Jularr.Web.Features.Acquisition.Wanted.WantedPassTrigger>();
+
     public AnimeAcquisitionScheduler Scheduler => services.GetRequiredService<AnimeAcquisitionScheduler>();
     public AnimeMonitoringStore Monitoring => services.GetRequiredService<AnimeMonitoringStore>();
     public QualityProfileStore QualityProfiles => services.GetRequiredService<QualityProfileStore>();
@@ -614,6 +616,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddSingleton<BackgroundJobQueue>();
         collection.AddSingleton(new MediaOptimizationJournal(Path.Combine(DataRoot, "media-optimization")));
         collection.AddSingleton<MediaOptimizationQueue>();
+        collection.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.WantedPassTrigger>();
         collection.AddSingleton<AnimeAcquisitionScheduler>();
         collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeWantedSource>();
         collection.AddScoped<AcquisitionApiKeyService>();

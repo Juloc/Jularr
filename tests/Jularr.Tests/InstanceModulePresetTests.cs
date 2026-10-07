@@ -52,4 +52,22 @@ public sealed class InstanceModulePresetTests
             Assert.IsTrue(Reachable(open), $"{open} is management and stays reachable.");
         }
     }
+
+    [TestMethod]
+    public void ARoomThatTurnsAMediaTypeOffLeavesNoReachableAdminOrLibraryPageOfIt()
+    {
+        var withoutMusic = InstanceModulePresets.Apply(InstancePreset.MediaManager, InstanceModuleSettings.Default).With(InstanceModule.Music, false);
+        var withoutAcquisition = InstanceModuleSettings.Default.With(InstanceModule.Acquisition, false);
+        bool Reachable(InstanceModuleSettings settings, string path) => InstanceModuleRoutes.Resolve(new PathString(path)).All(settings.IsEnabled);
+
+        foreach (var gated in new[] { "/Admin/Music", "/Admin/Music/Album/abc", "/Music", "/Music/Artist/abc" })
+        {
+            Assert.IsFalse(Reachable(withoutMusic, gated), $"{gated} belongs to the Music module.");
+        }
+
+        foreach (var gated in new[] { "/Admin/AcquisitionProfiles", "/Admin/ReadingManualSearch/abc", "/Admin/Music/Album/abc" })
+        {
+            Assert.IsFalse(Reachable(withoutAcquisition, gated), $"{gated} is acquisition management.");
+        }
+    }
 }
