@@ -14,6 +14,7 @@ using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Admin;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Events;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Operations;
@@ -201,6 +202,52 @@ public sealed class AdminDashboardPageRenderTests
     }
 
     [TestMethod]
+    public async Task ResourcesPageShowsWhatTheApplicationIsBusyWithByStableOperationNames()
+    {
+        await using var host = await DashboardHost.CreateAsync();
+        var telemetry = host.Resolve<ApplicationPerformanceTelemetry>();
+        telemetry.Record(PerformanceCategory.Route, "GET Library/Index", TimeSpan.FromMilliseconds(120), PerformanceOutcome.Succeeded);
+        telemetry.Record(PerformanceCategory.Background, "Wanted.Pass", TimeSpan.FromSeconds(2), PerformanceOutcome.Succeeded, TimeSpan.FromMilliseconds(40));
+        telemetry.Record(PerformanceCategory.Provider, "TmdbDiscoveryProvider", TimeSpan.FromMilliseconds(300), PerformanceOutcome.Failed);
+
+        var html = await host.GetHtmlAsync("/Admin/Resources");
+
+        StringAssert.Contains(html, "data-application-performance");
+        StringAssert.Contains(html, "<code>GET Library/Index</code>");
+        StringAssert.Contains(html, "<code>Wanted.Pass</code>");
+        StringAssert.Contains(html, "<code>TmdbDiscoveryProvider</code>");
+        StringAssert.Contains(html, "data-performance-table=\"budget\"");
+        foreach (var workClass in new[] { "Import", "Provider refresh", "Scan", "Maintenance" })
+        {
+            StringAssert.Contains(html, workClass);
+        }
+
+        StringAssert.Contains(html, "href=\"/Admin/Database\"");
+    }
+
+    [TestMethod]
+    public async Task AModuleThatIsOffSendsNoScriptsOfItsOwnOnAnyPage()
+    {
+        await using var host = await DashboardHost.CreateAsync();
+        var modules = host.Resolve<IInstanceModuleService>();
+
+        var full = await host.GetHtmlAsync("/Admin/Resources");
+        await modules.SaveAsync(InstanceModulePresets.Apply(InstancePreset.MediaManager, InstanceModuleSettings.Default));
+        var manager = await host.GetHtmlAsync("/Admin/Resources");
+        await modules.SaveAsync(InstanceModuleSettings.Default
+            .With(InstanceModule.Playback, false).With(InstanceModule.Manga, false).With(InstanceModule.Novel, false).With(InstanceModule.Book, false));
+        var neither = await host.GetHtmlAsync("/Admin/Resources");
+
+        StringAssert.Contains(full, "/js/offline-media.js");
+        StringAssert.Contains(full, "/js/offline-library.js");
+        Assert.IsFalse(manager.Contains("/js/offline-media", StringComparison.Ordinal), "Playback is off: no offline media script.");
+        StringAssert.Contains(manager, "/js/offline-library.js", "Books and manga are still served, so their offline library stays.");
+        Assert.IsFalse(neither.Contains("/js/offline-", StringComparison.Ordinal), "Nothing that needs offline copies is on.");
+        Assert.IsFalse(neither.Contains("id=\"offline-library-text\"", StringComparison.Ordinal));
+        Assert.IsFalse(full.Contains("/js/sakura.js", StringComparison.Ordinal), "The effect is off by default, so its script is not sent.");
+    }
+
+    [TestMethod]
     public async Task ResourcesPageKeepsTheStackHistoryAndMountedStorageSeparateFromTheHost()
     {
         await using var host = await DashboardHost.CreateAsync();
@@ -358,6 +405,7 @@ public sealed class AdminDashboardPageRenderTests
                         services.AddProviderFramework();
                         services.AddSingleton<IStackResourceTelemetry>(telemetry);
                         services.AddApplicationPerformance();
+                        services.AddSingleton<IInstanceModuleService>(new InstanceModuleStore(data.FullName));
                         services.AddScoped<AdminDashboardService>();
                     })
                     .Configure(app =>
@@ -493,6 +541,8 @@ public sealed class AdminDashboardPageRenderTests
             }
 
         }
+
+        public T Resolve<T>() where T : notnull => host.Services.GetRequiredService<T>();
 
         public async Task<string> GetHtmlAsync(string path)
         {

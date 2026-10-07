@@ -27,22 +27,24 @@ public sealed class OfflineModel(
             : await instanceModules.GetAsync(cancellationToken);
         var entries = new List<OfflineMediaEntry>();
 
-        if (instance.IsEnabled(InstanceModule.Anime))
+        // Offline copies of video and audio are a playback feature (their package API is part of that module); a manager-only instance lists none.
+        var playback = instance.IsEnabled(InstanceModule.Playback);
+        if (playback && instance.IsEnabled(InstanceModule.Anime))
         {
             entries.AddRange(await db.Episodes.AsNoTracking().OrderBy(x => x.DiscoveredAt)
                 .Select(x => new OfflineMediaEntry("episode", x.Id, x.Title)).ToListAsync(cancellationToken));
         }
-        if (instance.IsEnabled(InstanceModule.Movie))
+        if (playback && instance.IsEnabled(InstanceModule.Movie))
         {
             entries.AddRange(await db.Movies.AsNoTracking().OrderBy(x => x.Title)
                 .Select(x => new OfflineMediaEntry("movie", x.Id, x.Title)).ToListAsync(cancellationToken));
         }
-        if (instance.IsEnabled(InstanceModule.Tv))
+        if (playback && instance.IsEnabled(InstanceModule.Tv))
         {
             entries.AddRange(await db.TvSeries.AsNoTracking().OrderBy(x => x.Title)
                 .Select(x => new OfflineMediaEntry("tv", x.Id, x.Title)).ToListAsync(cancellationToken));
         }
-        if (instance.IsEnabled(InstanceModule.Audiobook))
+        if (playback && instance.IsEnabled(InstanceModule.Audiobook))
         {
             entries.AddRange(await db.Audiobooks.AsNoTracking().OrderBy(x => x.Title)
                 .Select(x => new OfflineMediaEntry("audiobook", x.Id, x.Title)).ToListAsync(cancellationToken));
