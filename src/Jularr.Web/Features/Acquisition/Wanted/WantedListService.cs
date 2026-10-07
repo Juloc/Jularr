@@ -76,6 +76,15 @@ public sealed class WantedListService(
                 .Where(episode => tvWorks.Contains(episode.WorkId))
                 .Select(episode => new { episode.Id, episode.WorkId, episode.SeasonId, episode.SeasonNumber, episode.EpisodeNumber, episode.AiredAt })
                 .ToListAsync(cancellationToken);
+        var movieWorks = video.Where(item => item.Kind == MediaAcquisitionKind.Movie && works.ContainsKey(item.RequestId!.Value)).Select(item => works[item.RequestId!.Value].WorkId).Distinct().ToArray();
+        var withMovieFile = movieWorks.Length == 0
+            ? []
+            : (await db.MediaAssets.AsNoTracking()
+                    .Where(asset => movieWorks.Contains(asset.WorkId) && asset.WorkEpisodeId == null && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
+                    .Select(asset => asset.WorkId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken))
+                .ToHashSet();
         var withFiles = tvWorks.Length == 0
             ? []
             : (await db.MediaAssets.AsNoTracking()
@@ -115,7 +124,8 @@ public sealed class WantedListService(
             };
             if (item.Kind == MediaAcquisitionKind.Movie)
             {
-                rows.Add(videoRow);
+                // A Movie that is installed and still wanted is waiting for a better release.
+                rows.Add(videoRow with { IsUpgrade = withMovieFile.Contains(workId) });
                 continue;
             }
 
@@ -127,7 +137,7 @@ public sealed class WantedListService(
                 .ToArray();
             if (missing.Length == 0)
             {
-                rows.Add(videoRow);
+                rows.Add(videoRow with { IsUpgrade = episodes.Any(episode => episode.WorkId == workId && withFiles.Contains(episode.Id)) });
                 continue;
             }
 

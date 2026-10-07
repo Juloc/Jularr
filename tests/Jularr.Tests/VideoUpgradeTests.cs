@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Selection;
@@ -136,6 +137,21 @@ public sealed class VideoUpgradeTests
         await world.WantedPassAsync();
         Assert.AreEqual(finalSearches, world.Indexer.Searches);
         Assert.AreEqual(AcquisitionRequestStatus.Completed, (await world.GetRequestAsync(request.Id)).Status);
+    }
+
+    [TestMethod]
+    public async Task AnInstalledMovieWaitingForABetterReleaseIsListedInWantedAsAnUpgrade()
+    {
+        await using var world = await VideoRequestToPlayWorld.CreateAsync(MediaAcquisitionKind.Movie, Tmdb());
+        world.Indexer.Publish(DuneLow);
+        var request = await world.RequestAsync(DuneTmdb, "Dune");
+        await ImportAsync(world, request, DuneLow, size: 4);
+        var wanted = new WantedListService(world.Requests, new AnimeMonitoringStore(Path.Combine(Path.GetTempPath(), "jularr-wanted-" + Guid.NewGuid().ToString("N"))), world.Services.GetRequiredService<QualityProfileStore>(), world.Db, new VideoRequestWorkResolver(world.Db), [], world.Clock);
+
+        var row = Assert.ContainsSingle(await wanted.LoadAsync(CancellationToken.None));
+
+        Assert.IsTrue(row.IsUpgrade, "The movie is installed, so the row is an upgrade, not a missing title.");
+        Assert.AreEqual(MediaAcquisitionKind.Movie, row.Kind);
     }
 
     [TestMethod]
