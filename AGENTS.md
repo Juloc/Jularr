@@ -11,6 +11,7 @@ Do not ask the user to repeat the Agent Control protocol, test budget, context r
 | Acquisition, Wanted, Arr, Search, Selection, Import | `jularr-task` + `jularr-acquisition` |
 | Schema, EF, PostgreSQL | add `jularr-db-change` |
 | Playback, player, streaming | add `jularr-playback-work` |
+| Dev environment, Docker, local site, `dotnet watch` | `jularr-dev-env` |
 | Unattended ordered run | `jularr-task` + specialist skill + `jularr-overnight` |
 | Before a substantial commit | `jularr-review` (own diff, no subagent by default) |
 

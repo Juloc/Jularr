@@ -58,11 +58,13 @@ Tests are required; broad validation during normal work is forbidden. Before eve
 - No huge background test runs, no second validation while one runs, no wait/monitor agents for tests, no rerunning an identical green command without relevant source change, no extra testing because the small tests were green.
 - Order: smallest unit/behavior tests, directly affected integration tests, build when needed, then stop. Green focused validation means finish.
 - Prefer behavior/regression tests (idempotent retry, restart recovery, authorization, state transitions) over tests of private wiring; PostgreSQL behavior is tested on real PostgreSQL; add a source/architecture guard when an invariant is objectively checkable.
-- The `validation` list in `.agent/project.yaml` (restore, build, full test) is the release/explicit-request gate. When it was not run for a slice, say so in the final message instead of implying it passed.
+- The `validation` list in `.agent/project.yaml` (restore, build, full test) is the release/explicit-request gate only. When it was not run for a slice, say so in the final message instead of implying it passed.
+- **Exit status is truth.** Never chain validation, commit and push in one shell command. Run the test/build command directly (let the tool truncate output), confirm its real exit code, and only then run commit/push as separate commands. Do not pipe a validation command into `tail`, `grep` or a logger: a successful filter is not a passing test. If piping is unavoidable, enable and verify `pipefail` first.
+- **"Pre-existing" is not an exemption.** If an existing failure blocks the acceptance criteria or the validation of the current slice, investigate it, determine its owner, and fix it when it lies on the required path. Defer only after establishing that it belongs to an unrelated subsystem, an explicitly excluded scope or a genuinely independent known defect, and state that exact reason (and the issue) in the report. "Predates this work" alone never justifies declaring the gate complete.
 
 ## 8. Build and process discipline
 
-Build the smallest meaningful target (e.g. the Web or Tests project); build the whole solution only when changes cross enough projects or an explicit final validation needs it. No automatic solution-wide restore after every slice, no needless Docker or dev-server restarts, never two dotnet builds at once. If `dotnet watch` locks the executable, handle it deliberately once instead of looping failed builds. Frontend assets changed: `npm ci` and the frontend checks.
+Build the smallest meaningful target (e.g. the Web or Tests project); build the whole solution only when changes cross enough projects or an explicit final validation needs it. No automatic solution-wide restore after every slice, no needless Docker or dev-server restarts, never two dotnet builds at once. If `dotnet watch` locks the executable, handle it deliberately once instead of looping failed builds (`jularr-dev-env`). Frontend assets changed: `npm ci` and the frontend checks.
 
 ## 9. Non-interactive rule
 
@@ -72,8 +74,15 @@ Never rely on the user answering firewall, sudo/password, OS security, package-i
 
 1. Run the review checklist on your own diff (`jularr-review`) and the maintainability completion gate for touched code.
 2. `git fetch origin`; if `origin/dev` moved, rebase clean owned work onto it (never discard another agent's changes) and re-check the ledger before push.
-3. Commit with the configured real identity. No agent attribution (`Co-Authored-By`, "Generated with") in commits, PRs, issues or source; never `--no-verify`; `npm ci` once so `.githooks` are active. Coherent focused commits.
+3. Inspect `git status`/diff and remove accidental artifacts first (see section 11), confirm validation exit status (section 7), then commit with the configured real identity. No agent attribution (`Co-Authored-By`, "Generated with") in commits, PRs, issues or source; never `--no-verify`; `npm ci` once so `.githooks` are active. Coherent focused commits.
 4. `git push origin HEAD:dev`. If rejected, fetch and reconcile, never force.
 5. Comment on the issue with what landed and what remains; tick or close only when every acceptance criterion is demonstrably met. Close or comment PRs whose work was incorporated or superseded.
 6. Post `done`/`release` for the claim.
 7. Stop. Do not pick another backlog issue. Only `jularr-overnight` overrides this stop rule.
+
+## 11. Agent, output and hygiene budget
+
+- **One lead agent.** At most one subagent at a time, only for a genuinely separable task whose context cost is justified. Never an agent wave. Do not spawn agents to search files, reread docs, run tests, wait for processes, do a routine self-review (`jularr-review`) or duplicate reasoning you can do directly.
+- **No narration of routine commands** (grep, reads, edits, test/build runs, Git operations). Speak only at meaningful milestones: a materially different objective, a real blocker, a major slice done, the final result. In `jularr-overnight` prefer almost no intermediate narration.
+- **Dependency restraint.** Use existing repository/runtime capabilities. No new NuGet/npm package, external binary, framework, service, dev tool or runtime dependency merely because it eases the current work; a new one needs a concrete current product/engineering need and must fit the architecture. No unrelated upgrades.
+- **Worktree hygiene.** Never commit scratch files, temporary patches, test output, logs, debug screenshots, DB dumps, browser state, local credentials, generated debug artifacts or temporary benchmarks. Delete only artifacts you created; never delete unknown uncommitted files that belong to another agent or the user.

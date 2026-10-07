@@ -23,6 +23,6 @@ Check:
 - **Tests**: focused behavior/regression coverage exists, deterministic, PostgreSQL behavior tested on PostgreSQL.
 - **UI** (if applicable): matches SPEC and approved images, all states, accessibility, Light/Dark, mobile; no duplicated or filler text.
 
-Review does not mean running more tests. If adequate focused green tests exist, inspect them and stop; run an extra test only for a specific uncovered failure mode the review found, never the full suite.
+A failure that blocks the current slice is not waved through as pre-existing (`jularr-task` section 7). Review does not mean running more tests. If adequate focused green tests exist, inspect them and stop; run an extra test only for a specific uncovered failure mode the review found, never the full suite.
 
 Report each finding with file:line where practical, a concrete failure scenario and a severity. Separate confirmed defects from suggestions and report only what the code justifies. Fix confirmed defects in your own diff before committing.

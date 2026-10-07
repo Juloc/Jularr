@@ -25,4 +25,4 @@ No firewall/security prompts, interactive authentication or package-install prom
 
 ## Reporting
 
-No long intermediate retrospectives. One final user-facing report: what landed (commit SHAs), blockers (exact), limitations (including that the full suite was not run), and what remains.
+Almost no intermediate narration (`jularr-task` section 11) and no long retrospectives. Validation exit status is confirmed before every commit/push (`jularr-task` section 7). One final user-facing report: what landed (commit SHAs), blockers (exact), limitations (including that the full suite was not run), and what remains.
