@@ -55,15 +55,14 @@ public sealed record MediaLibraryTarget(
 }
 
 /// <summary>
-/// The one canonical import-policy settings: default import mode, per-library-root overrides,
+/// The one canonical import-policy settings: the default import mode of the media types that have no LibraryRoot,
 /// the folders and remote path mappings of each media type, the per-anime target root for new
 /// imports and the post-import playback optimization. Stored at
 /// <c>/data/acquisition/import-settings.json</c> next to the other acquisition stores.
 /// </summary>
 public sealed record AnimeImportSettingsState(
     int Version,
-    ImportMode DefaultImportMode,
-    Dictionary<Guid, ImportMode> RootImportModes)
+    ImportMode DefaultImportMode)
 {
     // Post-import step for imported video: a lossless container remux when it widens browser
     // Direct Play without losing anything (MediaContainerOptimizer). Off unless the owner opts in.
@@ -79,10 +78,7 @@ public sealed record AnimeImportSettingsState(
 
 
     public static AnimeImportSettingsState Empty() =>
-        new(1, ImportMode.Move, []);
-
-    public ImportMode ModeFor(Guid? rootId) =>
-        rootId is { } id && RootImportModes.TryGetValue(id, out var mode) ? mode : DefaultImportMode;
+        new(1, ImportMode.Move);
 
     public MediaLibraryTarget? LibraryFor(MediaAcquisitionKind kind) =>
         MediaLibraries is not null &&

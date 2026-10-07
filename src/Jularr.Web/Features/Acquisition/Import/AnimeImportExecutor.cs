@@ -352,7 +352,7 @@ public sealed class AnimeImportExecutor(
             return new(false, storageWaiting);
         }
 
-        var (importAction, allowHardlinkFallback) = await ResolveImportActionAsync(location?.RootId, cancellationToken);
+        var (importAction, allowHardlinkFallback) = ImportFileTransfer.Resolve(location!.Mode);
 
         var file = record.Files[index];
         var planned = new PlannedAnimeImport(
@@ -505,7 +505,7 @@ public sealed class AnimeImportExecutor(
             return deferred;
         }
 
-        var (importAction, allowHardlinkFallback) = await ResolveImportActionAsync(location?.RootId, cancellationToken);
+        var (importAction, allowHardlinkFallback) = ImportFileTransfer.Resolve(location!.Mode);
         var plan = AnimeImportPlanner.Plan(
             new AnimeImportPlanContext(
                 jobId,
@@ -628,11 +628,6 @@ public sealed class AnimeImportExecutor(
             }
 
             return ToRecord(planned, AnimeImportFileStatus.ManualRequired, null, reason);
-        }
-
-        if (location is null)
-        {
-            return await ManualAsync("No library root is enabled; add one under Admin → System, then import manually.");
         }
 
         if (LibraryFilePlacer.FindSourceProblem(planned.Source.Path) is { } sourceProblem)
@@ -777,14 +772,19 @@ public sealed class AnimeImportExecutor(
             .FirstOrDefault();
     }
 
-    // An import needs its destination library storage now: a sleeping Wake-on-LAN NAS is started
-    // and the import waits for the bounded start attempt. Returns the reason to defer when the
-    // storage is still not readable, so no file is moved towards an offline mount.
+    // An import needs a destination and its library storage now. With no LibraryRoot to import into the import waits for the owner to
+    // choose one in Admin → Storage; a sleeping Wake-on-LAN NAS is started and the import waits for the bounded start attempt. Returns
+    // the reason to defer, so no file is moved without a destination or towards an offline mount.
     private async Task<string?> WaitForLibraryStorageAsync(
         AnimeLibraryLocation? location,
         CancellationToken cancellationToken)
     {
-        if (location is null || storage is null)
+        if (location is null)
+        {
+            return LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Anime);
+        }
+
+        if (storage is null)
         {
             return null;
         }
@@ -965,7 +965,7 @@ public sealed class AnimeImportExecutor(
                 .FirstOrDefault();
             placement = new CompletedDownloadPlacement(
                 destination,
-                (await importSettings.LoadAsync(cancellationToken)).ModeFor(root?.Id));
+                ImportFileTransfer.ModeFor(root?.PlacementPolicy ?? LibraryPlacementPolicy.HardlinkOrCopy));
         }
 
         var message = string.IsNullOrWhiteSpace(record.Message) ? "Anime import finished." : record.Message;
@@ -1010,17 +1010,6 @@ public sealed class AnimeImportExecutor(
                 return state with { Paths = paths };
             },
             cancellationToken);
-    }
-
-    // Resolves the canonical import mode (global default, overridden per library root) to the
-    // planner/executor's file action plus whether a cross-filesystem hardlink may fall back to a
-    // copy. rootId is null when no library root is enabled yet; the global default still applies.
-    private async Task<(ImportFileAction Action, bool AllowHardlinkFallback)> ResolveImportActionAsync(
-        Guid? rootId,
-        CancellationToken cancellationToken)
-    {
-        var settings = await importSettings.LoadAsync(cancellationToken);
-        return ImportFileTransfer.Resolve(settings.ModeFor(rootId));
     }
 
     private sealed class ExecutionLease : IDisposable

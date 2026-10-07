@@ -10,10 +10,10 @@ namespace Jularr.Web.Features.Storage;
 public sealed class LibraryRootRoutingService(AppDbContext db)
 {
     /// <summary>
-    /// The content types whose importers already resolve their destination through this service. Types not listed here
+    /// The content types whose importers resolve their destination and placement through this service. Types not listed here
     /// still read their legacy per-media library folder until their importer is migrated.
     /// </summary>
-    public static readonly LibraryContentType[] ImporterRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music];
+    public static readonly LibraryContentType[] ImporterRoutedTypes = [LibraryContentType.Anime, LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music];
 
     /// <summary>
     /// The reading and audiobook types whose importers still read a per-media library folder from the import settings. Storage's default root of

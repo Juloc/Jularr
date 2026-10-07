@@ -999,7 +999,9 @@ public sealed class AnimeAcquisitionPipeline(
                         .Select(candidate => new SabnzbdAnimeReleaseCandidate(
                             candidate.Release.Identity,
                             candidate.Release.Title,
-                            candidate.Release.InternalDownloadUri!))
+                            candidate.Release.InternalDownloadUri!,
+                            candidate.Release.Indexer,
+                            candidate.Release.ParsedRelease.ReleaseGroup))
                         .ToArray()),
                 cancellationToken);
         }

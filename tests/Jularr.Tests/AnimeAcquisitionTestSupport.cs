@@ -90,6 +90,10 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
     public SabnzbdAcquisitionStore Acquisitions => services.GetRequiredService<SabnzbdAcquisitionStore>();
     public AnimeImportStore Imports => services.GetRequiredService<AnimeImportStore>();
     public OperationStore Operations => new(Db);
+    /// <summary>How imports are placed into the Anime root: the placement policy of the LibraryRoot, the one owner of it.</summary>
+    public async Task UsePlacementAsync(LibraryPlacementPolicy policy) =>
+        await Db.LibraryRoots.Where(item => item.Id == Root.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.PlacementPolicy, policy));
+
     public AnimeImportSettingsStore ImportSettings => services.GetRequiredService<AnimeImportSettingsStore>();
     public AcquisitionPolicyStore Policy => services.GetRequiredService<AcquisitionPolicyStore>();
     public AniListAutoMonitorSettingsStore AniListAutoMonitorSettings => services.GetRequiredService<AniListAutoMonitorSettingsStore>();
@@ -235,7 +239,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
             .Options;
         var db = new AppDbContext(options);
         await DatabaseMigrationBridge.UpgradeAsync(db);
-        var root = new LibraryRoot { Name = "Anime", Path = library };
+        var root = new LibraryRoot { Name = "Anime", Path = library, PlacementPolicy = LibraryPlacementPolicy.Move };
         db.LibraryRoots.Add(root);
         db.LibraryRootContentAssignments.Add(new LibraryRootContentAssignment { LibraryRootId = root.Id, ContentType = LibraryContentType.Anime });
         await db.SaveChangesAsync();
@@ -445,7 +449,9 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
 
     public async Task<SabnzbdAcquisitionResult> StartAcquisitionAsync(
         IReadOnlyList<AnimeEpisodeKey> episodes,
-        string releaseTitle)
+        string releaseTitle,
+        string? indexer = null,
+        string? releaseGroup = null)
     {
         await using var scope = services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<SabnzbdAcquisitionService>().StartAsync(
@@ -454,7 +460,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
                 "Frieren",
                 episodes,
                 null,
-                [new SabnzbdAnimeReleaseCandidate($"release:{releaseTitle}", releaseTitle, new Uri("https://indexer.example/a.nzb"))]),
+                [new SabnzbdAnimeReleaseCandidate($"release:{releaseTitle}", releaseTitle, new Uri("https://indexer.example/a.nzb"), indexer, releaseGroup)]),
             CancellationToken.None);
     }
 
@@ -597,6 +603,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddScoped<AnimeImportRecovery>();
         collection.AddSingleton<Jularr.Web.Features.Storage.StorageAvailabilityCoordinator>();
         collection.AddScoped<Jularr.Web.Features.Storage.LibraryRootAvailabilityService>();
+        collection.AddScoped<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
         collection.AddSingleton<BackgroundJobQueue>();
         collection.AddSingleton(new MediaOptimizationJournal(Path.Combine(DataRoot, "media-optimization")));
         collection.AddSingleton<MediaOptimizationQueue>();

@@ -67,7 +67,9 @@ public sealed class SabnzbdAcquisitionService(
             .Select(release => new SabnzbdAnimeReleaseCandidate(
                 release.Identity,
                 release.Title,
-                release.InternalDownloadUri!))
+                release.InternalDownloadUri!,
+                release.Indexer,
+                release.ParsedRelease.ReleaseGroup))
             .ToArray();
     }
 
@@ -96,7 +98,9 @@ public sealed class SabnzbdAcquisitionService(
             .Select(candidate => new SabnzbdPendingCandidate(
                 candidate.ReleaseIdentity.Trim(),
                 candidate.ReleaseTitle.Trim(),
-                store.ProtectUrl(candidate.NzbUrl)))
+                store.ProtectUrl(candidate.NzbUrl),
+                candidate.ReleaseSource,
+                candidate.ReleaseGroup))
             .ToArray();
 
         var now = DateTimeOffset.UtcNow;
@@ -255,7 +259,9 @@ public sealed class SabnzbdAcquisitionService(
                     $"{acquisition.AnimeTitle} · {FormatEpisodes(acquisition.Episodes)} · {next.ReleaseTitle}",
                     acquisition.ProfileId,
                     SabnzbdPurpose.Anime,
-                    JobName: next.ReleaseTitle),
+                    JobName: next.ReleaseTitle,
+                    ReleaseSource: next.ReleaseSource,
+                    ReleaseGroup: next.ReleaseGroup),
                 store.UnprotectUrl(next.ProtectedNzbUrl),
                 cancellationToken);
 

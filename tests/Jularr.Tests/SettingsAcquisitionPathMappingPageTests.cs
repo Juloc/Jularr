@@ -362,7 +362,7 @@ public sealed class SettingsAcquisitionPathMappingPageTests
     }
 
     [TestMethod]
-    public async Task AnAnimeRootKeepsItsEditableImportModeWhileMovieRootsPointToStorage()
+    public async Task EveryRootShowsItsPlacementFromStorageAndOffersNoSecondImportModeOverride()
     {
         await using var host = await ManageSheetPageTestHost.CreateAsync();
         var anime = new LibraryRoot { Name = "Anime Library", Path = "/srv/anime" };
@@ -375,9 +375,8 @@ public sealed class SettingsAcquisitionPathMappingPageTests
 
         var html = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: true);
 
-        Assert.AreEqual(1, Occurrences(html, "name=\"rootImportMode\""), "Only the Anime root has an import mode override form.");
-        Assert.AreEqual(1, Occurrences(html, "Set in Storage"));
-        StringAssert.Contains(html, $"name=\"rootId\" value=\"{anime.Id}\"");
+        Assert.AreEqual(0, Occurrences(html, "name=\"rootImportMode\""), "The placement of a root, Anime included, belongs to Storage alone.");
+        Assert.AreEqual(2, Occurrences(html, "Set in Storage"));
     }
 
     [TestMethod]

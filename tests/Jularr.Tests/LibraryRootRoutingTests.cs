@@ -183,7 +183,7 @@ public sealed class LibraryRootRoutingTests
         }
 
         CollectionAssert.AreEquivalent(
-            new[] { LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music, LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook },
+            new[] { LibraryContentType.Anime, LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music, LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook },
             LibraryRootRoutingService.ManagedTypes.ToArray());
     }
 

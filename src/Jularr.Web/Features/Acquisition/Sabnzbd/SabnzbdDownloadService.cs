@@ -13,7 +13,9 @@ public sealed record SabnzbdSubmission(
     string Subject,
     string? ProfileId,
     SabnzbdPurpose Purpose,
-    string? JobName = null);
+    string? JobName = null,
+    string? ReleaseSource = null,
+    string? ReleaseGroup = null);
 
 public sealed record SabnzbdSubmissionOutcome(
     bool Accepted,
@@ -77,7 +79,9 @@ public sealed class SabnzbdDownloadService(
                 submission.ProfileId,
                 nzbUrl,
                 submission.JobName,
-                MediaKind: ToMediaKind(submission.Purpose)),
+                MediaKind: ToMediaKind(submission.Purpose),
+                ReleaseSource: submission.ReleaseSource,
+                ReleaseGroup: submission.ReleaseGroup),
             cancellationToken);
 
         return ToSubmissionOutcome(outcome);

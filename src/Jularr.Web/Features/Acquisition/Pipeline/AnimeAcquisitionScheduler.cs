@@ -7,23 +7,23 @@ using Jularr.Web.Features.Instance;
 namespace Jularr.Web.Features.Acquisition.Pipeline;
 
 /// <summary>
-/// In-process scheduler for anime acquisition. Runs the pipeline for all monitored anime on the
-/// one canonical interval stored in the monitoring state, runs owner-requested searches, recovers
-/// persisted import/attempt state at startup and serializes every pipeline run (periodic,
-/// requested, interactive grab) through one gate: at most one run is active, so two runs can
-/// never grab the same episode, and each run is bounded by the pipeline's search limits.
+/// Decides when the anime pipeline runs, but owns no loop: the shared Wanted pass calls <see cref="AdvanceAsync"/> (through
+/// <see cref="AnimeWantedSource"/>) on its own cadence. A pass recovers persisted import/attempt state once after startup, runs the
+/// owner-requested searches and runs the pipeline for all monitored anime when the canonical interval stored in the monitoring state
+/// has elapsed. Every pipeline run (periodic, requested, interactive grab) goes through one gate: at most one run is active, so two runs
+/// can never grab the same episode, and each run is bounded by the pipeline's search limits.
 /// </summary>
 public sealed class AnimeAcquisitionScheduler(
     IServiceScopeFactory scopeFactory,
     AnimeMonitoringStore monitoring,
-    ILogger<AnimeAcquisitionScheduler> logger) : BackgroundService
+    ILogger<AnimeAcquisitionScheduler> logger)
 {
     public static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(45);
     private const int MaxQueuedRequests = 50;
 
     private readonly SemaphoreSlim gate = new(1, 1);
-    private readonly SemaphoreSlim wake = new(0, 1);
     private readonly ConcurrentQueue<AnimeAcquisitionRunRequest> requests = new();
+    private bool recovered;
 
     public DateTimeOffset? LastRunAtUtc { get; private set; }
     public AnimeAcquisitionRunSummary? LastRun { get; private set; }
@@ -33,8 +33,8 @@ public sealed class AnimeAcquisitionScheduler(
     public int QueuedRequests => requests.Count;
 
     /// <summary>
-    /// Queues a run (all monitored anime when <paramref name="animeKey"/> is null) and wakes the
-    /// loop. Returns false when too many requests are already waiting.
+    /// Queues a run (all monitored anime when <paramref name="animeKey"/> is null) for the next Wanted pass. Returns false when too many
+    /// requests are already waiting.
     /// </summary>
     public bool RequestRun(string? animeKey = null, AnimeSearchTrigger trigger = AnimeSearchTrigger.Manual)
     {
@@ -44,18 +44,6 @@ public sealed class AnimeAcquisitionScheduler(
         }
 
         requests.Enqueue(new AnimeAcquisitionRunRequest(animeKey, trigger));
-        if (wake.CurrentCount == 0)
-        {
-            try
-            {
-                wake.Release();
-            }
-            catch (SemaphoreFullException)
-            {
-                // Another request woke the loop at the same moment.
-            }
-        }
-
         return true;
     }
 
@@ -138,58 +126,54 @@ public sealed class AnimeAcquisitionScheduler(
             cancellationToken);
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    /// <summary>
+    /// One step of the shared Wanted pass: recovery after startup, then the queued runs, otherwise the periodic run when it is due.
+    /// Returns how many pipeline runs it made.
+    /// </summary>
+    public async Task<int> AdvanceAsync(DateTimeOffset nowUtc, CancellationToken cancellationToken)
     {
-        await Task.Yield();
-        try
+        if (!await IsAnimeEnabledAsync(cancellationToken))
         {
-            var recovered = await RecoverAsync(stoppingToken);
-            if (recovered > 0)
-            {
-                logger.LogInformation("Resumed {Count} anime import(s) after startup.", recovered);
-            }
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(exception, "Anime acquisition recovery after startup failed; the next run retries it.");
+            return 0;
         }
 
-        var delay = StartupDelay;
-        while (!stoppingToken.IsCancellationRequested)
+        if (!recovered)
         {
-            NextRunAtUtc = DateTimeOffset.UtcNow + delay;
-            bool woken;
             try
             {
-                woken = await wake.WaitAsync(delay, stoppingToken);
+                var resumed = await RecoverAsync(cancellationToken);
+                recovered = true;
+                if (resumed > 0)
+                {
+                    logger.LogInformation("Resumed {Count} anime import(s) after startup.", resumed);
+                }
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                break;
+                logger.LogWarning(exception, "Anime acquisition recovery after startup failed; the next pass retries it.");
             }
-
-            if (woken)
-            {
-                await RunRequestsAsync(stoppingToken);
-                // Requested runs do not reset the periodic cadence beyond the remaining delay.
-                delay = NextRunAtUtc is { } next && next > DateTimeOffset.UtcNow
-                    ? next - DateTimeOffset.UtcNow
-                    : TimeSpan.Zero;
-                continue;
-            }
-
-            var schedule = await LoadScheduleAsync(stoppingToken);
-            if (schedule.Enabled)
-            {
-                await RunSafelyAsync(null, AnimeSearchTrigger.PeriodicMissing, stoppingToken);
-            }
-
-            delay = schedule.Interval;
         }
+
+        NextRunAtUtc ??= nowUtc + StartupDelay;
+        if (!requests.IsEmpty)
+        {
+            return await RunRequestsAsync(cancellationToken);
+        }
+
+        if (nowUtc < NextRunAtUtc)
+        {
+            return 0;
+        }
+
+        var schedule = await LoadScheduleAsync(cancellationToken);
+        NextRunAtUtc = nowUtc + schedule.Interval;
+        if (!schedule.Enabled)
+        {
+            return 0;
+        }
+
+        await RunSafelyAsync(null, AnimeSearchTrigger.PeriodicMissing, cancellationToken);
+        return 1;
     }
 
     // Imports deferred while a library scan or rename ran, or missed by the SABnzbd monitor,
@@ -208,7 +192,7 @@ public sealed class AnimeAcquisitionScheduler(
         }
     }
 
-    private async Task RunRequestsAsync(CancellationToken stoppingToken)
+    private async Task<int> RunRequestsAsync(CancellationToken stoppingToken)
     {
         var pending = new List<AnimeAcquisitionRunRequest>();
         while (requests.TryDequeue(out var request))
@@ -222,13 +206,11 @@ public sealed class AnimeAcquisitionScheduler(
             : pending.DistinctBy(request => request.AnimeKey, StringComparer.OrdinalIgnoreCase).ToArray();
         foreach (var request in batch)
         {
-            if (stoppingToken.IsCancellationRequested)
-            {
-                return;
-            }
-
+            stoppingToken.ThrowIfCancellationRequested();
             await RunSafelyAsync(request.AnimeKey, request.Trigger, stoppingToken);
         }
+
+        return batch.Length;
     }
 
     private async Task RunSafelyAsync(

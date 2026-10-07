@@ -84,7 +84,7 @@ public sealed class AdminStorageDestinationsTests
         await unknown.OnPostDestinationAsync(LibraryContentType.Movie, Guid.NewGuid(), LibraryPlacementPolicy.Copy, CancellationToken.None);
         Assert.AreEqual(unknown.Ui["admin.storage.destinations.failed"], unknown.TempData["StorageError"]);
 
-        var notRouted = await fixture.Page().OnPostDestinationAsync(LibraryContentType.Anime, disabled.Id, LibraryPlacementPolicy.Copy, CancellationToken.None);
+        var notRouted = await fixture.Page().OnPostDestinationAsync(LibraryContentType.Game, disabled.Id, LibraryPlacementPolicy.Copy, CancellationToken.None);
         Assert.IsInstanceOfType<BadRequestResult>(notRouted, "Importers that do not route through Storage yet have no destination to set here.");
         Assert.IsInstanceOfType<BadRequestResult>(await fixture.Page().OnPostDestinationAsync(LibraryContentType.Movie, disabled.Id, (LibraryPlacementPolicy)42, CancellationToken.None));
         Assert.IsNull(await fixture.Routing.ResolveDefaultAsync(LibraryContentType.Movie));
@@ -118,8 +118,8 @@ public sealed class AdminStorageDestinationsTests
         await page.OnGetAsync(CancellationToken.None);
 
         CollectionAssert.AreEqual(LibraryRootRoutingService.ManagedTypes.ToArray(), page.Destinations.Select(destination => destination.ContentType).ToArray());
-        Assert.AreEqual(cinema.Id, page.Destinations[0].Default!.LibraryRootId);
-        Assert.IsNull(page.Destinations[1].Default);
+        Assert.AreEqual(cinema.Id, page.Destinations.Single(destination => destination.ContentType == LibraryContentType.Movie).Default!.LibraryRootId);
+        Assert.IsNull(page.Destinations.Single(destination => destination.ContentType == LibraryContentType.Tv).Default);
         CollectionAssert.AreEqual(new[] { "Cinema" }, page.EnabledRoots.Select(root => root.Name).ToArray(), "Only enabled roots can be chosen.");
         Assert.IsTrue(page.CanManageDestinations);
 

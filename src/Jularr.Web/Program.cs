@@ -669,7 +669,7 @@ builder.Services.AddScoped<AnimeImportExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.ICompletedDownloadImportAdapter>(services => services.GetRequiredService<AnimeImportExecutor>());
 builder.Services.AddScoped<AnimeImportRecovery>();
 builder.Services.AddSingleton<AnimeAcquisitionScheduler>();
-builder.Services.AddHostedService(services => services.GetRequiredService<AnimeAcquisitionScheduler>());
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeWantedSource>();
 Jularr.Web.Features.Calendar.ReleaseCalendarRegistration.AddReleaseCalendar(builder.Services);
 
 builder.Services.AddScoped<AcquisitionApiKeyService>();

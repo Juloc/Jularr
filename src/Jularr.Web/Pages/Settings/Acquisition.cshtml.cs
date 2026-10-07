@@ -50,8 +50,6 @@ public sealed class AcquisitionModel(
     /// <summary>The Storage-owned default destination of each importer-routed media type; a missing entry means imports of that type wait.</summary>
     public IReadOnlyDictionary<MediaAcquisitionKind, LibraryRootRoute> Destinations { get; private set; } = new Dictionary<MediaAcquisitionKind, LibraryRootRoute>();
 
-    /// <summary>Roots that serve Movie or TV: their placement policy belongs to Storage. Anime roots keep their import mode override here.</summary>
-    public IReadOnlySet<Guid> RoutedRootIds { get; private set; } = new HashSet<Guid>();
     public IReadOnlyList<IndexerEntry> IndexerEntries { get; private set; } = [];
     public bool AniListAutoMonitorEnabled { get; private set; }
     public InstanceModuleSettings InstanceModules { get; private set; } = InstanceModuleSettings.Default;
@@ -77,33 +75,11 @@ public sealed class AcquisitionModel(
         _ => mode.ToString()
     };
 
-    public async Task<IActionResult> OnPostImportModeAsync(
-        ImportMode defaultImportMode,
-        Guid? rootId,
-        ImportMode? rootImportMode,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostImportModeAsync(ImportMode defaultImportMode, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
 
-        await importSettings.UpdateAsync(
-            state =>
-            {
-                var roots = new Dictionary<Guid, ImportMode>(state.RootImportModes);
-                if (rootId is { } id)
-                {
-                    if (rootImportMode is { } mode)
-                    {
-                        roots[id] = mode;
-                    }
-                    else
-                    {
-                        roots.Remove(id);
-                    }
-                }
-
-                return state with { DefaultImportMode = defaultImportMode, RootImportModes = roots };
-            },
-            cancellationToken);
+        await importSettings.UpdateAsync(state => state with { DefaultImportMode = defaultImportMode }, cancellationToken);
         TempData["Status"] = Ui["settings.acquisition.status.importModeSaved"];
         return RedirectToPage();
     }
@@ -629,7 +605,6 @@ public sealed class AcquisitionModel(
         ImportSettings = await importSettings.LoadAsync(cancellationToken);
         Policy = await policyStore.LoadAsync(cancellationToken);
         Roots = await db.LibraryRoots.AsNoTracking().OrderBy(root => root.Name).ToArrayAsync(cancellationToken);
-        RoutedRootIds = (await db.LibraryRootContentAssignments.AsNoTracking().Where(assignment => assignment.ContentType != LibraryContentType.Anime).Select(assignment => assignment.LibraryRootId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
         var destinations = new Dictionary<MediaAcquisitionKind, LibraryRootRoute>();
         foreach (var kind in MediaInboxImportService.InboxKinds)
         {

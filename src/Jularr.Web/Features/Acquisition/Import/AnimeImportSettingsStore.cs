@@ -74,7 +74,6 @@ public sealed class AnimeImportSettingsStore
                         ?? AnimeImportSettingsState.Empty();
             state = state with
             {
-                RootImportModes = new Dictionary<Guid, ImportMode>(state.RootImportModes ?? []),
                 MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries ?? [])
             };
 

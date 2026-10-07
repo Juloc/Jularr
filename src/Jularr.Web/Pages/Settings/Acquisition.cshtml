@@ -69,35 +69,14 @@
         @if (Model.Roots.Count > 0)
         {
             <div class="admset-table-wrap"><table class="admset-table">
-                <thead><tr><th>@ui["settings.acquisition.libraryRootColumn"]</th><th>@ui["settings.acquisition.importModeOverrideColumn"]</th><th></th></tr></thead>
+                <thead><tr><th>@ui["settings.acquisition.libraryRootColumn"]</th><th>@ui["admin.storage.destinations.column.placement"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var root in Model.Roots)
                     {
                         <tr>
                             <td>@root.Name</td>
-                            @if (Model.RoutedRootIds.Contains(root.Id))
-                            {
-                                <td>@Model.ImportPolicyLabel(root.PlacementPolicy)</td>
-                                <td class="admset-cell-actions"><a class="admin-tag admin-tag-accent" asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.placementInStorage"]</a></td>
-                            }
-                            else
-                            {
-                                <td>@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var mode) ? Model.ImportModeLabel(mode) : ui["settings.acquisition.usesDefault"])</td>
-                                <td>
-                                    <form method="post" asp-page-handler="ImportMode" class="acquisition-inline-form">
-                                        <input type="hidden" name="defaultImportMode" value="@Model.ImportSettings.DefaultImportMode" />
-                                        <input type="hidden" name="rootId" value="@root.Id" />
-                                        <select class="admset-control" name="rootImportMode">
-                                            <option value="">@ui["settings.acquisition.usesDefault"]</option>
-                                    @foreach (var mode in Enum.GetValues<ImportMode>())
-                                            {
-                                                <option value="@mode" selected="@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var current) && current == mode)">@Model.ImportModeLabel(mode)</option>
-                                            }
-                                        </select>
-                                        <button class="button" type="submit">@ui["settings.acquisition.set"]</button>
-                                    </form>
-                                </td>
-                            }
+                            <td>@Model.ImportPolicyLabel(root.PlacementPolicy)</td>
+                            <td class="admset-cell-actions"><a class="admin-tag admin-tag-accent" asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.placementInStorage"]</a></td>
                         </tr>
                     }
                 </tbody>
