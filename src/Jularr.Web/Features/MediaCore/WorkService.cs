@@ -711,7 +711,11 @@ public sealed class WorkService(AppDbContext db)
         return true;
     }
 
-    /// <summary>Bridges a work to an existing per-type record (adapter). Each legacy record maps to one work.</summary>
+    /// <summary>
+    /// Bridges a work to an existing per-type record (adapter). Each legacy record maps to one work, and a link is never moved silently: asking to link a record
+    /// that already belongs to another work is a conflict (<see cref="WorkSourceLinkConflictException"/>) that the caller must surface for review. Moving records
+    /// between works is the explicit owner action <see cref="MergeWorksAsync"/>.
+    /// </summary>
     public async Task<WorkSourceLink> LinkSourceAsync(
         Guid workId,
         WorkSourceKind sourceKind,
@@ -723,13 +727,7 @@ public sealed class WorkService(AppDbContext db)
 
         if (existing is not null)
         {
-            if (existing.WorkId != workId)
-            {
-                existing.WorkId = workId;
-                await db.SaveChangesAsync(cancellationToken);
-            }
-
-            return existing;
+            return existing.WorkId == workId ? existing : throw new WorkSourceLinkConflictException(sourceKind, sourceId, existing.WorkId, workId);
         }
 
         var link = new WorkSourceLink { WorkId = workId, SourceKind = sourceKind, SourceId = sourceId };
