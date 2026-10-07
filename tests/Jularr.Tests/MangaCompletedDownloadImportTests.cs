@@ -3,6 +3,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Manga;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.ReadingAcquisition;
 using Microsoft.EntityFrameworkCore;
@@ -96,6 +97,60 @@ public sealed class MangaCompletedDownloadImportTests
         // The matched series already lives in the library, so the new release goes into its folder.
         Assert.IsTrue(File.Exists(Path.Combine(host.Library, "Frieren", "Sousou.no.Frieren.v02.Digital", "Sousou no Frieren v02.cbz")));
         Assert.AreEqual($"/Manga/Series/{series.Id}", second.ResultUrl);
+    }
+
+    [TestMethod]
+    public async Task ARequestsFilesGoIntoTheSeriesOfItsWorkAndASecondVolumeJoinsItWithoutAnotherSeriesOrWork()
+    {
+        await using var host = await Host.CreateAsync(ImportMode.Copy);
+        var request = await RequestWorkTestSupport.CreateRequestAsync(host.Db, MediaAcquisitionKind.Manga, bound: true, provider: "anilist", externalId: "118586", title: "Frieren");
+
+        var first = await host.ImportAsync(host.Download("Frieren.Vol.01.CBZ", "Frieren Vol 01.cbz"), request);
+        var series = await host.SingleSeriesAsync();
+        var volumeTwo = host.Download("Frieren.Vol.02.CBZ", "Frieren Vol 02.cbz");
+        var second = await host.ImportAsync(volumeTwo, request);
+        var again = await host.ImportAsync(volumeTwo, request);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, first.Disposition, first.Message);
+        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, second.Disposition, second.Message);
+        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, again.Disposition, again.Message);
+        Assert.AreEqual(request.WorkId, await RequestWorkTestSupport.WorkOfLegacyAsync(host.Db, WorkSourceKind.MangaSeries, series.Id), "The series that received the files is the request's Work.");
+        Assert.AreEqual(series.Id, (await host.SingleSeriesAsync()).Id, "A next volume never creates another series.");
+        Assert.AreEqual(1, await host.Db.Set<Work>().CountAsync(), "Request and import share one Work.");
+        Assert.AreEqual($"/Manga/Series/{series.Id}", second.ResultUrl);
+    }
+
+    [TestMethod]
+    public async Task FilesNeverSilentlySwitchTheRequestsWorkWhenTheSeriesTheyLandInBelongsToAnotherOne()
+    {
+        await using var host = await Host.CreateAsync(ImportMode.Copy);
+        await host.ImportAsync(host.Download("Frieren.Vol.01.CBZ", "Frieren Vol 01.cbz"), provider: "manual", externalId: "frieren");
+        var series = await host.SingleSeriesAsync();
+        var works = new WorkService(host.Db);
+        var other = await works.CreateWorkAsync(WorkMediaType.Manga, "Another series", null, CancellationToken.None);
+        await works.LinkSourceAsync(other.Id, WorkSourceKind.MangaSeries, series.Id, CancellationToken.None);
+        var request = await RequestWorkTestSupport.CreateRequestAsync(host.Db, MediaAcquisitionKind.Manga, bound: true, provider: "anilist", externalId: "118586", title: "Frieren");
+
+        var result = await host.ImportAsync(host.Download("Frieren.Vol.02.CBZ", "Frieren Vol 02.cbz"), request);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.NeedsReview, result.Disposition, result.Message);
+        Assert.AreEqual(other.Id, await RequestWorkTestSupport.WorkOfLegacyAsync(host.Db, WorkSourceKind.MangaSeries, series.Id), "The series keeps the Work it belonged to.");
+        Assert.AreNotEqual(request.WorkId, other.Id);
+    }
+
+    [TestMethod]
+    public async Task ASeriesMatchedToADifferentAniListEntryIsNotBoundToTheRequestsWork()
+    {
+        await using var host = await Host.CreateAsync(ImportMode.Copy);
+        await host.ImportAsync(host.Download("Frieren.Vol.01.CBZ", "Frieren Vol 01.cbz"), provider: "manual", externalId: "frieren");
+        var series = await host.SingleSeriesAsync();
+        await host.Repository.UpdateMetadataAsync(series.Id, new MangaAniListCandidate("999", "Frieren", null, null, null, null, "RELEASING"), CancellationToken.None);
+        var request = await RequestWorkTestSupport.CreateRequestAsync(host.Db, MediaAcquisitionKind.Manga, bound: true, provider: "anilist", externalId: "118586", title: "Frieren");
+
+        var result = await host.ImportAsync(host.Download("Frieren.Vol.02.CBZ", "Frieren Vol 02.cbz"), request);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.NeedsReview, result.Disposition, result.Message);
+        Assert.IsNull(await RequestWorkTestSupport.WorkOfLegacyAsync(host.Db, WorkSourceKind.MangaSeries, series.Id), "Matching folder names is not identity: nothing was linked.");
     }
 
     [TestMethod]
@@ -229,23 +284,28 @@ public sealed class MangaCompletedDownloadImportTests
             return folder;
         }
 
+        public Task<CompletedDownloadImportResult> ImportAsync(string download, AcquisitionRequest request) =>
+            ImportAsync(download, request.Provider, request.ExternalId, request.Title, request);
+
         public Task<CompletedDownloadImportResult> ImportAsync(
             string download,
             string provider,
             string externalId,
-            string title = "Frieren")
+            string title = "Frieren",
+            AcquisitionRequest? bound = null)
         {
             var adapter = new MangaCompletedDownloadImportAdapter(
                 Db,
-                null!,
+                new UnreachableHttpClients(),
                 null!,
                 null!,
                 settings,
                 new FileSystemHardLinkCreator(),
                 NullLogger<MangaCompletedDownloadImportAdapter>.Instance,
                 Path.Combine(Root, "cache"),
-                routing: new Jularr.Web.Features.Storage.LibraryRootRoutingService(Db));
-            var request = new AcquisitionRequest(
+                routing: new Jularr.Web.Features.Storage.LibraryRootRoutingService(Db),
+                binder: bound is null ? null : RequestWorkTestSupport.Binder(Db));
+            var request = bound ?? new AcquisitionRequest(
                 Guid.NewGuid(),
                 MediaAcquisitionKind.Manga,
                 provider,
@@ -290,4 +350,16 @@ public sealed class MangaCompletedDownloadImportTests
     }
 
     private sealed record SeriesRow(string Id, string Title, string SourcePath);
+
+    /// <summary>AniList is not reachable from a test: the metadata match after an import fails the way a network problem does, and the import itself is unaffected.</summary>
+    private sealed class UnreachableHttpClients : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(new Unreachable());
+
+        private sealed class Unreachable : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                throw new HttpRequestException("AniList is not reachable in tests.");
+        }
+    }
 }

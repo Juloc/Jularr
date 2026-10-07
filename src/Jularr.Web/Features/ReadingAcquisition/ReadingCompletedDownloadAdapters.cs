@@ -1,3 +1,4 @@
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Library;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -31,7 +32,8 @@ public sealed class MangaCompletedDownloadImportAdapter(
     string? mangaCacheRoot = null,
     ReadingNamingProfileStore? namingStore = null,
     ReadingCoverArtwork? coverArtwork = null,
-    LibraryRootRoutingService? routing = null)
+    LibraryRootRoutingService? routing = null,
+    RequestWorkBinder? binder = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     public MediaAcquisitionKind Kind =>
@@ -45,6 +47,7 @@ public sealed class MangaCompletedDownloadImportAdapter(
         try
         {
             var repository = new MangaRepository(db);
+            var acquisition = request.Request is { } asked && binder is not null ? await binder.EnsureBoundAsync(asked, cancellationToken) : request.Request;
             var aniListId = request.Request is { } answered &&
                             answered.Provider.Equals(
                                 NovelAniListProvider.ProviderKey,
@@ -54,12 +57,19 @@ public sealed class MangaCompletedDownloadImportAdapter(
 
             // One series per AniList entry: a new volume of a series that is already matched is
             // added to that series instead of creating another one per release (#485 item 7).
-            var existing = aniListId is not null
-                ? await repository.FindByMetadataAsync(
-                    NovelAniListProvider.ProviderKey,
-                    aniListId,
-                    cancellationToken)
+            // The request's Work decides the series first: files of a request go into the library entry of the title it asked for, never into
+            // another one that happens to share a folder or a name.
+            var linkedSeries = acquisition is not null && binder is not null
+                ? await binder.LegacyTargetAsync(acquisition, WorkSourceKind.MangaSeries, null, cancellationToken)
                 : null;
+            var existing = linkedSeries is { } linkedId
+                ? await repository.FindByIdAsync(linkedId, cancellationToken)
+                : aniListId is not null
+                    ? await repository.FindByMetadataAsync(
+                        NovelAniListProvider.ProviderKey,
+                        aniListId,
+                        cancellationToken)
+                    : null;
 
             var releaseName = Path.GetFileName(request.SourcePath.TrimEnd(
                 Path.DirectorySeparatorChar,
@@ -177,6 +187,12 @@ public sealed class MangaCompletedDownloadImportAdapter(
                 }
             }
 
+            if (acquisition is not null && binder is not null
+                && await binder.BindImportedAsync(acquisition, WorkSourceKind.MangaSeries, imported.SeriesId, cancellationToken) is { } conflict)
+            {
+                return CompletedDownloadImportResult.NeedsReview(conflict, placement);
+            }
+
             return CompletedDownloadImportResult.Completed(
                 $"Imported {imported.ChapterCount} Manga chapter(s).{metadataWarning}",
                 $"/Manga/Series/{imported.SeriesId}",
@@ -283,7 +299,8 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
     IHardLinkCreator hardLinks,
     ILogger<LightNovelCompletedDownloadImportAdapter> logger,
     ReadingNamingProfileStore? namingStore = null,
-    LibraryRootRoutingService? routing = null)
+    LibraryRootRoutingService? routing = null,
+    RequestWorkBinder? binder = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     private static readonly CompletedDownloadPlacement Placement =
@@ -336,11 +353,18 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
                 releaseTitle);
             var importSource = destination;
 
+            // The request's Work decides the series: volumes of a request are added to the series of the title it asked for.
+            var acquisition = request.Request is { } asked && binder is not null ? await binder.EnsureBoundAsync(asked, cancellationToken) : request.Request;
+            var targetSeries = acquisition is not null && binder is not null
+                ? await binder.LegacyTargetAsync(acquisition, WorkSourceKind.NovelWork, NovelEpubImportService.Provider, cancellationToken)
+                : null;
+
             // Recursive, no folder hints, validated before anything is stored (#485 item 8).
             var import = await importer.ImportDownloadAsync(
                 importSource,
                 cancellationToken,
-                recordSourceStoragePath: true);
+                recordSourceStoragePath: true,
+                targetWorkId: targetSeries);
             if (import.RejectedBecause is { } rejected)
             {
                 return CompletedDownloadImportResult.RejectRelease(
@@ -407,6 +431,12 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
                     metadataWarning =
                         " Light Novel was imported, but AniList reconciliation needs attention.";
                 }
+            }
+
+            if (acquisition is not null && binder is not null
+                && await binder.BindImportedAsync(acquisition, WorkSourceKind.NovelWork, workIds[0], cancellationToken) is { } conflict)
+            {
+                return CompletedDownloadImportResult.NeedsReview(conflict, placement ?? Placement);
             }
 
             return CompletedDownloadImportResult.Completed(

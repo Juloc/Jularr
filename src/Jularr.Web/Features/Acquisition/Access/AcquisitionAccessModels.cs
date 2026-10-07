@@ -134,8 +134,15 @@ public sealed record AcquisitionRequest(
     DateTime CreatedAt,
     DateTime UpdatedAt,
     string? DecidedByProfileId,
-    DateTime? DecidedAt)
+    DateTime? DecidedAt,
+    Guid? WorkId = null)
 {
+    /// <summary>
+    /// Whether the request is bound to its canonical Work: the one Work Library, profile assignment, search and import all use. Provider and external id
+    /// stay evidence of it. Null for a request made before the binding or whose identity could not be resolved safely; it is bound lazily and never guessed.
+    /// </summary>
+    public bool IsBoundToWork => WorkId is not null;
+
     public bool IsOpen => AcquisitionAccessNames.IsOpen(Status);
 
     /// <summary>
@@ -188,7 +195,8 @@ public sealed record AcquisitionRequestDraft(
     string? Subtitle,
     string? CoverImageUrl,
     string? PayloadJson = null,
-    AcquisitionRequestOptions? Options = null);
+    AcquisitionRequestOptions? Options = null,
+    Guid? WorkId = null);
 
 /// <summary>The request a submit ended with, and whether it was an open request for the title already.</summary>
 public sealed record AcquisitionSubmission(AcquisitionRequest Request, bool AlreadyRequested);

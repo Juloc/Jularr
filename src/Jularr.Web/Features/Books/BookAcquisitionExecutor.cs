@@ -33,7 +33,8 @@ public sealed class BookAcquisitionExecutor(
     BookSearchCoordinator search,
     DownloadClientStore downloadClients,
     DownloadClientSubmissionService downloads,
-    ReleaseRequestTracker tracker) : IAcquisitionRequestExecutor
+    ReleaseRequestTracker tracker,
+    RequestWorkBinder? binder = null) : IAcquisitionRequestExecutor
 {
     /// <summary>Operation kind of a request-backed Books download.</summary>
     public const string OperationKind = "book-usenet-download";
@@ -42,6 +43,7 @@ public sealed class BookAcquisitionExecutor(
 
     public async Task<AcquisitionExecution> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
+        request = binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken);
         var payload = ReadPayload(request);
 
         string? directNote = null;
@@ -113,7 +115,8 @@ public sealed class BookAcquisitionExecutor(
             payload.Title,
             payload.Author,
             cancellationToken,
-            SelectionContext.SinceCreated(request.CreatedAt));
+            SelectionContext.SinceCreated(request.CreatedAt),
+            request.WorkId);
         return await tracker.ContinueAsync(
             request,
             payload,

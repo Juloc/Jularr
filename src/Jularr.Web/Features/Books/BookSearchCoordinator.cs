@@ -220,11 +220,12 @@ public sealed class BookSearchCoordinator(
         string title,
         string? author,
         CancellationToken cancellationToken,
-        DateTimeOffset? wantedSince = null)
+        DateTimeOffset? wantedSince = null,
+        Guid? workId = null)
     {
         var profile = await qualityProfiles.ResolveAsync(
             MediaAcquisitionKind.Book,
-            workId: null,
+            workId,
             cancellationToken);
         return await BookUsenetSearch.SearchAsync(indexers, title, author, profile, cancellationToken, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken), wantedSince: wantedSince);
     }

@@ -44,6 +44,16 @@ The SABnzbd monitor is the only component that projects external queue/history s
 
 Retrying a failed download under Operations is refused once the request has moved on to a newer release; retrying the last download of a request that is waiting or failed puts the request back to `Downloading`.
 
+## Request Work binding (#396, #432)
+
+A Book, Light Novel or Manga request is bound to the canonical Work it is about: `AcquisitionRequests.WorkId` (nullable text, no foreign key), set when the request is created. The provider and external id of the request (a catalog id for Books, an AniList id for Manga and Light Novels, a Syosetu key for a web novel) are the evidence the Work is resolved from, never the identity itself, and the title is never evidence. `RequestWorkBinder` resolves in this order: the Work the provider identity already points at, then the Work of the legacy library entry (Manga series, Novel work) that already holds that id, then a new Work created for the identity. Evidence that points at two different Works, or that is not a stable identity (a transient search id, a malformed id), binds nothing: the request stays valid, unbound, and keeps working on its payload with the media-kind default profile. A Work is only created for a request, never by showing a search result, and the same evidence always gives the same Work, so a repeated request or a second provider spelling never creates another one.
+
+A request made before the binding is bound lazily, the first time the automatic search, the Manual Search or an import uses it. The binding is stored with the request and survives a restart, a retry and a metadata refresh. Volume and chapter targets stay in the payload (`RequestedVolume`, `RequestedChapterStart`): the Work is the series or book, so the Work's profile applies to every volume and chapter.
+
+The effective profile of every Book, Light Novel and Manga search is `QualityProfileStore.ResolveAsync(kind, request.WorkId)`: the Work's own override, otherwise the media-kind default. Automatic search, Manual Search and the Wanted list use it, so the wait, the sources, the rules and the upgrades of a Work-specific profile apply to all of them. The wait is measured from the request's stored creation time, so it never starts over.
+
+The importer puts the files into the library entry of the request's Work: the entry already linked to the Work (or the one that already holds the request's provider id and belongs to no other Work) receives them, and an entry the import created is linked to the Work afterwards. An entry that belongs to a different Work, or that is matched to a different provider id, is never relinked: the download ends as "needs review". Not yet covered: Books and Light Novels have no canonical Work of their own in the Library until their first import (the legacy `NovelWorks` and `MangaSeries` tables stay the library records), and an ambiguous request has no review screen beyond its unbound state.
+
 ## Completed downloads
 
 `CompletedDownloadImportService` is the one import step for completed downloads:

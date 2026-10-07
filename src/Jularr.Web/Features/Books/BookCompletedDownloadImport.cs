@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
@@ -21,7 +22,8 @@ public sealed class BookCompletedDownloadImportAdapter(
     AnimeImportSettingsStore importSettings,
     IHardLinkCreator hardLinks,
     ILogger<BookCompletedDownloadImportAdapter> logger,
-    LibraryRootRoutingService? routing = null)
+    LibraryRootRoutingService? routing = null,
+    RequestWorkBinder? binder = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     /// <summary>Why a finished download did not become a book; the next release is tried.</summary>
@@ -45,7 +47,15 @@ public sealed class BookCompletedDownloadImportAdapter(
                 $"The download finished in '{request.SourcePath}', but Jularr cannot read it. Check the remote path mappings.");
         }
 
-        var hint = request.Request is { } acquisition ? Hint(acquisition) : null;
+        var bound = request.Request is { } asked && binder is not null ? await binder.EnsureBoundAsync(asked, cancellationToken) : request.Request;
+        var hint = bound is { } acquisition ? Hint(acquisition) : null;
+        if (hint is not null && bound is not null && binder is not null
+            && await binder.LegacyTargetAsync(bound, WorkSourceKind.NovelWork, BookCatalogService.ImportedBookProvider, cancellationToken) is { } targetBook)
+        {
+            // The book of the request's Work already exists in the library: the download is added to it, not imported as another book.
+            hint = hint with { ExistingWorkId = targetBook };
+        }
+
         IReadOnlyList<Guid> imported;
         try
         {
@@ -122,7 +132,8 @@ public sealed class BookCompletedDownloadImportAdapter(
                 placement ?? Placement);
         }
 
-        var match = works.FirstOrDefault(work => SameTitle(work.Title, answered.Title))
+        var match = (hint.ExistingWorkId is { } target ? works.FirstOrDefault(work => work.Id == target) : null)
+            ?? works.FirstOrDefault(work => SameTitle(work.Title, answered.Title))
             ?? (works.Count == 1 ? works[0] : null);
         if (match is null)
         {
@@ -134,6 +145,11 @@ public sealed class BookCompletedDownloadImportAdapter(
             "Matching imported book with the requested catalog item.",
             placement ?? Placement);
         await books.LinkRequestedWorkAsync(match.Id, hint, cancellationToken);
+        if (bound is not null && binder is not null && await binder.BindImportedAsync(bound, WorkSourceKind.NovelWork, match.Id, cancellationToken) is { } conflict)
+        {
+            return CompletedDownloadImportResult.NeedsReview(conflict, placement ?? Placement);
+        }
+
         return CompletedDownloadImportResult.Completed(
             "Downloaded book imported.",
             $"/Books/Library/{match.Id}",

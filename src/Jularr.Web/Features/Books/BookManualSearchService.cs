@@ -19,7 +19,8 @@ public sealed class BookManualSearchService(
     ReleaseRequestTracker tracker,
     AcquisitionAccessStore requests,
     IJularrEventPublisher events,
-    TimeProvider clock)
+    TimeProvider clock,
+    RequestWorkBinder? binder = null)
 {
     private static readonly ConcurrentDictionary<Guid, SearchCacheEntry> SearchCache = new();
     private static readonly TimeSpan SearchCacheLifetime = TimeSpan.FromMinutes(2);
@@ -57,7 +58,8 @@ public sealed class BookManualSearchService(
             target.Payload.Title,
             target.Payload.Author,
             cancellationToken,
-            SelectionContext.SinceCreated(target.Request.CreatedAt));
+            SelectionContext.SinceCreated(target.Request.CreatedAt),
+            target.Request.WorkId);
         SearchCache[requestId] = new SearchCacheEntry(
             now,
             target.Payload.Title,
@@ -85,7 +87,8 @@ public sealed class BookManualSearchService(
             payload.Title,
             payload.Author,
             cancellationToken,
-            SelectionContext.SinceCreated(request.CreatedAt));
+            SelectionContext.SinceCreated(request.CreatedAt),
+            request.WorkId);
         SearchCache.TryRemove(requestId, out _);
         var selected = SelectRelease(
             result,
@@ -199,9 +202,10 @@ public sealed class BookManualSearchService(
     private async Task<AcquisitionRequest> RequireRequestAsync(
         Guid requestId,
         CancellationToken cancellationToken) =>
-        await requests.GetAsync(requestId, cancellationToken)
-        ?? throw new InvalidOperationException(
-            "The request no longer exists.");
+        await requests.GetAsync(requestId, cancellationToken) is { } request
+            ? binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken)
+            : throw new InvalidOperationException(
+                "The request no longer exists.");
 
     private sealed record SearchCacheEntry(
         DateTimeOffset StoredAt,
