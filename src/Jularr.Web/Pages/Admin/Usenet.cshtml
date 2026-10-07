@@ -161,7 +161,7 @@
                     </div>
                     <dl class="usenet-facts">
                         <div><dt>@ui["admin.usenet.address"]</dt><dd>@card.Entry.Settings.BaseUrl</dd></div>
-                        @foreach (var kind in UsenetModel.DownloadKinds)
+                        @foreach (var kind in Model.ActiveKinds)
                         {
                             <div><dt>@ClientCategoryLabel(kind)</dt><dd>@(card.Entry.CategoryFor(kind) ?? ui["admin.usenet.defaultCategory"])</dd></div>
                         }

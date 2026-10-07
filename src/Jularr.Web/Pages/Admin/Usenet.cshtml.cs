@@ -10,6 +10,7 @@ using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Books;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.ReadingAcquisition;
 using Microsoft.AspNetCore.Authorization;
@@ -78,13 +79,17 @@ public sealed class UsenetModel(
     AcquisitionHealthStore health,
     AnimeImportSettingsStore importSettings,
     AcquisitionAccessStore access,
-    ILogger<UsenetModel> logger) : PageModel
+    ILogger<UsenetModel> logger,
+    IInstanceModuleService? instanceModules = null) : PageModel
 {
     private static readonly TimeSpan SabnzbdTimeout = TimeSpan.FromSeconds(6);
 
     /// <summary>Every media type that downloads through SABnzbd, in display order.</summary>
     public static IReadOnlyList<MediaAcquisitionKind> DownloadKinds { get; } =
-        [MediaAcquisitionKind.Anime, MediaAcquisitionKind.Book, MediaAcquisitionKind.Manga, MediaAcquisitionKind.LightNovel];
+        [MediaAcquisitionKind.Movie, MediaAcquisitionKind.Tv, MediaAcquisitionKind.Anime, MediaAcquisitionKind.Music, MediaAcquisitionKind.Book, MediaAcquisitionKind.Manga, MediaAcquisitionKind.LightNovel, MediaAcquisitionKind.Audiobook];
+
+    /// <summary>The download media types of the media modules this instance serves: a type that is switched off is neither listed nor asked for a category.</summary>
+    public IReadOnlyList<MediaAcquisitionKind> ActiveKinds { get; private set; } = DownloadKinds;
 
     /// <summary>The media types the search test can run.</summary>
     public static IReadOnlyList<MediaAcquisitionKind> TestKinds { get; } =
@@ -121,6 +126,8 @@ public sealed class UsenetModel(
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        var served = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
+        ActiveKinds = [.. DownloadKinds.Where(kind => served.IsEnabled(AcquisitionInstanceModules.For(kind)))];
 
         var indexerEntries = (await indexerStore.LoadAllAsync(cancellationToken))
             .OrderBy(entry => entry.Priority)
@@ -442,7 +449,7 @@ public sealed class UsenetModel(
                 ? new UsenetCheck("client", UsenetCheckState.Ok, string.Join(", ", enabledClients.Where(card => card.Health?.IsHealthy == true).Select(card => card.Entry.Name)), null)
                 : new UsenetCheck("client", UsenetCheckState.Warning, Ui["admin.usenet.check.client.untested"], null));
 
-        checks.Add(BuildCategoryCheck(Ui, enabledClients.Select(card => card.Entry).ToArray()));
+        checks.Add(BuildCategoryCheck(Ui, enabledClients.Select(card => card.Entry).ToArray(), ActiveKinds));
 
         var completed = Downloads.Where(row => row.LocalPathReadable is not null).ToArray();
         checks.Add(completed.Length == 0
@@ -474,9 +481,9 @@ public sealed class UsenetModel(
 
     /// <summary>
     /// Every media type should land in its own SABnzbd category so SABnzbd's sorting and the
-    /// importers never mix Anime, Books, Manga and Light Novels.
+    /// importers never mix one media type with another.
     /// </summary>
-    public static UsenetCheck BuildCategoryCheck(UiTextBundle ui, IReadOnlyList<DownloadClientEntry> enabledClients)
+    public static UsenetCheck BuildCategoryCheck(UiTextBundle ui, IReadOnlyList<DownloadClientEntry> enabledClients, IReadOnlyList<MediaAcquisitionKind>? kinds = null)
     {
         if (enabledClients.Count == 0)
         {
@@ -484,7 +491,7 @@ public sealed class UsenetModel(
         }
 
         string Label(MediaAcquisitionKind kind) => ui[$"admin.requests.kind.{AcquisitionAccessNames.Kind(kind)}"];
-        var categories = DownloadKinds
+        var categories = (kinds ?? DownloadKinds)
             .Select(kind => (Kind: kind, Category: enabledClients
                 .Select(entry => entry.Settings.CategoryFor(kind))
                 .FirstOrDefault(category => category is not null)))

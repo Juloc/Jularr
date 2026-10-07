@@ -51,6 +51,12 @@ public sealed class EditModel(
     public string? LightNovelCategory { get; set; }
 
     [BindProperty]
+    public string? MusicCategory { get; set; }
+
+    [BindProperty]
+    public string? AudiobookCategory { get; set; }
+
+    [BindProperty]
     public int Priority { get; set; } = 1;
 
     [BindProperty]
@@ -65,6 +71,8 @@ public sealed class EditModel(
     public bool ShowMovie => InstanceModules.IsEnabled(InstanceModule.Movie);
     public bool ShowManga => InstanceModules.IsEnabled(InstanceModule.Manga);
     public bool ShowLightNovels => InstanceModules.IsEnabled(InstanceModule.Novel);
+    public bool ShowMusic => InstanceModules.IsEnabled(InstanceModule.Music);
+    public bool ShowAudiobooks => InstanceModules.IsEnabled(InstanceModule.Audiobook);
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -90,6 +98,8 @@ public sealed class EditModel(
         MovieCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Movie);
         MangaCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Manga);
         LightNovelCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.LightNovel);
+        MusicCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Music);
+        AudiobookCategory = entry.Settings.CategoryFor(MediaAcquisitionKind.Audiobook);
         Priority = entry.Priority;
         Enabled = entry.Enabled;
     }
@@ -136,7 +146,13 @@ public sealed class EditModel(
                                 : existing?.Settings.CategoryFor(MediaAcquisitionKind.LightNovel),
                             [MediaAcquisitionKind.Book] = ShowBooks
                                 ? BooksCategory
-                                : existing?.Settings.CategoryFor(MediaAcquisitionKind.Book)
+                                : existing?.Settings.CategoryFor(MediaAcquisitionKind.Book),
+                            [MediaAcquisitionKind.Music] = ShowMusic
+                                ? MusicCategory
+                                : existing?.Settings.CategoryFor(MediaAcquisitionKind.Music),
+                            [MediaAcquisitionKind.Audiobook] = ShowAudiobooks
+                                ? AudiobookCategory
+                                : existing?.Settings.CategoryFor(MediaAcquisitionKind.Audiobook)
                         }),
                     secret),
                 cancellationToken);
