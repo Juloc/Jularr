@@ -243,7 +243,8 @@ public sealed partial class VideoAcquisitionEngine(
     ReleaseRequestTracker tracker,
     AcquisitionAccessStore requestStore,
     VideoRequestWorkResolver works,
-    TimeProvider clock)
+    TimeProvider clock,
+    InstalledVideoVersions? installed = null)
 {
     public const string OperationKind = "video-usenet-download";
     private static readonly IReadOnlyDictionary<string, string> EmptyIds = new Dictionary<string, string>();
@@ -279,22 +280,39 @@ public sealed partial class VideoAcquisitionEngine(
         }
 
         VideoUnit? unit = null;
+        string? installedQuality = null;
         var scope = VideoUnitScope.Empty;
         if (request.Kind == MediaAcquisitionKind.Movie)
         {
             if (await HasMovieFileAsync(target.WorkId, cancellationToken))
             {
                 await DropSatisfiedPlaybackIntentAsync(request, payload, cancellationToken);
-                return new AcquisitionExecution(
-                    AcquisitionRequestStatus.Completed,
-                    "Movie is already available in the library.",
-                    ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
+                installedQuality = await FindMovieUpgradeAsync(target.WorkId, cancellationToken);
+                if (installedQuality is null)
+                {
+                    return new AcquisitionExecution(
+                        AcquisitionRequestStatus.Completed,
+                        "Movie is already available in the library.",
+                        ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
+                }
             }
         }
         else
         {
             scope = await FindWantedTvUnitsAsync(request, payload, cancellationToken);
             unit = scope.Wanted.FirstOrDefault();
+            if (unit is null)
+            {
+                // Nothing is missing: the installed episodes a better release may replace are wanted next, each as its own unit.
+                var upgradable = await FindUpgradableTvUnitsAsync(request, payload, scope.All, cancellationToken);
+                if (upgradable.Count > 0)
+                {
+                    scope = new VideoUnitScope(scope.All, upgradable);
+                    unit = upgradable[0];
+                    installedQuality = unit.InstalledQuality;
+                }
+            }
+
             if (unit is null)
             {
                 var continuation = await TvContinuationAsync(request, payload, cancellationToken);
@@ -338,7 +356,61 @@ public sealed partial class VideoAcquisitionEngine(
         var profile = await profiles.ResolveAsync(request.Kind, target.WorkId, cancellationToken);
         var evaluation = await SearchAndEvaluateAsync(request, payload, unit, scope, target.ExternalIds ?? EmptyIds, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
 
-        return await GrabAsync(request, payload, unit, evaluation.Grabbable, FailureMessage(evaluation, request.Kind), cancellationToken);
+        return installedQuality is null
+            ? await GrabAsync(request, payload, unit, evaluation.Grabbable, FailureMessage(evaluation, request.Kind), cancellationToken)
+            : await UpgradeOrWaitAsync(request, payload, unit, evaluation, installedQuality, cancellationToken);
+    }
+
+    /// <summary>
+    /// The upgrade pass of an installed target that is not final: only a release that is a meaningful upgrade of the installed quality is taken
+    /// (the same facts the selection engine ranked by), and once every such release was tried or none exists the request waits a bounded
+    /// <see cref="UpgradePolicy.SearchInterval"/> instead of failing, because nothing is missing. The wait is stored in the request, so it survives a restart.
+    /// </summary>
+    private async Task<AcquisitionExecution> UpgradeOrWaitAsync(AcquisitionRequest request, VideoRequestPayload payload, VideoUnit? unit, VideoSearchEvaluation evaluation, string installedQuality, CancellationToken cancellationToken)
+    {
+        var better = evaluation.Grabbable.Where(release => release.Score is { } score && UpgradePolicy.IsUpgrade(evaluation.Profile, installedQuality, score.QualityKey)).ToArray();
+        var tried = (payload.TriedReleases ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (better.Any(release => !tried.Contains(release.Candidate.Identity)))
+        {
+            return await GrabAsync(request, payload, unit, better, string.Empty, cancellationToken);
+        }
+
+        var next = clock.GetUtcNow().UtcDateTime + UpgradePolicy.SearchInterval;
+        await tracker.SaveAsync(request, payload with { Searches = 0, LastProblem = null, NextSearchUtc = next, ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null }, cancellationToken);
+        var what = unit is null ? "Movie" : $"S{unit.SeasonNumber:00}E{unit.EpisodeNumber:00}";
+        return new AcquisitionExecution(
+            AcquisitionRequestStatus.Approved,
+            $"{what} is available as {installedQuality} ({UpgradePolicy.Assess(evaluation.Profile, installedQuality).Reason}) and no better release is known yet. Looking again {next:yyyy-MM-dd HH:mm} UTC.",
+            ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
+    }
+
+    /// <summary>The installed quality of a Movie that its profile still wants to upgrade, or null when the Movie is final (or its quality cannot be compared).</summary>
+    private async Task<string?> FindMovieUpgradeAsync(Guid workId, CancellationToken cancellationToken)
+    {
+        if (installed is null)
+        {
+            return null;
+        }
+
+        var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Movie, workId, cancellationToken);
+        var quality = await installed.BestMovieQualityAsync(workId, profile, cancellationToken);
+        return UpgradePolicy.Assess(profile, quality).IsUpgradable ? quality : null;
+    }
+
+    /// <summary>The installed, monitored episodes the profile still wants to upgrade, in season and episode order.</summary>
+    private async Task<IReadOnlyList<VideoUnit>> FindUpgradableTvUnitsAsync(AcquisitionRequest request, VideoRequestPayload payload, IReadOnlyList<VideoUnit> episodes, CancellationToken cancellationToken)
+    {
+        if (installed is null || episodes.All(episode => episode.InstalledQuality is null))
+        {
+            return [];
+        }
+
+        var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Tv, payload.WorkId, cancellationToken);
+        var selection = new VideoRequestSelection(payload, request.CreatedAt, clock.GetUtcNow().UtcDateTime);
+        return [.. episodes
+            .Where(episode => episode.HasFile && selection.Includes(episode.Id, episode.SeasonId, episode.AiredAt) && UpgradePolicy.Assess(profile, episode.InstalledQuality).IsUpgradable)
+            .OrderBy(episode => episode.SeasonNumber)
+            .ThenBy(episode => episode.EpisodeNumber)];
     }
 
     /// <summary>
@@ -530,12 +602,22 @@ public sealed partial class VideoAcquisitionEngine(
 
         if (request.Kind == MediaAcquisitionKind.Movie)
         {
-            return false;
+            if (await FindMovieUpgradeAsync(payload.WorkId, cancellationToken) is not { } movieQuality)
+            {
+                return false;
+            }
+
+            var movieNext = clock.GetUtcNow().UtcDateTime + UpgradePolicy.SearchInterval;
+            await tracker.SaveAsync(request, payload with { Searches = 0, LastProblem = null, NextSearchUtc = movieNext }, cancellationToken);
+            await requestStore.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Approved, $"Imported {movieQuality}. A better release is still wanted; looking again {movieNext:yyyy-MM-dd HH:mm} UTC.", request.OperationId, VideoWorkLinks.DetailPath(request.Kind, payload.WorkId), decidedByProfileId: null, cancellationToken);
+            return true;
         }
 
+        var continuation = await TvContinuationAsync(request, payload, cancellationToken);
+        // The releases tried so far only reset for the next missing episode; an upgrade-only request keeps them so a release that did not improve anything is never grabbed again.
         var reset = payload with
         {
-            TriedReleases = [],
+            TriedReleases = continuation.HasMissingDue ? [] : payload.TriedReleases,
             Searches = 0,
             LastProblem = null,
             NextSearchUtc = null,
@@ -544,7 +626,6 @@ public sealed partial class VideoAcquisitionEngine(
             ActiveEpisodeNumber = null
         };
 
-        var continuation = await TvContinuationAsync(request, reset, cancellationToken);
         if (!continuation.KeepOpen)
         {
             await tracker.SaveAsync(request, reset, cancellationToken);
@@ -558,7 +639,9 @@ public sealed partial class VideoAcquisitionEngine(
             AcquisitionRequestStatus.Approved,
             continuation.HasMissingDue
                 ? "Imported episode(s). Searching for the next requested episode."
-                : "Imported requested episodes. Waiting for the next requested TV episode.",
+                : continuation.HasUpgrade
+                    ? "Imported requested episodes. A better release is still wanted for some of them."
+                    : "Imported requested episodes. Waiting for the next requested TV episode.",
             request.OperationId,
             VideoWorkLinks.DetailPath(request.Kind, reset.WorkId),
             decidedByProfileId: null,
@@ -634,9 +717,10 @@ public sealed partial class VideoAcquisitionEngine(
 
         if (hasMissingDue)
         {
-            return new TvContinuation(true, true, null);
+            return new TvContinuation(true, true, null, false);
         }
 
+        DateTime? upgradeAt = (await FindUpgradableTvUnitsAsync(request, payload, episodes, cancellationToken)).Count > 0 ? now + UpgradePolicy.SearchInterval : null;
         var nextKnown = missingIncluded
             .Where(x => x.AiredAt is DateTime airedAt && airedAt > now)
             .Select(x => x.AiredAt)
@@ -644,12 +728,17 @@ public sealed partial class VideoAcquisitionEngine(
             .FirstOrDefault();
         if (nextKnown is not null)
         {
-            return new TvContinuation(true, false, nextKnown);
+            return new TvContinuation(true, false, upgradeAt is { } earlier && earlier < nextKnown ? earlier : nextKnown, upgradeAt is not null);
+        }
+
+        if (upgradeAt is not null)
+        {
+            return new TvContinuation(true, false, upgradeAt, true);
         }
 
         return payload.MonitorFuture
-            ? new TvContinuation(true, false, now.AddHours(24))
-            : new TvContinuation(false, false, null);
+            ? new TvContinuation(true, false, now.AddHours(24), false)
+            : new TvContinuation(false, false, null, false);
     }
 
     private async Task<IReadOnlyList<VideoUnit>> LoadTvUnitsAsync(
@@ -679,13 +768,17 @@ public sealed partial class VideoAcquisitionEngine(
                 .ToListAsync(cancellationToken))
             .ToHashSet();
 
+        var qualities = installed is null
+            ? new Dictionary<Guid, string?>()
+            : await installed.BestQualityByEpisodeAsync(MediaAcquisitionKind.Tv, workId, await profiles.ResolveAsync(MediaAcquisitionKind.Tv, workId, cancellationToken), cancellationToken);
         return episodes.Select(x => new VideoUnit(
                 x.Id,
                 x.SeasonId,
                 x.SeasonNumber,
                 x.EpisodeNumber,
                 x.AiredAt,
-                playable.Contains(x.Id)))
+                playable.Contains(x.Id),
+                qualities.GetValueOrDefault(x.Id)))
             .ToArray();
     }
 
@@ -734,7 +827,8 @@ public sealed partial class VideoAcquisitionEngine(
     private sealed record TvContinuation(
         bool KeepOpen,
         bool HasMissingDue,
-        DateTime? NextSearchUtc);
+        DateTime? NextSearchUtc,
+        bool HasUpgrade);
 }
 
 public abstract class VideoWantedRequestHandler(

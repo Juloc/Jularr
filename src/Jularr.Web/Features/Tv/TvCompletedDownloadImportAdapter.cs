@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Storage;
 
@@ -24,7 +25,8 @@ public sealed partial class TvCompletedDownloadImportAdapter(
     LibraryRootAvailabilityService availability,
     IHardLinkCreator hardLinks,
     ILogger<TvCompletedDownloadImportAdapter> logger,
-    CanonicalMediaStorageService? canonicalStorage = null)
+    CanonicalMediaStorageService? canonicalStorage = null,
+    InstalledVideoVersions? upgrades = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     /// <summary>Why a finished download did not become an episode; the next release is tried.</summary>
@@ -69,7 +71,10 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             {
                 foreach (var video in videos)
                 {
-                    placed.Add(await PlaceAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken));
+                    if (await PlaceAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken) is { } episode)
+                    {
+                        placed.Add(episode);
+                    }
                 }
 
                 failed = false;
@@ -79,11 +84,9 @@ public sealed partial class TvCompletedDownloadImportAdapter(
                 await AttachPlacedAsync(placed, afterFailure: failed);
             }
 
-            await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, $"Imported {placed.Count} episode(s).");
-            return CompletedDownloadImportResult.Completed(
-                $"Imported {placed.Count} episode(s).",
-                resultUrl: null,
-                new CompletedDownloadPlacement(placed[^1].SeriesFolder, ImportFileTransfer.ModeFor(route.PlacementPolicy)));
+            var summary = placed.Count == 0 ? "Every episode in the download is already in the library at least in this quality." : $"Imported {placed.Count} episode(s).";
+            await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, summary);
+            return CompletedDownloadImportResult.Completed(summary, resultUrl: null, new CompletedDownloadPlacement(placed.Count == 0 ? route.Path : placed[^1].SeriesFolder, ImportFileTransfer.ModeFor(route.PlacementPolicy)));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -133,7 +136,10 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 
                 try
                 {
-                    placed.Add(await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken));
+                    if (await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken) is { } episode)
+                    {
+                        placed.Add(episode);
+                    }
                 }
                 catch (DestinationMismatchException exception)
                 {
@@ -154,9 +160,11 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 
     /// <summary>
     /// Places one episode into the TV root with the root's placement policy and records the series and episode. Idempotent: an episode
-    /// already placed at the destination is left as is and only its records are refreshed.
+    /// already placed at the destination is left as is and only its records are refreshed. An episode that is a meaningful upgrade of the
+    /// installed one replaces it once the new file is recorded; an episode the library already has in at least this quality is skipped
+    /// (null), so a season pack never replaces a good file with a worse one.
     /// </summary>
-    private async Task<PlacedEpisode> PlaceAsync(LibraryRootRoute route, IReadOnlyList<CompletedDownloadFile> files, string videoPath, EpisodeMetadata meta, CancellationToken cancellationToken)
+    private async Task<PlacedEpisode?> PlaceAsync(LibraryRootRoute route, IReadOnlyList<CompletedDownloadFile> files, string videoPath, EpisodeMetadata meta, CancellationToken cancellationToken)
     {
         var (action, allowFallback) = ImportFileTransfer.Resolve(ImportFileTransfer.ModeFor(route.PlacementPolicy));
         var seriesFolder = Path.Combine(route.Path, TvNaming.SeriesFolderName(meta.Series, meta.Year));
@@ -167,24 +175,46 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         }
 
         var alreadyPlaced = LibraryFilePlacer.FindDestinationConflict(destination, []) is not null;
-        if (alreadyPlaced && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
-        {
-            throw new DestinationMismatchException(destination);
-        }
+        var incomingQuality = upgrades?.QualityOfDownload(MediaAcquisitionKind.Tv, videoPath);
 
         // The records come first so a database failure cannot happen after the file already left the source.
         var entry = await series.EnsureSeriesAsync(meta.Series, meta.Year, meta.TmdbId, meta.TvdbId, seriesFolder, cancellationToken);
         var workEpisode = await series.EnsureEpisodeAsync(entry.WorkId, meta.Season, meta.Episode, meta.EpisodeTitle, cancellationToken);
+        var judgement = upgrades is null || canonicalStorage is null
+            ? new IncomingVideoJudgement(IncomingVideoVerdict.Undecidable, [])
+            : await upgrades.JudgeIncomingAsync(MediaAcquisitionKind.Tv, entry.WorkId, workEpisode.Id, incomingQuality, cancellationToken);
+        var isUpgrade = judgement.Verdict == IncomingVideoVerdict.Upgrade;
+        var differentFileAtDestination = alreadyPlaced && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination);
+        if (differentFileAtDestination && !isUpgrade)
+        {
+            return judgement.Verdict == IncomingVideoVerdict.ExistingPreferred ? null : throw new DestinationMismatchException(destination);
+        }
+
+        ReplacedLibraryFile? replaced = null;
+        if (isUpgrade && differentFileAtDestination)
+        {
+            replaced = ReplacedLibraryFile.SetAside(destination);
+            alreadyPlaced = false;
+        }
+
         var moved = false;
         if (!alreadyPlaced)
         {
-            var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
-            new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
-            moved = action == ImportFileAction.Move;
+            try
+            {
+                var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
+                new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
+                moved = action == ImportFileAction.Move;
+            }
+            catch
+            {
+                replaced?.Rollback();
+                throw;
+            }
         }
 
-        var attachment = new CanonicalVideoAttachment(entry.WorkId, workEpisode.Id, Path.GetFullPath(destination), Path.GetFullPath(route.Path));
-        return new PlacedEpisode(attachment, seriesFolder, moved ? videoPath : null);
+        var attachment = new CanonicalVideoAttachment(entry.WorkId, workEpisode.Id, Path.GetFullPath(destination), Path.GetFullPath(route.Path), incomingQuality);
+        return new PlacedEpisode(attachment, seriesFolder, moved ? videoPath : null, replaced, isUpgrade ? judgement.Superseded : []);
     }
 
     // Attaching is data safety, not part of the request: it runs to completion even when the import is being cancelled. When it fails, the
@@ -208,12 +238,26 @@ public sealed partial class TvCompletedDownloadImportAdapter(
                 LibraryFilePlacer.RestoreMovedSource(episode.MovedFrom!, episode.Attachment.Path);
             }
 
+            foreach (var episode in placed)
+            {
+                episode.Replaced?.Rollback();
+            }
+
             if (!afterFailure)
             {
                 throw;
             }
 
             logger.LogError(exception, "Attaching the episodes placed before the failure also failed.");
+            return;
+        }
+
+        // The upgrades are recorded: the files they replaced go now, and their file rows with them.
+        foreach (var episode in placed)
+        {
+            episode.Replaced?.Commit();
+            var kept = episode.Attachment.Path;
+            await canonicalStorage.RemoveVideoFilesAsync([.. episode.Superseded.Where(file => !LibraryFilePlacer.SamePath(file.Path, kept)).Select(file => file.StoredFileId)], CancellationToken.None);
         }
     }
 
@@ -313,5 +357,5 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         string? TvdbId);
 
     /// <summary><paramref name="MovedFrom"/> is the source path when the file was moved (not copied or linked) into the library.</summary>
-    private readonly record struct PlacedEpisode(CanonicalVideoAttachment Attachment, string SeriesFolder, string? MovedFrom);
+    private readonly record struct PlacedEpisode(CanonicalVideoAttachment Attachment, string SeriesFolder, string? MovedFrom, ReplacedLibraryFile? Replaced, IReadOnlyList<InstalledVideoFile> Superseded);
 }

@@ -46,13 +46,18 @@ public sealed class StoredFile
     public DateTime DiscoveredAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <param name="Quality">The quality key of the release the file came from (see <c>ReleaseQuality</c>); it is what the upgrade policy compares later. Null keeps what the Version already says.</param>
 public sealed record CanonicalVideoAttachment(
     Guid WorkId,
     Guid? WorkEpisodeId,
     string Path,
-    string? StorageRootPath = null);
+    string? StorageRootPath = null,
+    string? Quality = null);
 
-public sealed record CanonicalAudioAttachment(Guid WorkId, Guid WorkTrackId, string Path);
+public sealed record CanonicalAudioAttachment(Guid WorkId, Guid WorkTrackId, string Path, string? Quality = null);
+
+/// <summary>One video file of a Work as the canonical Version/Asset/File chain holds it; <see cref="Quality"/> is the Version's recorded quality, null when none was recorded.</summary>
+public sealed record InstalledVideoFile(Guid StoredFileId, Guid? WorkEpisodeId, string Path, string? Quality);
 
 public sealed record CanonicalAudioFile(Guid MediaAssetId, Guid StoredFileId, Guid WorkTrackId, string Path);
 
@@ -230,6 +235,11 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
             {
                 version.UnitKey = unitKey;
             }
+
+            if (item.Quality is { Length: > 0 } quality)
+            {
+                version.Quality = quality;
+            }
         }
 
         var versionIds = versionByKey.Values.Select(x => x.Id).Distinct().ToArray();
@@ -337,11 +347,16 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         {
             var key = $"{LocalAudioVersionPrefix}{storedByPath[item.Path].Id:N}";
             var track = tracks[item.WorkTrackId];
-            if (!versionByKey.ContainsKey((item.WorkId, key)))
+            if (!versionByKey.TryGetValue((item.WorkId, key), out var version))
             {
-                var version = new WorkVersion { WorkId = item.WorkId, VersionKey = key, UnitKey = $"D{track.Disc:D2}T{track.Number:D2}", Source = "local" };
+                version = new WorkVersion { WorkId = item.WorkId, VersionKey = key, UnitKey = $"D{track.Disc:D2}T{track.Number:D2}", Source = "local" };
                 db.WorkVersions.Add(version);
                 versionByKey.Add((item.WorkId, key), version);
+            }
+
+            if (item.Quality is { Length: > 0 } quality)
+            {
+                version.Quality = quality;
             }
         }
 
@@ -367,6 +382,48 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
 
         await db.SaveChangesAsync(cancellationToken);
         return result;
+    }
+
+    /// <summary>Every video file of the Work with the quality its Version recorded; episodes are told apart by <see cref="InstalledVideoFile.WorkEpisodeId"/>, a Movie has none.</summary>
+    public async Task<IReadOnlyList<InstalledVideoFile>> ListVideoFilesAsync(Guid workId, CancellationToken cancellationToken) =>
+        await (
+            from asset in db.MediaAssets.AsNoTracking()
+            join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
+            join version in db.WorkVersions.AsNoTracking() on asset.WorkVersionId equals version.Id
+            where asset.Kind == MediaAssetKind.Video && asset.WorkId == workId
+            orderby file.Path
+            select new InstalledVideoFile(file.Id, asset.WorkEpisodeId, file.Path, version.Quality))
+        .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Forgets stored files a better version replaced: their file rows go (probe results follow with them) and the files are deleted from disk when
+    /// they are still there. The Assets and Versions stay as history; nothing resolves them without a file. A file that cannot be deleted stays
+    /// on disk for the library scan and is reported in the returned notes, it never blocks the replacement.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> RemoveVideoFilesAsync(IReadOnlyCollection<Guid> storedFileIds, CancellationToken cancellationToken)
+    {
+        if (storedFileIds.Count == 0)
+        {
+            return [];
+        }
+
+        var files = await db.StoredFiles.Where(file => storedFileIds.Contains(file.Id)).ToListAsync(cancellationToken);
+        var notes = new List<string>();
+        db.StoredFiles.RemoveRange(files);
+        await db.SaveChangesAsync(cancellationToken);
+        foreach (var file in files)
+        {
+            try
+            {
+                File.Delete(file.Path);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                notes.Add($"Replaced file {System.IO.Path.GetFileName(file.Path)} could not be deleted: {exception.Message}");
+            }
+        }
+
+        return notes;
     }
 
     public async Task<CanonicalPlayableFile?> ResolveVideoAsync(

@@ -338,6 +338,7 @@ builder.Services.AddSingleton<MediaProcessRunner>();
 builder.Services.AddSingleton<IMediaProcessRunner>(services => services.GetRequiredService<MediaProcessRunner>());
 builder.Services.AddScoped<LibraryScanner>();
 builder.Services.AddScoped<CanonicalMediaStorageService>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Selection.InstalledVideoVersions>();
 builder.Services.AddSingleton<IMediaProbeRunner, FfprobeMediaProbeRunner>();
 builder.Services.AddSingleton<MediaInventoryService>();
 builder.Services.AddSingleton<IMediaContainerRemuxer, FfmpegMediaContainerRemuxer>();
@@ -576,6 +577,11 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequest
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Books.BookWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Music.MusicWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, Jularr.Web.Features.Music.MusicWantedSource>();
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.VideoUpgradeScanState>();
+foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv })
+{
+    builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.VideoUpgradeWantedSource>(services, upgradeKind));
+}
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicMonitoringService>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicAdminQuery>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicManualSearchService>();

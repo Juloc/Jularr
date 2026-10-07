@@ -12,6 +12,7 @@ using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Discovery;
@@ -164,6 +165,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
     public string LibraryRoot => Path.Combine(_environment.Directory.FullName, "library");
     public string Downloads => Path.Combine(_environment.Directory.FullName, "downloads");
     public OperationStore Operations => new(Db);
+    public IServiceProvider Services => _services;
     public AcquisitionAccessStore Requests => new(Db);
 
     public static async Task<VideoRequestToPlayWorld> CreateAsync(MediaAcquisitionKind kind, FakeTmdb tmdb)
@@ -265,13 +267,17 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
     /// SABnzbd finished the request's download into a real folder holding the given files; the monitor projection marks the
     /// download operation succeeded. The importer is not run: that is the Wanted pass's job.
     /// </summary>
-    public async Task<string> CompleteDownloadAsync(AcquisitionRequest request, string jobName, params string[] fileNames)
+    public Task<string> CompleteDownloadAsync(AcquisitionRequest request, string jobName, params string[] fileNames) =>
+        CompleteDownloadAsync(request, jobName, [1, 2, 3, 4], fileNames);
+
+    /// <summary>The same download whose files hold <paramref name="content"/>, so two releases of one title differ in size as real ones do.</summary>
+    public async Task<string> CompleteDownloadAsync(AcquisitionRequest request, string jobName, byte[] content, params string[] fileNames)
     {
         var folder = Path.Combine(Downloads, jobName);
         Directory.CreateDirectory(folder);
         foreach (var fileName in fileNames)
         {
-            await File.WriteAllBytesAsync(Path.Combine(folder, fileName), [1, 2, 3, 4]);
+            await File.WriteAllBytesAsync(Path.Combine(folder, fileName), content);
         }
 
         var operation = (await Operations.GetAsync(request.OperationId!.Value))!;
@@ -320,16 +326,18 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
         var availability = new LibraryRootAvailabilityService(Db, new StorageAvailabilityCoordinator());
         var hardLinks = new FileSystemHardLinkCreator();
         var canonicalStorage = new CanonicalMediaStorageService(Db);
+        var profileStore = new QualityProfileStore(new DirectoryInfo(Path.Combine(directory.FullName, "quality-profiles")), registry);
+        var installed = new InstalledVideoVersions(canonicalStorage, registry, profileStore);
         ICompletedDownloadImportAdapter importer;
         if (Kind == MediaAcquisitionKind.Movie)
         {
             var movies = new MovieLibraryService(Db, bridge);
-            importer = new MovieCompletedDownloadImportAdapter(movies, registry, routing, availability, hardLinks, NullLogger<MovieCompletedDownloadImportAdapter>.Instance, canonicalStorage);
+            importer = new MovieCompletedDownloadImportAdapter(movies, registry, routing, availability, hardLinks, NullLogger<MovieCompletedDownloadImportAdapter>.Instance, canonicalStorage, installed);
         }
         else
         {
             var tv = new TvLibraryService(Db, bridge, new WorkStructureService(Db));
-            importer = new TvCompletedDownloadImportAdapter(tv, registry, routing, availability, hardLinks, NullLogger<TvCompletedDownloadImportAdapter>.Instance, canonicalStorage);
+            importer = new TvCompletedDownloadImportAdapter(tv, registry, routing, availability, hardLinks, NullLogger<TvCompletedDownloadImportAdapter>.Instance, canonicalStorage, installed);
         }
 
         var collection = new ServiceCollection()
@@ -337,7 +345,9 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton<TimeProvider>(Clock)
             .AddSingleton(coordinator)
             .AddSingleton(registry)
-            .AddSingleton(new QualityProfileStore(new DirectoryInfo(Path.Combine(directory.FullName, "quality-profiles")), registry))
+            .AddSingleton(profileStore)
+            .AddSingleton(installed)
+            .AddSingleton<IWantedSource>(new VideoUpgradeWantedSource(Kind, Db, new AcquisitionAccessStore(Db), installed, profileStore, new VideoUpgradeScanState()))
             .AddSingleton(downloadClients)
             .AddSingleton(new DownloadClientSubmissionService(downloadClient, new DownloadClientSelector(downloadClients, health), Db, NullLogger<DownloadClientSubmissionService>.Instance))
             .AddSingleton<IDownloadClient>(downloadClient)

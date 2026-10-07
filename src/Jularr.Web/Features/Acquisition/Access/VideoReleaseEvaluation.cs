@@ -8,7 +8,7 @@ using Jularr.Web.Features.Acquisition.Selection;
 namespace Jularr.Web.Features.Acquisition.Access;
 
 /// <summary>One canonical TV episode (or the movie itself is represented by no unit) a video search targets.</summary>
-public sealed record VideoUnit(Guid Id, Guid? SeasonId, int SeasonNumber, int EpisodeNumber, DateTime? AiredAt, bool HasFile);
+public sealed record VideoUnit(Guid Id, Guid? SeasonId, int SeasonNumber, int EpisodeNumber, DateTime? AiredAt, bool HasFile, string? InstalledQuality = null);
 
 /// <summary>Whether a returned release is for the requested title and unit. Identity is decided before the profile score.</summary>
 public enum VideoIdentityMatch

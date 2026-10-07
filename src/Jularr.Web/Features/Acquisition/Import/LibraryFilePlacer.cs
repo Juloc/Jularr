@@ -150,6 +150,63 @@ public sealed class LibraryFilePlacer(ImportFileTransfer transfer)
     }
 }
 
+/// <summary>
+/// An existing library file moved out of the way so its upgrade can take the same destination: the old file is only deleted once the
+/// replacement is recorded (<see cref="Commit"/>), and comes back when the replacement fails (<see cref="Rollback"/>).
+/// </summary>
+public sealed class ReplacedLibraryFile
+{
+    private ReplacedLibraryFile(string original, string aside)
+    {
+        Original = original;
+        Aside = aside;
+    }
+
+    public string Original { get; }
+
+    public string Aside { get; }
+
+    /// <exception cref="IOException">The file could not be moved aside; nothing changed.</exception>
+    public static ReplacedLibraryFile SetAside(string path)
+    {
+        var aside = $"{path}.replaced-{Guid.NewGuid():N}";
+        File.Move(path, aside, overwrite: false);
+        return new ReplacedLibraryFile(path, aside);
+    }
+
+    /// <summary>Deletes the old file for good; a file that cannot be deleted stays beside the new one for the owner.</summary>
+    public string? Commit()
+    {
+        try
+        {
+            File.Delete(Aside);
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return $"Replaced file {Path.GetFileName(Original)} could not be deleted: {exception.Message}";
+        }
+    }
+
+    /// <summary>Puts the old file back, removing a replacement that already reached the destination.</summary>
+    public void Rollback()
+    {
+        try
+        {
+            if (File.Exists(Original))
+            {
+                File.Delete(Original);
+            }
+
+            File.Move(Aside, Original, overwrite: false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The old file stays under its aside name; the owner can restore it from there.
+        }
+    }
+}
+
 /// <summary>The destination of a placement already exists but is not a complete copy of the source (an interrupted copy, or another file of the same name).</summary>
 public sealed class DestinationMismatchException(string destinationPath)
     : InvalidOperationException($"The library already has a different file at '{Path.GetFileName(destinationPath)}'. Remove it or import the release by hand.");

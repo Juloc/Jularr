@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Storage;
 
@@ -22,7 +23,8 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
     LibraryRootAvailabilityService availability,
     IHardLinkCreator hardLinks,
     ILogger<MovieCompletedDownloadImportAdapter> logger,
-    CanonicalMediaStorageService? canonicalStorage = null)
+    CanonicalMediaStorageService? canonicalStorage = null,
+    InstalledVideoVersions? upgrades = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     /// <summary>Why a finished download did not become a movie; the next release is tried.</summary>
@@ -126,7 +128,9 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
 
     /// <summary>
     /// Places one video into the Movie root with the root's placement policy and records it. Idempotent: a movie already placed at the
-    /// destination is left as is and only its record is refreshed, so re-running an inbox that keeps its sources never duplicates.
+    /// destination is left as is and only its record is refreshed, so re-running an inbox that keeps its sources never duplicates. A file that
+    /// is a meaningful upgrade of the installed movie (the upgrade policy of its profile) replaces it: the old file stays until the new one is
+    /// recorded, then goes, and the Version records the new quality.
     /// </summary>
     private async Task<(Movie Movie, string Folder)> PlaceAsync(LibraryRootRoute route, IReadOnlyList<CompletedDownloadFile> files, string videoPath, MovieMetadata metadata, CancellationToken cancellationToken)
     {
@@ -139,33 +143,65 @@ public sealed partial class MovieCompletedDownloadImportAdapter(
         }
 
         var alreadyPlaced = LibraryFilePlacer.FindDestinationConflict(destination, []) is not null;
-        if (alreadyPlaced && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
+        var incomingQuality = upgrades?.QualityOfDownload(MediaAcquisitionKind.Movie, videoPath);
+
+        // The records come first so a database failure cannot happen after the file already left the source.
+        var entry = await movies.EnsureAsync(metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, folder, cancellationToken);
+        var judgement = upgrades is null || canonicalStorage is null
+            ? new IncomingVideoJudgement(IncomingVideoVerdict.Undecidable, [])
+            : await upgrades.JudgeIncomingAsync(MediaAcquisitionKind.Movie, entry.WorkId, workEpisodeId: null, incomingQuality, cancellationToken);
+        var isUpgrade = judgement.Verdict == IncomingVideoVerdict.Upgrade;
+        if (alreadyPlaced && !isUpgrade && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
         {
             throw new DestinationMismatchException(destination);
         }
 
-        // The records come first so a database failure cannot happen after the file already left the source.
-        var entry = await movies.EnsureAsync(metadata.Title, metadata.Year, metadata.TmdbId, metadata.ImdbId, folder, cancellationToken);
-        var moved = false;
-        if (!alreadyPlaced)
+        ReplacedLibraryFile? replaced = null;
+        if (isUpgrade && alreadyPlaced && !LibraryFilePlacer.IsCompletePlacement(videoPath, destination))
         {
-            var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
-            new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
-            moved = action == ImportFileAction.Move;
+            replaced = ReplacedLibraryFile.SetAside(destination);
+            alreadyPlaced = false;
         }
 
-        if (canonicalStorage is not null)
+        var moved = false;
+        try
         {
-            try
+            if (!alreadyPlaced)
             {
-                await canonicalStorage.AttachVideoAsync(entry.WorkId, workEpisodeId: null, Path.GetFullPath(destination), Path.GetFullPath(route.Path), cancellationToken);
+                var sidecars = BuildSidecars(files, videoPath, Path.GetFileNameWithoutExtension(destination));
+                new LibraryFilePlacer(new ImportFileTransfer(hardLinks)).Place(new LibraryFilePlacement(videoPath, destination, action, allowFallback, sidecars, []));
+                moved = action == ImportFileAction.Move;
             }
-            catch when (moved)
+
+            if (canonicalStorage is not null)
             {
-                // The import is retried from the source, so the moved file must be there again.
-                LibraryFilePlacer.RestoreMovedSource(videoPath, destination);
-                throw;
+                try
+                {
+                    await canonicalStorage.AttachVideosAsync([new CanonicalVideoAttachment(entry.WorkId, null, Path.GetFullPath(destination), Path.GetFullPath(route.Path), incomingQuality)], cancellationToken);
+                }
+                catch when (moved)
+                {
+                    // The import is retried from the source, so the moved file must be there again.
+                    LibraryFilePlacer.RestoreMovedSource(videoPath, destination);
+                    throw;
+                }
             }
+        }
+        catch
+        {
+            replaced?.Rollback();
+            throw;
+        }
+
+        if (replaced is not null)
+        {
+            replaced.Commit();
+        }
+
+        if (isUpgrade && canonicalStorage is not null)
+        {
+            var kept = Path.GetFullPath(destination);
+            await canonicalStorage.RemoveVideoFilesAsync([.. judgement.Superseded.Where(file => !LibraryFilePlacer.SamePath(file.Path, kept)).Select(file => file.StoredFileId)], cancellationToken);
         }
 
         return (entry.Movie, folder);
