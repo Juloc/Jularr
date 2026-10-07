@@ -9,13 +9,23 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
 
-/// <summary>When each media type's upgrade scan last ran in this process; a scan is cheap to repeat after a restart, so nothing is persisted.</summary>
+/// <summary>
+/// When each media type's upgrade scan last ran in this process and where the next one continues; a scan is cheap to repeat after a restart,
+/// so nothing is persisted.
+/// </summary>
 public sealed class UpgradeScanState
 {
     /// <summary>How often the installed titles of a media type are looked at for upgrades; an idle library costs one query per interval.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromHours(1);
 
     private readonly ConcurrentDictionary<MediaAcquisitionKind, DateTime> next = new();
+    private readonly ConcurrentDictionary<MediaAcquisitionKind, Guid> cursors = new();
+
+    /// <summary>The last title the previous scan looked at (empty before the first one), so a library larger than one scan is walked in turns instead of its first titles every hour.</summary>
+    public Guid CursorOf(MediaAcquisitionKind kind) => cursors.GetValueOrDefault(kind);
+
+    /// <summary>Continues after <paramref name="last"/> next time, or from the start when the scan reached the end of the library.</summary>
+    public void Continue(MediaAcquisitionKind kind, Guid last, bool reachedEnd) => cursors[kind] = reachedEnd ? Guid.Empty : last;
 
     /// <summary>Claims the scan of <paramref name="kind"/> when it is due and schedules the next one.</summary>
     public bool TryStart(MediaAcquisitionKind kind, DateTime nowUtc, TimeSpan interval)
@@ -59,6 +69,7 @@ public sealed class VideoUpgradeWantedSource(
         }
 
         var mediaType = VideoWorkLinks.WorkType(kind);
+        var after = scans.CursorOf(kind);
         var workIds = await (
                 from asset in db.MediaAssets.AsNoTracking()
                 join version in db.WorkVersions.AsNoTracking() on asset.WorkVersionId equals version.Id
@@ -66,8 +77,11 @@ public sealed class VideoUpgradeWantedSource(
                 where asset.Kind == MediaAssetKind.Video && work.MediaType == mediaType && version.Quality != null && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id)
                 select asset.WorkId)
             .Distinct()
+            .Where(workId => workId.CompareTo(after) > 0)
+            .OrderBy(workId => workId)
             .Take(MaxTitlesPerPass)
             .ToListAsync(cancellationToken);
+        scans.Continue(kind, workIds.Count == 0 ? Guid.Empty : workIds[^1], workIds.Count < MaxTitlesPerPass);
 
         var reopened = 0;
         foreach (var workId in workIds)

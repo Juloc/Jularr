@@ -238,4 +238,18 @@ public sealed class VideoUpgradeTests
         CollectionAssert.AreEqual(new[] { "WEB-1080p", "WEB-720p" }, qualities);
         Assert.IsEmpty(Directory.GetFiles(world.LibraryRoot, "*.replaced-*", SearchOption.AllDirectories));
     }
+
+    [TestMethod]
+    public void AnUpgradeScanContinuesAfterTheTitlesItLookedAtAndStartsOverAtTheEndOfTheLibrary()
+    {
+        var scans = new UpgradeScanState();
+        var last = Guid.NewGuid();
+
+        Assert.AreEqual(Guid.Empty, scans.CursorOf(MediaAcquisitionKind.Movie), "The first scan starts at the beginning.");
+        scans.Continue(MediaAcquisitionKind.Movie, last, reachedEnd: false);
+        Assert.AreEqual(last, scans.CursorOf(MediaAcquisitionKind.Movie), "A full scan leaves the next one to continue after its last title.");
+        Assert.AreEqual(Guid.Empty, scans.CursorOf(MediaAcquisitionKind.Tv), "Every media type walks its own library.");
+        scans.Continue(MediaAcquisitionKind.Movie, last, reachedEnd: true);
+        Assert.AreEqual(Guid.Empty, scans.CursorOf(MediaAcquisitionKind.Movie), "Reaching the end starts the library over, so a title is never skipped for good.");
+    }
 }

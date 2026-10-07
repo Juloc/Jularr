@@ -37,16 +37,19 @@ public sealed class MusicMonitoringService(AppDbContext db, AcquisitionAccessSto
             return 0;
         }
 
+        var after = scans.CursorOf(MediaAcquisitionKind.Music);
         var albums = await (
                 from album in db.MusicAlbums.AsNoTracking()
                 join artist in db.MusicArtists.AsNoTracking() on album.ArtistId equals artist.Id
-                where album.Monitored && artist.Monitor != MusicMonitorMode.None && album.MusicBrainzReleaseGroupId != null
+                where album.WorkId.CompareTo(after) > 0 && album.Monitored && artist.Monitor != MusicMonitorMode.None && album.MusicBrainzReleaseGroupId != null
                       && db.MediaAssets.Any(asset => asset.WorkId == album.WorkId && asset.Kind == MediaAssetKind.Audio
                                                       && db.WorkVersions.Any(version => version.Id == asset.WorkVersionId && version.Quality != null)
                                                       && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
+                orderby album.WorkId
                 select new { album.WorkId, GroupId = album.MusicBrainzReleaseGroupId! })
             .Take(MaxUpgradeScanAlbums)
             .ToListAsync(cancellationToken);
+        scans.Continue(MediaAcquisitionKind.Music, albums.Count == 0 ? Guid.Empty : albums[^1].WorkId, albums.Count < MaxUpgradeScanAlbums);
         var reopened = 0;
         foreach (var album in albums)
         {

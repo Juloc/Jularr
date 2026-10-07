@@ -140,10 +140,7 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
                 select new { WorkId = byWork.Key, Count = byWork.Select(asset => asset.WorkTrackId).Distinct().Count() })
             .ToDictionaryAsync(item => item.WorkId, item => item.Count, cancellationToken);
         var groupIds = albums.Select(album => album.GroupId).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var latest = (await requests.ListAsync(MediaAcquisitionKind.Music, null, openOnly: false, 2000, cancellationToken))
-            .Where(request => groupIds.Contains(request.ExternalId))
-            .GroupBy(request => request.ExternalId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.OrderByDescending(request => request.UpdatedAt).First(), StringComparer.OrdinalIgnoreCase);
+        var latest = await requests.ListLatestAsync(MediaAcquisitionKind.Music, ProviderKeys.MusicBrainz, groupIds, cancellationToken);
 
         return [.. albums
             .OrderByDescending(album => album.ReleaseDate ?? DateTime.MinValue)
