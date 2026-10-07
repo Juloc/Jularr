@@ -4,6 +4,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Franchises;
+using Jularr.Web.Features.Home;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
@@ -50,6 +51,9 @@ public sealed partial class IndexModel
     /// <summary>The media types of this profile that Discover offers as tabs; a type the profile may not browse does not exist for it.</summary>
     public IReadOnlyList<(DiscoveryCategory Category, string LabelKey)> VisibleTabs { get; private set; } = DiscoverScopes.Tabs;
 
+    /// <summary>What this viewer arranged for Home/Discover (its own override, else the instance default): the order and hiding of the media types and the Continue priority.</summary>
+    public EffectiveHomeLayout HomeLayout { get; private set; } = HomeLayoutPolicy.Resolve(HomeLayoutPreference.BuiltIn, HomeLayoutPolicy.DefaultOrder.ToHashSet(), false);
+
     /// <summary>The page itself reads local state only (#186); the titles come from <see cref="OnGetBodyAsync"/> after first paint.</summary>
     public async Task LoadDiscoverAsync(CancellationToken cancellationToken)
     {
@@ -59,7 +63,8 @@ public sealed partial class IndexModel
         Response.Headers.ContentSecurityPolicy = $"frame-src 'self' {WorkTrailerView.EmbedOrigin}";
         var audience = await LoadAudienceAsync(cancellationToken);
         Query = ParseQuery(audience);
-        VisibleTabs = [.. DiscoverScopes.Tabs.Where(tab => DiscoverScopes.IsVisible(tab.Category, audience.VisibleMediaTypes))];
+        HomeLayout = await new HomeLayoutStore(db).ResolveAsync(audience.ProfileId, HomeLayoutStore.Orderable(audience.VisibleMediaTypes), cancellationToken);
+        VisibleTabs = DiscoverScopes.TabsFor(HomeLayout.Shown, Query.Category);
         RequestableCategories = await LoadRequestableCategoriesAsync(cancellationToken);
         Preference = await LoadPreferenceAsync(cancellationToken);
         AniListConnected = Query.Category is DiscoveryCategory.Anime or DiscoveryCategory.Manga or DiscoveryCategory.LightNovel
@@ -157,6 +162,11 @@ public sealed partial class IndexModel
                 return await BuildMoreAsync(audience, Math.Min(pg.Value, MaxPage), cancellationToken);
             }
 
+            if (Query.IsLanding)
+            {
+                HomeLayout = await new HomeLayoutStore(db).ResolveAsync(audience.ProfileId, HomeLayoutStore.Orderable(audience.VisibleMediaTypes), cancellationToken);
+            }
+
             var body = Query.IsLanding
                 ? await BuildLandingAsync(audience, wait, cancellationToken)
                 : await BuildResultsAsync(audience, wait, cancellationToken);
@@ -212,7 +222,7 @@ public sealed partial class IndexModel
 
     private async Task<DiscoverBodyView> BuildLandingAsync(DiscoveryAudience audience, DiscoveryWait wait, CancellationToken cancellationToken)
     {
-        var board = await shelves.GetBoardAsync(User, audience.ProfileId, audience.IsOwner, Query.Category, wait, cancellationToken);
+        var board = await shelves.GetBoardAsync(User, audience.ProfileId, audience.IsOwner, Query.Category, wait, cancellationToken, HomeLayout.Shown);
         var rows = new List<DiscoverLandingRow>();
 
         // Personalized cross-media rows (#428) lead the board: explainable "Because you …" and
@@ -224,6 +234,7 @@ public sealed partial class IndexModel
             {
                 var items = shelf.Items
                     .Where(item => DiscoverScopes.Includes(Query.Category, DiscoverRecommendations.CategoryOf(item.Candidate.MediaType)))
+                    .Where(item => Query.Category != DiscoveryCategory.All || !HomeLayout.Hidden.Contains(item.Candidate.MediaType))
                     .Select(item => DiscoverRecommendations.ToItem(item.Candidate))
                     .ToArray();
                 if (items.Length > 0)

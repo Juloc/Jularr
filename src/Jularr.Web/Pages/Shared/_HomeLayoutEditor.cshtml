@@ -1,0 +1,72 @@
+@using Jularr.Web.Features.Home
+@using Jularr.Web.Features.MediaCore
+@model HomeEditorModel
+@* The one editor of the Home/Discover layout: the media-type cards in order, the quick presets, the landing page and the Continue priority.
+   Admin → Instance renders it for the instance default, Settings → Home and the first-login onboarding for the viewer's own layout. The fields
+   belong to the form around it; the script only reorders cards, applies presets and keeps the preview in step. *@
+@{
+    var ui = Model.Ui;
+    var prefix = Model.IdPrefix;
+}
+<div class="home-layout" data-home-layout data-text-moved="@ui["home.layout.moved"]" data-text-grabbed="@ui["home.layout.grabbed"]" data-text-dropped="@ui["home.layout.dropped"]">
+    @if (Model.Presets.Count > 0)
+    {
+        <div class="home-layout-presets" role="group" aria-labelledby="@prefix-presets">
+            <strong id="@prefix-presets">@ui["home.layout.presets"]</strong>
+            @foreach (var preset in Model.Presets)
+            {
+                <button type="button" class="button" data-home-preset="@string.Join(',', preset.Order.Select(WorkMediaTypes.ToStorage))">@ui[preset.NameKey]</button>
+            }
+        </div>
+    }
+
+    <ol class="home-layout-list" aria-label="@ui["home.layout.list"]">
+        @foreach (var item in Model.Items)
+        {
+            var label = ui[item.LabelKey];
+            <li class="home-layout-card" data-home-item data-id="@item.Id" data-label="@label">
+                <input type="hidden" name="order" value="@item.Id" />
+                <button type="button" class="home-layout-handle" data-home-handle aria-pressed="false" aria-describedby="@prefix-help" aria-label="@ui.Format("home.layout.move", ("type", label))">
+                    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="5.5" cy="4" r="1.2" /><circle cx="10.5" cy="4" r="1.2" /><circle cx="5.5" cy="8" r="1.2" /><circle cx="10.5" cy="8" r="1.2" /><circle cx="5.5" cy="12" r="1.2" /><circle cx="10.5" cy="12" r="1.2" /></svg>
+                </button>
+                <span class="home-layout-icon"><partial name="/Pages/Admin/_AdminIcon.cshtml" model="item.Icon" /></span>
+                <span class="home-layout-name">@label</span>
+                <label class="home-layout-show">
+                    <input type="checkbox" name="shown" value="@item.Id" checked="@item.Shown" aria-label="@ui.Format("home.layout.showType", ("type", label))" data-home-shown />
+                    <span>@ui["home.layout.show"]</span>
+                </label>
+                <span class="home-layout-moves">
+                    <button type="button" class="button" data-home-up aria-label="@ui.Format("home.layout.moveUp", ("type", label))">↑</button>
+                    <button type="button" class="button" data-home-down aria-label="@ui.Format("home.layout.moveDown", ("type", label))">↓</button>
+                </span>
+            </li>
+        }
+    </ol>
+    <p id="@prefix-help" class="muted">@ui["home.layout.help"]</p>
+    <p class="sr-only" role="status" aria-live="polite" data-home-status></p>
+
+    <div class="home-layout-preview" role="group" aria-label="@ui["home.layout.preview"]">
+        <strong>@ui["home.layout.preview"]</strong>
+        <ol data-home-preview>
+            @foreach (var item in Model.Items.Where(item => item.Shown))
+            {
+                <li>@ui[item.LabelKey]</li>
+            }
+        </ol>
+    </div>
+
+    <fieldset class="home-layout-choice">
+        <legend>@ui["home.layout.landing"]</legend>
+        <label><input type="radio" name="landing" value="home" checked="@(Model.Landing == HomeLanding.Home)" /> <span>@ui["home.layout.landing.home"]</span></label>
+        <label><input type="radio" name="landing" value="library" checked="@(Model.Landing == HomeLanding.Library)" /> <span>@ui["home.layout.landing.library"]</span></label>
+    </fieldset>
+
+    <label class="home-layout-continue">
+        <input type="checkbox" name="prioritizeContinue" value="true" checked="@Model.PrioritizeContinue" />
+        <input type="hidden" name="prioritizeContinue" value="false" />
+        <span>
+            <strong>@ui["home.layout.continue"]</strong>
+            <small>@ui["home.layout.continue.help"]</small>
+        </span>
+    </label>
+</div>

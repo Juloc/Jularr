@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Jularr.Web.Features.Home;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Watchlist;
 using Jularr.Web.Features.MediaCore;
@@ -31,21 +32,18 @@ public static class DiscoveryShelfComposer
     public static IReadOnlyList<WorkMediaType> SupportedMediaTypes { get; } =
         [WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Series, WorkMediaType.Manga, WorkMediaType.LightNovel, WorkMediaType.Book];
 
-    /// <summary>Display order of the media types across the board, the order of the media-type bar.</summary>
-    private static IReadOnlyList<WorkMediaType> DisplayOrder { get; } =
-        [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie, WorkMediaType.LightNovel, WorkMediaType.Book, WorkMediaType.Manga];
-
     /// <summary>
     /// The ordered rows for a profile's visible media types. Only types the profile may at least browse
     /// (<paramref name="visibleMediaTypes"/> from the capability policy), that have a provider feed, and
     /// whose source is enabled, produce rows — so a Books-only user gets book rows only. Each type is one
     /// group of rows in the order Trending, Top, New (and Upcoming for Movies and Series); the New row of Books is the
-    /// newly published row (#371).
+    /// newly published row (#371). <paramref name="groupOrder"/> is the viewer's own order of the groups (<see cref="EffectiveHomeLayout.Shown"/>):
+    /// a type it leaves out gets no group. Without it the built-in order applies.
     /// </summary>
-    public static IReadOnlyList<DiscoveryShelfPlan> Plan(IReadOnlyList<WorkMediaType> visibleMediaTypes)
+    public static IReadOnlyList<DiscoveryShelfPlan> Plan(IReadOnlyList<WorkMediaType> visibleMediaTypes, IReadOnlyList<WorkMediaType>? groupOrder = null)
     {
         var visible = new HashSet<WorkMediaType>(visibleMediaTypes);
-        var types = DisplayOrder
+        var types = (groupOrder ?? HomeLayoutPolicy.DefaultOrder)
             .Where(visible.Contains)
             .Where(SupportedMediaTypes.Contains)
             .ToArray();
@@ -190,10 +188,11 @@ public static class DiscoveryShelfComposer
 public sealed class DiscoveryShelfService(IDiscoveryFeed feed, IAppShellService shell)
 {
     /// <param name="scope">The media types the viewer picked: only their rows are planned, so no other source is called or counted.</param>
-    public async Task<DiscoveryShelfBoard> GetBoardAsync(ClaimsPrincipal? user, string profileId, bool isOwner, DiscoveryCategory scope, DiscoveryWait wait, CancellationToken cancellationToken)
+    /// <param name="groupOrder">The viewer's own order of the media-type groups on the all-media board. A selected type is always planned, hidden or not.</param>
+    public async Task<DiscoveryShelfBoard> GetBoardAsync(ClaimsPrincipal? user, string profileId, bool isOwner, DiscoveryCategory scope, DiscoveryWait wait, CancellationToken cancellationToken, IReadOnlyList<WorkMediaType>? groupOrder = null)
     {
         var access = await shell.GetMediaAccessAsync(user, cancellationToken);
-        var plans = DiscoveryShelfComposer.Plan(access.VisibleMediaTypes).Where(plan => DiscoverScopes.Includes(scope, plan.Category)).ToArray();
+        var plans = DiscoveryShelfComposer.Plan(access.VisibleMediaTypes, scope == DiscoveryCategory.All ? groupOrder : null).Where(plan => DiscoverScopes.Includes(scope, plan.Category)).ToArray();
         if (plans.Length == 0)
         {
             return DiscoveryShelfBoard.Empty;
