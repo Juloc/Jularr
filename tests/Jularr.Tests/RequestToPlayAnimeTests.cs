@@ -16,7 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using DiscoverIndexModel = Jularr.Web.Pages.Discover.IndexModel;
+using DiscoverIndexModel = Jularr.Web.Pages.IndexModel;
 
 namespace Jularr.Tests;
 

@@ -21,6 +21,10 @@ public sealed class MediaAsset
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid WorkId { get; set; }
     public Guid? WorkEpisodeId { get; set; }
+
+    /// <summary>The track of an album Work an Audio asset belongs to; null for every other asset.</summary>
+    public Guid? WorkTrackId { get; set; }
+
     public Guid WorkVersionId { get; set; }
     public MediaAssetKind Kind { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -42,11 +46,23 @@ public sealed class StoredFile
     public DateTime DiscoveredAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <param name="Quality">The quality key of the release the file came from (see <c>ReleaseQuality</c>); it is what the upgrade policy compares later. Null keeps what the Version already says.</param>
 public sealed record CanonicalVideoAttachment(
     Guid WorkId,
     Guid? WorkEpisodeId,
     string Path,
-    string? StorageRootPath = null);
+    string? StorageRootPath = null,
+    string? Quality = null);
+
+public sealed record CanonicalAudioAttachment(Guid WorkId, Guid WorkTrackId, string Path, string? Quality = null);
+
+/// <summary>One video file of a Work as the canonical Version/Asset/File chain holds it; <see cref="Quality"/> is the Version's recorded quality, null when none was recorded.</summary>
+public sealed record InstalledVideoFile(Guid StoredFileId, Guid? WorkEpisodeId, string Path, string? Quality);
+
+/// <summary>One audio file of an album Work as the canonical Version/Asset/File chain holds it; <see cref="Quality"/> is the Version's recorded quality, null when none was recorded.</summary>
+public sealed record InstalledAudioFile(Guid StoredFileId, Guid WorkTrackId, string Path, string? Quality);
+
+public sealed record CanonicalAudioFile(Guid MediaAssetId, Guid StoredFileId, Guid WorkTrackId, string Path);
 
 public sealed record CanonicalPlayableFile(
     Guid MediaAssetId,
@@ -65,6 +81,7 @@ public sealed record CanonicalPlayableFile(
 public sealed class CanonicalMediaStorageService(AppDbContext db)
 {
     private const string LocalVideoVersionPrefix = "video-file:";
+    private const string LocalAudioVersionPrefix = "audio-file:";
 
     public async Task<CanonicalPlayableFile> AttachVideoAsync(
         Guid workId,
@@ -221,6 +238,11 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
             {
                 version.UnitKey = unitKey;
             }
+
+            if (item.Quality is { Length: > 0 } quality)
+            {
+                version.Quality = quality;
+            }
         }
 
         var versionIds = versionByKey.Values.Select(x => x.Id).Distinct().ToArray();
@@ -266,6 +288,156 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
 
         await db.SaveChangesAsync(cancellationToken);
         return result;
+    }
+
+    /// <summary>
+    /// Records placed audio files as canonical Audio assets of album tracks: one StoredFile, one WorkVersion and one MediaAsset per file, in a
+    /// single save. Idempotent by path: recording a file again refreshes its row and keeps its asset. A file must lie inside a LibraryRoot (the
+    /// importer placed it there) and a path never serves two tracks.
+    /// </summary>
+    public async Task<IReadOnlyList<CanonicalAudioFile>> AttachAudiosAsync(IReadOnlyCollection<CanonicalAudioAttachment> requested, CancellationToken cancellationToken)
+    {
+        if (requested.Count == 0)
+        {
+            return [];
+        }
+
+        var normalized = requested.Select(item => item with { Path = System.IO.Path.GetFullPath(item.Path) }).ToArray();
+        if (normalized.GroupBy(item => item.Path, StringComparer.Ordinal).Any(group => group.Select(item => item.WorkTrackId).Distinct().Count() > 1))
+        {
+            throw new InvalidOperationException("A stored audio file cannot serve more than one track.");
+        }
+
+        var trackIds = normalized.Select(item => item.WorkTrackId).Distinct().ToArray();
+        var tracks = await db.WorkTracks.AsNoTracking().Where(track => trackIds.Contains(track.Id)).ToDictionaryAsync(track => track.Id, cancellationToken);
+        foreach (var item in normalized)
+        {
+            if (!tracks.TryGetValue(item.WorkTrackId, out var track) || track.WorkId != item.WorkId)
+            {
+                throw new InvalidOperationException("The canonical track does not belong to the album.");
+            }
+        }
+
+        var paths = normalized.Select(item => item.Path).ToArray();
+        var storedByPath = (await db.StoredFiles.Where(file => paths.Contains(file.Path)).ToListAsync(cancellationToken)).ToDictionary(file => file.Path, StringComparer.Ordinal);
+        var roots = await db.LibraryRoots.ToListAsync(cancellationToken);
+        foreach (var item in normalized)
+        {
+            var info = new FileInfo(item.Path);
+            if (!info.Exists)
+            {
+                throw new FileNotFoundException("Cannot attach a missing stored audio file.", item.Path);
+            }
+
+            var root = ResolveStorageRoot(item.Path, roots) ?? throw new InvalidOperationException("A stored audio file has to lie inside a library root.");
+            if (!storedByPath.TryGetValue(item.Path, out var stored))
+            {
+                stored = new StoredFile { LibraryRootId = root.Id, Path = item.Path };
+                db.StoredFiles.Add(stored);
+                storedByPath.Add(item.Path, stored);
+            }
+
+            stored.LibraryRootId = root.Id;
+            stored.SizeBytes = info.Length;
+            stored.LastWriteTimeUtc = info.LastWriteTimeUtc;
+        }
+
+        var workIds = normalized.Select(item => item.WorkId).Distinct().ToArray();
+        var versionKeys = storedByPath.Values.Select(file => $"{LocalAudioVersionPrefix}{file.Id:N}").ToArray();
+        var versionByKey = (await db.WorkVersions.Where(version => workIds.Contains(version.WorkId) && versionKeys.Contains(version.VersionKey)).ToListAsync(cancellationToken))
+            .ToDictionary(version => (version.WorkId, version.VersionKey));
+        foreach (var item in normalized)
+        {
+            var key = $"{LocalAudioVersionPrefix}{storedByPath[item.Path].Id:N}";
+            var track = tracks[item.WorkTrackId];
+            if (!versionByKey.TryGetValue((item.WorkId, key), out var version))
+            {
+                version = new WorkVersion { WorkId = item.WorkId, VersionKey = key, UnitKey = $"D{track.Disc:D2}T{track.Number:D2}", Source = "local" };
+                db.WorkVersions.Add(version);
+                versionByKey.Add((item.WorkId, key), version);
+            }
+
+            if (item.Quality is { Length: > 0 } quality)
+            {
+                version.Quality = quality;
+            }
+        }
+
+        var versionIds = versionByKey.Values.Select(version => version.Id).ToArray();
+        var assetByVersion = (await db.MediaAssets.Where(asset => versionIds.Contains(asset.WorkVersionId) && asset.Kind == MediaAssetKind.Audio).ToListAsync(cancellationToken))
+            .ToDictionary(asset => asset.WorkVersionId);
+        var result = new List<CanonicalAudioFile>(normalized.Length);
+        foreach (var item in normalized)
+        {
+            var stored = storedByPath[item.Path];
+            var version = versionByKey[(item.WorkId, $"{LocalAudioVersionPrefix}{stored.Id:N}")];
+            if (!assetByVersion.TryGetValue(version.Id, out var asset))
+            {
+                asset = new MediaAsset { WorkId = item.WorkId, WorkTrackId = item.WorkTrackId, WorkVersionId = version.Id, Kind = MediaAssetKind.Audio };
+                db.MediaAssets.Add(asset);
+                assetByVersion.Add(version.Id, asset);
+            }
+
+            asset.WorkTrackId = item.WorkTrackId;
+            stored.MediaAssetId = asset.Id;
+            result.Add(new CanonicalAudioFile(asset.Id, stored.Id, item.WorkTrackId, stored.Path));
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return result;
+    }
+
+    /// <summary>Every video file of the Work with the quality its Version recorded; episodes are told apart by <see cref="InstalledVideoFile.WorkEpisodeId"/>, a Movie has none.</summary>
+    public async Task<IReadOnlyList<InstalledVideoFile>> ListVideoFilesAsync(Guid workId, CancellationToken cancellationToken) =>
+        await (
+            from asset in db.MediaAssets.AsNoTracking()
+            join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
+            join version in db.WorkVersions.AsNoTracking() on asset.WorkVersionId equals version.Id
+            where asset.Kind == MediaAssetKind.Video && asset.WorkId == workId
+            orderby file.Path
+            select new InstalledVideoFile(file.Id, asset.WorkEpisodeId, file.Path, version.Quality))
+        .ToListAsync(cancellationToken);
+
+    /// <summary>Every audio file of the album Work with the quality its Version recorded.</summary>
+    public async Task<IReadOnlyList<InstalledAudioFile>> ListAudioFilesAsync(Guid workId, CancellationToken cancellationToken) =>
+        await (
+            from asset in db.MediaAssets.AsNoTracking()
+            join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
+            join version in db.WorkVersions.AsNoTracking() on asset.WorkVersionId equals version.Id
+            where asset.Kind == MediaAssetKind.Audio && asset.WorkId == workId && asset.WorkTrackId != null
+            orderby file.Path
+            select new InstalledAudioFile(file.Id, asset.WorkTrackId!.Value, file.Path, version.Quality))
+        .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Forgets stored files a better version replaced: their file rows go (probe results follow with them) and the files are deleted from disk when
+    /// they are still there. The Assets and Versions stay as history; nothing resolves them without a file. A file that cannot be deleted stays
+    /// on disk for the library scan and is reported in the returned notes, it never blocks the replacement.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> RemoveFilesAsync(IReadOnlyCollection<Guid> storedFileIds, CancellationToken cancellationToken)
+    {
+        if (storedFileIds.Count == 0)
+        {
+            return [];
+        }
+
+        var files = await db.StoredFiles.Where(file => storedFileIds.Contains(file.Id)).ToListAsync(cancellationToken);
+        var notes = new List<string>();
+        db.StoredFiles.RemoveRange(files);
+        await db.SaveChangesAsync(cancellationToken);
+        foreach (var file in files)
+        {
+            try
+            {
+                File.Delete(file.Path);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                notes.Add($"Replaced file {System.IO.Path.GetFileName(file.Path)} could not be deleted: {exception.Message}");
+            }
+        }
+
+        return notes;
     }
 
     public async Task<CanonicalPlayableFile?> ResolveVideoAsync(

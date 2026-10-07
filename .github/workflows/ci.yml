@@ -381,10 +381,14 @@ jobs:
 
           exit "${status}"
 
-      - name: Validate single-container Compose
+      - name: Validate Compose stack
+        # compose.yaml refuses to render without an immutable release tag and a database password; any values prove the shape.
+        env:
+          JULARR_VERSION: 0.0.0-ci
+          JULARR_DB_PASSWORD: ci-validation-only
         run: |
-          test "$(docker compose config --services)" = "jularr"
-          test "$(docker compose config --images)" = "ghcr.io/juloc/jularr:latest"
+          test "$(docker compose config --services | sort | paste -sd,)" = "jularr,postgres"
+          test "$(docker compose config --images | sort | paste -sd,)" = "ghcr.io/juloc/jularr:0.0.0-ci,postgres:18-alpine"
           ! docker compose config | grep -q '/media/anime'
 
   image:
@@ -558,7 +562,7 @@ jobs:
           fi
           cat "${RUNNER_TEMP}/legacy.log"
           grep -q "Jularr startup aborted" "${RUNNER_TEMP}/legacy.log"
-          grep -qF "chown -v <jularr-data>:/data ghcr.io/juloc/jularr:latest -R 1654:1654 /data" "${RUNNER_TEMP}/legacy.log"
+          grep -qF "chown -v <jularr-data>:/data ghcr.io/juloc/jularr:<release-tag> -R 1654:1654 /data" "${RUNNER_TEMP}/legacy.log"
 
           # The documented one-time fix (with the image under test instead of :latest).
           docker run --rm --user 0:0 --entrypoint chown -v jularr-legacy-data:/data "${IMAGE}:${GITHUB_SHA}" -R 1654:1654 /data

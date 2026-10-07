@@ -33,10 +33,7 @@ public sealed class LibraryStartupScanService(
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            roots = await db.LibraryRoots
-                .AsNoTracking()
-                .Where(x => x.IsEnabled)
-                .ServingAnime(db)
+            roots = await (await db.AnimeRootsForBackgroundWorkAsync(scope.ServiceProvider, stoppingToken))
                 .OrderBy(x => x.CreatedAt)
                 .Select(x => x.Id)
                 .ToArrayAsync(stoppingToken);

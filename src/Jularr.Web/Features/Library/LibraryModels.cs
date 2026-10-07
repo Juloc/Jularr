@@ -9,7 +9,8 @@ public enum LibraryContentType
     Movie = 5,
     Tv = 6,
     Audiobook = 7,
-    Game = 8
+    Game = 8,
+    Music = 9
 }
 
 public enum LibraryPlacementPolicy

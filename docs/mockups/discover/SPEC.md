@@ -2,6 +2,53 @@
 
 Status: **approved clean UX direction**.
 
+## One Home/Discover surface (binding product decision, 2026-10-07)
+
+This decision supersedes every conflicting rule in this specification and in `docs/mockups/home/SPEC.md`. It was extended on 2026-10-07 (Discover completion): provider ownership, browse views, filters, paging, live search, Hero pool and the card action.
+
+### One surface, three concepts
+- Home and Discover are one consumer experience at `/`. An empty global Search is the normal Home/Discover surface. `/Discover` is only a permanent redirect to `/` that keeps the query string; there is one render implementation.
+- Three concepts stay separate and are never mixed in one control: **media type** (what am I browsing), **browse view** (which ranking/feed) and **filters** (how the feed is narrowed).
+- Content header (shell): left the context "Discover", centre the one wide global Search, right the Filter action (with the active count) and Notifications.
+
+### Media-type bar
+One wide rounded segmented control directly under the header (page content, not shell navigation): `All | Anime | Series | Movies | Light novels | Books | Manga`, later Audiobooks and Games when real discovery exists. Only types that are enabled for the instance and profile are rendered. Books and Light Novels are separate scopes and never share results.
+
+### All landing
+With no query, scope All and no narrowing filter the page is the landing: Hero, Continue Watching / Reading / Listening / Playing, then discovery shelves **for every enabled media type**, in the media-type bar order. Per type the shelves are Trending, Top, New and, where the source truthfully has the semantic, Upcoming. A shelf that a source cannot truthfully provide is omitted or uses the nearest honestly named semantic; a shelf is never faked to make types symmetrical. The page is intentionally long: vertical browsing across types, horizontal browsing inside a shelf. Shelves are previews (hidden native scrollbar, chevrons, bounded prefetch near the horizontal end); **See all** opens the browse view of that type and ranking.
+
+### Selected type: browse views
+With one type selected, a compact secondary **browse navigation** sits directly under the media-type bar (not inside Filters). It starts with **All**, the default: the overview of that type, its shelves (Trending, Top, New, Upcoming) one below the other exactly like the All landing but for this type only, with the Hero and Continue of that type above. The other entries open one ranking as a full view with infinite scrolling. It lists only the views that have real semantics for that type's provider: Trending, Top, New, Upcoming, All-time popular, Top rated, and My List when an applicable AniList account is connected (consumer label "My List"; hidden when no account is connected). My List is never a filter.
+
+### Provider ownership
+- **AniList** owns Anime, Manga and Light Novels. Manga and Light Novels use the same AniList MANGA family but are separated by format on the provider side: Manga excludes the NOVEL format, Light Novels require it. A Light Novel is never a generic Book and a Manga never a Light Novel. Provider records stay transient discovery evidence until a durable action resolves them to canonical Jularr identity.
+- **TMDB** owns Movies and Series.
+- **Books** use a capability boundary: a book provider may be a **primary discovery** source (browse feeds, search, paging, locale/region and rating capability), an **enrichment** source (metadata, editions, covers, ratings) or an **acquisition** source. These roles are separate. Open Library is the primary catalog/search/paging source and owns the global feeds; Google Books enriches (metadata, editions, covers, locale-aware lookups); Wikisource, Gutenberg and OPDS contribute search/acquisition evidence and never own consumer Trending; Usenet is acquisition availability only and never a discovery identity owner; Hardcover keeps its enrichment role (community rating) unless its real API proves it can own a feed.
+
+### Ranking scope and regions
+Every ranking declares its scope: **Regional**, **Locale-aware** or **Global**, and is only labelled for the scope it really has. The effective discovery region comes from the canonical instance/profile locale policy (de-DE is Germany, en-GB the United Kingdom, en-US the United States); it is never inferred from an IP address. A regional label ("in Germany") requires a defensible regional signal from the source. Open Library trending is global: it is shown as global trending or omitted, never as regional, and nothing is fabricated from language, publication country or search order. Search may be locale- and language-aware independently of ranking. A region-capable Book discovery provider is a tracked gap, not an assumption.
+
+### Hero
+The Hero is a rotating pool of useful candidates, in priority order: a useful Continue/Resume item; newly available local media; newly imported or acquired local media; a personalized recommendation; a New discovery item; a Trending discovery item. A strong Continue item comes first but never monopolizes the Hero; locally available discovery items are preferred over remote ones. The primary action is the canonical state (Play, Continue, Read, Listen, or the Request/Start intent); there is no Hero-specific acquisition model.
+
+### Paging and infinite scrolling
+Shelves are bounded previews. **See all** (the browse view) and Search load provider pages progressively with infinite scrolling until the source is exhausted. A first page has a bounded size; nothing fetches the catalogue at once. The paging contract is generic (category, mode, query, filters, locale, region, page/cursor in; items, next page, has-more out) and each provider maps it to its native paging (AniList page/pageInfo, TMDB pages, Open Library offset/page). Results are de-duplicated by canonical identity across pages, the end of a source stops loading, and a failed later page is retried without removing pages already loaded.
+
+### Live search
+Typing in the global search is debounced (no request per keystroke), obsolete requests are cancelled, and an older response never overwrites a newer query. Search mode shows local, persisted and cached results together with concurrent provider results and then pages progressively; late results follow the staged-commit rules of this specification without moving pointer, focus or scroll anchors.
+
+### Filters
+The Filter drawer contains narrowing constraints only (never Trending, Top or My List): **Genres** (searchable multi-select with selected tokens), **Year** (from/to range with presets 2020s, 2010s, 2000s, Before 2000; no year dropdown), **Status** (multi-select where the source has trustworthy semantics), **Availability** (multi-select: In library, Requested, Not requested) and **Language** (searchable multi-select only with reliable evidence). No filter is offered for a field the source cannot reliably filter. The Filters button shows the active count; active filters are also shown as removable tokens (with Clear all) below the browse navigation. Filters that the provider supports are pushed into the provider request so paging stays truthful; fields that can only be applied locally continue loading pages until enough matches exist, the source is exhausted or a bounded safety limit is reached, and a first page that happens not to match never claims that nothing exists.
+
+### Card action
+A card shows a fixed status area at its bottom (for example "Not requested"), never a separate metadata line beneath the card. On hover or focus the area becomes the canonical action: Request where approval is required, Play / Start watching where an instant start is permitted, Read for reading media, Listen for audio; a local title shows Play / Continue / Read / Continue reading / Listen / Continue listening. The action reuses the Request, Instant Play and Detail contracts; no second state machine exists. A card click never acquires.
+
+### Continue and artwork
+Continue uses clean poster-oriented cards. A vertical poster is never shown inside a horizontal card over a blurred copy of itself; only the Hero uses landscape/backdrop artwork.
+
+### Future Admin-owned Discovery cache policy (requirement, not yet built)
+Discovery caching and retention are not hardcoded policy. A future Admin area will configure a Discovery cache policy (for example Minimal, Balanced/default, Extended) and/or bounded settings for browse TTL, search TTL, transient metadata retention and artwork-cache retention and size, because self-hosters differ in provider tolerance, storage and privacy. Invariants: canonical, local and requested media metadata stays durable as the Library requires; transient Discover candidates never become permanent Works by being cached; lowering Discover retention never deletes canonical Library metadata; cache settings never disable request de-duplication or rate limiting; no provider is hammered because retention is low.
+
 ## Purpose
 
 Discover and Search are one coherent surface.
@@ -14,30 +61,15 @@ Discover and Search are one coherent surface.
 
 ## Global search bar
 
-The shell header carries the global Search everywhere except Discover: Discover owns the prominent search below, so the header field is omitted there (Ctrl/Cmd+K focuses Discover's field) and two equally dominant fields never appear.
+The shell header carries the one global Search on every page, Discover included (Ctrl/Cmd+K focuses it); Discover has no search field of its own.
 
-At the top of Discover on every platform:
-
-- very wide search bar
-- Discover/Compass icon inside or directly attached to it
-- searches Anime, Series, Movies, Books & Light Novels, Manga, Audiobooks and Games
-- optional compact Filter icon on the right
-- the control must clearly communicate both **search** and **discover**
+- very wide, rounded search field in the content header
+- searches Anime, Series, Movies, Light Novels, Books, Manga, Audiobooks and Games
+- the Filter action sits in the header to the right of it, before Notifications
 
 ## Media-type switch
 
-Directly below the search bar:
-
-- All
-- Anime
-- Series
-- Movies
-- Books & Light Novels
-- Manga
-- Audiobooks
-- Games
-
-This is the primary quick scope control.
+Directly below the header, as page content (see the decision above): All, Anime, Series, Movies, Light Novels, Books, Manga, Audiobooks, Games, restricted to the types enabled for the instance and profile. This is the primary quick scope control.
 
 ## Discover content
 
@@ -281,7 +313,7 @@ For watch/read/listen media, the canonical identity is Work. The Work/Season/Epi
 - The default model is **Work -> Season -> Episode** for Series/Anime. AniList is a metadata/presentation provider layered on top of that model, not a second library model.
 - One canonical Anime work may map to multiple AniList media entries (for example separate seasons, parts/cours, specials or sequels where the provider splits them differently).
 - **Default/global search** groups results by media type and deduplicates to one canonical Jularr work wherever identity resolution can prove the match. It must not normally show Season 1/2/3 as unrelated Anime cards just because AniList exposes separate entries.
-- Result groups are independently collapsible/expandable: Anime, Series, Movies, Books & Light Novels, Manga and Audiobooks. “Show all” keeps the active type/filter context.
+- Result groups are independently collapsible/expandable: Anime, Series, Movies, Light Novels, Books, Manga and Audiobooks. “Show all” keeps the active type/filter context.
 - When the **Anime** media-type filter is active, expose a compact result-view switch: **Jularr** / **AniList**.
   - **Jularr** (default): canonical work cards with seasons underneath/on the detail page.
   - **AniList**: provider-native entries may be shown individually for users/admins who intentionally want the AniList split.

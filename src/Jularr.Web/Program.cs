@@ -81,10 +81,7 @@ builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaO
 var dataProtectionDirectory = new DirectoryInfo(builder.Configuration["DataProtection:KeysDirectory"] ?? "/data/keys");
 Directory.CreateDirectory(dataProtectionDirectory.FullName);
 builder.Services.AddDataProtection()
-    // Stays "AniLingo" after the Jularr rebrand: the application name isolates the Data Protection
-    // key ring, and changing it would invalidate every sign-in cookie and every secret already
-    // protected with it (download-client passwords, indexer/Prowlarr/SABnzbd/AI API keys, AniList tokens).
-    .SetApplicationName("AniLingo")
+    .SetApplicationName("Jularr")
     .PersistKeysToFileSystem(dataProtectionDirectory);
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
@@ -342,6 +339,8 @@ builder.Services.AddSingleton<IMediaProcessRunner>(services => services.GetRequi
 builder.Services.AddScoped<LibraryScanner>();
 builder.Services.AddScoped<CanonicalMediaStorageService>();
 builder.Services.AddScoped<CanonicalVideoStorageBackfillService>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Selection.InstalledVideoVersions>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Selection.ReleaseReliabilityService>();
 builder.Services.AddSingleton<IMediaProbeRunner, FfprobeMediaProbeRunner>();
 builder.Services.AddSingleton<MediaInventoryService>();
 builder.Services.AddSingleton<IMediaContainerRemuxer, FfmpegMediaContainerRemuxer>();
@@ -422,7 +421,6 @@ builder.Services.AddScoped<MediaSegmentSidecarImporter>();
 builder.Services.AddScoped<VideoProgressService>();
 builder.Services.AddScoped<VideoDetailQuery>();
 builder.Services.AddScoped<CanonicalVideoTargetResolver>();
-builder.Services.AddScoped<CanonicalVideoProgressBackfillService>();
 builder.Services.AddScoped<ActiveSessionService>();
 builder.Services.AddScoped<EpisodeProgressService>();
 builder.Services.AddScoped<ClientApiService>();
@@ -513,17 +511,12 @@ builder.Services.AddHttpClient<BookCatalogService>(client =>
 builder.Services.AddScoped<BookSearchCoordinator>();
 builder.Services.AddScoped<BookManualSearchService>();
 
-// Legacy single-connection stores: read once by the one-time settings migration below, then
-// unused. Kept registered only so that migration can resolve them.
-builder.Services.AddSingleton<SabnzbdSettingsStore>();
-builder.Services.AddSingleton<SabnzbdConnectionResolver>();
 builder.Services.AddSingleton<SabnzbdAcquisitionStore>();
 builder.Services.AddHttpClient<ISabnzbdClient, SabnzbdClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
-builder.Services.AddSingleton<ProwlarrSettingsStore>();
 builder.Services.AddHttpClient<IProwlarrClient, ProwlarrClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(60);
@@ -539,12 +532,20 @@ builder.Services.AddProviderFramework();
 // usenet-only; torrent indexers (Torznab) are intentionally unsupported.
 builder.Services.AddSingleton<IndexerStore>();
 builder.Services.AddHttpClient<NewznabIndexer>(client => client.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddHttpClient<Jularr.Web.Features.Music.MusicBrainzProvider>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/0.1 (+https://github.com/Juloc/Jularr)");
+});
+builder.Services.AddScoped<Jularr.Web.Features.Music.IMusicMetadataProvider>(services => services.GetRequiredService<Jularr.Web.Features.Music.MusicBrainzProvider>());
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicLibraryService>();
 builder.Services.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(services =>
     new Dictionary<IndexerType, IIndexer>
     {
         [IndexerType.Prowlarr] = new ProwlarrIndexer(services.GetRequiredService<IProwlarrClient>()),
         [IndexerType.Newznab] = services.GetRequiredService<NewznabIndexer>()
     });
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Search.SearchEvidenceCache>();
 builder.Services.AddScoped<IndexerSearchCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService>();
@@ -565,6 +566,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AnimeAcquisiti
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IMonitoredAcquisitionExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoAcquisitionEngine>();
@@ -576,6 +578,22 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequest
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.MangaWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.LightNovelWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Books.BookWantedRequestHandler>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Music.MusicWantedRequestHandler>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, Jularr.Web.Features.Music.MusicWantedSource>();
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.UpgradeScanState>();
+foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv })
+{
+    builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.VideoUpgradeWantedSource>(services, upgradeKind));
+}
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicMonitoringService>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicQuery>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicManualSearchService>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.ICompletedDownloadImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>());
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.IMediaInboxImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>());
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Music.MusicAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.ReleaseRequestTracker>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.ICompletedDownloadImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>());
@@ -624,6 +642,7 @@ builder.Services.AddScoped<SabnzbdDownloadService>();
 builder.Services.AddScoped<IOperationActions, OperationActions>();
 builder.Services.AddScoped<SabnzbdAcquisitionService>();
 builder.Services.AddHostedService<SabnzbdOperationMonitorService>();
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.WantedPassTrigger>();
 builder.Services.AddHostedService<Jularr.Web.Features.Acquisition.Wanted.WantedAcquisitionService>();
 
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcquisitionRegistration, Jularr.Web.Features.Acquisition.Release.AnimeAcquisitionRegistration>();
@@ -631,6 +650,9 @@ builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcqu
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcquisitionRegistration, Jularr.Web.Features.Acquisition.Release.TvAcquisitionRegistration>();
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcquisitionRegistration, Jularr.Web.Features.Acquisition.Release.AudiobookAcquisitionRegistration>();
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcquisitionRegistration, Jularr.Web.Features.Acquisition.Release.BookAcquisitionRegistration>();
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcquisitionRegistration, Jularr.Web.Features.Acquisition.Release.MusicAcquisitionRegistration>();
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcquisitionRegistration, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRegistration>();
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.IMediaAcquisitionRegistration, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRegistration>();
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Release.MediaAcquisitionRegistry>();
 builder.Services.AddSingleton<AnimeQualityProfileStore>();
 builder.Services.AddSingleton(_ => new AnimeMonitoringStore("/data"));
@@ -648,7 +670,7 @@ builder.Services.AddScoped<AnimeImportExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.ICompletedDownloadImportAdapter>(services => services.GetRequiredService<AnimeImportExecutor>());
 builder.Services.AddScoped<AnimeImportRecovery>();
 builder.Services.AddSingleton<AnimeAcquisitionScheduler>();
-builder.Services.AddHostedService(services => services.GetRequiredService<AnimeAcquisitionScheduler>());
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeWantedSource>();
 Jularr.Web.Features.Calendar.ReleaseCalendarRegistration.AddReleaseCalendar(builder.Services);
 
 builder.Services.AddScoped<AcquisitionApiKeyService>();
@@ -796,28 +818,6 @@ try
     await InitializeDatabaseAsync(
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await SabnzbdSettingsMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await IndexerSettingsMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await DownloadClientSettingsMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await Jularr.Web.Features.Acquisition.Import.MediaFolderSettingsMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    await Jularr.Web.Features.Acquisition.Import.VideoLibraryRootMigration.RunAtStartupAsync(
-        app.Services,
-        message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
-    var migratedBibles = await BookTranslationMemoryStore
-        .FromConfiguration(app.Configuration)
-        .MigrateLegacyAsync(CancellationToken.None);
-    if (migratedBibles > 0)
-    {
-        Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} Moved {migratedBibles} translation bible(s) into the shared story context.");
-    }
     Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} Database ready. Starting web server.");
 }
 catch (Exception ex)
@@ -838,24 +838,6 @@ static async Task InitializeDatabaseAsync(
 
     await DatabaseMigrationBridge.UpgradeAsync(db, log: log);
 
-    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    await Jularr.Web.Data.SqliteImport.SqliteToPostgresImporter.RunIfNeededAsync(db, configuration, log);
-
-    var canonicalVideoBackfill = scope.ServiceProvider.GetRequiredService<CanonicalVideoStorageBackfillService>();
-    var backfilledVideoFiles = await canonicalVideoBackfill.BackfillLegacyAnimeAsync(
-        libraryRootId: null,
-        CancellationToken.None);
-    if (backfilledVideoFiles > 0)
-    {
-        log($"Backfilled {backfilledVideoFiles} legacy Anime file(s) into canonical video Assets.");
-    }
-
-    var canonicalProgressBackfill = scope.ServiceProvider.GetRequiredService<CanonicalVideoProgressBackfillService>();
-    var backfilledProgress = await canonicalProgressBackfill.BackfillLegacyAnimeAsync(CancellationToken.None);
-    if (backfilledProgress > 0)
-    {
-        log($"Backfilled {backfilledProgress} legacy Anime progress row(s) into canonical MediaProgress.");
-    }
 
     if (await db.LibraryRoots.AnyAsync())
     {

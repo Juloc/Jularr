@@ -8,9 +8,7 @@ public enum DiscoveryCategory
     Series,
     LightNovel,
     Manga,
-    Book,
-    /// <summary>The combined "Books and Light Novels" scope of the Discover media-type switch.</summary>
-    BooksAndLightNovels
+    Book
 }
 
 public enum DiscoveryMode
@@ -24,7 +22,16 @@ public enum DiscoveryMode
     New,
 
     /// <summary>Provider-backed titles announced for a future release.</summary>
-    Upcoming
+    Upcoming,
+
+    /// <summary>The all-time popularity ranking of a source (not what is popular this week).</summary>
+    Popular,
+
+    /// <summary>The best rated titles among those with a substantial audience.</summary>
+    TopRated,
+
+    /// <summary>The overview of a scope: the shelves (Trending, Top, New, Upcoming) of every type, or of the selected type, one below the other.</summary>
+    Overview
 }
 
 public sealed record DiscoveryRequest(
@@ -33,6 +40,21 @@ public sealed record DiscoveryRequest(
     DiscoveryMode Mode,
     string Genre = "")
 {
+    /// <summary>The constraints pushed into the provider requests; <see cref="Genre"/> stays the single genre of a shelf row.</summary>
+    public DiscoveryFilter Filter { get; init; } = DiscoveryFilter.None;
+
+    /// <summary>The 1-based provider page: the first page of a view, then the pages its infinite scrolling asks for.</summary>
+    public int Page { get; init; } = 1;
+
+    /// <summary>A shelf is a bounded preview of a view; the view itself loads full pages.</summary>
+    public bool Preview { get; init; }
+
+    /// <summary>The genres to ask the provider for: the shelf genre and the viewer's selection.</summary>
+    public IReadOnlyList<string> EffectiveGenres => Genre.Length == 0 ? Filter.Genres : [.. Filter.Genres.Prepend(Genre).Distinct()];
+
+    /// <summary>The filter with the shelf genre merged in, exactly what a provider is asked for.</summary>
+    public DiscoveryFilter EffectiveFilter => Filter with { Genres = EffectiveGenres };
+
     public static DiscoveryRequest Parse(
         string? query,
         string? category,
@@ -106,14 +128,16 @@ public sealed record DiscoveryRequest(
                 DiscoveryCategory.LightNovel,
             "manga" => DiscoveryCategory.Manga,
             "book" or "books" => DiscoveryCategory.Book,
-            "books-light-novels" => DiscoveryCategory.BooksAndLightNovels,
+            "books-light-novels" => DiscoveryCategory.Book,
             _ => DiscoveryCategory.All
         };
 
     private static DiscoveryMode ParseMode(string? value) =>
         value?.Trim().ToLowerInvariant() switch
         {
-            "top" or "popular" => DiscoveryMode.Top,
+            "top" => DiscoveryMode.Top,
+            "popular" or "all-time" or "all-time-popular" => DiscoveryMode.Popular,
+            "top-rated" or "toprated" => DiscoveryMode.TopRated,
             "my" or "my-list" or "mylist" => DiscoveryMode.MyList,
             "new" or "recent" or "recently-published" => DiscoveryMode.New,
             "upcoming" => DiscoveryMode.Upcoming,

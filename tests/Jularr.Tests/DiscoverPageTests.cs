@@ -28,25 +28,29 @@ public sealed class DiscoverPageTests
 
         Assert.IsTrue(query.IsLanding);
         Assert.AreEqual(0, query.ActiveFilterCount);
-        Assert.AreEqual("/Discover", query.Href);
+        Assert.AreEqual("/", query.Href);
     }
 
     [TestMethod]
     public void EveryFilterRoundTripsThroughTheAddress()
     {
-        var address = "/Discover?q=frieren&category=anime&mode=top&genre=Sci-Fi&year=2023&status=finished&avail=library&pref=1";
+        var address = "/?q=frieren&category=anime&mode=top&genre=Sci-Fi,Fantasy&from=2015&to=2023&status=finished,ongoing&avail=library,requested&pref=1";
 
         var query = Parse(address[(address.IndexOf('?') + 1)..]);
 
         Assert.AreEqual("frieren", query.Text);
         Assert.AreEqual(DiscoveryCategory.Anime, query.Category);
         Assert.AreEqual(DiscoveryMode.Top, query.Mode);
-        Assert.AreEqual("Sci-Fi", query.Genre);
-        Assert.AreEqual(2023, query.Year);
-        Assert.AreEqual(MediaReleaseStatus.Finished, query.Status);
-        Assert.AreEqual(DiscoverAvailabilityFilter.InLibrary, query.Availability);
+        CollectionAssert.AreEqual(new[] { "Sci-Fi", "Fantasy" }, query.Genres.ToArray());
+        Assert.AreEqual(2015, query.YearFrom);
+        Assert.AreEqual(2023, query.YearTo);
+        CollectionAssert.AreEqual(new[] { MediaReleaseStatus.Finished, MediaReleaseStatus.Ongoing }, query.Statuses.ToArray());
+        CollectionAssert.AreEqual(new[] { DiscoverAvailabilityFilter.InLibrary, DiscoverAvailabilityFilter.Requested }, query.Availabilities.ToArray());
         Assert.IsTrue(query.PreferredLanguage);
-        Assert.AreEqual(5, query.ActiveFilterCount, "Genre, year, status, availability and language are the filters.");
+        Assert.AreEqual(8, query.ActiveFilterCount, "Two genres, the year range, two statuses, two availabilities and the language are the filters.");
+        Assert.AreEqual(8, query.ActiveFilters.Count, "Every active filter is one removable token.");
+        Assert.AreEqual("/?q=frieren&category=anime&mode=top&genre=Sci-Fi&from=2015&to=2023&status=finished,ongoing&avail=library,requested&pref=1", query.WithoutFilter("genre:Fantasy").Href);
+        Assert.AreEqual(0, query.WithoutFilters().ActiveFilterCount);
         Assert.IsFalse(query.IsLanding);
         Assert.AreEqual(address, query.Href);
     }
@@ -69,14 +73,25 @@ public sealed class DiscoverPageTests
         Assert.AreEqual(DiscoveryMode.New, Parse("category=tv&mode=new").Mode);
         Assert.AreEqual(DiscoveryMode.Upcoming, Parse("category=movie&mode=upcoming").Mode);
         Assert.AreEqual(DiscoveryMode.Upcoming, Parse("category=tv&mode=upcoming").Mode);
-        Assert.AreEqual(DiscoveryMode.Trending, Parse("category=anime&mode=new").Mode);
-        Assert.AreEqual(DiscoveryMode.Trending, Parse("category=anime&mode=upcoming").Mode);
+        Assert.AreEqual(DiscoveryMode.New, Parse("category=anime&mode=new").Mode);
+        Assert.AreEqual(DiscoveryMode.Upcoming, Parse("category=manga&mode=upcoming").Mode);
+        Assert.AreEqual(DiscoveryMode.Popular, Parse("category=light-novel&mode=popular").Mode);
+        Assert.AreEqual(DiscoveryMode.TopRated, Parse("category=tv&mode=top-rated").Mode);
+        Assert.AreEqual(DiscoveryMode.MyList, Parse("category=anime&mode=my-list").Mode);
+        Assert.AreEqual(DiscoveryMode.Overview, Parse("category=movie&mode=my-list").Mode, "My List is an AniList view.");
+        Assert.AreEqual(DiscoveryMode.Overview, Parse("category=book&mode=upcoming").Mode, "Open Library announces nothing.");
+        Assert.AreEqual(DiscoveryMode.Overview, Parse("category=book&mode=top-rated").Mode, "Books have no rating feed.");
+        Assert.AreEqual(DiscoveryMode.Overview, Parse("category=anime").Mode, "A scope opens its overview.");
+        Assert.AreEqual(DiscoveryMode.Trending, Parse("category=anime&mode=trending").Mode);
+        Assert.IsTrue(Parse("category=anime").IsLanding, "The overview of one type is its shelves one below the other.");
+        Assert.IsFalse(Parse("category=anime&mode=trending").IsLanding);
         Assert.AreEqual(DiscoveryMode.Trending, Parse("mode=search").Mode, "search is derived from the text, never asked for.");
 
         var junk = Parse("year=abc&status=gone&avail=x&pref=0&category=games");
-        Assert.IsNull(junk.Year);
-        Assert.IsNull(junk.Status);
-        Assert.AreEqual(DiscoverAvailabilityFilter.Any, junk.Availability);
+        Assert.IsNull(junk.YearFrom);
+        Assert.IsNull(junk.YearTo);
+        Assert.AreEqual(0, junk.Statuses.Count);
+        Assert.AreEqual(0, junk.Availabilities.Count);
         Assert.IsFalse(junk.PreferredLanguage);
         Assert.AreEqual(DiscoveryCategory.All, junk.Category);
         Assert.IsTrue(junk.IsLanding);
@@ -91,7 +106,7 @@ public sealed class DiscoverPageTests
         CollectionAssert.AreEqual(
             new[] { DiscoveryCategory.All, DiscoveryCategory.Series },
             DiscoverScopes.Tabs.Select(tab => tab.Category).Where(category => DiscoverScopes.IsVisible(category, series)).ToArray());
-        Assert.IsTrue(DiscoverScopes.IsVisible(DiscoveryCategory.BooksAndLightNovels, books), "One of the two types is enough for the combined tab.");
+        Assert.IsTrue(DiscoverScopes.IsVisible(DiscoveryCategory.LightNovel, books), "Light Novels and Books are separate scopes: each needs its own media type.");
         Assert.IsFalse(DiscoverScopes.IsVisible(DiscoveryCategory.Book, books));
         Assert.IsFalse(DiscoverScopes.IsVisible(DiscoveryCategory.Anime, series));
         Assert.IsTrue(DiscoverScopes.IsVisible(DiscoveryCategory.All, new HashSet<Jularr.Web.Features.MediaCore.WorkMediaType>()));
@@ -101,7 +116,7 @@ public sealed class DiscoverPageTests
     public void TheDiscoverHandlersAreRateLimitedPerAccountBecauseEveryRequestCanStartProviderCalls()
     {
         var attribute = (Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute?)Attribute.GetCustomAttribute(
-            typeof(Jularr.Web.Pages.Discover.IndexModel),
+            typeof(Jularr.Web.Pages.IndexModel),
             typeof(Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute));
 
         Assert.IsNotNull(attribute);
@@ -111,9 +126,9 @@ public sealed class DiscoverPageTests
     [TestMethod]
     public void MyAniListCountsAsAFilterOnlyWithoutASearchText()
     {
-        Assert.AreEqual(1, Parse("mode=my-list").ActiveFilterCount);
-        Assert.AreEqual(0, Parse("q=x&mode=my-list").ActiveFilterCount);
-        Assert.AreEqual(DiscoveryMode.Trending, Parse("mode=my-list&genre=Horror").WithoutFilters().Mode);
+        Assert.AreEqual(0, Parse("category=anime&mode=my-list").ActiveFilterCount, "My List is a browse view, never a filter.");
+        Assert.IsFalse(Parse("category=anime&mode=my-list").IsLanding);
+        Assert.AreEqual(DiscoveryMode.MyList, Parse("category=anime&mode=my-list&genre=Horror").WithoutFilters().Mode);
         Assert.AreEqual(DiscoveryMode.Top, Parse("mode=top&genre=Horror").WithoutFilters().Mode, "Top is an ordering, not a filter.");
     }
 
@@ -134,22 +149,20 @@ public sealed class DiscoverPageTests
     public void TheMediaTypeSwitchOffersOnlyTypesWithADiscoverySource()
     {
         CollectionAssert.AreEqual(
-            new[] { DiscoveryCategory.All, DiscoveryCategory.Anime, DiscoveryCategory.Movie, DiscoveryCategory.Series, DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.Manga },
+            new[] { DiscoveryCategory.All, DiscoveryCategory.Anime, DiscoveryCategory.Series, DiscoveryCategory.Movie, DiscoveryCategory.LightNovel, DiscoveryCategory.Book, DiscoveryCategory.Manga },
             DiscoverScopes.Tabs.Select(tab => tab.Category).ToArray());
 
-        Assert.IsTrue(DiscoverScopes.IsActive(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.Book));
-        Assert.IsTrue(DiscoverScopes.IsActive(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.LightNovel));
+        Assert.IsTrue(DiscoverScopes.IsActive(DiscoveryCategory.Book, DiscoveryCategory.Book));
+        Assert.IsFalse(DiscoverScopes.IsActive(DiscoveryCategory.Book, DiscoveryCategory.LightNovel), "Books and Light Novels are two scopes.");
         Assert.IsFalse(DiscoverScopes.IsActive(DiscoveryCategory.Manga, DiscoveryCategory.Book));
-        Assert.IsTrue(DiscoverScopes.Includes(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.LightNovel));
-        Assert.IsTrue(DiscoverScopes.Includes(DiscoveryCategory.BooksAndLightNovels, DiscoveryCategory.BooksAndLightNovels));
+        Assert.IsTrue(DiscoverScopes.Includes(DiscoveryCategory.LightNovel, DiscoveryCategory.LightNovel));
+        Assert.IsFalse(DiscoverScopes.Includes(DiscoveryCategory.Book, DiscoveryCategory.LightNovel));
         Assert.IsFalse(DiscoverScopes.Includes(DiscoveryCategory.Anime, DiscoveryCategory.Manga));
         Assert.AreEqual(DiscoveryCategory.Movie, Parse("category=movies").Category);
         Assert.AreEqual(DiscoveryCategory.Series, Parse("category=tv").Category);
-        Assert.AreEqual(DiscoveryCategory.BooksAndLightNovels, Parse("category=books-light-novels").Category);
-        Assert.AreEqual("/Discover?category=books-light-novels", Parse("category=books-light-novels").Href);
-        Assert.AreEqual(
-            "/Discover?category=books-light-novels&mode=top",
-            DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.BooksAndLightNovels, DiscoveryMode.Top, ""));
+        Assert.AreEqual(DiscoveryCategory.Book, Parse("category=books-light-novels").Category, "The retired combined scope of old bookmarks opens Books.");
+        Assert.AreEqual("/?category=light-novel", Parse("category=light-novels").Href);
+        Assert.AreEqual("/?category=book&mode=top", DiscoveryShelfLinks.ToDiscoverUrl(DiscoveryCategory.Book, DiscoveryMode.Top, ""));
     }
 
     // ---- The one language and request indicator ---------------------------------------------------

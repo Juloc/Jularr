@@ -1,8 +1,10 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Metadata;
+using Jularr.Web.Features.Storage;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Acquisition.Pipeline;
@@ -64,11 +66,13 @@ public sealed record AnimeEpisodeSlots(
 
 // Where imported files of an anime go: the library root and series folder its existing files
 // live in. AnimeDirectory is null when the anime has no folder in any library root yet.
+/// <summary>Where an anime's files go: the LibraryRoot, the anime's folder in it when it has one, and how imports are placed there (the root's placement policy).</summary>
 public sealed record AnimeLibraryLocation(
     Guid RootId,
     string RootPath,
     string? AnimeDirectory,
-    bool UsesSeasonFolders);
+    bool UsesSeasonFolders,
+    ImportMode Mode);
 
 /// <summary>
 /// Builds the per-anime episode inventory the monitoring engine and the import planner work on
@@ -79,6 +83,7 @@ public sealed class AnimeAcquisitionInventory(
     AnimeMetadataService metadata,
     AnimeQualityProfileStore profiles,
     IEnumerable<IAnimeMetadataProvider> providers,
+    LibraryRootRoutingService routing,
     ILogger<AnimeAcquisitionInventory> logger)
 {
     private readonly Dictionary<string, IReadOnlyList<string>> titleCache =
@@ -241,10 +246,10 @@ public sealed class AnimeAcquisitionInventory(
         return new InventoryLayout(anime, match, local, expected, diagnostic);
     }
 
-    // preferredRootId (the anime's assigned target root, item 3 of the P1 backlog) is used only
-    // when the anime has no existing folder in any library root yet: an anime that is already
-    // organized under a root keeps importing there, so switching the assignment never splits an
-    // anime's episodes across two roots.
+    // An anime that is already organized under a root keeps importing there, so changing a root never splits its episodes across two
+    // roots. Only a new anime picks a destination: the root assigned to the anime itself, else the Anime default of Admin → Storage (the
+    // one Anime root when there is exactly one, so nothing is left to choose). No destination is null: the import waits for the owner.
+    // The placement mode always comes from the chosen LibraryRoot.
     public async Task<AnimeLibraryLocation?> GetLibraryLocationAsync(
         Guid animeId,
         CancellationToken cancellationToken,
@@ -289,14 +294,25 @@ public sealed class AnimeAcquisitionInventory(
                 !parent.Equals(directories[0], StringComparison.OrdinalIgnoreCase) &&
                 Path.GetFileName(parent).StartsWith("Season", StringComparison.OrdinalIgnoreCase));
 
-            return new AnimeLibraryLocation(root.Id, rootPath, directories[0], usesSeasonFolders);
+            return new AnimeLibraryLocation(root.Id, rootPath, directories[0], usesSeasonFolders, ImportFileTransfer.ModeFor(root.PlacementPolicy));
         }
 
-        var preferred = preferredRootId is { } id ? roots.FirstOrDefault(root => root.Id == id) : null;
-        var fallback = preferred ?? roots.FirstOrDefault();
-        return fallback is null
+        var destination = preferredRootId is { } id ? roots.FirstOrDefault(root => root.Id == id) : null;
+        if (destination is null && await routing.ResolveDefaultAsync(LibraryContentType.Anime, cancellationToken) is { } route)
+        {
+            destination = roots.FirstOrDefault(root => root.Id == route.LibraryRootId);
+        }
+
+        if (destination is null)
+        {
+            var servingIds = await db.LibraryRootContentAssignments.AsNoTracking().Where(assignment => assignment.ContentType == LibraryContentType.Anime).Select(assignment => assignment.LibraryRootId).ToListAsync(cancellationToken);
+            var serving = roots.Where(root => servingIds.Contains(root.Id)).ToList();
+            destination = serving.Count == 1 ? serving[0] : null;
+        }
+
+        return destination is null
             ? null
-            : new AnimeLibraryLocation(fallback.Id, Path.GetFullPath(fallback.Path), null, false);
+            : new AnimeLibraryLocation(destination.Id, Path.GetFullPath(destination.Path), null, false, ImportFileTransfer.ModeFor(destination.PlacementPolicy));
     }
 
     // Converts one slot into the monitoring engine's inventory. A file whose quality cannot be

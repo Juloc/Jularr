@@ -10,6 +10,7 @@ using Jularr.Web.Features.Shell;
 using Jularr.Web.Pages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jularr.Tests;
 
@@ -60,12 +61,24 @@ internal sealed class EpisodeFlowFixture : IAsyncDisposable
 
     public static IndexModel Home(AppDbContext db, CurrentAccountContext account, MediaRecommendationService? recommendations, IInstanceModuleService? instanceModules, MediaCapabilityStore? capabilities) =>
         new(
+            null!,
+            null!,
+            null!,
             db,
+            null!,
+            null!,
             account,
+            null!,
+            null!,
+            null!,
+            null!,
+            null!,
+            null!,
+            recommendations!,
+            instanceModules ?? new InstanceModuleStore(Path.Combine(Path.GetTempPath(), $"jularr-home-modules-{Guid.NewGuid():N}")),
             new VideoProgressService(db),
-            new AppShellService(new MediaCapabilityService(capabilities ?? new MediaCapabilityStore(Path.Combine(Path.GetTempPath(), $"jularr-home-capabilities-{Guid.NewGuid():N}")), instanceModules)),
-            recommendations,
-            instanceModules);
+            NullLogger<IndexModel>.Instance,
+            new AppShellService(new MediaCapabilityService(capabilities ?? new MediaCapabilityStore(Path.Combine(Path.GetTempPath(), $"jularr-home-capabilities-{Guid.NewGuid():N}")), instanceModules)));
 
     public async Task<Anime> AddAnimeAsync(string key)
     {

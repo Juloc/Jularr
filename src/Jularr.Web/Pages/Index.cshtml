@@ -1,18 +1,117 @@
 @page
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Discovery
 @using Jularr.Web.Features.MediaCore
 @using Jularr.Web.Features.Progress
+@using Jularr.Web.Ui
 @model IndexModel
+@* Home and Discover are one surface (docs/mockups/home and docs/mockups/discover, binding): the media-type bar, then on the landing the hero,
+   Continue and the discovery rows; typing or a filter turns the same page into results. The address is the only state; the titles are fetched
+   from the Body handler after first paint so this GET stays local (#186). The Filter and the Search live in the shell header. *@
 @{
-    ViewData["Title"] = Model.Ui["nav.home"];
+    var ui = Model.Ui;
+    var query = Model.Query;
+    ViewData["Title"] = ui["discover.index.title"];
 }
 
 @section Head {
     <link rel="stylesheet" href="~/css/home.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-browse.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/discover-request.css" asp-append-version="true" />
 }
 
-@* Layout and hierarchy follow docs/mockups/home/SPEC.md (binding): hero → Continue → For you →
-   recently discovered. No stat tiles and no filter chips; ?type= still narrows the rows server-side. *@
+<div class="dc-page"
+     data-discover
+     data-is-owner="@Model.IsOwner.ToString().ToLowerInvariant()"
+     data-resolve-url="@Url.Page("/Index", "Resolve")"
+     data-open-url="@Url.Page("/Index", "Open")"
+     data-request-url="@Url.Page("/Index", "Request")"
+     data-request-status-url="@Url.Page("/Index", "RequestStatus")"
+     data-watchlist-url="@Url.Page("/Index", "Watchlist")"
+     data-franchise-url="@Url.Page("/Index", "FollowFranchise")"
+     data-text-action-failed="@ui["discover.card.actionFailed"]"
+     data-text-retry="@ui["library.browse.error.retry"]"
+     data-text-follow="@ui["discover.card.follow"]"
+     data-text-followed="@ui["discover.card.followed"]"
+     data-text-unfollow="@ui["discover.card.unfollow"]"
+     data-text-franchise-followed="@ui["discover.card.franchiseFollowed"]"
+     data-text-open="@ui["requests.open"]"
+     data-text-source-for="@ui["discover.import.sourceFor"]"
+     data-text-source-url="@ui["discover.import.sourceUrlHeading"]"
+     data-status-pending="@ui[ConsumerAcquisitionLabels.StatusKey("pending")]"
+     data-status-approved="@ui[ConsumerAcquisitionLabels.StatusKey("approved")]"
+     data-status-searching="@ui[ConsumerAcquisitionLabels.StatusKey("searching")]"
+     data-status-downloading="@ui[ConsumerAcquisitionLabels.StatusKey("downloading")]"
+     data-status-importing="@ui[ConsumerAcquisitionLabels.StatusKey("importing")]"
+     data-status-completed="@ui[ConsumerAcquisitionLabels.StatusKey("completed")]"
+     data-status-failed="@ui[ConsumerAcquisitionLabels.StatusKey("failed")]"
+     data-status-rejected="@ui[ConsumerAcquisitionLabels.StatusKey("rejected")]">
+    @Html.AntiForgeryToken()
 
+    <h1 class="sr-only">@ui["discover.index.title"]</h1>
+
+    @* The fields of the header (search, filter) and the media type belong to this form. *@
+    <form id="dc-form" method="get" action="/" data-dc-form>
+        @if (query.Category != DiscoveryCategory.All)
+        {
+            <input type="hidden" name="category" value="@DiscoverBrowseQuery.CategoryName(query.Category)" />
+        }
+        @if (query.Mode != DiscoveryMode.Overview)
+        {
+            <input type="hidden" name="mode" value="@DiscoverBrowseQuery.ModeName(query.Mode)" />
+        }
+    </form>
+
+    <nav class="dc-seg" aria-label="@ui["discover.categories.aria"]">
+        @foreach (var (category, labelKey) in Model.VisibleTabs)
+        {
+            var selected = DiscoverScopes.IsActive(category, query.Category);
+            <a class="dc-seg-item@(selected ? " is-active" : "")"
+               href="@((query with { Category = category }).Href)"
+               aria-current="@(selected ? "page" : null)"
+               data-dc-tab>@ui[labelKey]</a>
+        }
+    </nav>
+
+    @* The browse view of the selected type (never inside the filters), then the active filters as tokens that can be removed one by one. *@
+    @if (query.Category != DiscoveryCategory.All && !query.IsSearch)
+    {
+        <nav class="dc-browse" aria-label="@ui["discover.browse.aria"]">
+            @foreach (var mode in DiscoverBrowseModes.For(query.Category).Where(mode => mode != DiscoveryMode.MyList || Model.AniListConnected))
+            {
+                var current = query.Mode == mode;
+                <a class="dc-browse-item@(current ? " is-active" : "")"
+                   href="@((query with { Mode = mode }).Href)"
+                   aria-current="@(current ? "page" : null)">@ui[DiscoverBrowseModes.LabelKey(mode)]</a>
+            }
+        </nav>
+    }
+
+    @if (query.ActiveFilterCount > 0)
+    {
+        <div class="dc-tokens" role="group" aria-label="@ui["library.browse.filters"]">
+            @foreach (var (token, kind, value) in query.ActiveFilters)
+            {
+                var label = kind switch
+                {
+                    "genre" => ui[DiscoverGenres.Key(value)!],
+                    "status" => ui[MediaBannerCardModel.StatusKey(Enum.Parse<MediaReleaseStatus>(value, true))],
+                    "avail" => ui[value switch { "library" => "discover.filter.availabilityLibrary", "requested" => "discover.filter.availabilityRequested", _ => "discover.filter.availabilityNew" }],
+                    "pref" => ui.Format("library.browse.filter.preferred", ("languages", string.Join(" · ", Model.Preference.Codes))),
+                    _ => value
+                };
+                <a class="dc-token" href="@query.WithoutFilter(token).Href" aria-label="@ui.Format("discover.filter.removeAria", ("filter", label))">
+                    <span>@label</span>
+                    <partial name="_DiscoverIcon" model='"close"' />
+                </a>
+            }
+            <a class="dc-token dc-token-clear" href="@query.WithoutFilters().Href">@ui["discover.filter.clearAll"]</a>
+        </div>
+    }
+
+    @if (query.IsLanding)
+    {
+    <div data-dc-landing>
 @if (Model.Hero.Count > 0)
 {
     <section class="home-hero"
@@ -132,6 +231,7 @@
     </section>
 }
 
+
 @if (Model.ContinueTiles.Count > 0)
 {
     <section class="home-row" data-home-continue>
@@ -150,80 +250,94 @@
     </section>
 }
 
-@if (Model.ForYou.Count > 0)
-{
-    <section class="home-row" data-home-for-you>
-        <div class="home-row-heading">
-            <h2><a href="/Recommendations">@Model.Ui["recommendations.heading"]</a></h2>
-        </div>
-        <div class="home-row-scroller" data-home-row>
-            <div class="home-row-track home-poster-track" data-home-row-track>
-                @foreach (var poster in Model.ForYou)
+
+    </div>
+    }
+
+    <p class="dc-notice" data-dc-offline hidden role="status">
+        <partial name="_DiscoverIcon" model='"offline"' />
+        <span>@ui["discover.offline"]</span>
+    </p>
+
+    <p class="dc-notice dc-notice-warning" data-dc-sync hidden role="status">
+        <partial name="_DiscoverIcon" model='"warning"' />
+        <span>@ui["discover.results.updateFailed"]</span>
+        <button type="button" class="dc-link" data-dc-sync-retry>@ui["library.browse.error.retry"]</button>
+    </p>
+
+    <noscript><p class="dc-message">@ui["discover.noscript"]</p></noscript>
+
+    <div class="dc-results" data-dc-body aria-busy="true">
+        <p class="sr-only">@ui["discover.results.loading"]</p>
+        <div class="dc-skeleton" aria-hidden="true">
+            <span class="dc-skeleton-head"></span>
+            <ul class="dc-track dc-ghosts">
+                @for (var i = 0; i < DiscoverSectionView.TrackGhosts; i++)
                 {
-                    <a class="home-poster" href="@poster.Href" aria-label="@poster.Title" title="@poster.Title">
-                        @if (!string.IsNullOrWhiteSpace(poster.ImageUrl))
-                        {
-                            <img src="@poster.ImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
-                        }
-                        else
-                        {
-                            <span aria-hidden="true">@(poster.Title.Length > 0 ? poster.Title[..1].ToUpperInvariant() : "·")</span>
-                        }
-                    </a>
+                    <li class="dc-track-item"><partial name="_DiscoverGhost" /></li>
                 }
-            </div>
-            <partial name="_HomeRowArrows" model="Model.Ui" />
+            </ul>
         </div>
-    </section>
-}
+    </div>
 
-@if (Model.RecentTitles.Count > 0)
+    <div class="dc-message" role="alert" data-dc-error hidden>
+        <div>
+            <p><strong>@ui["discover.results.unavailableTitle"]</strong></p>
+            <p>@ui["discover.results.unavailableBody"]</p>
+        </div>
+        <button type="button" class="button" data-dc-retry>@ui["library.browse.error.retry"]</button>
+    </div>
+
+    @if (Model.IsOwner)
+    {
+        <details class="dc-import" data-dc-import hidden>
+            <summary>@ui["discover.import.toggle"]</summary>
+            <form method="post"
+                  asp-page-handler="ImportSource"
+                  class="dc-import-form"
+                  data-dc-import-form>
+                <div>
+                    <strong data-import-title>@ui["discover.import.sourceUrlHeading"]</strong>
+                    <span>@ui["discover.import.sourceHint"]</span>
+                </div>
+                <input type="hidden" name="metadataProvider" data-import-provider />
+                <input type="hidden" name="metadataExternalId" data-import-external-id />
+                <label>
+                    <span>@ui["discover.import.sourceUrlHeading"]</span>
+                    <input type="url"
+                           name="sourceUrl"
+                           required
+                           inputmode="url"
+                           autocomplete="url"
+                           data-import-url
+                           placeholder="https://ncode.syosetu.com/…" />
+                </label>
+                <div class="dc-import-actions">
+                    <button class="button button-primary" type="submit">@ui["discover.import.submit"]</button>
+                    <button class="button" type="button" data-import-clear>@ui["discover.import.clearMatch"]</button>
+                </div>
+            </form>
+        </details>
+    }
+
+    @* The rich preview: a popover next to the hovered card on a pointer, a modal sheet on touch and from the
+       preview button. Its content is cloned from the card's template when it opens. *@
+    <div class="dc-hover" data-dc-hover role="dialog" hidden></div>
+    <dialog class="dc-sheet" data-dc-sheet>
+        <button type="button" class="dc-icon-btn dc-sheet-close" data-dc-sheet-close aria-label="@ui["library.browse.close"]">
+            <partial name="_DiscoverIcon" model='"close"' />
+        </button>
+        <div class="dc-sheet-content" data-dc-sheet-content></div>
+    </dialog>
+    <partial name="_DiscoverRequestDialog" model="ui" />
+</div>
+
+
+@if (query.IsLanding)
 {
-    <section class="home-row home-row-secondary" data-home-recent>
-        <div class="home-row-heading">
-            <h2>@Model.Ui["home.library.recent"]</h2>
-            <a class="text-link" href="/Library">@Model.Ui["home.library.view"]</a>
-        </div>
-        <div class="home-row-scroller" data-home-row>
-            <div class="media-grid home-row-track home-media-track" data-home-row-track>
-                @foreach (var recent in Model.RecentTitles)
-                {
-                    var coverageLabel = !Model.ShowContentMetrics || recent.Title.MediaType != WorkMediaType.Anime
-                        ? null
-                        : recent.TotalOccurrences == 0
-                            ? Model.Ui["home.library.noLearningText"]
-                            : Model.Ui.Format("home.library.prepared", ("percent", recent.PreparationPercent));
-                    <partial name="_MediaCard" model='new MediaCardModel(
-                        recent.Title.Title,
-                        recent.Subtitle,
-                        recent.Title.DetailHref,
-                        coverageLabel is null ? null : recent.PreparationPercent,
-                        coverageLabel,
-                        recent.Title.PosterUrl,
-                        coverageLabel)' />
-                }
-            </div>
-            <partial name="_HomeRowArrows" model="Model.Ui" />
-        </div>
-    </section>
-}
-
-@if (Model.IsEmpty)
-{
-    <section class="empty-state" data-home-empty>
-        <h3>@Model.Ui["home.empty.title"]</h3>
-        <p>@Model.Ui["home.empty.body"]</p>
-        <a class="button" href="/Discover">@Model.Ui["home.empty.discover"]</a>
-        @if (Model.CanManageStorage)
-        {
-            <a class="button" href="/Admin/Storage">@Model.Ui["home.empty.storage"]</a>
-        }
-    </section>
-}
-
 @if (Model.PlaybackHistory.Count > 0)
 {
-    <details class="panel playback-history" data-playback-history>
+    <details class="panel playback-history" data-playback-history data-dc-landing>
         <summary>
             <strong>@Model.Ui["home.history.title"]</strong>
             <span class="muted">@Model.PlaybackHistory.Count</span>
@@ -260,6 +374,13 @@
     </details>
 }
 
+
+}
+
 @section Scripts {
     <script src="~/js/home-spotlight.js" asp-append-version="true" defer></script>
+    <script src="~/js/work-metadata.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-staging.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover.js" asp-append-version="true" defer></script>
+    <script src="~/js/discover-request.js" asp-append-version="true" defer></script>
 }

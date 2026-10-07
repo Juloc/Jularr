@@ -1027,6 +1027,47 @@ public sealed class OperationStore(AppDbContext db, IJularrEventPublisher? event
             cancellationToken);
     }
 
+    /// <summary>
+    /// How recent downloads of an external client ended, newest first: the status and the routing details. Only downloads the client itself
+    /// reported as finished or failed are listed; a submission that never reached the client, a cancel by the owner and an interrupted run say
+    /// nothing about the release.
+    /// </summary>
+    public async Task<IReadOnlyList<(OperationStatus Status, string? Details)>> ListRecentDownloadOutcomesAsync(
+        DateTime sinceUtc,
+        int limit,
+        CancellationToken cancellationToken = default) =>
+        await WithConnectionAsync(
+            async connection =>
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    """
+                    SELECT "Status", "Details"
+                    FROM "Operations"
+                    WHERE "IsDownload" = 1
+                      AND "ExternalProvider" IS NOT NULL
+                      AND "Status" IN (@succeeded, @failed)
+                      AND "FinishedAtUtc" >= @since
+                      AND "Details" IS NOT NULL
+                    ORDER BY "FinishedAtUtc" DESC
+                    LIMIT @limit;
+                    """;
+                Add(command, "@succeeded", (int)OperationStatus.Succeeded);
+                Add(command, "@failed", (int)OperationStatus.Failed);
+                Add(command, "@since", Format(sinceUtc));
+                Add(command, "@limit", limit);
+
+                var result = new List<(OperationStatus, string?)>();
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    result.Add(((OperationStatus)Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture), ReadNullableString(reader, 1)));
+                }
+
+                return (IReadOnlyList<(OperationStatus Status, string? Details)>)result;
+            },
+            cancellationToken);
+
     public async Task<IReadOnlyList<OperationSnapshot>> ListActiveExternalAsync(
         string provider,
         CancellationToken cancellationToken = default)

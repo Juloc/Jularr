@@ -84,7 +84,7 @@ public sealed class AdminStorageDestinationsTests
         await unknown.OnPostDestinationAsync(LibraryContentType.Movie, Guid.NewGuid(), LibraryPlacementPolicy.Copy, CancellationToken.None);
         Assert.AreEqual(unknown.Ui["admin.storage.destinations.failed"], unknown.TempData["StorageError"]);
 
-        var notRouted = await fixture.Page().OnPostDestinationAsync(LibraryContentType.Anime, disabled.Id, LibraryPlacementPolicy.Copy, CancellationToken.None);
+        var notRouted = await fixture.Page().OnPostDestinationAsync(LibraryContentType.Game, disabled.Id, LibraryPlacementPolicy.Copy, CancellationToken.None);
         Assert.IsInstanceOfType<BadRequestResult>(notRouted, "Importers that do not route through Storage yet have no destination to set here.");
         Assert.IsInstanceOfType<BadRequestResult>(await fixture.Page().OnPostDestinationAsync(LibraryContentType.Movie, disabled.Id, (LibraryPlacementPolicy)42, CancellationToken.None));
         Assert.IsNull(await fixture.Routing.ResolveDefaultAsync(LibraryContentType.Movie));
@@ -107,7 +107,7 @@ public sealed class AdminStorageDestinationsTests
     }
 
     [TestMethod]
-    public async Task ThePageListsMovieAndTvWithTheirRootsAndHidesAModuleThatIsDisabled()
+    public async Task ThePageListsEveryRoutedTypeWithItsRootAndHidesAModuleThatIsDisabled()
     {
         await using var fixture = await Fixture.CreateAsync();
         var cinema = await fixture.AddRootAsync("Cinema");
@@ -117,15 +117,15 @@ public sealed class AdminStorageDestinationsTests
         var page = fixture.Page();
         await page.OnGetAsync(CancellationToken.None);
 
-        CollectionAssert.AreEqual(new[] { LibraryContentType.Movie, LibraryContentType.Tv }, page.Destinations.Select(destination => destination.ContentType).ToArray());
-        Assert.AreEqual(cinema.Id, page.Destinations[0].Default!.LibraryRootId);
-        Assert.IsNull(page.Destinations[1].Default);
+        CollectionAssert.AreEqual(LibraryRootRoutingService.ManagedTypes.ToArray(), page.Destinations.Select(destination => destination.ContentType).ToArray());
+        Assert.AreEqual(cinema.Id, page.Destinations.Single(destination => destination.ContentType == LibraryContentType.Movie).Default!.LibraryRootId);
+        Assert.IsNull(page.Destinations.Single(destination => destination.ContentType == LibraryContentType.Tv).Default);
         CollectionAssert.AreEqual(new[] { "Cinema" }, page.EnabledRoots.Select(root => root.Name).ToArray(), "Only enabled roots can be chosen.");
         Assert.IsTrue(page.CanManageDestinations);
 
         var tvOff = fixture.Page(modules: InstanceModuleSettings.Default.With(InstanceModule.Tv, false));
         await tvOff.OnGetAsync(CancellationToken.None);
-        CollectionAssert.AreEqual(new[] { LibraryContentType.Movie }, tvOff.Destinations.Select(destination => destination.ContentType).ToArray(), "A disabled module leaves no dead control.");
+        CollectionAssert.AreEqual(LibraryRootRoutingService.ManagedTypes.Where(type => type != LibraryContentType.Tv).ToArray(), tvOff.Destinations.Select(destination => destination.ContentType).ToArray(), "A disabled module leaves no dead control.");
 
         Assert.IsFalse(fixture.Page(asOwner: false).CanManageDestinations);
     }
@@ -145,10 +145,11 @@ public sealed class AdminStorageDestinationsTests
         var manager = await host.GetHtmlAsync("/Admin/Storage", asOwner: false, asMediaManager: true);
 
         StringAssert.Contains(owner, "Default destinations");
-        Assert.AreEqual(2, System.Text.RegularExpressions.Regex.Matches(owner, "handler=Destination").Count, "One form for Movies and one for TV.");
+        Assert.AreEqual(LibraryRootRoutingService.ManagedTypes.Count, System.Text.RegularExpressions.Regex.Matches(owner, "handler=Destination").Count, "One form per routed type.");
         StringAssert.Contains(owner, "name=\"libraryRootId\"");
         StringAssert.Contains(owner, "name=\"placementPolicy\"");
         StringAssert.Contains(owner, "No default root: imports of this type wait until one is chosen.", "TV has no default yet.");
+        Assert.IsFalse(owner.Contains("library folder of Import", StringComparison.Ordinal), "No media type falls back to a folder of Import & naming any more.");
         Assert.IsFalse(manager.Contains("handler=Destination", StringComparison.Ordinal), "A media manager sees the destinations but cannot change them.");
         StringAssert.Contains(manager, "Default destinations");
         StringAssert.Contains(manager, "Cinema");

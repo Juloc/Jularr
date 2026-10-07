@@ -217,6 +217,12 @@ public sealed class AccentPaletteTests
                 await Assert.ThrowsExactlyAsync<ArgumentException>(
                     () => store.SetAccentAsync("alice", "blue", CancellationToken.None));
 
+                Assert.IsTrue((await store.GetAsync("alice", CancellationToken.None)).ShowAdminShortcut, "The Admin shortcut is on by default.");
+                await store.SetAdminShortcutAsync("alice", false, CancellationToken.None);
+                Assert.IsFalse((await store.GetAsync("alice", CancellationToken.None)).ShowAdminShortcut);
+                Assert.IsTrue((await store.GetAsync("bob", CancellationToken.None)).ShowAdminShortcut, "The switch is per profile.");
+                Assert.AreEqual(AppTheme.Dark, (await store.GetAsync("alice", CancellationToken.None)).ThemeMode, "Changing the switch keeps the theme.");
+
                 await Assert.ThrowsExactlyAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlRawAsync(
                     "UPDATE \"UiProfileThemes\" SET \"AccentColor\" = 'blue' WHERE \"ProfileId\" = 'bob'"));
             }

@@ -5,8 +5,11 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -241,10 +244,12 @@ public sealed partial class VideoAcquisitionEngine(
     ReleaseRequestTracker tracker,
     AcquisitionAccessStore requestStore,
     VideoRequestWorkResolver works,
-    TimeProvider clock)
+    TimeProvider clock,
+    InstalledVideoVersions? installed = null,
+    ReleaseReliabilityService? reliability = null)
 {
     public const string OperationKind = "video-usenet-download";
-    private static readonly int[] MovieCategories = [2000];
+    private static readonly IReadOnlyDictionary<string, string> EmptyIds = new Dictionary<string, string>();
 
     public async Task<AcquisitionExecution> ExecuteAsync(
         AcquisitionRequest request,
@@ -277,20 +282,39 @@ public sealed partial class VideoAcquisitionEngine(
         }
 
         VideoUnit? unit = null;
+        string? installedQuality = null;
+        var scope = VideoUnitScope.Empty;
         if (request.Kind == MediaAcquisitionKind.Movie)
         {
             if (await HasMovieFileAsync(target.WorkId, cancellationToken))
             {
                 await DropSatisfiedPlaybackIntentAsync(request, payload, cancellationToken);
-                return new AcquisitionExecution(
-                    AcquisitionRequestStatus.Completed,
-                    "Movie is already available in the library.",
-                    ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
+                installedQuality = await FindMovieUpgradeAsync(target.WorkId, cancellationToken);
+                if (installedQuality is null)
+                {
+                    return new AcquisitionExecution(
+                        AcquisitionRequestStatus.Completed,
+                        "Movie is already available in the library.",
+                        ResultUrl: VideoWorkLinks.DetailPath(request.Kind, payload.WorkId));
+                }
             }
         }
         else
         {
-            unit = await FindNextTvUnitAsync(request, payload, cancellationToken);
+            scope = await FindWantedTvUnitsAsync(request, payload, cancellationToken);
+            unit = scope.Wanted.FirstOrDefault();
+            if (unit is null)
+            {
+                // Nothing is missing: the installed episodes a better release may replace are wanted next, each as its own unit.
+                var upgradable = await FindUpgradableTvUnitsAsync(request, payload, scope.All, cancellationToken);
+                if (upgradable.Count > 0)
+                {
+                    scope = new VideoUnitScope(scope.All, upgradable);
+                    unit = upgradable[0];
+                    installedQuality = unit.InstalledQuality;
+                }
+            }
+
             if (unit is null)
             {
                 var continuation = await TvContinuationAsync(request, payload, cancellationToken);
@@ -332,10 +356,60 @@ public sealed partial class VideoAcquisitionEngine(
         }
 
         var profile = await profiles.ResolveAsync(request.Kind, target.WorkId, cancellationToken);
-        var evaluation = await SearchAndEvaluateAsync(request.Kind, payload, unit, profile, cancellationToken);
-        var ranked = Rank(evaluation.Releases);
+        var evaluation = await SearchAndEvaluateAsync(request, payload, unit, scope, target.ExternalIds ?? EmptyIds, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
 
-        return await GrabAsync(request, payload, unit, ranked, FailureMessage(evaluation.Search, request.Kind), cancellationToken);
+        return installedQuality is null
+            ? await GrabAsync(request, payload, unit, evaluation.Grabbable, FailureMessage(evaluation, request.Kind), cancellationToken)
+            : await UpgradeOrWaitAsync(request, payload, unit, evaluation, installedQuality, cancellationToken);
+    }
+
+    /// <summary>
+    /// The upgrade pass of an installed target that is not final: only a release that is a meaningful upgrade of the installed quality is taken
+    /// (the same facts the selection engine ranked by), and once every such release was tried or none exists the request waits a bounded
+    /// <see cref="UpgradePolicy.SearchInterval"/> instead of failing, because nothing is missing. The wait is stored in the request, so it survives a restart.
+    /// </summary>
+    private async Task<AcquisitionExecution> UpgradeOrWaitAsync(AcquisitionRequest request, VideoRequestPayload payload, VideoUnit? unit, VideoSearchEvaluation evaluation, string installedQuality, CancellationToken cancellationToken)
+    {
+        var better = evaluation.Grabbable.Where(release => release.Score is { } score && UpgradePolicy.IsUpgrade(evaluation.Profile, installedQuality, score.QualityKey)).ToArray();
+        var what = unit is null ? "Movie" : $"S{unit.SeasonNumber:00}E{unit.EpisodeNumber:00}";
+        var waiting = await tracker.WaitForUpgradeAsync(
+            request,
+            payload with { ActiveWorkEpisodeId = null, ActiveSeasonNumber = null, ActiveEpisodeNumber = null },
+            [.. better.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))],
+            $"{what} is available as {installedQuality} ({UpgradePolicy.Assess(evaluation.Profile, installedQuality).Reason}) and no better release is known yet.",
+            cancellationToken);
+        return waiting is null
+            ? await GrabAsync(request, payload, unit, better, string.Empty, cancellationToken)
+            : waiting with { ResultUrl = VideoWorkLinks.DetailPath(request.Kind, payload.WorkId) };
+    }
+
+    /// <summary>The installed quality of a Movie that its profile still wants to upgrade, or null when the Movie is final (or its quality cannot be compared).</summary>
+    private async Task<string?> FindMovieUpgradeAsync(Guid workId, CancellationToken cancellationToken)
+    {
+        if (installed is null)
+        {
+            return null;
+        }
+
+        var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Movie, workId, cancellationToken);
+        var quality = await installed.BestMovieQualityAsync(workId, profile, cancellationToken);
+        return UpgradePolicy.Assess(profile, quality).IsUpgradable ? quality : null;
+    }
+
+    /// <summary>The installed, monitored episodes the profile still wants to upgrade, in season and episode order.</summary>
+    private async Task<IReadOnlyList<VideoUnit>> FindUpgradableTvUnitsAsync(AcquisitionRequest request, VideoRequestPayload payload, IReadOnlyList<VideoUnit> episodes, CancellationToken cancellationToken)
+    {
+        if (installed is null || episodes.All(episode => episode.InstalledQuality is null))
+        {
+            return [];
+        }
+
+        var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Tv, payload.WorkId, cancellationToken);
+        var selection = new VideoRequestSelection(payload, request.CreatedAt, clock.GetUtcNow().UtcDateTime);
+        return [.. episodes
+            .Where(episode => episode.HasFile && selection.Includes(episode.Id, episode.SeasonId, episode.AiredAt) && UpgradePolicy.Assess(profile, episode.InstalledQuality).IsUpgradable)
+            .OrderBy(episode => episode.SeasonNumber)
+            .ThenBy(episode => episode.EpisodeNumber)];
     }
 
     /// <summary>
@@ -349,7 +423,7 @@ public sealed partial class VideoAcquisitionEngine(
         IReadOnlyList<VideoReleaseEvaluation> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
-        VideoGrabProgress? progress = null)
+        ManualGrabProgress? progress = null)
     {
         // Admin may have changed monitoring while the indexers were searched; look again before anything is stored or grabbed, so a grab that is
         // dropped never marks its release as tried. A Manual Search grab chose its episode itself, so only Off applies to it. An Off that lands
@@ -364,7 +438,8 @@ public sealed partial class VideoAcquisitionEngine(
         var prioritized = payload.IsPlaybackUnit(unit?.Id, clock.GetUtcNow().UtcDateTime);
         var priority = prioritized ? OperationPriority.High : OperationPriority.Normal;
         var mediaTarget = unit is null ? VideoWorkLinks.WorkTarget(payload.WorkId) : VideoWorkLinks.EpisodeTarget(unit.Id);
-        var candidates = releases.Select(x => new ReleaseRequestCandidate(x.Candidate.Identity, x.Candidate.Title, x.Candidate.InternalDownloadUri!)).ToArray();
+        var candidates = releases.Select(x => new ReleaseRequestCandidate(x.Candidate.Identity, x.Candidate.Title, x.Candidate.InternalDownloadUri!, x.Candidate.Indexer, x.Candidate.ParsedRelease.ReleaseGroup)).ToArray();
+        var byIdentity = releases.ToDictionary(x => x.Candidate.Identity, x => x.Candidate, StringComparer.Ordinal);
         var execution = await tracker.ContinueAsync(
             request,
             payload,
@@ -373,8 +448,15 @@ public sealed partial class VideoAcquisitionEngine(
             async release =>
             {
                 progress?.SubmitStarted = true;
-                var spec = new DownloadSubmissionSpec(OperationKind, downloadTitle, payload.Title, request.RequestedByProfileId, release.DownloadUri, release.Title, request.Kind, MediaTargetKey: mediaTarget, Priority: priority);
-                var outcome = await downloads.SubmitAsync(spec, cancellationToken);
+
+                // A release several indexers returned is one candidate with several sources: when the download client refuses the first
+                // source, the next one is offered before the release counts as failed.
+                var sources = byIdentity[release.Identity].Sources.Select(source => source.DownloadUri).OfType<Uri>().Distinct().ToArray();
+                var outcome = await downloads.SubmitFirstAcceptedAsync(
+                    sources.Length == 0 ? [release.DownloadUri] : sources,
+                    uri => new DownloadSubmissionSpec(OperationKind, downloadTitle, payload.Title, request.RequestedByProfileId, uri, release.Title, request.Kind, MediaTargetKey: mediaTarget, Priority: priority, ReleaseSource: release.Source, ReleaseGroup: release.ReleaseGroup),
+                    cancellationToken);
+
                 if (outcome.Accepted && progress is not null)
                 {
                     progress.Accepted = true;
@@ -399,16 +481,59 @@ public sealed partial class VideoAcquisitionEngine(
 
     /// <summary>The one search + scoring pipeline: automatic acquisition and Manual Search both read their candidates from here.</summary>
     private async Task<VideoSearchEvaluation> SearchAndEvaluateAsync(
-        MediaAcquisitionKind kind,
+        AcquisitionRequest request,
         VideoRequestPayload payload,
         VideoUnit? unit,
+        VideoUnitScope scope,
+        IReadOnlyDictionary<string, string> externalIds,
         QualityProfile profile,
+        SearchOptions options,
         CancellationToken cancellationToken)
     {
-        var search = kind == MediaAcquisitionKind.Movie
-            ? await SearchMovieAsync(payload, cancellationToken)
-            : await SearchTvAsync(payload, unit!, cancellationToken);
-        return new VideoSearchEvaluation(profile, search, Evaluate(kind, payload.Title, unit, search.Releases, profile));
+        var kind = request.Kind;
+
+        // A season of which every unit is wanted (nothing of it is in the library yet) is searched as the season, so the planner asks for
+        // packs deliberately; the judge below credits a pack with every wanted unit it covers. A season that is partly there or still airing
+        // is searched unit by unit.
+        var seasonUnits = unit is null ? 0 : scope.All.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber);
+        var searchWholeSeason = kind == MediaAcquisitionKind.Tv && unit is not null && unit.SeasonNumber > 0 && seasonUnits >= 2 && scope.Wanted.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber) == seasonUnits;
+        var intent = new SearchIntent(kind, payload.Title)
+        {
+            Year = payload.Year,
+            ExternalIds = externalIds,
+            Season = unit?.SeasonNumber,
+            Episode = searchWholeSeason ? null : unit?.EpisodeNumber
+        };
+        var parser = registry.ParserFor(kind);
+        VideoJudgement Judge(ProwlarrReleaseCandidate release) => VideoReleaseJudge.Judge(parser, kind, payload.Title, payload.Year, unit, scope, release);
+        var search = await indexers.SearchAsync(
+            intent,
+            options with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong) },
+            cancellationToken);
+
+        // One selection for the whole result: the same engine ranks what automatic acquisition grabs and what Manual Search lists.
+        var judged = search.Releases.GroupBy(release => release.Identity, StringComparer.Ordinal).ToDictionary(group => group.Key, group => (Release: group.First(), Judgement: Judge(group.First())), StringComparer.Ordinal);
+        var wantedSince = new DateTimeOffset(DateTime.SpecifyKind(unit?.AiredAt is { } aired && aired > request.CreatedAt ? aired : request.CreatedAt, DateTimeKind.Utc));
+        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
+        var selection = ReleaseSelectionEngine.Select(
+            profile,
+            new SelectionContext(clock.GetUtcNow(), wantedSince),
+            [.. judged.Select(pair => new SelectionCandidate(
+                pair.Key,
+                pair.Value.Judgement.Parsed,
+                pair.Value.Release.SizeBytes,
+                pair.Value.Release.Indexer,
+                pair.Value.Release.Sources.FirstOrDefault()?.Priority ?? 0,
+                pair.Value.Release.PublishedAt,
+                pair.Value.Judgement.Evidence,
+                pair.Value.Judgement.Coverage)
+            {
+                SafetyRejection = pair.Value.Judgement.SafetyRejection
+            })], lookup);
+        var evaluations = selection.Ranked
+            .Select(ranked => new VideoReleaseEvaluation(judged[ranked.Candidate.Id].Release, judged[ranked.Candidate.Id].Judgement.Parsed, judged[ranked.Candidate.Id].Judgement.Match, ranked))
+            .ToArray();
+        return new VideoSearchEvaluation(profile, search, evaluations, selection);
     }
 
     /// <summary>
@@ -483,12 +608,22 @@ public sealed partial class VideoAcquisitionEngine(
 
         if (request.Kind == MediaAcquisitionKind.Movie)
         {
-            return false;
+            if (await FindMovieUpgradeAsync(payload.WorkId, cancellationToken) is not { } movieQuality)
+            {
+                return false;
+            }
+
+            var movieNext = clock.GetUtcNow().UtcDateTime + UpgradePolicy.SearchInterval;
+            await tracker.SaveAsync(request, payload with { Searches = 0, LastProblem = null, NextSearchUtc = movieNext }, cancellationToken);
+            await requestStore.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Approved, $"Imported {movieQuality}. A better release is still wanted; looking again {movieNext:yyyy-MM-dd HH:mm} UTC.", request.OperationId, VideoWorkLinks.DetailPath(request.Kind, payload.WorkId), decidedByProfileId: null, cancellationToken);
+            return true;
         }
 
+        var continuation = await TvContinuationAsync(request, payload, cancellationToken);
+        // The releases tried so far only reset for the next missing episode; an upgrade-only request keeps them so a release that did not improve anything is never grabbed again.
         var reset = payload with
         {
-            TriedReleases = [],
+            TriedReleases = continuation.HasMissingDue ? [] : payload.TriedReleases,
             Searches = 0,
             LastProblem = null,
             NextSearchUtc = null,
@@ -497,7 +632,6 @@ public sealed partial class VideoAcquisitionEngine(
             ActiveEpisodeNumber = null
         };
 
-        var continuation = await TvContinuationAsync(request, reset, cancellationToken);
         if (!continuation.KeepOpen)
         {
             await tracker.SaveAsync(request, reset, cancellationToken);
@@ -511,7 +645,9 @@ public sealed partial class VideoAcquisitionEngine(
             AcquisitionRequestStatus.Approved,
             continuation.HasMissingDue
                 ? "Imported episode(s). Searching for the next requested episode."
-                : "Imported requested episodes. Waiting for the next requested TV episode.",
+                : continuation.HasUpgrade
+                    ? "Imported requested episodes. A better release is still wanted for some of them."
+                    : "Imported requested episodes. Waiting for the next requested TV episode.",
             request.OperationId,
             VideoWorkLinks.DetailPath(request.Kind, reset.WorkId),
             decidedByProfileId: null,
@@ -568,21 +704,8 @@ public sealed partial class VideoAcquisitionEngine(
     private async Task<VideoUnit?> FindNextTvUnitAsync(
         AcquisitionRequest request,
         VideoRequestPayload payload,
-        CancellationToken cancellationToken)
-    {
-        var now = clock.GetUtcNow().UtcDateTime;
-        var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
-        var selection = new VideoRequestSelection(payload, request.CreatedAt, now);
-
-        return episodes
-            .Where(x => !x.HasFile)
-            .Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt))
-            .Where(x => x.AiredAt is null || x.AiredAt <= now)
-            .OrderBy(x => selection.IsPlaybackEpisode(x.Id) ? 0 : 1)
-            .ThenBy(x => x.SeasonNumber)
-            .ThenBy(x => x.EpisodeNumber)
-            .FirstOrDefault();
-    }
+        CancellationToken cancellationToken) =>
+        (await FindWantedTvUnitsAsync(request, payload, cancellationToken)).Wanted.FirstOrDefault();
 
     private async Task<TvContinuation> TvContinuationAsync(
         AcquisitionRequest request,
@@ -600,9 +723,10 @@ public sealed partial class VideoAcquisitionEngine(
 
         if (hasMissingDue)
         {
-            return new TvContinuation(true, true, null);
+            return new TvContinuation(true, true, null, false);
         }
 
+        DateTime? upgradeAt = (await FindUpgradableTvUnitsAsync(request, payload, episodes, cancellationToken)).Count > 0 ? now + UpgradePolicy.SearchInterval : null;
         var nextKnown = missingIncluded
             .Where(x => x.AiredAt is DateTime airedAt && airedAt > now)
             .Select(x => x.AiredAt)
@@ -610,12 +734,17 @@ public sealed partial class VideoAcquisitionEngine(
             .FirstOrDefault();
         if (nextKnown is not null)
         {
-            return new TvContinuation(true, false, nextKnown);
+            return new TvContinuation(true, false, upgradeAt is { } earlier && earlier < nextKnown ? earlier : nextKnown, upgradeAt is not null);
+        }
+
+        if (upgradeAt is not null)
+        {
+            return new TvContinuation(true, false, upgradeAt, true);
         }
 
         return payload.MonitorFuture
-            ? new TvContinuation(true, false, now.AddHours(24))
-            : new TvContinuation(false, false, null);
+            ? new TvContinuation(true, false, now.AddHours(24), false)
+            : new TvContinuation(false, false, null, false);
     }
 
     private async Task<IReadOnlyList<VideoUnit>> LoadTvUnitsAsync(
@@ -645,154 +774,67 @@ public sealed partial class VideoAcquisitionEngine(
                 .ToListAsync(cancellationToken))
             .ToHashSet();
 
+        var qualities = installed is null
+            ? new Dictionary<Guid, string?>()
+            : await installed.BestQualityByEpisodeAsync(MediaAcquisitionKind.Tv, workId, await profiles.ResolveAsync(MediaAcquisitionKind.Tv, workId, cancellationToken), cancellationToken);
         return episodes.Select(x => new VideoUnit(
                 x.Id,
                 x.SeasonId,
                 x.SeasonNumber,
                 x.EpisodeNumber,
                 x.AiredAt,
-                playable.Contains(x.Id)))
+                playable.Contains(x.Id),
+                qualities.GetValueOrDefault(x.Id)))
             .ToArray();
     }
 
-    private async Task<IndexerAnimeSearchResult> SearchMovieAsync(
+    /// <summary>What an empty or unusable search means: an indexer problem, nothing found, only another title, or the profile refusing what was found.</summary>
+    private static string FailureMessage(VideoSearchEvaluation evaluation, MediaAcquisitionKind kind)
+    {
+        var search = evaluation.Search;
+        var what = kind == MediaAcquisitionKind.Movie ? "Movie" : "TV";
+        if (search.Releases.Count == 0)
+        {
+            return search.EveryIndexerFailed
+                ? $"No indexer could be searched ({search.Warnings[0].IndexerName}: {search.Warnings[0].Message})."
+                : search.Warnings.Count > 0
+                    ? $"No release found ({search.Warnings[0].IndexerName}: {search.Warnings[0].Message})."
+                    : "No release found on the indexers.";
+        }
+
+        return evaluation.Selection.Outcome switch
+        {
+            SelectionOutcome.ManualReviewOnly => $"Releases were found, but their identity needs a manual decision (Manual Search).",
+            SelectionOutcome.IdentityInvalid => $"Releases were found, but none is the requested {what} title or episode.",
+            _ => $"No suitable {what} release matched the requested title and quality profile."
+        };
+    }
+
+    // The units of a Series that are still wanted, first the ones a profile waits for, then in season and episode order.
+    private async Task<VideoUnitScope> FindWantedTvUnitsAsync(
+        AcquisitionRequest request,
         VideoRequestPayload payload,
         CancellationToken cancellationToken)
     {
-        var query = payload.Year is int year ? $"{payload.Title} {year}" : payload.Title;
-        var result = await indexers.SearchCategoriesAsync(
-            [query],
-            _ => MovieCategories,
-            cancellationToken);
-        if (result.Releases.Count == 0)
-        {
-            result = await indexers.SearchCategoriesAsync([query], _ => [], cancellationToken);
-        }
-
-        return result;
-    }
-
-    private Task<IndexerAnimeSearchResult> SearchTvAsync(
-        VideoRequestPayload payload,
-        VideoUnit unit,
-        CancellationToken cancellationToken) =>
-        indexers.SearchAsync(
-            new IndexerAnimeSearchTarget(
-                payload.Title,
-                [],
-                IndexerAnimeSearchMode.Episode,
-                unit.SeasonNumber,
-                unit.EpisodeNumber),
-            cancellationToken);
-
-    /// <summary>
-    /// Parses and scores every returned candidate against the requested title and unit. Candidates that cannot be grabbed stay in the
-    /// result with the reason, so Manual Search can explain them; automatic acquisition ranks only the grabbable ones. Identity is
-    /// decided before the score: a high score never repairs a wrong title, season or episode.
-    /// </summary>
-    private IReadOnlyList<VideoReleaseEvaluation> Evaluate(
-        MediaAcquisitionKind kind,
-        string title,
-        VideoUnit? unit,
-        IReadOnlyList<ProwlarrReleaseCandidate> candidates,
-        QualityProfile profile)
-    {
-        var parser = registry.ParserFor(kind);
-        var evaluations = new List<VideoReleaseEvaluation>(candidates.Count);
-        foreach (var candidate in candidates)
-        {
-            if (candidate.InternalDownloadUri is null)
-            {
-                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.NoDownload));
-            }
-            else if (candidate.Protocol is not null && !candidate.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
-            {
-                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.NotUsenet));
-            }
-            else if (!parser.TryParse(candidate.Title, out var parsed))
-            {
-                evaluations.Add(new VideoReleaseEvaluation(candidate, null, null, VideoIdentityMatch.Unparseable));
-            }
-            else
-            {
-                var identity = !TitleMatches(title, parsed.SeriesTitle) ? VideoIdentityMatch.WrongTitle : unit is null ? VideoIdentityMatch.Matches : Coverage(parsed, unit);
-                var score = ReleaseScorer.Score(profile, new ReleaseCandidate(parsed, candidate.SizeBytes, candidate.Indexer, candidate.Identity));
-                evaluations.Add(new VideoReleaseEvaluation(candidate, parsed, score, identity));
-            }
-        }
-
-        return evaluations;
-    }
-
-    private static IReadOnlyList<VideoReleaseEvaluation> Rank(IReadOnlyList<VideoReleaseEvaluation> evaluations) =>
-        evaluations
-            .Where(x => x.IsGrabbable)
-            .OrderBy(x => x.Score!.QualityRank)
-            .ThenByDescending(x => x.Score!.Score)
-            .ThenByDescending(x => x.Candidate.PublishedAt)
-            .ThenBy(x => x.Candidate.Title, StringComparer.OrdinalIgnoreCase)
+        var now = clock.GetUtcNow().UtcDateTime;
+        var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
+        var selection = new VideoRequestSelection(payload, request.CreatedAt, now);
+        var wanted = episodes
+            .Where(x => !x.HasFile)
+            .Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt))
+            .Where(x => x.AiredAt is null || x.AiredAt <= now)
+            .OrderBy(x => selection.IsPlaybackEpisode(x.Id) ? 0 : 1)
+            .ThenBy(x => x.SeasonNumber)
+            .ThenBy(x => x.EpisodeNumber)
             .ToArray();
-
-    private static VideoIdentityMatch Coverage(ReleaseInfo release, VideoUnit unit)
-    {
-        if (release.SeasonNumber != unit.SeasonNumber)
-        {
-            return VideoIdentityMatch.WrongSeason;
-        }
-
-        if (release.IsSeasonPack)
-        {
-            return VideoIdentityMatch.ContainsTarget;
-        }
-
-        return release.EpisodeStart is int start && release.EpisodeEnd is int end && unit.EpisodeNumber >= start && unit.EpisodeNumber <= end
-            ? VideoIdentityMatch.Matches
-            : VideoIdentityMatch.WrongEpisode;
+        return new VideoUnitScope(episodes, wanted);
     }
-
-    private static bool TitleMatches(string requested, string candidate)
-    {
-        var wanted = SignificantWords(requested);
-        if (wanted.Count == 0)
-        {
-            return false;
-        }
-
-        var actual = SignificantWords(candidate);
-        return wanted.All(actual.Contains);
-    }
-
-    private static HashSet<string> SignificantWords(string value)
-    {
-        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "the", "a", "an", "of", "and", "der", "die", "das", "und"
-        };
-        return value.Split(
-                [' ', '.', '_', '-', ':', ',', '(', ')', '[', ']', '\'', '"', '!', '?', '&', '/'],
-                StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.ToLowerInvariant())
-            .Where(x => x.Length > 1 && !ignored.Contains(x))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static string FailureMessage(
-        IndexerAnimeSearchResult search,
-        MediaAcquisitionKind kind) =>
-        search.Releases.Count == 0
-            ? search.Warnings.Count > 0
-                ? $"No release found ({search.Warnings[0].IndexerName}: {search.Warnings[0].Message})."
-                : "No release found on the indexers."
-            : kind == MediaAcquisitionKind.Movie
-                ? "No suitable Movie release matched the requested title and quality profile."
-                : "No suitable TV release matched the requested episode and quality profile.";
-
-
 
     private sealed record TvContinuation(
         bool KeepOpen,
         bool HasMissingDue,
-        DateTime? NextSearchUtc);
+        DateTime? NextSearchUtc,
+        bool HasUpgrade);
 }
 
 public abstract class VideoWantedRequestHandler(

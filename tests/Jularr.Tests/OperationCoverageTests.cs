@@ -118,7 +118,7 @@ public sealed class OperationCoverageTests
 
         AssertKinds(
             root,
-            "src/Jularr.Web/Pages/Discover/Index.cshtml.cs",
+            "src/Jularr.Web/Pages/Index.Discover.cs",
             "discover-novel-import");
 
         AssertKinds(

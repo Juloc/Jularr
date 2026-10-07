@@ -24,6 +24,21 @@ namespace Jularr.Tests;
 public sealed class BookCompletedDownloadImportTests
 {
     [TestMethod]
+    public async Task WithoutADefaultBookRootTheImportWaitsInsteadOfReadingTheDownloadInPlace()
+    {
+        await using var host = await Host.CreateAsync();
+        var downloads = host.Folder("downloads");
+        File.WriteAllText(Path.Combine(downloads, "Dune.epub"), "book");
+        await new Jularr.Web.Features.Storage.LibraryRootRoutingService(host.Db).SetDefaultAsync(Jularr.Web.Features.Library.LibraryContentType.Book, null);
+
+        var result = await host.Adapter.ImportAsync(new CompletedDownloadImportRequest(null, null, downloads, MediaAcquisitionKind.Book), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.RetryLater, result.Disposition);
+        StringAssert.Contains(result.Message, "Admin → Storage");
+        Assert.AreEqual(0, await host.Db.BookFiles.CountAsync(), "Nothing is imported from where the download client left it.");
+    }
+
+    [TestMethod]
     public async Task InboxScanImportsEveryBookOnceAsARecordedOperation()
     {
         await using var host = await Host.CreateAsync();
@@ -192,7 +207,7 @@ public sealed class BookCompletedDownloadImportTests
         Assert.AreEqual(DownloadImportState.Completed, import.State);
         Assert.AreEqual("/downloads/books/manual", import.ReportedPath);
         Assert.AreEqual(job, import.LocalPath);
-        Assert.AreEqual(host.Books.FilesPath, import.Destination);
+        Assert.AreEqual(Path.Combine(host.Root, "default-library", "mnt-books-manual"), import.Destination, "The release is placed in the default Book root of Storage.");
         Assert.AreEqual(ImportMode.Copy, import.Mode);
         Assert.AreEqual(MediaAcquisitionKind.Book, details.MediaKind, "The routing details survive the import record.");
         var logs = await store.ListLogsAsync(new OperationLogFilter(OperationId: operationId));
@@ -234,62 +249,6 @@ public sealed class BookCompletedDownloadImportTests
         Assert.IsTrue(DownloadOperationDetails.TryParse((await store.GetAsync(operationId))!.Details, out var gaveUp));
         Assert.AreEqual(DownloadImportState.GaveUp, gaveUp!.Import!.State);
         StringAssert.Contains(gaveUp.Import.Result, "Gave up importing");
-    }
-
-    [TestMethod]
-    public async Task OldBooksInboxMovesOnceIntoThePerMediaInboxFolders()
-    {
-        var root = TempDirectory();
-        try
-        {
-            var legacy = Path.Combine(root, "integrations.json");
-            await File.WriteAllTextAsync(legacy, """{ "InboxPath": "/books-inbox" }""");
-            var store = new AnimeImportSettingsStore(root);
-
-            Assert.IsTrue(await MediaFolderSettingsMigration.MigrateAsync(store, configuredBooksInbox: null, legacy));
-            var migrated = await store.LoadAsync();
-            Assert.AreEqual(MediaFolderSettingsMigration.MediaFoldersVersion, migrated.Version);
-            Assert.AreEqual(Path.GetFullPath("/books-inbox"), migrated.InboxFor(MediaAcquisitionKind.Book));
-            Assert.AreEqual(Path.Combine(Path.GetFullPath("/books-inbox"), "light-novels"), migrated.InboxFor(MediaAcquisitionKind.LightNovel));
-            Assert.IsNull(migrated.InboxFor(MediaAcquisitionKind.Manga));
-            Assert.IsFalse(File.Exists(legacy), "Nothing reads the old Books integration file again.");
-
-            // Later changes by the owner stay; the configuration key is not read again.
-            await store.UpdateAsync(state => state with
-            {
-                MediaLibraries = new() { [MediaAcquisitionKind.Book] = new MediaLibraryTarget(InboxRoot: "/data/downloads/complete/books") }
-            });
-            Assert.IsFalse(await MediaFolderSettingsMigration.MigrateAsync(store, "/old-env-inbox", legacy));
-            Assert.AreEqual("/data/downloads/complete/books", (await store.LoadAsync()).InboxFor(MediaAcquisitionKind.Book));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [TestMethod]
-    public async Task InboxMigrationKeepsFoldersTheOwnerAlreadyChose()
-    {
-        var root = TempDirectory();
-        try
-        {
-            var store = new AnimeImportSettingsStore(root);
-            await store.UpdateAsync(state => state with
-            {
-                MediaLibraries = new() { [MediaAcquisitionKind.LightNovel] = new MediaLibraryTarget(InboxRoot: "/data/downloads/complete/lightnovels") }
-            });
-
-            Assert.IsTrue(await MediaFolderSettingsMigration.MigrateAsync(store, "/env-inbox", Path.Combine(root, "missing.json")));
-
-            var migrated = await store.LoadAsync();
-            Assert.AreEqual(Path.GetFullPath("/env-inbox"), migrated.InboxFor(MediaAcquisitionKind.Book));
-            Assert.AreEqual("/data/downloads/complete/lightnovels", migrated.InboxFor(MediaAcquisitionKind.LightNovel));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     private static async Task WriteEpubAsync(string path)
@@ -370,6 +329,7 @@ public sealed class BookCompletedDownloadImportTests
                 .AddSingleton<Jularr.Web.Features.Storage.LibraryRootRoutingService>()
                 .AddSingleton<MediaInboxImportService>()
                 .BuildServiceProvider();
+            await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Book, Path.Combine(root, "default-library"), ImportMode.Copy);
             return new Host(root, services);
         }
 
@@ -386,15 +346,7 @@ public sealed class BookCompletedDownloadImportTests
                 return state with { MediaLibraries = libraries };
             });
 
-        public Task SetLibraryAsync(MediaAcquisitionKind kind, string library, ImportMode mode) =>
-            services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(state =>
-            {
-                var libraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries)
-                {
-                    [kind] = new MediaLibraryTarget(library, mode)
-                };
-                return state with { MediaLibraries = libraries };
-            });
+        public Task SetLibraryAsync(MediaAcquisitionKind kind, string library, ImportMode mode) => ReadingTestRoots.AssignAsync(Db, kind, library, mode);
 
         public CompletedDownloadImportService ImportService(ICompletedDownloadLocationResolver locations) =>
             new(

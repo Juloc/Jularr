@@ -621,12 +621,35 @@ public sealed class SabnzbdClient(HttpClient httpClient) : ISabnzbdClient
     private static Uri ApiUri(SabnzbdConnection connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        var baseUrl = SabnzbdSettingsStore.NormalizeBaseUrl(connection.Settings.BaseUrl)
+        var baseUrl = NormalizeBaseUrl(connection.Settings.BaseUrl)
             ?? throw new ArgumentException(
                 "SABnzbd URL is required.",
                 nameof(connection));
 
         return new Uri($"{baseUrl}/api", UriKind.Absolute);
+    }
+
+    public static string? NormalizeBaseUrl(string? baseUrl)
+    {
+        var clean = baseUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(clean))
+        {
+            return null;
+        }
+
+        if (!Uri.TryCreate(clean, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            || string.IsNullOrWhiteSpace(uri.Host)
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment))
+        {
+            throw new ArgumentException(
+                "SABnzbd URL must be an absolute HTTP(S) URL without credentials, query or fragment.",
+                nameof(baseUrl));
+        }
+
+        return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
     }
 
     private static string RequireApiKey(SabnzbdConnection connection)

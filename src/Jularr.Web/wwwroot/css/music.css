@@ -1,0 +1,40 @@
+/* Music library: artist and album tiles, the album header and the track list. Tiles use the card tokens of the other Library types; there is no artwork until a
+   provider supplies it, so a letter tile stands in. States are the shared outlined tags (admin-controls.css). */
+.music-header { margin: 0 0 20px; }
+.music-header h1 { margin: 0; }
+.music-sub { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.music-empty { margin: 0; color: var(--muted); }
+
+.music-hero { display: flex; align-items: center; gap: 20px; margin: 0 0 24px; }
+.music-hero-copy { display: grid; gap: 8px; min-width: 0; }
+.music-hero-copy h1 { margin: 0; overflow-wrap: anywhere; }
+.music-hero > .music-cover { flex: none; width: 128px; font-size: 52px; }
+.music-facts { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.music-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+.music-tile { display: grid; gap: 4px; align-content: start; justify-items: start; color: var(--text); border-radius: var(--radius-card); }
+.music-tile:hover .music-title { color: var(--accent-text); }
+.music-tile:hover .music-cover { border-color: var(--border-strong, var(--accent)); }
+.music-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.music-tile > .admin-tag { margin-top: 2px; }
+.music-cover {
+    display: grid; place-items: center; width: 100%; aspect-ratio: 1; border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: var(--surface-2); color: var(--muted); font-size: 44px; font-weight: 800;
+}
+.music-title { font-weight: 700; overflow-wrap: anywhere; }
+
+.music-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.music-actions form { margin: 0; }
+.music-tracks-card { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); }
+.music-tracks { width: 100%; border-collapse: collapse; font-size: 14px; }
+.music-tracks th { padding: 10px 14px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-align: start; text-transform: uppercase; }
+.music-tracks td { padding: 10px 14px; border-top: 1px solid var(--border); }
+.music-tracks tbody tr:hover { background: var(--surface-2); }
+.music-tracks .is-numeric { text-align: end; font-variant-numeric: tabular-nums; width: 4.5em; white-space: nowrap; }
+
+@media (max-width: 760px) {
+    .music-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
+    .music-hero { align-items: flex-start; gap: 14px; }
+    .music-hero > .music-cover { width: 88px; font-size: 34px; }
+    .music-actions .button { min-height: 44px; }
+}

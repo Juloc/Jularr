@@ -425,6 +425,30 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             },
             cancellationToken);
 
+    /// <summary>The latest request of each given title of one provider, in one query, so a list of titles never reads more requests than it shows.</summary>
+    public async Task<IReadOnlyDictionary<string, AcquisitionRequest>> ListLatestAsync(MediaAcquisitionKind kind, string provider, IReadOnlyCollection<string> externalIds, CancellationToken cancellationToken)
+    {
+        if (externalIds.Count == 0)
+        {
+            return new Dictionary<string, AcquisitionRequest>();
+        }
+
+        var rows = await QueryAsync(
+            $"""
+            SELECT DISTINCT ON ("ExternalId") {Columns} FROM "AcquisitionRequests"
+            WHERE "Kind" = @kind AND "Provider" = @provider AND "ExternalId" = ANY(@externalIds)
+            ORDER BY "ExternalId", "CreatedAt" DESC;
+            """,
+            command =>
+            {
+                Add(command, "@kind", AcquisitionAccessNames.Kind(kind));
+                Add(command, "@provider", provider);
+                Add(command, "@externalIds", externalIds.ToArray());
+            },
+            cancellationToken);
+        return rows.ToDictionary(request => request.ExternalId, StringComparer.Ordinal);
+    }
+
     public async Task<int> CountPendingAsync(CancellationToken cancellationToken) =>
         await WithConnectionAsync(async connection =>
         {

@@ -28,6 +28,16 @@
             return Url.Page("/Admin/BookManualSearch", new { id = item.RequestId });
         }
 
+        if (item.Source == WantedSource.Request && item.Kind is MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel)
+        {
+            return Url.Page("/Admin/ReadingManualSearch", new { id = item.RequestId });
+        }
+
+        if (item.Source == WantedSource.Request && item.Kind == MediaAcquisitionKind.Music && item.DetailUrl is { } albumUrl)
+        {
+            return albumUrl + "#manual-search";
+        }
+
         if (item.Source == WantedSource.Request && item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv)
         {
             return Url.Page("/Admin/ManualSearch", new { id = item.RequestId, unit = item.UnitId });

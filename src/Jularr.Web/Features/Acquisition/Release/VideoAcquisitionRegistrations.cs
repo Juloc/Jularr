@@ -38,7 +38,7 @@ public static class VideoQualityProfiles
                 "HDTV-720p"
             ],
             UpgradeAllowed: true,
-            UpgradeCutoffQuality: "BLURAY-1080p",
+            UpgradeCutoffQuality: "WEB-1080p",
             MinimumScore: 0,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,

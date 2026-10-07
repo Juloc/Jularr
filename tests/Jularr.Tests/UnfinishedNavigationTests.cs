@@ -156,7 +156,10 @@ public sealed partial class UnfinishedNavigationTests
         var sidebar = navigation[navigation.IndexOf("<aside class=\"sidebar\"", StringComparison.Ordinal)..navigation.IndexOf("</aside>", StringComparison.Ordinal)];
 
         StringAssert.Contains(header, "<partial name=\"_AppSearch\" />");
-        foreach (var utility in new[] { "_AppSearch", "_AppThemeControl", "_AppAccountFooter", "_AppUserMenu", "_NotificationBell", "_AppSignOut" })
+        StringAssert.Contains(header, "<partial name=\"_NotificationBell\" />");
+        StringAssert.Contains(sidebar, "sidebar-brand");
+        Assert.IsTrue(sidebar.TrimEnd().EndsWith("<partial name=\"_AppUserMenu\" />", StringComparison.Ordinal), "The account card is the last element of the sidebar.");
+        foreach (var utility in new[] { "_AppSearch", "_AppThemeControl", "_AppAccountFooter", "_NotificationBell", "_AppSignOut" })
         {
             Assert.IsFalse(sidebar.Contains(utility, StringComparison.Ordinal), $"The sidebar is navigation only, not {utility}.");
         }
@@ -174,13 +177,16 @@ public sealed partial class UnfinishedNavigationTests
     }
 
     [TestMethod]
-    public void DiscoverLeavesTheSearchFocusToItsOwnField()
+    public void DiscoverUsesTheGlobalSearchAndShowsNoSecondSearchField()
     {
-        var navigation = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Shared", "_AppNavigation.cshtml"));
-        var pwa = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "pwa.js"));
-
-        StringAssert.Contains(navigation, "StartsWithSegments(\"/Discover\"");
-        StringAssert.Contains(pwa, "[data-dc-search], [data-app-search]");
+        var root = Path.Combine(RepositoryRoot(), "src", "Jularr.Web");
+        var navigation = File.ReadAllText(Path.Combine(root, "Pages", "Shared", "_AppNavigation.cshtml"));
+        var search = File.ReadAllText(Path.Combine(root, "Pages", "Shared", "_AppSearch.cshtml"));
+        
+        Assert.IsFalse(navigation.Contains("/Discover", StringComparison.Ordinal), "The header search stays on every page, Discover included.");
+        StringAssert.Contains(search, "Context.Request.Query[\"q\"]");
+        Assert.IsFalse(File.ReadAllText(Path.Combine(root, "Pages", "Index.cshtml")).Contains("class=\"dc-search\"", StringComparison.Ordinal), "The page has no search field of its own.");
+        StringAssert.Contains(search, "data-dc-search");
     }
 
     [TestMethod]

@@ -16,7 +16,9 @@ public sealed record DownloadSubmissionSpec(
     Stream? File = null,
     string? FileName = null,
     string? MediaTargetKey = null,
-    OperationPriority Priority = OperationPriority.Normal);
+    OperationPriority Priority = OperationPriority.Normal,
+    string? ReleaseSource = null,
+    string? ReleaseGroup = null);
 
 public sealed record DownloadSubmissionOutcome(
     bool Accepted,
@@ -43,6 +45,35 @@ public sealed class DownloadClientSubmissionService(
 
     public static bool IsDownloadClientOperation(OperationSnapshot operation) =>
         !string.IsNullOrWhiteSpace(operation.ExternalProvider) && !string.IsNullOrWhiteSpace(operation.ExternalId);
+
+    /// <summary>
+    /// Offers a release that several indexers returned to the download client source by source: the first source the client accepts wins,
+    /// and when none is accepted the last refusal is returned. A release submitted from one source is never submitted again from another.
+    /// </summary>
+    public async Task<DownloadSubmissionOutcome> SubmitFirstAcceptedAsync(
+        IReadOnlyList<Uri> sources,
+        Func<Uri, DownloadSubmissionSpec> specFor,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        ArgumentNullException.ThrowIfNull(specFor);
+        if (sources.Count == 0)
+        {
+            throw new ArgumentException("A release needs at least one source.", nameof(sources));
+        }
+
+        DownloadSubmissionOutcome? outcome = null;
+        foreach (var source in sources)
+        {
+            outcome = await SubmitAsync(specFor(source), cancellationToken);
+            if (outcome.Accepted)
+            {
+                break;
+            }
+        }
+
+        return outcome!;
+    }
 
     public async Task<DownloadSubmissionOutcome> SubmitAsync(
         DownloadSubmissionSpec spec,
@@ -115,7 +146,9 @@ public sealed class DownloadClientSubmissionService(
                         entry.CategoryFor(spec.MediaKind),
                         TargetKey: string.IsNullOrWhiteSpace(spec.MediaTargetKey)
                             ? null
-                            : spec.MediaTargetKey.Trim()).Serialize(),
+                            : spec.MediaTargetKey.Trim(),
+                        ReleaseSource: spec.ReleaseSource,
+                        ReleaseGroup: spec.ReleaseGroup).Serialize(),
                     cancellationToken);
                 await store.ReportProgressAsync(
                     operationId,

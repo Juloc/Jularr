@@ -40,29 +40,7 @@ public sealed class MovieLibraryService(
         var cleanTmdbId = Clean(tmdbId);
         var cleanImdbId = Clean(imdbId);
 
-        Movie? movie = null;
-        if (cleanTmdbId is not null)
-        {
-            movie = await db.Set<Movie>()
-                .FirstOrDefaultAsync(x => x.TmdbId == cleanTmdbId, cancellationToken);
-        }
-
-        if (movie is null && cleanImdbId is not null)
-        {
-            movie = await db.Set<Movie>()
-                .FirstOrDefaultAsync(x => x.ImdbId == cleanImdbId, cancellationToken);
-        }
-
-        if (movie is null)
-        {
-            movie = await db.Set<Movie>()
-                .FirstOrDefaultAsync(
-                    x => x.Key == key
-                         && (cleanTmdbId == null || x.TmdbId == null)
-                         && (cleanImdbId == null || x.ImdbId == null),
-                    cancellationToken);
-        }
-
+        var movie = await FindAsync(key, cleanTmdbId, cleanImdbId, cancellationToken);
         if (movie is null)
         {
             movie = new Movie
@@ -94,6 +72,29 @@ public sealed class MovieLibraryService(
 
         var workId = await bridge.EnsureWorkForMovieAsync(movie, cancellationToken);
         return new MovieLibraryEntry(movie, workId);
+    }
+
+    /// <summary>Whether the library already knows this movie, without creating anything.</summary>
+    public async Task<bool> ExistsAsync(string title, int? year, string? tmdbId, string? imdbId, CancellationToken cancellationToken)
+    {
+        var cleanTitle = string.IsNullOrWhiteSpace(title) ? "Untitled" : title.Trim();
+        return await FindAsync(MovieKey(cleanTitle, year), Clean(tmdbId), Clean(imdbId), cancellationToken) is not null;
+    }
+
+    private async Task<Movie?> FindAsync(string key, string? cleanTmdbId, string? cleanImdbId, CancellationToken cancellationToken)
+    {
+        Movie? movie = null;
+        if (cleanTmdbId is not null)
+        {
+            movie = await db.Set<Movie>().FirstOrDefaultAsync(x => x.TmdbId == cleanTmdbId, cancellationToken);
+        }
+
+        if (movie is null && cleanImdbId is not null)
+        {
+            movie = await db.Set<Movie>().FirstOrDefaultAsync(x => x.ImdbId == cleanImdbId, cancellationToken);
+        }
+
+        return movie ?? await db.Set<Movie>().FirstOrDefaultAsync(x => x.Key == key && (cleanTmdbId == null || x.TmdbId == null) && (cleanImdbId == null || x.ImdbId == null), cancellationToken);
     }
 
     /// <summary>The stable de-duplication key of a movie: folded title plus year so remakes stay distinct.</summary>

@@ -94,8 +94,21 @@ public sealed record DiscoverBodyView(
     int Settled,
     int Pending)
 {
+    /// <summary>True when a view of one media type holds a full provider page, so that another page may follow; the browser then loads pages as the viewer scrolls.</summary>
+    public bool HasMore { get; init; }
+
     public static DiscoverBodyView Of(UiTextBundle ui, DiscoverBrowseQuery query, DiscoverBodyState state) =>
         new(ui, query, state, [], 0, 0, 0);
+}
+
+/// <summary>A further provider page of a view of one media type: the cards to append and whether yet another page may follow.</summary>
+public sealed record DiscoverMoreView(UiTextBundle Ui, IReadOnlyList<DiscoverCardView> Cards, bool HasMore);
+
+public static class DiscoverPaging
+{
+    /// <summary>A view may continue when a ready source returned a whole page: a short page is the end of that source.</summary>
+    public static bool MayContinue(DiscoveryBatch batch) =>
+        batch.Sources.Any(source => source.State == DiscoverySourceState.Ready && source.Items.Count >= DiscoverySources.FullPageSize(source.Source));
 }
 
 public static class DiscoverRecommendations

@@ -95,7 +95,7 @@
     };
 
     const profileId = document.body?.dataset.profileId || "unknown";
-    const wakeLockStorageKey = `anilingo.profile.${profileId}.novel.keepAwake`;
+    const wakeLockStorageKey = `jularr.profile.${profileId}.novel.keepAwake`;
 
     const readKeepAwakePreference = () => {
         try {

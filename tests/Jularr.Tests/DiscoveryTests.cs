@@ -362,18 +362,17 @@ public sealed class DiscoveryTests
             "src",
             "Jularr.Web",
             "Pages",
-            "Discover",
-            "Index.cshtml"));
+            "Shared",
+            "_DiscoverFilter.cshtml"));
 
-        StringAssert.Contains(page, "DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series");
-        StringAssert.Contains(page, "DiscoveryMode.New, \"discover.tabs.new\"");
-        StringAssert.Contains(page, "DiscoveryMode.Upcoming, \"discover.tabs.upcoming\"");
-        Assert.AreEqual(
-            DiscoveryMode.Trending,
-            DiscoverBrowseQuery.Parse(key => key == "mode" ? "new" : key == "category" ? "anime" : null).Mode);
-        Assert.AreEqual(
-            DiscoveryMode.Upcoming,
-            DiscoverBrowseQuery.Parse(key => key == "mode" ? "upcoming" : key == "category" ? "movie" : null).Mode);
+        Assert.IsFalse(page.Contains("discover.tabs.top", StringComparison.Ordinal), "The browse views are not part of the filters.");
+        CollectionAssert.AreEqual(
+            new[] { DiscoveryMode.Overview, DiscoveryMode.Trending, DiscoveryMode.Popular, DiscoveryMode.New },
+            DiscoverBrowseModes.For(DiscoveryCategory.Book).ToArray(),
+            "Open Library has a trending feed, an all-time ranking and a recent one, but no upcoming or rated feed.");
+        CollectionAssert.Contains(DiscoverBrowseModes.For(DiscoveryCategory.LightNovel).ToArray(), DiscoveryMode.MyList);
+        CollectionAssert.DoesNotContain(DiscoverBrowseModes.For(DiscoveryCategory.Movie).ToArray(), DiscoveryMode.MyList);
+        CollectionAssert.Contains(DiscoverBrowseModes.For(DiscoveryCategory.Series).ToArray(), DiscoveryMode.TopRated);
     }
 
     private static AniListRemoteListEntry Remote(

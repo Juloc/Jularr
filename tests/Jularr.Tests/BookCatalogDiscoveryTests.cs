@@ -82,6 +82,44 @@ public sealed class BookCatalogDiscoveryTests
     }
 
     [TestMethod]
+    public async Task EveryBrowseFeedContinuesWhereThePreviousPageEndedThroughTheOpenLibraryOffset()
+    {
+        var path = TempDatabasePath();
+
+        try
+        {
+            await using var db = await CreateDatabaseAsync(path);
+            var seen = new List<string>();
+            using var client = new HttpClient(new DelegateHttpMessageHandler(request =>
+            {
+                if (request.RequestUri?.Host == "openlibrary.org")
+                {
+                    seen.Add(request.RequestUri.PathAndQuery);
+                    return JsonResponse("""{ "docs": [], "works": [] }""");
+                }
+
+                return JsonResponse("""{ "items": [] }""");
+            }))
+            {
+                BaseAddress = new Uri("https://gutendex.com/")
+            };
+
+            var service = NewService(db, client);
+            await service.BrowseAsync(BookBrowseMode.Popular, CancellationToken.None, offset: 48, limit: 24);
+            await service.BrowseAsync(BookBrowseMode.New, CancellationToken.None, offset: 24, limit: 24);
+            await service.BrowseAsync(BookBrowseMode.Trending, CancellationToken.None, offset: 72, limit: 24);
+
+            Assert.IsTrue(seen.Any(address => address.Contains("sort=editions") && address.Contains("limit=24") && address.Contains("offset=48")), "Popular continues at its offset.");
+            Assert.IsTrue(seen.Any(address => address.Contains("/subjects/fiction.json") && address.Contains("offset=24")), "New continues at its offset.");
+            Assert.IsTrue(seen.Any(address => address.Contains("/trending/daily.json") && address.Contains("offset=72")), "Trending continues at its offset.");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
     public async Task NewModeUsesOpenLibrarySubjectsRecentListingNotTrendingOrEditions()
     {
         var path = TempDatabasePath();

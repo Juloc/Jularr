@@ -41,8 +41,8 @@
 {
     <div class="ad-page vd-page"
          data-request-host
-         data-resolve-url="@Url.Page("/Discover/Index", "Resolve")"
-         data-request-url="@Url.Page("/Discover/Index", "Request")"
+         data-resolve-url="@Url.Page("/Index", "Resolve")"
+         data-request-url="@Url.Page("/Index", "Request")"
          data-dc-category="@request!.Category"
          data-dc-provider="@request.Provider"
          data-dc-external-id="@request.ExternalId"
@@ -51,7 +51,7 @@
         @Html.AntiForgeryToken()
         <partial name="_ContextBackLink" model="backLink" />
         @RenderBody()
-        <partial name="~/Pages/Discover/_DiscoverRequestDialog.cshtml" model="ui" />
+        <partial name="~/Pages/Shared/_DiscoverRequestDialog.cshtml" model="ui" />
     </div>
 }
 else

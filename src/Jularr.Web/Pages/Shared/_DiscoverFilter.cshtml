@@ -1,0 +1,123 @@
+@using Jularr.Web.Features.Discovery
+@using Jularr.Web.Features.MediaCore
+@using Jularr.Web.Ui
+@model DiscoverFilterView
+@{
+    var ui = Model.Ui;
+    var query = Model.Query;
+    var active = query.ActiveFilterCount;
+    var statuses = DiscoverBrowseModes.StatusesFor(query.Category);
+    var availabilities = new[]
+    {
+        (DiscoverAvailabilityFilter.InLibrary, "discover.filter.availabilityLibrary"),
+        (DiscoverAvailabilityFilter.Requested, "discover.filter.availabilityRequested"),
+        (DiscoverAvailabilityFilter.NotInLibrary, "discover.filter.availabilityNew")
+    };
+    var presets = new[]
+    {
+        (2020, 2029, "discover.filter.preset2020s"),
+        (2010, 2019, "discover.filter.preset2010s"),
+        (2000, 2009, "discover.filter.preset2000s"),
+        (1900, 1999, "discover.filter.presetBefore2000")
+    };
+}
+@* The Filter control of the Home/Discover surface, rendered in the content header. It only narrows: the media type and the browse view are
+   chosen elsewhere. Its fields belong to the page's form (id dc-form); the multi-valued ones repeat their name. *@
+<details class="dc-pop" data-dc-pop>
+    <summary class="dc-btn@(active > 0 ? " is-active" : "")"
+             aria-label="@(active > 0 ? ui.Format("library.browse.filtersActiveAria", ("count", active)) : ui["library.browse.filters"])">
+        <partial name="_DiscoverIcon" model='"filter"' />
+        <span class="dc-btn-label">@ui["library.browse.filters"]</span>
+        @if (active > 0)
+        {
+            <span class="dc-badge">@active</span>
+        }
+    </summary>
+    <span class="dc-pop-backdrop" data-dc-close></span>
+    <div class="dc-pop-panel" role="dialog" aria-label="@ui["library.browse.filters"]">
+        <div class="dc-pop-head">
+            <h2>@ui["library.browse.filters"]</h2>
+            @if (active > 0)
+            {
+                <a class="dc-reset" href="@query.WithoutFilters().Href">@ui["library.browse.filter.reset"]</a>
+            }
+            <button type="button" class="dc-icon-btn" data-dc-close aria-label="@ui["library.browse.close"]">
+                <partial name="_DiscoverIcon" model='"close"' />
+            </button>
+        </div>
+
+        <div class="dc-groups">
+            <fieldset class="dc-group" data-dc-genres>
+                <legend>@ui["discover.filter.genre"]</legend>
+                <input type="search" class="dc-genre-search" data-dc-genre-search autocomplete="off" placeholder="@ui["discover.filter.genreSearch"]" aria-label="@ui["discover.filter.genreSearch"]" />
+                <ul class="dc-options" role="group">
+                    @foreach (var genre in DiscoveryRequest.KnownGenres)
+                    {
+                        <li data-dc-option="@genre.ToLowerInvariant()">
+                            <label class="dc-check">
+                                <input type="checkbox" form="dc-form" name="genre" value="@genre" checked="@query.Genres.Contains(genre)" />
+                                <span>@ui[DiscoverGenres.Key(genre)!]</span>
+                            </label>
+                        </li>
+                    }
+                </ul>
+            </fieldset>
+
+            <fieldset class="dc-group">
+                <legend>@ui["library.browse.filter.year"]</legend>
+                <div class="dc-range">
+                    <label class="dc-select">
+                        <span>@ui["discover.filter.yearFrom"]</span>
+                        <input type="number" form="dc-form" name="from" min="1900" max="2100" inputmode="numeric" value="@query.YearFrom" data-dc-year-from />
+                    </label>
+                    <label class="dc-select">
+                        <span>@ui["discover.filter.yearTo"]</span>
+                        <input type="number" form="dc-form" name="to" min="1900" max="2100" inputmode="numeric" value="@query.YearTo" data-dc-year-to />
+                    </label>
+                </div>
+                <div class="dc-presets">
+                    @foreach (var (from, to, labelKey) in presets)
+                    {
+                        <button type="button" class="dc-preset" data-dc-year-preset="@from-@to">@ui[labelKey]</button>
+                    }
+                </div>
+            </fieldset>
+
+            @if (statuses.Count > 0)
+            {
+                <fieldset class="dc-group">
+                    <legend>@ui["library.browse.filter.status"]</legend>
+                    @foreach (var status in statuses)
+                    {
+                        <label class="dc-check">
+                            <input type="checkbox" form="dc-form" name="status" value="@DiscoverBrowseQuery.StatusName(status)" checked="@query.Statuses.Contains(status)" />
+                            <span>@ui[MediaBannerCardModel.StatusKey(status)]</span>
+                        </label>
+                    }
+                </fieldset>
+            }
+
+            <fieldset class="dc-group">
+                <legend>@ui["library.browse.filter.groupAvailability"]</legend>
+                @foreach (var (availability, labelKey) in availabilities)
+                {
+                    <label class="dc-check">
+                        <input type="checkbox" form="dc-form" name="avail" value="@DiscoverBrowseQuery.AvailabilityName(availability)" checked="@query.Availabilities.Contains(availability)" />
+                        <span>@ui[labelKey]</span>
+                    </label>
+                }
+                @if (Model.Preference.IsSet || query.PreferredLanguage)
+                {
+                    <label class="dc-check">
+                        <input type="checkbox" form="dc-form" name="pref" value="1" checked="@query.PreferredLanguage" />
+                        <span>@ui.Format("library.browse.filter.preferred", ("languages", string.Join(" · ", Model.Preference.Codes)))</span>
+                    </label>
+                }
+            </fieldset>
+        </div>
+
+        <div class="dc-pop-foot">
+            <button type="submit" form="dc-form" class="button button-primary">@ui["library.browse.filter.apply"]</button>
+        </div>
+    </div>
+</details>

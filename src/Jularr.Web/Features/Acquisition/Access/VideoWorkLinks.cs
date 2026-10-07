@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Providers;
 using Jularr.Web.Features.Operations;
 using Microsoft.EntityFrameworkCore;
 
@@ -68,7 +69,8 @@ public static class VideoWorkLinks
 }
 
 /// <summary>The canonical Work a Movie or TV request names.</summary>
-public sealed record VideoRequestWork(Guid WorkId, string Title, int? Year);
+/// <param name="ExternalIds">The confirmed TMDB/TVDB/IMDb ids of the Work by lowercase provider key, the structured evidence a search may send to indexers that support it.</param>
+public sealed record VideoRequestWork(Guid WorkId, string Title, int? Year, IReadOnlyDictionary<string, string>? ExternalIds = null);
 
 /// <summary>
 /// Finds the canonical Work of Movie and TV requests. A request names its title by provider identity; the engine
@@ -98,15 +100,31 @@ public sealed class VideoRequestWorkResolver(AppDbContext db)
                 select new { work.MediaType, identity.Provider, identity.ExternalId, WorkId = work.Id, Title = work.CanonicalTitle, work.Year })
             .ToListAsync(cancellationToken);
 
+        var matched = video
+            .Select(request => (Request: request, Match: identities.FirstOrDefault(identity => identity.MediaType == VideoWorkLinks.WorkType(request.Kind) && identity.Provider == Provider(request) && identity.ExternalId == request.ExternalId.Trim())))
+            .Where(pair => pair.Match is not null)
+            .ToArray();
+        var matchedWorkIds = matched.Select(pair => pair.Match!.WorkId).Distinct().ToArray();
+        string[] searchProviders = [ProviderKeys.Tmdb, ProviderKeys.Tvdb, ProviderKeys.Imdb];
+        var evidence = matchedWorkIds.Length == 0
+            ? []
+            : await (
+                    from identity in db.WorkExternalIdentities.AsNoTracking()
+                    join work in db.Works.AsNoTracking() on identity.WorkId equals work.Id
+                    where matchedWorkIds.Contains(work.Id)
+                          && identity.MediaType == work.MediaType
+                          && identity.ReviewState == MappingReviewState.Confirmed
+                          && searchProviders.Contains(identity.Provider)
+                    select new { identity.WorkId, identity.Provider, identity.ExternalId })
+                .ToListAsync(cancellationToken);
+
         var works = new Dictionary<Guid, VideoRequestWork>();
-        foreach (var request in video)
+        foreach (var (request, match) in matched)
         {
-            var type = VideoWorkLinks.WorkType(request.Kind);
-            var match = identities.FirstOrDefault(identity => identity.MediaType == type && identity.Provider == Provider(request) && identity.ExternalId == request.ExternalId.Trim());
-            if (match is not null)
-            {
-                works[request.Id] = new VideoRequestWork(match.WorkId, match.Title, match.Year);
-            }
+            var ids = evidence.Where(item => item.WorkId == match!.WorkId)
+                .GroupBy(item => item.Provider)
+                .ToDictionary(group => group.Key, group => group.First().ExternalId);
+            works[request.Id] = new VideoRequestWork(match!.WorkId, match.Title, match.Year, ids);
         }
 
         return works;

@@ -96,7 +96,7 @@ public sealed class SubtitleImportService
         this.instanceModules = instanceModules;
         contentLanguageResolver = new LearningContentLanguageResolver(db);
         jimakuProtector = dataProtectionProvider?.CreateProtector(
-            "AniLingo.Subtitles.Jimaku.ApiKey.v1");
+            "Jularr.Subtitles.Jimaku.ApiKey.v1");
     }
 
     // The first usable sidecar in preference order becomes the learning track. Sidecar tracks are

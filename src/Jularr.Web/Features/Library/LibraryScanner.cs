@@ -414,6 +414,8 @@ public sealed class LibraryScanner(
 
         await db.SaveChangesAsync(cancellationToken);
 
+        // Anime files still enter through the scanner as legacy rows; each scan gives the new ones their canonical Work, episode and Asset, so an
+        // imported or dropped episode is playable through the canonical Library without any startup or background backfill.
         if (canonicalVideoBackfill is not null)
         {
             await canonicalVideoBackfill.BackfillLegacyAnimeAsync(rootId, cancellationToken);

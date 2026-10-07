@@ -1,7 +1,9 @@
+using Jularr.Web.Features.Library;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.ReadingAcquisition;
+using Jularr.Web.Features.Storage;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Books;
@@ -18,7 +20,8 @@ public sealed class BookCompletedDownloadImportAdapter(
     AppDbContext db,
     AnimeImportSettingsStore importSettings,
     IHardLinkCreator hardLinks,
-    ILogger<BookCompletedDownloadImportAdapter> logger)
+    ILogger<BookCompletedDownloadImportAdapter> logger,
+    LibraryRootRoutingService? routing = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     /// <summary>Why a finished download did not become a book; the next release is tried.</summary>
@@ -47,23 +50,28 @@ public sealed class BookCompletedDownloadImportAdapter(
         try
         {
             var settings = await importSettings.LoadAsync(cancellationToken);
-            var library = settings.LibraryFor(MediaAcquisitionKind.Book);
-            var importSource = request.SourcePath;
-            var preserveSourceFiles = false;
-            if (library is not null)
+            if (routing is not null)
             {
-                var destination = ReadingLibraryPlacement.ReleaseFolder(
-                    library.LibraryRoot!,
-                    request.Request?.Title ?? Path.GetFileNameWithoutExtension(request.SourcePath));
-                var mode = settings.ModeFor(MediaAcquisitionKind.Book);
-                placement = new CompletedDownloadPlacement(destination, mode);
-                new ReadingLibraryPlacement(new ImportFileTransfer(hardLinks)).PlaceBookFiles(
-                    request.SourcePath,
-                    destination,
-                    mode);
-                importSource = destination;
-                preserveSourceFiles = true;
+                settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
             }
+
+            var library = settings.LibraryFor(MediaAcquisitionKind.Book);
+            if (library is null)
+            {
+                return CompletedDownloadImportResult.RetryLater(LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Book));
+            }
+
+            var destination = ReadingLibraryPlacement.ReleaseFolder(
+                library.LibraryRoot!,
+                request.Request?.Title ?? Path.GetFileNameWithoutExtension(request.SourcePath));
+            var mode = settings.ModeFor(MediaAcquisitionKind.Book);
+            placement = new CompletedDownloadPlacement(destination, mode);
+            new ReadingLibraryPlacement(new ImportFileTransfer(hardLinks)).PlaceBookFiles(
+                request.SourcePath,
+                destination,
+                mode);
+            var importSource = destination;
+            const bool preserveSourceFiles = true;
 
             imported = await books.ImportBooksFromPathAsync(
                 importSource,
@@ -76,6 +84,11 @@ public sealed class BookCompletedDownloadImportAdapter(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (InvalidDataException)
+        {
+            // Placing a download that holds no readable book file: the release is unsuitable, not the storage.
+            return CompletedDownloadImportResult.RejectRelease(NoBookFileReason);
         }
         catch (Exception exception) when (
             exception is IOException or

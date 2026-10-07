@@ -1,8 +1,11 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Selection;
 
 namespace Jularr.Web.Features.ReadingAcquisition;
 
@@ -38,7 +41,14 @@ public sealed record RankedReadingRelease(
     ProwlarrReleaseCandidate Release,
     ReadingReleaseInfo Parsed,
     int Score,
-    string? RejectedBecause);
+    string? RejectedBecause)
+{
+    /// <summary>What the shared selection engine concluded: identity confidence, decision, the profile score and every reason.</summary>
+    public CandidateEvaluation? Selection { get; init; }
+}
+
+/// <summary>Every release judged by the shared selection engine, best first, and in words why the best one wins.</summary>
+public sealed record ReadingRanking(IReadOnlyList<RankedReadingRelease> Ranked, string? WinnerReason);
 
 public sealed record ReadingUsenetSearchResult(
     IReadOnlyList<string> Queries,
@@ -46,6 +56,11 @@ public sealed record ReadingUsenetSearchResult(
     IReadOnlyList<IndexerSearchWarning> Warnings,
     bool UsedCategoryFallback)
 {
+    /// <summary>The complete search with its per-indexer outcomes, provenance and trace; Manual Search reports from it.</summary>
+    public AcquisitionSearchResult? Search { get; init; }
+
+    public string? WinnerReason { get; init; }
+
     public ProwlarrReleaseCandidate? Picked =>
         Ranked.FirstOrDefault(candidate => candidate.Score > 0)?.Release;
 
@@ -185,163 +200,167 @@ public static class ReadingReleaseSelector
         "le", "la", "les", "de", "no", "to"
     };
 
+    /// <summary>
+    /// Every release judged for the target and ordered by the shared selection engine: identity and format gates first, then the format tier of
+    /// the profile, then the preference points of the request (exact volume, batch, chapter, language order, author), then the shared tiebreaks.
+    /// </summary>
     public static IReadOnlyList<RankedReadingRelease> Rank(
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
-        ReadingAcquisitionTarget target) =>
-        releases
-            .Select(release => Judge(release, target))
-            .OrderByDescending(candidate => candidate.Score)
-            .ThenByDescending(candidate => candidate.Release.PublishedAt)
-            .ThenBy(candidate => candidate.Release.Title, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        ReadingAcquisitionTarget target,
+        QualityProfile? profile = null,
+        ReleaseReliabilityLookup? reliability = null) =>
+        Evaluate(releases, target, profile, reliability).Ranked;
+
+    public static ReadingRanking Evaluate(
+        IReadOnlyList<ProwlarrReleaseCandidate> releases,
+        ReadingAcquisitionTarget target,
+        QualityProfile? profile = null,
+        ReleaseReliabilityLookup? reliability = null)
+    {
+        var judged = releases
+            .GroupBy(release => release.Identity, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => ToJudgement(group.First(), target), StringComparer.Ordinal);
+        var now = DateTimeOffset.UtcNow;
+        var selection = ReleaseSelectionEngine.Select(profile ?? ReadingQualityProfiles.For(target.Kind), new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)], reliability);
+        return new ReadingRanking([.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))], selection.WinnerReason);
+    }
 
     public static RankedReadingRelease Judge(
         ProwlarrReleaseCandidate release,
-        ReadingAcquisitionTarget target)
+        ReadingAcquisitionTarget target,
+        QualityProfile? profile = null) =>
+        Rank([release], target, profile)[0];
+
+    private sealed record ReadingJudgement(ProwlarrReleaseCandidate Release, ReadingReleaseInfo Parsed, SelectionCandidate Candidate);
+
+    private static ReadingJudgement ToJudgement(ProwlarrReleaseCandidate release, ReadingAcquisitionTarget target)
     {
         var parsed = ReadingReleaseParser.Parse(release.Title);
-
-        if (release.InternalDownloadUri is null)
-        {
-            return Reject(release, parsed, "no download link");
-        }
-
-        if (release.Protocol is not null &&
-            !release.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
-        {
-            return Reject(release, parsed, "not a Usenet release");
-        }
-
         var names = new[] { target.Title }
             .Concat(target.Aliases ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        if (!names.Any(name => TitleMatches(release.Title, name)))
-        {
-            return Reject(release, parsed, "title does not match");
-        }
-
-        if (target.Kind == MediaAcquisitionKind.Manga)
-        {
-            if (parsed.Format is ReadingReleaseFormat.Epub or ReadingReleaseFormat.Pdf or ReadingReleaseFormat.Cbr)
-            {
-                return Reject(release, parsed, "format is not supported by the Manga importer");
-            }
-        }
-        else if (target.Kind == MediaAcquisitionKind.LightNovel)
-        {
-            if (parsed.Format is ReadingReleaseFormat.Pdf or ReadingReleaseFormat.Cbz or ReadingReleaseFormat.Cbr)
-            {
-                return Reject(release, parsed, "format is not supported by the Light Novel importer");
-            }
-        }
-        else
-        {
-            return Reject(release, parsed, "unsupported reading media type");
-        }
-
-        if (target.RequestedVolume is { } requestedVolume &&
-            parsed.VolumeNumber is { } releaseVolume &&
-            requestedVolume != releaseVolume)
-        {
-            return Reject(release, parsed, $"volume {releaseVolume} does not match requested volume {requestedVolume}");
-        }
-
-        if (target.RequestedChapterStart is { } requestedChapter &&
-            parsed.ChapterStart is { } releaseChapterStart)
-        {
-            var releaseChapterEnd = parsed.ChapterEnd ?? releaseChapterStart;
-            if (requestedChapter < releaseChapterStart || requestedChapter > releaseChapterEnd)
-            {
-                return Reject(release, parsed, "chapter range does not contain the requested chapter");
-            }
-        }
-
         var preferredLanguages = target.PreferredLanguages?
             .Where(language => !string.IsNullOrWhiteSpace(language))
             .Select(NormalizeLanguage)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray() ?? [];
-        if (preferredLanguages.Length > 0 &&
-            parsed.Language is { } releaseLanguage &&
-            !preferredLanguages.Contains(releaseLanguage, StringComparer.OrdinalIgnoreCase))
+
+        string? safety = null;
+        if (release.InternalDownloadUri is null)
         {
-            return Reject(release, parsed, $"release language '{releaseLanguage}' is not allowed");
+            safety = "no download link";
+        }
+        else if (release.Protocol is not null && !release.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
+        {
+            safety = "not a Usenet release";
+        }
+        else if (target.Kind == MediaAcquisitionKind.Manga && parsed.Format is ReadingReleaseFormat.Epub or ReadingReleaseFormat.Pdf or ReadingReleaseFormat.Cbr)
+        {
+            safety = "format is not supported by the Manga importer";
+        }
+        else if (target.Kind == MediaAcquisitionKind.LightNovel && parsed.Format is ReadingReleaseFormat.Pdf or ReadingReleaseFormat.Cbz or ReadingReleaseFormat.Cbr)
+        {
+            safety = "format is not supported by the Light Novel importer";
+        }
+        else if (target.Kind is not (MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel))
+        {
+            safety = "unsupported reading media type";
         }
 
-        var score = 100;
-        score += target.Kind switch
+        var releaseChapterEnd = parsed.ChapterEnd ?? parsed.ChapterStart;
+        ReleaseIdentityEvidence identity;
+        if (!names.Any(name => TitleMatches(release.Title, name)))
         {
-            MediaAcquisitionKind.Manga => parsed.Format switch
-            {
-                ReadingReleaseFormat.Cbz => 35,
-                ReadingReleaseFormat.Zip => 24,
-                ReadingReleaseFormat.Unknown => 8,
-                _ => 0
-            },
-            MediaAcquisitionKind.LightNovel => parsed.Format switch
-            {
-                ReadingReleaseFormat.Epub => 40,
-                ReadingReleaseFormat.Zip => 15,
-                ReadingReleaseFormat.Unknown => 8,
-                _ => 0
-            },
-            _ => 0
-        };
+            identity = ReleaseIdentityEvidence.Conflict("TitleDoesNotMatch", "title does not match");
+        }
+        else if (target.RequestedVolume is { } requestedVolume && parsed.VolumeNumber is { } releaseVolume && requestedVolume != releaseVolume)
+        {
+            identity = ReleaseIdentityEvidence.Conflict("WrongVolume", $"volume {releaseVolume} does not match requested volume {requestedVolume}");
+        }
+        else if (target.RequestedChapterStart is { } requestedChapter && parsed.ChapterStart is { } releaseChapterStart && (requestedChapter < releaseChapterStart || requestedChapter > releaseChapterEnd))
+        {
+            identity = ReleaseIdentityEvidence.Conflict("WrongChapter", "chapter range does not contain the requested chapter");
+        }
+        else if (preferredLanguages.Length > 0 && parsed.Language is { } releaseLanguage && !preferredLanguages.Contains(releaseLanguage, StringComparer.OrdinalIgnoreCase))
+        {
+            identity = ReleaseIdentityEvidence.Conflict("LanguageNotAllowed", $"release language '{releaseLanguage}' is not allowed");
+        }
+        else if ((target.RequestedVolume is { } volume && parsed.VolumeNumber == volume)
+                 || (target.RequestedChapterStart is { } chapter && parsed.ChapterStart is { } start && chapter >= start && chapter <= releaseChapterEnd))
+        {
+            identity = ReleaseIdentityEvidence.Exact("VolumeOrChapter", "The requested volume or chapter is named in the release.");
+        }
+        else
+        {
+            identity = ReleaseIdentityEvidence.Strong("Title", "The title matches.");
+        }
 
-        if (target.RequestedVolume is { } volume && parsed.VolumeNumber == volume)
+        var context = 0;
+        if (target.RequestedVolume is { } wantedVolume && parsed.VolumeNumber == wantedVolume)
         {
-            score += 24;
+            context += 24;
         }
         else if (target.RequestedVolume is null && parsed.IsCompleteOrBatch)
         {
-            score += 12;
+            context += 12;
         }
 
-        if (target.RequestedChapterStart is { } chapter &&
-            parsed.ChapterStart is { } chapterStart &&
-            chapter >= chapterStart &&
-            chapter <= (parsed.ChapterEnd ?? chapterStart))
+        if (target.RequestedChapterStart is { } wantedChapter && parsed.ChapterStart is { } chapterStart && wantedChapter >= chapterStart && wantedChapter <= releaseChapterEnd)
         {
-            score += 20;
+            context += 20;
         }
 
         if (preferredLanguages.Length > 0 && parsed.Language is { } language)
         {
-            var languageIndex = Array.FindIndex(
-                preferredLanguages,
-                item => item.Equals(language, StringComparison.OrdinalIgnoreCase));
-            score += Math.Max(2, 12 - languageIndex * 3);
+            var languageIndex = Array.FindIndex(preferredLanguages, item => item.Equals(language, StringComparison.OrdinalIgnoreCase));
+            context += Math.Max(2, 12 - languageIndex * 3);
         }
 
-        if (!string.IsNullOrWhiteSpace(target.Author) &&
-            Words(release.Title).Overlaps(Words(target.Author)))
+        if (!string.IsNullOrWhiteSpace(target.Author) && Words(release.Title).Overlaps(Words(target.Author)))
         {
-            score += 5;
+            context += 5;
         }
 
-        if (release.SizeBytes is > 0)
+        // An oversized release for one volume costs storage: it only loses against an otherwise equal one.
+        var cost = release.SizeBytes switch
         {
-            if (target.Kind == MediaAcquisitionKind.LightNovel && release.SizeBytes > 2L * 1024 * 1024 * 1024)
-            {
-                score -= 20;
-            }
-
-            if (target.Kind == MediaAcquisitionKind.Manga && release.SizeBytes > 100L * 1024 * 1024 * 1024)
-            {
-                score -= 10;
-            }
-        }
-
-        return new RankedReadingRelease(release, parsed, Math.Max(score, 1), null);
+            > 2L * 1024 * 1024 * 1024 when target.Kind == MediaAcquisitionKind.LightNovel => 20,
+            > 100L * 1024 * 1024 * 1024 when target.Kind == MediaAcquisitionKind.Manga => 10,
+            _ => 0
+        };
+        var candidate = new SelectionCandidate(
+            release.Identity,
+            ReadingReleaseEvidenceParser.Instance.Parse(release.Title),
+            release.SizeBytes,
+            release.Indexer,
+            release.Sources.FirstOrDefault()?.Priority ?? 0,
+            release.PublishedAt,
+            identity,
+            SelectionCoverage.Single with { Cost = cost })
+        {
+            SafetyRejection = safety,
+            ContextScore = context
+        };
+        return new ReadingJudgement(release, parsed, candidate);
     }
 
-    private static RankedReadingRelease Reject(
-        ProwlarrReleaseCandidate release,
-        ReadingReleaseInfo parsed,
-        string reason) =>
-        new(release, parsed, 0, reason);
+    private static RankedReadingRelease ToRanked(CandidateEvaluation evaluation, ReadingJudgement judged)
+    {
+        if (!evaluation.IsSelectable)
+        {
+            var because = evaluation.Reasons.FirstOrDefault(reason => reason.Kind == SelectionReasonKind.Safety)?.Detail
+                          ?? (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict
+                              ? evaluation.Candidate.Identity.Detail
+                              : string.Join("; ", evaluation.Score?.RejectionReasons ?? []));
+            return new RankedReadingRelease(judged.Release, judged.Parsed, 0, because) { Selection = evaluation };
+        }
+
+        // The displayed score keeps one scale: a base, a step per format tier and the request's preference points, minus the storage cost.
+        var tierPoints = (3 - Math.Min(evaluation.QualityRank, 3)) * 10;
+        return new RankedReadingRelease(judged.Release, judged.Parsed, Math.Max(1, 100 + tierPoints + evaluation.PreferenceScore - evaluation.Candidate.Coverage.Cost), null) { Selection = evaluation };
+    }
 
     internal static bool TitleMatches(string releaseTitle, string expectedTitle)
     {
@@ -416,92 +435,41 @@ public static class ReadingReleaseSelector
     }
 }
 
+/// <summary>
+/// Searches the indexers for one Manga or Light Novel target through the shared planner: the author + title (Light Novels), the
+/// title with the requested volume or chapter and the aliases, in the reading categories and, when too little matches, once more
+/// without a category.
+/// </summary>
 public static class ReadingUsenetSearch
 {
-    private static readonly int[] LightNovelCategories = [7020, 7000];
-    private static readonly int[] MangaCategories = [7030, 7000];
-
-    public static IReadOnlyList<string> Queries(ReadingAcquisitionTarget target)
-    {
-        var queries = new List<string>();
-        var names = new[] { target.Title }
-            .Concat(target.Aliases ?? [])
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(4)
-            .ToArray();
-
-        foreach (var name in names)
-        {
-            if (!string.IsNullOrWhiteSpace(target.Author) &&
-                target.Kind == MediaAcquisitionKind.LightNovel)
-            {
-                queries.Add($"{target.Author.Trim()} {name.Trim()}");
-            }
-
-            if (target.RequestedVolume is { } volume)
-            {
-                queries.Add($"{name.Trim()} vol {volume}");
-                queries.Add($"{name.Trim()} volume {volume}");
-            }
-            else if (target.RequestedChapterStart is { } chapter)
-            {
-                queries.Add($"{name.Trim()} ch {chapter.ToString(CultureInfo.InvariantCulture)}");
-            }
-
-            queries.Add(name.Trim());
-        }
-
-        return queries
-            .Where(query => query.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(12)
-            .ToArray();
-    }
-
     public static async Task<ReadingUsenetSearchResult> SearchAsync(
         IndexerSearchCoordinator indexers,
         ReadingAcquisitionTarget target,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SearchOptions? options = null,
+        QualityProfile? profile = null,
+        ReleaseReliabilityLookup? reliability = null)
     {
-        var queries = Queries(target);
-        var result = await indexers.SearchCategoriesAsync(
-            queries,
-            entry => Categories(entry, target.Kind),
-            cancellationToken);
-
-        var fallback = false;
-        if (result.Releases.Count == 0)
+        var intent = new SearchIntent(target.Kind, target.Title)
         {
-            var anyCategory = await indexers.SearchCategoriesAsync(
-                queries,
-                _ => [],
-                cancellationToken);
-            if (anyCategory.Releases.Count > 0)
-            {
-                result = anyCategory;
-                fallback = true;
-            }
-        }
-
+            Aliases = target.Aliases ?? [],
+            Creator = target.Author,
+            Volume = target.RequestedVolume,
+            Chapter = target.RequestedChapterStart is { } chapter ? (decimal)chapter : null
+        };
+        var result = await indexers.SearchAsync(
+            intent,
+            (options ?? new SearchOptions()) with { UsableCount = releases => ReadingReleaseSelector.Rank(releases, target, profile, reliability).Count(ranked => ranked.Score > 0) },
+            cancellationToken);
+        var ranking = ReadingReleaseSelector.Evaluate(result.Releases, target, profile, reliability);
         return new ReadingUsenetSearchResult(
-            queries,
-            ReadingReleaseSelector.Rank(result.Releases, target),
+            [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
+            ranking.Ranked,
             result.Warnings,
-            fallback);
-    }
-
-    public static IReadOnlyList<int> Categories(
-        IndexerEntry entry,
-        MediaAcquisitionKind kind)
-    {
-        var defaults = kind == MediaAcquisitionKind.Manga
-            ? MangaCategories
-            : LightNovelCategories;
-
-        return entry.Settings.EffectiveBookCategories
-            .Concat(defaults)
-            .Distinct()
-            .ToArray();
+            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0))
+        {
+            Search = result,
+            WinnerReason = ranking.WinnerReason
+        };
     }
 }

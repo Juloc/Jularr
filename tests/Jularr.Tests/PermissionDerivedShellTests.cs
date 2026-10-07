@@ -58,7 +58,7 @@ public sealed class PermissionDerivedShellTests
         var nav = UiShellNavigation.Build("/", learningVisible: true, User, visibleMediaTypes: []);
 
         CollectionAssert.AreEqual(
-            new[] { "home", "watchlist", "calendar", "activity", "settings", "profile" },
+            new[] { "home", "watchlist", "calendar", "settings", "profile" },
             nav.Primary.Concat(nav.Secondary).Select(item => item.Id).ToArray());
         Assert.AreEqual(0, UiShellNavigation.BuildLibraryTabs("/", []).Count);
 
@@ -109,7 +109,7 @@ public sealed class PermissionDerivedShellTests
             unscoped.Primary.Concat(unscoped.Secondary).Select(item => (item.Id, item.Href)).ToArray(),
             everything.Primary.Concat(everything.Secondary).Select(item => (item.Id, item.Href)).ToArray());
         CollectionAssert.AreEqual(
-            new[] { "library-video", "library-reading", "library-books" },
+            new[] { "library-video", "library-reading", "library-books", "library-music" },
             UiShellNavigation.BuildLibraryTabs("/Library", WorkMediaTypes.All).Select(tab => tab.Id).ToArray());
         Assert.AreEqual("/Library", everything.Primary.Single(item => item.Id == "library").Href);
     }

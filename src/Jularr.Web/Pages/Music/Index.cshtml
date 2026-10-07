@@ -1,0 +1,35 @@
+@page "/Music"
+@model Jularr.Web.Pages.Music.IndexModel
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["music.title"];
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/music.css" asp-append-version="true" />
+}
+
+<partial name="_LibraryTypeTabs" model="ui" />
+
+<header class="music-header">
+    <h1>@ui["music.title"]</h1>
+</header>
+
+@if (Model.Artists.Count == 0)
+{
+    <p class="music-empty">@ui["music.empty"]</p>
+}
+else
+{
+    <ul class="music-grid">
+        @foreach (var artist in Model.Artists)
+        {
+            <li>
+                <a class="music-tile" asp-page="Artist" asp-route-id="@artist.Id">
+                    <span class="music-cover" aria-hidden="true">@Jularr.Web.Features.Watchlist.WatchlistLabels.Initial(artist.Name)</span>
+                    <span class="music-title">@artist.Name</span>
+                    <span class="music-sub">@ui.Format("music.summary", ("albums", artist.Albums), ("available", artist.Available))</span>
+                </a>
+            </li>
+        }
+    </ul>
+}

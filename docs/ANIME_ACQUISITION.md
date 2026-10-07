@@ -63,14 +63,14 @@ monitored anime, recent decisions and recent imports.
 | Download status, progress, failure reason | the download client's Operation (`anime-sabnzbd-download`) |
 | Import plan, per-file result, manual-import state | `/data/acquisition/imports.json` (`AnimeImportStore`) |
 | Ownership (mode, Jularr/Sonarr jobs, owned paths) | `/data/acquisition/ownership.json` |
-| Import mode (global/per root), per-media-type folders and remote path mappings, lossless playback optimization | `/data/acquisition/import-settings.json` (`AnimeImportSettingsStore`) |
+| Default import mode of the media types without a LibraryRoot, per-media-type folders and remote path mappings, lossless playback optimization | `/data/acquisition/import-settings.json` (`AnimeImportSettingsStore`) |
 | Tag catalog, delay profiles, tag-scoped indexer restrictions | `/data/acquisition/acquisition-policy.json` (`AcquisitionPolicyStore`) |
 | Per-profile AniList Current/Planning auto-monitor opt-in | `/data/acquisition/anilist-auto-monitor.json` (`AniListAutoMonitorSettingsStore`) |
 | Per-episode grab/delay/import/upgrade history | the database (`AcquisitionHistoryEntry`, via `AcquisitionHistoryService`) |
 | Automation API keys (name, SHA-256 hash, created/last-used/revoked) — never the raw key | the database (`AcquisitionApiKey`, via `AcquisitionApiKeyService`) |
 | Episodes and files | the library database, updated only by the library scanner |
 
-`/Settings/Acquisition` is the one place to edit import mode, playback optimization, remote path mappings, tags, delay
+`/Settings/Acquisition` is the one place to edit the default import mode, playback optimization, remote path mappings, tags, delay
 profiles, indexer restrictions, the current profile's AniList auto-monitor rule, and to export or
 restore a JSON backup of every store above except `health.json` (runtime health state, not a
 setting, so it is never part of the backup). Indexer and download client API keys/passwords travel
@@ -94,10 +94,13 @@ whose quality cannot be parsed is never offered for upgrade.
 
 ## Scheduler
 
-`AnimeAcquisitionScheduler` is a hosted service with one canonical interval
+Anime has no loop of its own. The shared Wanted pass (every 2 minutes, `WantedAcquisitionService`) calls
+`AnimeWantedSource`, which asks `AnimeAcquisitionScheduler` to advance: it recovers after startup once, runs the
+queued owner requests (a requested search wakes the pass at once, so Search now and search-on-add do not wait for its next turn), and otherwise runs the pipeline for all monitored anime when the one canonical interval
 (`AnimeMonitoringSchedule`, default every 30 minutes, 5 minutes to 24 hours, editable on
-`/Acquisition`; switching it off keeps owner-requested searches working). The first run starts
-45 seconds after startup.
+`/Acquisition`) has elapsed; switching it off keeps owner-requested searches working. The first run starts
+45 seconds after startup. Because the pass owns the cadence, an interval is honoured to the pass granularity
+(2 minutes) and a disabled Anime or Acquisition module is cold: the pass skips the source.
 
 - Runs never overlap: periodic runs, **Search all now**, **Search wanted now** for one anime,
   search-on-add and interactive grabs all go through one gate.
@@ -281,12 +284,16 @@ The SABnzbd monitor separately advances failed downloads that were not handled b
 
 ## Import mode and remote path mapping
 
-`/Settings/Acquisition` chooses how a completed download becomes a library file, globally and
-per library root: **Move** (the historical default, removes the source), **Copy** (keeps the
+How a completed download becomes a library file is the placement policy of the LibraryRoot it goes to, set in
+Admin → Storage like for Movie, TV and Music (`/Settings/Acquisition` lists each root's placement and links
+there): **Move** (removes the source), **Copy** (keeps the
 source), **Hardlink** (no extra disk space, keeps the download seeding; fails the import with a
 clear reason when the source and the library root are on different filesystems) or **Hardlink or
 copy** (the explicit choice to fall back to a copy only on a different filesystem — no other mode
-falls back silently). The same page's remote path mappings (`RemotePrefix` → `LocalPrefix`) belong to a
+falls back silently). A new anime goes to the root assigned to it, else to the Anime default root of Admin →
+Storage (the only Anime root when there is exactly one); with several Anime roots and no default the import
+waits until the owner chooses one. An anime that already has a folder keeps importing into its root. The
+`/Settings/Acquisition` page's remote path mappings (`RemotePrefix` → `LocalPrefix`) belong to a
 media type: the mappings of a media type rewrite a path the download client reports for that media
 type before anything reads it, and the **Anime** mappings also rewrite every Sonarr-observed path
 (series folder, episode file, queue output, history) the same way, so Sonarr ↔ Jularr path matching

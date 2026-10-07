@@ -8,6 +8,7 @@ using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Events;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Media.Optimization;
 using Jularr.Web.Features.Operations;
@@ -48,7 +49,8 @@ public sealed class AnimeImportExecutor(
     ILogger<AnimeImportExecutor> logger,
     MediaOptimizationQueue? optimizationQueue = null,
     LibraryRootAvailabilityService? storage = null,
-    IJularrEventPublisher? events = null) : ICompletedDownloadImportAdapter
+    IJularrEventPublisher? events = null,
+    IInstanceModuleService? instanceModules = null) : ICompletedDownloadImportAdapter
 {
     public const string OperationKind = "anime-import";
     public const string OperationCategory = "Library";
@@ -350,7 +352,7 @@ public sealed class AnimeImportExecutor(
             return new(false, storageWaiting);
         }
 
-        var (importAction, allowHardlinkFallback) = await ResolveImportActionAsync(location?.RootId, cancellationToken);
+        var (importAction, allowHardlinkFallback) = ImportFileTransfer.Resolve(location!.Mode);
 
         var file = record.Files[index];
         var planned = new PlannedAnimeImport(
@@ -503,7 +505,7 @@ public sealed class AnimeImportExecutor(
             return deferred;
         }
 
-        var (importAction, allowHardlinkFallback) = await ResolveImportActionAsync(location?.RootId, cancellationToken);
+        var (importAction, allowHardlinkFallback) = ImportFileTransfer.Resolve(location!.Mode);
         var plan = AnimeImportPlanner.Plan(
             new AnimeImportPlanContext(
                 jobId,
@@ -626,11 +628,6 @@ public sealed class AnimeImportExecutor(
             }
 
             return ToRecord(planned, AnimeImportFileStatus.ManualRequired, null, reason);
-        }
-
-        if (location is null)
-        {
-            return await ManualAsync("No library root is enabled; add one under Admin → System, then import manually.");
         }
 
         if (LibraryFilePlacer.FindSourceProblem(planned.Source.Path) is { } sourceProblem)
@@ -775,14 +772,19 @@ public sealed class AnimeImportExecutor(
             .FirstOrDefault();
     }
 
-    // An import needs its destination library storage now: a sleeping Wake-on-LAN NAS is started
-    // and the import waits for the bounded start attempt. Returns the reason to defer when the
-    // storage is still not readable, so no file is moved towards an offline mount.
+    // An import needs a destination and its library storage now. With no LibraryRoot to import into the import waits for the owner to
+    // choose one in Admin → Storage; a sleeping Wake-on-LAN NAS is started and the import waits for the bounded start attempt. Returns
+    // the reason to defer, so no file is moved without a destination or towards an offline mount.
     private async Task<string?> WaitForLibraryStorageAsync(
         AnimeLibraryLocation? location,
         CancellationToken cancellationToken)
     {
-        if (location is null || storage is null)
+        if (location is null)
+        {
+            return LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Anime);
+        }
+
+        if (storage is null)
         {
             return null;
         }
@@ -837,7 +839,8 @@ public sealed class AnimeImportExecutor(
         Guid? importOperationId,
         CancellationToken cancellationToken)
     {
-        if (optimizationQueue is null)
+        // Remuxing for Direct Play spawns ffmpeg and only serves the player: an instance without Playback never starts it.
+        if (optimizationQueue is null || (instanceModules is not null && !await instanceModules.IsEnabledAsync(InstanceModule.Playback, cancellationToken)))
         {
             return;
         }
@@ -962,7 +965,7 @@ public sealed class AnimeImportExecutor(
                 .FirstOrDefault();
             placement = new CompletedDownloadPlacement(
                 destination,
-                (await importSettings.LoadAsync(cancellationToken)).ModeFor(root?.Id));
+                ImportFileTransfer.ModeFor(root?.PlacementPolicy ?? LibraryPlacementPolicy.HardlinkOrCopy));
         }
 
         var message = string.IsNullOrWhiteSpace(record.Message) ? "Anime import finished." : record.Message;
@@ -1007,17 +1010,6 @@ public sealed class AnimeImportExecutor(
                 return state with { Paths = paths };
             },
             cancellationToken);
-    }
-
-    // Resolves the canonical import mode (global default, overridden per library root) to the
-    // planner/executor's file action plus whether a cross-filesystem hardlink may fall back to a
-    // copy. rootId is null when no library root is enabled yet; the global default still applies.
-    private async Task<(ImportFileAction Action, bool AllowHardlinkFallback)> ResolveImportActionAsync(
-        Guid? rootId,
-        CancellationToken cancellationToken)
-    {
-        var settings = await importSettings.LoadAsync(cancellationToken);
-        return ImportFileTransfer.Resolve(settings.ModeFor(rootId));
     }
 
     private sealed class ExecutionLease : IDisposable

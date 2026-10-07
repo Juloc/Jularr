@@ -66,6 +66,12 @@ All entities live in `Features/MediaCore` and are EF-modelled in
   BookEdition / MangaSeries and bridge it via `WorkSourceLink`. Bridging is idempotent
   and never modifies the legacy tables.
 
+**What the legacy Anime tables still are (reviewed, not competing).** `Anime`, `Episode` and their terms, segments and subtitles hold what is specific to Anime and
+its folder scan: the series folder key, local season and absolute numbering, subtitle and segment facts, bridged to the Work by `WorkSourceLink`. They own no file,
+no progress and no request: files are canonical `StoredFile`s (`AppDbContext.MediaFiles` is that table), progress is the canonical video progress
+(`EpisodeProgress` has no runtime reader or writer and only feeds the one-time backfill), and what is wanted lives in Requests and the Wanted pass. The AniList
+metadata rows move into Work ownership with #820, not before.
+
 Registered by `MediaCoreRegistration.AddMediaCore` (called from `Program.cs`).
 
 ## #432 / #435 reconciliation

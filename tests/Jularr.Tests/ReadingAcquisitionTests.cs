@@ -184,7 +184,7 @@ public sealed class ReadingAcquisitionTests
             "Rifujin na Magonote",
             RequestedVolume: 12);
 
-        var queries = ReadingUsenetSearch.Queries(target);
+        var queries = SearchPlannerTests.ReadingQueries(target);
 
         CollectionAssert.Contains(
             queries.ToList(),

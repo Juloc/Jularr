@@ -1,0 +1,84 @@
+@page "/Music/Album/{workId:guid}"
+@model Jularr.Web.Pages.Music.AlbumModel
+@using Jularr.Web.Features.Music
+@using Jularr.Web.Features.Watchlist
+@{
+    var ui = Model.Ui;
+    var view = Model.View!;
+    var album = view.Album;
+    ViewData["Title"] = album.Title;
+    var shown = MusicAlbumPresentation.ForLibrary(album.State);
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/music.css" asp-append-version="true" />
+}
+
+<partial name="_LibraryTypeTabs" model="ui" />
+
+<header class="music-hero">
+    <span class="music-cover" aria-hidden="true">@WatchlistLabels.Initial(album.Title)</span>
+    <div class="music-hero-copy">
+        <h1>@album.Title</h1>
+        <p class="music-sub"><a class="text-link" asp-page="Artist" asp-route-id="@view.Artist.Id">@view.Artist.Name</a>@(album.Year is { } year ? $" · {year}" : "") · @Model.TypeLabel(album.Type)</p>
+        <div class="music-facts">
+            <span class="admin-tag admin-tag-@MusicAlbumPresentation.Tone(shown)">@Model.StateLabel(album.State)</span>
+            @if (album.Tracks > 0)
+            {
+                <span class="admin-tag admin-tag-text">@ui.Format("music.tracksInLibrary", ("have", album.TracksWithFiles), ("total", album.Tracks))</span>
+            }
+        </div>
+        @if (Model.Notice is not null)
+        {
+            <p class="metadata-notice" role="status">@Model.Notice</p>
+        }
+        @if (Model.Error is not null)
+        {
+            <p class="metadata-error" role="alert">@Model.Error</p>
+        }
+        @if (Model.CanRequest || Model.CanManage)
+        {
+            <div class="music-actions">
+                @if (Model.CanRequest)
+                {
+                    <form method="post" asp-page-handler="Request" asp-route-workId="@album.WorkId">
+                        <button class="button button-primary" type="submit">@ui["music.request"]</button>
+                    </form>
+                }
+                @if (Model.CanManage)
+                {
+                    <a class="button" href="/Admin/Music/Album/@album.WorkId">@ui["music.manage"]</a>
+                }
+            </div>
+        }
+    </div>
+</header>
+
+@if (view.Tracks.Count == 0)
+{
+    <p class="music-empty">@ui["music.noTracks"]</p>
+}
+else
+{
+    <div class="music-tracks-card">
+        <table class="music-tracks">
+            <thead>
+                <tr>
+                    <th scope="col" class="is-numeric">@ui["admin.music.col.number"]</th>
+                    <th scope="col">@ui["admin.music.col.trackTitle"]</th>
+                    <th scope="col" class="is-numeric">@ui["music.col.inLibrary"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var track in view.Tracks)
+                {
+                    <tr>
+                        <td class="is-numeric">@(view.Tracks.Any(other => other.Disc != track.Disc) ? $"{track.Disc}.{track.Number}" : track.Number.ToString())</td>
+                        <td>@track.Title</td>
+                        <td class="is-numeric">@(track.Path is null ? "—" : "✓")<span class="visually-hidden">@(track.Path is null ? ui["music.notInLibrary"] : ui["music.inLibrary"])</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

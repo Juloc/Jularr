@@ -179,7 +179,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
             NullLogger<IndexerSearchCoordinator>.Instance);
 
         var registry = new MediaAcquisitionRegistry(
-            [new MovieAcquisitionRegistration(), new TvAcquisitionRegistration()]);
+            [new MovieAcquisitionRegistration(), new TvAcquisitionRegistration(), new Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRegistration(), new Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRegistration(), new MusicAcquisitionRegistration()]);
         var importer = new RecordingVideoImporter(db, kind);
         var services = new ServiceCollection()
             .AddSingleton(db)
@@ -306,9 +306,9 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
     }
 
     /// <summary>Adds another Work of the host's media type with its provider identity, for tests that need several titles in one list.</summary>
-    public async Task<Work> AddWorkAsync(string title, string tmdbId)
+    public async Task<Work> AddWorkAsync(string title, string tmdbId, int year = 2020)
     {
-        var work = new Work { MediaType = Work.MediaType, CanonicalTitle = title, Year = 2020 };
+        var work = new Work { MediaType = Work.MediaType, CanonicalTitle = title, Year = year };
         Environment.Db.Works.Add(work);
         Environment.Db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = work.Id, MediaType = work.MediaType, Provider = "tmdb", ExternalId = tmdbId, IsPrimary = true, Evidence = "test" });
         await Environment.Db.SaveChangesAsync();
@@ -370,6 +370,9 @@ internal sealed class FixedVideoIndexer(IReadOnlyList<ProwlarrReleaseCandidate> 
     /// <summary>Lets a test hold a search open, to change something while a Wanted pass is running.</summary>
     public Func<Task>? OnSearch { get; set; }
 
+    /// <summary>What the Search Planner asked this indexer, in order.</summary>
+    public List<IndexerSearchQuery> Queries { get; } = [];
+
     public IndexerType Type => IndexerType.Newznab;
 
     public Task<IndexerConnectionTestResult> TestAsync(
@@ -382,6 +385,7 @@ internal sealed class FixedVideoIndexer(IReadOnlyList<ProwlarrReleaseCandidate> 
         IndexerSearchQuery query,
         CancellationToken cancellationToken)
     {
+        Queries.Add(query);
         if (OnSearch is { } gate)
         {
             await gate();

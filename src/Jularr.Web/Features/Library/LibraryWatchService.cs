@@ -109,10 +109,7 @@ public sealed class LibraryWatchService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.LibraryRoots
-            .AsNoTracking()
-            .Where(x => x.IsEnabled)
-            .ServingAnime(db)
+        return await (await db.AnimeRootsForBackgroundWorkAsync(scope.ServiceProvider, cancellationToken))
             .Select(x => new WatchedRoot(x.Id, x.Path, x.ReconciliationIntervalMinutes, x.LastScannedAt))
             .ToArrayAsync(cancellationToken);
     }

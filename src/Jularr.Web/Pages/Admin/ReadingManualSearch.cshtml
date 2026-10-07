@@ -1,0 +1,114 @@
+@page "{id:guid}"
+@model Jularr.Web.Pages.Admin.ReadingManualSearchModel
+@using Jularr.Web.Features.Acquisition.Access
+@{
+    var ui = Model.Ui;
+    var target = Model.Target!;
+    var statusName = AcquisitionAccessNames.Status(target.Status);
+    ViewData["Title"] = ui["admin.wanted.manualSearch"];
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/manual-search.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<header class="page-header">
+    <div>
+        <h1>@ui["admin.wanted.manualSearch"]</h1>
+    </div>
+    <div class="inline-actions">
+        <a class="button" asp-page="/Admin/Wanted">@ui["admin.requests.wanted"]</a>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+<section class="bms-target-card" aria-label="@target.Title">
+    <span class="bms-cover bms-cover-initial" aria-hidden="true">@Jularr.Web.Features.Watchlist.WatchlistLabels.Initial(target.Title)</span>
+    <div class="bms-target-copy">
+        <strong class="bms-target-title">@target.Title@(target.Author is null ? "" : $" · {target.Author}")</strong>
+        <div class="bms-chips">
+            <span class="admin-tag admin-tag-text">@ui[MediaKindLabelKeys.Name(target.Kind)]</span>
+            <span class="admin-tag admin-tag-@AdminStatusTone.Of(target.Status)" data-status="@statusName">@ui["requests.status." + statusName]</span>
+            <span class="admin-tag admin-tag-text">@ui["admin.manualSearch.profile"]: @target.ProfileName</span>
+            <span class="admin-tag admin-tag-text">@ui["admin.manualSearch.searches"]: @target.Searches</span>
+            @if (target.NextSearchUtc is { } next)
+            {
+                <span class="admin-tag admin-tag-text">@ui["admin.manualSearch.nextSearch"]: @next.ToString("yyyy-MM-dd HH:mm") UTC</span>
+            }
+        </div>
+        @if (target.StatusMessage is not null)
+        {
+            <small class="muted">@target.StatusMessage</small>
+        }
+    </div>
+    @if (target.CanSearch)
+    {
+        <a class="button button-primary bms-start" asp-page="ReadingManualSearch" asp-route-id="@target.RequestId" asp-route-search="normal" asp-route-refresh="true" asp-fragment="manual-search">
+            <partial name="_AdminIcon" model='"search"' />@ui["admin.manualSearch.start"]
+        </a>
+    }
+</section>
+
+@if (Model.Notice is not null)
+{
+    <p class="metadata-notice" role="status">@Model.Notice</p>
+}
+@if (Model.Error is not null)
+{
+    <p class="metadata-error" role="alert">@Model.Error</p>
+}
+
+<section class="panel bms-search" id="manual-search" aria-labelledby="manual-search-results">
+    <div class="panel-heading">
+        <h2 id="manual-search-results">@ui["admin.manualSearch.searchResults"]</h2>
+        @if (Model.Manual is { } found)
+        {
+            <span>@ui.Format("admin.manualSearch.resultCount", ("count", found.Candidates.Count))</span>
+        }
+    </div>
+
+    @if (!target.CanSearch)
+    {
+        <p class="muted bms-empty">@ui["admin.manualSearch.notSearchable"]</p>
+    }
+    else
+    {
+        <div class="bms-chips">
+            <a class="button" asp-page="ReadingManualSearch" asp-route-id="@target.RequestId" asp-route-search="deep" asp-route-refresh="true" asp-fragment="manual-search">@ui["admin.manualSearch.deep"]</a>
+            @if (Model.ManualDepth is not null)
+            {
+                <a class="button" asp-page="ReadingManualSearch" asp-route-id="@target.RequestId" asp-route-search="@Model.ManualDepth.ToString()!.ToLowerInvariant()" asp-route-refresh="true" asp-fragment="manual-search">@ui["admin.manualSearch.refresh"]</a>
+            }
+        </div>
+    }
+
+    @if (Model.Manual is { } manual)
+    {
+        @foreach (var failed in manual.Summary.Outcomes.Where(outcome => outcome.Message is not null))
+        {
+            <p class="bms-warning" role="status">
+                <partial name="_ManualSearchIcon" model='"warning"' />
+                <span>@failed.IndexerName: @failed.Message</span>
+            </p>
+        }
+
+        <p class="muted">@ui.Format("admin.manualSearch.summary", ("raw", manual.Summary.RawResults), ("distinct", manual.Summary.DistinctCandidates))</p>
+        @if (manual.WinnerReason is not null && manual.Candidates.Any(candidate => candidate.CanGrab))
+        {
+            <p>@ui.Format("admin.manualSearch.winner", ("reason", manual.WinnerReason))</p>
+        }
+
+        @if (manual.Candidates.Count == 0)
+        {
+            <p class="muted bms-empty">@ui["admin.manualSearch.noCandidates"]</p>
+        }
+        else
+        {
+            <partial name="_ManualReleaseTable" model="Model.ReleaseTable(manual)" />
+        }
+    }
+</section>

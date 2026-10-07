@@ -36,29 +36,7 @@ public sealed class TvLibraryService(
         var cleanTmdbId = Clean(tmdbId);
         var cleanTvdbId = Clean(tvdbId);
 
-        TvSeries? series = null;
-        if (cleanTmdbId is not null)
-        {
-            series = await db.Set<TvSeries>()
-                .FirstOrDefaultAsync(x => x.TmdbId == cleanTmdbId, cancellationToken);
-        }
-
-        if (series is null && cleanTvdbId is not null)
-        {
-            series = await db.Set<TvSeries>()
-                .FirstOrDefaultAsync(x => x.TvdbId == cleanTvdbId, cancellationToken);
-        }
-
-        if (series is null)
-        {
-            series = await db.Set<TvSeries>()
-                .FirstOrDefaultAsync(
-                    x => x.Key == key
-                         && (cleanTmdbId == null || x.TmdbId == null)
-                         && (cleanTvdbId == null || x.TvdbId == null),
-                    cancellationToken);
-        }
-
+        var series = await FindSeriesAsync(key, cleanTmdbId, cleanTvdbId, cancellationToken);
         if (series is null)
         {
             series = new TvSeries
@@ -90,6 +68,29 @@ public sealed class TvLibraryService(
 
         var workId = await bridge.EnsureWorkForSeriesAsync(series, cancellationToken);
         return new TvSeriesEntry(series, workId);
+    }
+
+    /// <summary>Whether the library already knows this series, without creating anything.</summary>
+    public async Task<bool> SeriesExistsAsync(string title, int? year, string? tmdbId, string? tvdbId, CancellationToken cancellationToken)
+    {
+        var cleanTitle = string.IsNullOrWhiteSpace(title) ? "Untitled" : title.Trim();
+        return await FindSeriesAsync(SeriesKey(cleanTitle, year), Clean(tmdbId), Clean(tvdbId), cancellationToken) is not null;
+    }
+
+    private async Task<TvSeries?> FindSeriesAsync(string key, string? cleanTmdbId, string? cleanTvdbId, CancellationToken cancellationToken)
+    {
+        TvSeries? series = null;
+        if (cleanTmdbId is not null)
+        {
+            series = await db.Set<TvSeries>().FirstOrDefaultAsync(x => x.TmdbId == cleanTmdbId, cancellationToken);
+        }
+
+        if (series is null && cleanTvdbId is not null)
+        {
+            series = await db.Set<TvSeries>().FirstOrDefaultAsync(x => x.TvdbId == cleanTvdbId, cancellationToken);
+        }
+
+        return series ?? await db.Set<TvSeries>().FirstOrDefaultAsync(x => x.Key == key && (cleanTmdbId == null || x.TmdbId == null) && (cleanTvdbId == null || x.TvdbId == null), cancellationToken);
     }
 
     /// <summary>

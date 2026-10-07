@@ -32,6 +32,7 @@
     ViewData["AppThemeMode"] = appTheme;
     ViewData["AppThemeId"] = themeId;
     ViewData["AppBuildVersion"] = AppBuildInfo.Version;
+    ViewData["ShowAdminShortcut"] = appearance.ShowAdminShortcut;
 }
 <!DOCTYPE html>
 <html lang="@ui.Locale" dir="@ui.Direction" data-app-version="@AppBuildInfo.Version" data-app-theme="@appTheme" data-app-theme-id="@themeId" data-accent="@palette.Seed" data-sakura="@effectiveSakura">

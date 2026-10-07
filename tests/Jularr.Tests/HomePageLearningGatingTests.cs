@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
@@ -21,94 +22,16 @@ public sealed class HomePageLearningGatingTests
     private const string Profile = "home-user";
 
     [TestMethod]
-    public async Task OffShowsNoCoverage()
-    {
-        await using var fixture = await Fixture.CreateAsync();
-        await fixture.SeedEpisodeWithDueVocabularyAsync();
-
-        var home = fixture.Home();
-        await home.OnGetAsync(CancellationToken.None);
-
-        Assert.IsFalse(home.ShowContentMetrics);
-        Assert.AreEqual(1, home.RecentTitles.Count);
-        Assert.AreEqual(0, home.RecentTitles[0].TotalOccurrences, "Coverage must not be loaded.");
-        Assert.AreEqual(0, home.RecentTitles[0].PreparationPercent);
-    }
-
-    [TestMethod]
-    public async Task StudyKeepsHomeQuietUntilMetricsAreOptedIn()
-    {
-        await using var fixture = await Fixture.CreateAsync();
-        await fixture.SeedEpisodeWithDueVocabularyAsync();
-        await fixture.SetModeAsync(LearningMode.Study);
-
-        var home = fixture.Home();
-        await home.OnGetAsync(CancellationToken.None);
-
-        Assert.IsFalse(home.ShowContentMetrics, "ContentMetrics is opt-in even in Study.");
-        Assert.AreEqual(0, home.RecentTitles[0].TotalOccurrences);
-    }
-
-    [TestMethod]
-    public async Task OptedInMetricsResolveThroughTheHierarchy()
-    {
-        await using var fixture = await Fixture.CreateAsync();
-        await fixture.SeedEpisodeWithDueVocabularyAsync();
-        await fixture.SetModeAsync(LearningMode.Study);
-        var store = new LearningConfigurationStore(fixture.Db);
-        // An opted-in HomeWidget no longer adds anything to Home (no stat tiles); only the
-        // ContentMetrics capability changes what Home shows.
-        await store.SetCapabilityOverrideAsync(
-            Profile,
-            LearningScopeRef.Profile,
-            LearningCapability.HomeWidget,
-            true,
-            CancellationToken.None);
-        await store.SetCapabilityOverrideAsync(
-            Profile,
-            LearningScopeRef.ForMedia(LearningMediaType.Anime),
-            LearningCapability.ContentMetrics,
-            true,
-            CancellationToken.None);
-
-        var home = fixture.Home();
-        await home.OnGetAsync(CancellationToken.None);
-
-        Assert.IsTrue(home.ShowContentMetrics);
-        Assert.AreEqual(3, home.RecentTitles[0].TotalOccurrences);
-        Assert.AreEqual(2, home.RecentTitles[0].PreparedOccurrences);
-        Assert.AreEqual(66, home.RecentTitles[0].PreparationPercent);
-    }
-
-    [TestMethod]
-    public async Task LanguageToolsShowsNoCoverage()
-    {
-        await using var fixture = await Fixture.CreateAsync();
-        await fixture.SeedEpisodeWithDueVocabularyAsync();
-        await fixture.SetModeAsync(LearningMode.LanguageTools);
-
-        var home = fixture.Home();
-        await home.OnGetAsync(CancellationToken.None);
-
-        Assert.IsFalse(home.ShowContentMetrics);
-        Assert.AreEqual(0, home.RecentTitles[0].TotalOccurrences);
-    }
-
-    [TestMethod]
     public void HomeLeadsWithTheHeroAndContinueRowAndHasNoLearningWidgets()
     {
         var view = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "Jularr.Web", "Pages", "Index.cshtml"));
 
-        // Order (SPEC content hierarchy): hero → Continue → For you → recently discovered.
+        // Order (SPEC content hierarchy): hero → Continue; the discovery rows follow from the Body handler.
         var hero = view.IndexOf("data-home-hero", StringComparison.Ordinal);
         var continueRow = view.IndexOf("data-home-continue", StringComparison.Ordinal);
-        var forYou = view.IndexOf("data-home-for-you", StringComparison.Ordinal);
-        var library = view.IndexOf("home.library.recent", StringComparison.Ordinal);
         Assert.IsTrue(hero > 0);
         Assert.IsTrue(hero < continueRow, "The hero leads Home.");
-        Assert.IsTrue(continueRow < forYou, "Continue follows the hero.");
-        Assert.IsTrue(forYou < library);
 
         // SPEC "Explicit exclusions": no stat tiles; Home carries no Learning links, due-review
         // prompts or widgets at all.

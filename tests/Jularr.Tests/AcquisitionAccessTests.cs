@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -333,11 +334,12 @@ public sealed class AcquisitionAccessTests
     [TestMethod]
     public void BookUsenetQueriesUseAuthorAndMainTitleFirst()
     {
-        CollectionAssert.AreEqual(
-            new[] { "Mary Shelley Frankenstein", "Frankenstein", "Frankenstein: The 1818 Text" },
-            BookUsenetSearch.Queries("Frankenstein: The 1818 Text", "Mary Shelley").ToArray());
-        CollectionAssert.AreEqual(new[] { "Dune" }, BookUsenetSearch.Queries(" Dune ", null).ToArray());
-        Assert.AreEqual("Dune", BookReleaseSelector.MainTitle("Dune - Deluxe Edition"));
+        static string[] Texts(string title, string? author) =>
+            [.. SearchPlanner.Plan(new SearchIntent(MediaAcquisitionKind.Book, title.Trim()) { Creator = author }, null, SearchDepth.Normal).Where(query => !query.AnyCategory).Select(query => query.Text!)];
+
+        CollectionAssert.AreEqual(new[] { "Mary Shelley Frankenstein", "Frankenstein", "Frankenstein: The 1818 Text" }, Texts("Frankenstein: The 1818 Text", "Mary Shelley"));
+        CollectionAssert.AreEqual(new[] { "Dune" }, Texts(" Dune ", null));
+        Assert.AreEqual("Dune", SearchPlanner.MainTitle("Dune - Deluxe Edition"));
     }
 
     [TestMethod]

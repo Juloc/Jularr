@@ -96,7 +96,11 @@ public sealed record DiscoverCardView(
     bool IsFollowed,
     Guid? FollowedFranchiseId,
     bool CanFollowFranchise,
-    bool CanImportSource);
+    bool CanImportSource)
+{
+    /// <summary>A watchable title this viewer may start at once (auto-approved acquisition on an instance that plays): the card offers Start watching, which opens the Detail where the Instant Play state machine takes over.</summary>
+    public bool StartsInstantly { get; init; }
+}
 
 /// <summary>Everything a card needs besides the title itself. All of it is read on the server; the browser never supplies library state.</summary>
 public sealed record DiscoverContext(
@@ -106,7 +110,8 @@ public sealed record DiscoverContext(
     IReadOnlyDictionary<string, DiscoverLocalFacts> Local,
     IReadOnlyDictionary<string, Guid?> Followed,
     IReadOnlySet<string> RequestableCategories,
-    bool CanConfigureProviders = false);
+    bool CanConfigureProviders = false,
+    IReadOnlySet<string>? InstantCategories = null);
 
 public static partial class DiscoverCardFactory
 {
@@ -154,6 +159,7 @@ public static partial class DiscoverCardFactory
             ? null
             : ui[ConsumerAcquisitionLabels.StatusKey(open.Status)];
 
+        var startsInstantly = canRequest && context.InstantCategories?.Contains(item.Category) == true;
         return new DiscoverCardView(
             item.Id,
             item.Category,
@@ -196,7 +202,10 @@ public static partial class DiscoverCardFactory
             isFollowed,
             followedFranchise ?? item.FollowedFranchiseId,
             canFollow && !item.IsLocal && FranchiseService.CanSeed(identity),
-            item.CanImportSource && !item.IsLocal);
+            item.CanImportSource && !item.IsLocal)
+        {
+            StartsInstantly = startsInstantly
+        };
     }
 
     public static MediaBannerKind KindOf(string category) => category switch
@@ -465,19 +474,24 @@ public static class DiscoverCanonical
 
 public static class DiscoverFilter
 {
-    /// <summary>Narrows the loaded titles by the year, release status, availability and language filters.</summary>
+    /// <summary>
+    /// Narrows the loaded titles by the year range, release statuses, availabilities and language. The providers already filter what they can
+    /// (genres, years, statuses), so for them this only enforces the same constraint on the titles that arrived; the availability and language
+    /// constraints are answered from local state and exist only here.
+    /// </summary>
     public static IReadOnlyList<DiscoverCardView> Apply(IEnumerable<DiscoverCardView> cards, DiscoverBrowseQuery query) =>
     [
         .. cards.Where(card =>
-            (query.Year is null || card.Year == query.Year)
-            && (query.Status is null || card.ReleaseStatus == query.Status)
+            (query.YearFrom is null || card.Year >= query.YearFrom)
+            && (query.YearTo is null || card.Year <= query.YearTo)
+            && (query.Statuses.Count == 0 || (card.ReleaseStatus is { } release && query.Statuses.Contains(release)))
             && (!query.PreferredLanguage || card.State.Kind == DiscoverStateKind.PreferredAvailable)
-            && query.Availability switch
+            && (query.Availabilities.Count == 0 || query.Availabilities.Any(availability => availability switch
             {
                 DiscoverAvailabilityFilter.InLibrary => card.IsLocal,
                 DiscoverAvailabilityFilter.Requested => card.RequestStatus is not null,
                 DiscoverAvailabilityFilter.NotInLibrary => !card.IsLocal && card.RequestStatus is null,
                 _ => true
-            })
+            })))
     ];
 }

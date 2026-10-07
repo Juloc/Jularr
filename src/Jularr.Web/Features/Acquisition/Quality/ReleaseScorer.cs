@@ -99,15 +99,26 @@ public static class ReleaseScorer
         }
 
         var score = 0;
+        var infoReasons = new List<string>();
         foreach (var rule in profile.ScoreRules)
         {
-            if (!Matches(rule, candidate.Release))
+            var matched = Matches(rule, candidate.Release);
+            switch (rule.EffectiveEffect)
             {
-                continue;
+                case ReleaseRuleEffect.Require when !matched:
+                    rejections.Add($"Missing required rule '{rule.Name}'.");
+                    break;
+                case ReleaseRuleEffect.Reject when matched:
+                    rejections.Add($"Matches reject rule '{rule.Name}'.");
+                    break;
+                case ReleaseRuleEffect.Info when matched:
+                    infoReasons.Add(rule.Name);
+                    break;
+                case ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid when matched:
+                    score += rule.Score;
+                    scoreReasons.Add($"{rule.Name}: {(rule.Score >= 0 ? "+" : "")}{rule.Score}");
+                    break;
             }
-
-            score += rule.Score;
-            scoreReasons.Add($"{rule.Name}: {(rule.Score >= 0 ? "+" : "")}{rule.Score}");
         }
 
         if (score < profile.MinimumScore)
@@ -122,7 +133,10 @@ public static class ReleaseScorer
             qualityKey,
             qualityRank,
             rejections,
-            scoreReasons);
+            scoreReasons)
+        {
+            InfoReasons = infoReasons
+        };
     }
 
     public static IReadOnlyList<ReleaseScoreResult> Rank(
@@ -136,6 +150,7 @@ public static class ReleaseScorer
             .ThenBy(result => result.Candidate.Release.RawTitle, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+    /// <summary>Whether a scored release is a meaningful upgrade of the scored current file: the shared <see cref="Selection.UpgradePolicy"/>, where a file whose quality cannot be read is replaced by any release of a known quality.</summary>
     public static bool IsUpgrade(
         QualityProfile profile,
         ReleaseScoreResult current,
@@ -145,28 +160,8 @@ public static class ReleaseScorer
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(candidate);
 
-        if (!profile.UpgradeAllowed || !candidate.Accepted)
-        {
-            return false;
-        }
-
-        var cutoffRank = string.IsNullOrWhiteSpace(profile.UpgradeCutoffQuality)
-            ? int.MinValue
-            : IndexOf(profile.QualityOrder, profile.UpgradeCutoffQuality);
-
-        if (cutoffRank != int.MaxValue &&
-            current.QualityRank <= cutoffRank)
-        {
-            return false;
-        }
-
-        if (candidate.QualityRank < current.QualityRank)
-        {
-            return true;
-        }
-
-        return candidate.QualityRank == current.QualityRank &&
-               candidate.Score > current.Score;
+        return candidate.Accepted
+            && Selection.UpgradePolicy.IsUpgrade(profile, current.QualityKey, candidate.QualityKey, current.Score, candidate.Score, upgradeUnknownInstalled: true);
     }
 
     public static IReadOnlyList<string> ValidateProfile(QualityProfile profile)
@@ -236,6 +231,29 @@ public static class ReleaseScorer
         foreach (var pattern in profile.RequiredRegex.Concat(profile.RejectedRegex))
         {
             ValidateRegex(pattern, errors);
+        }
+
+        var previousWait = -1;
+        foreach (var tier in profile.FallbackTiers ?? [])
+        {
+            if (tier.AfterMinutes <= previousWait)
+            {
+                errors.Add("Fallback tiers must wait longer than the tier before them.");
+            }
+
+            previousWait = tier.AfterMinutes;
+            foreach (var added in tier.AddedQualities ?? [])
+            {
+                if (!profile.QualityOrder.Contains(added, StringComparer.OrdinalIgnoreCase))
+                {
+                    errors.Add($"Fallback quality '{added}' is missing from quality order.");
+                }
+            }
+        }
+
+        if (profile.UpgradeMinimumScoreDelta < 1 || profile.UpgradeMinimumQualitySteps < 1)
+        {
+            errors.Add("Upgrade benefit thresholds must be at least 1.");
         }
 
         foreach (var rule in profile.ScoreRules)

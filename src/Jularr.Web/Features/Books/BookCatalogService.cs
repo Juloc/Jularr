@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Storage;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
@@ -105,7 +106,8 @@ public sealed partial class BookCatalogService(
     // Resolves the configured Books NAS library root (#389/#545); null (the default for tests
     // that do not exercise artwork placement) behaves exactly like no root being configured, so
     // covers keep using CoversPath -- no regression when nothing is set up.
-    AnimeImportSettingsStore? importSettings = null)
+    AnimeImportSettingsStore? importSettings = null,
+    LibraryRootRoutingService? routing = null)
 {
     public const string ImportedBookProvider = "book-epub";
     public const int TranslationPromptVersion = 5;
@@ -131,7 +133,7 @@ public sealed partial class BookCatalogService(
             // The trending listing reports a catalog that did not answer (Discover shows that); this search has always meant "nothing".
             try
             {
-                return await BrowseTrendingBooksAsync(cancellationToken);
+                return await BrowseTrendingBooksAsync(0, SearchLimit, cancellationToken);
             }
             catch (HttpRequestException)
             {
@@ -218,13 +220,16 @@ public sealed partial class BookCatalogService(
     /// </summary>
     public async Task<IReadOnlyList<BookCatalogItem>> BrowseAsync(
         BookBrowseMode mode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int offset = 0,
+        int limit = 0)
     {
+        limit = limit <= 0 ? SearchLimit : Math.Min(limit, 50);
         var items = mode switch
         {
-            BookBrowseMode.Popular => await BrowseTopBooksAsync(cancellationToken),
-            BookBrowseMode.New => await BrowseNewBooksAsync(cancellationToken),
-            _ => await BrowseTrendingBooksAsync(cancellationToken)
+            BookBrowseMode.Popular => await BrowseTopBooksAsync(offset, limit, cancellationToken),
+            BookBrowseMode.New => await BrowseNewBooksAsync(offset, limit, cancellationToken),
+            _ => await BrowseTrendingBooksAsync(offset, limit, cancellationToken)
         };
 
         if (dataProtectionProvider is null)
@@ -2827,8 +2832,13 @@ public sealed partial class BookCatalogService(
             return null;
         }
 
-        var libraryRoot = (await importSettings.LoadAsync(cancellationToken))
-            .LibraryFor(MediaAcquisitionKind.Book)?.LibraryRoot;
+        var settings = await importSettings.LoadAsync(cancellationToken);
+        if (routing is not null)
+        {
+            settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
+        }
+
+        var libraryRoot = settings.LibraryFor(MediaAcquisitionKind.Book)?.LibraryRoot;
         if (string.IsNullOrWhiteSpace(libraryRoot))
         {
             return null;

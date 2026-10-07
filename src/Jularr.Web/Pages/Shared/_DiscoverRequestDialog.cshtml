@@ -1,0 +1,45 @@
+@using Jularr.Web.Features.Localization
+@model UiTextBundle
+@* The one Request dialog of Discover (docs/mockups/add-request-flow): a compact identity header from the card the
+   visitor picked, the settings groups the server returns for that title, and a sticky Cancel + Request footer. The
+   same dialog switches to the success state after submit. Instant or Request capability never shows here: the
+   action is always Request. Styles: wwwroot/css/discover-request.css; behaviour: wwwroot/js/discover-request.js. *@
+@{
+    var ui = Model;
+}
+<dialog class="dc-rq"
+        data-dc-rq
+        data-text-label="@ui["discover.request.dialogLabel"]"
+        data-text-loading="@ui["discover.request.loading"]"
+        data-text-load-failed="@ui["discover.request.loadFailed"]"
+        data-text-failed="@ui["discover.request.failed"]"
+        data-text-forbidden="@ui["discover.request.forbidden"]"
+        data-text-invalid="@ui["discover.request.invalid"]"
+        data-text-changed="@ui["requests.detail.error.changed"]"
+        data-text-save="@ui["requests.detail.edit.save"]"
+        data-text-retry="@ui["library.browse.error.retry"]"
+        data-text-selected="@ui["discover.request.selected"]"
+        data-text-included-all="@ui["discover.request.included.all"]"
+        data-text-included-all-count="@ui["discover.request.included.allCount"]"
+        data-text-included-future="@ui["discover.request.included.future"]"
+        data-text-included-future-hint="@ui["discover.request.included.futureHint"]"
+        data-text-included-custom="@ui["discover.request.included.custom"]"
+        data-text-future-releases="@ui["discover.request.summary.future"]">
+    <form class="dc-rq-panel" data-dc-rq-form novalidate>
+        <header class="dc-rq-head">
+            <span class="dc-rq-cover" data-dc-rq-cover aria-hidden="true"></span>
+            <div class="dc-rq-identity">
+                <h2 id="dc-rq-title" tabindex="-1" data-dc-rq-title></h2>
+                <p data-dc-rq-meta></p>
+            </div>
+            <button type="button" class="dc-icon-btn" data-dc-rq-close aria-label="@ui["library.browse.close"]">
+                <partial name="~/Pages/Shared/_DiscoverIcon.cshtml" model='"close"' />
+            </button>
+        </header>
+        <div class="dc-rq-body" data-dc-rq-body aria-live="polite" aria-busy="true"></div>
+        <footer class="dc-rq-foot" data-dc-rq-foot>
+            <button type="button" class="button" data-dc-rq-close>@ui["common.cancel"]</button>
+            <button type="submit" class="button button-primary" data-dc-rq-submit disabled>@ui["discover.card.request"]</button>
+        </footer>
+    </form>
+</dialog>

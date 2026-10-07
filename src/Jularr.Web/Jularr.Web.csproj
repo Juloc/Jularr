@@ -5,19 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Canonical application/release version. Bump on dev before the single dev -> main promotion; that main diff is release intent. -->
-    <Version>0.1.0-alpha.87</Version>
+    <Version>0.1.0-alpha.88</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="DotNetG2P.MeCab" Version="1.10.0" />
     <PackageReference Include="Fsrs.Sharp" Version="2.0.0" />
-    <!-- Read-only, used only by the one-time SQLite -> PostgreSQL importer (#570). -->
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
-    <!-- Pin a patched native SQLite: Microsoft.Data.Sqlite pulls the vulnerable
-         SQLitePCLRaw 2.1.11 (GHSA-2m69-gcr7-jv3q) transitively. Deliberately held on the 2.1.x
-         line (2.1.13 is the patched build): 3.x is a new major that Microsoft.Data.Sqlite is not
-         built against. Do not "freshen" this to 3.x until Microsoft.Data.Sqlite depends on it. -->
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
     <!-- Explicit so it stays on the same patch as Microsoft.EntityFrameworkCore: Npgsql.EntityFrameworkCore.PostgreSQL
          only requires Relational >= 10.0.4, and without this the (Design-less) test project would resolve the

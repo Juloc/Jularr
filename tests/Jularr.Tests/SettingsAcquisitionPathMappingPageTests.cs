@@ -99,17 +99,10 @@ public sealed class SettingsAcquisitionPathMappingPageTests
             MediaAcquisitionKind.Manga,
             [new RemotePathMapping("/downloads", "/data/downloads")]));
 
-        await fixture.Page().OnPostMediaFoldersAsync(
-            MediaAcquisitionKind.Manga,
-            "/data/media/manga",
-            ImportMode.Hardlink,
-            "/data/downloads/complete/manga",
-            CancellationToken.None);
+        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Manga, "/data/downloads/complete/manga", CancellationToken.None);
 
         var state = await fixture.Store.LoadAsync();
         var manga = state.FoldersFor(MediaAcquisitionKind.Manga);
-        Assert.AreEqual("/data/media/manga", manga.LibraryRoot);
-        Assert.AreEqual(ImportMode.Hardlink, manga.ImportMode);
         Assert.AreEqual("/data/downloads/complete/manga", manga.InboxRoot);
         Assert.AreEqual("/data/downloads/x", state.TranslatePath(MediaAcquisitionKind.Manga, "/downloads/x"));
     }
@@ -122,18 +115,18 @@ public sealed class SettingsAcquisitionPathMappingPageTests
             {
                 MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>
                 {
-                    [MediaAcquisitionKind.Manga] = new("/data/media/manga", null, "/inbox/manga"),
+                    [MediaAcquisitionKind.Manga] = new(null, null, "/inbox/manga"),
                     [MediaAcquisitionKind.Book] = new(null, null, "/inbox/books")
                 }
             })
             .WithRemotePathMappings(MediaAcquisitionKind.Manga, [new RemotePathMapping("/downloads", "/data/downloads")]));
 
-        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Manga, null, null, null, CancellationToken.None);
-        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Book, null, null, null, CancellationToken.None);
+        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Manga, null, CancellationToken.None);
+        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Book, null, CancellationToken.None);
 
         var state = await fixture.Store.LoadAsync();
         Assert.IsTrue(state.MediaLibraries.ContainsKey(MediaAcquisitionKind.Manga));
-        Assert.IsNull(state.FoldersFor(MediaAcquisitionKind.Manga).LibraryRoot);
+        Assert.IsNull(state.FoldersFor(MediaAcquisitionKind.Manga).InboxRoot);
         Assert.AreEqual(1, state.RemotePathMappingsFor(MediaAcquisitionKind.Manga).Count);
         Assert.IsFalse(state.MediaLibraries.ContainsKey(MediaAcquisitionKind.Book));
     }
@@ -254,26 +247,6 @@ public sealed class SettingsAcquisitionPathMappingPageTests
     }
 
     [TestMethod]
-    public async Task LibraryAndInboxOnTheSameFolderAreRefusedWhileNestedFoldersAreSaved()
-    {
-        await using var fixture = await Fixture.CreateAsync();
-        var library = Directory.CreateDirectory(Path.Combine(fixture.Root, "library")).FullName;
-        var page = fixture.Page();
-
-        await page.OnPostMediaFoldersAsync(MediaAcquisitionKind.Manga, library, null, library + Path.DirectorySeparatorChar, CancellationToken.None);
-
-        Assert.AreEqual(page.Ui["storage.pair.same"], page.TempData["AcquisitionSettingsError"]);
-        Assert.IsFalse((await fixture.Store.LoadAsync()).MediaLibraries.ContainsKey(MediaAcquisitionKind.Manga));
-
-        var nested = Path.Combine(library, "inbox");
-        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Manga, library, null, nested, CancellationToken.None);
-
-        var manga = (await fixture.Store.LoadAsync()).FoldersFor(MediaAcquisitionKind.Manga);
-        Assert.AreEqual(library, manga.LibraryRoot);
-        Assert.AreEqual(nested, manga.InboxRoot);
-    }
-
-    [TestMethod]
     public async Task MovieAndTvHaveTheirOwnMappingsAndPathTest()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -292,17 +265,16 @@ public sealed class SettingsAcquisitionPathMappingPageTests
     }
 
     [TestMethod]
-    public async Task MovieAndTvSaveAnInboxFolderButNeverALibraryFolder()
+    public async Task EveryMediaTypeSavesAnInboxFolderAndNeverALibraryFolder()
     {
         await using var fixture = await Fixture.CreateAsync();
         var inbox = Directory.CreateDirectory(Path.Combine(fixture.Root, "inbox-movies")).FullName;
-        var legacyLibrary = Directory.CreateDirectory(Path.Combine(fixture.Root, "legacy-library")).FullName;
 
-        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Movie, legacyLibrary, ImportMode.Move, inbox, CancellationToken.None);
+        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Movie, inbox, CancellationToken.None);
 
         var movie = (await fixture.Store.LoadAsync()).FoldersFor(MediaAcquisitionKind.Movie);
         Assert.AreEqual(inbox, movie.InboxRoot);
-        Assert.IsNull(movie.LibraryRoot, "The destination of Movies is the default root of Storage, never a folder set here.");
+        Assert.IsNull(movie.LibraryRoot, "The destination of every media type is the default root of Storage, never a folder set here.");
         Assert.IsNull(movie.ImportMode);
     }
 
@@ -321,26 +293,26 @@ public sealed class SettingsAcquisitionPathMappingPageTests
         foreach (var overlapping in new[] { library, Path.Combine(library, "inbox"), fixture.Root })
         {
             var page = fixture.Page();
-            await page.OnPostMediaFoldersAsync(MediaAcquisitionKind.Tv, null, null, overlapping, CancellationToken.None);
+            await page.OnPostMediaFoldersAsync(MediaAcquisitionKind.Tv, overlapping, CancellationToken.None);
 
             Assert.AreEqual(page.Ui["settings.acquisition.validation.inboxOverlapsDestination"], page.TempData["AcquisitionSettingsError"], overlapping);
         }
 
         Assert.IsNull((await fixture.Store.LoadAsync()).InboxFor(MediaAcquisitionKind.Tv));
         var outside = Directory.CreateDirectory(Path.Combine(fixture.Root, "inbox-tv")).FullName;
-        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Tv, null, null, outside, CancellationToken.None);
+        await fixture.Page().OnPostMediaFoldersAsync(MediaAcquisitionKind.Tv, outside, CancellationToken.None);
         Assert.AreEqual(outside, (await fixture.Store.LoadAsync()).InboxFor(MediaAcquisitionKind.Tv));
     }
 
     [TestMethod]
-    public async Task ThePageShowsTheStorageDestinationOfMovieAndTvAndNoLibraryFolderField()
+    public async Task ThePageShowsTheStorageDestinationOfEveryMediaTypeAndNoLibraryFolderField()
     {
         await using var host = await ManageSheetPageTestHost.CreateAsync();
 
         var waiting = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: true);
-        Assert.AreEqual(2, Occurrences(waiting, "No default library root: imports of this type wait until one is chosen in Storage."), "Movies and TV each say their imports wait.");
-        Assert.AreEqual(3, Occurrences(waiting, "name=\"libraryRoot\""), "Only the reading types still have a library folder field here.");
-        Assert.AreEqual(2, Occurrences(waiting, "Change in Storage"));
+        Assert.AreEqual(6, Occurrences(waiting, "No default library root: imports of this type wait until one is chosen in Storage."), "Every media type with an inbox says its imports wait.");
+        Assert.AreEqual(0, Occurrences(waiting, "name=\"libraryRoot\""), "No media type has a library folder field here.");
+        Assert.AreEqual(6, Occurrences(waiting, "Change in Storage"));
         StringAssert.Contains(waiting, "/Admin/Storage#destinations");
 
         var root = new LibraryRoot { Name = "Cinema", Path = "/srv/cinema", PlacementPolicy = LibraryPlacementPolicy.Hardlink };
@@ -358,11 +330,11 @@ public sealed class SettingsAcquisitionPathMappingPageTests
         Assert.IsFalse(manager.Contains("/srv/cinema", StringComparison.Ordinal), "The host path of the root is for the owner only.");
         StringAssert.Contains(manager, "Cinema");
         StringAssert.Contains(owner, "Set in Storage", "A routed root's placement policy belongs to Storage, not to the import mode table.");
-        Assert.AreEqual(1, Occurrences(owner, "No default library root: imports of this type wait until one is chosen in Storage."), "Only TV is still waiting.");
+        Assert.AreEqual(5, Occurrences(owner, "No default library root: imports of this type wait until one is chosen in Storage."), "Only Movie has a default root.");
     }
 
     [TestMethod]
-    public async Task AnAnimeRootKeepsItsEditableImportModeWhileMovieRootsPointToStorage()
+    public async Task EveryRootShowsItsPlacementFromStorageAndOffersNoSecondImportModeOverride()
     {
         await using var host = await ManageSheetPageTestHost.CreateAsync();
         var anime = new LibraryRoot { Name = "Anime Library", Path = "/srv/anime" };
@@ -375,9 +347,8 @@ public sealed class SettingsAcquisitionPathMappingPageTests
 
         var html = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: true);
 
-        Assert.AreEqual(1, Occurrences(html, "name=\"rootImportMode\""), "Only the Anime root has an import mode override form.");
-        Assert.AreEqual(1, Occurrences(html, "Set in Storage"));
-        StringAssert.Contains(html, $"name=\"rootId\" value=\"{anime.Id}\"");
+        Assert.AreEqual(0, Occurrences(html, "name=\"rootImportMode\""), "The placement of a root, Anime included, belongs to Storage alone.");
+        Assert.AreEqual(2, Occurrences(html, "Set in Storage"));
     }
 
     [TestMethod]
@@ -388,11 +359,11 @@ public sealed class SettingsAcquisitionPathMappingPageTests
         var owner = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: true);
         var manager = await host.GetHtmlAsync("/Settings/Acquisition", asOwner: false, asMediaManager: true);
 
-        // Library and inbox of Manga, Light Novels and Books, the inbox of Movies and TV, and the local side of a mapping.
-        Assert.AreEqual(3, Occurrences(owner, "name=\"libraryRoot\""));
-        Assert.AreEqual(5, Occurrences(owner, "name=\"inboxRoot\""));
+        // The inbox of every media type that has one and the local side of a mapping; no library folder, that is Storage's.
+        Assert.AreEqual(0, Occurrences(owner, "name=\"libraryRoot\""));
+        Assert.AreEqual(6, Occurrences(owner, "name=\"inboxRoot\""));
         Assert.AreEqual(1, Occurrences(owner, "name=\"localPrefix\""));
-        Assert.AreEqual(9, Occurrences(owner, "data-path-browse"), "Every one of them has the Browse button.");
+        Assert.AreEqual(7, Occurrences(owner, "data-path-browse"), "Every one of them has the Browse button.");
         Assert.AreEqual(1, Occurrences(owner, "<dialog class=\"folder-browser\""), "One shared browser, not one per field.");
         StringAssert.Contains(owner, "/js/folder-browser.js");
         StringAssert.Contains(owner, "/css/storage-paths.css");

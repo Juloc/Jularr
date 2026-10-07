@@ -53,7 +53,7 @@ public sealed class CalendarPageMarkupTests
     public void DiscoverCardsKeepOneFollowControlNextToThePrimaryAction()
     {
         var script = Read("src", "Jularr.Web", "wwwroot", "js", "discover.js");
-        var card = Read("src", "Jularr.Web", "Pages", "Discover", "_DiscoverCard.cshtml");
+        var card = Read("src", "Jularr.Web", "Pages", "Shared", "_DiscoverCard.cshtml");
         Assert.AreEqual(1, Count(card, "data-dc-follow "), "One follow control per preview.");
         Assert.AreEqual(1, Count(card, "data-dc-follow-franchise"), "Follow franchise sits next to it, once.");
         Assert.AreEqual(1, Count(script, "root.dataset.watchlistUrl,"), "The script posts one follow request.");

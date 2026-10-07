@@ -19,7 +19,7 @@ public sealed class AcquisitionImportPolicyTests
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
-        await environment.ImportSettings.UpdateAsync(state => state with { DefaultImportMode = ImportMode.Copy });
+        await environment.UsePlacementAsync(LibraryPlacementPolicy.Copy);
         await environment.StartAcquisitionAsync([new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 1, 2, 2)], Best);
 
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
@@ -35,7 +35,7 @@ public sealed class AcquisitionImportPolicyTests
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
-        await environment.ImportSettings.UpdateAsync(state => state with { DefaultImportMode = ImportMode.Hardlink });
+        await environment.UsePlacementAsync(LibraryPlacementPolicy.Hardlink);
         await environment.StartAcquisitionAsync([new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 1, 2, 2)], Best);
 
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
@@ -53,7 +53,7 @@ public sealed class AcquisitionImportPolicyTests
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync(new AlwaysCrossDeviceHardLinkCreator());
         await environment.SeedFrierenAsync();
-        await environment.ImportSettings.UpdateAsync(state => state with { DefaultImportMode = ImportMode.Hardlink });
+        await environment.UsePlacementAsync(LibraryPlacementPolicy.Hardlink);
         await environment.StartAcquisitionAsync([new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 1, 2, 2)], Best);
 
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
@@ -70,7 +70,7 @@ public sealed class AcquisitionImportPolicyTests
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync(new AlwaysCrossDeviceHardLinkCreator());
         await environment.SeedFrierenAsync();
-        await environment.ImportSettings.UpdateAsync(state => state with { DefaultImportMode = ImportMode.HardlinkOrCopy });
+        await environment.UsePlacementAsync(LibraryPlacementPolicy.HardlinkOrCopy);
         await environment.StartAcquisitionAsync([new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 1, 2, 2)], Best);
 
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
@@ -79,25 +79,6 @@ public sealed class AcquisitionImportPolicyTests
         Assert.AreEqual(AnimeImportStatus.Imported, record!.Status, record.Message);
         Assert.IsTrue(File.Exists(Path.Combine(download, $"{Best}.mkv")), "The explicit fallback copies instead of moving.");
         Assert.IsNotNull(await environment.MediaFileAsync(1, 2));
-    }
-
-    [TestMethod]
-    public async Task PerRootImportModeOverridesTheGlobalDefault()
-    {
-        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync();
-        await environment.ImportSettings.UpdateAsync(state => state with
-        {
-            DefaultImportMode = ImportMode.Move,
-            RootImportModes = new Dictionary<Guid, ImportMode> { [environment.Root.Id] = ImportMode.Copy }
-        });
-        await environment.StartAcquisitionAsync([new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 1, 2, 2)], Best);
-
-        var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
-        var record = await environment.ImportCompletedAsync(await environment.CompleteLatestDownloadAsync(download), download);
-
-        Assert.AreEqual(AnimeImportStatus.Imported, record!.Status, record.Message);
-        Assert.IsTrue(File.Exists(Path.Combine(download, $"{Best}.mkv")), "The root override (Copy) applies instead of the global default (Move).");
     }
 
     [TestMethod]

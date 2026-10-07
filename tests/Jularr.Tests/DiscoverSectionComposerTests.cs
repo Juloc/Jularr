@@ -29,7 +29,7 @@ public sealed class DiscoverSectionComposerTests
     private static DiscoverySourceResult Source(DiscoverySource source, DiscoverySourceState state, params DiscoveryItem[] items) => new(source, state, items);
 
     private static DiscoverLandingRow Row(string id, string label, params DiscoverySourceResult[] sources) =>
-        new(id, label + " row", "/Discover?category=" + id, [.. sources.SelectMany(source => source.Items)], sources, label);
+        new(id, label + " row", "/?category=" + id, [.. sources.SelectMany(source => source.Items)], sources, label);
 
     [TestMethod]
     public void ARowThatWaitsKeepsItsPlaceAsGhostCardsAndNoRowIsInventedForAnEmptyOne()
@@ -108,11 +108,12 @@ public sealed class DiscoverSectionComposerTests
         var (sections, total) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Text = "solo" }, Context());
         var (again, _) = DiscoverSectionComposer.Results(reversed, new DiscoverBrowseQuery { Text = "solo" }, Context());
 
-        CollectionAssert.AreEqual(new[] { "group-anime", "group-movie", "group-tv", "group-books-light-novels", "group-manga" }, sections.Select(section => section.Id).ToArray());
+        CollectionAssert.AreEqual(new[] { "group-anime", "group-movie", "group-tv", "group-light-novel", "group-book", "group-manga" }, sections.Select(section => section.Id).ToArray());
         Assert.AreEqual(5 + 1, total);
         Assert.IsTrue(sections.All(section => section.Collapsible && section.SeeAllUrl is not null));
-        Assert.AreEqual("/Discover?q=solo&category=anime", sections[0].SeeAllUrl, "See all keeps the search text.");
-        CollectionAssert.AreEquivalent(new[] { "Solo Book", "Solo Novel" }, sections[3].Cards.Select(card => card.Title).ToArray(), "Books and light novels are one group.");
+        Assert.AreEqual("/?q=solo&category=anime", sections[0].SeeAllUrl, "See all keeps the search text.");
+        CollectionAssert.AreEqual(new[] { "Solo Novel" }, sections[3].Cards.Select(card => card.Title).ToArray(), "Light novels are their own group.");
+        CollectionAssert.AreEqual(new[] { "Solo Book" }, sections[4].Cards.Select(card => card.Title).ToArray(), "Books are their own group.");
         CollectionAssert.AreEqual(sections.Select(section => section.Signature).ToArray(), again.Select(section => section.Signature).ToArray(), "Identical data renders identically.");
     }
 
@@ -125,12 +126,12 @@ public sealed class DiscoverSectionComposerTests
             [Source(DiscoverySource.Anime, DiscoverySourceState.Ready, Item("anime", "anilist", "1", "A", 2023), Item("anime", "anilist", "2", "B", 2024), Item("anime", "anilist", "3", "C", 2024))]);
 
         var (all, total) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime }, Context());
-        var (narrowed, _) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime, Year = 2024 }, Context());
-        var (none, noneTotal) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime, Year = 1999 }, Context());
+        var (narrowed, _) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime, YearFrom = 2024, YearTo = 2024 }, Context());
+        var (none, noneTotal) = DiscoverSectionComposer.Results(batch, new DiscoverBrowseQuery { Category = DiscoveryCategory.Anime, YearFrom = 1999, YearTo = 1999 }, Context());
 
         Assert.AreEqual(DiscoverSectionLayout.Grid, all.Single().Layout);
-        Assert.AreEqual("3 results", all.Single().Count);
-        Assert.AreEqual("2 of 3 results", narrowed.Single().Count);
+        Assert.IsNull(all.Single().Count, "A paged view has no count: the titles loaded so far are not the results.");
+        Assert.AreEqual(2, narrowed.Single().Cards.Count);
         Assert.AreEqual(3, total);
         Assert.AreEqual(0, none.Count, "Nothing left after the filters is the no-results state of the body, not an empty grid.");
         Assert.AreEqual(3, noneTotal);

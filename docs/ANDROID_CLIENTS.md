@@ -154,7 +154,7 @@ GET    /api/client/v1/me/playback-history
 DELETE /api/client/v1/me/playback-history
 ```
 
-The server is the only durable owner of resume position, watched state, autoplay preference and history; clients must not keep a second durable progress store. Clients should resume from `resumePositionMs` (zero means start from the beginning), send bounded checkpoints (for example every 15 seconds while playing plus pause/stop/end) and use `/flow` instead of computing next/previous episodes locally. The semantics are described in the README section *Playback continuity*.
+The server is the only durable owner of resume position, watched state, autoplay preference and history; clients must not keep a second durable progress store. Clients should resume from `resumePositionMs` (zero means start from the beginning), send bounded checkpoints (for example every 15 seconds while playing plus pause/stop/end) and use `/flow` instead of computing next/previous episodes locally. The semantics are described in [PLAYBACK.md](PLAYBACK.md#playback-continuity).
 
 Watchlist endpoint (additive v1, advertised by `watchlist`; #533):
 
@@ -188,7 +188,7 @@ Player controls and preferences (additive v1, advertised by `playbackPreferences
 - `/episodes/{id}/player` adds `defaults` (server-resolved `audioTrackId`, `subtitleMode` = `off|learning|embedded`, `subtitleTrackId`, `playbackSpeed`, `preferences`) and `controls` (`playbackSpeeds`, `qualityCaps`). Clients start with these values instead of re-deciding them; later changes are session-only unless the user saves them as defaults.
 - Track ids are the canonical `stream:{index}`. `audioTrackId` on `/hls` and `/fallback` keeps the selected audio across a fallback restart; `/subtitle-tracks/{trackId}/cues` returns plain cues of an embedded text subtitle so a playback subtitle survives fallbacks that drop container subtitles. The interactive learning subtitle stays the separate `/cues` model.
 - `quality` (`auto`, `1080p`, `720p`, `low`) is a device-local cap. The server applies it only to a stream it must encode anyway or when the media inventory proves the source is taller; direct play and Device-mode remuxes are never converted because of it.
-- Playback mode, quality cap and decoder capability are device-local; do not store them on the server. The ownership table is in the README section *Player controls*.
+- Playback mode, quality cap and decoder capability are device-local; do not store them on the server. The ownership table is in [PLAYBACK.md](PLAYBACK.md#player-controls).
 
 Bounded offline playback endpoints (additive v1, advertised by `offlineDownloads`; see §8.2):
 

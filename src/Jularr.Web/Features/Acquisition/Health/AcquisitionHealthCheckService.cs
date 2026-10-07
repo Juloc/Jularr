@@ -81,7 +81,7 @@ public sealed class AcquisitionHealthCheckService(
                 continue;
             }
 
-            await CheckIndexerAsync(indexer, entry, health, cancellationToken);
+            await CheckIndexerAsync(indexer, indexerStore, entry, health, cancellationToken);
         }
 
         foreach (var entry in (await clientStore.LoadAllAsync(cancellationToken)).Where(entry => entry.Enabled))
@@ -92,6 +92,7 @@ public sealed class AcquisitionHealthCheckService(
 
     private async Task CheckIndexerAsync(
         IIndexer indexer,
+        IndexerStore store,
         IndexerEntry entry,
         AcquisitionHealthStore health,
         CancellationToken cancellationToken)
@@ -105,6 +106,10 @@ public sealed class AcquisitionHealthCheckService(
             reachable = true;
             authOk = result.Success;
             error = result.Error;
+            if (result.Capabilities is { } capabilities)
+            {
+                await store.UpdateCapabilitiesAsync(entry.Id, capabilities, cancellationToken);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

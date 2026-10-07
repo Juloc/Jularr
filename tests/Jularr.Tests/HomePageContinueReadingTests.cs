@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using System.Security.Claims;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Localization;
@@ -24,7 +25,7 @@ public sealed class HomePageContinueReadingTests
         await fixture.SetNovelProgressAsync("other-profile", novel, 0, 300, DateTime.UtcNow);
 
         var home = Home(fixture);
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         Assert.AreEqual(0, home.ContinueReading.Count);
     }
@@ -40,7 +41,7 @@ public sealed class HomePageContinueReadingTests
         await fixture.SetMangaProgressAsync(Profile, manga, 0, 3, now);
 
         var home = Home(fixture);
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         CollectionAssert.AreEqual(
             new[] { ContinueReadingKind.Manga, ContinueReadingKind.Novel },
@@ -57,7 +58,7 @@ public sealed class HomePageContinueReadingTests
         await fixture.SetNovelProgressAsync(Profile, novel, 0, 300, DateTime.UtcNow);
 
         var home = Home(fixture);
-        await home.OnGetAsync(CancellationToken.None);
+        await home.LoadHomeAsync(DiscoveryCategory.All, CancellationToken.None);
 
         var tile = Assert.ContainsSingle(home.ContinueTiles);
         Assert.AreEqual(home.ContinueReading[0].ResumeUrl, tile.Href);
@@ -74,7 +75,7 @@ public sealed class HomePageContinueReadingTests
         // Watching and reading share one Continue row (docs/mockups/home), rendered only with items.
         var guard = view.IndexOf("@if (Model.ContinueTiles.Count > 0)", StringComparison.Ordinal);
         var row = view.IndexOf("data-home-continue", StringComparison.Ordinal);
-        var next = view.IndexOf("data-home-for-you", StringComparison.Ordinal);
+        var next = view.IndexOf("</section>", row, StringComparison.Ordinal);
         Assert.IsTrue(guard > 0 && row > guard, "The row is rendered only when items exist.");
         Assert.IsTrue(next > row);
 

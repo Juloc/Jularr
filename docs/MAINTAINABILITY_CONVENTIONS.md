@@ -436,3 +436,18 @@ Weak-server stability includes controlling incoming work, not only background co
 - Stream large uploads/media where practical.
 - Long-lived streams/upgraded connections must still count against the relevant resource policy.
 - Performance validation includes at least one constrained CPU/RAM load profile representative of a weak self-hosted server and verifies interactive latency under concurrent background work.
+
+
+## 23. Documentation and public README discipline
+
+The root `README.md` is Jularr's public landing page, not the complete manual.
+
+- Keep the README concise: product purpose, important currently implemented capabilities, a verified deployment entry point, a small representative screenshot set when available, and links to focused documentation.
+- Detailed deployment, persistence, administration, client, playback, provider, migration, troubleshooting, architecture and development material belongs in purpose-specific files under `docs/`. Link to the canonical document instead of copying the same guidance into the README.
+- README and durable documentation describe current implemented behavior only. Planned behavior belongs in Issues/specs and must not be presented as shipped.
+- Before adding a new documentation file, search the existing docs and extend the canonical owner when one already exists. Do not create overlapping manuals for the same responsibility.
+- When a material user-facing UI change makes README screenshots stale, the implementing/reviewing agent must run the current application and capture fresh screenshots from the real implementation. Mockups, generated concept art and planned-state specs must never be presented as implemented UI.
+- Keep the README screenshot set small and representative, normally 2-4 images. Store canonical assets under `docs/assets/readme/` with stable descriptive filenames. Avoid secrets, personal data and installation-specific identifiers in screenshots.
+- The product name and new runtime identifiers are **Jularr**. Do not add AniLingo-era names, storage keys, protector purposes, claims or compatibility aliases. Any future exception requires an explicit current interoperability requirement and focused issue.
+- Documentation examples, commands, paths, image tags and links must be checked against the current repository/release before being promoted into the README. If an agent cannot verify an operational command, it must not present it as a verified quick start.
+- When moving material out of the README, update every inbound documentation link/anchor in the same change so the move does not create stale references.

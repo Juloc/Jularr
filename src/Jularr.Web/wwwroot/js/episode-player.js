@@ -11,9 +11,9 @@
 
     const profileId = document.body?.dataset.profileId || "unknown";
     // Device-local choices (mode override, quality) live in this browser only.
-    const preferenceKey = `anilingo.profile.${profileId}.playbackMode`;
-    const legacyQualityKey = `anilingo.profile.${profileId}.qualityCap`;
-    const qualityKey = `anilingo.profile.${profileId}.qualityPreset`;
+    const preferenceKey = `jularr.profile.${profileId}.playbackMode`;
+    const legacyQualityKey = `jularr.profile.${profileId}.qualityCap`;
+    const qualityKey = `jularr.profile.${profileId}.qualityPreset`;
     const progressUrl = root.dataset.progressUrl || "";
     let offlineMediaUrl = "";
     const planUrl = root.dataset.playbackPlanUrl || "";

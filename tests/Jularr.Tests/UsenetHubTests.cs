@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
@@ -75,10 +76,10 @@ public sealed class UsenetHubTests
             new IndexerSettings("http://indexer", [5070], [], 100, BookCategories: [7020]),
             ApiKey: "unused");
 
-        CollectionAssert.AreEqual(new[] { 5070 }, UsenetModel.SearchCategories(entry, MediaAcquisitionKind.Anime).ToArray());
-        CollectionAssert.AreEqual(new[] { 7020 }, UsenetModel.SearchCategories(entry, MediaAcquisitionKind.Book).ToArray());
-        CollectionAssert.Contains(UsenetModel.SearchCategories(entry, MediaAcquisitionKind.Manga).ToArray(), 7030);
-        CollectionAssert.Contains(UsenetModel.SearchCategories(entry, MediaAcquisitionKind.LightNovel).ToArray(), 7020);
+        CollectionAssert.AreEqual(new[] { 5070 }, SearchPlanner.Categories(MediaAcquisitionKind.Anime, entry).ToArray());
+        CollectionAssert.AreEqual(new[] { 7020 }, SearchPlanner.Categories(MediaAcquisitionKind.Book, entry).ToArray());
+        CollectionAssert.Contains(SearchPlanner.Categories(MediaAcquisitionKind.Manga, entry).ToArray(), 7030);
+        CollectionAssert.Contains(SearchPlanner.Categories(MediaAcquisitionKind.LightNovel, entry).ToArray(), 7020);
     }
 
     [TestMethod]

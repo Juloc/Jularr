@@ -31,8 +31,8 @@ public sealed class HomeTypeFilterTests
         Assert.AreEqual(DiscoveryCategory.All, home.ActiveType);
         Assert.AreEqual(1, home.ContinueWatching.Count);
         Assert.AreEqual(1, home.ContinueReading.Count);
-        Assert.AreEqual("/Discover?mode=my-list", home.ContinueWatchingDiscoverUrl);
-        Assert.AreEqual("/Discover?mode=my-list", home.ContinueReadingDiscoverUrl);
+        Assert.AreEqual("/?mode=my-list", home.ContinueWatchingDiscoverUrl);
+        Assert.AreEqual("/?mode=my-list", home.ContinueReadingDiscoverUrl);
     }
 
     [TestMethod]
@@ -66,7 +66,7 @@ public sealed class HomeTypeFilterTests
         Assert.AreEqual(0, home.ContinueWatching.Count);
         var item = Assert.ContainsSingle(home.ContinueReading);
         Assert.AreEqual(ContinueReadingKind.Manga, item.Kind);
-        Assert.AreEqual("/Discover?category=manga&mode=my-list", home.ContinueReadingDiscoverUrl);
+        Assert.AreEqual("/?category=manga&mode=my-list", home.ContinueReadingDiscoverUrl);
     }
 
     [TestMethod]
@@ -83,7 +83,7 @@ public sealed class HomeTypeFilterTests
         Assert.AreEqual(DiscoveryCategory.LightNovel, home.ActiveType);
         var item = Assert.ContainsSingle(home.ContinueReading);
         Assert.AreEqual(ContinueReadingKind.Novel, item.Kind);
-        Assert.AreEqual("/Discover?category=light-novel&mode=my-list", home.ContinueReadingDiscoverUrl);
+        Assert.AreEqual("/?category=light-novel&mode=my-list", home.ContinueReadingDiscoverUrl);
     }
 
     [TestMethod]
@@ -100,7 +100,7 @@ public sealed class HomeTypeFilterTests
         Assert.AreEqual(DiscoveryCategory.Book, home.ActiveType);
         var item = Assert.ContainsSingle(home.ContinueReading);
         Assert.AreEqual(ContinueReadingKind.Book, item.Kind);
-        Assert.AreEqual("/Discover?category=book&mode=my-list", home.ContinueReadingDiscoverUrl);
+        Assert.AreEqual("/?category=book&mode=my-list", home.ContinueReadingDiscoverUrl);
     }
 
     [TestMethod]
@@ -148,7 +148,7 @@ public sealed class HomeTypeFilterTests
     private static async Task<IndexModel> LoadHomeAsync(AppDbContext db, string? type)
     {
         var home = EpisodeFlowFixture.Home(db, EpisodeFlowFixture.Account(Profile));
-        await home.OnGetAsync(CancellationToken.None, type);
+        await home.LoadHomeAsync(DiscoveryRequest.ParseCategory(type), CancellationToken.None);
         return home;
     }
 }

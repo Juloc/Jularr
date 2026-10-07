@@ -144,7 +144,7 @@
                         &middot; @ui.Format("settings.sonarrMigration.activeDownloads", ("count", row.ActiveSonarrDownloads))
                         @if (row.SonarrUnmonitoredByJularr)
                         {
-                            <span>&middot; @ui["settings.sonarrMigration.unmonitoredByAniLingo"]</span>
+                            <span>&middot; @ui["settings.sonarrMigration.unmonitoredByJularr"]</span>
                         }
                     </span>
                 }
@@ -167,7 +167,7 @@
                 }
                 <button class="button" type="submit" name="migrationAction" value="@AnimeMigrationAction.KeepSonarr">@ui["settings.sonarrMigration.rollout.keepSonarr.term"]</button>
                 <button class="button" type="submit" name="migrationAction" value="@AnimeMigrationAction.StartParallel">@ui["settings.sonarrMigration.rollout.parallel.term"]</button>
-                <button class="button button-primary" type="submit" name="migrationAction" value="@AnimeMigrationAction.HandOverToJularr">@ui["settings.sonarrMigration.handOverToAniLingoButton"]</button>
+                <button class="button button-primary" type="submit" name="migrationAction" value="@AnimeMigrationAction.HandOverToJularr">@ui["settings.sonarrMigration.handOverToJularrButton"]</button>
                 <button class="button" type="submit" name="migrationAction" value="@AnimeMigrationAction.Revert">@ui["settings.sonarrMigration.rollout.revert.term"]</button>
             </form>
         </article>

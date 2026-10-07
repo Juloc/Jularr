@@ -75,7 +75,8 @@ public sealed record DownloadClientSettings
                 [MediaAcquisitionKind.Movie] = "movies",
                 [MediaAcquisitionKind.Manga] = "manga",
                 [MediaAcquisitionKind.LightNovel] = "lightnovels",
-                [MediaAcquisitionKind.Book] = "books"
+                [MediaAcquisitionKind.Book] = "books",
+                [MediaAcquisitionKind.Music] = "music"
             });
 
     private static string? CleanCategory(string? value) =>
@@ -158,14 +159,17 @@ public sealed record DownloadImportDetails(
 /// Durable routing metadata for a submitted external download. The monitor
 /// uses the exact selected connection instead of whichever client currently
 /// has the highest priority. <see cref="Import"/> is filled once the
-/// completed download was handed to its media importer.
+/// completed download was handed to its media importer. <see cref="ReleaseSource"/> and <see cref="ReleaseGroup"/> say where the release came
+/// from, so the outcome of the download can later count for or against that indexer and release group (<c>ReleaseReliabilityService</c>).
 /// </summary>
 public sealed record DownloadOperationDetails(
     Guid ClientEntryId,
     MediaAcquisitionKind MediaKind,
     string? Category,
     DownloadImportDetails? Import = null,
-    string? TargetKey = null)
+    string? TargetKey = null,
+    string? ReleaseSource = null,
+    string? ReleaseGroup = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -178,7 +182,9 @@ public sealed record DownloadOperationDetails(
             AcquisitionAccessNames.Kind(MediaKind),
             string.IsNullOrWhiteSpace(Category) ? null : Category.Trim(),
             Import,
-            string.IsNullOrWhiteSpace(TargetKey) ? null : TargetKey.Trim()),
+            string.IsNullOrWhiteSpace(TargetKey) ? null : TargetKey.Trim(),
+            string.IsNullOrWhiteSpace(ReleaseSource) ? null : ReleaseSource.Trim(),
+            string.IsNullOrWhiteSpace(ReleaseGroup) ? null : ReleaseGroup.Trim()),
         JsonOptions);
 
     public static bool TryParse(string? json, out DownloadOperationDetails? details)
@@ -202,7 +208,9 @@ public sealed record DownloadOperationDetails(
                 AcquisitionAccessNames.ParseKind(persisted.MediaKind),
                 string.IsNullOrWhiteSpace(persisted.Category) ? null : persisted.Category.Trim(),
                 persisted.Import,
-                string.IsNullOrWhiteSpace(persisted.TargetKey) ? null : persisted.TargetKey.Trim());
+                string.IsNullOrWhiteSpace(persisted.TargetKey) ? null : persisted.TargetKey.Trim(),
+                persisted.ReleaseSource,
+                persisted.ReleaseGroup);
             return true;
         }
         catch (JsonException)
@@ -220,7 +228,9 @@ public sealed record DownloadOperationDetails(
         string MediaKind,
         string? Category,
         DownloadImportDetails? Import = null,
-        string? TargetKey = null);
+        string? TargetKey = null,
+        string? ReleaseSource = null,
+        string? ReleaseGroup = null);
 }
 
 public sealed record DownloadClientSubmitResult(

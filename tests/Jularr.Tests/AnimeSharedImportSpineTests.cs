@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -66,10 +67,7 @@ public sealed class AnimeSharedImportSpineTests
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
-        await environment.ImportSettings.UpdateAsync(state => state with
-        {
-            RootImportModes = new Dictionary<Guid, ImportMode> { [environment.Root.Id] = ImportMode.Copy }
-        });
+        await environment.UsePlacementAsync(LibraryPlacementPolicy.Copy);
         await environment.StartAcquisitionAsync(EpisodeTwo, Best);
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
         var completed = await environment.CompleteLatestDownloadAsync(download);

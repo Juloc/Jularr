@@ -1,4 +1,6 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Library;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,10 +10,53 @@ namespace Jularr.Web.Features.Storage;
 public sealed class LibraryRootRoutingService(AppDbContext db)
 {
     /// <summary>
-    /// The content types whose importers already resolve their destination through this service. Types not listed here
-    /// still read their legacy per-media library folder until their importer is migrated.
+    /// The content types whose importers resolve their final destination and placement through this service, and so every content type the Admin
+    /// Storage page lets the owner route. A type without a default root imports nothing: its imports wait until the owner chooses one.
     /// </summary>
-    public static readonly LibraryContentType[] ImporterRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv];
+    public static readonly LibraryContentType[] ImporterRoutedTypes =
+    [
+        LibraryContentType.Anime, LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music,
+        LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook
+    ];
+
+    /// <summary>The reading and audiobook importers read their destination as an import-settings view built from Storage (<see cref="WithRoutedLibrariesAsync"/>).</summary>
+    private static readonly LibraryContentType[] SettingsViewTypes = [LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook];
+
+    /// <summary>Every content type the Admin Storage page lets the owner route.</summary>
+    public static IReadOnlyList<LibraryContentType> ManagedTypes => ImporterRoutedTypes;
+
+    /// <summary>The acquisition kind whose importer serves a content type, or null for a type without one.</summary>
+    public static MediaAcquisitionKind? KindOf(LibraryContentType contentType) =>
+        contentType switch
+        {
+            LibraryContentType.Anime => MediaAcquisitionKind.Anime,
+            LibraryContentType.Manga => MediaAcquisitionKind.Manga,
+            LibraryContentType.LightNovel => MediaAcquisitionKind.LightNovel,
+            LibraryContentType.Book => MediaAcquisitionKind.Book,
+            LibraryContentType.Movie => MediaAcquisitionKind.Movie,
+            LibraryContentType.Tv => MediaAcquisitionKind.Tv,
+            LibraryContentType.Audiobook => MediaAcquisitionKind.Audiobook,
+            LibraryContentType.Music => MediaAcquisitionKind.Music,
+            _ => null
+        };
+
+    /// <summary>The content type whose default root receives the imports of a media type, or null for a media type that has none.</summary>
+    public static LibraryContentType? ContentTypeOf(MediaAcquisitionKind kind) =>
+        kind switch
+        {
+            MediaAcquisitionKind.Anime => LibraryContentType.Anime,
+            MediaAcquisitionKind.Manga => LibraryContentType.Manga,
+            MediaAcquisitionKind.LightNovel => LibraryContentType.LightNovel,
+            MediaAcquisitionKind.Book => LibraryContentType.Book,
+            MediaAcquisitionKind.Movie => LibraryContentType.Movie,
+            MediaAcquisitionKind.Tv => LibraryContentType.Tv,
+            MediaAcquisitionKind.Audiobook => LibraryContentType.Audiobook,
+            MediaAcquisitionKind.Music => LibraryContentType.Music,
+            _ => null
+        };
+
+    /// <summary>The video types: a root serving Anime cannot also serve them, because the Anime scanner would read their folders as anime.</summary>
+    private static readonly LibraryContentType[] VideoRoutedTypes = [LibraryContentType.Movie, LibraryContentType.Tv];
 
     /// <summary>Why an importer cannot place media: no enabled default LibraryRoot is configured for the content type.</summary>
     public static string MissingDefaultMessage(LibraryContentType contentType) =>
@@ -24,6 +69,44 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             where assignment.ContentType == contentType && assignment.IsDefault && root.IsEnabled
             select new LibraryRootRoute(root.Id, root.Name, root.Path, root.PlacementPolicy, true, true))
         .SingleOrDefaultAsync(cancellationToken);
+
+    /// <summary>
+    /// Gives the reading and audiobook importers their destination: for every such type with an enabled default root, that root and its placement
+    /// policy become the library folder and import mode of its entry in the import settings (the inbox and remote path mappings are kept). The
+    /// settings store no library folder of its own, so a type without a default root has no destination and its importer waits.
+    /// </summary>
+    public async Task<AnimeImportSettingsState> WithRoutedLibrariesAsync(AnimeImportSettingsState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        var types = SettingsViewTypes;
+        var defaults = await (
+                from assignment in db.LibraryRootContentAssignments.AsNoTracking()
+                join root in db.LibraryRoots.AsNoTracking() on assignment.LibraryRootId equals root.Id
+                where assignment.IsDefault && root.IsEnabled && types.Contains(assignment.ContentType)
+                select new { assignment.ContentType, root.Path, root.PlacementPolicy })
+            .ToListAsync(cancellationToken);
+        var libraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries ?? []);
+        foreach (var type in types)
+        {
+            if (KindOf(type) is { } kind && libraries.TryGetValue(kind, out var stored))
+            {
+                libraries[kind] = stored with { LibraryRoot = null, ImportMode = null };
+            }
+        }
+
+        foreach (var route in defaults)
+        {
+            if (KindOf(route.ContentType) is not { } kind)
+            {
+                continue;
+            }
+
+            libraries[kind] = libraries.GetValueOrDefault(kind, new MediaLibraryTarget()) with { LibraryRoot = route.Path, ImportMode = ImportFileTransfer.ModeFor(route.PlacementPolicy) };
+        }
+
+        return state with { MediaLibraries = libraries };
+    }
 
     public async Task<IReadOnlyList<LibraryRootRoute>> ListAsync(LibraryContentType contentType, CancellationToken cancellationToken = default) =>
         await (
@@ -127,7 +210,7 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             throw new InvalidOperationException("A disabled LibraryRoot cannot be the default destination.");
         }
 
-        if (ImporterRoutedTypes.Contains(contentType))
+        if (VideoRoutedTypes.Contains(contentType))
         {
             await EnsureNoAnimeConflictAsync(root, cancellationToken);
         }
@@ -156,7 +239,7 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
     {
         if (contentType == LibraryContentType.Anime)
         {
-            if (await db.LibraryRootContentAssignments.AsNoTracking().AnyAsync(row => row.LibraryRootId == root.Id && ImporterRoutedTypes.Contains(row.ContentType), cancellationToken))
+            if (await db.LibraryRootContentAssignments.AsNoTracking().AnyAsync(row => row.LibraryRootId == root.Id && VideoRoutedTypes.Contains(row.ContentType), cancellationToken))
             {
                 throw new LibraryRootConflictException($"LibraryRoot '{root.Name}' is a Movie or TV destination and cannot also serve Anime.");
             }
@@ -164,7 +247,7 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             return;
         }
 
-        if (ImporterRoutedTypes.Contains(contentType))
+        if (VideoRoutedTypes.Contains(contentType))
         {
             await EnsureNoAnimeConflictAsync(root, cancellationToken);
         }

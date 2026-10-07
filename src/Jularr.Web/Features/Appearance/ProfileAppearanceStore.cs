@@ -14,7 +14,8 @@ public sealed record ProfileAppearance(
     string ThemeMode,
     string? AccentColor,
     string SakuraMode,
-    string? ThemeId = null)
+    string? ThemeId = null,
+    bool ShowAdminShortcut = true)
 {
     public static ProfileAppearance Default { get; } = new(AppTheme.System, null, AppSakura.Default);
 
@@ -40,7 +41,7 @@ public sealed class ProfileAppearanceStore(AppDbContext db)
             await using var command = connection.CreateCommand();
             command.CommandText =
                 """
-                SELECT "ThemeMode", "AccentColor", "SakuraMode", "ThemeId"
+                SELECT "ThemeMode", "AccentColor", "SakuraMode", "ThemeId", "ShowAdminShortcut"
                 FROM "UiProfileThemes"
                 WHERE "ProfileId" = @profileId
                 LIMIT 1;
@@ -60,7 +61,8 @@ public sealed class ProfileAppearanceStore(AppDbContext db)
                 mode,
                 AppAccent.TryNormalize(accent, out var normalized) ? normalized : null,
                 sakura,
-                reader.IsDBNull(3) ? null : ThemeCatalog.NormalizeOrOriginal(reader.GetString(3)));
+                reader.IsDBNull(3) ? null : ThemeCatalog.NormalizeOrOriginal(reader.GetString(3)),
+                reader.GetBoolean(4));
         }, cancellationToken);
     }
 
@@ -118,6 +120,29 @@ public sealed class ProfileAppearanceStore(AppDbContext db)
                 """;
             Add(command, "@profileId", profileId);
             Add(command, "@sakura", normalized);
+            Add(command, "@updatedAt", DateTime.UtcNow);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return true;
+        }, cancellationToken);
+    }
+
+    /// <summary>Stores whether the sidebar shows the permanent Admin shortcut; Admin stays reachable from the account menu either way.</summary>
+    public async Task SetAdminShortcutAsync(string profileId, bool show, CancellationToken cancellationToken)
+    {
+        RequireProfile(profileId);
+        await WithConnectionAsync(async connection =>
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                INSERT INTO "UiProfileThemes" ("ProfileId", "ThemeMode", "ShowAdminShortcut", "UpdatedAt")
+                VALUES (@profileId, 'system', @show, @updatedAt)
+                ON CONFLICT("ProfileId") DO UPDATE SET
+                    "ShowAdminShortcut" = excluded."ShowAdminShortcut",
+                    "UpdatedAt" = excluded."UpdatedAt";
+                """;
+            Add(command, "@profileId", profileId);
+            Add(command, "@show", show);
             Add(command, "@updatedAt", DateTime.UtcNow);
             await command.ExecuteNonQueryAsync(cancellationToken);
             return true;

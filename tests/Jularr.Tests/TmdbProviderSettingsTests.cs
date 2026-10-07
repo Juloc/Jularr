@@ -237,14 +237,14 @@ public sealed class TmdbProviderSettingsTests
             return TmdbDiscoveryTests.Json("{\"results\":[]}");
         }), tokenStore);
 
-        await provider.BrowseAsync(TmdbDiscoveryMediaType.Movie, DiscoveryMode.Top, 5, "", CancellationToken.None);
+        await provider.DiscoverPageAsync(TmdbDiscoveryMediaType.Movie, new DiscoveryRequest("", DiscoveryCategory.Movie, DiscoveryMode.Top), 5, CancellationToken.None);
 
         Assert.AreEqual("token-a", seen.Single().Bearer);
         Assert.IsFalse(seen.Single().Query.Contains("api_key", StringComparison.Ordinal), "The token is sent as a header; the API key is not sent along with it.");
 
         var empty = TmdbTestSupport.Credentials(apiKey: null, directory: Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")));
         var none = TmdbDiscoveryTests.Provider(rig.Db, TmdbDiscoveryTests.Client(_ => TmdbDiscoveryTests.Json("{}")), empty);
-        await Assert.ThrowsExactlyAsync<ProviderNotConfiguredException>(() => none.BrowseAsync(TmdbDiscoveryMediaType.Movie, DiscoveryMode.Top, 5, "", CancellationToken.None));
+        await Assert.ThrowsExactlyAsync<ProviderNotConfiguredException>(() => none.DiscoverPageAsync(TmdbDiscoveryMediaType.Movie, new DiscoveryRequest("", DiscoveryCategory.Movie, DiscoveryMode.Top), 5, CancellationToken.None));
     }
 
     [TestMethod]
@@ -253,7 +253,7 @@ public sealed class TmdbProviderSettingsTests
         await using var rig = await CreateAsync();
         var provider = TmdbDiscoveryTests.Provider(rig.Db, TmdbDiscoveryTests.Client(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)), health: rig.Health);
 
-        var failure = await Assert.ThrowsExactlyAsync<ProviderAuthenticationException>(() => provider.SearchAsync(TmdbDiscoveryMediaType.Series, "x", 5, "", CancellationToken.None));
+        var failure = await Assert.ThrowsExactlyAsync<ProviderAuthenticationException>(() => provider.DiscoverPageAsync(TmdbDiscoveryMediaType.Series, new DiscoveryRequest("x", DiscoveryCategory.Series, DiscoveryMode.Search), 5, CancellationToken.None));
 
         Assert.AreEqual(ProviderHealthStatus.AuthenticationFailed, rig.Health.Get(ProviderKeys.Tmdb).Status);
         Assert.IsFalse(failure.ToString().Contains("test-key", StringComparison.Ordinal));

@@ -1,19 +1,14 @@
 @model Jularr.Web.Pages.IndexModel.HomeContinueTile
-@* Home "Continue" tile (docs/mockups/home): landscape 16:9 artwork with a thin progress bar along its
-   bottom edge, then the title and one caption line. A poster/cover is not cropped into the landscape
-   frame; it sits sharp over a background blurred from the same image. Styles: wwwroot/css/home.css. *@
+@* Home "Continue" card: poster-oriented artwork cropped to 2:3 with a thin progress bar along its bottom edge, then the title and one caption
+   line. No blurred copy of the artwork behind it. Styles: wwwroot/css/home.css. *@
 @{
     var hasImage = !string.IsNullOrWhiteSpace(Model.ImageUrl);
 }
 <a class="home-continue-tile" href="@Model.Href">
-    <span class="home-continue-art@(hasImage && !Model.ImageIsBackdrop ? " home-continue-art-poster" : "")">
+    <span class="home-continue-art">
         @if (hasImage)
         {
-            <img class="home-continue-backdrop" src="@Model.ImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
-            @if (!Model.ImageIsBackdrop)
-            {
-                <img class="home-continue-cover" src="@Model.ImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
-            }
+            <img class="home-continue-cover" src="@Model.ImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
         }
         else
         {

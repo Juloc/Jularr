@@ -5,6 +5,7 @@ using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Movies;
 using Jularr.Web.Features.Providers;
+using Jularr.Web.Ui;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,10 +44,9 @@ public sealed class TmdbDiscoveryTests
         });
         var provider = Provider(db, client);
 
-        var first = await provider.SearchAsync(
-            TmdbDiscoveryMediaType.Movie, "Fight Club", 10, "Drama", CancellationToken.None);
-        var second = await provider.SearchAsync(
-            TmdbDiscoveryMediaType.Movie, "Fight Club", 10, "Drama", CancellationToken.None);
+        var request = new DiscoveryRequest("Fight Club", DiscoveryCategory.Movie, DiscoveryMode.Search, "Drama");
+        var first = (await provider.DiscoverPageAsync(TmdbDiscoveryMediaType.Movie, request, 10, CancellationToken.None)).Items;
+        var second = (await provider.DiscoverPageAsync(TmdbDiscoveryMediaType.Movie, request, 10, CancellationToken.None)).Items;
 
         Assert.AreEqual(1, calls, "The second identical provider request must hit ProviderResponseCache.");
         Assert.AreEqual(1, first.Count);
@@ -174,6 +174,67 @@ public sealed class TmdbDiscoveryTests
         CollectionAssert.AreEquivalent(
             new[] { "/3/tv/1396", "/3/tv/1396/season/1" },
             calls.ToArray());
+    }
+
+    private static async Task<(string Path, Dictionary<string, string> Query, bool HasMore)> AskAsync(DiscoveryRequest request, TmdbDiscoveryMediaType mediaType)
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        string path = "";
+        var query = new Dictionary<string, string>();
+        using var client = Client(http =>
+        {
+            path = http.RequestUri!.AbsolutePath;
+            foreach (var pair in http.RequestUri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = pair.Split('=', 2);
+                query[Uri.UnescapeDataString(parts[0])] = Uri.UnescapeDataString(parts.ElementAtOrDefault(1) ?? "");
+            }
+
+            return Json("{\"total_pages\":3,\"results\":[]}");
+        });
+        var page = await Provider(db, client).DiscoverPageAsync(mediaType, request, 20, CancellationToken.None);
+        return (path, query, page.HasMore);
+    }
+
+    [TestMethod]
+    public async Task EveryBrowseViewAsksTmdbForItsOwnRankingAndNarrowedViewsUseTheDiscoverEndpoint()
+    {
+        var trending = await AskAsync(new DiscoveryRequest("", DiscoveryCategory.Movie, DiscoveryMode.Trending), TmdbDiscoveryMediaType.Movie);
+        Assert.AreEqual("/3/trending/movie/day", trending.Path);
+        Assert.IsFalse(trending.Query.ContainsKey("region"), "No region is ever sent: the application does not infer one.");
+
+        var popular = await AskAsync(new DiscoveryRequest("", DiscoveryCategory.Movie, DiscoveryMode.Popular), TmdbDiscoveryMediaType.Movie);
+        Assert.AreEqual("/3/discover/movie", popular.Path);
+        Assert.AreEqual("vote_count.desc", popular.Query["sort_by"], "All-time popular is by votes, not by what is popular this week.");
+
+        var rated = await AskAsync(new DiscoveryRequest("", DiscoveryCategory.Series, DiscoveryMode.TopRated), TmdbDiscoveryMediaType.Series);
+        Assert.AreEqual("/3/tv/top_rated", rated.Path);
+
+        var top = await AskAsync(new DiscoveryRequest("", DiscoveryCategory.Series, DiscoveryMode.Top), TmdbDiscoveryMediaType.Series);
+        Assert.AreEqual("/3/tv/popular", top.Path);
+    }
+
+    [TestMethod]
+    public async Task TheViewersFiltersAreSentToTmdbAndTheSecondPageIsAskedForByNumber()
+    {
+        var filter = new DiscoveryFilter(["Drama"], 2010, 2015, [MediaReleaseStatus.Finished]);
+        var series = await AskAsync(new DiscoveryRequest("", DiscoveryCategory.Series, DiscoveryMode.TopRated) { Filter = filter, Page = 2 }, TmdbDiscoveryMediaType.Series);
+
+        Assert.AreEqual("/3/discover/tv", series.Path);
+        Assert.AreEqual("2", series.Query["page"]);
+        Assert.AreEqual("18", series.Query["with_genres"]);
+        Assert.AreEqual("3", series.Query["with_status"], "Finished is the ended status of TMDB.");
+        Assert.AreEqual("2010-01-01", series.Query["first_air_date.gte"]);
+        Assert.AreEqual("2015-12-31", series.Query["first_air_date.lte"]);
+        Assert.AreEqual("vote_average.desc", series.Query["sort_by"]);
+        Assert.AreEqual("500", series.Query["vote_count.gte"]);
+        Assert.IsTrue(series.HasMore, "Page 2 of 3 is followed by another.");
+
+        var last = await AskAsync(new DiscoveryRequest("", DiscoveryCategory.Movie, DiscoveryMode.Popular) { Page = 3 }, TmdbDiscoveryMediaType.Movie);
+        Assert.IsFalse(last.HasMore, "The last page ends the view.");
+
+        var upcoming = await AskAsync(new DiscoveryRequest("", DiscoveryCategory.Movie, DiscoveryMode.Upcoming) { Filter = new DiscoveryFilter(["Drama"]) }, TmdbDiscoveryMediaType.Movie);
+        Assert.IsTrue(string.CompareOrdinal(upcoming.Query["primary_release_date.gte"], DateTime.UtcNow.ToString("yyyy-MM-dd")) > 0, "Upcoming only holds titles after today.");
     }
 
     internal static TmdbDiscoveryProvider Provider(

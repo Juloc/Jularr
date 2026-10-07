@@ -24,7 +24,8 @@ public sealed class InstanceModel(
         InstanceModule.Manga,
         InstanceModule.Novel,
         InstanceModule.Book,
-        InstanceModule.Audiobook
+        InstanceModule.Audiobook,
+        InstanceModule.Music
     ];
 
     public static IReadOnlyList<InstanceModule> ConfigurableFeatureModules { get; } =
@@ -46,6 +47,26 @@ public sealed class InstanceModel(
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         await LoadAsync(cancellationToken);
+    }
+
+    public InstancePreset Preset => InstanceModulePresets.Detect(Settings);
+
+    public string PresetName(InstancePreset preset) => Ui[$"admin.instance.preset.{preset.ToString().ToLowerInvariant()}"];
+
+    public string PresetDescription(InstancePreset preset) => Ui[$"admin.instance.preset.{preset.ToString().ToLowerInvariant()}.description"];
+
+    /// <summary>A preset only sets the module switches below it; it adds no runtime of its own.</summary>
+    public async Task<IActionResult> OnPostPresetAsync(InstancePreset preset, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (preset == InstancePreset.Custom || !Enum.IsDefined(preset))
+        {
+            return BadRequest();
+        }
+
+        await modules.SaveAsync(InstanceModulePresets.Apply(preset, await modules.GetAsync(cancellationToken)), cancellationToken);
+        TempData["Status"] = Ui["admin.instance.saved"];
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
@@ -80,7 +101,7 @@ public sealed class InstanceModel(
             InstanceModule.Tv => "tv",
             InstanceModule.Manga or InstanceModule.Book => "book",
             InstanceModule.Novel => "document",
-            InstanceModule.Audiobook => "headphones",
+            InstanceModule.Audiobook or InstanceModule.Music => "headphones",
             InstanceModule.Learning => "cap",
             InstanceModule.Acquisition => "download",
             InstanceModule.Playback => "play",

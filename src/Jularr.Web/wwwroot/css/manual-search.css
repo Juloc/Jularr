@@ -35,6 +35,13 @@
     background: var(--surface-2);
     overflow: hidden;
 }
+.bms-cover-initial {
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: 22px;
+    font-weight: 800;
+}
 .bms-cover img {
     width: 100%;
     height: 100%;
@@ -475,6 +482,11 @@
 }
 .bms-reason-rejected svg {
     color: var(--danger-text);
+}
+.bms-facts-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 .bms-warning {
     display: flex;

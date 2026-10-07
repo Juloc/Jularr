@@ -28,12 +28,38 @@ public enum ReleaseRuleMatch
     Regex
 }
 
+/// <summary>
+/// What a matching score rule does. Require and Reject are gates that run before any score and can never be outweighed by one;
+/// Prefer and Avoid move the preference score; Info only explains.
+/// </summary>
+public enum ReleaseRuleEffect
+{
+    Prefer,
+    Avoid,
+    Require,
+    Reject,
+    Info
+}
+
 public sealed record ReleaseScoreRule(
     string Name,
     ReleaseRuleField Field,
     ReleaseRuleMatch Match,
     string Value,
-    int Score);
+    int Score)
+{
+    /// <summary>The effect of the rule; a rule without one prefers when its score is not negative and avoids otherwise.</summary>
+    public ReleaseRuleEffect? Effect { get; init; }
+
+    public ReleaseRuleEffect EffectiveEffect => Effect ?? (Score >= 0 ? ReleaseRuleEffect.Prefer : ReleaseRuleEffect.Avoid);
+}
+
+/// <summary>
+/// One explicit step of the fallback ladder: once a target has been wanted for <see cref="AfterMinutes"/>, the qualities in
+/// <see cref="AddedQualities"/> become allowed as well. Identity, safety and the permanent Require/Reject rules never relax; a
+/// candidate taken from a later tier is only temporary and the target stays wanted for an upgrade.
+/// </summary>
+public sealed record FallbackTier(int AfterMinutes, string[] AddedQualities);
 
 public sealed record QualityProfile(
     string Id,
@@ -49,7 +75,23 @@ public sealed record QualityProfile(
     string[] MustNotContain,
     string[] RequiredRegex,
     string[] RejectedRegex,
-    ReleaseScoreRule[] ScoreRules);
+    ReleaseScoreRule[] ScoreRules)
+{
+    /// <summary>The fallback ladder after tier 0 (the allowed qualities above); tiers are ordered by their wait.</summary>
+    public FallbackTier[] FallbackTiers { get; init; } = [];
+
+    /// <summary>The least preference-score gain that makes a candidate of the same quality an upgrade, so tiny differences never churn files.</summary>
+    public int UpgradeMinimumScoreDelta { get; init; } = 1;
+
+    /// <summary>The least number of quality steps a candidate must be better by to be an upgrade; 1 means any better quality.</summary>
+    public int UpgradeMinimumQualitySteps { get; init; } = 1;
+
+    /// <summary>Upgrades stop once the current file reaches this preference score; null keeps upgrading until the quality cutoff.</summary>
+    public int? UpgradeUntilScore { get; init; }
+
+    /// <summary>Whether a candidate whose identity is only ambiguous may be taken automatically; by default it waits for manual review.</summary>
+    public bool AllowAmbiguousIdentity { get; init; }
+}
 
 // Media-type-agnostic quality-profile state. Profiles are shared shapes; each media type has a
 // default profile (KindDefaults, keyed by AcquisitionAccessNames.Kind) and any work can override
@@ -85,7 +127,11 @@ public sealed record ReleaseScoreResult(
     string QualityKey,
     int QualityRank,
     IReadOnlyList<string> RejectionReasons,
-    IReadOnlyList<string> ScoreReasons);
+    IReadOnlyList<string> ScoreReasons)
+{
+    /// <summary>Rules that matched with the Info effect: shown in explanations, never part of the score or a gate.</summary>
+    public IReadOnlyList<string> InfoReasons { get; init; } = [];
+}
 
 public static class ReleaseQuality
 {

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Discovery;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -37,10 +38,12 @@ public sealed class AniListMetadataProvider(
         }
         """;
 
-    private const string BrowseQuery = """
-        query ($perPage: Int!, $sort: [MediaSort!], $genre: [String]) {
-          Page(page: 1, perPage: $perPage) {
-            media(type: ANIME, isAdult: false, sort: $sort, genre_in: $genre) {
+    /// <summary>One page of anime for Discover: every filter is optional (a null variable is no filter to AniList) and the page reports whether another follows.</summary>
+    private const string DiscoverQuery = """
+        query ($page: Int!, $perPage: Int!, $search: String, $sort: [MediaSort!], $genre: [String], $status: [MediaStatus], $startFrom: FuzzyDateInt, $startTo: FuzzyDateInt, $popularityMin: Int) {
+          Page(page: $page, perPage: $perPage) {
+            pageInfo { hasNextPage }
+            media(type: ANIME, isAdult: false, search: $search, sort: $sort, genre_in: $genre, status_in: $status, startDate_greater: $startFrom, startDate_lesser: $startTo, popularity_greater: $popularityMin) {
               id
               title { romaji english native }
               description(asHtml: false)
@@ -174,31 +177,13 @@ public sealed class AniListMetadataProvider(
         return ParseSearchResponse(response);
     }
 
-    public async Task<IReadOnlyList<AnimeMetadataCandidate>> BrowseAsync(
-        bool trending,
-        int limit,
-        CancellationToken cancellationToken) =>
-        await BrowseAsync(trending, limit, null, cancellationToken);
-
-    public async Task<IReadOnlyList<AnimeMetadataCandidate>> BrowseAsync(
-        bool trending,
-        int limit,
-        string? genre,
+    /// <summary>One Discover page (a browse view or a search) with the viewer's filters applied by AniList itself, so paging stays truthful.</summary>
+    public async Task<DiscoveryProviderPage<AnimeMetadataCandidate>> DiscoverPageAsync(
+        AniListDiscoveryOptions options,
         CancellationToken cancellationToken)
     {
-        var response = await SendAsync(
-            BrowseQuery,
-            new
-            {
-                perPage = Math.Clamp(limit, 1, MaximumBrowseLimit),
-                sort = trending
-                    ? new[] { "TRENDING_DESC", "POPULARITY_DESC" }
-                    : new[] { "SCORE_DESC", "POPULARITY_DESC" },
-                genre = GenreVariable(genre)
-            },
-            cancellationToken);
-
-        return ParseSearchResponse(response);
+        var response = await SendAsync(DiscoverQuery, options.Variables(), cancellationToken);
+        return new DiscoveryProviderPage<AnimeMetadataCandidate>(ParseSearchResponse(response), AniListPageInfo.HasNextPage(response));
     }
 
     // AniList treats a null genre_in as "no filter"; an empty array would match nothing.

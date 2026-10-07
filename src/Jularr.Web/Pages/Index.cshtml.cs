@@ -1,14 +1,18 @@
 using System.Globalization;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Discovery;
+using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Novels;
+using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Reading;
 using Jularr.Web.Features.Recommendations;
@@ -25,13 +29,25 @@ namespace Jularr.Web.Pages;
 /// most recently added to the library. Every read is local — the database, the local release cache
 /// and the local recommendation engine; no provider calls.
 /// </summary>
-public sealed class IndexModel(
+public sealed partial class IndexModel(
+    IDiscoveryFeed coordinator,
+    DiscoveryShelfService shelves,
+    TmdbDiscoveryProvider tmdb,
     AppDbContext db,
-    CurrentAccountContext currentAccount,
+    NovelImportService novels,
+    NovelMetadataService novelMetadata,
+    CurrentAccountContext account,
+    OperationRunner operations,
+    AcquisitionRequestService requests,
+    AcquisitionAccessStore requestStore,
+    VideoRequestScopeResolver scopes,
+    WatchlistStore watchlist,
+    FranchiseService franchiseService,
+    MediaRecommendationService recommendations,
+    IInstanceModuleService instanceModules,
     VideoProgressService videoProgress,
-    IAppShellService appShell,
-    MediaRecommendationService? recommendations = null,
-    IInstanceModuleService? instanceModules = null) : PageModel
+    ILogger<IndexModel> logger,
+    IAppShellService? shell = null) : PageModel
 {
     /// <summary>
     /// The Home media-type filters, parsed from <c>?type=</c> the same way as Discover's
@@ -102,10 +118,10 @@ public sealed class IndexModel(
     /// <summary>Discover link for the Continue Watching heading, narrowed to the active video filter.</summary>
     public string ContinueWatchingDiscoverUrl => ActiveType switch
     {
-        DiscoveryCategory.Anime => "/Discover?category=anime&mode=my-list",
-        DiscoveryCategory.Movie => "/Discover?category=movie&mode=my-list",
-        DiscoveryCategory.Series => "/Discover?category=series&mode=my-list",
-        _ => "/Discover?mode=my-list"
+        DiscoveryCategory.Anime => "/?category=anime&mode=my-list",
+        DiscoveryCategory.Movie => "/?category=movie&mode=my-list",
+        DiscoveryCategory.Series => "/?category=series&mode=my-list",
+        _ => "/?mode=my-list"
     };
 
     /// <summary>
@@ -115,10 +131,10 @@ public sealed class IndexModel(
     /// </summary>
     public string ContinueReadingDiscoverUrl => ActiveType switch
     {
-        DiscoveryCategory.Manga => "/Discover?category=manga&mode=my-list",
-        DiscoveryCategory.LightNovel => "/Discover?category=light-novel&mode=my-list",
-        DiscoveryCategory.Book => "/Discover?category=book&mode=my-list",
-        _ => "/Discover?mode=my-list"
+        DiscoveryCategory.Manga => "/?category=manga&mode=my-list",
+        DiscoveryCategory.LightNovel => "/?category=light-novel&mode=my-list",
+        DiscoveryCategory.Book => "/?category=book&mode=my-list",
+        _ => "/?mode=my-list"
     };
 
     /// <summary>The merged row keeps the Continue Watching heading and link while anything is being watched.</summary>
@@ -138,37 +154,45 @@ public sealed class IndexModel(
     public int PlaybackHistoryLimit => VideoProgressService.HistoryLimit;
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
-    /// <summary>
-    /// Resolved ContentMetrics capability for the Anime media type. Controls
-    /// preparation percentages on recently discovered Anime cards.
-    /// </summary>
-    public bool ShowContentMetrics { get; private set; }
-
     /// <summary>True when Home has nothing of the profile's or of the library to show: the new-user empty state.</summary>
     public bool IsEmpty => Hero.Count == 0 && ContinueTiles.Count == 0 && ForYou.Count == 0 && RecentTitles.Count == 0;
 
     /// <summary>Whether the profile may add library folders, so the empty state may link to them.</summary>
-    public bool CanManageStorage => currentAccount.Can(JularrPolicies.AdminSystem);
+    public bool CanManageStorage => account.Can(JularrPolicies.AdminSystem);
 
     public async Task<IActionResult> OnPostClearHistoryAsync(CancellationToken cancellationToken)
     {
-        await videoProgress.ClearHistoryAsync(currentAccount.ProfileId, cancellationToken);
+        await videoProgress.ClearHistoryAsync(account.ProfileId, cancellationToken);
 
         var ui = await new UiTranslationCatalogStore(db).LoadProfileBundleAsync(
-            currentAccount.ProfileId,
+            account.ProfileId,
             cancellationToken);
         TempData["Status"] = ui["home.history.cleared"];
         return RedirectToPage();
     }
 
-    public async Task OnGetAsync(CancellationToken cancellationToken, string? type = null)
+    public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        Ui = await new UiTranslationCatalogStore(db).LoadProfileBundleAsync(currentAccount.ProfileId, cancellationToken);
+        await LoadDiscoverAsync(cancellationToken);
 
-        ActiveType = DiscoveryRequest.ParseCategory(type);
-        var instance = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
+        // Typing or a filter turns the surface into results only, so nothing of Home is read for it.
+        if (Query.IsLanding)
+        {
+            await LoadHomeAsync(Query.Category, cancellationToken);
+        }
+        else
+        {
+            ActiveType = Query.Category;
+        }
+    }
+
+    /// <summary>The hero, the Continue cards and the playback history of the landing, for the media type the bar has selected.</summary>
+    public async Task LoadHomeAsync(DiscoveryCategory activeType, CancellationToken cancellationToken)
+    {
+        ActiveType = activeType;
+        var instance = await instanceModules.GetAsync(cancellationToken);
         PlaybackEnabled = instance.IsEnabled(InstanceModule.Playback);
-        var access = await appShell.GetMediaAccessAsync(currentAccount.User, cancellationToken);
+        var access = await shell!.GetMediaAccessAsync(account.User, cancellationToken);
         var videoTypes = LibraryBrowse.VideoMediaTypes.Where(access.IsVisible).ToArray();
         var videoQuery = new HomeVideoQuery(db, videoProgress);
 
@@ -176,37 +200,107 @@ public sealed class IndexModel(
         if (PlaybackEnabled)
         {
             var continueTypes = videoTypes.Where(mediaType => MatchesFilter(ActiveType, mediaType)).ToArray();
-            ContinueWatching = await videoQuery.GetContinueAsync(currentAccount.ProfileId, continueTypes, VideoProgressService.ContinueWatchingLimit, cancellationToken);
-            PlaybackHistory = await videoQuery.GetHistoryAsync(currentAccount.ProfileId, videoTypes, cancellationToken);
+            ContinueWatching = await videoQuery.GetContinueAsync(account.ProfileId, continueTypes, VideoProgressService.ContinueWatchingLimit, cancellationToken);
+            PlaybackHistory = await videoQuery.GetHistoryAsync(account.ProfileId, videoTypes, cancellationToken);
         }
 
-        var continueReading = await new ContinueReadingQuery(db).GetAsync(currentAccount.ProfileId, cancellationToken: cancellationToken);
+        var continueReading = await new ContinueReadingQuery(db).GetAsync(account.ProfileId, cancellationToken: cancellationToken);
         ContinueReading = FilterContinueReading(continueReading.Where(item => IsReadingEnabled(instance, item.Kind)).ToArray(), ActiveType);
 
         ContinueTiles = BuildContinueTiles();
-        var ownSlides = BuildWatchingSlides(ContinueReading).ToArray();
-        Hero = ownSlides.Length >= HeroLimit
-            ? ownSlides.Take(HeroLimit).ToArray()
-            : [.. ownSlides, .. (await LoadWatchlistSlidesAsync(cancellationToken)).Take(HeroLimit - ownSlides.Length)];
+        var watchlistSlides = await LoadWatchlistSlidesAsync(cancellationToken);
         ForYou = await LoadForYouAsync(cancellationToken);
 
-        var recent = await videoQuery.GetRecentlyAddedAsync(currentAccount.ProfileId, videoTypes, RecentLimit, cancellationToken);
-        var animeLearning = await new LearningConfigurationStore(db, instanceModules).ResolveAsync(currentAccount.ProfileId, new LearningScopeContext(LearningMediaType.Anime), cancellationToken);
-        ShowContentMetrics = access.IsVisible(WorkMediaType.Anime) && animeLearning.IsEnabled(LearningCapability.ContentMetrics);
+        var recent = await videoQuery.GetRecentlyAddedAsync(account.ProfileId, videoTypes, RecentLimit, cancellationToken);
+        RecentTitles = [.. recent.Select(item => new HomeRecentTitle(item.Title, RecentSubtitle(item)))];
 
-        // Vocabulary coverage is only computed when the resolved Anime scope shows content metrics; otherwise Home never touches learning tables.
-        var coverage = ShowContentMetrics
-            ? await videoQuery.GetVocabularyCoverageAsync(currentAccount.ProfileId, [.. recent.Where(item => item.LegacyEpisodeId.HasValue).Select(item => item.LegacyEpisodeId!.Value)], cancellationToken)
-            : new Dictionary<Guid, (int Total, int Prepared)>();
-        RecentTitles =
-        [
-            .. recent.Select(item =>
-            {
-                var totals = item.LegacyEpisodeId is { } legacyEpisodeId ? coverage.GetValueOrDefault(legacyEpisodeId) : default;
-                return new HomeRecentTitle(item.Title, RecentSubtitle(item), totals.Total, totals.Prepared);
-            })
-        ];
+        // The Hero is a pool of useful candidates of several classes, not the first Continue item: Continue or Resume leads, then what is newly
+        // available in the library, then a personalized recommendation, then what the followed works released. The classes alternate, so a Continue
+        // item never monopolizes the Hero while it still comes first.
+        Hero = RotateClasses(
+            [
+                [.. BuildWatchingSlides(ContinueReading)],
+                [.. RecentTitles.Where(title => MatchesFilter(ActiveType, title.Title.MediaType)).Take(HeroPerSourceLimit).Select(NewlyAvailableSlide)],
+                [.. (ActiveType == DiscoveryCategory.All ? ForYou : []).Take(HeroPerSourceLimit).Select(RecommendedSlide)],
+                [.. watchlistSlides]
+            ],
+            HeroLimit);
     }
+
+    /// <summary>Takes one slide of every class in priority order, then the next of each, until the Hero is full; a class that has no more simply drops out.</summary>
+    public static IReadOnlyList<HomeHeroSlide> RotateClasses(IReadOnlyList<IReadOnlyList<HomeHeroSlide>> classes, int limit)
+    {
+        var result = new List<HomeHeroSlide>(limit);
+        for (var round = 0; result.Count < limit; round++)
+        {
+            var added = false;
+            foreach (var slides in classes)
+            {
+                if (round >= slides.Count || result.Count >= limit)
+                {
+                    continue;
+                }
+
+                added = true;
+
+                // A title that already leads the Hero in another class (a series being continued that is also newly added) is shown once.
+                if (!result.Any(existing => string.Equals(existing.Title, slides[round].Title, StringComparison.OrdinalIgnoreCase)))
+                {
+                    result.Add(slides[round]);
+                }
+            }
+
+            if (!added)
+            {
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>A title that is newly available in the library: a Movie plays directly, a series opens its Detail where the next episode is the primary action.</summary>
+    private HomeHeroSlide NewlyAvailableSlide(HomeRecentTitle recent)
+    {
+        var title = recent.Title;
+        var plays = PlaybackEnabled && title.MediaType == WorkMediaType.Movie;
+        var image = title.BackdropUrl ?? title.PosterUrl;
+        return new HomeHeroSlide(
+            Ui["home.hero.newlyAvailable"],
+            title.Title,
+            VideoMeta(title),
+            recent.Subtitle,
+            title.Description,
+            null,
+            null,
+            image,
+            title.BackdropUrl is not null,
+            plays ? $"/Library/Watch/{title.WorkId}" : title.DetailHref,
+            plays ? Ui["home.spotlight.play"] : Ui["home.spotlight.open"],
+            plays,
+            title.DetailHref,
+            Ui["home.spotlight.details"],
+            HomeHeroSecondary.Details);
+    }
+
+    /// <summary>A personalized recommendation: the title page is the primary action, because nothing of it is playable yet.</summary>
+    private HomeHeroSlide RecommendedSlide(HomePosterItem item) =>
+        new(
+            Ui["home.hero.recommended"],
+            item.Title,
+            null,
+            null,
+            null,
+            null,
+            null,
+            item.ImageUrl,
+            false,
+            item.Href,
+            Ui["home.spotlight.open"],
+            false,
+            item.Href,
+            Ui["home.spotlight.details"],
+            HomeHeroSecondary.Details);
 
     /// <summary>"S01 · Episode 4 · 32 min left" for an episode, "32 min left" for a Movie — the caption of a watching tile.</summary>
     public string WatchingCaption(HomeContinueVideo item) => string.Join(" · ", new[] { EpisodeLabel(item.SeasonNumber, item.EpisodeNumber), RemainingText(item) }.Where(part => part is not null));
@@ -378,7 +472,7 @@ public sealed class IndexModel(
             DiscoveryCategory.LightNovel => ReleaseMediaType.LightNovel,
             _ => null
         };
-        if (string.IsNullOrWhiteSpace(currentAccount.ProfileId) || ActiveType is DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
+        if (string.IsNullOrWhiteSpace(account.ProfileId) || ActiveType is DiscoveryCategory.Book or DiscoveryCategory.Movie or DiscoveryCategory.Series)
         {
             return [];
         }
@@ -396,7 +490,7 @@ public sealed class IndexModel(
                 zone,
                 presenter.Now,
                 MediaType: mediaType,
-                ProfileId: currentAccount.ProfileId),
+                ProfileId: account.ProfileId),
             cancellationToken);
 
         var instance = instanceModules is null
@@ -441,14 +535,14 @@ public sealed class IndexModel(
     /// </summary>
     private async Task<IReadOnlyList<HomePosterItem>> LoadForYouAsync(CancellationToken cancellationToken)
     {
-        if (recommendations is null || string.IsNullOrWhiteSpace(currentAccount.ProfileId))
+        if (recommendations is null || string.IsNullOrWhiteSpace(account.ProfileId))
         {
             return [];
         }
 
         var result = await recommendations.GetForProfileAsync(
-            currentAccount.User,
-            currentAccount.ProfileId,
+            account.User,
+            account.ProfileId,
             cancellationToken);
 
         return result.Shelves
@@ -531,11 +625,6 @@ public sealed class IndexModel(
     public static string ChipHref(HomeTypeChip chip) =>
         chip.QueryValue == "all" ? "/" : $"/?type={chip.QueryValue}";
 
-    /// <summary>One card of the "Recently discovered" row; the occurrence totals are only filled when content metrics are on.</summary>
-    public sealed record HomeRecentTitle(HomeVideoTitle Title, string Subtitle, int TotalOccurrences, int PreparedOccurrences)
-    {
-        public int PreparationPercent => TotalOccurrences == 0
-            ? 0
-            : (int)Math.Floor((double)PreparedOccurrences / TotalOccurrences * 100);
-    }
+    /// <summary>A title that is newly available in the library; the Hero offers it as one of its candidates.</summary>
+    public sealed record HomeRecentTitle(HomeVideoTitle Title, string Subtitle);
 }

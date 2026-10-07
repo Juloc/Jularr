@@ -56,6 +56,36 @@ public static class AcquisitionDelayEngine
     }
 
     /// <summary>
+    /// A delay profile as the selection engine's own wait: the qualities that reach the profile's cutoff stay allowed at once and the rest are
+    /// added as a fallback tier after the delay, so "wait for a preferred release, then take what exists" is the same timed ladder every
+    /// media type uses. Without a cutoff the best quality of the profile is the preferred one. Returns the profile itself when no delay applies.
+    /// </summary>
+    public static AnimeQualityProfile WithDelayAsFallbackTier(AnimeQualityProfile profile, AnimeDelayProfile? delayProfile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        if (delayProfile is null || delayProfile.DelayMinutes <= 0)
+        {
+            return profile;
+        }
+
+        string[] universe = profile.AllowedQualities.Length > 0 ? profile.AllowedQualities : profile.QualityOrder;
+        var cutoffRank = Selection.UpgradePolicy.RankOf(profile, profile.UpgradeCutoffQuality);
+        var preferred = universe.Where(quality => Selection.UpgradePolicy.RankOf(profile, quality) <= (cutoffRank == int.MaxValue ? 0 : cutoffRank)).ToArray();
+        var rest = universe.Except(preferred, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (preferred.Length == 0 || rest.Length == 0)
+        {
+            return profile;
+        }
+
+        return profile with
+        {
+            AllowedQualities = preferred,
+            FallbackTiers = [.. profile.FallbackTiers.Append(new FallbackTier(delayProfile.DelayMinutes, rest)).OrderBy(tier => tier.AfterMinutes)]
+        };
+    }
+
+    /// <summary>
     /// Whether the candidate should be grabbed now, or held back until <c>DelayedUntilUtc</c>
     /// (unless a preferred release — one that already meets the profile's upgrade cutoff quality —
     /// appears sooner, in which case the delay is skipped).

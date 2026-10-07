@@ -55,7 +55,7 @@ public sealed class AniListProfileIsolationTests
         try
         {
             var provider = new EphemeralDataProtectionProvider();
-            var protector = provider.CreateProtector("AniLingo.AniList.AccessToken.v1");
+            var protector = provider.CreateProtector("Jularr.AniList.AccessToken.v1");
             var connectedAt = new DateTimeOffset(
                 2026,
                 9,

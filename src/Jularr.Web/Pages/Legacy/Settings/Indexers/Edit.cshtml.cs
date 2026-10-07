@@ -47,6 +47,12 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
     [BindProperty]
     public bool Enabled { get; set; } = true;
 
+    [BindProperty]
+    public bool AutomaticSearch { get; set; } = true;
+
+    [BindProperty]
+    public bool InteractiveSearch { get; set; } = true;
+
     public bool IsNew => Id is null;
     public string? Error { get; private set; }
 
@@ -77,6 +83,8 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
         SearchLimit = entry.Settings.SearchLimit;
         Priority = entry.Priority;
         Enabled = entry.Enabled;
+        AutomaticSearch = entry.Settings.AutomaticSearch;
+        InteractiveSearch = entry.Settings.InteractiveSearch;
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
@@ -107,7 +115,17 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
                     Type,
                     Enabled,
                     Priority,
-                    new IndexerSettings(BaseUrl, categories, indexerIds, SearchLimit, bookCategories.Length == 0 ? null : bookCategories),
+                    // What the owner does not edit here (reported capabilities, media scope) stays as stored.
+                    (existing?.Settings ?? new IndexerSettings(BaseUrl, categories, indexerIds, SearchLimit)) with
+                    {
+                        BaseUrl = BaseUrl,
+                        Categories = categories,
+                        IndexerIds = indexerIds,
+                        SearchLimit = SearchLimit,
+                        BookCategories = bookCategories.Length == 0 ? null : bookCategories,
+                        AutomaticSearch = AutomaticSearch,
+                        InteractiveSearch = InteractiveSearch
+                    },
                     apiKey),
                 cancellationToken);
 

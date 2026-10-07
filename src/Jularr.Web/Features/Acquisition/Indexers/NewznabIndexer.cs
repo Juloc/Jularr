@@ -68,7 +68,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
                 .FirstOrDefault(element => element.Name.LocalName == "server")?
                 .Attribute("version")?.Value;
 
-            return new IndexerConnectionTestResult(true, version);
+            return new IndexerConnectionTestResult(true, version, Capabilities: NewznabCapsParser.Parse(document, DateTimeOffset.UtcNow));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -93,25 +93,46 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(query);
 
-        if (string.IsNullOrWhiteSpace(query.Query))
+        var parameters = new List<KeyValuePair<string, string>>();
+        if (!string.IsNullOrWhiteSpace(query.Query))
+        {
+            parameters.Add(new("q", query.Query));
+        }
+
+        parameters.AddRange(query.Parameters ?? []);
+        if (parameters.Count == 0)
         {
             return [];
         }
 
-        var parameters = new List<KeyValuePair<string, string>> { new("q", query.Query) };
+        var label = string.IsNullOrWhiteSpace(query.Query) ? string.Join(' ', parameters.Select(pair => $"{pair.Key}={pair.Value}")) : query.Query;
         parameters.AddRange(
             entry.Settings.Categories.Select(
                 category => new KeyValuePair<string, string>("cat", category.ToString(CultureInfo.InvariantCulture))));
-        parameters.Add(new("limit", entry.Settings.SearchLimit.ToString(CultureInfo.InvariantCulture)));
+        parameters.Add(new("limit", (query.Limit ?? entry.Settings.SearchLimit).ToString(CultureInfo.InvariantCulture)));
+        if (query.Offset > 0)
+        {
+            parameters.Add(new("offset", query.Offset.ToString(CultureInfo.InvariantCulture)));
+        }
 
         using var response = await executor.SendAsync(
             ProviderKeys.Newznab,
             httpClient,
-            () => CreateRequest(entry, "search", parameters),
+            () => CreateRequest(entry, Function(query.Mode), parameters),
             ExecutionPolicy,
             cancellationToken);
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            throw new IndexerAuthenticationException($"'{entry.Name}' rejected the API key.");
+        }
+
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            throw new IndexerRateLimitedException($"'{entry.Name}' is rate limited.", RetryAfter(response));
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             throw new IndexerException($"'{entry.Name}' search failed with HTTP {(int)response.StatusCode}.");
@@ -119,7 +140,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
 
         try
         {
-            return ParseSearchResponse(entry, query.Query, body);
+            return ParseSearchResponse(entry, label, body);
         }
         catch (System.Xml.XmlException exception)
         {
@@ -133,6 +154,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         string xml)
     {
         var document = XDocument.Parse(xml);
+        ThrowWhenError(entry, document);
         var items = document.Descendants().Where(element => element.Name.LocalName == "item");
         var releases = new List<ProwlarrReleaseCandidate>();
         const string protocol = "usenet";
@@ -197,6 +219,47 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         }
 
         return releases;
+    }
+
+    /// <summary>The function name of the <c>t=</c> parameter for a search mode.</summary>
+    public static string Function(IndexerSearchMode mode) =>
+        mode switch
+        {
+            IndexerSearchMode.TvSearch => "tvsearch",
+            IndexerSearchMode.Movie => "movie",
+            IndexerSearchMode.Book => "book",
+            IndexerSearchMode.Music => "music",
+            _ => "search"
+        };
+
+    private static TimeSpan? RetryAfter(HttpResponseMessage response)
+    {
+        var header = response.Headers.RetryAfter;
+        if (header?.Delta is { } delta)
+        {
+            return delta;
+        }
+
+        return header?.Date is { } date && date > DateTimeOffset.UtcNow ? date - DateTimeOffset.UtcNow : null;
+    }
+
+    // Newznab reports many failures as an HTTP 200 <error code="..."/> document: 1xx is a credential or account problem, 429/500 a
+    // reached request limit. Anything else is an ordinary failure of this indexer.
+    private static void ThrowWhenError(IndexerEntry entry, XDocument document)
+    {
+        if (!string.Equals(document.Root?.Name.LocalName, "error", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = int.TryParse(document.Root!.Attribute("code")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code);
+        var description = document.Root.Attribute("description")?.Value;
+        throw code switch
+        {
+            >= 100 and < 200 => new IndexerAuthenticationException($"'{entry.Name}' rejected the account: {description ?? "invalid credentials"}."),
+            429 or 500 => new IndexerRateLimitedException($"'{entry.Name}' reached its request limit.", null),
+            _ => new IndexerException($"'{entry.Name}' reported an error: {description ?? code.ToString(CultureInfo.InvariantCulture)}.")
+        };
     }
 
     private static HttpRequestMessage CreateRequest(

@@ -142,6 +142,52 @@ public sealed class LibraryRootRoutingTests
         Assert.AreEqual(LibraryPlacementPolicy.Hardlink, stored.PlacementPolicy);
     }
 
+    [TestMethod]
+    public async Task OnlyStorageRootsGiveTheReadingAndAudiobookTypesADestinationAndTheirInboxAndMappingsAreKept()
+    {
+        await using var db = await CreateDbAsync();
+        var manga = new LibraryRoot { Name = "Manga", Path = "/media/manga", PlacementPolicy = LibraryPlacementPolicy.Copy };
+        var disabled = new LibraryRoot { Name = "Books", Path = "/media/books" };
+        db.LibraryRoots.AddRange(manga, disabled);
+        await db.SaveChangesAsync();
+        var routing = new LibraryRootRoutingService(db);
+        await routing.AssignDefaultAsync(LibraryContentType.Manga, manga.Id, LibraryPlacementPolicy.Copy);
+        await routing.SetSupportedAsync(disabled.Id, LibraryContentType.Book, true);
+        await routing.SetDefaultAsync(LibraryContentType.Book, disabled.Id);
+        db.LibraryRoots.Single(root => root.Id == disabled.Id).IsEnabled = false;
+        await db.SaveChangesAsync();
+        var legacy = Jularr.Web.Features.Acquisition.Import.AnimeImportSettingsState.Empty() with
+        {
+            MediaLibraries = new()
+            {
+                [Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga] = new Jularr.Web.Features.Acquisition.Import.MediaLibraryTarget(null, null, "/inbox/manga"),
+                [Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book] = new Jularr.Web.Features.Acquisition.Import.MediaLibraryTarget(null, null, "/inbox/books")
+            }
+        };
+
+        var effective = await routing.WithRoutedLibrariesAsync(legacy);
+
+        var mangaTarget = effective.LibraryFor(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga)!;
+        Assert.AreEqual("/media/manga", mangaTarget.LibraryRoot);
+        Assert.AreEqual(Jularr.Web.Features.Acquisition.Import.ImportMode.Copy, mangaTarget.ImportMode);
+        Assert.AreEqual("/inbox/manga", mangaTarget.InboxRoot, "The inbox is not a destination and stays as configured.");
+        Assert.IsNull(effective.LibraryFor(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book), "A type without an enabled default root has no destination.");
+        Assert.AreEqual("/inbox/books", effective.InboxFor(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book));
+    }
+
+    [TestMethod]
+    public void EveryManagedContentTypeHasItsAcquisitionKind()
+    {
+        foreach (var type in LibraryRootRoutingService.ManagedTypes)
+        {
+            Assert.IsNotNull(LibraryRootRoutingService.KindOf(type), type.ToString());
+        }
+
+        CollectionAssert.AreEquivalent(
+            new[] { LibraryContentType.Anime, LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music, LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook },
+            LibraryRootRoutingService.ManagedTypes.ToArray());
+    }
+
     private static async Task<AppDbContext> CreateDbAsync()
     {
         var connection = TestPostgres.ResolveConnectionString($"Data Source=library-routing-{Guid.NewGuid():N}.db");

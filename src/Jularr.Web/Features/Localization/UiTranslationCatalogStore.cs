@@ -27,12 +27,6 @@ public sealed class UiTranslationCatalogStore(AppDbContext db)
 
             foreach (var message in UiTranslationResources.All)
             {
-                await CarryOverProductRenameAsync(
-                    connection,
-                    transaction,
-                    message,
-                    now,
-                    cancellationToken);
                 await MarkGeneratedTranslationsOutdatedAsync(
                     connection,
                     transaction,
@@ -794,59 +788,6 @@ public sealed class UiTranslationCatalogStore(AppDbContext db)
         Add(command, "@englishName", source.EnglishName);
         Add(command, "@nativeName", source.NativeName);
         Add(command, "@direction", source.Direction);
-        Add(command, "@now", now);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    /// <summary>
-    /// One-time upgrade step for the AniLingo → Jularr rebrand (#333): when a source message changed
-    /// only by the product name, its existing translations are renamed in place and re-pinned to the
-    /// new source hash instead of being marked outdated, so installed locales keep working without
-    /// an AI re-translation. Once every stored source message carries the new name this matches
-    /// nothing; it can be deleted after the release that ships the rebrand.
-    /// </summary>
-    private static async Task CarryOverProductRenameAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        UiMessageDefinition message,
-        DateTime now,
-        CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText =
-            """
-            UPDATE "UiTranslations"
-            SET "Text" = replace("Text", 'AniLingo', 'Jularr'),
-                "SourceHash" = @sourceHash,
-                "UpdatedAt" = @now
-            WHERE "MessageKey" = @key
-              AND "SourceHash" <> @sourceHash
-              AND "Status" IN ('Generated', 'Reviewed', 'Manual')
-              AND EXISTS (
-                  SELECT 1
-                  FROM "UiTranslationMessages" source
-                  WHERE source."Key" = @key
-                    AND source."SourceHash" = "UiTranslations"."SourceHash"
-                    AND strpos(source."DefaultText" || source."Description" || source."DoNotTranslateJson", 'AniLingo') > 0
-                    AND replace(source."DefaultText", 'AniLingo', 'Jularr') = @defaultText
-                    AND replace(source."Description", 'AniLingo', 'Jularr') = @description
-                    AND replace(source."DoNotTranslateJson", 'AniLingo', 'Jularr') = @doNotTranslate
-                    AND source."PlaceholdersJson" = @placeholders
-                    AND source."Feature" = @feature
-                    AND source."Surface" = @surface
-                    AND source."Tone" = @tone);
-            """;
-        Add(command, "@key", message.Key);
-        Add(command, "@sourceHash", message.SourceHash);
-        Add(command, "@defaultText", message.DefaultText);
-        Add(command, "@description", message.Description);
-        Add(command, "@doNotTranslate", JsonSerializer.Serialize(message.DoNotTranslate ?? []));
-        Add(command, "@placeholders", JsonSerializer.Serialize(
-            message.Placeholders ?? new Dictionary<string, string>()));
-        Add(command, "@feature", message.Feature);
-        Add(command, "@surface", message.Surface);
-        Add(command, "@tone", message.Tone);
         Add(command, "@now", now);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

@@ -242,8 +242,7 @@ public sealed class LightNovelAcquisitionExecutorTests
         var payload = ReadingAcquisitionEngine.ReadPayload(
             request,
             new ReadingAcquisitionTarget(MediaAcquisitionKind.LightNovel, request.Title, [], request.Subtitle));
-        var queries = ReadingUsenetSearch.Queries(
-            ReadingAcquisitionEngine.ToTarget(MediaAcquisitionKind.LightNovel, payload));
+        var queries = SearchPlannerTests.ReadingQueries(ReadingAcquisitionEngine.ToTarget(MediaAcquisitionKind.LightNovel, payload));
 
         Assert.AreEqual("Rifujin na Magonote", payload.Author);
         CollectionAssert.AreEqual(new[] { "無職転生" }, payload.Aliases!.ToArray());

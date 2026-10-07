@@ -1,12 +1,14 @@
 @using Jularr.Web.Features.Localization
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
+    var onDiscover = ViewData["DiscoverFilter"] is not null;
 }
-@* Global search in the header. Discover reads ?q= and runs the search on load; Ctrl/Cmd+K focuses it (pwa.js). *@
-<form class="app-search" role="search" method="get" action="/Discover">
+@* Global search in the content header. On the Home/Discover surface the field belongs to that page's form (id dc-form): typing there is Search
+   mode of the same page. Everywhere else it opens that surface with ?q= (Ctrl/Cmd+K focuses it, pwa.js). *@
+<form class="app-search" role="search" method="get" action="/">
     <partial name="_AppIcon" model="@("search")" />
-    <input type="search" name="q" autocomplete="off" spellcheck="false" enterkeyhint="search" data-app-search
+    <input type="search" name="q" maxlength="120" value="@(onDiscover ? Context.Request.Query["q"].ToString() : "")" autocomplete="off" spellcheck="false" enterkeyhint="search"
+           data-app-search form="@(onDiscover ? "dc-form" : null)" data-dc-search="@(onDiscover ? "" : null)"
            aria-label="@ui["nav.search"]"
            placeholder="@ui["nav.searchPlaceholder"]" />
-    <kbd class="app-search-hint" aria-hidden="true">@ui["nav.searchShortcut"]</kbd>
 </form>

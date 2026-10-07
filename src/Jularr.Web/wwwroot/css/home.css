@@ -404,12 +404,13 @@
 .home-row-prev { left: -12px; }
 .home-row-next { right: -12px; }
 
-/* Continue tiles: landscape artwork, thin progress along its bottom edge, two caption lines. */
+/* Continue cards: a clean poster-oriented card, the artwork cropped to 2:3 with a thin progress along its bottom edge, then the title and one
+   caption line. Never a poster inside a landscape frame over a blurred copy of itself; only the hero uses landscape artwork. */
 .home-continue-tile {
     display: grid;
     align-content: start;
     gap: 3px;
-    width: clamp(170px, 12vw, 230px);
+    width: clamp(150px, 11vw, 190px);
     color: inherit;
     text-decoration: none;
 }
@@ -418,16 +419,16 @@
     position: relative;
     display: grid;
     place-items: center;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 2 / 3;
     margin-bottom: 6px;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--surface-2);
     box-shadow: var(--shadow-card);
 }
 
-.home-continue-backdrop {
+.home-continue-cover {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -436,28 +437,7 @@
     transition: transform .25s ease;
 }
 
-.home-continue-tile:hover .home-continue-backdrop { transform: scale(1.03); }
-
-.home-continue-art-poster .home-continue-backdrop {
-    filter: blur(22px) saturate(1.15) brightness(.85);
-    transform: scale(1.35);
-}
-
-.home-continue-tile:hover .home-continue-art-poster .home-continue-backdrop { transform: scale(1.35); }
-
-/* Absolutely sized against the 16:9 frame, so the percentage height is definite. */
-.home-continue-cover {
-    position: absolute;
-    top: 8%;
-    left: 50%;
-    width: auto;
-    height: 84%;
-    aspect-ratio: 2 / 3;
-    transform: translateX(-50%);
-    border-radius: 6px;
-    object-fit: cover;
-    box-shadow: 0 8px 20px rgb(0 0 0 / .35);
-}
+.home-continue-tile:hover .home-continue-cover { transform: scale(1.03); }
 
 .home-continue-initial {
     font-size: 34px;
@@ -585,23 +565,20 @@
     }
 
     .home-continue-tile {
-        width: clamp(124px, 36vw, 200px);
+        width: clamp(112px, 32vw, 170px);
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .home-hero-track,
-    .home-continue-backdrop,
+    .home-continue-cover,
     .home-poster img {
         transition: none;
     }
 
-    .home-continue-tile:hover .home-continue-backdrop,
+    .home-continue-tile:hover .home-continue-cover,
     .home-poster:hover img {
         transform: none;
     }
 
-    .home-continue-tile:hover .home-continue-art-poster .home-continue-backdrop {
-        transform: scale(1.35);
-    }
 }

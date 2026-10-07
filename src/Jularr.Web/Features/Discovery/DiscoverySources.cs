@@ -79,6 +79,15 @@ public sealed record DiscoveryLoad(IReadOnlyList<DiscoveryBatch> Batches, int Se
 /// <summary>Which sources answer which scope, and which result section a source feeds.</summary>
 public static class DiscoverySources
 {
+    /// <summary>The size of a full provider page of a browse view or a search (AniList and Open Library; a shelf asks for fewer).</summary>
+    public const int PageSize = 24;
+
+    /// <summary>TMDB pages hold 20 titles; the page is taken whole so that the next page continues exactly where this one ends.</summary>
+    public const int TmdbPageSize = 20;
+
+    /// <summary>The titles a source returns for one full page; a page that holds this many may be followed by another.</summary>
+    public static int FullPageSize(DiscoverySource source) => source is DiscoverySource.Movies or DiscoverySource.Series ? TmdbPageSize : PageSize;
+
     /// <summary>The sources of a scope in their fixed order, which is also the order of the result sections.</summary>
     public static IReadOnlyList<DiscoverySource> For(DiscoveryCategory category) => category switch
     {
@@ -88,7 +97,6 @@ public static class DiscoverySources
         DiscoveryCategory.Manga => [DiscoverySource.Reading],
         DiscoveryCategory.LightNovel => [DiscoverySource.Reading],
         DiscoveryCategory.Book => [DiscoverySource.Books],
-        DiscoveryCategory.BooksAndLightNovels => [DiscoverySource.Reading, DiscoverySource.Books],
         _ => [DiscoverySource.Anime, DiscoverySource.Movies, DiscoverySource.Series, DiscoverySource.Reading, DiscoverySource.Books]
     };
 

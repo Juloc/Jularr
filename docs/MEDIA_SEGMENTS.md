@@ -165,7 +165,7 @@ longer than ~3 minutes, since neither bound is a plausible OP/ED length.
 **Fingerprint cache**: each episode's intro/outro hash sequences are cached
 under `/data/media-segment-cache/fingerprints/<media file>-<identity>-v<version>.json`,
 keyed by the canonical media identity and the detector's `FingerprintVersion`
-(see [media inventory](../README.md#media-inventory) — the detector never
+(see [media inventory](PLAYBACK.md#media-inventory) — the detector never
 probes on its own). A season re-run after adding one new episode only decodes
 and hashes that episode; every sibling's fingerprint is reused from cache. A
 new identity or detector version prunes the superseded cache file for that
@@ -209,7 +209,7 @@ When a player loads a playable episode, Jularr queues a background operation
 extracts keyframe thumbnails with `ffmpeg` into JPEG sprite sheets. Playback
 never waits for it.
 
-- **Identity and duration** come from the canonical [media inventory](../README.md#media-inventory):
+- **Identity and duration** come from the canonical [media inventory](PLAYBACK.md#media-inventory):
   the analysed content fingerprint (fallback: size + modification time) and the
   analysed duration. Without a successful analysis there are no previews; the
   generator never probes on its own.

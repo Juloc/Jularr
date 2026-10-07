@@ -159,7 +159,7 @@ public sealed class LibraryPageRenderTests
         var owner = WebUtility.HtmlDecode(await host.GetHtmlAsync("/Library", asOwner: true));
         StringAssert.Contains(owner, "Library is empty");
         StringAssert.Contains(owner, "Find something in Discover and request it.");
-        StringAssert.Contains(owner, "href=\"/Discover\"");
+        StringAssert.Contains(owner, "href=\"/\"");
         Assert.IsFalse(owner.Contains("Add a root", StringComparison.Ordinal), "Roots are an Admin concern.");
         Assert.IsFalse(owner.Contains("Import from Sonarr", StringComparison.Ordinal), "Importing is an Admin task, not a Library header action.");
         Assert.IsFalse(owner.Contains("Manage roots", StringComparison.Ordinal));

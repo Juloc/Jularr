@@ -168,7 +168,7 @@ public sealed class CgroupStackResourceSource(IServiceScopeFactory scopes, ILogg
             return FromTexts(cpu, memory, io);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException
-            or Microsoft.Data.Sqlite.SqliteException or Npgsql.PostgresException)
+            or Npgsql.PostgresException)
         {
             logger.LogDebug(exception, "PostgreSQL cgroup telemetry is unavailable.");
             return null;

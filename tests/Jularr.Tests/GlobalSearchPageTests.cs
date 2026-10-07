@@ -52,7 +52,7 @@ public sealed class GlobalSearchPageTests
         StringAssert.Contains(html, "search-badge-monitored");
         StringAssert.Contains(html, "search-badge-library");
         StringAssert.Contains(html, "<span>2023</span>");
-        StringAssert.Contains(html, "href=\"/Discover?q=Sousou%20no%20Frieren\"");
+        StringAssert.Contains(html, "href=\"/?q=Sousou%20no%20Frieren\"");
         StringAssert.Contains(html, "Search online providers");
 
         // A movie has no page yet: its title is listed, but never linked to a route that does not exist.

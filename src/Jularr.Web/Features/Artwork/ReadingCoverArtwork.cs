@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Storage;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
@@ -22,7 +23,8 @@ public sealed class ReadingCoverArtwork(
     BesideMediaArtworkStore store,
     BesideMediaArtworkCache cache,
     IHttpClientFactory httpClientFactory,
-    ILogger<ReadingCoverArtwork> logger)
+    ILogger<ReadingCoverArtwork> logger,
+    LibraryRootRoutingService? routing = null)
 {
     /// <summary>The beside-media artwork kind: <c>cover.*</c> in the series folder.</summary>
     public const string CoverKind = "cover";
@@ -154,6 +156,11 @@ public sealed class ReadingCoverArtwork(
         CancellationToken cancellationToken)
     {
         var settings = await importSettings.LoadAsync(cancellationToken);
+        if (routing is not null)
+        {
+            settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
+        }
+
         return kind switch
         {
             MediaAcquisitionKind.LightNovel => await NovelArtworkFolders.ResolveAsync(db, settings, workId, cancellationToken),

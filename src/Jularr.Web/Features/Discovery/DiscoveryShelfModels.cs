@@ -91,6 +91,9 @@ public interface IDiscoveryFeed
         DiscoveryWait wait,
         CancellationToken cancellationToken);
 
+    /// <summary>Whether an AniList account is connected, so that the My List browse view is offered only where it can answer.</summary>
+    Task<bool> IsAniListConnectedAsync(CancellationToken cancellationToken);
+
     /// <summary>The library state of the given titles, keyed by <see cref="DiscoveryItem.Id"/>, read in one batch.</summary>
     Task<IReadOnlyDictionary<string, DiscoveryItem>> OverlayLocalStateAsync(IEnumerable<DiscoveryItem> items, string profileId, CancellationToken cancellationToken);
 }
@@ -106,7 +109,8 @@ public static class DiscoveryShelfLinks
             parts.Add("category=" + CategoryParam(category));
         }
 
-        if (mode != DiscoveryMode.Trending)
+        // A scope of one type opens its overview without a mode, so its Trending view names itself.
+        if (mode != DiscoveryMode.Trending || category != DiscoveryCategory.All)
         {
             parts.Add("mode=" + ModeParam(mode));
         }
@@ -116,7 +120,7 @@ public static class DiscoveryShelfLinks
             parts.Add("genre=" + Uri.EscapeDataString(genre));
         }
 
-        return parts.Count == 0 ? "/Discover" : "/Discover?" + string.Join('&', parts);
+        return parts.Count == 0 ? "/" : "/?" + string.Join('&', parts);
     }
 
     private static string CategoryParam(DiscoveryCategory category) => category switch
@@ -127,7 +131,6 @@ public static class DiscoveryShelfLinks
         DiscoveryCategory.LightNovel => "light-novel",
         DiscoveryCategory.Manga => "manga",
         DiscoveryCategory.Book => "book",
-        DiscoveryCategory.BooksAndLightNovels => "books-light-novels",
         _ => "all"
     };
 

@@ -24,6 +24,39 @@
 
 <partial name="_AdminNavigation" model="ui" />
 
+<section class="admset-section" aria-labelledby="instance-preset">
+    <div class="admset-head">
+        <div>
+            <h2 id="instance-preset">@ui["admin.instance.preset.title"]</h2>
+            <p>@ui["admin.instance.preset.hint"]</p>
+        </div>
+        @if (Model.Preset == InstancePreset.Custom)
+        {
+            <span class="admin-tag admin-tag-text">@Model.PresetName(InstancePreset.Custom)</span>
+        }
+    </div>
+    <div class="admin-module-grid">
+        @foreach (var preset in new[] { InstancePreset.MediaManager, InstancePreset.Full })
+        {
+            <form method="post" asp-page-handler="Preset" class="admin-module-card">
+                <input type="hidden" name="preset" value="@preset" />
+                <div class="admin-module-head">
+                    <strong>@Model.PresetName(preset)</strong>
+                    @if (Model.Preset == preset)
+                    {
+                        <span class="admin-tag admin-tag-accent">@ui["admin.instance.preset.currentTag"]</span>
+                    }
+                </div>
+                <p>@Model.PresetDescription(preset)</p>
+                @if (Model.Preset != preset)
+                {
+                    <button class="button" type="submit">@ui["admin.instance.preset.apply"]</button>
+                }
+            </form>
+        }
+    </div>
+</section>
+
 <form method="post" class="admset-sections">
     @foreach (var group in groups)
     {

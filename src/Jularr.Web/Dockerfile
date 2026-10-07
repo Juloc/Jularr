@@ -157,10 +157,10 @@ fail_data_access() {
     cat >&2 <<MSG
 Jularr startup aborted: $1
 Jularr runs as the non-root user uid=${runtime_uid} gid=${runtime_gid} (jularr, fixed at 1654:1654) and needs read/write access to everything under ${data_root}.
-Data volumes created by Jularr/AniLingo images that still ran as root are owned by root and must be handed over once.
+A data volume that is not writable by the Jularr runtime user must have its ownership corrected before startup.
 Stop Jularr and run (replace <jularr-data> with the data volume name or host path mounted at ${data_root}):
 
-  docker run --rm --user 0:0 --entrypoint chown -v <jularr-data>:/data ghcr.io/juloc/jularr:latest -R 1654:1654 /data
+  docker run --rm --user 0:0 --entrypoint chown -v <jularr-data>:/data ghcr.io/juloc/jularr:<release-tag> -R 1654:1654 /data
 
 Then start Jularr again.
 See "Non-root container runtime and /data ownership" in docs/ADMIN_OPERATIONS.md.

@@ -74,6 +74,7 @@ public static class VideoDetailView
         WorkMediaType.Anime => "library.mediaCard.kind.anime",
         WorkMediaType.Manga => "library.mediaCard.kind.manga",
         WorkMediaType.LightNovel => "library.mediaCard.kind.lightNovel",
+        WorkMediaType.Music => "library.mediaCard.kind.music",
         _ => "library.mediaCard.kind.book"
     };
 

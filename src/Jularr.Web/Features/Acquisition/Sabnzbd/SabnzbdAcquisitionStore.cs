@@ -5,12 +5,15 @@ using Microsoft.AspNetCore.DataProtection;
 namespace Jularr.Web.Features.Acquisition.Sabnzbd;
 
 /// <summary>
-/// One accepted release that may be sent to SABnzbd for an acquisition.
+/// One accepted release that may be sent to SABnzbd for an acquisition. The indexer and release group travel with it so the download
+/// Operation records where the release came from, which is what the selection engine's reliability evidence is built from.
 /// </summary>
 public sealed record SabnzbdAnimeReleaseCandidate(
     string ReleaseIdentity,
     string ReleaseTitle,
-    Uri NzbUrl);
+    Uri NzbUrl,
+    string? ReleaseSource = null,
+    string? ReleaseGroup = null);
 
 /// <summary>
 /// One release submitted for an acquisition. Its lifecycle (queued,
@@ -31,7 +34,9 @@ public sealed record SabnzbdAcquisitionAttempt(
 public sealed record SabnzbdPendingCandidate(
     string ReleaseIdentity,
     string ReleaseTitle,
-    string ProtectedNzbUrl);
+    string ProtectedNzbUrl,
+    string? ReleaseSource = null,
+    string? ReleaseGroup = null);
 
 /// <summary>
 /// Durable relation between an anime acquisition request and the
@@ -122,7 +127,7 @@ public sealed class SabnzbdAcquisitionStore
         ArgumentNullException.ThrowIfNull(directory);
 
         protector = dataProtectionProvider.CreateProtector(
-            "AniLingo.Acquisition.Sabnzbd.CandidateUrl.v1");
+            "Jularr.Acquisition.Sabnzbd.CandidateUrl.v1");
         storePath = Path.Combine(directory.FullName, FileName);
     }
 

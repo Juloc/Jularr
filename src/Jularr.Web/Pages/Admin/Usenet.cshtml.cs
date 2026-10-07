@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Health;
@@ -172,14 +173,6 @@ public sealed class UsenetModel(
         _ => MediaAcquisitionKind.Book
     };
 
-    /// <summary>Newznab categories an indexer is searched in for one media type.</summary>
-    public static IReadOnlyList<int> SearchCategories(IndexerEntry entry, MediaAcquisitionKind kind) => kind switch
-    {
-        MediaAcquisitionKind.Anime => entry.Settings.Categories,
-        MediaAcquisitionKind.Book => entry.Settings.EffectiveBookCategories,
-        _ => ReadingUsenetSearch.Categories(entry, kind)
-    };
-
     private async Task<UsenetSearchTest> RunSearchTestAsync(
         MediaAcquisitionKind kind,
         string title,
@@ -197,7 +190,8 @@ public sealed class UsenetModel(
                 title,
                 author,
                 profile,
-                cancellationToken);
+                cancellationToken,
+                new SearchOptions { Purpose = SearchPurpose.Interactive });
             return new UsenetSearchTest(
                 book.Queries,
                 book.Ranked.Select(ranked => new UsenetTestRelease(ranked.Release, ranked.Score, ranked.RejectedBecause)).ToArray(),
@@ -214,7 +208,8 @@ public sealed class UsenetModel(
                 title.Trim(),
                 [],
                 string.IsNullOrWhiteSpace(author) ? null : author.Trim()),
-            cancellationToken);
+            cancellationToken,
+            new SearchOptions { Purpose = SearchPurpose.Interactive });
         return new UsenetSearchTest(
             reading.Queries,
             reading.Ranked.Select(ranked => new UsenetTestRelease(ranked.Release, ranked.Score, ranked.RejectedBecause)).ToArray(),
@@ -352,6 +347,11 @@ public sealed class UsenetModel(
             new AcquisitionHealthStatus(
                 AcquisitionHealthKind.Indexer, entry.Id, entry.Name, true, result.Success, result.Error, DateTimeOffset.UtcNow),
             cancellationToken);
+        if (result.Capabilities is { } capabilities)
+        {
+            await indexerStore.UpdateCapabilitiesAsync(entry.Id, capabilities, cancellationToken);
+        }
+
         return result;
     }
 

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Library;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Web.Data;
@@ -29,7 +30,8 @@ public sealed class MangaCompletedDownloadImportAdapter(
     ILogger<MangaCompletedDownloadImportAdapter> logger,
     string? mangaCacheRoot = null,
     ReadingNamingProfileStore? namingStore = null,
-    ReadingCoverArtwork? coverArtwork = null)
+    ReadingCoverArtwork? coverArtwork = null,
+    LibraryRootRoutingService? routing = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     public MediaAcquisitionKind Kind =>
@@ -68,73 +70,67 @@ public sealed class MangaCompletedDownloadImportAdapter(
                             : releaseName);
 
             var settings = await importSettings.LoadAsync(cancellationToken);
+            if (routing is not null)
+            {
+                settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
+            }
+
             var library = settings.LibraryFor(MediaAcquisitionKind.Manga);
             var sourceExists = File.Exists(request.SourcePath) || Directory.Exists(request.SourcePath);
             var namingProfile = namingStore is null
                 ? null
                 : await namingStore.ResolveAsync(MediaAcquisitionKind.Manga, cancellationToken);
 
-            string importSource;
             if (library is null)
             {
-                // No Manga library configured: the completed download is read in place.
-                placement = new CompletedDownloadPlacement(request.SourcePath, Mode: null);
-                if (!sourceExists)
-                {
-                    return CompletedDownloadImportResult.RetryLater(
-                        "The completed Manga files are not currently available.",
-                        placement);
-                }
-
-                importSource = request.SourcePath;
+                return CompletedDownloadImportResult.RetryLater(LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Manga));
             }
-            else
-            {
-                var seriesFolder = MangaLibraryPlacement.SeriesFolder(
-                    library.LibraryRoot!,
-                    existing,
+
+            string importSource;
+            var seriesFolder = MangaLibraryPlacement.SeriesFolder(
+                library.LibraryRoot!,
+                existing,
+                title,
+                namingProfile);
+
+            // The rendered leaf name is computed once, upfront, from the source path's name
+            // alone (IsImportableFile is a pure extension check, not a disk probe), so the
+            // exact same path is used for the existence/retry check below, the placement
+            // itself and importSource - including on a retry after a previous Move already
+            // relocated (and deleted) the original download (#529/#563: Manga has no durable
+            // identity to look the file up by otherwise).
+            var releaseLeaf = MangaImportService.IsImportableFile(request.SourcePath)
+                ? ReadingNamingPlacement.RenderChapterLeafName(
+                    request.SourcePath,
+                    namingProfile,
                     title,
-                    namingProfile);
+                    MangaLibraryPlacement.SafeName(releaseName))
+                : MangaLibraryPlacement.SafeName(releaseName);
+            var releaseTarget = Path.Combine(seriesFolder, releaseLeaf);
+            var mode = settings.ModeFor(MediaAcquisitionKind.Manga);
+            placement = new CompletedDownloadPlacement(releaseTarget, mode);
 
-                // The rendered leaf name is computed once, upfront, from the source path's name
-                // alone (IsImportableFile is a pure extension check, not a disk probe), so the
-                // exact same path is used for the existence/retry check below, the placement
-                // itself and importSource - including on a retry after a previous Move already
-                // relocated (and deleted) the original download (#529/#563: Manga has no durable
-                // identity to look the file up by otherwise).
-                var releaseLeaf = MangaImportService.IsImportableFile(request.SourcePath)
-                    ? ReadingNamingPlacement.RenderChapterLeafName(
-                        request.SourcePath,
-                        namingProfile,
-                        title,
-                        MangaLibraryPlacement.SafeName(releaseName))
-                    : MangaLibraryPlacement.SafeName(releaseName);
-                var releaseTarget = Path.Combine(seriesFolder, releaseLeaf);
-                var mode = settings.ModeFor(MediaAcquisitionKind.Manga);
-                placement = new CompletedDownloadPlacement(releaseTarget, mode);
-
-                if (sourceExists)
-                {
-                    new MangaLibraryPlacement(new ImportFileTransfer(hardLinks)).Place(
-                        request.SourcePath,
-                        releaseTarget,
-                        mode,
-                        namingProfile,
-                        title);
-                }
-                else if (!File.Exists(releaseTarget) && !Directory.Exists(releaseTarget))
-                {
-                    return CompletedDownloadImportResult.RetryLater(
-                        "The completed Manga files are not currently available.",
-                        placement);
-                }
-
-                // A series living elsewhere keeps its folder; only the new release is added.
-                importSource = existing is not null &&
-                               !MangaLibraryPlacement.SamePath(existing.SourcePath, seriesFolder)
-                    ? releaseTarget
-                    : seriesFolder;
+            if (sourceExists)
+            {
+                new MangaLibraryPlacement(new ImportFileTransfer(hardLinks)).Place(
+                    request.SourcePath,
+                    releaseTarget,
+                    mode,
+                    namingProfile,
+                    title);
             }
+            else if (!File.Exists(releaseTarget) && !Directory.Exists(releaseTarget))
+            {
+                return CompletedDownloadImportResult.RetryLater(
+                    "The completed Manga files are not currently available.",
+                    placement);
+            }
+
+            // A series living elsewhere keeps its folder; only the new release is added.
+            importSource = existing is not null &&
+                           !MangaLibraryPlacement.SamePath(existing.SourcePath, seriesFolder)
+                ? releaseTarget
+                : seriesFolder;
 
             var importer = new MangaImportService(repository, mangaCacheRoot);
             var imported = await importer.ImportAsync(
@@ -286,7 +282,8 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
     AnimeImportSettingsStore importSettings,
     IHardLinkCreator hardLinks,
     ILogger<LightNovelCompletedDownloadImportAdapter> logger,
-    ReadingNamingProfileStore? namingStore = null)
+    ReadingNamingProfileStore? namingStore = null,
+    LibraryRootRoutingService? routing = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     private static readonly CompletedDownloadPlacement Placement =
@@ -310,34 +307,40 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
         try
         {
             var settings = await importSettings.LoadAsync(cancellationToken);
-            var library = settings.LibraryFor(MediaAcquisitionKind.LightNovel);
-            var importSource = request.SourcePath;
-            if (library is not null)
+            if (routing is not null)
             {
-                var namingProfile = namingStore is null
-                    ? null
-                    : await namingStore.ResolveAsync(MediaAcquisitionKind.LightNovel, cancellationToken);
-                var releaseTitle = request.Request?.Title ?? Path.GetFileNameWithoutExtension(request.SourcePath);
-                var destination = ReadingLibraryPlacement.ReleaseFolder(
-                    library.LibraryRoot!,
-                    releaseTitle,
-                    namingProfile);
-                var mode = settings.ModeFor(MediaAcquisitionKind.LightNovel);
-                placement = new CompletedDownloadPlacement(destination, mode);
-                new ReadingLibraryPlacement(new ImportFileTransfer(hardLinks)).PlaceEpubs(
-                    request.SourcePath,
-                    destination,
-                    mode,
-                    namingProfile,
-                    releaseTitle);
-                importSource = destination;
+                settings = await routing.WithRoutedLibrariesAsync(settings, cancellationToken);
             }
+
+            var library = settings.LibraryFor(MediaAcquisitionKind.LightNovel);
+            if (library is null)
+            {
+                return CompletedDownloadImportResult.RetryLater(LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.LightNovel));
+            }
+
+            var namingProfile = namingStore is null
+                ? null
+                : await namingStore.ResolveAsync(MediaAcquisitionKind.LightNovel, cancellationToken);
+            var releaseTitle = request.Request?.Title ?? Path.GetFileNameWithoutExtension(request.SourcePath);
+            var destination = ReadingLibraryPlacement.ReleaseFolder(
+                library.LibraryRoot!,
+                releaseTitle,
+                namingProfile);
+            var mode = settings.ModeFor(MediaAcquisitionKind.LightNovel);
+            placement = new CompletedDownloadPlacement(destination, mode);
+            new ReadingLibraryPlacement(new ImportFileTransfer(hardLinks)).PlaceEpubs(
+                request.SourcePath,
+                destination,
+                mode,
+                namingProfile,
+                releaseTitle);
+            var importSource = destination;
 
             // Recursive, no folder hints, validated before anything is stored (#485 item 8).
             var import = await importer.ImportDownloadAsync(
                 importSource,
                 cancellationToken,
-                recordSourceStoragePath: library is not null);
+                recordSourceStoragePath: true);
             if (import.RejectedBecause is { } rejected)
             {
                 return CompletedDownloadImportResult.RejectRelease(

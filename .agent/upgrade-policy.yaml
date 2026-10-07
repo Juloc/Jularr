@@ -1,10 +1,10 @@
 schemaVersion: 1
 
 currentEpoch: 4
-minimumSupportedEpoch: 3
+minimumSupportedEpoch: 4
 
 introducedIn: null
 minimumSupportedVersion: null
 bridgeVersion: null
 
-reason: "Epoch 4 moves Jularr's canonical database from SQLite to PostgreSQL (EF Core/Npgsql, #570). Fresh installs get a single squashed PostgreSQL baseline (Data/Migrations Epoch4PostgresBaseline). A supported existing installation upgrades once: the SQLite database from Epoch 3 (the EF-baseline SQLite epoch) is imported into PostgreSQL by SqliteToPostgresImporter at startup (or an operator-run pass), which copies every table in FK order with value conversion, then renames the legacy file. Epoch 2 (pre-EF SQLite) is no longer imported directly: bridge it to Epoch 3 on a pre-#570 SQLite build first, then upgrade to Epoch 4. The SQLite-specific migration bridge and the legacy UserTerms/Reviews learning conversion were retired with this cutoff; that data arrives already-converted through the Epoch 3 SQLite import."
+reason: "Jularr now supports the current PostgreSQL epoch only. Pre-PostgreSQL SQLite databases, AniLingo-era compatibility data and older upgrade bridges are intentionally unsupported. Fresh/current PostgreSQL installs are the baseline; older installations must be recreated or migrated externally before using this version."

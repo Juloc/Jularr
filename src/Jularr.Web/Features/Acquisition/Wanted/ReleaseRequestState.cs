@@ -32,10 +32,14 @@ public abstract record ReleaseRequestPayload
 }
 
 /// <summary>A release a media search accepted, in ranked order.</summary>
+/// <param name="Source">The indexer that returned the release.</param>
+/// <param name="ReleaseGroup">The release group its name states; with the source it is what a download outcome is counted for.</param>
 public sealed record ReleaseRequestCandidate(
     string Identity,
     string Title,
-    Uri DownloadUri);
+    Uri DownloadUri,
+    string? Source = null,
+    string? ReleaseGroup = null);
 
 /// <summary>What the download client said about one submitted release.</summary>
 public sealed record ReleaseRequestSubmission(
@@ -210,6 +214,30 @@ public sealed class ReleaseRequestTracker(
             AcquisitionRequestStatus.Approved,
             $"{problem} Searching again {retryAt:yyyy-MM-dd HH:mm} UTC.",
             outcome.OperationId);
+    }
+
+    /// <summary>
+    /// The upgrade pass of an installed target: when every release that would improve it was tried or none exists, the request waits a bounded
+    /// <see cref="Selection.UpgradePolicy.SearchInterval"/> instead of counting a failed search (nothing is missing), and the wait is stored so it
+    /// survives a restart. Returns null while an untried improvement exists, so the caller grabs it through <see cref="ContinueAsync{TPayload}"/>.
+    /// </summary>
+    public async Task<AcquisitionExecution?> WaitForUpgradeAsync<TPayload>(
+        AcquisitionRequest request,
+        TPayload payload,
+        IReadOnlyList<ReleaseRequestCandidate> improvements,
+        string message,
+        CancellationToken cancellationToken)
+        where TPayload : ReleaseRequestPayload
+    {
+        var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
+        if (improvements.Any(candidate => !tried.Contains(candidate.Identity)))
+        {
+            return null;
+        }
+
+        var next = Now + Selection.UpgradePolicy.SearchInterval;
+        await SaveAsync(request, payload with { Searches = 0, LastProblem = null, NextSearchUtc = next }, cancellationToken);
+        return new AcquisitionExecution(AcquisitionRequestStatus.Approved, $"{message} Looking again {next:yyyy-MM-dd HH:mm} UTC.");
     }
 
     /// <summary>

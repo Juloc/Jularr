@@ -126,6 +126,23 @@
             </form>
         </section>
 
+        @if (Model.CanUseAdmin)
+        {
+            <section class="panel">
+                <div class="panel-heading">
+                    <h2>@ui["settings.appearance.adminShortcutHeading"]</h2>
+                </div>
+                <form method="post" asp-page-handler="AdminShortcut" class="appearance-mode">
+                    <label class="appearance-mode-option">
+                        <input type="checkbox" name="show" value="true" checked="@Model.Appearance.ShowAdminShortcut" onchange="this.form.submit()" />
+                        <span>@ui["settings.appearance.adminShortcutLabel"]</span>
+                    </label>
+                    <input type="hidden" name="show" value="false" />
+                    <p class="muted">@ui["settings.appearance.adminShortcutHelp"]</p>
+                </form>
+            </section>
+        }
+
         <section class="panel">
             <div class="panel-heading">
                 <h2>@ui["settings.appearance.sakuraHeading"]</h2>

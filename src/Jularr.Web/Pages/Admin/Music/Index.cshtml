@@ -1,0 +1,140 @@
+@page
+@model Jularr.Web.Pages.Admin.Music.IndexModel
+@using Jularr.Web.Features.Music
+@using Jularr.Web.Features.Watchlist
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.music.title"];
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<header class="page-header">
+    <div>
+        <h1>@ui["admin.music.title"]</h1>
+        <p>@ui["admin.music.subtitle"]</p>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+@if (Model.Notice is not null)
+{
+    <p class="admset-notice" role="status">@Model.Notice</p>
+}
+@if (Model.Error is not null)
+{
+    <p class="admset-notice" role="alert">@Model.Error</p>
+}
+
+<div class="admmusic">
+    <section class="admset-section" aria-labelledby="admmusic-add-heading">
+        <div class="admset-head">
+            <span class="admset-tile"><partial name="_AdminIcon" model='"headphones"' /></span>
+            <div><h2 id="admmusic-add-heading">@ui["admin.music.addArtist"]</h2></div>
+        </div>
+        <form method="get" class="admmusic-search" role="search">
+            <input type="search" class="admset-control" name="q" value="@Model.Search" maxlength="120" placeholder="@ui["admin.music.searchPlaceholder"]" aria-label="@ui["admin.music.searchPlaceholder"]" />
+            <button class="button button-primary" type="submit"><partial name="_AdminIcon" model='"search"' />@ui["common.search"]</button>
+        </form>
+        @if (Model.ProviderFailed)
+        {
+            <p class="admset-notice" role="alert">@ui["admin.music.providerFailed"]</p>
+        }
+        else if (Model.Search is not null && Model.Found.Count == 0)
+        {
+            <p class="admset-hint">@ui["admin.music.noResults"]</p>
+        }
+        else if (Model.Found.Count > 0)
+        {
+            <ul class="admmusic-hits">
+                @foreach (var artist in Model.Found)
+                {
+                    <li class="admmusic-hit">
+                        <span class="admmusic-avatar" aria-hidden="true">@WatchlistLabels.Initial(artist.Name)</span>
+                        <span class="admset-name">
+                            <strong>@artist.Name</strong>
+                            <span class="admmusic-tags">
+                                @foreach (var detail in new[] { artist.Type, artist.Country, artist.Disambiguation }.Where(value => !string.IsNullOrWhiteSpace(value)))
+                                {
+                                    <span class="admin-tag admin-tag-text">@detail</span>
+                                }
+                            </span>
+                        </span>
+                        <form method="post" asp-page-handler="Add" class="admmusic-add">
+                            <input type="hidden" name="musicBrainzId" value="@artist.MusicBrainzId" />
+                            <select class="admset-control admset-control-fit" name="mode" aria-label="@ui["admin.music.monitor.label"]">
+                                @foreach (var mode in new[] { MusicMonitorMode.All, MusicMonitorMode.Future, MusicMonitorMode.None })
+                                {
+                                    <option value="@((int)mode)">@Model.MonitorLabel(mode)</option>
+                                }
+                            </select>
+                            <button class="button button-primary" type="submit">@ui["admin.music.add"]</button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section class="admset-section" aria-labelledby="admmusic-artists-heading">
+        <div class="admset-head">
+            <div><h2 id="admmusic-artists-heading">@ui["admin.music.artists"]</h2></div>
+            @if (Model.Artists.Count > 0)
+            {
+                <span class="admin-tag admin-tag-text">@Model.Artists.Count</span>
+            }
+        </div>
+        @if (Model.Artists.Count == 0)
+        {
+            <p class="admset-hint">@ui["admin.music.empty"]</p>
+        }
+        else
+        {
+            <div class="admset-table-wrap">
+                <table class="admset-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">@ui["admin.music.col.artist"]</th>
+                            <th scope="col">@ui["admin.music.monitor.label"]</th>
+                            <th scope="col" class="admmusic-num">@ui["admin.music.col.albums"]</th>
+                            <th scope="col" class="admmusic-num">@ui["admin.music.col.monitored"]</th>
+                            <th scope="col" class="admmusic-num">@ui["admin.music.col.available"]</th>
+                            <th scope="col">@ui["admin.music.col.refreshed"]</th>
+                            <th scope="col"><span class="visually-hidden">@ui["admin.requests.col.actions"]</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var artist in Model.Artists)
+                        {
+                            <tr>
+                                <td data-label="@ui["admin.music.col.artist"]">
+                                    <a class="admmusic-artist" asp-page="Artist" asp-route-id="@artist.Id">
+                                        <span class="admmusic-avatar" aria-hidden="true">@WatchlistLabels.Initial(artist.Name)</span>
+                                        <strong>@artist.Name</strong>
+                                    </a>
+                                </td>
+                                <td data-label="@ui["admin.music.monitor.label"]"><span class="admin-tag admin-tag-@(artist.Monitor == MusicMonitorMode.None ? "text" : artist.Monitor == MusicMonitorMode.All ? "accent" : "info")">@Model.MonitorLabel(artist.Monitor)</span></td>
+                                <td class="admmusic-num" data-label="@ui["admin.music.col.albums"]">@artist.Albums</td>
+                                <td class="admmusic-num" data-label="@ui["admin.music.col.monitored"]">@artist.Monitored</td>
+                                <td class="admmusic-num" data-label="@ui["admin.music.col.available"]">@artist.Available</td>
+                                <td data-label="@ui["admin.music.col.refreshed"]">@Model.RefreshedLabel(artist.LastRefreshedAt)</td>
+                                <td class="admset-cell-actions">
+                                    <form method="post" asp-page="Artist" asp-page-handler="Refresh" asp-route-id="@artist.Id">
+                                        <button class="admin-icon-button" type="submit" aria-label="@ui["admin.music.refresh"]" title="@ui["admin.music.refresh"]"><partial name="_AdminIcon" model='"refresh"' /></button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>

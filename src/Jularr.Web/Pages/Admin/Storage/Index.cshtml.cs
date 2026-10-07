@@ -70,7 +70,7 @@ public sealed class IndexModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        if (!LibraryRootRoutingService.ImporterRoutedTypes.Contains(contentType) || !Enum.IsDefined(placementPolicy))
+        if (!LibraryRootRoutingService.ManagedTypes.Contains(contentType) || !Enum.IsDefined(placementPolicy))
         {
             return BadRequest();
         }
@@ -100,11 +100,7 @@ public sealed class IndexModel(
         return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "destinations");
     }
 
-    public string ContentTypeLabel(LibraryContentType contentType) => Ui[MediaKindLabelKeys.Name(KindOf(contentType))];
-
-    // Only the importer-routed types reach the page, so Movie and TV are the whole mapping.
-    private static MediaAcquisitionKind KindOf(LibraryContentType contentType) =>
-        contentType == LibraryContentType.Tv ? MediaAcquisitionKind.Tv : MediaAcquisitionKind.Movie;
+    public string ContentTypeLabel(LibraryContentType contentType) => Ui[MediaKindLabelKeys.Name(LibraryRootRoutingService.KindOf(contentType)!.Value)];
 
     public string PlacementLabel(LibraryPlacementPolicy policy) =>
         ImportFileTransfer.ModeFor(policy) switch
@@ -173,9 +169,9 @@ public sealed class IndexModel(
         // A content type whose module is disabled has no importer to configure, so it disappears instead of showing a dead control.
         var modules = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
         var destinations = new List<StorageDestination>();
-        foreach (var contentType in LibraryRootRoutingService.ImporterRoutedTypes)
+        foreach (var contentType in LibraryRootRoutingService.ManagedTypes)
         {
-            if (modules.IsEnabled(InstanceModule.Acquisition) && modules.IsEnabled(AcquisitionInstanceModules.For(KindOf(contentType))))
+            if (modules.IsEnabled(InstanceModule.Acquisition) && modules.IsEnabled(AcquisitionInstanceModules.For(LibraryRootRoutingService.KindOf(contentType)!.Value)))
             {
                 destinations.Add(new StorageDestination(contentType, await routing.ListAsync(contentType, cancellationToken)));
             }

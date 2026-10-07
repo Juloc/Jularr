@@ -1,0 +1,38 @@
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Discovery
+@model DiscoverRequestResultView
+@* The success state of the Request dialog: what was requested and where the request stands. The data attributes
+   let discover.js bring the card behind the dialog in line with the persisted request state. *@
+@{
+    var ui = Model.Ui;
+    var request = Model.Request;
+}
+<div class="dc-rq-result"
+     data-dc-rq-result
+     data-request-id="@request.Id"
+     data-status="@AcquisitionAccessNames.Status(request.Status)"
+     data-progress="@Model.Progress"
+     data-done="@(Model.IsDone ? "true" : "false")"
+     data-result-url="@request.ResultUrl">
+    <span class="dc-rq-check@(Model.AlreadyRequested ? " is-existing" : "")" aria-hidden="true"><partial name="~/Pages/Shared/_DiscoverIcon.cshtml" model='Model.AlreadyRequested ? "requested" : "library"' /></span>
+    <h3 id="dc-rq-result-title" tabindex="-1">@ui[Model.Updated ? "discover.request.updated" : Model.AlreadyRequested ? "discover.request.exists" : "discover.request.created"]</h3>
+    <ul class="dc-rq-summary">
+        @foreach (var line in Model.Summary)
+        {
+            <li>@line</li>
+        }
+        <li class="dc-rq-state"><strong data-dc-rq-state>@Model.StateLabel</strong></li>
+    </ul>
+    @if (Model.StateHint is { } hint)
+    {
+        <p class="dc-rq-hint">@hint</p>
+    }
+    <div class="dc-rq-result-actions">
+        @if (!Model.Updated)
+        {
+            @* Only the requester has a status page of the request; for a title somebody else asked for first the list is the place. *@
+            <a class="button" href="@(Model.IsOwn ? AcquisitionRequestService.StatusPath(request.Id) : AcquisitionRequestService.HistoryPath)">@ui["discover.request.viewStatus"]</a>
+        }
+        <button type="button" class="button button-primary" data-dc-rq-close>@ui["discover.request.done"]</button>
+    </div>
+</div>

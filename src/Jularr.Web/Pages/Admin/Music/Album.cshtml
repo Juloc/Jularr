@@ -1,0 +1,154 @@
+@page "{workId:guid}"
+@model Jularr.Web.Pages.Admin.Music.AlbumModel
+@using Jularr.Web.Features.Music
+@using Jularr.Web.Features.Watchlist
+@using Jularr.Web.Pages.Admin.Music
+@{
+    var ui = Model.Ui;
+    var view = Model.View!;
+    var album = view.Album;
+    ViewData["Title"] = album.Title;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/manual-search.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<header class="page-header">
+    <div>
+        <h1>@album.Title</h1>
+        <p><a class="text-link" asp-page="Artist" asp-route-id="@view.Artist.Id">@view.Artist.Name</a></p>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+@if (Model.Notice is not null)
+{
+    <p class="admset-notice" role="status">@Model.Notice</p>
+}
+@if (Model.Error is not null)
+{
+    <p class="admset-notice" role="alert">@Model.Error</p>
+}
+
+<div class="admmusic">
+    <section class="admset-section admmusic-hero" aria-label="@album.Title">
+        <span class="admmusic-cover" aria-hidden="true">@WatchlistLabels.Initial(album.Title)</span>
+        <div class="admmusic-hero-copy">
+            <div class="admmusic-tags">
+                <span class="admin-tag admin-tag-@MusicAlbumPresentation.Tone(album.State)">@Model.StateLabel(album.State)</span>
+                <span class="admin-tag admin-tag-text">@Model.TypeLabel(album.Type)</span>
+                @if (album.Year is { } year)
+                {
+                    <span class="admin-tag admin-tag-text">@year</span>
+                }
+                @if (album.Tracks > 0)
+                {
+                    <span class="admin-tag admin-tag-text">@ui.Format("music.tracksInLibrary", ("have", album.TracksWithFiles), ("total", album.Tracks))</span>
+                }
+            </div>
+            @if (album.RequestMessage is not null)
+            {
+                <p class="admset-hint">@album.RequestMessage</p>
+            }
+            <div class="admset-actions">
+                <form method="post" asp-page-handler="Monitor" asp-route-workId="@album.WorkId">
+                    <input type="hidden" name="monitored" value="@((!album.Monitored).ToString().ToLowerInvariant())" />
+                    <button class="admmusic-toggle @(album.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(album.Monitored ? "true" : "false")">
+                        <span class="admin-switch" aria-hidden="true"></span>
+                        <span>@(album.Monitored ? ui["admin.music.monitored"] : ui["admin.music.unmonitored"])</span>
+                    </button>
+                </form>
+                @if (album.State is not (MusicAlbumState.Available or MusicAlbumState.Downloading))
+                {
+                    <form method="post" asp-page-handler="SearchNow" asp-route-workId="@album.WorkId">
+                        <button class="button button-primary" type="submit"><partial name="_AdminIcon" model='"search"' />@ui["admin.music.searchNow"]</button>
+                    </form>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="admset-section" aria-labelledby="admmusic-tracks-heading">
+        <div class="admset-head"><div><h2 id="admmusic-tracks-heading">@ui["admin.music.tracks"]</h2></div></div>
+        @if (view.Tracks.Count == 0)
+        {
+            <p class="admset-hint">@ui["admin.music.noTracks"]</p>
+        }
+        else
+        {
+            <div class="admset-table-wrap">
+                <table class="admset-table">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="admmusic-num">@ui["admin.music.col.disc"]</th>
+                            <th scope="col" class="admmusic-num">@ui["admin.music.col.number"]</th>
+                            <th scope="col">@ui["admin.music.col.trackTitle"]</th>
+                            <th scope="col">@ui["admin.music.col.file"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var track in view.Tracks)
+                        {
+                            <tr>
+                                <td class="admmusic-num" data-label="@ui["admin.music.col.disc"]">@track.Disc</td>
+                                <td class="admmusic-num" data-label="@ui["admin.music.col.number"]">@track.Number</td>
+                                <td data-label="@ui["admin.music.col.trackTitle"]">@track.Title</td>
+                                <td data-label="@ui["admin.music.col.file"]">@(track.Path is null ? "—" : System.IO.Path.GetFileName(track.Path))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="panel bms-search" id="manual-search" aria-labelledby="admmusic-manual-heading">
+        <div class="panel-heading">
+            <h2 id="admmusic-manual-heading">@ui["admin.music.manualSearch"]</h2>
+            @if (Model.Manual is { } found)
+            {
+                <span>@ui.Format("admin.manualSearch.resultCount", ("count", found.Candidates.Count))</span>
+            }
+        </div>
+        <div class="bms-chips">
+            <a class="button button-primary" asp-page="Album" asp-route-workId="@album.WorkId" asp-route-search="normal" asp-route-refresh="true" asp-fragment="manual-search"><partial name="_AdminIcon" model='"search"' />@ui["admin.music.manual.run"]</a>
+            <a class="button" asp-page="Album" asp-route-workId="@album.WorkId" asp-route-search="deep" asp-route-refresh="true" asp-fragment="manual-search">@ui["admin.music.manual.deep"]</a>
+            @if (Model.ManualDepth is not null)
+            {
+                <a class="button" asp-page="Album" asp-route-workId="@album.WorkId" asp-route-search="@Model.ManualDepth.ToString()!.ToLowerInvariant()" asp-route-refresh="true" asp-fragment="manual-search">@ui["admin.music.manual.refresh"]</a>
+            }
+        </div>
+        @if (Model.Manual is { } manual)
+        {
+            @foreach (var outcome in manual.Summary.Outcomes.Where(outcome => outcome.Message is not null))
+            {
+                <p class="bms-warning" role="status">
+                    <partial name="_ManualSearchIcon" model='"warning"' />
+                    <span>@outcome.IndexerName: @outcome.Message</span>
+                </p>
+            }
+
+            <p class="muted">@ui.Format("admin.music.manual.summary", ("raw", manual.Summary.RawResults), ("distinct", manual.Summary.DistinctCandidates))</p>
+            @if (manual.WinnerReason is not null && manual.Candidates.Any(candidate => candidate.CanGrab))
+            {
+                <p>@ui.Format("admin.music.manual.winner", ("reason", manual.WinnerReason))</p>
+            }
+
+            @if (manual.Candidates.Count == 0)
+            {
+                <p class="muted bms-empty">@ui["admin.music.manual.noCandidates"]</p>
+            }
+            else
+            {
+                <partial name="_ManualReleaseTable" model="Model.ReleaseTable(manual)" />
+            }
+        }
+    </section>
+</div>

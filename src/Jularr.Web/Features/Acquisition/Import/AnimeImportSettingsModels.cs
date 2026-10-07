@@ -37,33 +37,30 @@ public sealed record RemotePathMapping(string RemotePrefix, string LocalPrefix);
 /// path Jularr reads. Everything is optional.
 /// </summary>
 public sealed record MediaLibraryTarget(
-    string? LibraryRoot = null,
-    ImportMode? ImportMode = null,
+    [property: JsonIgnore] string? LibraryRoot = null,
+    [property: JsonIgnore] ImportMode? ImportMode = null,
     string? InboxRoot = null)
 {
     public List<RemotePathMapping> RemotePathMappings { get; init; } = [];
 
     /// <summary>
-    /// True when the target carries no folder and no path mapping and can be dropped from the
-    /// store (an import mode only overrides the mode of a library folder).
+    /// True when the target carries no inbox and no path mapping and can be dropped from the store.
     /// </summary>
     [JsonIgnore]
     public bool IsEmpty =>
-        string.IsNullOrWhiteSpace(LibraryRoot) &&
         string.IsNullOrWhiteSpace(InboxRoot) &&
         (RemotePathMappings is null || RemotePathMappings.Count == 0);
 }
 
 /// <summary>
-/// The one canonical import-policy settings: default import mode, per-library-root overrides,
+/// The one canonical import-policy settings: the default import mode of the media types that have no LibraryRoot,
 /// the folders and remote path mappings of each media type, the per-anime target root for new
 /// imports and the post-import playback optimization. Stored at
 /// <c>/data/acquisition/import-settings.json</c> next to the other acquisition stores.
 /// </summary>
 public sealed record AnimeImportSettingsState(
     int Version,
-    ImportMode DefaultImportMode,
-    Dictionary<Guid, ImportMode> RootImportModes)
+    ImportMode DefaultImportMode)
 {
     // Post-import step for imported video: a lossless container remux when it widens browser
     // Direct Play without losing anything (MediaContainerOptimizer). Off unless the owner opts in.
@@ -77,21 +74,9 @@ public sealed record AnimeImportSettingsState(
     /// </summary>
     public Dictionary<MediaAcquisitionKind, MediaLibraryTarget> MediaLibraries { get; init; } = [];
 
-    /// <summary>
-    /// The pre-per-media-type global path mapping list, read only so
-    /// <see cref="RemotePathMappingMigration"/> can move it into <see cref="MediaLibraries"/>. It is
-    /// null in every migrated state, is never written back and never consulted by
-    /// <see cref="TranslatePath"/>.
-    /// </summary>
-    [JsonPropertyName("remotePathMappings")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<RemotePathMapping>? LegacyRemotePathMappings { get; init; }
 
     public static AnimeImportSettingsState Empty() =>
-        new(1, ImportMode.Move, []);
-
-    public ImportMode ModeFor(Guid? rootId) =>
-        rootId is { } id && RootImportModes.TryGetValue(id, out var mode) ? mode : DefaultImportMode;
+        new(1, ImportMode.Move);
 
     public MediaLibraryTarget? LibraryFor(MediaAcquisitionKind kind) =>
         MediaLibraries is not null &&

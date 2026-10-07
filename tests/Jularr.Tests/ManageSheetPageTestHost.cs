@@ -208,6 +208,7 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                         services.AddScoped<SonarrObservationService>();
                         services.AddScoped<IndexerSearchCoordinator>();
                         services.AddScoped<AnimeAcquisitionInventory>();
+                        services.AddScoped<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
                         services.AddScoped<AcquisitionHistoryService>();
                         services.AddScoped<AnimeAcquisitionPipeline>();
                         // The Settings → Acquisition page (#389) lists the per-media-type remote

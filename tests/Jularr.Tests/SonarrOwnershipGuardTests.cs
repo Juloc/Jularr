@@ -194,16 +194,16 @@ public sealed class SonarrOwnershipGuardTests
     [TestMethod]
     public void SonarrRenameOfJularrFileIsAConflictAndBlocksRenamingBack()
     {
-        var aniLingoPath = FrierenRoot + "/Season 01/Frieren - S01E02 [Jularr].mkv";
+        var jularrPath = FrierenRoot + "/Season 01/Frieren - S01E02 [Jularr].mkv";
         var sonarrPath = FrierenRoot + "/Season 01/Frieren - S01E02.mkv";
         var state = SonarrParallelSafety.RegisterPath(
             State(),
-            new ManagedMediaPath(aniLingoPath, "frieren", AcquisitionOwner.Jularr, "job-1", Now));
+            new ManagedMediaPath(jularrPath, "frieren", AcquisitionOwner.Jularr, "job-1", Now));
         var sonarr = Sonarr(frierenMonitored: false) with
         {
             History =
             [
-                History(9200, 1, SonarrHistoryEventKind.Renamed, Now.AddMinutes(-5), sourcePath: aniLingoPath, path: sonarrPath)
+                History(9200, 1, SonarrHistoryEventKind.Renamed, Now.AddMinutes(-5), sourcePath: jularrPath, path: sonarrPath)
             ]
         };
 
@@ -211,7 +211,7 @@ public sealed class SonarrOwnershipGuardTests
         Assert.IsTrue(conflicts.Any(conflict => conflict.Kind == "rename-loop"));
         Assert.IsTrue(conflicts.Any(conflict => conflict.Kind == "sonarr-activity"));
 
-        var renameBack = SonarrParallelSafety.CanRename(new(state, sonarr), "frieren", sonarrPath, aniLingoPath, Now);
+        var renameBack = SonarrParallelSafety.CanRename(new(state, sonarr), "frieren", sonarrPath, jularrPath, Now);
         Assert.IsFalse(renameBack.Allowed);
         StringAssert.Contains(renameBack.Reason, "rename loop");
     }

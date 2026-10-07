@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
@@ -126,7 +128,9 @@ public sealed class BookAcquisitionExecutor(
                         request.RequestedByProfileId,
                         release.DownloadUri,
                         payload.Title,
-                        MediaAcquisitionKind.Book),
+                        MediaAcquisitionKind.Book,
+                        ReleaseSource: release.Source,
+                        ReleaseGroup: release.ReleaseGroup),
                     cancellationToken);
                 return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
             },
@@ -143,7 +147,9 @@ public sealed class BookAcquisitionExecutor(
             .Select(candidate => new ReleaseRequestCandidate(
                 candidate.Release.Title,
                 candidate.Release.Title,
-                candidate.Release.InternalDownloadUri!))
+                candidate.Release.InternalDownloadUri!,
+                candidate.Release.Indexer,
+                candidate.Release.ParsedRelease.ReleaseGroup))
             .ToArray();
 
     public static BookRequestPayload ReadPayload(AcquisitionRequest request)
@@ -206,56 +212,31 @@ public sealed record BookUsenetSearchResult(
 }
 
 /// <summary>
-/// Searches the indexers for one book: "author title" and "title" in each indexer's Books
-/// categories and, when that finds nothing, once more without a category because many
-/// indexers file ebooks inconsistently.
+/// Searches the indexers for one book through the shared planner: the author and title as a book search where the indexer supports
+/// it, then author + title, the title and the full title as text in the Books categories and, when too little matches, once more
+/// without a category because many indexers file ebooks inconsistently.
 /// </summary>
 public static class BookUsenetSearch
 {
-    public static IReadOnlyList<string> Queries(string title, string? author)
-    {
-        var fullTitle = title.Trim();
-        var mainTitle = BookReleaseSelector.MainTitle(fullTitle);
-        var queries = new List<string>();
-        if (!string.IsNullOrWhiteSpace(author))
-        {
-            queries.Add($"{author.Trim()} {mainTitle}");
-        }
-
-        queries.Add(mainTitle);
-        if (!mainTitle.Equals(fullTitle, StringComparison.OrdinalIgnoreCase))
-        {
-            queries.Add(fullTitle);
-        }
-
-        return queries;
-    }
-
     public static async Task<BookUsenetSearchResult> SearchAsync(
         IndexerSearchCoordinator indexers,
         string title,
         string? author,
         QualityProfile profile,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SearchOptions? options = null,
+        ReleaseReliabilityLookup? reliability = null)
     {
-        var queries = Queries(title, author);
-        var result = await indexers.SearchCategoriesAsync(queries, entry => entry.Settings.EffectiveBookCategories, cancellationToken);
-        var fallback = false;
-        if (result.Releases.Count == 0)
-        {
-            var anyCategory = await indexers.SearchCategoriesAsync(queries, _ => [], cancellationToken);
-            if (anyCategory.Releases.Count > 0)
-            {
-                result = anyCategory;
-                fallback = true;
-            }
-        }
-
+        var intent = new SearchIntent(MediaAcquisitionKind.Book, title.Trim()) { Creator = string.IsNullOrWhiteSpace(author) ? null : author.Trim() };
+        var result = await indexers.SearchAsync(
+            intent,
+            (options ?? new SearchOptions()) with { UsableCount = releases => BookReleaseSelector.Rank(releases, title, author, profile, reliability).Count(ranked => ranked.Score > 0) },
+            cancellationToken);
         return new BookUsenetSearchResult(
-            queries,
-            BookReleaseSelector.Rank(result.Releases, title, author, profile),
+            [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
+            BookReleaseSelector.Rank(result.Releases, title, author, profile, reliability),
             result.Warnings,
-            fallback);
+            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0));
     }
 }
 
@@ -276,124 +257,86 @@ public static class BookReleaseSelector
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
         string title,
         string? author,
-        QualityProfile? profile = null)
+        QualityProfile? profile = null,
+        ReleaseReliabilityLookup? reliability = null)
     {
-        // Identity is always checked before quality. A custom profile can reject or prefer a format,
-        // regex or scored term, but it can never make a release for another book eligible.
+        // Identity is decided first and the shared selection engine orders what is left, so a custom profile can reject or prefer a
+        // format, regex or scored term but can never make a release for another book eligible.
         var effectiveProfile = profile ?? BookQualityProfiles.CreateDefaultBook();
-        var titleWords = Words(MainTitle(title));
+        var titleWords = Words(SearchPlanner.MainTitle(title));
         var authorWords = Words(author);
-        return releases
-            .Select(release => Judge(
-                release,
-                titleWords,
-                authorWords,
-                effectiveProfile))
-            .OrderByDescending(candidate => candidate.Score > 0)
-            .ThenBy(candidate => candidate.QualityRank)
-            .ThenByDescending(candidate => candidate.Score)
-            .ThenByDescending(candidate => candidate.Release.PublishedAt)
-            .ToArray();
+        var judged = releases.GroupBy(release => release.Identity, StringComparer.Ordinal).ToDictionary(group => group.Key, group => Judge(group.First(), titleWords, authorWords), StringComparer.Ordinal);
+        var now = DateTimeOffset.UtcNow;
+        var selection = ReleaseSelectionEngine.Select(effectiveProfile, new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)], reliability);
+        return [.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))];
     }
 
-    /// <summary>The title before a subtitle separator (":", ";" or " - ").</summary>
-    public static string MainTitle(string title)
+    private sealed record BookJudgement(ProwlarrReleaseCandidate Release, SelectionCandidate Candidate, int MatchedTitleWords, int AuthorHits);
+
+    private static BookJudgement Judge(ProwlarrReleaseCandidate release, IReadOnlyCollection<string> titleWords, IReadOnlyCollection<string> authorWords)
     {
-        var trimmed = title.Trim();
-        var cut = trimmed.IndexOfAny([':', ';']);
-        var dash = trimmed.IndexOf(" - ", StringComparison.Ordinal);
-        if (dash > 0 && (cut < 0 || dash < cut))
-        {
-            cut = dash;
-        }
-
-        return cut > 0 ? trimmed[..cut].Trim() : trimmed;
-    }
-
-    private static RankedBookRelease Judge(
-        ProwlarrReleaseCandidate release,
-        IReadOnlyCollection<string> titleWords,
-        IReadOnlyCollection<string> authorWords,
-        QualityProfile profile)
-    {
-        if (release.InternalDownloadUri is null)
-        {
-            return new RankedBookRelease(release, 0, "no download link");
-        }
-
-        if (release.Protocol is not null && !release.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
-        {
-            return new RankedBookRelease(release, 0, "not a Usenet release");
-        }
-
-        if (titleWords.Count == 0)
-        {
-            return new RankedBookRelease(release, 0, "empty title");
-        }
-
         var words = Words(release.Title);
         var matchedTitle = titleWords.Count(words.Contains);
-        // Every significant title word must appear; otherwise it is another book.
-        if (matchedTitle < titleWords.Count)
-        {
-            return new RankedBookRelease(release, 0, "title does not match");
-        }
-
+        var authorHits = authorWords.Count(words.Contains);
         var formatWords = words.Where(word => UnsupportedFormats.Contains(word)).ToArray();
-        var isEpub = words.Contains("epub");
-        var isPdf = words.Contains("pdf");
-        if (!isEpub && !isPdf && formatWords.Length > 0)
-        {
-            return new RankedBookRelease(release, 0, $"{formatWords[0].ToUpperInvariant()}, not EPUB or PDF");
-        }
+        var safety = release.InternalDownloadUri is null
+            ? "no download link"
+            : release.Protocol is not null && !release.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase)
+                ? "not a Usenet release"
+                : !words.Contains("epub") && !words.Contains("pdf") && formatWords.Length > 0 ? $"{formatWords[0].ToUpperInvariant()}, not EPUB or PDF" : null;
+        var identity = titleWords.Count == 0
+            ? ReleaseIdentityEvidence.Conflict("EmptyTitle", "empty title")
+            : matchedTitle < titleWords.Count
+                ? ReleaseIdentityEvidence.Conflict("TitleDoesNotMatch", "title does not match")
+                : authorHits > 0
+                    ? ReleaseIdentityEvidence.Exact("TitleAndAuthor", "Title and author match.")
+                    : ReleaseIdentityEvidence.Strong("Title", "The title matches.");
 
-        var quality = ReleaseScorer.Score(
-            profile,
-            new ReleaseCandidate(
-                BookReleaseParser.Instance.Parse(release.Title),
-                release.SizeBytes,
-                release.Indexer));
-        if (!quality.Accepted)
+        // An oversized release for one book costs storage: it only loses against an otherwise equal one.
+        var coverage = SelectionCoverage.Single with { Cost = release.SizeBytes is > 200L * 1024 * 1024 ? 6 : 0 };
+        var candidate = new SelectionCandidate(release.Identity, BookReleaseParser.Instance.Parse(release.Title), release.SizeBytes, release.Indexer, release.Sources.FirstOrDefault()?.Priority ?? 0, release.PublishedAt, identity, coverage)
         {
-            return new RankedBookRelease(
-                release,
-                0,
-                string.Join("; ", quality.RejectionReasons))
+            SafetyRejection = safety
+        };
+        return new BookJudgement(release, candidate, matchedTitle, authorHits);
+    }
+
+    private static RankedBookRelease ToRanked(CandidateEvaluation evaluation, BookJudgement judged)
+    {
+        var score = evaluation.Score;
+        if (!evaluation.IsSelectable)
+        {
+            var because = evaluation.Reasons.FirstOrDefault(reason => reason.Kind is SelectionReasonKind.Safety)?.Detail
+                          ?? (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict ? evaluation.Candidate.Identity.Detail : string.Join("; ", score?.RejectionReasons ?? []));
+            return new RankedBookRelease(judged.Release, 0, because)
             {
-                QualityKey = quality.QualityKey,
-                QualityRank = quality.QualityRank,
-                ScoreReasons = quality.ScoreReasons
+                QualityKey = score?.QualityKey,
+                QualityRank = score?.QualityRank ?? int.MaxValue,
+                ScoreReasons = score?.ScoreReasons ?? []
             };
         }
 
-        // Identity score remains Book-specific. Quality order and configurable generic profile
-        // rules are layered on top, so current title/author safety and future shared rules coexist.
-        var reasons = new List<string>();
-        var titleScore = 10 + matchedTitle;
-        var score = titleScore + quality.Score;
-        reasons.Add($"Title match +{titleScore}");
-
-        var authorHits = authorWords.Count(words.Contains);
-        if (authorHits > 0)
+        // The displayed score keeps its meaning: identity points plus the profile preference, minus the cost of a large release.
+        var reasons = new List<string> { $"Title match +{10 + judged.MatchedTitleWords}" };
+        var total = 10 + judged.MatchedTitleWords + score!.Score;
+        if (judged.AuthorHits > 0)
         {
-            var authorScore = authorHits * 2;
-            score += authorScore;
-            reasons.Add($"Author match +{authorScore}");
+            total += judged.AuthorHits * 2;
+            reasons.Add($"Author match +{judged.AuthorHits * 2}");
         }
 
-        reasons.Add($"Quality {quality.QualityKey}");
-        reasons.AddRange(quality.ScoreReasons);
-
-        if (release.SizeBytes is > 200L * 1024 * 1024)
+        reasons.Add($"Quality {score.QualityKey}");
+        reasons.AddRange(score.ScoreReasons);
+        if (evaluation.Candidate.Coverage.Cost > 0)
         {
-            score -= 6;
-            reasons.Add("Large release -6");
+            total -= evaluation.Candidate.Coverage.Cost;
+            reasons.Add($"Large release -{evaluation.Candidate.Coverage.Cost}");
         }
 
-        return new RankedBookRelease(release, Math.Max(score, 1), null)
+        return new RankedBookRelease(judged.Release, Math.Max(total, 1), null)
         {
-            QualityKey = quality.QualityKey,
-            QualityRank = quality.QualityRank,
+            QualityKey = score.QualityKey,
+            QualityRank = score.QualityRank,
             ScoreReasons = reasons
         };
     }

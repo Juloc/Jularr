@@ -1,0 +1,122 @@
+@page "{id:guid}"
+@model Jularr.Web.Pages.Admin.Music.ArtistModel
+@using Jularr.Web.Features.Music
+@using Jularr.Web.Features.Watchlist
+@{
+    var ui = Model.Ui;
+    var artist = Model.View!.Artist;
+    var albums = Model.View.Albums;
+    ViewData["Title"] = artist.Name;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<header class="page-header">
+    <div>
+        <h1>@artist.Name</h1>
+        <p><a class="text-link" asp-page="Index">@ui["admin.music.title"]</a></p>
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+@if (Model.Notice is not null)
+{
+    <p class="admset-notice" role="status">@Model.Notice</p>
+}
+@if (Model.Error is not null)
+{
+    <p class="admset-notice" role="alert">@Model.Error</p>
+}
+
+<div class="admmusic">
+    <section class="admset-section admmusic-hero" aria-label="@artist.Name">
+        <span class="admmusic-cover" aria-hidden="true">@WatchlistLabels.Initial(artist.Name)</span>
+        <div class="admmusic-hero-copy">
+            <div class="admmusic-tags">
+                <span class="admin-tag admin-tag-@(artist.Monitor == MusicMonitorMode.None ? "text" : artist.Monitor == MusicMonitorMode.All ? "accent" : "info")">@Model.MonitorLabel(artist.Monitor)</span>
+                <span class="admin-tag admin-tag-text">@ui.Format("music.summary", ("albums", albums.Count), ("available", albums.Count(album => album.State == MusicAlbumState.Available)))</span>
+            </div>
+            <div class="admset-actions">
+                <form method="post" asp-page-handler="Monitor" asp-route-id="@artist.Id" class="admmusic-monitor">
+                    <label for="monitor-mode">@ui["admin.music.monitor.label"]</label>
+                    <select id="monitor-mode" class="admset-control admset-control-fit" name="mode">
+                        @foreach (var mode in new[] { MusicMonitorMode.All, MusicMonitorMode.Future, MusicMonitorMode.None })
+                        {
+                            <option value="@((int)mode)" selected="@(artist.Monitor == mode)">@Model.MonitorLabel(mode)</option>
+                        }
+                    </select>
+                    <button class="button" type="submit">@ui["common.save"]</button>
+                </form>
+                <form method="post" asp-page-handler="Refresh" asp-route-id="@artist.Id">
+                    <button class="button" type="submit"><partial name="_AdminIcon" model='"refresh"' />@ui["admin.music.refresh"]</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <section class="admset-section" aria-labelledby="admmusic-albums-heading">
+        <div class="admset-head">
+            <div><h2 id="admmusic-albums-heading">@ui["admin.music.albums"]</h2></div>
+            @if (albums.Count > 0)
+            {
+                <span class="admin-tag admin-tag-text">@albums.Count</span>
+            }
+        </div>
+        @if (albums.Count == 0)
+        {
+            <p class="admset-hint">@ui["admin.music.noAlbums"]</p>
+        }
+        else
+        {
+            <div class="admset-table-wrap">
+                <table class="admset-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">@ui["admin.music.col.album"]</th>
+                            <th scope="col">@ui["admin.music.col.type"]</th>
+                            <th scope="col">@ui["admin.music.col.state"]</th>
+                            <th scope="col" class="admmusic-num">@ui["admin.music.col.tracks"]</th>
+                            <th scope="col">@ui["admin.music.col.monitor"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var album in albums)
+                        {
+                            <tr id="album-@album.WorkId">
+                                <td data-label="@ui["admin.music.col.album"]">
+                                    <a class="admmusic-artist" asp-page="Album" asp-route-workId="@album.WorkId">
+                                        <span class="admmusic-avatar" aria-hidden="true">@WatchlistLabels.Initial(album.Title)</span>
+                                        <span class="admset-name">
+                                            <strong>@album.Title</strong>
+                                            <small>@(album.ReleaseDate is { } released ? released.ToString("yyyy-MM-dd") : album.Year?.ToString())</small>
+                                        </span>
+                                    </a>
+                                </td>
+                                <td data-label="@ui["admin.music.col.type"]">@Model.TypeLabel(album.Type)</td>
+                                <td data-label="@ui["admin.music.col.state"]"><span class="admin-tag admin-tag-@MusicAlbumPresentation.Tone(album.State)">@Model.StateLabel(album.State)</span></td>
+                                <td class="admmusic-num" data-label="@ui["admin.music.col.tracks"]">@(album.Tracks == 0 ? "—" : $"{album.TracksWithFiles}/{album.Tracks}")</td>
+                                <td data-label="@ui["admin.music.col.monitor"]">
+                                    <form method="post" asp-page-handler="Album" asp-route-id="@artist.Id">
+                                        <input type="hidden" name="workId" value="@album.WorkId" />
+                                        <input type="hidden" name="monitored" value="@((!album.Monitored).ToString().ToLowerInvariant())" />
+                                        <button class="admmusic-toggle @(album.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(album.Monitored ? "true" : "false")" aria-label="@ui["admin.music.monitorAlbum"]: @album.Title">
+                                            <span class="admin-switch" aria-hidden="true"></span>
+                                            <span>@(album.Monitored ? ui["admin.music.monitored"] : ui["admin.music.unmonitored"])</span>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>

@@ -69,35 +69,14 @@
         @if (Model.Roots.Count > 0)
         {
             <div class="admset-table-wrap"><table class="admset-table">
-                <thead><tr><th>@ui["settings.acquisition.libraryRootColumn"]</th><th>@ui["settings.acquisition.importModeOverrideColumn"]</th><th></th></tr></thead>
+                <thead><tr><th>@ui["settings.acquisition.libraryRootColumn"]</th><th>@ui["admin.storage.destinations.column.placement"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var root in Model.Roots)
                     {
                         <tr>
                             <td>@root.Name</td>
-                            @if (Model.RoutedRootIds.Contains(root.Id))
-                            {
-                                <td>@Model.ImportPolicyLabel(root.PlacementPolicy)</td>
-                                <td class="admset-cell-actions"><a class="admin-tag admin-tag-accent" asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.placementInStorage"]</a></td>
-                            }
-                            else
-                            {
-                                <td>@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var mode) ? Model.ImportModeLabel(mode) : ui["settings.acquisition.usesDefault"])</td>
-                                <td>
-                                    <form method="post" asp-page-handler="ImportMode" class="acquisition-inline-form">
-                                        <input type="hidden" name="defaultImportMode" value="@Model.ImportSettings.DefaultImportMode" />
-                                        <input type="hidden" name="rootId" value="@root.Id" />
-                                        <select class="admset-control" name="rootImportMode">
-                                            <option value="">@ui["settings.acquisition.usesDefault"]</option>
-                                    @foreach (var mode in Enum.GetValues<ImportMode>())
-                                            {
-                                                <option value="@mode" selected="@(Model.ImportSettings.RootImportModes.TryGetValue(root.Id, out var current) && current == mode)">@Model.ImportModeLabel(mode)</option>
-                                            }
-                                        </select>
-                                        <button class="button" type="submit">@ui["settings.acquisition.set"]</button>
-                                    </form>
-                                </td>
-                            }
+                            <td>@Model.ImportPolicyLabel(root.PlacementPolicy)</td>
+                            <td class="admset-cell-actions"><a class="admin-tag admin-tag-accent" asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.placementInStorage"]</a></td>
                         </tr>
                     }
                 </tbody>
@@ -112,64 +91,35 @@
         {
             var folders = Model.FoldersFor(kind);
             var slug = Jularr.Web.Pages.Settings.AcquisitionModel.FolderName(kind);
-            var hasLibrary = Jularr.Web.Pages.Settings.AcquisitionModel.HasLibraryFolder(kind);
-            var libraryField = new PathFieldModel($"{slug}-library", "libraryRoot", ui["settings.acquisition.libraryFolderLabel"], folders.LibraryRoot, ui)
-            {
-                Placeholder = $"/data/media/{slug}",
-                Disabled = !Model.CanManageStorage,
-                PairGroup = slug
-            };
             var inboxField = new PathFieldModel($"{slug}-inbox", "inboxRoot", ui["settings.acquisition.inboxFolderLabel"], folders.InboxRoot, ui)
             {
                 Placeholder = $"/data/downloads/complete/{slug}",
-                Disabled = !Model.CanManageStorage,
-                PairGroup = hasLibrary ? slug : null
+                Disabled = !Model.CanManageStorage
             };
             <div class="acquisition-folder">
             <h3>@Model.MediaLabel(kind)</h3>
             <form method="post" asp-page-handler="MediaFolders" class="form-stack">
                 <input type="hidden" name="kind" value="@kind" />
-                @if (hasLibrary)
+                @if (Model.Destinations.TryGetValue(kind, out var destination))
                 {
-                    <partial name="_PathField" model="libraryField" />
-                    <label>
-                        <span>@ui["settings.acquisition.importModeLabel"]</span>
-                        <select class="admset-control" name="importMode" disabled="@(!Model.CanManageStorage)">
-                            <option value="">@ui["settings.acquisition.usesDefault"]</option>
-                            @foreach (var mode in Enum.GetValues<ImportMode>())
+                    <div class="acquisition-destination">
+                        <span class="admset-label">@ui["settings.acquisition.destinationLabel"]</span>
+                        <span class="admset-name">
+                            <strong>@destination.Name</strong>
+                            @if (Model.CanManageStorage)
                             {
-                                <option value="@mode" selected="@(folders.ImportMode == mode)">@Model.ImportModeLabel(mode)</option>
+                                <code>@destination.Path</code>
                             }
-                        </select>
-                    </label>
-                }
-                else if (Jularr.Web.Pages.Settings.AcquisitionModel.IsRouted(kind))
-                {
-                    if (Model.Destinations.TryGetValue(kind, out var destination))
-                    {
-                        <div class="acquisition-destination">
-                            <span class="admset-label">@ui["settings.acquisition.destinationLabel"]</span>
-                            <span class="admset-name">
-                                <strong>@destination.Name</strong>
-                                @if (Model.CanManageStorage)
-                                {
-                                    <code>@destination.Path</code>
-                                }
-                            </span>
-                            <span class="admin-tag">@Model.ImportPolicyLabel(destination.PlacementPolicy)</span>
-                        </div>
-                    }
-                    else
-                    {
-                        <p class="admset-hint">@ui["settings.acquisition.destinationMissing"]</p>
-                    }
-
-                    <a class="text-link" asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.destinationChange"]</a>
+                        </span>
+                        <span class="admin-tag">@Model.ImportPolicyLabel(destination.PlacementPolicy)</span>
+                    </div>
                 }
                 else
                 {
-                    <p class="muted">@ui["settings.acquisition.storedInJularr"]</p>
+                    <p class="admset-hint">@ui["settings.acquisition.destinationMissing"]</p>
                 }
+
+                <a class="text-link" asp-page="/Admin/Storage/Index" asp-fragment="destinations">@ui["settings.acquisition.destinationChange"]</a>
                 <partial name="_PathField" model="inboxField" />
                 <div class="inline-actions">
                     @if (Model.CanManageStorage)
