@@ -13,6 +13,7 @@ using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Admin;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Branding;
 using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
@@ -199,6 +200,34 @@ public sealed class AdminDashboardPageRenderTests
 
         StringAssert.Contains(html, "data-stack-resources-unavailable");
         Assert.IsFalse(html.Contains("data-metric=", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task TheInstanceBrandReachesTheTitleTheMarkAndTheAccentAndGoesAgainWhenReset()
+    {
+        await using var host = await DashboardHost.CreateAsync();
+        var store = host.Resolve<InstanceBrandingStore>();
+
+        var plain = await host.GetHtmlAsync("/Admin/Resources");
+        StringAssert.Contains(plain, "<title>Resources - Jularr</title>");
+        Assert.IsFalse(plain.Contains("by Jularr", StringComparison.Ordinal), "Plain Jularr is not \"Jularr by Jularr\".");
+
+        await store.SaveIdentityAsync("Casa Media", true, 160, CancellationToken.None);
+        await store.SetLogoAsync([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0], CancellationToken.None);
+        var branded = await host.GetHtmlAsync("/Admin/Resources");
+
+        StringAssert.Contains(branded, "<title>Resources - Casa Media</title>");
+        StringAssert.Contains(branded, "<meta name=\"application-name\" content=\"Casa Media\" />");
+        StringAssert.Contains(branded, "<span class=\"brand-name\">Casa Media</span>");
+        StringAssert.Contains(branded, "by Jularr", "The product stays named beside the instance's own brand.");
+        StringAssert.Contains(branded, "src=\"/branding/logo?v=1\"");
+        StringAssert.Contains(branded, "<link rel=\"icon\" href=\"/branding/logo?v=1\" />");
+        StringAssert.Contains(branded, $"data-accent=\"{BrandingColor.SeedOf(160)}\"", "Hue branding replaces the accent.");
+
+        await store.ResetAsync(CancellationToken.None);
+        var reset = await host.GetHtmlAsync("/Admin/Resources");
+        StringAssert.Contains(reset, "<title>Resources - Jularr</title>");
+        Assert.IsFalse(reset.Contains("/branding/logo", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -405,6 +434,7 @@ public sealed class AdminDashboardPageRenderTests
                         services.AddProviderFramework();
                         services.AddSingleton<IStackResourceTelemetry>(telemetry);
                         services.AddApplicationPerformance();
+                        services.AddSingleton<InstanceBrandingStore>();
                         services.AddSingleton<IInstanceModuleService>(new InstanceModuleStore(data.FullName));
                         services.AddScoped<AdminDashboardService>();
                     })

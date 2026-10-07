@@ -3,6 +3,10 @@
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["admin.appearance.title"];
+    var branding = Model.Branding;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-branding.css" asp-append-version="true" />
 }
 
 <header class="page-header">
@@ -51,3 +55,65 @@
         <button class="button button-primary" type="submit">@ui["admin.appearance.save"]</button>
     </div>
 </form>
+
+<section class="panel brand-panel" aria-labelledby="branding-title" data-instance-branding>
+    <div class="panel-heading">
+        <div>
+            <h2 id="branding-title">@ui["admin.branding.title"]</h2>
+            <p class="muted">@ui["admin.branding.description"]</p>
+        </div>
+        @if (branding.IsCustom || branding.HueBranding)
+        {
+            <form method="post" asp-page-handler="ResetBranding">
+                <button class="button" type="submit">@ui["admin.branding.reset"]</button>
+            </form>
+        }
+    </div>
+
+    <form method="post" asp-page-handler="Branding" class="form-stack">
+        <label>
+            @ui["admin.branding.name"]
+            <input asp-for="BrandName" maxlength="40" placeholder="Jularr" autocomplete="off" />
+            <small class="muted">@ui["admin.branding.nameHelp"]</small>
+        </label>
+        <label class="checkbox-row">
+            <input asp-for="HueBranding" />
+            <span>
+                @ui["admin.branding.hue"]
+                <small class="muted">@ui["admin.branding.hueHelp"]</small>
+            </span>
+        </label>
+        <label>
+            @ui["admin.branding.hueValue"]
+            <input asp-for="Hue" type="range" min="0" max="359" step="1" class="brand-hue-range" />
+        </label>
+        <div class="inline-actions">
+            <button class="button button-primary" type="submit">@ui["admin.branding.save"]</button>
+        </div>
+    </form>
+
+    <form method="post" asp-page-handler="Logo" enctype="multipart/form-data" class="form-stack brand-logo-form">
+        <div class="brand-logo-current">
+            @if (branding.LogoUrl is { } logoUrl)
+            {
+                <img src="@logoUrl" alt="" width="56" height="56" class="brand-logo-preview" />
+            }
+            else
+            {
+                <span class="brand-logo-none">@ui["admin.branding.logo.none"]</span>
+            }
+        </div>
+        <label>
+            @ui["admin.branding.logo"]
+            <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" />
+            <small class="muted">@ui["admin.branding.logoHelp"]</small>
+        </label>
+        <div class="inline-actions">
+            <button class="button" type="submit">@ui["admin.branding.logo.upload"]</button>
+            @if (branding.HasLogo)
+            {
+                <button class="button" type="submit" asp-page-handler="RemoveLogo" formnovalidate>@ui["admin.branding.logo.remove"]</button>
+            }
+        </div>
+    </form>
+</section>

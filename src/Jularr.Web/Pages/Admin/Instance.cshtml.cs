@@ -90,8 +90,12 @@ public sealed class InstanceModel(
     public static string FieldName(InstanceModule module) =>
         $"module_{module}";
 
-    public string Name(InstanceModule module) =>
-        Ui[$"admin.instance.module.{StorageName(module)}"];
+    public string Name(InstanceModule module) => Ui[NameKey(module)];
+
+    /// <summary>The catalog key of a module's name; Setup shows the same module list with the same words.</summary>
+    public static string NameKey(InstanceModule module) => $"admin.instance.module.{StorageName(module)}";
+
+    public static string DescriptionKey(InstanceModule module) => $"{NameKey(module)}.description";
 
     public static string Icon(InstanceModule module) =>
         module switch
@@ -117,8 +121,7 @@ public sealed class InstanceModel(
             _ => null
         };
 
-    public string Description(InstanceModule module) =>
-        Ui[$"admin.instance.module.{StorageName(module)}.description"];
+    public string Description(InstanceModule module) => Ui[DescriptionKey(module)];
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {

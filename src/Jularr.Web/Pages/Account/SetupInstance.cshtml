@@ -1,0 +1,128 @@
+@page
+@using Jularr.Web.Features.Appearance
+@using Jularr.Web.Features.Branding
+@using Jularr.Web.Features.Instance
+@using Jularr.Web.Pages.Admin
+@model Jularr.Web.Pages.Account.SetupInstanceModel
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/appearance-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/setup-instance.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/setup-instance.js" asp-append-version="true" defer></script>
+}
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["setup.instance.title"];
+    var starts = new[] { InstancePreset.MediaManager, InstancePreset.Full, InstancePreset.Custom };
+    var groups = new (string TitleKey, string DescriptionKey, IReadOnlyList<InstanceModule> Modules)[]
+    {
+        ("admin.instance.media", "admin.instance.mediaDescription", InstanceModel.ConfigurableMediaModules),
+        ("admin.instance.features", "setup.instance.featuresDescription", InstanceModel.ConfigurableFeatureModules)
+    };
+    var themeModes = new[] { AppTheme.System, AppTheme.Light, AppTheme.Dark };
+    var accent = Model.Accent ?? AppAccent.DefaultSeed;
+}
+
+<header class="page-header">
+    <div>
+        <p class="setup-step">@ui.Format("setup.instance.step", ("current", "2"), ("total", "3"))</p>
+        <h1>@ui["setup.instance.title"]</h1>
+        <p>@ui["setup.instance.description"]</p>
+    </div>
+</header>
+
+<form method="post" class="admset-sections setup-instance" data-setup-instance>
+    <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+
+    <section class="admset-section" aria-labelledby="setup-name">
+        <div class="admset-head"><div><h2 id="setup-name">@ui["setup.instance.name"]</h2><p>@ui["admin.branding.nameHelp"]</p></div></div>
+        <label class="setup-field">
+            <span class="visually-hidden">@ui["admin.branding.name"]</span>
+            <input asp-for="InstanceName" maxlength="40" placeholder="@InstanceBrandingSettings.ProductName" autocomplete="off" />
+        </label>
+        <span asp-validation-for="InstanceName" class="field-validation-error"></span>
+    </section>
+
+    <section class="admset-section" aria-labelledby="setup-start">
+        <div class="admset-head"><div><h2 id="setup-start">@ui["setup.instance.start"]</h2><p>@ui["admin.instance.preset.hint"]</p></div></div>
+        <div class="admin-module-grid" role="radiogroup" aria-labelledby="setup-start">
+            @foreach (var start in starts)
+            {
+                <label class="admin-module-card setup-start-card @(Model.Start == start ? "selected" : "")">
+                    <span class="admin-module-head">
+                        <strong>@Model.PresetName(start)</strong>
+                        <input type="radio" name="Start" value="@start" checked="@(Model.Start == start)" data-setup-start />
+                    </span>
+                    <span class="setup-start-text">@Model.PresetDescription(start)</span>
+                </label>
+            }
+        </div>
+    </section>
+
+    @foreach (var group in groups)
+    {
+        var headingId = $"setup-{group.TitleKey}";
+        <section class="admset-section" aria-labelledby="@headingId">
+            <div class="admset-head"><div><h2 id="@headingId">@ui[group.TitleKey]</h2><p>@ui[group.DescriptionKey]</p></div></div>
+            <div class="admin-module-grid">
+                @foreach (var module in group.Modules)
+                {
+                    var fieldName = InstanceModel.FieldName(module);
+                    var isFeature = group.Modules == InstanceModel.ConfigurableFeatureModules;
+                    <div class="admin-module-card">
+                        <label class="admin-module-head" for="@fieldName">
+                            <span class="admset-tile"><partial name="/Pages/Admin/_AdminIcon.cshtml" model="InstanceModel.Icon(module)" /></span>
+                            <strong>@Model.Name(module)</strong>
+                            <input id="@fieldName" type="checkbox" class="admin-switch" role="switch" name="@fieldName" value="true"
+                                   checked="@Model.Settings.IsEnabled(module)" aria-describedby="@fieldName-description"
+                                   data-setup-module="@(isFeature ? "feature" : "media")"
+                                   data-on-mediamanager="@(isFeature ? (InstanceModulePresets.Apply(InstancePreset.MediaManager, InstanceModuleSettings.Default).IsEnabled(module) ? "1" : "0") : "")"
+                                   data-on-full="1" />
+                        </label>
+                        <p id="@fieldName-description">@Model.Description(module)</p>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+
+    <section class="admset-section" aria-labelledby="setup-look">
+        <div class="admset-head"><div><h2 id="setup-look">@ui["setup.instance.look"]</h2><p>@ui["setup.instance.lookHelp"]</p></div></div>
+        <div class="setup-look">
+            <fieldset class="setup-modes">
+                <legend>@ui["settings.appearance.modeHeading"]</legend>
+                @foreach (var mode in themeModes)
+                {
+                    <label class="appearance-mode-option">
+                        <input type="radio" name="ThemeMode" value="@mode" checked="@(Model.ThemeMode == mode)" />
+                        <span class="appearance-mode-swatch appearance-mode-swatch-@mode" aria-hidden="true"><i></i><i></i></span>
+                        <span>@ui["theme." + mode]</span>
+                    </label>
+                }
+            </fieldset>
+            <fieldset class="setup-accents">
+                <legend>@ui["settings.appearance.accentHeading"]</legend>
+                <input type="hidden" name="Accent" value="@Model.Accent" data-setup-accent />
+                <div class="accent-swatches" role="radiogroup" aria-label="@ui["settings.appearance.accentHeading"]">
+                    @foreach (var preset in Model.AccentPresets)
+                    {
+                        var selected = string.Equals(preset.Seed, accent, StringComparison.OrdinalIgnoreCase);
+                        <button type="button" class="accent-swatch @(selected ? "selected" : "")" role="radio" aria-checked="@(selected ? "true" : "false")"
+                                data-setup-accent-preset="@preset.Seed" style="--swatch: @preset.Seed">
+                            <span class="accent-swatch-dot" aria-hidden="true"></span>
+                            <span class="accent-swatch-label">@ui["settings.appearance.preset." + preset.Key]</span>
+                        </button>
+                    }
+                </div>
+            </fieldset>
+        </div>
+    </section>
+
+    <div class="admset-actions setup-actions">
+        <button class="button" type="submit" asp-page-handler="Skip" formnovalidate>@ui["setup.instance.skip"]</button>
+        <button class="button button-primary" type="submit">@ui["setup.instance.continue"]</button>
+    </div>
+</form>

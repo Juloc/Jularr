@@ -40,6 +40,7 @@ using Jularr.Web.Features.Pairing;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.PlaybackSessions;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Features.Branding;
 using Jularr.Web.Features.Performance;
 using Jularr.Web.Features.Providers;
 using Jularr.Web.Features.ReaderThemes;
@@ -123,6 +124,7 @@ builder.Services.AddScoped<AdminOverviewService>();
 builder.Services.AddScoped<AdminSessionsService>();
 builder.Services.AddScoped<AdminDashboardService>();
 builder.Services.AddApplicationPerformance();
+builder.Services.AddSingleton<Jularr.Web.Features.Branding.InstanceBrandingStore>();
 builder.Services.AddSingleton<IStackResourceSource, CgroupStackResourceSource>();
 builder.Services.AddSingleton<StackResourceTelemetrySampler>();
 builder.Services.AddSingleton<IStackResourceTelemetry>(services => services.GetRequiredService<StackResourceTelemetrySampler>());
@@ -781,6 +783,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseForwardedHeaders();
+app.UseBrandedManifest();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseApplicationPerformance();
@@ -813,6 +816,7 @@ app.MapReaderThemeCatalog();
 app.MapLanguageInspector();
 app.MapAiActivity();
 app.MapFolderBrowse();
+app.MapBranding();
 app.MapRazorPages();
 
 try

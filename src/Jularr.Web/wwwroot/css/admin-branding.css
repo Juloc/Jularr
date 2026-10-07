@@ -1,0 +1,23 @@
+/* Admin → Appearance → Branding (#876). */
+.brand-panel { display: grid; gap: 18px; padding: 18px 20px 20px; }
+.brand-panel .panel-heading { align-items: end; }
+.brand-panel h2, .brand-panel p { margin: 0; }
+.brand-panel small { display: block; margin-top: 4px; font-weight: 400; }
+.brand-hue-range {
+    width: min(100%, 420px);
+    height: 12px;
+    padding: 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, hsl(0 62% 46%), hsl(60 62% 46%), hsl(120 62% 46%), hsl(180 62% 46%), hsl(240 62% 46%), hsl(300 62% 46%), hsl(360 62% 46%));
+    accent-color: var(--accent);
+}
+.brand-logo-form { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+.brand-logo-form .inline-actions { grid-column: 2; }
+.brand-logo-current { display: grid; place-items: center; width: 72px; height: 72px; border: 1px dashed var(--border); border-radius: 12px; background: var(--surface-2); }
+.brand-logo-preview { width: 56px; height: 56px; object-fit: contain; }
+.brand-logo-none { color: var(--muted); font-size: 12px; text-align: center; }
+@media (max-width: 720px) {
+    .brand-panel { padding: 14px; }
+    .brand-logo-form { grid-template-columns: minmax(0, 1fr); }
+    .brand-logo-form .inline-actions { grid-column: 1; }
+}
