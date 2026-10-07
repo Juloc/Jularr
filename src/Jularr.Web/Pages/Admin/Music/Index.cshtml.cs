@@ -11,7 +11,7 @@ namespace Jularr.Web.Pages.Admin.Music;
 
 /// <summary>The managed artists and the form that adds one: search the metadata provider, choose how its albums are monitored.</summary>
 [Authorize(Policy = JularrPolicies.AdminMedia)]
-public sealed class IndexModel(AppDbContext db, MusicAdminQuery query, IMusicMetadataProvider provider, MusicLibraryService library, ILogger<IndexModel> logger) : PageModel
+public sealed class IndexModel(AppDbContext db, MusicQuery query, IMusicMetadataProvider provider, MusicLibraryService library, ILogger<IndexModel> logger) : PageModel
 {
     public const string PagePath = "/Admin/Music";
 

@@ -306,7 +306,8 @@ public static class InstanceModuleRoutes
             ],
             [InstanceModule.Music] =
             [
-                "/Admin/Music"
+                "/Admin/Music",
+                "/Music"
             ],
             [InstanceModule.Acquisition] =
             [

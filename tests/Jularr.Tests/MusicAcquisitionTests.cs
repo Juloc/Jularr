@@ -293,9 +293,9 @@ public sealed class MusicAcquisitionTests
         await host.Requests.UpdateStatusAsync(failure.Id, AcquisitionRequestStatus.Failed, "Gave up.", null, null, null, CancellationToken.None);
 
         var artistId = (await host.Environment.Db.MusicArtists.SingleAsync()).Id;
-        var view = await host.Get<MusicAdminQuery>().GetArtistAsync(artistId, CancellationToken.None);
+        var view = await host.Get<MusicQuery>().GetArtistAsync(artistId, CancellationToken.None);
         var states = view!.Albums.ToDictionary(album => album.WorkId, album => album.State);
-        var artists = await host.Get<MusicAdminQuery>().ListArtistsAsync(CancellationToken.None);
+        var artists = await host.Get<MusicQuery>().ListArtistsAsync(CancellationToken.None);
 
         Assert.AreEqual(MusicAlbumState.Unmonitored, states[unmonitored]);
         Assert.AreEqual(MusicAlbumState.Missing, states[missing]);
@@ -387,7 +387,7 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton<MusicAcquisitionEngine>()
                 .AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>()
                 .AddSingleton<MusicManualSearchService>()
-                .AddSingleton<MusicAdminQuery>()
+                .AddSingleton<MusicQuery>()
                 .AddSingleton<IAcquisitionRequestExecutor, MusicAcquisitionRequestExecutor>()
                 .AddSingleton<IWantedRequestHandler, MusicWantedRequestHandler>()
                 .AddSingleton<IWantedSource, MusicWantedSource>()

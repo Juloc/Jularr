@@ -115,7 +115,9 @@ public static class UiNavigationCatalog
                 new("/Manga", [WorkMediaType.Manga])
             ]),
         new("library-books", "nav.books", "/Books", "books",
-            MediaRoutes: [new("/Books", [WorkMediaType.Book])])
+            MediaRoutes: [new("/Books", [WorkMediaType.Book])]),
+        new("library-music", "nav.libraryTab.music", "/Music", "headphones",
+            MediaRoutes: [new("/Music", [WorkMediaType.Music])])
     ];
 
     /// <summary>Every consumer route that only exists for the media types it serves (#598).</summary>

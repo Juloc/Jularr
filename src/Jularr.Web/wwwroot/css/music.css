@@ -1,0 +1,26 @@
+/* Music library: artist and album tiles and the track list. Tiles use the card tokens of the other Library types; there is no artwork until a provider supplies it. */
+.music-header { margin: 0 0 20px; }
+.music-header h1 { margin: 0; }
+.music-sub { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.music-empty { margin: 0; color: var(--muted); }
+
+.music-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+.music-tile { display: grid; gap: 4px; align-content: start; color: var(--text); }
+.music-tile:hover .music-title { color: var(--accent-text); }
+.music-cover {
+    display: grid; place-items: center; aspect-ratio: 1; border: 1px solid var(--border); border-radius: var(--radius-card);
+    background: var(--surface-2); color: var(--muted); font-size: 44px; font-weight: 800;
+}
+.music-title { font-weight: 700; overflow-wrap: anywhere; }
+
+.music-tag { justify-self: start; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 700; }
+.music-tag-success { color: var(--success, #2e7d32); }
+.music-tag-warning { color: var(--warning, #b26a00); }
+.music-tag-danger { color: var(--danger, #b3261e); }
+
+.music-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 20px; }
+.music-actions form { margin: 0; }
+.music-tracks { width: 100%; border-collapse: collapse; font-size: 14px; }
+.music-tracks th { padding: 8px 10px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-align: start; text-transform: uppercase; }
+.music-tracks td { padding: 8px 10px; border-top: 1px solid var(--border); }
+.music-tracks .is-numeric { text-align: end; font-variant-numeric: tabular-nums; width: 3.5em; }

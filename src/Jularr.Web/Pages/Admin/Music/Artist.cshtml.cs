@@ -10,7 +10,7 @@ namespace Jularr.Web.Pages.Admin.Music;
 
 /// <summary>One artist: how its albums are monitored, a discography refresh and every album with where it stands.</summary>
 [Authorize(Policy = JularrPolicies.AdminMedia)]
-public sealed class ArtistModel(AppDbContext db, MusicAdminQuery query, MusicLibraryService library, ILogger<ArtistModel> logger) : PageModel
+public sealed class ArtistModel(AppDbContext db, MusicQuery query, MusicLibraryService library, ILogger<ArtistModel> logger) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 

@@ -51,11 +51,11 @@ public sealed record MusicTrackRow(Guid Id, int Disc, int Number, string Title, 
 public sealed record MusicAlbumView(MusicAlbumRow Album, MusicArtist Artist, string? MusicBrainzReleaseGroupId, IReadOnlyList<MusicTrackRow> Tracks, Guid? RequestId, AcquisitionRequestStatus? RequestStatus);
 
 /// <summary>
-/// The Admin read model of the Music media type: artists with their counts, an artist's albums and one album with its tracks. Every state is
+/// The read model of the Music media type, shared by the Admin and consumer pages: artists with their counts, an artist's albums and one album with its tracks. Every state is
 /// derived from canonical records (assets and files, the album's monitoring, the album's request) in set-based queries, so the pages never
 /// keep a second copy of what is wanted or available.
 /// </summary>
-public sealed class MusicAdminQuery(AppDbContext db, AcquisitionAccessStore requests)
+public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
 {
     public async Task<IReadOnlyList<MusicArtistRow>> ListArtistsAsync(CancellationToken cancellationToken)
     {

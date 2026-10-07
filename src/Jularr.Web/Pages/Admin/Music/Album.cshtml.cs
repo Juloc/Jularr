@@ -16,7 +16,7 @@ namespace Jularr.Web.Pages.Admin.Music;
 /// that calls indexers; everything else is local state. A grab posts only an opaque release identity.
 /// </summary>
 [Authorize(Policy = JularrPolicies.AdminMedia)]
-public sealed class AlbumModel(AppDbContext db, MusicAdminQuery query, MusicManualSearchService manualSearch, MusicLibraryService library, ILogger<AlbumModel> logger) : PageModel
+public sealed class AlbumModel(AppDbContext db, MusicQuery query, MusicManualSearchService manualSearch, MusicLibraryService library, ILogger<AlbumModel> logger) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 

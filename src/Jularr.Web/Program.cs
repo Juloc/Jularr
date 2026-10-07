@@ -585,7 +585,7 @@ foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.Media
     builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.VideoUpgradeWantedSource>(services, upgradeKind));
 }
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicMonitoringService>();
-builder.Services.AddScoped<Jularr.Web.Features.Music.MusicAdminQuery>();
+builder.Services.AddScoped<Jularr.Web.Features.Music.MusicQuery>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicCompletedDownloadImportAdapter>();
