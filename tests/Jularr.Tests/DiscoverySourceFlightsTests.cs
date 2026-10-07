@@ -46,22 +46,68 @@ public sealed class DiscoverySourceFlightsTests
     }
 
     [TestMethod]
-    public async Task AnAnswerIsReusedWhileItIsFreshAndFetchedAgainOnceItIsOld()
+    public async Task AnAnswerIsReusedWhileItIsFreshAndServedAsStaleWhileOneCallRenewsItOnceItIsOld()
     {
         var clock = new DiscoveryTestSupport.MovableClock(Start);
         var calls = 0;
+        var renewal = new TaskCompletionSource();
         var flights = DiscoveryTestSupport.Flights(clock);
-        Task<IReadOnlyList<DiscoveryItem>> Fetch(IServiceProvider services, CancellationToken cancellationToken) => Task.FromResult(Titles($"call-{Interlocked.Increment(ref calls)}"));
+
+        async Task<IReadOnlyList<DiscoveryItem>> Fetch(IServiceProvider services, CancellationToken cancellationToken)
+        {
+            var call = Interlocked.Increment(ref calls);
+            if (call > 1)
+            {
+                await renewal.Task;
+            }
+
+            return Titles($"call-{call}");
+        }
 
         await Begin(flights, "books|trending", Fetch).Completion;
         clock.Advance(TimeSpan.FromMinutes(2));
         var fresh = await Begin(flights, "books|trending", Fetch).Completion;
         clock.Advance(TimeSpan.FromMinutes(2));
-        var old = await Begin(flights, "books|trending", Fetch).Completion;
+        var stale = Begin(flights, "books|trending", Fetch);
+        var second = Begin(flights, "books|trending", Fetch);
 
         Assert.AreEqual("call-1", fresh.Items[0].Title);
-        Assert.AreEqual("call-2", old.Items[0].Title);
+        Assert.IsTrue(stale.IsSettled, "The old answer is there at once, nobody waits for the provider.");
+        Assert.AreEqual("call-1", stale.Outcome!.Items[0].Title);
+        Assert.IsTrue(stale.IsRefreshing);
+        Assert.IsFalse(stale.IsFresh);
+        Assert.AreSame(stale, second, "One renewal serves every caller.");
+        renewal.SetResult();
+        await stale.Pending;
+        Assert.AreEqual("call-2", stale.Outcome!.Items[0].Title, "The renewal replaced the old answer.");
+        Assert.IsTrue(stale.IsFresh);
         Assert.AreEqual(2, calls);
+    }
+
+    [TestMethod]
+    public async Task ARenewalThatFailsKeepsTheOldAnswerSoAProviderOutageNeverEmptiesDiscover()
+    {
+        var clock = new DiscoveryTestSupport.MovableClock(Start);
+        var calls = 0;
+        var flights = DiscoveryTestSupport.Flights(clock);
+        Task<IReadOnlyList<DiscoveryItem>> Fetch(IServiceProvider services, CancellationToken cancellationToken) =>
+            Interlocked.Increment(ref calls) == 1 ? Task.FromResult(Titles("Frieren")) : throw new HttpRequestException("down");
+
+        await Begin(flights, "movies|trending", Fetch).Completion;
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var stale = Begin(flights, "movies|trending", Fetch);
+        await stale.Pending;
+
+        Assert.AreEqual(DiscoverySourceState.Ready, stale.Outcome!.State);
+        Assert.AreEqual("Frieren", stale.Outcome.Items[0].Title, "The failed renewal leaves the titles that were usable.");
+        Assert.IsFalse(stale.IsRefreshing);
+
+        Begin(flights, "movies|trending", Fetch);
+        Assert.AreEqual(2, calls, "The next attempt waits for the retry interval, a down provider is not hammered.");
+
+        clock.Advance(DiscoverySourceFlights.RetryInterval + TimeSpan.FromSeconds(1));
+        await Begin(flights, "movies|trending", Fetch).Pending;
+        Assert.AreEqual(3, calls);
     }
 
     [TestMethod]

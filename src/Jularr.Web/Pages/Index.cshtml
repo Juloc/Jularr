@@ -259,17 +259,25 @@
 
     <noscript><p class="dc-message">@ui["discover.noscript"]</p></noscript>
 
-    <div class="dc-results" data-dc-body aria-busy="true">
-        <p class="sr-only">@ui["discover.results.loading"]</p>
-        <div class="dc-skeleton" aria-hidden="true">
-            <span class="dc-skeleton-head"></span>
-            <ul class="dc-track dc-ghosts">
-                @for (var i = 0; i < DiscoverSectionView.TrackGhosts; i++)
-                {
-                    <li class="dc-track-item"><partial name="_DiscoverGhost" /></li>
-                }
-            </ul>
-        </div>
+    @* With titles to show (fresh, stale or from the local snapshot) the first response carries them and the page has no placeholder; only a page that has nothing yet shows one. *@
+    <div class="dc-results" data-dc-body aria-busy="@(Model.InitialBody is null ? "true" : "false")">
+        @if (Model.InitialBody is { } initial)
+        {
+            <partial name="_DiscoverBody" model="initial" />
+        }
+        else
+        {
+            <p class="sr-only">@ui["discover.results.loading"]</p>
+            <div class="dc-skeleton" aria-hidden="true">
+                <span class="dc-skeleton-head"></span>
+                <ul class="dc-track dc-ghosts">
+                    @for (var i = 0; i < DiscoverSectionView.TrackGhosts; i++)
+                    {
+                        <li class="dc-track-item"><partial name="_DiscoverGhost" /></li>
+                    }
+                </ul>
+            </div>
+        }
     </div>
 
     @if (query.IsLanding && !Model.HomeLayout.PrioritizeContinue)

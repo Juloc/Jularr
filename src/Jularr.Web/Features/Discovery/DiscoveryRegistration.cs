@@ -32,6 +32,7 @@ public static class DiscoveryRegistration
     public static IServiceCollection AddDiscovery(this IServiceCollection services)
     {
         services.AddSingleton<DiscoverySourceFlights>();
+        services.AddScoped<DiscoverySnapshotStore>();
         services.AddScoped<DiscoveryCoordinator>();
         services.AddScoped<IDiscoveryFeed>(provider => provider.GetRequiredService<DiscoveryCoordinator>());
         services.AddScoped<DiscoveryShelfService>();

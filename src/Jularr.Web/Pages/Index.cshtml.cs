@@ -184,6 +184,32 @@ public sealed partial class IndexModel(
         {
             ActiveType = Query.Category;
         }
+
+        InitialBody = Query.IsSearch ? null : await TryBuildInitialBodyAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The titles of the page when the sources already have an answer for it, fresh, stale or from the local snapshot: the first response is then useful by
+    /// itself, with no skeleton and no second request, and the browser only asks for what has been renewed since. Null when no source has anything to show
+    /// yet (the very first load, a type that was never browsed), where the page keeps its placeholder and fetches the body. It never waits for a provider.
+    /// </summary>
+    public DiscoverBodyView? InitialBody { get; private set; }
+
+    private async Task<DiscoverBodyView?> TryBuildInitialBodyAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var audience = await LoadAudienceAsync(cancellationToken);
+            var wait = DiscoveryWait.None;
+            var body = Query.IsLanding ? await BuildLandingAsync(audience, wait, cancellationToken) : await BuildResultsAsync(audience, wait, cancellationToken);
+            return body.State == DiscoverBodyState.Sections && body.Sections.Any(section => section.State == DiscoverySectionState.Ready) ? body : null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The body handler builds it again after first paint, as it always did.
+            logger.LogWarning(exception, "The discovery titles could not be prepared for the first response.");
+            return null;
+        }
     }
 
     /// <summary>The hero, the Continue cards and the playback history of the landing, for the media type the bar has selected.</summary>
