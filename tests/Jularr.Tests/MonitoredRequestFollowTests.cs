@@ -59,6 +59,17 @@ public sealed class MonitoredRequestFollowTests
             Entries.Add((logLevel, exception, formatter(state, exception)));
     }
 
+    private sealed class HangingSource : IWantedSource
+    {
+        public MediaAcquisitionKind Kind => MediaAcquisitionKind.Music;
+
+        public async Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return 0;
+        }
+    }
+
     private sealed class RecordingImportAdapter : ICompletedDownloadImportAdapter
     {
         public MediaAcquisitionKind Kind => MediaAcquisitionKind.Manga;
@@ -85,16 +96,19 @@ public sealed class MonitoredRequestFollowTests
         public AcquisitionAccessStore Store => fixture.Store;
         public AcquisitionRequestService Requests { get; } = fixture.Service("owner", isOwner: true, executor);
 
+        public List<IWantedSource> Sources { get; } = [];
+
         public IServiceProvider Services =>
             new ServiceCollection()
                 .AddSingleton(Store)
                 .AddSingleton(Requests)
                 .AddSingleton<IMonitoredAcquisitionExecutor>(executor)
                 .AddSingleton<ILogger<WantedAcquisitionService>>(Log)
+                .AddSingleton<IEnumerable<IWantedSource>>(Sources)
                 .AddSingleton(new CompletedDownloadImportService(new FixedLocationResolver(), new CompletedDownloadDispatcher([ManualAdapter]), fixture.Db, Store, NullLogger<CompletedDownloadImportService>.Instance))
                 .BuildServiceProvider();
 
-        public Task<int> PassAsync() => WantedAcquisitionService.ProcessOnceAsync(Services, DateTime.UtcNow, CancellationToken.None);
+        public Task<int> PassAsync(TimeSpan? sourceBudget = null) => WantedAcquisitionService.ProcessOnceAsync(Services, DateTime.UtcNow, CancellationToken.None, sourceBudget);
 
         public async Task<AcquisitionRequest> RequestAsync(string title, AcquisitionRequestStatus status = AcquisitionRequestStatus.Approved) =>
             await Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", title, title, null, null), "owner", status, "owner", CancellationToken.None);
@@ -142,6 +156,21 @@ public sealed class MonitoredRequestFollowTests
         Assert.AreEqual(total, (await world.Store.ListByStatusAsync(MediaAcquisitionKind.Anime, AcquisitionRequestStatus.Downloading, CancellationToken.None)).Count);
         Assert.AreEqual(1, world.Executor.Begins);
         Assert.AreEqual(0, await world.PassAsync(), "A request that is where its pipeline is stays untouched.");
+    }
+
+    [TestMethod]
+    public async Task AMediaTypeThatStaysBusyPreparingIsCancelledAndNeverHoldsUpTheRestOfThePass()
+    {
+        await using var world = await CreateAsync(Downloading);
+        world.Sources.Add(new HangingSource());
+        await world.RequestAsync("waiting");
+
+        var advanced = await world.PassAsync(sourceBudget: TimeSpan.FromMilliseconds(100));
+
+        Assert.AreEqual(1, advanced, "The request of the other media type is followed although the source never finished.");
+        var entry = Assert.ContainsSingle(world.Log.Entries);
+        Assert.AreEqual(LogLevel.Warning, entry.Level);
+        StringAssert.Contains(entry.Message, "Music");
     }
 
     [TestMethod]

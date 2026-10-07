@@ -68,6 +68,12 @@ public sealed class WantedAcquisitionService(
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(2);
     public const int MaxRequestsPerKindPerPass = 25;
 
+    /// <summary>
+    /// How long one media type may prepare in a pass (a provider refresh, the anime search run). A source that is still busy then is cancelled and
+    /// tried again by the next pass, so one slow provider cannot hold up the requests of every other media type.
+    /// </summary>
+    public static readonly TimeSpan SourceBudget = TimeSpan.FromMinutes(5);
+
     /// <summary>How many open requests of a monitored media type are read from the store at a time; a pass walks every batch.</summary>
     public const int FollowBatchSize = 50;
 
@@ -126,7 +132,8 @@ public sealed class WantedAcquisitionService(
     public static async Task<int> ProcessOnceAsync(
         IServiceProvider services,
         DateTime nowUtc,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? sourceBudget = null)
     {
         var modules = services.GetService<IInstanceModuleService>();
         InstanceModuleSettings? instance = null;
@@ -147,7 +154,16 @@ public sealed class WantedAcquisitionService(
                 continue;
             }
 
-            advanced += await source.PrepareAsync(nowUtc, cancellationToken);
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            budget.CancelAfter(sourceBudget ?? SourceBudget);
+            try
+            {
+                advanced += await source.PrepareAsync(nowUtc, budget.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                services.GetService<ILogger<WantedAcquisitionService>>()?.LogWarning("Preparing {Kind} took longer than {Budget}; the next pass continues it.", source.Kind, sourceBudget ?? SourceBudget);
+            }
         }
 
         var handlers = services
