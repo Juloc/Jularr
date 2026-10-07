@@ -131,6 +131,31 @@ public sealed class SetupInstanceTests
         Assert.AreEqual(InstanceBrandingSettings.Default, await fixture.Branding.GetAsync(CancellationToken.None));
     }
 
+    [TestMethod]
+    public async Task SetupContinuesToTheProviderStepWhileAnEnabledFeatureNeedsAnUnusableProviderAndFinishesOtherwise()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var blocking = new FakeProvider(new ProviderBlocking("title", "body", "configure", "disable"));
+        var ready = new FakeProvider(null);
+
+        var needsProvider = fixture.Page(Form((Field(InstanceModule.Movie), "true")), blocking);
+        needsProvider.Start = InstancePreset.Full;
+        needsProvider.ReturnUrl = "/Discover";
+        var toProviders = await needsProvider.OnPostAsync(CancellationToken.None);
+
+        var redirect = Assert.IsInstanceOfType<RedirectToPageResult>(toProviders);
+        Assert.AreEqual("/Account/SetupProvider", redirect.PageName);
+        Assert.AreEqual("/Discover", redirect.RouteValues!["returnUrl"], "The provider step returns to where Setup was going.");
+
+        var skipped = fixture.Page(Form(), blocking);
+        Assert.IsInstanceOfType<RedirectToPageResult>(await skipped.OnPostSkipAsync(CancellationToken.None), "Skipping the instance step does not skip the required provider.");
+
+        var usable = fixture.Page(Form((Field(InstanceModule.Movie), "true")), ready);
+        usable.Start = InstancePreset.Full;
+        usable.ReturnUrl = "/Discover";
+        Assert.AreEqual("/Discover", ((LocalRedirectResult)await usable.OnPostAsync(CancellationToken.None)).Url);
+    }
+
     private static string Field(InstanceModule module) => Jularr.Web.Pages.Admin.InstanceModel.FieldName(module);
 
     private static IFormCollection Form(params (string Name, string Value)[] fields) =>
@@ -171,13 +196,13 @@ public sealed class SetupInstanceTests
             return fixture;
         }
 
-        public SetupInstanceModel Page(IFormCollection? form = null)
+        public SetupInstanceModel Page(IFormCollection? form = null, params IProviderSettings[] providers)
         {
             var context = new DefaultHttpContext();
             context.Request.ContentType = "application/x-www-form-urlencoded";
             context.Request.Form = form ?? new FormCollection([]);
             context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Owner)], "test"));
-            var page = new SetupInstanceModel(Db, ModuleStore, Branding, Array.Empty<IProviderSettings>())
+            var page = new SetupInstanceModel(Db, ModuleStore, Branding, providers)
             {
                 PageContext = new PageContext(new ActionContext(context, new RouteData(), new PageActionDescriptor())),
                 Url = new LocalOnlyUrlHelper()
@@ -195,6 +220,23 @@ public sealed class SetupInstanceTests
 
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    private sealed class FakeProvider(ProviderBlocking? blocking) : IProviderSettings
+    {
+        public string Key => "fake";
+
+        public Task<ProviderView> GetViewAsync(CancellationToken cancellationToken) => Task.FromResult(new ProviderView(
+            "fake", "Fake", "summary", ProviderFamily.Metadata, true, blocking is null ? ProviderConnectionState.Healthy : ProviderConnectionState.NotConfigured, blocking is null ? null : "required", [], [],
+            false, false, false, "source", null, null, blocking));
+
+        public Task<ProviderFeedback> SaveAsync(bool enabled, IReadOnlyDictionary<string, string?> secrets, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<ProviderFeedback> TestAsync(IReadOnlyDictionary<string, string?> secrets, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task RemoveSavedValuesAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task DisableDependentFeaturesAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class LocalOnlyUrlHelper : IUrlHelper

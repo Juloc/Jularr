@@ -216,7 +216,7 @@ public sealed class IndexerStore
         var result = new List<IndexerEntry>();
         foreach (var item in persisted)
         {
-            var apiKey = protector.Unprotect(item.ProtectedApiKey);
+            var apiKey = ProtectedSecrets.Read(protector, item.ProtectedApiKey) ?? string.Empty;
             result.Add(
                 new IndexerEntry(
                     item.Id,
