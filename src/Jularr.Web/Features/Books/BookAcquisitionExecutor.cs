@@ -134,7 +134,8 @@ public sealed class BookAcquisitionExecutor(
                     cancellationToken);
                 return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
             },
-            cancellationToken);
+            cancellationToken,
+            searchUnavailable: usenetSearch.EveryIndexerFailed);
     }
 
     /// <summary>
@@ -201,6 +202,9 @@ public sealed record BookUsenetSearchResult(
     IReadOnlyList<IndexerSearchWarning> Warnings,
     bool UsedCategoryFallback)
 {
+    /// <summary>True when no indexer could answer at all, so an empty result says nothing about the book.</summary>
+    public bool EveryIndexerFailed { get; init; }
+
     public ProwlarrReleaseCandidate? Picked => Ranked.FirstOrDefault(release => release.Score > 0)?.Release;
 
     public string FailureMessage =>
@@ -236,7 +240,10 @@ public static class BookUsenetSearch
             [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
             BookReleaseSelector.Rank(result.Releases, title, author, profile, reliability),
             result.Warnings,
-            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0));
+            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0))
+        {
+            EveryIndexerFailed = result.EveryIndexerFailed
+        };
     }
 }
 

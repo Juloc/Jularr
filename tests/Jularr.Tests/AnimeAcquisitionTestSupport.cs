@@ -704,6 +704,9 @@ internal sealed class FakeProwlarrClient : IProwlarrClient
     public List<string> Queries { get; } = [];
     public List<ProwlarrConnection> Connections { get; } = [];
 
+    /// <summary>When set, every search fails like an indexer that does not answer.</summary>
+    public Exception? Failure { get; set; }
+
     public Task<ProwlarrConnectionTestResult> TestAsync(ProwlarrConnection connection, CancellationToken cancellationToken) =>
         Task.FromResult(new ProwlarrConnectionTestResult(true, "test"));
 
@@ -714,6 +717,11 @@ internal sealed class FakeProwlarrClient : IProwlarrClient
     {
         Queries.Add(search.Query);
         Connections.Add(connection);
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
         return Task.FromResult<IReadOnlyList<ProwlarrReleaseCandidate>>([.. Releases]);
     }
 }

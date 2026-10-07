@@ -119,8 +119,8 @@ public static class SabnzbdOperationProjector
             {
                 const string missing = "SABnzbd job no longer appears in queue or history.";
                 await store.MarkFailedAsync(operation.Id, missing, cancellationToken);
-                await RecordFailureKindAsync(store, operation, SabnzbdFailureKind.Unknown, cancellationToken);
-                failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Unknown, missing));
+                await RecordFailureKindAsync(store, operation, SabnzbdFailureKind.Lost, cancellationToken);
+                failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Lost, missing));
             }
         }
 
@@ -360,8 +360,8 @@ public sealed class SabnzbdOperationMonitorService(
         foreach (var operation in groupOperations)
         {
             await store.MarkFailedAsync(operation.Id, RemovedClientMessage, cancellationToken);
-            await SabnzbdOperationProjector.RecordFailureKindAsync(store, operation, SabnzbdFailureKind.Unknown, cancellationToken);
-            failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Unknown, RemovedClientMessage));
+            await SabnzbdOperationProjector.RecordFailureKindAsync(store, operation, SabnzbdFailureKind.Lost, cancellationToken);
+            failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Lost, RemovedClientMessage));
         }
 
         logger.LogWarning(

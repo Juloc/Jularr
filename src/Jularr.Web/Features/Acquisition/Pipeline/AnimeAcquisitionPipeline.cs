@@ -1,3 +1,5 @@
+using Jularr.Web.Features.Acquisition.DownloadClients;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.History;
@@ -470,6 +472,14 @@ public sealed class AnimeAcquisitionPipeline(
 
                     // A failed download advances to the next candidate (SABnzbd monitor); a
                     // cancelled or interrupted one does not, so the episode backs off instead.
+                    // A failure of this server or its client leaves the release usable: the episode is searched again later, with no back-off raised.
+                    if (operation.Status == OperationStatus.Failed && DownloadOperationDetails.TryParse(operation.Details, out var failedDetails) && SabnzbdFailureKinds.IsInfrastructure(failedDetails?.FailureKind))
+                    {
+                        updates.Add(current => AnimeMonitoringEngine.MarkUnavailable(current, key, now, ReleaseRequestTracker.UnavailableRetry, "The download could not finish because of a local problem."));
+                        exhausted.Add(acquisition.Id);
+                        break;
+                    }
+
                     var canAdvance = operation.Status == OperationStatus.Failed &&
                                      acquisition.Attempts.Length < acquisition.MaxAttempts &&
                                      acquisition.PendingCandidates.Any(candidate => !relations.IsBlocked(candidate.ReleaseIdentity));
@@ -942,6 +952,15 @@ public sealed class AnimeAcquisitionPipeline(
                     return false;
                 }
 
+                if (candidates.Count == 0 && result.EveryIndexerFailed)
+                {
+                    // Nothing could be asked, so nothing was found: the outage is not a failed search and does not raise the back-off.
+                    const string outage = "No indexer could be searched; the search is repeated soon.";
+                    await monitoring.UpdateAsync(current => AnimeMonitoringEngine.MarkUnavailable(current, episode.Key, now, ReleaseRequestTracker.UnavailableRetry, outage), cancellationToken);
+                    await operations.MarkSucceededAsync(operationId, outage, CancellationToken.None);
+                    return false;
+                }
+
                 await monitoring.UpdateAsync(current => AnimeMonitoringEngine.MarkFailed(current, episode.Key, null, now), cancellationToken);
                 await operations.MarkSucceededAsync(
                     operationId,
@@ -960,7 +979,7 @@ public sealed class AnimeAcquisitionPipeline(
         }
         catch (Exception exception) when (exception is ProwlarrException or HttpRequestException or TaskCanceledException)
         {
-            await monitoring.UpdateAsync(current => AnimeMonitoringEngine.MarkFailed(current, episode.Key, null, now), cancellationToken);
+            await monitoring.UpdateAsync(current => AnimeMonitoringEngine.MarkUnavailable(current, episode.Key, now, ReleaseRequestTracker.UnavailableRetry, "The indexers did not answer."), cancellationToken);
             await operations.MarkFailedAsync(operationId, $"Indexer search failed: {exception.Message}", CancellationToken.None);
             return false;
         }
@@ -1008,7 +1027,7 @@ public sealed class AnimeAcquisitionPipeline(
         catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException)
         {
             await monitoring.UpdateAsync(
-                current => episodes.Aggregate(current, (accumulated, key) => AnimeMonitoringEngine.MarkFailed(accumulated, key, null, now)),
+                current => episodes.Aggregate(current, (accumulated, key) => AnimeMonitoringEngine.MarkUnavailable(accumulated, key, now, ReleaseRequestTracker.UnavailableRetry, "The download client did not accept the release.")),
                 cancellationToken);
             await operations.MarkFailedAsync(operationId, $"SABnzbd submission failed: {exception.Message}", CancellationToken.None);
             return null;

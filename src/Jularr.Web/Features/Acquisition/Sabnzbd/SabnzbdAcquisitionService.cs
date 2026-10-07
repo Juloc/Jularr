@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -137,6 +138,12 @@ public sealed class SabnzbdAcquisitionService(
             return null;
         }
 
+        // A problem of this server or its client says nothing about the release: it stays usable and the next search may pick it again.
+        if (SabnzbdFailureKinds.IsInfrastructure(failureKind))
+        {
+            return null;
+        }
+
         await store.BlockAsync(
             new SabnzbdBlockedRelease(
                 found.Attempt.ReleaseIdentity,
@@ -178,7 +185,7 @@ public sealed class SabnzbdAcquisitionService(
 
             var result = await HandleFailedAsync(
                 operation.Id,
-                SabnzbdFailureKind.Unknown,
+                DownloadOperationDetails.TryParse(operation.Details, out var details) && Enum.TryParse<SabnzbdFailureKind>(details?.FailureKind, ignoreCase: true, out var stored) ? stored : SabnzbdFailureKind.Unknown,
                 operation.Error ?? "SABnzbd download failed.",
                 cancellationToken);
             if (result?.Submitted == true)

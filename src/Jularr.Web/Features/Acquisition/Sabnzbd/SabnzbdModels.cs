@@ -59,6 +59,9 @@ public enum SabnzbdFailureKind
 
     /// <summary>The client could not write or read its own storage (a full disk, permissions, a missing folder): a problem of this server, never of the release.</summary>
     Storage,
+
+    /// <summary>The client no longer had the job (it vanished from the queue and history, or its client entry was removed): not the release's fault.</summary>
+    Lost,
     Unknown
 }
 
@@ -70,6 +73,14 @@ public static class SabnzbdFailureKinds
     /// an indexer or a release group.
     /// </summary>
     public static bool IsReleaseFault(SabnzbdFailureKind kind) => kind is SabnzbdFailureKind.Download or SabnzbdFailureKind.Unpack or SabnzbdFailureKind.Verification or SabnzbdFailureKind.Password;
+
+    /// <summary>
+    /// Failures of this server or its client rather than of the release: the release is neither blocklisted nor counted against its source, and the
+    /// episode or request is searched again later instead of moving on to another release.
+    /// </summary>
+    public static bool IsInfrastructure(SabnzbdFailureKind kind) => kind is SabnzbdFailureKind.Storage or SabnzbdFailureKind.Script or SabnzbdFailureKind.Lost;
+
+    public static bool IsInfrastructure(string? kind) => Enum.TryParse<SabnzbdFailureKind>(kind, ignoreCase: true, out var parsed) && IsInfrastructure(parsed);
 
     /// <summary>The release-fault test for a kind stored by name in the operation's details; an unrecorded kind is not evidence.</summary>
     public static bool IsReleaseFault(string? kind) => Enum.TryParse<SabnzbdFailureKind>(kind, ignoreCase: true, out var parsed) && IsReleaseFault(parsed);
@@ -136,6 +147,7 @@ public static class SabnzbdFailureDescriptions
             SabnzbdFailureKind.Download => "download is incomplete (missing articles)",
             SabnzbdFailureKind.Script => "post-processing script failed",
             SabnzbdFailureKind.Storage => "the download client could not use its storage (disk space or permissions)",
+            SabnzbdFailureKind.Lost => "the download client no longer had the job",
             _ => "download failed"
         };
 
