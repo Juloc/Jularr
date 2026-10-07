@@ -78,7 +78,9 @@ public sealed class ReadingManualSearchService(
 
         var payload = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request));
         var profile = await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, profile, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
+        var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh };
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, options, profile, lookup, SelectionContext.SinceCreated(request.CreatedAt));
         var target = await TargetOfAsync(request, cancellationToken);
         var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
         var candidates = search.Ranked.Select(ranked => ToCandidate(ranked, tried, target.CanSearch)).ToArray();
@@ -101,7 +103,9 @@ public sealed class ReadingManualSearchService(
         }
 
         var profile = await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true }, profile, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
+        var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true };
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, options, profile, lookup, SelectionContext.SinceCreated(request.CreatedAt));
         var selected = search.Ranked.FirstOrDefault(ranked => ranked.Release.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
         if (selected is null || selected.Score <= 0 || selected.Release.InternalDownloadUri is null)
         {

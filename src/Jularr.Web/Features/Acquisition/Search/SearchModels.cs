@@ -73,6 +73,20 @@ public sealed record SearchOptions
     /// <summary>Restricts the search to these indexer entries (tag-scoped restrictions); null searches every enabled entry.</summary>
     public IReadOnlyCollection<Guid>? AllowedEntryIds { get; init; }
 
+    /// <summary>Indexer entries whose releases win a tie against the same release from another entry (a profile's preferred sources).</summary>
+    public IReadOnlyCollection<Guid>? PreferredEntryIds { get; init; }
+
+    /// <summary>
+    /// Applies an Acquisition Profile's source policy on top of what the caller already restricts: an allow list intersects with it (so a restriction
+    /// can only narrow), and an empty intersection stays empty rather than becoming "everything".
+    /// </summary>
+    public SearchOptions WithSourcePolicy(Quality.AcquisitionSourcePolicy policy) =>
+        this with
+        {
+            AllowedEntryIds = policy.IsRestricted ? AllowedEntryIds is null ? policy.AllowedEntryIds : [.. AllowedEntryIds.Intersect(policy.AllowedEntryIds)] : AllowedEntryIds,
+            PreferredEntryIds = policy.PreferredEntryIds.Length > 0 ? policy.PreferredEntryIds : PreferredEntryIds
+        };
+
     /// <summary>Overrides the Prowlarr per-indexer restriction of every Prowlarr entry.</summary>
     public IReadOnlyList<int>? ProwlarrIndexerIds { get; init; }
 
@@ -174,12 +188,20 @@ public sealed record AcquisitionSearchResult(
 {
     public static AcquisitionSearchResult Empty { get; } = new([], [], [], 0);
 
+    /// <summary>
+    /// Set when the profile's source policy left no enabled indexer to ask: nothing was searched and nothing was widened. It is an unavailable source, not a
+    /// statement about the media, so it never counts as a failed search.
+    /// </summary>
+    public string? SourcePolicyBlock { get; init; }
+
     /// <summary>The per-indexer problems in the shape the callers show: a skipped, failed or rate-limited indexer, with the query that failed.</summary>
     public IReadOnlyList<IndexerSearchWarning> Warnings =>
-        [.. Outcomes.Where(outcome => outcome.State is not (IndexerSearchState.Searched or IndexerSearchState.NoResults) || outcome.Message is not null)
+        [.. (SourcePolicyBlock is null ? Array.Empty<IndexerSearchWarning>() : new[] { new IndexerSearchWarning("Acquisition Profile", string.Empty, SourcePolicyBlock) }),
+            .. Outcomes.Where(outcome => outcome.State is not (IndexerSearchState.Searched or IndexerSearchState.NoResults) || outcome.Message is not null)
             .Select(outcome => new IndexerSearchWarning(outcome.IndexerName, string.Empty, outcome.Message ?? outcome.State.ToString()))];
 
     /// <summary>True when no indexer could answer at all, so an empty result says nothing about the media.</summary>
     public bool EveryIndexerFailed =>
-        Outcomes.Count > 0 && Outcomes.All(outcome => outcome.State is IndexerSearchState.Unavailable or IndexerSearchState.AuthenticationFailed or IndexerSearchState.RateLimited or IndexerSearchState.TimedOut);
+        SourcePolicyBlock is not null
+        || Outcomes.Count > 0 && Outcomes.All(outcome => outcome.State is IndexerSearchState.Unavailable or IndexerSearchState.AuthenticationFailed or IndexerSearchState.RateLimited or IndexerSearchState.TimedOut);
 }

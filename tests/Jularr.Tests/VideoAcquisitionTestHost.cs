@@ -185,6 +185,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
             .AddSingleton(db)
             .AddSingleton(TimeProvider.System)
             .AddSingleton(coordinator)
+            .AddSingleton(indexerStore)
             .AddSingleton(registry)
             .AddSingleton(new QualityProfileStore(
                 new DirectoryInfo(Path.Combine(directory.FullName, "quality-profiles")),

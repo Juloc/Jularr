@@ -213,122 +213,78 @@
         </div>
     </section>
 
-    <section class="panel">
-        <div class="panel-heading"><h2>@ui["settings.acquisition.tagsHeading"]</h2></div>
-        @if (Model.Policy.Tags.Count > 0)
-        {
-            <ul class="acquisition-history-list">
-                @foreach (var tag in Model.Policy.Tags)
-                {
-                    <li>
-                        @tag.Name
-                        <form method="post" asp-page-handler="RemoveTag" style="display:inline">
-                            <input type="hidden" name="tagId" value="@tag.Id" />
-                            <button class="button" type="submit">@ui["settings.acquisition.remove"]</button>
-                        </form>
-                    </li>
-                }
-            </ul>
-        }
-        <form method="post" asp-page-handler="AddTag" class="acquisition-inline-form">
-            <label><span>@ui["settings.acquisition.newTagLabel"]</span><input type="text" name="name" placeholder="fast-track" required /></label>
-            <button class="button" type="submit">@ui["settings.acquisition.addTag"]</button>
-        </form>
-    </section>
-
-    <section class="panel">
-        <div class="panel-heading"><h2>@ui["settings.acquisition.delayProfilesHeading"]</h2></div>
-        <p class="muted">@ui["settings.acquisition.delayProfilesDescription"]</p>
-        @if (Model.Policy.DelayProfiles.Count > 0)
-        {
-            <div class="admset-table-wrap"><table class="admset-table">
-                <thead><tr><th>@ui["settings.acquisition.nameColumn"]</th><th>@ui["settings.acquisition.delayColumn"]</th><th>@ui["settings.acquisition.qualityProfileColumn"]</th><th>@ui["settings.acquisition.tagsColumn"]</th><th>@ui["settings.acquisition.defaultColumn"]</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var profile in Model.Policy.DelayProfiles)
-                    {
-                        <tr>
-                            <td>@profile.Name</td>
-                            <td>@ui.Format("settings.acquisition.delayMinutes", ("minutes", profile.DelayMinutes))</td>
-                            <td>@(profile.QualityProfileId ?? ui["settings.acquisition.any"])</td>
-                            <td>@string.Join(", ", profile.TagIds)</td>
-                            <td>@(profile.IsDefault ? ui["settings.acquisition.yes"] : "")</td>
-                            <td>
-                                <form method="post" asp-page-handler="RemoveDelayProfile">
-                                    <input type="hidden" name="profileId" value="@profile.Id" />
-                                    <button class="button" type="submit">@ui["settings.acquisition.remove"]</button>
-                                </form>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table></div>
-        }
-        <form method="post" asp-page-handler="AddDelayProfile" class="acquisition-inline-form">
-            <label><span>@ui["settings.acquisition.nameColumn"]</span><input type="text" name="name" required /></label>
-            <label><span>@ui["settings.acquisition.delayMinutesLabel"]</span><input type="number" name="delayMinutes" min="0" value="60" required /></label>
-            <label><span>@ui["settings.acquisition.qualityProfileIdLabel"]</span><input type="text" name="qualityProfileId" placeholder="@ui["settings.acquisition.any"]" /></label>
-            <label>
-                <span>@ui["settings.acquisition.tagsColumn"]</span>
-                <select name="tagIds" multiple>
+    @* Compatibility only: the wait and the sources of every media type are set in the Acquisition Profile. What is listed here is the policy that is scoped to
+       Anime tags, which cannot become a profile assignment; it is still applied to those Anime and can only be removed, never added. *@
+    @if (Model.Policy.Tags.Count + Model.Policy.DelayProfiles.Count + Model.Policy.IndexerRestrictions.Count > 0)
+    {
+        <section class="panel">
+            <div class="panel-heading"><h2>@ui["settings.acquisition.legacyHeading"]</h2></div>
+            <p class="muted">@ui["settings.acquisition.legacyDescription"] <a asp-page="/Admin/AcquisitionProfiles">@ui["settings.acquisition.legacyLink"]</a></p>
+            @if (Model.Policy.Tags.Count > 0)
+            {
+                <h3>@ui["settings.acquisition.tagsHeading"]</h3>
+                <ul class="acquisition-history-list">
                     @foreach (var tag in Model.Policy.Tags)
                     {
-                        <option value="@tag.Id">@tag.Name</option>
+                        <li>
+                            @tag.Name
+                            <form method="post" asp-page-handler="RemoveTag" style="display:inline">
+                                <input type="hidden" name="tagId" value="@tag.Id" />
+                                <button class="button" type="submit">@ui["settings.acquisition.remove"]</button>
+                            </form>
+                        </li>
                     }
-                </select>
-            </label>
-            <label class="acquisition-check"><input type="checkbox" name="isDefault" value="true" /><span>@ui["settings.acquisition.defaultCheckboxLabel"]</span></label>
-            <button class="button" type="submit">@ui["settings.acquisition.addProfile"]</button>
-        </form>
-    </section>
-
-    <section class="panel">
-        <div class="panel-heading"><h2>@ui["settings.acquisition.indexerRestrictionsHeading"]</h2></div>
-        <p class="muted">@ui["settings.acquisition.indexerRestrictionsDescription"]</p>
-        @if (Model.Policy.IndexerRestrictions.Count > 0)
-        {
-            <div class="admset-table-wrap"><table class="admset-table">
-                <thead><tr><th>@ui["settings.acquisition.nameColumn"]</th><th>@ui["settings.acquisition.tagsColumn"]</th><th>@ui["settings.acquisition.allowedIndexersColumn"]</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var restriction in Model.Policy.IndexerRestrictions)
-                    {
-                        <tr>
-                            <td>@restriction.Name</td>
-                            <td>@string.Join(", ", restriction.TagIds)</td>
-                            <td>@string.Join(", ", restriction.AllowedIndexerEntryIds.Select(id => Model.IndexerEntries.FirstOrDefault(entry => entry.Id == id)?.Name ?? id.ToString()))</td>
-                            <td>
-                                <form method="post" asp-page-handler="RemoveIndexerRestriction">
-                                    <input type="hidden" name="restrictionId" value="@restriction.Id" />
-                                    <button class="button" type="submit">@ui["settings.acquisition.remove"]</button>
-                                </form>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table></div>
-        }
-        <form method="post" asp-page-handler="AddIndexerRestriction" class="acquisition-inline-form">
-            <label><span>@ui["settings.acquisition.nameColumn"]</span><input type="text" name="name" required /></label>
-            <label>
-                <span>@ui["settings.acquisition.tagsColumn"]</span>
-                <select name="tagIds" multiple required>
-                    @foreach (var tag in Model.Policy.Tags)
-                    {
-                        <option value="@tag.Id">@tag.Name</option>
-                    }
-                </select>
-            </label>
-            <label>
-                <span>@ui["settings.acquisition.allowedIndexersColumn"]</span>
-                <select name="allowedIndexerEntryIds" multiple required>
-                    @foreach (var entry in Model.IndexerEntries)
-                    {
-                        <option value="@entry.Id">@entry.Name (@entry.Type)</option>
-                    }
-                </select>
-            </label>
-            <button class="button" type="submit">@ui["settings.acquisition.addRestriction"]</button>
-        </form>
-    </section>
+                </ul>
+            }
+            @if (Model.Policy.DelayProfiles.Count > 0)
+            {
+                <h3>@ui["settings.acquisition.delayProfilesHeading"]</h3>
+                <div class="admset-table-wrap"><table class="admset-table">
+                    <thead><tr><th>@ui["settings.acquisition.nameColumn"]</th><th>@ui["settings.acquisition.delayColumn"]</th><th>@ui["settings.acquisition.qualityProfileColumn"]</th><th>@ui["settings.acquisition.tagsColumn"]</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var profile in Model.Policy.DelayProfiles)
+                        {
+                            <tr>
+                                <td>@profile.Name</td>
+                                <td>@ui.Format("settings.acquisition.delayMinutes", ("minutes", profile.DelayMinutes))</td>
+                                <td>@(profile.QualityProfileId ?? ui["settings.acquisition.any"])</td>
+                                <td>@string.Join(", ", profile.TagIds)</td>
+                                <td>
+                                    <form method="post" asp-page-handler="RemoveDelayProfile">
+                                        <input type="hidden" name="profileId" value="@profile.Id" />
+                                        <button class="button" type="submit">@ui["settings.acquisition.remove"]</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+            @if (Model.Policy.IndexerRestrictions.Count > 0)
+            {
+                <h3>@ui["settings.acquisition.indexerRestrictionsHeading"]</h3>
+                <div class="admset-table-wrap"><table class="admset-table">
+                    <thead><tr><th>@ui["settings.acquisition.nameColumn"]</th><th>@ui["settings.acquisition.tagsColumn"]</th><th>@ui["settings.acquisition.allowedIndexersColumn"]</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var restriction in Model.Policy.IndexerRestrictions)
+                        {
+                            <tr>
+                                <td>@restriction.Name</td>
+                                <td>@string.Join(", ", restriction.TagIds)</td>
+                                <td>@string.Join(", ", restriction.AllowedIndexerEntryIds.Select(id => Model.IndexerEntries.FirstOrDefault(entry => entry.Id == id)?.Name ?? id.ToString()))</td>
+                                <td>
+                                    <form method="post" asp-page-handler="RemoveIndexerRestriction">
+                                        <input type="hidden" name="restrictionId" value="@restriction.Id" />
+                                        <button class="button" type="submit">@ui["settings.acquisition.remove"]</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table></div>
+            }
+        </section>
+    }
 
     @if (Model.ShowAnimeAutoMonitor)
     {

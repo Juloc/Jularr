@@ -43,6 +43,24 @@ public sealed class ManagerAdminPagesRenderTests
         Assert.AreEqual(ReleaseRuleEffect.Reject, stored.ScoreRules.Single(rule => rule.Value == "BAD").EffectiveEffect, "A rule row the owner added is stored with its effect.");
         Assert.AreEqual(120, stored.FallbackTiers.Single().AfterMinutes);
 
+        // Wait & sources: the section lists the configured indexers, a saved allow list is the profile's source policy and the test explains a release.
+        var entry = (await video.Get<Jularr.Web.Features.Acquisition.Indexers.IndexerStore>().LoadAllAsync()).Single();
+        StringAssert.Contains(html, "Wait & sources");
+        StringAssert.Contains(html, entry.Name);
+        form.AllowedSources = [entry.Id];
+        form.PreferredSources = [entry.Id];
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Save", FormFields(form)));
+        var restricted = (await store.ResolveAsync(MediaAcquisitionKind.Movie, null)).SourcePolicy;
+        CollectionAssert.AreEqual(new[] { entry.Id }, restricted.AllowedEntryIds);
+        CollectionAssert.AreEqual(new[] { entry.Id }, restricted.PreferredEntryIds);
+        var tested = await host.PostHtmlAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Test", [.. FormFields(form), new("testTitle", "Dune.2021.720p.WEB-DL.x264-GROUP"), new("testSource", Guid.NewGuid().ToString()), new("testWantedMinutes", "0")]);
+        StringAssert.Contains(tested, "data-profile-test-result");
+        StringAssert.Contains(tested, "Would not be found: the profile does not search this indexer.");
+        form.AllowedSources = [];
+        form.PreferredSources = [];
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Save", FormFields(form)));
+        Assert.IsFalse((await store.ResolveAsync(MediaAcquisitionKind.Movie, null)).SourcePolicy.IsRestricted);
+
         form.Rules = [new ScoreRuleRow { Effect = "Prefer", Field = "NoSuchField", Match = "Equals", Value = "x", Score = "5", Name = "broken" }];
         var rejected = await host.PostAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Save", FormFields(form));
         Assert.AreEqual(HttpStatusCode.OK, rejected, "An invalid rule is explained on the page, not stored.");
@@ -149,6 +167,8 @@ public sealed class ManagerAdminPagesRenderTests
         ];
         fields.AddRange(form.QualityOrder.Select(quality => new KeyValuePair<string, string>("QualityOrder", quality)));
         fields.AddRange(form.AllowedQualities.Select(quality => new KeyValuePair<string, string>("AllowedQualities", quality)));
+        fields.AddRange(form.AllowedSources.Select(source => new KeyValuePair<string, string>("AllowedSources", source.ToString())));
+        fields.AddRange(form.PreferredSources.Select(source => new KeyValuePair<string, string>("PreferredSources", source.ToString())));
         for (var index = 0; index < form.Rules.Count; index++)
         {
             var rule = form.Rules[index];

@@ -316,7 +316,7 @@ public sealed class MusicAcquisitionEngine(
         MusicJudgement Judge(ProwlarrReleaseCandidate release) => MusicReleaseJudge.Judge(parser, payload.Artist, payload.Album, payload.Year, release);
         var search = await indexers.SearchAsync(
             intent,
-            options with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong && Judge(release).SafetyRejection is null) },
+            options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong && Judge(release).SafetyRejection is null) },
             cancellationToken);
 
         var judged = search.Releases

@@ -219,13 +219,14 @@ public sealed class BookSearchCoordinator(
     public async Task<BookUsenetSearchResult> SearchUsenetAsync(
         string title,
         string? author,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DateTimeOffset? wantedSince = null)
     {
         var profile = await qualityProfiles.ResolveAsync(
             MediaAcquisitionKind.Book,
             workId: null,
             cancellationToken);
-        return await BookUsenetSearch.SearchAsync(indexers, title, author, profile, cancellationToken, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+        return await BookUsenetSearch.SearchAsync(indexers, title, author, profile, cancellationToken, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken), wantedSince: wantedSince);
     }
 
     private async Task<SourceResult<UsenetPool>> CaptureUsenetPoolAsync(

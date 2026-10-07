@@ -61,6 +61,19 @@ public sealed record ReleaseScoreRule(
 /// </summary>
 public sealed record FallbackTier(int AfterMinutes, string[] AddedQualities);
 
+/// <summary>
+/// Which indexers an Acquisition Profile may search and which it prefers, by the canonical entry id of the Indexer settings (the profile never copies
+/// an indexer's configuration). An empty allow list is "every indexer that takes part in this kind of search". A restricted profile is never silently
+/// widened: when none of its indexers can be searched the search says so and asks nobody else. Preferred entries only win ties between candidates that are
+/// otherwise equal, so a preferred source never makes an unacceptable release acceptable.
+/// </summary>
+public sealed record AcquisitionSourcePolicy(Guid[] AllowedEntryIds, Guid[] PreferredEntryIds)
+{
+    public static AcquisitionSourcePolicy Unrestricted { get; } = new([], []);
+
+    public bool IsRestricted => AllowedEntryIds.Length > 0;
+}
+
 public sealed record QualityProfile(
     string Id,
     string Name,
@@ -91,6 +104,9 @@ public sealed record QualityProfile(
 
     /// <summary>Whether a candidate whose identity is only ambiguous may be taken automatically; by default it waits for manual review.</summary>
     public bool AllowAmbiguousIdentity { get; init; }
+
+    /// <summary>The indexers this profile may search and prefers; the same policy applies to Automatic and Manual Search of every media type the profile serves.</summary>
+    public AcquisitionSourcePolicy SourcePolicy { get; init; } = AcquisitionSourcePolicy.Unrestricted;
 }
 
 // Media-type-agnostic quality-profile state. Profiles are shared shapes; each media type has a

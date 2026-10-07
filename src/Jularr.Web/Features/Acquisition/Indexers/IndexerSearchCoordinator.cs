@@ -20,6 +20,11 @@ public sealed class IndexerSearchCoordinator(
     ILogger<IndexerSearchCoordinator> logger,
     SearchEvidenceCache? evidence = null)
 {
+    /// <summary>How far a profile's preferred source moves up the indexer order: far enough to beat any configured priority, never a reason to accept a release.</summary>
+    private const int PreferredSourceBoost = 10_000;
+
+    private const string SourcePolicyBlockMessage = "The profile's sources leave no enabled indexer to search for this kind of search; no other indexer was asked.";
+
     private readonly SearchEvidenceCache cache = evidence ?? new SearchEvidenceCache();
 
     public async Task<bool> HasEnabledIndexerAsync(CancellationToken cancellationToken) =>
@@ -60,7 +65,8 @@ public sealed class IndexerSearchCoordinator(
             .ToArray();
         if (entries.Length == 0)
         {
-            return AcquisitionSearchResult.Empty;
+            // A restriction that leaves nothing is reported, never widened: the caller must be able to tell it from "nothing found".
+            return options.AllowedEntryIds is null ? AcquisitionSearchResult.Empty : AcquisitionSearchResult.Empty with { SourcePolicyBlock = SourcePolicyBlockMessage };
         }
 
         var session = new SearchSession(options);
@@ -78,7 +84,7 @@ public sealed class IndexerSearchCoordinator(
             }
         }));
 
-        var hits = runs.SelectMany(run => run.Hits).ToArray();
+        var hits = runs.SelectMany(run => run.Hits).Select(hit => options.PreferredEntryIds?.Contains(hit.EntryId) == true ? hit with { Priority = hit.Priority - PreferredSourceBoost } : hit).ToArray();
         return new AcquisitionSearchResult(
             ReleaseDeduplicator.Merge(hits),
             [.. runs.Select(run => run.Outcome)],

@@ -132,7 +132,11 @@ public enum SelectionOutcome
     Usable
 }
 
-public sealed record SelectionContext(DateTimeOffset Now, DateTimeOffset WantedSince);
+public sealed record SelectionContext(DateTimeOffset Now, DateTimeOffset WantedSince)
+{
+    /// <summary>The start of a request's wait: the stored creation time, so the wait of a request survives a restart and never starts over.</summary>
+    public static DateTimeOffset SinceCreated(DateTime createdUtc) => new(DateTime.SpecifyKind(createdUtc, DateTimeKind.Utc));
+}
 
 public sealed record SelectionResult(
     IReadOnlyList<CandidateEvaluation> Ranked,
@@ -158,7 +162,7 @@ public static class ReleaseSelectionEngine
         var activeTier = ActiveTier(profile, context);
         var effective = profile with { AllowedQualities = AllowedAt(profile, activeTier) };
         var ranked = candidates
-            .Select(candidate => Evaluate(profile, effective, activeTier, candidate, reliability))
+            .Select(candidate => Evaluate(profile, effective, context, activeTier, candidate, reliability))
             .OrderBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible or SelectionDecision.Temporary => 0, SelectionDecision.ManualReview => 1, _ => 2 })
             .ThenBy(evaluation => evaluation.FallbackTier)
             .ThenBy(evaluation => evaluation.QualityRank)
@@ -197,7 +201,7 @@ public static class ReleaseSelectionEngine
             ? []
             : [.. profile.AllowedQualities.Concat(profile.FallbackTiers.Take(tier).SelectMany(fallback => fallback.AddedQualities)).Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    private static CandidateEvaluation Evaluate(QualityProfile profile, QualityProfile effective, int activeTier, SelectionCandidate candidate, ReleaseReliabilityLookup? lookup)
+    private static CandidateEvaluation Evaluate(QualityProfile profile, QualityProfile effective, SelectionContext context, int activeTier, SelectionCandidate candidate, ReleaseReliabilityLookup? lookup)
     {
         var reasons = new List<SelectionReason>();
         var reliability = (candidate.Reliability ?? lookup?.For(candidate.Indexer, candidate.Parsed?.ReleaseGroup))?.Points ?? 0;
@@ -223,7 +227,7 @@ public static class ReleaseSelectionEngine
 
         foreach (var rejection in score.RejectionReasons)
         {
-            reasons.Add(ProfileReason(profile, activeTier, rejection));
+            reasons.Add(ProfileReason(profile, context, activeTier, rejection));
         }
 
         if (!score.Accepted)
@@ -265,7 +269,7 @@ public static class ReleaseSelectionEngine
     }
 
     // A quality a later fallback tier would allow is not "not allowed": it is waiting, and the reason says until when.
-    private static SelectionReason ProfileReason(QualityProfile profile, int activeTier, string rejection)
+    private static SelectionReason ProfileReason(QualityProfile profile, SelectionContext context, int activeTier, string rejection)
     {
         if (!rejection.StartsWith("Quality '", StringComparison.Ordinal))
         {
@@ -277,7 +281,8 @@ public static class ReleaseSelectionEngine
         {
             if (profile.FallbackTiers[index].AddedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase))
             {
-                return new SelectionReason(SelectionReasonKind.Fallback, "WaitingForFallbackTier", $"{quality} is allowed from fallback tier {index + 1}, after {profile.FallbackTiers[index].AfterMinutes} minutes of waiting.");
+                var after = profile.FallbackTiers[index].AfterMinutes;
+                return new SelectionReason(SelectionReasonKind.Fallback, "WaitingForFallbackTier", $"{quality} is allowed from fallback tier {index + 1}, after {after} minutes of waiting (from {context.WantedSince.AddMinutes(after):u}).");
             }
         }
 

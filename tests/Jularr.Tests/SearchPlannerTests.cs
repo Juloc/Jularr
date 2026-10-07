@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Health;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.ReadingAcquisition;
 using Microsoft.AspNetCore.DataProtection;
@@ -329,6 +330,81 @@ public sealed class SearchPlannerTests
         Assert.AreEqual(1, result.Releases.Count);
     }
 
+    public static IEnumerable<object[]> EveryAcquisitionKind() => Enum.GetValues<MediaAcquisitionKind>().Select(kind => new object[] { kind });
+
+    [TestMethod]
+    [DynamicData(nameof(EveryAcquisitionKind))]
+    public async Task AProfilesAllowListSearchesOnlyItsIndexersWhateverTheMediaKind(MediaAcquisitionKind kind)
+    {
+        using var host = new SearchHost();
+        var allowed = await host.AddAsync("Allowed", 5);
+        var other = await host.AddAsync("Other", 1);
+        var asked = new List<Guid>();
+        host.Script = (entry, _) =>
+        {
+            asked.Add(entry.Id);
+            return [Release(entry.Name, "Dune.2021.1080p.WEB.H264-GRP", 4_000_000_000, entry.Name + "-1")];
+        };
+        var policy = new AcquisitionSourcePolicy([allowed.Id], []);
+
+        var result = await host.Coordinator.SearchAsync(new SearchIntent(kind, "Dune"), new SearchOptions { Depth = SearchDepth.Fast }.WithSourcePolicy(policy), CancellationToken.None);
+        var unrestricted = await host.Coordinator.SearchAsync(new SearchIntent(kind, "Dune"), new SearchOptions { Depth = SearchDepth.Fast, Refresh = true }.WithSourcePolicy(AcquisitionSourcePolicy.Unrestricted), CancellationToken.None);
+
+        Assert.IsTrue(result.Releases.Count > 0);
+        Assert.IsFalse(result.Releases.SelectMany(release => release.Sources).Any(source => source.EntryId == other.Id), "The profile never asks an indexer it does not name.");
+        Assert.IsNull(result.SourcePolicyBlock);
+        Assert.IsTrue(unrestricted.Releases.SelectMany(release => release.Sources).Any(source => source.EntryId == other.Id), "Without a list every indexer takes part.");
+    }
+
+    [TestMethod]
+    public async Task ARestrictedProfileIsNeverWidenedWhenItsIndexersAreGoneOffOrDown()
+    {
+        using var host = new SearchHost();
+        var removed = Guid.NewGuid();
+        var off = await host.AddAsync("Off", 1, enabled: false);
+        var down = await host.AddAsync("Down", 2);
+        await host.AddAsync("Unrelated", 3);
+        var asked = new List<string>();
+        host.Script = (entry, _) =>
+        {
+            asked.Add(entry.Name);
+            return entry.Id == down.Id ? throw new IndexerException("down") : [Release(entry.Name, "Dune.2021.1080p.WEB.H264-GRP", 4_000_000_000, "u-1")];
+        };
+        var intent = new SearchIntent(MediaAcquisitionKind.Movie, "Dune") { Year = 2021 };
+
+        var gone = await host.Coordinator.SearchAsync(intent, new SearchOptions().WithSourcePolicy(new AcquisitionSourcePolicy([removed, off.Id], [])), CancellationToken.None);
+        var failing = await host.Coordinator.SearchAsync(intent, new SearchOptions().WithSourcePolicy(new AcquisitionSourcePolicy([down.Id], [])), CancellationToken.None);
+
+        Assert.IsNotNull(gone.SourcePolicyBlock, "A list with no enabled indexer says so instead of searching the others.");
+        Assert.IsTrue(gone.EveryIndexerFailed, "It is an unavailable source, never a statement about the media.");
+        Assert.AreEqual(0, gone.Releases.Count);
+        StringAssert.Contains(gone.Warnings[0].Message, "no other indexer was asked");
+        Assert.AreEqual(0, failing.Releases.Count);
+        Assert.IsTrue(failing.EveryIndexerFailed);
+        CollectionAssert.AreEqual(new[] { "Down" }, asked.Distinct().ToArray(), "Neither the disabled nor the unrelated indexer was asked.");
+    }
+
+    [TestMethod]
+    public async Task APreferredIndexerWinsTheSameReleaseAndAProfileOnlyNarrowsACallersRestriction()
+    {
+        using var host = new SearchHost();
+        var first = await host.AddAsync("First", 1);
+        var second = await host.AddAsync("Second", 5);
+        var third = await host.AddAsync("Third", 9);
+        host.Script = (entry, _) => [Release(entry.Name, "Dune.2021.1080p.WEB.H264-GRP", 4_000_000_000, "same-1")];
+        var intent = new SearchIntent(MediaAcquisitionKind.Movie, "Dune") { Year = 2021 };
+
+        var plain = await host.Coordinator.SearchAsync(intent, new SearchOptions { Depth = SearchDepth.Fast }, CancellationToken.None);
+        var preferred = await host.Coordinator.SearchAsync(intent, new SearchOptions { Depth = SearchDepth.Fast, Refresh = true }.WithSourcePolicy(new AcquisitionSourcePolicy([], [third.Id])), CancellationToken.None);
+        var narrowed = new SearchOptions { AllowedEntryIds = [first.Id, second.Id] }.WithSourcePolicy(new AcquisitionSourcePolicy([second.Id, third.Id], []));
+        var empty = new SearchOptions { AllowedEntryIds = [first.Id] }.WithSourcePolicy(new AcquisitionSourcePolicy([third.Id], []));
+
+        Assert.AreEqual("First", plain.Releases[0].Sources[0].Indexer, "By configured priority.");
+        Assert.AreEqual("Third", preferred.Releases[0].Sources[0].Indexer, "The profile's preferred source is the first one tried for the same release.");
+        CollectionAssert.AreEqual(new[] { second.Id }, narrowed.AllowedEntryIds!.ToArray());
+        Assert.AreEqual(0, empty.AllowedEntryIds!.Count, "An empty intersection stays empty, it never becomes everything.");
+    }
+
     private static SearchHit Hit(string indexer, int priority, string title, long? size, string guid, DateTimeOffset posted) =>
         new(Release(indexer, title, size, guid, posted), Guid.NewGuid(), priority, indexer, new PlannedQuery("title", 0, IndexerSearchMode.Search, "Show S01E01", [], "Title + S01E01"));
 
@@ -359,13 +435,13 @@ public sealed class SearchPlannerTests
             NullLogger<IndexerSearchCoordinator>.Instance,
             new SearchEvidenceCache());
 
-        public async Task<IndexerEntry> AddAsync(string name, int priority, bool automatic = true, bool interactive = true, int limit = 100)
+        public async Task<IndexerEntry> AddAsync(string name, int priority, bool automatic = true, bool interactive = true, int limit = 100, bool enabled = true)
         {
             var entry = new IndexerEntry(
                 Guid.NewGuid(),
                 name,
                 IndexerType.Newznab,
-                true,
+                enabled,
                 priority,
                 new IndexerSettings("http://indexer.example", [5070], [], limit) { AutomaticSearch = automatic, InteractiveSearch = interactive },
                 "key");

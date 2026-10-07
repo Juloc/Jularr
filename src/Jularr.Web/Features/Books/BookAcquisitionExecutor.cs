@@ -112,7 +112,8 @@ public sealed class BookAcquisitionExecutor(
         var usenetSearch = await search.SearchUsenetAsync(
             payload.Title,
             payload.Author,
-            cancellationToken);
+            cancellationToken,
+            SelectionContext.SinceCreated(request.CreatedAt));
         return await tracker.ContinueAsync(
             request,
             payload,
@@ -229,16 +230,17 @@ public static class BookUsenetSearch
         QualityProfile profile,
         CancellationToken cancellationToken,
         SearchOptions? options = null,
-        ReleaseReliabilityLookup? reliability = null)
+        ReleaseReliabilityLookup? reliability = null,
+        DateTimeOffset? wantedSince = null)
     {
         var intent = new SearchIntent(MediaAcquisitionKind.Book, title.Trim()) { Creator = string.IsNullOrWhiteSpace(author) ? null : author.Trim() };
         var result = await indexers.SearchAsync(
             intent,
-            (options ?? new SearchOptions()) with { UsableCount = releases => BookReleaseSelector.Rank(releases, title, author, profile, reliability).Count(ranked => ranked.Score > 0) },
+            (options ?? new SearchOptions()).WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => BookReleaseSelector.Rank(releases, title, author, profile, reliability, wantedSince).Count(ranked => ranked.Score > 0) },
             cancellationToken);
         return new BookUsenetSearchResult(
             [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
-            BookReleaseSelector.Rank(result.Releases, title, author, profile, reliability),
+            BookReleaseSelector.Rank(result.Releases, title, author, profile, reliability, wantedSince),
             result.Warnings,
             result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0))
         {
@@ -265,7 +267,8 @@ public static class BookReleaseSelector
         string title,
         string? author,
         QualityProfile? profile = null,
-        ReleaseReliabilityLookup? reliability = null)
+        ReleaseReliabilityLookup? reliability = null,
+        DateTimeOffset? wantedSince = null)
     {
         // Identity is decided first and the shared selection engine orders what is left, so a custom profile can reject or prefer a
         // format, regex or scored term but can never make a release for another book eligible.
@@ -274,7 +277,7 @@ public static class BookReleaseSelector
         var authorWords = Words(author);
         var judged = releases.GroupBy(release => release.Identity, StringComparer.Ordinal).ToDictionary(group => group.Key, group => Judge(group.First(), titleWords, authorWords), StringComparer.Ordinal);
         var now = DateTimeOffset.UtcNow;
-        var selection = ReleaseSelectionEngine.Select(effectiveProfile, new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)], reliability);
+        var selection = ReleaseSelectionEngine.Select(effectiveProfile, new SelectionContext(now, wantedSince ?? now), [.. judged.Values.Select(item => item.Candidate)], reliability);
         return [.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))];
     }
 
@@ -313,8 +316,9 @@ public static class BookReleaseSelector
         var score = evaluation.Score;
         if (!evaluation.IsSelectable)
         {
+            var waiting = evaluation.Reasons.FirstOrDefault(reason => reason.Code == "WaitingForFallbackTier")?.Detail;
             var because = evaluation.Reasons.FirstOrDefault(reason => reason.Kind is SelectionReasonKind.Safety)?.Detail
-                          ?? (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict ? evaluation.Candidate.Identity.Detail : string.Join("; ", score?.RejectionReasons ?? []));
+                          ?? (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict ? evaluation.Candidate.Identity.Detail : waiting ?? string.Join("; ", score?.RejectionReasons ?? []));
             return new RankedBookRelease(judged.Release, 0, because)
             {
                 QualityKey = score?.QualityKey,

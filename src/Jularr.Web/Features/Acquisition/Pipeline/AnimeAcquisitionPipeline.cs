@@ -273,10 +273,8 @@ public sealed class AnimeAcquisitionPipeline(
                 return new(target, episode?.Key, mode, [], [], blockedReason);
             }
 
-            var result = await indexers.SearchAsync(
-                ToSearchIntent(searchTarget),
-                new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(searchTarget, releases) },
-                cancellationToken);
+            var searchOptions = new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(searchTarget, releases) };
+            var result = await indexers.SearchAsync(ToSearchIntent(searchTarget), searchOptions.WithSourcePolicy(target.Profile.SourcePolicy), cancellationToken);
             var snapshot = await observation.GetSnapshotAsync(forceRefresh: false, cancellationToken);
             var candidates = Evaluate(target, scope, wanted, episode?.Key, result.Releases, state, snapshot, policy, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
             return new(target, episode?.Key, mode, candidates, result.Warnings, null);
@@ -907,10 +905,8 @@ public sealed class AnimeAcquisitionPipeline(
             }
 
             var episodeTarget = PlannedTargetFor(target, episode, allWanted);
-            var result = await indexers.SearchAsync(
-                ToSearchIntent(episodeTarget),
-                new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(episodeTarget, releases) },
-                cancellationToken);
+            var searchOptions = new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(episodeTarget, releases) };
+            var result = await indexers.SearchAsync(ToSearchIntent(episodeTarget), searchOptions.WithSourcePolicy(target.Profile.SourcePolicy), cancellationToken);
             foreach (var warning in result.Warnings)
             {
                 await operations.AppendLogAsync(operationId, OperationLogLevel.Warning, LogModule, $"{warning.IndexerName}: {warning.Message}{(string.IsNullOrEmpty(warning.Query) ? "" : $" ({warning.Query})")}", cancellationToken);

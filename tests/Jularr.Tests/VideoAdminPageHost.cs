@@ -99,6 +99,7 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
                     services.AddScoped<Jularr.Web.Features.Music.MusicAcquisitionEngine>();
                     services.AddScoped<Jularr.Web.Features.Music.MusicManualSearchService>();
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.Indexers.IndexerSearchCoordinator>());
+                    services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.Indexers.IndexerStore>());
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.DownloadClientStore>());
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.DownloadClientSubmissionService>());
                     services.AddSingleton(video.Get<ReleaseRequestTracker>());
@@ -150,7 +151,18 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
     /// Posts a form the way a browser does: the anti-forgery token and cookie come from <paramref name="formPage"/>. A successful action answers
     /// with the redirect back to the page, which is not followed.
     /// </summary>
-    public async Task<HttpStatusCode> PostAsync(string formPage, string handlerPath, IEnumerable<KeyValuePair<string, string>> fields, bool asOwner = true, bool withToken = true)
+    public async Task<HttpStatusCode> PostAsync(string formPage, string handlerPath, IEnumerable<KeyValuePair<string, string>> fields, bool asOwner = true, bool withToken = true) =>
+        (await SendAsync(formPage, handlerPath, fields, asOwner, withToken)).Status;
+
+    /// <summary>Posts a form the way <see cref="PostAsync"/> does and returns the page the post answered with (a handler that renders instead of redirecting).</summary>
+    public async Task<string> PostHtmlAsync(string formPage, string handlerPath, IEnumerable<KeyValuePair<string, string>> fields)
+    {
+        var (status, html) = await SendAsync(formPage, handlerPath, fields, true, true);
+        Assert.AreEqual(HttpStatusCode.OK, status, $"POST {handlerPath} failed:\n{html}");
+        return WebUtility.HtmlDecode(html);
+    }
+
+    private async Task<(HttpStatusCode Status, string Html)> SendAsync(string formPage, string handlerPath, IEnumerable<KeyValuePair<string, string>> fields, bool asOwner, bool withToken)
     {
         var form = fields.ToList();
         using var client = Client(asOwner);
@@ -168,7 +180,7 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
         }
 
         using var response = await client.PostAsync(handlerPath, new FormUrlEncodedContent(form));
-        return response.StatusCode;
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
     public async ValueTask DisposeAsync()

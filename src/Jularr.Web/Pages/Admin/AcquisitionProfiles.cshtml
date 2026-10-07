@@ -273,6 +273,71 @@
                         </template>
                         <button type="button" class="button" data-repeat-add><partial name="_AdminIcon" model='"plus"' />@ui["admin.profiles.tier.add"]</button>
                     </div>
+                    <h3 class="admset-label">@ui["admin.profiles.sources"]</h3>
+                    <p class="admset-hint">@ui["admin.profiles.sources.hint"]</p>
+                    @if (Model.Sources.Count == 0)
+                    {
+                        <p class="admset-hint">@ui["admin.profiles.sources.none"]</p>
+                    }
+                    else
+                    {
+                        <ul class="admprofiles-sources">
+                            @foreach (var source in Model.Sources)
+                            {
+                                <li>
+                                    <label class="admprofiles-chip"><input type="checkbox" name="AllowedSources" value="@source.Id" checked="@Model.Form.AllowedSources.Contains(source.Id)" /><span>@source.Name</span></label>
+                                    <label class="admprofiles-chip"><input type="checkbox" name="PreferredSources" value="@source.Id" checked="@Model.Form.PreferredSources.Contains(source.Id)" /><span>@ui["admin.profiles.sources.prefer"]</span></label>
+                                    @if (source.Missing)
+                                    {
+                                        <span class="admin-tag admin-tag-text">@ui["admin.profiles.sources.missing"]</span>
+                                    }
+                                    else if (!source.Enabled)
+                                    {
+                                        <span class="admin-tag admin-tag-text">@ui["admin.profiles.sources.disabled"]</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                <section class="admset-section" aria-labelledby="admprofiles-test">
+                    <div class="admset-head"><div><h2 id="admprofiles-test">@ui["admin.profiles.test.heading"]</h2><p>@ui["admin.profiles.test.hint"]</p></div></div>
+                    <div class="admset-grid">
+                        <label class="admset-field"><span class="admset-label">@ui["admin.profiles.test.title"]</span><input class="admset-control" name="testTitle" value="@Model.TestInput.Title" spellcheck="false" /></label>
+                        <label class="admset-field"><span class="admset-label">@ui["admin.profiles.test.size"]</span><input class="admset-control" type="number" min="0" name="testSizeMegabytes" value="@Model.TestInput.SizeMegabytes" /></label>
+                        <label class="admset-field"><span class="admset-label">@ui["admin.profiles.test.wanted"]</span><input class="admset-control" type="number" min="0" name="testWantedMinutes" value="@Model.TestInput.WantedMinutes" /></label>
+                        <label class="admset-field">
+                            <span class="admset-label">@ui["admin.profiles.test.source"]</span>
+                            <select class="admset-control" name="testSource">
+                                <option value="">@ui["admin.profiles.test.sourceAny"]</option>
+                                @foreach (var source in Model.Sources.Where(source => !source.Missing))
+                                {
+                                    <option value="@source.Id" selected="@(Model.TestInput.Source == source.Id)">@source.Name</option>
+                                }
+                            </select>
+                        </label>
+                    </div>
+                    <div class="admset-actions"><button class="button" type="submit" asp-page-handler="Test" formnovalidate>@ui["admin.profiles.test.run"]</button></div>
+                    @if (Model.TestResult is { } test)
+                    {
+                        <div class="admset-notice" role="status" data-profile-test-result>
+                            <p><strong>@Model.TestVerdict(test)</strong></p>
+                            @if (test.QualityKey.Length > 0)
+                            {
+                                <p>@ui.Format("admin.profiles.test.quality", ("quality", test.QualityKey), ("score", test.Score))</p>
+                            }
+                            @if (test.Reasons.Count > 0)
+                            {
+                                <ul>
+                                    @foreach (var reason in test.Reasons)
+                                    {
+                                        <li>@reason</li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    }
                 </section>
 
                 <div class="admset-actions">

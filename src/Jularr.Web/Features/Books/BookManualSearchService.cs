@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Wanted;
@@ -55,7 +56,8 @@ public sealed class BookManualSearchService(
         var result = await search.SearchUsenetAsync(
             target.Payload.Title,
             target.Payload.Author,
-            cancellationToken);
+            cancellationToken,
+            SelectionContext.SinceCreated(target.Request.CreatedAt));
         SearchCache[requestId] = new SearchCacheEntry(
             now,
             target.Payload.Title,
@@ -82,7 +84,8 @@ public sealed class BookManualSearchService(
         var result = await search.SearchUsenetAsync(
             payload.Title,
             payload.Author,
-            cancellationToken);
+            cancellationToken,
+            SelectionContext.SinceCreated(request.CreatedAt));
         SearchCache.TryRemove(requestId, out _);
         var selected = SelectRelease(
             result,

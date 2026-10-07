@@ -320,33 +320,6 @@ public sealed class AcquisitionModel(
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostAddTagAsync(string name, CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.tagNameRequired"];
-            return RedirectToPage();
-        }
-
-        await policyStore.UpdateAsync(
-            state =>
-            {
-                var id = name.Trim().ToLowerInvariant().Replace(' ', '-');
-                if (state.Tags.Any(tag => tag.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return state;
-                }
-
-                var tags = state.Tags.Append(new AcquisitionTag(id, name.Trim())).ToList();
-                return state with { Tags = tags };
-            },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.tagAdded"];
-        return RedirectToPage();
-    }
-
     public async Task<IActionResult> OnPostRemoveTagAsync(string tagId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -367,39 +340,6 @@ public sealed class AcquisitionModel(
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostAddDelayProfileAsync(
-        string name,
-        int delayMinutes,
-        string? qualityProfileId,
-        string[]? tagIds,
-        bool isDefault,
-        CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        if (string.IsNullOrWhiteSpace(name) || delayMinutes < 0)
-        {
-            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.delayProfileRequired"];
-            return RedirectToPage();
-        }
-
-        await policyStore.UpdateAsync(
-            state =>
-            {
-                var profiles = state.DelayProfiles.Append(new AnimeDelayProfile(
-                    Guid.NewGuid().ToString("N"),
-                    name.Trim(),
-                    delayMinutes,
-                    string.IsNullOrWhiteSpace(qualityProfileId) ? null : qualityProfileId.Trim(),
-                    tagIds ?? [],
-                    isDefault)).ToList();
-                return state with { DelayProfiles = profiles };
-            },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.delayProfileAdded"];
-        return RedirectToPage();
-    }
-
     public async Task<IActionResult> OnPostRemoveDelayProfileAsync(string profileId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -408,42 +348,6 @@ public sealed class AcquisitionModel(
             state => state with { DelayProfiles = state.DelayProfiles.Where(profile => profile.Id != profileId).ToList() },
             cancellationToken);
         TempData["Status"] = Ui["settings.acquisition.status.delayProfileRemoved"];
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostAddIndexerRestrictionAsync(
-        string name,
-        string[]? tagIds,
-        Guid[]? allowedIndexerEntryIds,
-        CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        if (string.IsNullOrWhiteSpace(name) || tagIds is not { Length: > 0 })
-        {
-            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.indexerRestrictionNameAndTag"];
-            return RedirectToPage();
-        }
-
-        var ids = (allowedIndexerEntryIds ?? [])
-            .Distinct()
-            .Order()
-            .ToArray();
-        if (ids.Length == 0)
-        {
-            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.indexerRestrictionIndexer"];
-            return RedirectToPage();
-        }
-
-        await policyStore.UpdateAsync(
-            state =>
-            {
-                var restrictions = state.IndexerRestrictions.Append(
-                    new AnimeIndexerRestriction(Guid.NewGuid().ToString("N"), name.Trim(), tagIds, ids)).ToList();
-                return state with { IndexerRestrictions = restrictions };
-            },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.indexerRestrictionAdded"];
         return RedirectToPage();
     }
 

@@ -1,7 +1,9 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
@@ -18,16 +20,28 @@ public sealed record ProfileQualityRowView(string Quality, bool TakenAtOnce, boo
 
 public sealed record ProfileRuleRowView(ScoreRuleRow Row, string Index, IReadOnlyList<ReleaseRuleField> Fields, UiTextBundle Ui);
 
+/// <summary>One indexer as the Sources section offers it: a configured entry, or an id the profile still names that no longer exists (kept until the owner unticks it, so deleting an indexer never widens the profile).</summary>
+public sealed record ProfileSourceRow(Guid Id, string Name, bool Enabled, bool Missing);
+
+/// <summary>What was typed into the profile test, kept so the result page shows it again.</summary>
+public sealed record ProfileTestInput(string? Title, string? SizeMegabytes, Guid? Source, string? WantedMinutes);
+
 public sealed record ProfileTierRowView(FallbackTierRow Row, string Index, IReadOnlyList<string> Qualities, UiTextBundle Ui);
 
 /// <summary>
 /// The one Admin editor of Acquisition Profiles, for every media type that has an acquisition kind: the profile list with where each is used,
-/// and the selected profile's quality order, upgrade policy, release rules and waiting steps. It edits the generic <see cref="QualityProfile"/>
+/// and the selected profile's quality order, upgrade policy, release rules, waiting steps and sources, with a test of one release name against the profile as edited. It edits the generic <see cref="QualityProfile"/>
 /// of the shared store; a media type only decides which profile is its default and which rule fields its releases carry.
 /// </summary>
 [Authorize(Policy = JularrPolicies.AcquisitionSettings)]
-public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStore store, MediaAcquisitionRegistry registry, IInstanceModuleService modules) : PageModel
+public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStore store, MediaAcquisitionRegistry registry, IInstanceModuleService modules, IndexerStore indexerStore, TimeProvider? clock = null) : PageModel
 {
+    public IReadOnlyList<ProfileSourceRow> Sources { get; private set; } = [];
+
+    public ProfileTestResult? TestResult { get; private set; }
+
+    public ProfileTestInput TestInput { get; private set; } = new(null, null, null, "0");
+
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
     public IReadOnlyList<AcquisitionProfileRow> Rows { get; private set; } = [];
@@ -96,6 +110,30 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
         return Page();
     }
 
+    /// <summary>Runs one release name through the shared selection engine with the profile exactly as it is in the form, saving nothing.</summary>
+    public async Task<IActionResult> OnPostTestAsync(QualityProfileForm form, string? testTitle, string? testSizeMegabytes, Guid? testSource, string? testWantedMinutes, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        await LoadAsync(form.Id, cancellationToken);
+        if (Selected is null)
+        {
+            return NotFound();
+        }
+
+        var result = QualityProfileEditing.Parse(form);
+        Errors = result.Errors;
+        Form = form;
+        TestInput = new ProfileTestInput(testTitle, testSizeMegabytes, testSource, testWantedMinutes);
+        if (result.Profile is { } profile && !string.IsNullOrWhiteSpace(testTitle))
+        {
+            long? size = long.TryParse(testSizeMegabytes, out var megabytes) && megabytes > 0 ? megabytes * 1024 * 1024 : null;
+            var minutes = int.TryParse(testWantedMinutes, out var waited) && waited >= 0 ? waited : 0;
+            TestResult = ProfileTest.Run(profile, registry.ParserFor(KindsOf(Selected)[0]), testTitle.Trim(), size, testSource, TimeSpan.FromMinutes(minutes), (clock ?? TimeProvider.System).GetUtcNow());
+        }
+
+        return Page();
+    }
+
     public async Task<IActionResult> OnPostNewAsync(MediaAcquisitionKind kind, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -150,6 +188,18 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
         TempData["ProfilesNotice"] = Ui["admin.profiles.saved"];
         return RedirectToPage(new { id });
     }
+
+    /// <summary>The verdict of a profile test in words: taken now, taken as a temporary choice, waiting until a time, or not taken.</summary>
+    public string TestVerdict(ProfileTestResult test) =>
+        test.EligibleAt is { } until ? Ui.Format("admin.profiles.test.waiting", ("time", until.ToString("u")))
+            : test.SourceProblem is not null ? Ui["admin.profiles.test.notFound"]
+            : test.Decision switch
+            {
+                SelectionDecision.Eligible => Ui["admin.profiles.test.grab"],
+                SelectionDecision.Temporary => Ui["admin.profiles.test.temporary"],
+                SelectionDecision.ManualReview => Ui["admin.profiles.test.manual"],
+                _ => Ui["admin.profiles.test.rejected"]
+            };
 
     public string KindLabel(MediaAcquisitionKind kind) => Ui[MediaKindLabelKeys.Name(kind)];
 
@@ -223,6 +273,10 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
                 .OrderBy(row => row.Profile.Name, StringComparer.OrdinalIgnoreCase)
         ];
         Selected = Rows.FirstOrDefault(row => row.Profile.Id.Equals(id, StringComparison.OrdinalIgnoreCase)) ?? (string.IsNullOrWhiteSpace(id) ? Rows.FirstOrDefault() : null);
+
+        var entries = await indexerStore.LoadAllAsync(cancellationToken);
+        var named = Selected?.Profile.SourcePolicy.AllowedEntryIds.Concat(Selected.Profile.SourcePolicy.PreferredEntryIds).Where(entry => entries.All(known => known.Id != entry)).Distinct() ?? [];
+        Sources = [.. entries.OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase).Select(entry => new ProfileSourceRow(entry.Id, entry.Name, entry.Enabled, false)), .. named.Select(entry => new ProfileSourceRow(entry, entry.ToString("D")[..8], false, true))];
     }
 
     private async Task<string> CreateFromAsync(QualityProfile source, string name, CancellationToken cancellationToken)

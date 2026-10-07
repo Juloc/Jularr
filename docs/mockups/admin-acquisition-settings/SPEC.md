@@ -605,6 +605,18 @@ It does **not** own:
 
 Those remain in Admin Providers.
 
+### Implemented on dev: one profile owns wait and sources for every media kind (#396)
+
+**Wait.** The wait is the profile's fallback ladder (`FallbackTiers`): the qualities of the profile are taken at once, and after N minutes of the title being wanted the listed qualities are allowed too, as a temporary choice while the title stays wanted for the better one. The one `ReleaseSelectionEngine` applies it for Movie, TV, Anime, Book, Light Novel, Manga and Music from a stored start (the request's creation time, or the Anime unit's became-wanted time), so a restart never starts a wait over. Manual Search, the profile test and Automatic Search read the same reason ("allowed from fallback tier N, after M minutes (from <time>)"), which names when the release becomes eligible. Book, Light Novel and Manga used to rank with "wanted since now", so their ladder could never be reached; they now use the request's creation time.
+
+**Sources.** `QualityProfile.SourcePolicy` holds the indexer entries the profile may search (`AllowedEntryIds`, empty = every indexer that takes part) and the entries that win ties (`PreferredEntryIds`), both by the canonical entry id of the Indexer settings. Every search of a profile (Movie, TV, Anime, Book, Light Novel, Manga, Music; Automatic and Manual alike) applies it through `SearchOptions.WithSourcePolicy`, and `IndexerSearchCoordinator` enforces it. A restricted profile is never widened: when none of its indexers is enabled the search asks nobody, reports "no other indexer was asked" and counts as an unavailable source, not as a failed search; an allowed indexer that is down is not replaced by another one. A caller's own restriction (the legacy Anime tag restriction) is only narrowed by the profile. A preferred source is moved ahead of the configured priority for the same release, so it is the first one tried and wins ties; it never makes an unacceptable release acceptable.
+
+**Legacy Anime policy.** Delay profiles that name no tag are moved into the profiles they applied to at startup (scoped to a quality profile: that profile; unscoped: the profiles the Anime media type uses; the more specific profile wins) as fallback tiers, idempotently, and the legacy entry is then removed. A profile that a tag-scoped delay profile can also apply to keeps its legacy delay profiles, because for the tagged Anime the tag outranks them. Tag-scoped delay profiles and tag-scoped indexer restrictions stay in the legacy store and are still translated into the same profile fields for the Anime that carry the tag (compatibility only; Settings → Acquisition lists them and can only remove them). They go away together with the Anime tag assignment.
+
+**Admin.** Admin → Acquisition Profiles has one "Wait & sources" section (waiting steps, the indexer allow and prefer lists; an indexer the profile still names but that was deleted stays listed as "Removed" until it is unticked, so deleting an indexer never widens a profile) and a Test: one release name, its size, how long the title has been wanted and the indexer that found it, run through the shared engine with the profile exactly as edited (identity is assumed), answering taken now, taken as a temporary choice, waiting until a time, needs a decision, not taken, or not found because the indexer is not searched.
+
+**Not yet:** a per-Work profile override for Book, Light Novel and Manga requests (their requests carry no Work id, so only the kind default applies); "grab at once at score >= X" and a maximum wait; a source penalty and the fallback-only provider switch per profile; a preferred downloader path.
+
 ### Downloader path
 
 If multiple download paths are available:

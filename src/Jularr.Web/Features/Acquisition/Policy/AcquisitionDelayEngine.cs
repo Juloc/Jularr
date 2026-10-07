@@ -1,17 +1,11 @@
-using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
 
 namespace Jularr.Web.Features.Acquisition.Policy;
 
-public sealed record AcquisitionDelayDecision(bool Grab, DateTimeOffset? DelayedUntilUtc, string? Reason)
-{
-    public static AcquisitionDelayDecision NoDelay { get; } = new(true, null, null);
-}
-
 /// <summary>
-/// Pure decision logic for delay profiles (P1 item 4) and tag-scoped indexer restrictions (item 5).
-/// The pipeline calls these once it has resolved the anime's tags and quality profile; nothing here
-/// touches Prowlarr, SABnzbd or persisted state.
+/// Compatibility translation of the legacy Anime tag policy into the profile fields every media type uses: a delay profile becomes a fallback tier
+/// of the profile (the selection engine is the only one that waits), and a tag restriction becomes the allowed indexer entries of a search. Nothing
+/// here decides a grab, touches Prowlarr, SABnzbd or persisted state; it goes away with the Anime tag assignment.
 /// </summary>
 public static class AcquisitionDelayEngine
 {
@@ -83,43 +77,6 @@ public static class AcquisitionDelayEngine
             AllowedQualities = preferred,
             FallbackTiers = [.. profile.FallbackTiers.Append(new FallbackTier(delayProfile.DelayMinutes, rest)).OrderBy(tier => tier.AfterMinutes)]
         };
-    }
-
-    /// <summary>
-    /// Whether the candidate should be grabbed now, or held back until <c>DelayedUntilUtc</c>
-    /// (unless a preferred release — one that already meets the profile's upgrade cutoff quality —
-    /// appears sooner, in which case the delay is skipped).
-    /// </summary>
-    public static AcquisitionDelayDecision Evaluate(
-        AnimeDelayProfile? delayProfile,
-        AnimeQualityProfile qualityProfile,
-        AnimeReleaseScoreResult candidate,
-        DateTimeOffset becameWantedAtUtc,
-        DateTimeOffset now)
-    {
-        ArgumentNullException.ThrowIfNull(qualityProfile);
-        ArgumentNullException.ThrowIfNull(candidate);
-
-        if (delayProfile is null || delayProfile.DelayMinutes <= 0)
-        {
-            return AcquisitionDelayDecision.NoDelay;
-        }
-
-        if (AnimeMonitoringEngine.IsCutoffMet(qualityProfile, candidate))
-        {
-            return new(true, null, $"Preferred release quality already met; delay profile '{delayProfile.Name}' skipped.");
-        }
-
-        var delayedUntil = becameWantedAtUtc + TimeSpan.FromMinutes(delayProfile.DelayMinutes);
-        if (now >= delayedUntil)
-        {
-            return AcquisitionDelayDecision.NoDelay;
-        }
-
-        return new(
-            false,
-            delayedUntil,
-            $"Delayed by profile '{delayProfile.Name}' until {delayedUntil:u}, waiting for a preferred release.");
     }
 
     /// <summary>

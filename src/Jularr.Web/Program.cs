@@ -664,6 +664,7 @@ builder.Services.AddSingleton<AnimeImportStore>();
 builder.Services.AddSingleton(_ => new AnimeImportSettingsStore("/data"));
 builder.Services.AddSingleton<IHardLinkCreator, FileSystemHardLinkCreator>();
 builder.Services.AddSingleton(_ => new AcquisitionPolicyStore("/data"));
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Policy.AcquisitionPolicyMigration>();
 builder.Services.AddSingleton(_ => new AniListAutoMonitorSettingsStore("/data"));
 builder.Services.AddScoped<AniListAutoMonitorService>();
 builder.Services.AddScoped<AcquisitionHistoryService>();
@@ -826,6 +827,15 @@ try
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
     Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} Database ready. Starting web server.");
+    try
+    {
+        // Idempotent: a failure is repeated at the next start and the Anime pipeline keeps reading what was not moved yet.
+        await app.Services.GetRequiredService<Jularr.Web.Features.Acquisition.Policy.AcquisitionPolicyMigration>().RunAsync(CancellationToken.None);
+    }
+    catch (Exception policyException)
+    {
+        Console.Error.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} The legacy acquisition policy could not be moved into Acquisition Profiles: {policyException.Message}");
+    }
 }
 catch (Exception ex)
 {

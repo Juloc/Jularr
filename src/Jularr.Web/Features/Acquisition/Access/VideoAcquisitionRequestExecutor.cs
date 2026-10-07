@@ -510,7 +510,7 @@ public sealed partial class VideoAcquisitionEngine(
         VideoJudgement Judge(ProwlarrReleaseCandidate release) => VideoReleaseJudge.Judge(parser, kind, payload.Title, payload.Year, unit, scope, release);
         var search = await indexers.SearchAsync(
             intent,
-            options with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong) },
+            options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong) },
             cancellationToken);
 
         // One selection for the whole result: the same engine ranks what automatic acquisition grabs and what Manual Search lists.
