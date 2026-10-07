@@ -9,8 +9,10 @@
     <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/appearance-settings.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/setup-instance.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/home-layout.css" asp-append-version="true" />
 }
 @section Scripts {
+    <script src="~/js/home-layout.js" asp-append-version="true" defer></script>
     <script src="~/js/setup-instance.js" asp-append-version="true" defer></script>
 }
 @{
@@ -88,6 +90,12 @@
             </div>
         </section>
     }
+
+    @* The instance default of Home, the same editor and store as Admin → Instance; a profile's own layout is never written from here. *@
+    <section class="admset-section" aria-labelledby="setup-home">
+        <div class="admset-head"><div><h2 id="setup-home">@ui["admin.instance.home.title"]</h2><p>@ui["admin.instance.home.description"]</p></div></div>
+        <partial name="_HomeLayoutEditor" model="Model.HomeEditor" />
+    </section>
 
     <section class="admset-section" aria-labelledby="setup-look">
         <div class="admset-head"><div><h2 id="setup-look">@ui["setup.instance.look"]</h2><p>@ui["setup.instance.lookHelp"]</p></div></div>

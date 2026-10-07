@@ -11,7 +11,8 @@
         const status = root.querySelector("[data-home-status]");
         const preview = root.querySelector("[data-home-preview]");
         let moving = false;
-        const items = () => Array.from(list.querySelectorAll("[data-home-item]"));
+        // A card the instance does not serve (Setup hides it while its module switch is off) is not part of the order the viewer moves and sees.
+        const items = () => Array.from(list.querySelectorAll("[data-home-item]")).filter(item => !item.hidden);
         const announce = text => { if (status) { status.textContent = ""; status.textContent = text; } };
         const describe = (key, item) => fill(root.dataset[key], { type: item.dataset.label, position: items().indexOf(item) + 1, count: items().length });
 
@@ -129,6 +130,7 @@
             announce(button.textContent);
         }));
 
+        root.addEventListener("home-layout:refresh", refresh);
         refresh();
         root.classList.add("is-ready");
     };

@@ -3,7 +3,6 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Home;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Localization;
-using Jularr.Web.Features.MediaCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -79,7 +78,7 @@ public sealed class InstanceModel(
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var store = new HomeLayoutStore(db);
-        var available = AvailableHomeTypes(await modules.GetAsync(cancellationToken));
+        var available = HomeLayoutStore.OrderableFor(await modules.GetAsync(cancellationToken));
         await store.SaveInstanceDefaultAsync(HomeLayoutPolicy.FromEditor(await store.GetInstanceDefaultAsync(cancellationToken), order, shown, landing, prioritizeContinue, available), cancellationToken);
         TempData["Status"] = Ui["admin.instance.home.saved"];
         return RedirectToPage();
@@ -143,14 +142,10 @@ public sealed class InstanceModel(
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         Settings = await modules.GetAsync(cancellationToken);
-        var available = AvailableHomeTypes(Settings);
+        var available = HomeLayoutStore.OrderableFor(Settings);
         var layout = HomeLayoutPolicy.Resolve(await new HomeLayoutStore(db).GetInstanceDefaultAsync(cancellationToken), available, false);
         HomeEditor = new HomeEditorModel(Ui, "instance-home", HomeEditorModel.ItemsOf(layout.Order, layout.Hidden), layout.Landing, layout.PrioritizeContinue, HomeEditorModel.PresetsFor(available));
     }
-
-    /// <summary>The media types Home/Discover can arrange that this instance serves: a switched-off module is never offered.</summary>
-    private static IReadOnlySet<WorkMediaType> AvailableHomeTypes(InstanceModuleSettings settings) =>
-        HomeLayoutStore.Orderable(WorkMediaTypes.All.Where(type => InstanceModuleMedia.IsCapabilityFamilyEnabled(settings, type)));
 
     private static string StorageName(InstanceModule module) =>
         module switch

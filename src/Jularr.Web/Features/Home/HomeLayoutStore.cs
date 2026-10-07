@@ -2,6 +2,7 @@ using System.Data;
 using System.Data.Common;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Discovery;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -161,6 +162,10 @@ public sealed class HomeLayoutStore(AppDbContext db)
     /// <summary>The media types Home/Discover can order, reduced to what a viewer may use.</summary>
     public static IReadOnlySet<WorkMediaType> Orderable(IEnumerable<WorkMediaType> visible) =>
         visible.Where(DiscoveryShelfComposer.SupportedMediaTypes.Contains).ToHashSet();
+
+    /// <summary>The media types an instance with these module switches serves and Home can arrange; Admin → Instance and Setup both offer exactly these.</summary>
+    public static IReadOnlySet<WorkMediaType> OrderableFor(InstanceModuleSettings modules) =>
+        Orderable(WorkMediaTypes.All.Where(type => InstanceModuleMedia.IsCapabilityFamilyEnabled(modules, type)));
 
     private static HomeLayoutPreference Read(DbDataReader reader) => new(Split(reader.GetString(0)), Split(reader.GetString(1)), ParseLanding(reader.GetString(2)), reader.GetBoolean(3));
 

@@ -1,5 +1,6 @@
 @using Jularr.Web.Features.Home
 @using Jularr.Web.Features.MediaCore
+@using Jularr.Web.Pages.Admin
 @model HomeEditorModel
 @* The one editor of the Home/Discover layout: the media-type cards in order, the quick presets, the landing page and the Continue priority.
    Admin → Instance renders it for the instance default, Settings → Home and the first-login onboarding for the viewer's own layout. The fields
@@ -24,7 +25,7 @@
         @foreach (var item in Model.Items)
         {
             var label = ui[item.LabelKey];
-            <li class="home-layout-card" data-home-item data-id="@item.Id" data-label="@label">
+            <li class="home-layout-card" data-home-item data-id="@item.Id" data-label="@label" data-home-modules="@string.Join(' ', item.Modules.Select(InstanceModel.FieldName))" hidden="@(!item.Offered)">
                 <input type="hidden" name="order" value="@item.Id" />
                 <button type="button" class="home-layout-handle" data-home-handle aria-pressed="false" aria-describedby="@prefix-help" aria-label="@ui.Format("home.layout.move", ("type", label))">
                     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false" fill="currentColor"><circle cx="5.5" cy="4" r="1.2" /><circle cx="10.5" cy="4" r="1.2" /><circle cx="5.5" cy="8" r="1.2" /><circle cx="10.5" cy="8" r="1.2" /><circle cx="5.5" cy="12" r="1.2" /><circle cx="10.5" cy="12" r="1.2" /></svg>
@@ -48,7 +49,7 @@
     <div class="home-layout-preview" role="group" aria-label="@ui["home.layout.preview"]">
         <strong>@ui["home.layout.preview"]</strong>
         <ol data-home-preview>
-            @foreach (var item in Model.Items.Where(item => item.Shown))
+            @foreach (var item in Model.Items.Where(item => item.Shown && item.Offered))
             {
                 <li>@ui[item.LabelKey]</li>
             }

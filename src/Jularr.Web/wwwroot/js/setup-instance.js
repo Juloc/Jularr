@@ -40,6 +40,26 @@
         });
     }
 
+    // The Home cards follow the media switches: a media type is offered while a module that serves it is on.
+    const homeCards = Array.from(form.querySelectorAll("[data-home-modules]"));
+    const syncHomeCards = () => {
+        for (const card of homeCards) {
+            card.hidden = !card.dataset.homeModules.split(" ").some((field) => form.querySelector(`[name="${field}"]`)?.checked);
+        }
+
+        form.querySelector("[data-home-layout]")?.dispatchEvent(new Event("home-layout:refresh"));
+    };
+
+    for (const control of switches) {
+        control.addEventListener("change", syncHomeCards);
+    }
+
+    for (const radio of starts) {
+        radio.addEventListener("change", syncHomeCards);
+    }
+
+    syncHomeCards();
+
     const accentInput = form.querySelector("[data-setup-accent]");
     const presets = Array.from(form.querySelectorAll("[data-setup-accent-preset]"));
     for (const preset of presets) {

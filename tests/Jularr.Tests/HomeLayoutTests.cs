@@ -211,6 +211,26 @@ public sealed class HomeLayoutTests
         Assert.AreEqual(0, offenders.Length, "The Home layout has one owner: " + string.Join(", ", offenders));
     }
 
+    [TestMethod]
+    public void SetupAndAdminEditTheInstanceDefaultWhileOnlySettingsAndTheOfferEditAProfile()
+    {
+        var pages = Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages");
+        var setup = File.ReadAllText(Path.Combine(pages, "Account", "SetupInstance.cshtml.cs"));
+        var admin = File.ReadAllText(Path.Combine(pages, "Admin", "Instance.cshtml.cs"));
+        var settings = File.ReadAllText(Path.Combine(pages, "Settings", "Home.cshtml.cs"));
+
+        foreach (var instancePage in new[] { setup, admin })
+        {
+            StringAssert.Contains(instancePage, "SaveInstanceDefaultAsync");
+            foreach (var profileWrite in new[] { "SaveProfileAsync", "ResetProfileAsync", "SkipOnboardingAsync" })
+            {
+                Assert.IsFalse(instancePage.Contains(profileWrite, StringComparison.Ordinal), "An instance page never writes a profile layout: " + profileWrite);
+            }
+        }
+
+        Assert.IsFalse(settings.Contains("SaveInstanceDefaultAsync", StringComparison.Ordinal), "Settings → Home never writes the instance default.");
+    }
+
     private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

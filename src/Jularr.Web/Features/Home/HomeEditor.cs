@@ -1,12 +1,16 @@
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
 
 namespace Jularr.Web.Features.Home;
 
 /// <summary>One media type in the editor: the card the viewer orders and shows or hides.</summary>
-public sealed record HomeEditorItem(WorkMediaType Type, string LabelKey, string Icon, bool Shown)
+public sealed record HomeEditorItem(WorkMediaType Type, string LabelKey, string Icon, bool Shown, bool Offered = true)
 {
     public string Id => WorkMediaTypes.ToStorage(Type);
+
+    /// <summary>The module switches that make this type available (Books also follow Audiobooks); Setup uses them to show or hide the card while the owner changes the switches.</summary>
+    public IReadOnlyList<InstanceModule> Modules => Type == WorkMediaType.Book ? [InstanceModule.Book, InstanceModule.Audiobook] : [InstanceModuleMedia.For(Type)];
 }
 
 /// <summary>A quick arrangement. It only fills the editor; nothing is stored until the viewer saves.</summary>
@@ -15,9 +19,12 @@ public sealed record HomePreset(string Id, string NameKey, IReadOnlyList<WorkMed
 /// <summary>What the shared editor renders, for the instance default (Admin), a viewer's own layout (Settings) and the first-login onboarding alike.</summary>
 public sealed record HomeEditorModel(UiTextBundle Ui, string IdPrefix, IReadOnlyList<HomeEditorItem> Items, HomeLanding Landing, bool PrioritizeContinue, IReadOnlyList<HomePreset> Presets)
 {
-    /// <summary>The cards for the available types in the layout's order; a hidden type keeps its place and is only unchecked.</summary>
-    public static IReadOnlyList<HomeEditorItem> ItemsOf(IReadOnlyList<WorkMediaType> order, IReadOnlySet<WorkMediaType> hidden) =>
-        [.. order.Select(type => new HomeEditorItem(type, LabelKey(type), Icon(type), !hidden.Contains(type)))];
+    /// <summary>
+    /// The cards in the layout's order; a hidden type keeps its place and is only unchecked. A type that is not in <paramref name="offered"/> stays in the
+    /// markup but not on screen (Setup shows it as soon as its module is switched on); without it every card is offered.
+    /// </summary>
+    public static IReadOnlyList<HomeEditorItem> ItemsOf(IReadOnlyList<WorkMediaType> order, IReadOnlySet<WorkMediaType> hidden, IReadOnlySet<WorkMediaType>? offered = null) =>
+        [.. order.Select(type => new HomeEditorItem(type, LabelKey(type), Icon(type), !hidden.Contains(type), offered?.Contains(type) ?? true))];
 
     /// <summary>The presets that mean something here: one that names at least one available media type, so a preset never offers a type the instance does not serve.</summary>
     public static IReadOnlyList<HomePreset> PresetsFor(IReadOnlySet<WorkMediaType> available) => [.. AllPresets.Where(preset => preset.Order.Any(available.Contains))];

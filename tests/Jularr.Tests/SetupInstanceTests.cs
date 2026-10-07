@@ -2,7 +2,9 @@ using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Appearance;
 using Jularr.Web.Features.Branding;
+using Jularr.Web.Features.Home;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Providers;
 using Jularr.Web.Pages.Account;
 using Microsoft.AspNetCore.Http;
@@ -156,6 +158,102 @@ public sealed class SetupInstanceTests
         Assert.AreEqual("/Discover", ((LocalRedirectResult)await usable.OnPostAsync(CancellationToken.None)).Url);
     }
 
+    [TestMethod]
+    public async Task SetupSavesTheHomeDefaultOfTheInstanceAndNeverALayoutOfAProfile()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var page = fixture.Page(Form((Field(InstanceModule.Anime), "true"), (Field(InstanceModule.Tv), "true"), (Field(InstanceModule.Manga), "true")));
+        page.Start = InstancePreset.Custom;
+        page.Order = ["manga", "series", "anime"];
+        page.Shown = ["manga", "anime"];
+        page.Landing = "library";
+        page.PrioritizeContinue = false;
+
+        await page.OnPostAsync(CancellationToken.None);
+
+        var store = new HomeLayoutStore(fixture.Db);
+        var saved = await store.GetInstanceDefaultAsync(CancellationToken.None);
+        var served = HomeLayoutStore.OrderableFor(await fixture.ModuleStore.GetAsync());
+        CollectionAssert.AreEqual(new[] { WorkMediaType.Manga, WorkMediaType.Series, WorkMediaType.Anime }, HomeLayoutPolicy.Resolve(saved, served, false).Order.ToArray());
+        CollectionAssert.AreEqual(new[] { "series" }, saved.Hidden.ToArray(), "An available type that was not left checked is hidden by default.");
+        Assert.AreEqual(HomeLanding.Library, saved.Landing);
+        Assert.IsFalse(saved.PrioritizeContinue);
+        Assert.AreEqual(0, await fixture.CountAsync("ProfileHomeLayouts"), "Setup writes no profile layout, not even for the owner who is running it.");
+        Assert.AreEqual(1, await fixture.CountAsync("InstanceHomeDefaults"));
+    }
+
+    [TestMethod]
+    public async Task SetupOffersAndKeepsOnlyTheMediaTypesOfTheModulesItSwitchesOn()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var page = fixture.Page(Form((Field(InstanceModule.Anime), "true"), (Field(InstanceModule.Manga), "true")));
+        page.Start = InstancePreset.Custom;
+        page.Order = ["movie", "manga", "anime", "book"];
+        page.Shown = ["movie", "anime", "book"];
+
+        await page.OnPostAsync(CancellationToken.None);
+        var served = HomeLayoutStore.OrderableFor(await fixture.ModuleStore.GetAsync());
+        var layout = await new HomeLayoutStore(fixture.Db).ResolveAsync("someone", served, CancellationToken.None);
+
+        Assert.IsTrue(served.SetEquals([WorkMediaType.Anime, WorkMediaType.Manga]));
+        CollectionAssert.AreEqual(new[] { WorkMediaType.Manga, WorkMediaType.Anime }, layout.Order.ToArray(), "A type whose module is off is not in the order a profile gets.");
+        CollectionAssert.AreEqual(new[] { WorkMediaType.Anime }, layout.Shown.ToArray(), "Only the available type that stayed checked is shown.");
+        var all = await fixture.Page().OnGetAsync(CancellationToken.None);
+        Assert.IsInstanceOfType<PageResult>(all);
+    }
+
+    [TestMethod]
+    public async Task ANewProfileInheritsTheSetupDefaultAndItsOwnLayoutIsIndependentOfLaterSetupOrAdminEditsUntilItIsReset()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var setup = fixture.Page(Form((Field(InstanceModule.Anime), "true"), (Field(InstanceModule.Manga), "true"), (Field(InstanceModule.Movie), "true")));
+        setup.Start = InstancePreset.Custom;
+        setup.Order = ["manga", "movie", "anime"];
+        setup.Shown = ["manga", "movie", "anime"];
+        setup.Landing = "library";
+        await setup.OnPostAsync(CancellationToken.None);
+        var store = new HomeLayoutStore(fixture.Db);
+        var served = HomeLayoutStore.OrderableFor(await fixture.ModuleStore.GetAsync());
+
+        var inherited = await store.ResolveAsync("new-profile", served, CancellationToken.None);
+        await store.SkipOnboardingAsync("new-profile", CancellationToken.None);
+        var afterSkip = await store.ResolveAsync("new-profile", served, CancellationToken.None);
+        await store.SaveProfileAsync("new-profile", new HomeLayoutPreference(["anime", "movie", "manga"], [], HomeLanding.Home, true), CancellationToken.None);
+
+        var again = fixture.Page(Form((Field(InstanceModule.Anime), "true"), (Field(InstanceModule.Manga), "true"), (Field(InstanceModule.Movie), "true")));
+        again.Start = InstancePreset.Custom;
+        again.Order = ["movie", "anime", "manga"];
+        again.Shown = ["movie", "anime", "manga"];
+        await again.OnPostAsync(CancellationToken.None);
+        var ownAfterEdit = await store.ResolveAsync("new-profile", served, CancellationToken.None);
+        await store.ResetProfileAsync("new-profile", CancellationToken.None);
+        var afterReset = await store.ResolveAsync("new-profile", served, CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { WorkMediaType.Manga, WorkMediaType.Movie, WorkMediaType.Anime }, inherited.Order.ToArray());
+        Assert.AreEqual(HomeLanding.Library, inherited.Landing);
+        Assert.IsFalse(inherited.IsCustomized);
+        CollectionAssert.AreEqual(inherited.Order.ToArray(), afterSkip.Order.ToArray(), "Not now keeps inheriting the instance default.");
+        Assert.IsFalse(afterSkip.IsCustomized);
+        CollectionAssert.AreEqual(new[] { WorkMediaType.Anime, WorkMediaType.Movie, WorkMediaType.Manga }, ownAfterEdit.Order.ToArray(), "A later Setup or Admin edit does not touch a profile's own layout.");
+        Assert.IsTrue(ownAfterEdit.IsCustomized);
+        CollectionAssert.AreEqual(new[] { WorkMediaType.Movie, WorkMediaType.Anime, WorkMediaType.Manga }, afterReset.Order.ToArray(), "Reset follows the instance default as it is now.");
+        Assert.IsFalse(afterReset.IsCustomized);
+    }
+
+    [TestMethod]
+    public async Task SkippingSetupOrPostingWithoutTheEditorLeavesTheHomeDefaultUntouched()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.Page(Form()).OnPostSkipAsync(CancellationToken.None);
+        var withoutEditor = fixture.Page(Form((Field(InstanceModule.Movie), "true")));
+        withoutEditor.Start = InstancePreset.Full;
+
+        await withoutEditor.OnPostAsync(CancellationToken.None);
+
+        Assert.AreEqual(0, await fixture.CountAsync("InstanceHomeDefaults"));
+        Assert.AreEqual(HomeLayoutPreference.BuiltIn.MediaOrder.Count, (await new HomeLayoutStore(fixture.Db).GetInstanceDefaultAsync(CancellationToken.None)).MediaOrder.Count, "The built-in default stays valid.");
+    }
+
     private static string Field(InstanceModule module) => Jularr.Web.Pages.Admin.InstanceModel.FieldName(module);
 
     private static IFormCollection Form(params (string Name, string Value)[] fields) =>
@@ -195,6 +293,9 @@ public sealed class SetupInstanceTests
             var fixture = new Fixture(root, db, new InstanceModuleStore(root), provider.GetRequiredService<InstanceBrandingStore>()) { services = provider };
             return fixture;
         }
+
+        public async Task<int> CountAsync(string table) =>
+            await Db.Database.SqlQueryRaw<int>($"SELECT count(*)::int AS \"Value\" FROM \"{table}\"").SingleAsync();
 
         public SetupInstanceModel Page(IFormCollection? form = null, params IProviderSettings[] providers)
         {
