@@ -31,6 +31,9 @@ public sealed class QualityProfileForm
 
     public string? UpgradeUntilScore { get; set; }
 
+    /// <summary>A release of a fallback tier not yet reached is taken at once from this preference score; empty always waits for the ladder.</summary>
+    public string? GrabImmediatelyScore { get; set; }
+
     public string? MinimumScore { get; set; }
 
     public string? MinimumSizeMegabytes { get; set; }
@@ -44,6 +47,9 @@ public sealed class QualityProfileForm
 
     /// <summary>The indexer entries whose releases win a tie; only entries the profile may search count.</summary>
     public List<Guid> PreferredSources { get; set; } = [];
+
+    /// <summary>The indexer entries that are searched only when the other sources returned nothing.</summary>
+    public List<Guid> FallbackOnlySources { get; set; } = [];
 
     public string MustContain { get; set; } = "";
 
@@ -113,12 +119,14 @@ public static class QualityProfileEditing
             UpgradeMinimumQualitySteps = profile.UpgradeMinimumQualitySteps.ToString(CultureInfo.InvariantCulture),
             UpgradeMinimumScoreDelta = profile.UpgradeMinimumScoreDelta.ToString(CultureInfo.InvariantCulture),
             UpgradeUntilScore = profile.UpgradeUntilScore?.ToString(CultureInfo.InvariantCulture),
+            GrabImmediatelyScore = profile.GrabImmediatelyScore?.ToString(CultureInfo.InvariantCulture),
             MinimumScore = profile.MinimumScore.ToString(CultureInfo.InvariantCulture),
             MinimumSizeMegabytes = profile.MinimumSizeBytes is { } minimum ? (minimum / Megabyte).ToString(CultureInfo.InvariantCulture) : null,
             MaximumSizeMegabytes = profile.MaximumSizeBytes is { } maximum ? (maximum / Megabyte).ToString(CultureInfo.InvariantCulture) : null,
             AllowAmbiguousIdentity = profile.AllowAmbiguousIdentity,
             AllowedSources = [.. profile.SourcePolicy.AllowedEntryIds],
             PreferredSources = [.. profile.SourcePolicy.PreferredEntryIds],
+            FallbackOnlySources = [.. profile.SourcePolicy.FallbackOnlyEntryIds],
             MustContain = string.Join('\n', profile.MustContain),
             MustNotContain = string.Join('\n', profile.MustNotContain),
             RequiredRegex = string.Join('\n', profile.RequiredRegex),
@@ -185,6 +193,7 @@ public static class QualityProfileEditing
         var steps = Number(form.UpgradeMinimumQualitySteps, 1, nameof(QualityProfileForm.UpgradeMinimumQualitySteps), errors);
         var delta = Number(form.UpgradeMinimumScoreDelta, 1, nameof(QualityProfileForm.UpgradeMinimumScoreDelta), errors);
         var until = Optional(form.UpgradeUntilScore, nameof(QualityProfileForm.UpgradeUntilScore), errors);
+        var grabImmediately = Optional(form.GrabImmediatelyScore, nameof(QualityProfileForm.GrabImmediatelyScore), errors);
         var minimumScore = Number(form.MinimumScore, 0, nameof(QualityProfileForm.MinimumScore), errors, allowNegative: true);
         var minimumSize = Optional(form.MinimumSizeMegabytes, nameof(QualityProfileForm.MinimumSizeMegabytes), errors);
         var maximumSize = Optional(form.MaximumSizeMegabytes, nameof(QualityProfileForm.MaximumSizeMegabytes), errors);
@@ -214,6 +223,7 @@ public static class QualityProfileEditing
             UpgradeMinimumQualitySteps = steps,
             UpgradeMinimumScoreDelta = delta,
             UpgradeUntilScore = until,
+            GrabImmediatelyScore = grabImmediately,
             AllowAmbiguousIdentity = form.AllowAmbiguousIdentity,
             SourcePolicy = SourcePolicyOf(form)
         };
@@ -233,12 +243,13 @@ public static class QualityProfileEditing
         return errors.Count == 0 ? new ProfileEditResult(profile, []) : new ProfileEditResult(null, errors);
     }
 
-    /// <summary>A preferred source the profile may not search could never be asked, so it is not stored.</summary>
+    /// <summary>A preferred or fallback-only source the profile may not search could never be asked, so it is not stored.</summary>
     private static AcquisitionSourcePolicy SourcePolicyOf(QualityProfileForm form)
     {
         var allowed = form.AllowedSources.Distinct().Order().ToArray();
         var preferred = form.PreferredSources.Distinct().Where(id => allowed.Length == 0 || allowed.Contains(id)).Order().ToArray();
-        return allowed.Length == 0 && preferred.Length == 0 ? AcquisitionSourcePolicy.Unrestricted : new AcquisitionSourcePolicy(allowed, preferred);
+        var fallbackOnly = form.FallbackOnlySources.Distinct().Where(id => allowed.Length == 0 || allowed.Contains(id)).Order().ToArray();
+        return new AcquisitionSourcePolicy(allowed, preferred) { FallbackOnlyEntryIds = fallbackOnly } is { IsDefault: false } policy ? policy : AcquisitionSourcePolicy.Unrestricted;
     }
 
     private static ReleaseScoreRule? ParseRule(ScoreRuleRow row, int number)

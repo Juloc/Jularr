@@ -256,7 +256,7 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
     private static IEnumerable<ReleaseRuleField> RuleFieldsOf(MediaAcquisitionKind kind) =>
         kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime
             ? Enum.GetValues<ReleaseRuleField>()
-            : [ReleaseRuleField.RawTitle, ReleaseRuleField.ReleaseGroup];
+            : [ReleaseRuleField.RawTitle, ReleaseRuleField.ReleaseGroup, ReleaseRuleField.Indexer];
 
     private async Task LoadAsync(string? id, CancellationToken cancellationToken)
     {

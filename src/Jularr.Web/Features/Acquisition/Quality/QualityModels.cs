@@ -18,7 +18,10 @@ public enum ReleaseRuleField
     DualAudio,
     MultiAudio,
     Proper,
-    Repack
+    Repack,
+
+    /// <summary>The name of the indexer entry the release came from: a source penalty or preference is an ordinary Avoid / Prefer rule on it, and Reject or Require work the same way.</summary>
+    Indexer
 }
 
 public enum ReleaseRuleMatch
@@ -65,13 +68,19 @@ public sealed record FallbackTier(int AfterMinutes, string[] AddedQualities);
 /// Which indexers an Acquisition Profile may search and which it prefers, by the canonical entry id of the Indexer settings (the profile never copies
 /// an indexer's configuration). An empty allow list is "every indexer that takes part in this kind of search". A restricted profile is never silently
 /// widened: when none of its indexers can be searched the search says so and asks nobody else. Preferred entries only win ties between candidates that are
-/// otherwise equal, so a preferred source never makes an unacceptable release acceptable.
+/// otherwise equal, so a preferred source never makes an unacceptable release acceptable. Fallback-only entries are asked only when every other source of the
+/// search returned nothing at all, so a backup indexer never competes with the primary ones and costs no query while they answer.
 /// </summary>
 public sealed record AcquisitionSourcePolicy(Guid[] AllowedEntryIds, Guid[] PreferredEntryIds)
 {
     public static AcquisitionSourcePolicy Unrestricted { get; } = new([], []);
 
+    /// <summary>Indexer entries that are searched only when the other sources of the search returned no release.</summary>
+    public Guid[] FallbackOnlyEntryIds { get; init; } = [];
+
     public bool IsRestricted => AllowedEntryIds.Length > 0;
+
+    public bool IsDefault => AllowedEntryIds.Length == 0 && PreferredEntryIds.Length == 0 && FallbackOnlyEntryIds.Length == 0;
 }
 
 public sealed record QualityProfile(
@@ -98,6 +107,12 @@ public sealed record QualityProfile(
 
     /// <summary>The least number of quality steps a candidate must be better by to be an upgrade; 1 means any better quality.</summary>
     public int UpgradeMinimumQualitySteps { get; init; } = 1;
+
+    /// <summary>
+    /// A release of a fallback tier that is not yet reached is taken at once when its preference score is at least this; null always waits for the ladder.
+    /// Identity, safety and every gate still apply, and the release is temporary: the target stays wanted for an upgrade.
+    /// </summary>
+    public int? GrabImmediatelyScore { get; init; }
 
     /// <summary>Upgrades stop once the current file reaches this preference score; null keeps upgrading until the quality cutoff.</summary>
     public int? UpgradeUntilScore { get; init; }

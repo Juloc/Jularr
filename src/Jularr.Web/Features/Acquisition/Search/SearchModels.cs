@@ -76,6 +76,9 @@ public sealed record SearchOptions
     /// <summary>Indexer entries whose releases win a tie against the same release from another entry (a profile's preferred sources).</summary>
     public IReadOnlyCollection<Guid>? PreferredEntryIds { get; init; }
 
+    /// <summary>Indexer entries that are searched only when every other entry of the search returned no release (a profile's fallback-only sources).</summary>
+    public IReadOnlyCollection<Guid>? FallbackOnlyEntryIds { get; init; }
+
     /// <summary>
     /// Applies an Acquisition Profile's source policy on top of what the caller already restricts: an allow list intersects with it (so a restriction
     /// can only narrow), and an empty intersection stays empty rather than becoming "everything".
@@ -84,7 +87,8 @@ public sealed record SearchOptions
         this with
         {
             AllowedEntryIds = policy.IsRestricted ? AllowedEntryIds is null ? policy.AllowedEntryIds : [.. AllowedEntryIds.Intersect(policy.AllowedEntryIds)] : AllowedEntryIds,
-            PreferredEntryIds = policy.PreferredEntryIds.Length > 0 ? policy.PreferredEntryIds : PreferredEntryIds
+            PreferredEntryIds = policy.PreferredEntryIds.Length > 0 ? policy.PreferredEntryIds : PreferredEntryIds,
+            FallbackOnlyEntryIds = policy.FallbackOnlyEntryIds.Length > 0 ? policy.FallbackOnlyEntryIds : FallbackOnlyEntryIds
         };
 
     /// <summary>Overrides the Prowlarr per-indexer restriction of every Prowlarr entry.</summary>

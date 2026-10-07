@@ -218,11 +218,23 @@ public static class ReleaseSelectionEngine
         }
 
         // The score is computed for every parsed candidate so Manual Search can show it, but it is only consulted after identity.
-        var score = ReleaseScorer.Score(effective, new ReleaseCandidate(candidate.Parsed, candidate.SizeBytes, candidate.Indexer, candidate.Id));
+        var release = new ReleaseCandidate(candidate.Parsed, candidate.SizeBytes, candidate.Indexer, candidate.Id);
+        var score = ReleaseScorer.Score(effective, release);
         reasons.Add(new SelectionReason(SelectionReasonKind.Identity, candidate.Identity.Code, candidate.Identity.Detail));
         if (candidate.Identity.Confidence == IdentityConfidence.Conflict)
         {
             return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, 0, reliability, reasons);
+        }
+
+        // A release a later fallback tier would allow skips the wait when its preference score is high enough: the whole ladder is tried for it, the gates stay.
+        if (!score.Accepted && profile.GrabImmediatelyScore is { } immediately && activeTier < profile.FallbackTiers.Length)
+        {
+            var ladder = ReleaseScorer.Score(profile with { AllowedQualities = AllowedAt(profile, profile.FallbackTiers.Length) }, release);
+            if (ladder.Accepted && ladder.Score + candidate.ContextScore >= immediately)
+            {
+                score = ladder;
+                reasons.Add(new SelectionReason(SelectionReasonKind.Fallback, "GrabImmediately", $"Preference score {ladder.Score + candidate.ContextScore} reaches {immediately}, so {ladder.QualityKey} is taken without waiting for its fallback tier."));
+            }
         }
 
         foreach (var rejection in score.RejectionReasons)

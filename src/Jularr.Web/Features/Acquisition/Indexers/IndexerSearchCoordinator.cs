@@ -69,9 +69,35 @@ public sealed class IndexerSearchCoordinator(
             return options.AllowedEntryIds is null ? AcquisitionSearchResult.Empty : AcquisitionSearchResult.Empty with { SourcePolicyBlock = SourcePolicyBlockMessage };
         }
 
+        // A fallback-only entry is asked only when the primary entries returned no release at all, so a backup source costs nothing while they answer.
         var session = new SearchSession(options);
+        var fallbackOnly = options.FallbackOnlyEntryIds;
+        var primary = fallbackOnly is { Count: > 0 } ? entries.Where(entry => !fallbackOnly.Contains(entry.Id)).ToArray() : entries;
+        var runs = await RunEntriesAsync(primary, kind, planFor, options, budget, session, cancellationToken);
+        if (fallbackOnly is { Count: > 0 } && !runs.Any(run => run.Hits.Count > 0))
+        {
+            runs = [.. runs, .. await RunEntriesAsync([.. entries.Where(entry => fallbackOnly.Contains(entry.Id))], kind, planFor, options, budget, session, cancellationToken)];
+        }
+
+        var hits = runs.SelectMany(run => run.Hits).Select(hit => options.PreferredEntryIds?.Contains(hit.EntryId) == true ? hit with { Priority = hit.Priority - PreferredSourceBoost } : hit).ToArray();
+        return new AcquisitionSearchResult(
+            ReleaseDeduplicator.Merge(hits),
+            [.. runs.Select(run => run.Outcome)],
+            [.. runs.SelectMany(run => run.Trace)],
+            hits.Length);
+    }
+
+    private async Task<IndexerRun[]> RunEntriesAsync(
+        IReadOnlyList<IndexerEntry> entries,
+        MediaAcquisitionKind kind,
+        Func<IndexerCapabilities?, IReadOnlyList<PlannedQuery>> planFor,
+        SearchOptions options,
+        SearchBudget budget,
+        SearchSession session,
+        CancellationToken cancellationToken)
+    {
         using var gate = new SemaphoreSlim(budget.MaxConcurrentIndexers);
-        var runs = await Task.WhenAll(entries.Select(async entry =>
+        return await Task.WhenAll(entries.Select(async entry =>
         {
             await gate.WaitAsync(cancellationToken);
             try
@@ -83,13 +109,6 @@ public sealed class IndexerSearchCoordinator(
                 gate.Release();
             }
         }));
-
-        var hits = runs.SelectMany(run => run.Hits).Select(hit => options.PreferredEntryIds?.Contains(hit.EntryId) == true ? hit with { Priority = hit.Priority - PreferredSourceBoost } : hit).ToArray();
-        return new AcquisitionSearchResult(
-            ReleaseDeduplicator.Merge(hits),
-            [.. runs.Select(run => run.Outcome)],
-            [.. runs.SelectMany(run => run.Trace)],
-            hits.Length);
     }
 
     private async Task<IndexerRun> RunIndexerAsync(

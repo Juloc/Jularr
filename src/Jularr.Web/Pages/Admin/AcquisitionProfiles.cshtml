@@ -189,6 +189,11 @@
                             <label for="admprofiles-until">@ui["admin.profiles.field.upgradeUntilScore"]</label>
                             <input id="admprofiles-until" type="number" min="0" inputmode="numeric" name="UpgradeUntilScore" value="@Model.Form.UpgradeUntilScore" />
                         </div>
+                        <div class="admset-field">
+                            <label for="admprofiles-grab">@ui["admin.profiles.field.grabImmediatelyScore"]</label>
+                            <input id="admprofiles-grab" type="number" inputmode="numeric" name="GrabImmediatelyScore" value="@Model.Form.GrabImmediatelyScore" />
+                            <span class="admset-hint">@ui["admin.profiles.field.grabImmediatelyScore.hint"]</span>
+                        </div>
                     </div>
                 </section>
 
@@ -287,6 +292,7 @@
                                 <li>
                                     <label class="admprofiles-chip"><input type="checkbox" name="AllowedSources" value="@source.Id" checked="@Model.Form.AllowedSources.Contains(source.Id)" /><span>@source.Name</span></label>
                                     <label class="admprofiles-chip"><input type="checkbox" name="PreferredSources" value="@source.Id" checked="@Model.Form.PreferredSources.Contains(source.Id)" /><span>@ui["admin.profiles.sources.prefer"]</span></label>
+                                    <label class="admprofiles-chip"><input type="checkbox" name="FallbackOnlySources" value="@source.Id" checked="@Model.Form.FallbackOnlySources.Contains(source.Id)" /><span>@ui["admin.profiles.sources.fallbackOnly"]</span></label>
                                     @if (source.Missing)
                                     {
                                         <span class="admin-tag admin-tag-text">@ui["admin.profiles.sources.missing"]</span>

@@ -102,7 +102,7 @@ public static class ReleaseScorer
         var infoReasons = new List<string>();
         foreach (var rule in profile.ScoreRules)
         {
-            var matched = Matches(rule, candidate.Release);
+            var matched = Matches(rule, candidate);
             switch (rule.EffectiveEffect)
             {
                 case ReleaseRuleEffect.Require when !matched:
@@ -279,9 +279,9 @@ public static class ReleaseScorer
 
     private static bool Matches(
         ReleaseScoreRule rule,
-        ReleaseInfo release)
+        ReleaseCandidate candidate)
     {
-        var values = GetValues(rule.Field, release);
+        var values = GetValues(rule.Field, candidate.Release, candidate.Indexer);
         return values.Any(value => rule.Match switch
         {
             ReleaseRuleMatch.Equals =>
@@ -300,7 +300,8 @@ public static class ReleaseScorer
 
     private static IEnumerable<string> GetValues(
         ReleaseRuleField field,
-        ReleaseInfo release) =>
+        ReleaseInfo release,
+        string? indexer) =>
         field switch
         {
             ReleaseRuleField.RawTitle => [release.RawTitle],
@@ -320,6 +321,7 @@ public static class ReleaseScorer
             ReleaseRuleField.MultiAudio => [release.IsMultiAudio.ToString()],
             ReleaseRuleField.Proper => [release.IsProper.ToString()],
             ReleaseRuleField.Repack => [release.IsRepack.ToString()],
+            ReleaseRuleField.Indexer => Value(indexer),
             _ => []
         };
 
