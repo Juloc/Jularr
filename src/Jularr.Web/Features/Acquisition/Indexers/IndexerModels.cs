@@ -45,6 +45,16 @@ public sealed record IndexerSettings(
     /// <summary>The media types this indexer is searched for; null searches it for every media type.</summary>
     public MediaAcquisitionKind[]? MediaKinds { get; init; }
 
+    /// <summary>
+    /// The Newznab categories the owner chose for a media type of this indexer, by the media type's name; a type without an entry uses its default
+    /// (<see cref="SearchPlanner.Categories"/>). Parent and sub categories can be mixed, and an indexer's own custom categories (100000 and up) work too.
+    /// </summary>
+    public Dictionary<string, int[]>? CategoriesByKind { get; init; }
+
+    /// <summary>The categories the owner configured for one media type, or null to use the media type's default.</summary>
+    public int[]? CategoriesFor(MediaAcquisitionKind kind) =>
+        CategoriesByKind is { } configured && configured.TryGetValue(AcquisitionAccessNames.Kind(kind), out var ids) && ids.Length > 0 ? ids : null;
+
     public static IndexerSettings CreateDefault(string baseUrl, IndexerType type) =>
         new(
             baseUrl,

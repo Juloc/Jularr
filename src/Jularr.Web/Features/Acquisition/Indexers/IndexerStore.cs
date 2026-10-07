@@ -178,7 +178,8 @@ public sealed class IndexerStore
             IndexerIds = (settings.IndexerIds ?? []).Where(value => value > 0).Distinct().Order().ToArray(),
             BookCategories = settings.BookCategories is null
                 ? null
-                : settings.BookCategories.Where(value => value > 0).Distinct().Order().ToArray()
+                : settings.BookCategories.Where(value => value > 0).Distinct().Order().ToArray(),
+            CategoriesByKind = NormalizeKindCategories(settings.CategoriesByKind)
         };
 
         return entry with
@@ -187,6 +188,24 @@ public sealed class IndexerStore
             ApiKey = entry.ApiKey.Trim(),
             Settings = normalizedSettings
         };
+    }
+
+    /// <summary>Keeps only the media types that exist and, for each, its positive distinct ids; a type left without any falls back to its default.</summary>
+    private static Dictionary<string, int[]>? NormalizeKindCategories(Dictionary<string, int[]>? configured)
+    {
+        var known = Enum.GetValues<MediaAcquisitionKind>().Select(AcquisitionAccessNames.Kind).ToHashSet(StringComparer.Ordinal);
+        var kept = new Dictionary<string, int[]>(StringComparer.Ordinal);
+        foreach (var (key, value) in configured ?? [])
+        {
+            var name = key.Trim().ToLowerInvariant();
+            var ids = (value ?? []).Where(id => id > 0).Distinct().Order().ToArray();
+            if (known.Contains(name) && ids.Length > 0)
+            {
+                kept[name] = ids;
+            }
+        }
+
+        return kept.Count == 0 ? null : kept;
     }
 
     private async Task<IReadOnlyList<IndexerEntry>> LoadUnlockedAsync(
@@ -234,7 +253,8 @@ public sealed class IndexerStore
                         Capabilities = item.Capabilities,
                         AutomaticSearch = item.AutomaticSearch ?? true,
                         InteractiveSearch = item.InteractiveSearch ?? true,
-                        MediaKinds = item.MediaKinds
+                        MediaKinds = item.MediaKinds,
+                        CategoriesByKind = item.CategoriesByKind
                     },
                     apiKey));
         }
@@ -266,7 +286,8 @@ public sealed class IndexerStore
                 entry.Settings.Capabilities,
                 entry.Settings.AutomaticSearch,
                 entry.Settings.InteractiveSearch,
-                entry.Settings.MediaKinds))
+                entry.Settings.MediaKinds,
+                entry.Settings.CategoriesByKind))
             .ToArray();
 
         var temporaryPath = $"{storePath}.tmp-{Guid.NewGuid():N}";
@@ -325,5 +346,6 @@ public sealed class IndexerStore
         IndexerCapabilities? Capabilities = null,
         bool? AutomaticSearch = null,
         bool? InteractiveSearch = null,
-        MediaAcquisitionKind[]? MediaKinds = null);
+        MediaAcquisitionKind[]? MediaKinds = null,
+        Dictionary<string, int[]>? CategoriesByKind = null);
 }

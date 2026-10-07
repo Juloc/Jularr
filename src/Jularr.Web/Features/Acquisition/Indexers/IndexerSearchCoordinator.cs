@@ -150,6 +150,18 @@ public sealed class IndexerSearchCoordinator(
             : entry;
         var categories = SearchPlanner.Categories(kind, entry).ToArray();
 
+        // An indexer that stopped offering the categories of a media type (its caps say so) is not asked for it: its answers would come from some other section.
+        if (capabilities is { Categories.Length: > 0 })
+        {
+            var offered = categories.Where(capabilities.Offers).ToArray();
+            if (offered.Length == 0)
+            {
+                return IndexerRun.Skipped(entry, $"Skipped: the indexer offers none of the categories searched for {kind} ({string.Join(", ", categories)}). Test it again after changing them.");
+            }
+
+            categories = offered;
+        }
+
         var hits = new List<SearchHit>();
         var trace = new List<SearchTraceLine>();
         var queriesRun = 0;
