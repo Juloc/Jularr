@@ -68,7 +68,7 @@ public sealed class ReadingAcquisitionEngine(
         var profile = profiles is null ? null : await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
         var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken));
 
-        return await GrabAsync(request, payload, Candidates(search), search.FailureMessage, cancellationToken);
+        return await GrabAsync(request, payload, Candidates(search), search.FailureMessage, cancellationToken, searchUnavailable: search.Search?.EveryIndexerFailed == true);
     }
 
     /// <summary>
@@ -81,7 +81,8 @@ public sealed class ReadingAcquisitionEngine(
         IReadOnlyList<ReleaseRequestCandidate> candidates,
         string noReleaseReason,
         CancellationToken cancellationToken,
-        ManualGrabProgress? progress = null) =>
+        ManualGrabProgress? progress = null,
+        bool searchUnavailable = false) =>
         await tracker.ContinueAsync(
             request,
             payload,
@@ -115,7 +116,8 @@ public sealed class ReadingAcquisitionEngine(
                     outcome.OperationId,
                     outcome.Message);
             },
-            cancellationToken);
+            cancellationToken,
+            searchUnavailable);
 
     /// <summary>The releases the reading matcher accepted, best first; each is tried once by its identity.</summary>
     public static IReadOnlyList<ReleaseRequestCandidate> Candidates(

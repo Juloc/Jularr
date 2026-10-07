@@ -67,6 +67,30 @@ public sealed class ReleaseRequestTrackerTests
     }
 
     [TestMethod]
+    public async Task AnIndexerOutageIsNotASearchAndNeverUsesUpTheSearchesThatEndInGivingUp()
+    {
+        await using var host = await Host.CreateAsync();
+        var request = await host.CreateBookAsync(new BookRequestPayload("ol:1", "Dune", null));
+        await host.SavePayloadAsync(request, BookAcquisitionExecutor.ReadPayload(request) with { Searches = ReleaseRequestTracker.MaxSearches - 1 });
+
+        var execution = await host.Tracker.ContinueAsync(
+            await host.GetAsync(request.Id),
+            BookAcquisitionExecutor.ReadPayload(await host.GetAsync(request.Id)),
+            [],
+            "No indexer could be searched (Indexer A: timed out).",
+            _ => throw new AssertFailedException("Nothing may be submitted."),
+            CancellationToken.None,
+            searchUnavailable: true);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "An outage never ends in giving up, however many searches came before it.");
+        StringAssert.Contains(execution.Message, "No indexer could be searched");
+        var payload = BookAcquisitionExecutor.ReadPayload(await host.GetAsync(request.Id));
+        Assert.AreEqual(ReleaseRequestTracker.MaxSearches - 1, payload.Searches, "The outage is not counted as a search.");
+        Assert.AreEqual(Now + ReleaseRequestTracker.UnavailableRetry, payload.NextSearchUtc, "The next search comes soon, not after the back-off meant for \"nothing exists\".");
+        Assert.IsTrue(ReleaseRequestTracker.IsSearchDue(payload, Now + ReleaseRequestTracker.UnavailableRetry));
+    }
+
+    [TestMethod]
     public async Task EveryReleaseTriedIsNamedInsteadOfNoRelease()
     {
         await using var host = await Host.CreateAsync();

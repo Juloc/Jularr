@@ -63,6 +63,9 @@ public sealed class ReleaseRequestTracker(
 
     public const string EveryReleaseTried = "Every matching release was tried already.";
 
+    /// <summary>How long to wait before searching again after no indexer could answer at all.</summary>
+    public static readonly TimeSpan UnavailableRetry = TimeSpan.FromMinutes(30);
+
     /// <summary>Wait before the next search while no release exists: 6 h, 12 h, then daily.</summary>
     public static TimeSpan SearchBackoff(int searches) =>
         TimeSpan.FromHours(searches switch
@@ -103,7 +106,9 @@ public sealed class ReleaseRequestTracker(
     /// <summary>
     /// Runs one search result through the lifecycle. <paramref name="candidates"/> are the
     /// releases the media search accepted, best first; <paramref name="noReleaseReason"/>
-    /// explains an empty result. <paramref name="submit"/> sends the chosen release.
+    /// explains an empty result. <paramref name="submit"/> sends the chosen release. When <paramref name="searchUnavailable"/> says that no indexer
+    /// could answer, an empty result says nothing about the media: the outage is not counted as a search, so it can never use up the searches that
+    /// end in giving up, and the next search comes soon (<see cref="UnavailableRetry"/>) instead of after the back-off meant for "nothing exists".
     /// </summary>
     public async Task<AcquisitionExecution> ContinueAsync<TPayload>(
         AcquisitionRequest request,
@@ -111,7 +116,8 @@ public sealed class ReleaseRequestTracker(
         IReadOnlyList<ReleaseRequestCandidate> candidates,
         string noReleaseReason,
         Func<ReleaseRequestCandidate, Task<ReleaseRequestSubmission>> submit,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool searchUnavailable = false)
         where TPayload : ReleaseRequestPayload
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -124,6 +130,15 @@ public sealed class ReleaseRequestTracker(
             payload.TriedReleases ?? [],
             StringComparer.OrdinalIgnoreCase);
         var next = candidates.FirstOrDefault(candidate => !tried.Contains(candidate.Identity));
+
+        if (next is null && candidates.Count == 0 && searchUnavailable)
+        {
+            var retry = Now + UnavailableRetry;
+            await SaveAsync(request, payload with { NextSearchUtc = retry, LastProblem = null }, cancellationToken);
+            return new AcquisitionExecution(
+                AcquisitionRequestStatus.Approved,
+                WithProblem(payload, $"{noReleaseReason} Searching again {retry:yyyy-MM-dd HH:mm} UTC."));
+        }
 
         if (next is null)
         {
