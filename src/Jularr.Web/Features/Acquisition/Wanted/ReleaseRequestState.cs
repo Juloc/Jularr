@@ -32,10 +32,14 @@ public abstract record ReleaseRequestPayload
 }
 
 /// <summary>A release a media search accepted, in ranked order.</summary>
+/// <param name="Source">The indexer that returned the release.</param>
+/// <param name="ReleaseGroup">The release group its name states; with the source it is what a download outcome is counted for.</param>
 public sealed record ReleaseRequestCandidate(
     string Identity,
     string Title,
-    Uri DownloadUri);
+    Uri DownloadUri,
+    string? Source = null,
+    string? ReleaseGroup = null);
 
 /// <summary>What the download client said about one submitted release.</summary>
 public sealed record ReleaseRequestSubmission(

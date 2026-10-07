@@ -16,7 +16,9 @@ public sealed record DownloadSubmissionSpec(
     Stream? File = null,
     string? FileName = null,
     string? MediaTargetKey = null,
-    OperationPriority Priority = OperationPriority.Normal);
+    OperationPriority Priority = OperationPriority.Normal,
+    string? ReleaseSource = null,
+    string? ReleaseGroup = null);
 
 public sealed record DownloadSubmissionOutcome(
     bool Accepted,
@@ -144,7 +146,9 @@ public sealed class DownloadClientSubmissionService(
                         entry.CategoryFor(spec.MediaKind),
                         TargetKey: string.IsNullOrWhiteSpace(spec.MediaTargetKey)
                             ? null
-                            : spec.MediaTargetKey.Trim()).Serialize(),
+                            : spec.MediaTargetKey.Trim(),
+                        ReleaseSource: spec.ReleaseSource,
+                        ReleaseGroup: spec.ReleaseGroup).Serialize(),
                     cancellationToken);
                 await store.ReportProgressAsync(
                     operationId,

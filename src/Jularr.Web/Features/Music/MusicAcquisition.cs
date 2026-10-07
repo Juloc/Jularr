@@ -175,7 +175,8 @@ public sealed class MusicAcquisitionEngine(
     MusicLibraryService library,
     TimeProvider clock,
     ILogger<MusicAcquisitionEngine> logger,
-    CanonicalMediaStorageService? storage = null)
+    CanonicalMediaStorageService? storage = null,
+    ReleaseReliabilityService? reliability = null)
 {
     public const string OperationKind = "music-usenet-download";
 
@@ -236,7 +237,7 @@ public sealed class MusicAcquisitionEngine(
         var waiting = await tracker.WaitForUpgradeAsync(
             request,
             payload,
-            [.. better.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!))],
+            [.. better.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))],
             $"The album is in the library as {installedQuality} ({UpgradePolicy.Assess(profile, installedQuality).Reason}) and no better release is known yet.",
             cancellationToken);
         return waiting is null
@@ -271,7 +272,7 @@ public sealed class MusicAcquisitionEngine(
     {
         var workId = payload.WorkId;
         var candidates = releases
-            .Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!))
+            .Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))
             .ToArray();
         var byIdentity = releases.ToDictionary(release => release.Candidate.Identity, release => release.Candidate, StringComparer.Ordinal);
         var title = $"{payload.Artist} - {payload.Album}";
@@ -286,7 +287,7 @@ public sealed class MusicAcquisitionEngine(
                 var sources = byIdentity[release.Identity].Sources.Select(source => source.DownloadUri).OfType<Uri>().Distinct().ToArray();
                 var outcome = await downloads.SubmitFirstAcceptedAsync(
                     sources.Length == 0 ? [release.DownloadUri] : sources,
-                    uri => new DownloadSubmissionSpec(OperationKind, "Download Music", title, request.RequestedByProfileId, uri, release.Title, MediaAcquisitionKind.Music, MediaTargetKey: $"work:{workId:D}"),
+                    uri => new DownloadSubmissionSpec(OperationKind, "Download Music", title, request.RequestedByProfileId, uri, release.Title, MediaAcquisitionKind.Music, MediaTargetKey: $"work:{workId:D}", ReleaseSource: release.Source, ReleaseGroup: release.ReleaseGroup),
                     cancellationToken);
                 if (outcome.Accepted && progress is not null)
                 {
@@ -320,6 +321,7 @@ public sealed class MusicAcquisitionEngine(
             .GroupBy(release => release.Identity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (Release: group.First(), Judgement: Judge(group.First())), StringComparer.Ordinal);
         var wantedSince = new DateTimeOffset(DateTime.SpecifyKind(wantedSinceUtc, DateTimeKind.Utc));
+        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
         var selection = ReleaseSelectionEngine.Select(
             profile,
             new SelectionContext(clock.GetUtcNow(), wantedSince),
@@ -334,7 +336,7 @@ public sealed class MusicAcquisitionEngine(
                 SelectionCoverage.Single)
             {
                 SafetyRejection = pair.Value.Judgement.SafetyRejection
-            })]);
+            })], lookup);
         var evaluations = selection.Ranked
             .Select(ranked => new MusicReleaseEvaluation(judged[ranked.Candidate.Id].Release, judged[ranked.Candidate.Id].Judgement.Parsed, ranked))
             .ToArray();

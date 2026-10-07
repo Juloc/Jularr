@@ -86,7 +86,8 @@ public sealed class AnimeAcquisitionPipeline(
     AcquisitionPolicyStore policyStore,
     AcquisitionHistoryService history,
     ILogger<AnimeAcquisitionPipeline> logger,
-    TimeProvider clock)
+    TimeProvider clock,
+    ReleaseReliabilityService? reliability = null)
 {
     public const string SearchOperationKind = "anime-search";
     public const string GrabOperationKind = "anime-grab";
@@ -275,7 +276,7 @@ public sealed class AnimeAcquisitionPipeline(
                 new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(searchTarget, releases) },
                 cancellationToken);
             var snapshot = await observation.GetSnapshotAsync(forceRefresh: false, cancellationToken);
-            var candidates = Evaluate(target, scope, wanted, episode?.Key, result.Releases, state, snapshot, policy, now);
+            var candidates = Evaluate(target, scope, wanted, episode?.Key, result.Releases, state, snapshot, policy, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
             return new(target, episode?.Key, mode, candidates, result.Warnings, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -905,7 +906,7 @@ public sealed class AnimeAcquisitionPipeline(
                 await operations.AppendLogAsync(operationId, OperationLogLevel.Warning, LogModule, $"{warning.IndexerName}: {warning.Message}{(string.IsNullOrEmpty(warning.Query) ? "" : $" ({warning.Query})")}", cancellationToken);
             }
 
-            var candidates = Evaluate(target, [episode], allWanted, episode.Key, result.Releases, state, snapshot, policy, now);
+            var candidates = Evaluate(target, [episode], allWanted, episode.Key, result.Releases, state, snapshot, policy, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
             await LogDecisionsAsync(operations, operationId, candidates, cancellationToken);
 
             var accepted = candidates.Where(candidate => candidate.Decision.Grab).ToArray();
@@ -1083,7 +1084,8 @@ public sealed class AnimeAcquisitionPipeline(
         AnimeMonitoringState state,
         AcquisitionOwnershipSnapshot snapshot,
         AcquisitionPolicyState policy,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        ReleaseReliabilityLookup? reliability)
     {
         var tagIds = state.Anime.TryGetValue(target.Anime.Key, out var animeSettings) ? animeSettings.TagIds : null;
         var delayProfile = AcquisitionDelayEngine.SelectProfile(policy.DelayProfiles, target.Profile.Id, tagIds);
@@ -1103,7 +1105,8 @@ public sealed class AnimeAcquisitionPipeline(
         var selection = ReleaseSelectionEngine.Select(
             AcquisitionDelayEngine.WithDelayAsFallbackTier(target.Profile, delayProfile),
             new SelectionContext(now, wantedSince),
-            [.. judged.Values.Select(item => item.Candidate)]);
+            [.. judged.Values.Select(item => item.Candidate)],
+            reliability);
 
         var candidates = new List<AnimeSearchCandidate>();
         foreach (var evaluation in selection.Ranked)

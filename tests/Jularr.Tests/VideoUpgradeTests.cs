@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
@@ -91,6 +92,11 @@ public sealed class VideoUpgradeTests
         await using var world = await VideoRequestToPlayWorld.CreateAsync(MediaAcquisitionKind.Movie, Tmdb());
         world.Indexer.Publish(DuneLow);
         var request = await world.RequestAsync(DuneTmdb, "Dune");
+
+        var download = (await world.Operations.GetAsync(request.OperationId!.Value))!;
+        Assert.IsTrue(DownloadOperationDetails.TryParse(download.Details, out var details), "The download records where its release came from.");
+        Assert.AreEqual("Video test indexer", details!.ReleaseSource);
+        Assert.AreEqual("GROUP", details.ReleaseGroup, "The outcome of this download can later count for or against its indexer and release group.");
 
         // The acceptable release is taken at once; the movie stays wanted because 720p is below the cutoff.
         var imported = await ImportAsync(world, request, DuneLow, size: 4);

@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Selection;
 
 namespace Jularr.Web.Features.Books;
 
@@ -35,7 +36,8 @@ public sealed class BookSearchCoordinator(
     BookCatalogService books,
     IndexerSearchCoordinator indexers,
     QualityProfileStore qualityProfiles,
-    ILogger<BookSearchCoordinator> logger)
+    ILogger<BookSearchCoordinator> logger,
+    ReleaseReliabilityService? reliability = null)
 {
     /// <summary>The warning source of the metadata catalogs (Open Library, Google Books, Wikisource) when none of them answered.</summary>
     public const string CatalogSource = "Book catalogs";
@@ -223,12 +225,7 @@ public sealed class BookSearchCoordinator(
             MediaAcquisitionKind.Book,
             workId: null,
             cancellationToken);
-        return await BookUsenetSearch.SearchAsync(
-            indexers,
-            title,
-            author,
-            profile,
-            cancellationToken);
+        return await BookUsenetSearch.SearchAsync(indexers, title, author, profile, cancellationToken, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken));
     }
 
     private async Task<SourceResult<UsenetPool>> CaptureUsenetPoolAsync(

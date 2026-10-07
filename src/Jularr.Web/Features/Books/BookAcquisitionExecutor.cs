@@ -128,7 +128,9 @@ public sealed class BookAcquisitionExecutor(
                         request.RequestedByProfileId,
                         release.DownloadUri,
                         payload.Title,
-                        MediaAcquisitionKind.Book),
+                        MediaAcquisitionKind.Book,
+                        ReleaseSource: release.Source,
+                        ReleaseGroup: release.ReleaseGroup),
                     cancellationToken);
                 return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
             },
@@ -145,7 +147,9 @@ public sealed class BookAcquisitionExecutor(
             .Select(candidate => new ReleaseRequestCandidate(
                 candidate.Release.Title,
                 candidate.Release.Title,
-                candidate.Release.InternalDownloadUri!))
+                candidate.Release.InternalDownloadUri!,
+                candidate.Release.Indexer,
+                candidate.Release.ParsedRelease.ReleaseGroup))
             .ToArray();
 
     public static BookRequestPayload ReadPayload(AcquisitionRequest request)
@@ -220,16 +224,17 @@ public static class BookUsenetSearch
         string? author,
         QualityProfile profile,
         CancellationToken cancellationToken,
-        SearchOptions? options = null)
+        SearchOptions? options = null,
+        ReleaseReliabilityLookup? reliability = null)
     {
         var intent = new SearchIntent(MediaAcquisitionKind.Book, title.Trim()) { Creator = string.IsNullOrWhiteSpace(author) ? null : author.Trim() };
         var result = await indexers.SearchAsync(
             intent,
-            (options ?? new SearchOptions()) with { UsableCount = releases => BookReleaseSelector.Rank(releases, title, author, profile).Count(ranked => ranked.Score > 0) },
+            (options ?? new SearchOptions()) with { UsableCount = releases => BookReleaseSelector.Rank(releases, title, author, profile, reliability).Count(ranked => ranked.Score > 0) },
             cancellationToken);
         return new BookUsenetSearchResult(
             [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
-            BookReleaseSelector.Rank(result.Releases, title, author, profile),
+            BookReleaseSelector.Rank(result.Releases, title, author, profile, reliability),
             result.Warnings,
             result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0));
     }
@@ -252,7 +257,8 @@ public static class BookReleaseSelector
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
         string title,
         string? author,
-        QualityProfile? profile = null)
+        QualityProfile? profile = null,
+        ReleaseReliabilityLookup? reliability = null)
     {
         // Identity is decided first and the shared selection engine orders what is left, so a custom profile can reject or prefer a
         // format, regex or scored term but can never make a release for another book eligible.
@@ -261,7 +267,7 @@ public static class BookReleaseSelector
         var authorWords = Words(author);
         var judged = releases.GroupBy(release => release.Identity, StringComparer.Ordinal).ToDictionary(group => group.Key, group => Judge(group.First(), titleWords, authorWords), StringComparer.Ordinal);
         var now = DateTimeOffset.UtcNow;
-        var selection = ReleaseSelectionEngine.Select(effectiveProfile, new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)]);
+        var selection = ReleaseSelectionEngine.Select(effectiveProfile, new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)], reliability);
         return [.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))];
     }
 

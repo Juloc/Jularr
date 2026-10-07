@@ -150,7 +150,7 @@ public sealed record SelectionResult(
 /// </summary>
 public static class ReleaseSelectionEngine
 {
-    public static SelectionResult Select(QualityProfile profile, SelectionContext context, IReadOnlyList<SelectionCandidate> candidates)
+    public static SelectionResult Select(QualityProfile profile, SelectionContext context, IReadOnlyList<SelectionCandidate> candidates, ReleaseReliabilityLookup? reliability = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(candidates);
@@ -158,7 +158,7 @@ public static class ReleaseSelectionEngine
         var activeTier = ActiveTier(profile, context);
         var effective = profile with { AllowedQualities = AllowedAt(profile, activeTier) };
         var ranked = candidates
-            .Select(candidate => Evaluate(profile, effective, activeTier, candidate))
+            .Select(candidate => Evaluate(profile, effective, activeTier, candidate, reliability))
             .OrderBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible or SelectionDecision.Temporary => 0, SelectionDecision.ManualReview => 1, _ => 2 })
             .ThenBy(evaluation => evaluation.FallbackTier)
             .ThenBy(evaluation => evaluation.QualityRank)
@@ -197,10 +197,10 @@ public static class ReleaseSelectionEngine
             ? []
             : [.. profile.AllowedQualities.Concat(profile.FallbackTiers.Take(tier).SelectMany(fallback => fallback.AddedQualities)).Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    private static CandidateEvaluation Evaluate(QualityProfile profile, QualityProfile effective, int activeTier, SelectionCandidate candidate)
+    private static CandidateEvaluation Evaluate(QualityProfile profile, QualityProfile effective, int activeTier, SelectionCandidate candidate, ReleaseReliabilityLookup? lookup)
     {
         var reasons = new List<SelectionReason>();
-        var reliability = candidate.Reliability?.Points ?? 0;
+        var reliability = (candidate.Reliability ?? lookup?.For(candidate.Indexer, candidate.Parsed?.ReleaseGroup))?.Points ?? 0;
         if (candidate.SafetyRejection is { } safety)
         {
             reasons.Add(new SelectionReason(SelectionReasonKind.Safety, "Safety", safety));

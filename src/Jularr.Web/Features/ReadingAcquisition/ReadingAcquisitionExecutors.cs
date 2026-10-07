@@ -4,6 +4,7 @@ using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.ReadingDiscovery;
@@ -29,7 +30,8 @@ public sealed class ReadingAcquisitionEngine(
     DownloadClientStore downloadClients,
     DownloadClientSubmissionService downloads,
     ReleaseRequestTracker tracker,
-    QualityProfileStore? profiles = null)
+    QualityProfileStore? profiles = null,
+    ReleaseReliabilityService? reliability = null)
 {
     public const string OperationKind = "reading-usenet-download";
 
@@ -64,7 +66,7 @@ public sealed class ReadingAcquisitionEngine(
         }
 
         var profile = profiles is null ? null : await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile);
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken));
 
         return await GrabAsync(request, payload, Candidates(search), search.FailureMessage, cancellationToken);
     }
@@ -98,7 +100,9 @@ public sealed class ReadingAcquisitionEngine(
                         request.RequestedByProfileId,
                         release.DownloadUri,
                         release.Title,
-                        request.Kind),
+                        request.Kind,
+                        ReleaseSource: release.Source,
+                        ReleaseGroup: release.ReleaseGroup),
                     cancellationToken);
                 if (outcome.Accepted && progress is not null)
                 {
@@ -126,7 +130,9 @@ public sealed class ReadingAcquisitionEngine(
             .Select(candidate => new ReleaseRequestCandidate(
                 candidate.Release.Identity,
                 candidate.Release.Title,
-                candidate.Release.InternalDownloadUri!))
+                candidate.Release.InternalDownloadUri!,
+                candidate.Release.Indexer,
+                candidate.Release.ParsedRelease.ReleaseGroup))
             .ToArray();
     }
 

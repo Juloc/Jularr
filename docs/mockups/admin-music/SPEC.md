@@ -26,10 +26,11 @@ Route family `/Admin/Music` (Admin media policy, Music and Acquisition modules).
 - Every visible string is a catalog key. No host paths in responses except the file name of a track.
 - Home and Discover do not show Music in this slice; the consumer Library does (below).
 
-## Consumer Library: 
-Music is a Library type behind the Music module and the profile's Music browse permission, reachable as the Library tab "Music". It is a read surface over the same canonical records as the Admin pages (); it shows only what is true and offers no Play action until Jularr plays music.
+## Consumer Library: `/Music`
 
-- ****: a grid of the artists Jularr knows: a letter tile (MusicBrainz provides no artwork; a cover is shown only once a provider supplies one), the name and "N albums, M in the library". Empty state: "No music in the library yet."
-- ****: the artist's albums, newest first, as tiles with year, type and the derived album status.
-- ****: artist link, year, type, status, "x of y tracks in the library", the track list with an in-library mark per track. An account that may request Music sees **Request album** for an album that is not in the library and has no open request; it goes through the shared request flow, and the server decides. An Admin also sees **Manage in Admin**.
+Music is a Library type behind the Music module and the profile's Music browse permission, reachable as the Library tab "Music". It is a read surface over the same canonical records as the Admin pages (`MusicQuery`); it shows only what is true and offers no Play action until Jularr plays music.
+
+- **`/Music`**: a grid of the artists Jularr knows: a letter tile (MusicBrainz provides no artwork; a cover is shown only once a provider supplies one), the name and "N albums, M in the library". Empty state: "No music in the library yet."
+- **`/Music/Artist/{id}`**: the artist's albums, newest first, as tiles with year, type and the derived album status.
+- **`/Music/Album/{workId}`**: artist link, year, type, status, "x of y tracks in the library", the track list with an in-library mark per track. An account that may request Music sees **Request album** for an album that is not in the library and has no open request; it goes through the shared request flow, and the server decides. An Admin also sees **Manage in Admin**.
 - Search and discovery of new artists stay in Admin Music for now; the consumer surface never changes monitoring.

@@ -340,6 +340,7 @@ builder.Services.AddScoped<LibraryScanner>();
 builder.Services.AddScoped<CanonicalMediaStorageService>();
 builder.Services.AddScoped<CanonicalVideoStorageBackfillService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Selection.InstalledVideoVersions>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Selection.ReleaseReliabilityService>();
 builder.Services.AddSingleton<IMediaProbeRunner, FfprobeMediaProbeRunner>();
 builder.Services.AddSingleton<MediaInventoryService>();
 builder.Services.AddSingleton<IMediaContainerRemuxer, FfmpegMediaContainerRemuxer>();

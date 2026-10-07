@@ -61,7 +61,8 @@ public sealed class ReadingManualSearchService(
     ReadingAcquisitionEngine engine,
     ManualGrabCoordinator coordinator,
     QualityProfileStore profiles,
-    TimeProvider clock)
+    TimeProvider clock,
+    ReleaseReliabilityService? reliability = null)
 {
     public async Task<ReadingManualSearchTarget?> GetTargetAsync(Guid requestId, CancellationToken cancellationToken) =>
         await requests.GetAsync(requestId, cancellationToken) is { } request && IsUsenetSearchable(request)
@@ -77,7 +78,7 @@ public sealed class ReadingManualSearchService(
 
         var payload = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request));
         var profile = await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, profile);
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, profile, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
         var target = await TargetOfAsync(request, cancellationToken);
         var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
         var candidates = search.Ranked.Select(ranked => ToCandidate(ranked, tried, target.CanSearch)).ToArray();
@@ -100,14 +101,14 @@ public sealed class ReadingManualSearchService(
         }
 
         var profile = await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true }, profile);
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true }, profile, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
         var selected = search.Ranked.FirstOrDefault(ranked => ranked.Release.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
         if (selected is null || selected.Score <= 0 || selected.Release.InternalDownloadUri is null)
         {
             return new ManualGrabOutcome(ManualGrabStatus.NotAvailable, null, null);
         }
 
-        var candidate = new ReleaseRequestCandidate(selected.Release.Identity, selected.Release.Title, selected.Release.InternalDownloadUri);
+        var candidate = new ReleaseRequestCandidate(selected.Release.Identity, selected.Release.Title, selected.Release.InternalDownloadUri, selected.Release.Indexer, selected.Release.ParsedRelease.ReleaseGroup);
         return await coordinator.GrabAsync(
             request,
             async (claimed, progress) =>

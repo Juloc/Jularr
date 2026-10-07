@@ -207,19 +207,21 @@ public static class ReadingReleaseSelector
     public static IReadOnlyList<RankedReadingRelease> Rank(
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
         ReadingAcquisitionTarget target,
-        QualityProfile? profile = null) =>
-        Evaluate(releases, target, profile).Ranked;
+        QualityProfile? profile = null,
+        ReleaseReliabilityLookup? reliability = null) =>
+        Evaluate(releases, target, profile, reliability).Ranked;
 
     public static ReadingRanking Evaluate(
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
         ReadingAcquisitionTarget target,
-        QualityProfile? profile = null)
+        QualityProfile? profile = null,
+        ReleaseReliabilityLookup? reliability = null)
     {
         var judged = releases
             .GroupBy(release => release.Identity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => ToJudgement(group.First(), target), StringComparer.Ordinal);
         var now = DateTimeOffset.UtcNow;
-        var selection = ReleaseSelectionEngine.Select(profile ?? ReadingQualityProfiles.For(target.Kind), new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)]);
+        var selection = ReleaseSelectionEngine.Select(profile ?? ReadingQualityProfiles.For(target.Kind), new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)], reliability);
         return new ReadingRanking([.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))], selection.WinnerReason);
     }
 
@@ -445,7 +447,8 @@ public static class ReadingUsenetSearch
         ReadingAcquisitionTarget target,
         CancellationToken cancellationToken,
         SearchOptions? options = null,
-        QualityProfile? profile = null)
+        QualityProfile? profile = null,
+        ReleaseReliabilityLookup? reliability = null)
     {
         var intent = new SearchIntent(target.Kind, target.Title)
         {
@@ -456,9 +459,9 @@ public static class ReadingUsenetSearch
         };
         var result = await indexers.SearchAsync(
             intent,
-            (options ?? new SearchOptions()) with { UsableCount = releases => ReadingReleaseSelector.Rank(releases, target, profile).Count(ranked => ranked.Score > 0) },
+            (options ?? new SearchOptions()) with { UsableCount = releases => ReadingReleaseSelector.Rank(releases, target, profile, reliability).Count(ranked => ranked.Score > 0) },
             cancellationToken);
-        var ranking = ReadingReleaseSelector.Evaluate(result.Releases, target, profile);
+        var ranking = ReadingReleaseSelector.Evaluate(result.Releases, target, profile, reliability);
         return new ReadingUsenetSearchResult(
             [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
             ranking.Ranked,
