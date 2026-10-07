@@ -119,6 +119,7 @@ public sealed class MusicManualSearchService(
 
         return await coordinator.GrabAsync(
             request,
+            [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending],
             async (claimed, progress) =>
             {
                 var fresh = MusicRequestPayload.Of(claimed) with { WorkId = workId };

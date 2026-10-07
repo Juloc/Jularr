@@ -65,15 +65,4 @@ public enum VideoAcquisitionSetupProblem
     NoDownloadClient
 }
 
-/// <summary>
-/// What a grab got through before it stopped, so a caller that sees an exception knows whether a download exists: the submission
-/// started (its result is unknown if it was interrupted) or the download client accepted the release (a download is running).
-/// </summary>
-public sealed class VideoGrabProgress
-{
-    public bool SubmitStarted { get; set; }
 
-    public bool Accepted { get; set; }
-
-    public Guid? OperationId { get; set; }
-}

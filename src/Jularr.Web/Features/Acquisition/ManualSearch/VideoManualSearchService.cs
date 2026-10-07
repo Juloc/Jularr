@@ -21,8 +21,11 @@ public sealed partial class VideoManualSearchService(
     AcquisitionRequestService requestService,
     TimeProvider clock,
     ILogger<VideoManualSearchService> logger,
-    IInstanceModuleService? instanceModules = null)
+    IInstanceModuleService? instanceModules = null,
+    ManualGrabCoordinator? grabCoordinator = null)
 {
+    private readonly ManualGrabCoordinator coordinator = grabCoordinator ?? new ManualGrabCoordinator(requests, requestService, Microsoft.Extensions.Logging.Abstractions.NullLogger<ManualGrabCoordinator>.Instance);
+
     // A striped lock is enough: it serializes grabs of the same request in this process without one lock object per request id.
     private static readonly SemaphoreSlim[] GrabLocks = Enumerable.Range(0, 32).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
 
@@ -126,95 +129,24 @@ public sealed partial class VideoManualSearchService(
                 return new ManualGrabOutcome(ManualGrabStatus.NotAvailable, null, request);
             }
 
-            // The search took seconds: claim the request only if it still waits for a release, then read it again so the grab works on
+            // The search took seconds: the request is claimed only if it still waits for a release and read again, so the grab works on
             // what the claim froze, not on what was read before the search.
-            var waiting = new[] { AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed };
-            if (await requests.TryTransitionStatusAsync(requestId, waiting, AcquisitionRequestStatus.Searching, null, null, cancellationToken) is not { } claimedFrom)
-            {
-                return new ManualGrabOutcome(ManualGrabStatus.NotSearchable, null, await requests.GetAsync(requestId, cancellationToken) ?? request);
-            }
-
-            var progress = new VideoGrabProgress();
-            AcquisitionExecution execution;
-            try
-            {
-                var claimed = await requests.GetAsync(requestId, cancellationToken) ?? request;
-                var fresh = await engine.ResolveManualTargetAsync(claimed, unitId, cancellationToken) ?? target;
-                if ((fresh.Payload.TriedReleases ?? []).Contains(releaseIdentity, StringComparer.OrdinalIgnoreCase))
+            var outcome = await coordinator.GrabAsync(
+                request,
+                [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed],
+                async (claimed, progress) =>
                 {
-                    await ReleaseClaimAsync(requestId, claimedFrom);
-                    return new ManualGrabOutcome(ManualGrabStatus.AlreadySubmitted, null, request);
-                }
-
-                execution = await engine.GrabManualAsync(claimed, fresh, selected, progress, cancellationToken);
-            }
-            catch (Exception exception) when (progress.SubmitStarted)
-            {
-                // The release may be at the download client already: never hand the request back to the scheduler.
-                logger.LogError(exception, "Manual grab for request {RequestId} stopped after the release was submitted.", requestId);
-                var message = progress.Accepted ? SentMessage : InterruptedMessage;
-                var recorded = await TryFinishClaimAsync(requestId, progress.Accepted ? AcquisitionRequestStatus.Downloading : AcquisitionRequestStatus.Failed, message, progress.OperationId);
-                if (exception is OperationCanceledException && !progress.Accepted)
-                {
-                    throw;
-                }
-
-                return new ManualGrabOutcome(recorded && progress.Accepted ? ManualGrabStatus.Submitted : ManualGrabStatus.Unrecorded, message, request);
-            }
-            catch
-            {
-                // Nothing was submitted: give the request back to the status it was claimed from.
-                await ReleaseClaimAsync(requestId, claimedFrom);
-                throw;
-            }
-
-            try
-            {
-                var updated = await requestService.ApplyManualExecutionAsync(requestId, execution, cancellationToken);
-                return execution.Status == AcquisitionRequestStatus.Downloading
-                    ? new ManualGrabOutcome(ManualGrabStatus.Submitted, execution.Message, updated)
-                    : new ManualGrabOutcome(ManualGrabStatus.ClientRejected, execution.Message, updated);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                logger.LogError(exception, "Manual grab for request {RequestId} was submitted but the request could not be updated.", requestId);
-                var accepted = execution.Status == AcquisitionRequestStatus.Downloading;
-                await TryFinishClaimAsync(requestId, accepted ? AcquisitionRequestStatus.Downloading : AcquisitionRequestStatus.Failed, accepted ? SentMessage : execution.Message, execution.OperationId);
-                return new ManualGrabOutcome(ManualGrabStatus.Unrecorded, execution.Message, request);
-            }
+                    var fresh = await engine.ResolveManualTargetAsync(claimed, unitId, cancellationToken) ?? target;
+                    return (fresh.Payload.TriedReleases ?? []).Contains(releaseIdentity, StringComparer.OrdinalIgnoreCase)
+                        ? null
+                        : await engine.GrabManualAsync(claimed, fresh, selected, progress, cancellationToken);
+                },
+                cancellationToken);
+            return outcome with { Request = outcome.Request ?? await requests.GetAsync(requestId, cancellationToken) ?? request };
         }
         finally
         {
             gate.Release();
-        }
-    }
-
-    private const string SentMessage = "The release was sent to the download client. Follow it under Operations.";
-    private const string InterruptedMessage = "Submitting the release was interrupted. Check Operations before choosing another release.";
-
-    // Best effort and never throws: it runs while another failure is being handled and must not replace it.
-    private async Task ReleaseClaimAsync(Guid requestId, AcquisitionStatusTransition claimedFrom)
-    {
-        try
-        {
-            await requests.TryTransitionStatusAsync(requestId, [AcquisitionRequestStatus.Searching], claimedFrom.PreviousStatus, claimedFrom.PreviousMessage, null, CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "Could not give request {RequestId} back after a manual grab stopped.", requestId);
-        }
-    }
-
-    private async Task<bool> TryFinishClaimAsync(Guid requestId, AcquisitionRequestStatus status, string? message, Guid? operationId)
-    {
-        try
-        {
-            return await requests.TryTransitionStatusAsync(requestId, [AcquisitionRequestStatus.Searching], status, message, operationId, CancellationToken.None) is not null;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "Could not record the manual grab of request {RequestId}.", requestId);
-            return false;
         }
     }
 

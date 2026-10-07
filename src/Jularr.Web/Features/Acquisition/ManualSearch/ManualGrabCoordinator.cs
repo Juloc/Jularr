@@ -23,11 +23,11 @@ public sealed class ManualGrabCoordinator(AcquisitionAccessStore requests, Acqui
     private const string SentMessage = "The release was sent to the download client. Follow it under Operations.";
     private const string InterruptedMessage = "Submitting the release was interrupted. Check Operations before choosing another release.";
 
+    /// <param name="claimable">The statuses a request may be claimed from: the ones in which it waits for a release.</param>
     /// <param name="grab">Submits the chosen release for the claimed request; returns null when the release was tried meanwhile, so nothing was submitted.</param>
-    public async Task<ManualGrabOutcome> GrabAsync(AcquisitionRequest request, Func<AcquisitionRequest, ManualGrabProgress, Task<AcquisitionExecution?>> grab, CancellationToken cancellationToken)
+    public async Task<ManualGrabOutcome> GrabAsync(AcquisitionRequest request, IReadOnlyCollection<AcquisitionRequestStatus> claimable, Func<AcquisitionRequest, ManualGrabProgress, Task<AcquisitionExecution?>> grab, CancellationToken cancellationToken)
     {
-        var waiting = new[] { AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending };
-        if (await requests.TryTransitionStatusAsync(request.Id, waiting, AcquisitionRequestStatus.Searching, null, null, cancellationToken) is not { } claimedFrom)
+        if (await requests.TryTransitionStatusAsync(request.Id, claimable, AcquisitionRequestStatus.Searching, null, null, cancellationToken) is not { } claimedFrom)
         {
             return new ManualGrabOutcome(ManualGrabStatus.NotSearchable, null, null);
         }

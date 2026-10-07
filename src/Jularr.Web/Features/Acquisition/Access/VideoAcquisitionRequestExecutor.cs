@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Search;
@@ -422,7 +423,7 @@ public sealed partial class VideoAcquisitionEngine(
         IReadOnlyList<VideoReleaseEvaluation> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
-        VideoGrabProgress? progress = null)
+        ManualGrabProgress? progress = null)
     {
         // Admin may have changed monitoring while the indexers were searched; look again before anything is stored or grabbed, so a grab that is
         // dropped never marks its release as tried. A Manual Search grab chose its episode itself, so only Off applies to it. An Off that lands

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Search;
 
@@ -106,7 +107,7 @@ public sealed partial class VideoAcquisitionEngine
     /// Submits the one release the owner selected through the shared grab path. The caller has already verified that it is grabbable
     /// and not yet tried; the tracker records it as tried so neither automatic acquisition nor a second selection submits it again.
     /// </summary>
-    public Task<AcquisitionExecution> GrabManualAsync(AcquisitionRequest request, VideoManualTarget target, VideoReleaseEvaluation selected, VideoGrabProgress progress, CancellationToken cancellationToken)
+    public Task<AcquisitionExecution> GrabManualAsync(AcquisitionRequest request, VideoManualTarget target, VideoReleaseEvaluation selected, ManualGrabProgress progress, CancellationToken cancellationToken)
     {
         if (!selected.IsManuallyGrabbable)
         {

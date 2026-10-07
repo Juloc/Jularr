@@ -111,6 +111,7 @@ public sealed class ReadingManualSearchService(
         var candidate = new ReleaseRequestCandidate(selected.Release.Identity, selected.Release.Title, selected.Release.InternalDownloadUri, selected.Release.Indexer, selected.Release.ParsedRelease.ReleaseGroup);
         return await coordinator.GrabAsync(
             request,
+            [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending],
             async (claimed, progress) =>
             {
                 var fresh = ReadingAcquisitionEngine.ReadPayload(claimed, ReadingAcquisitionEngine.FallbackTarget(claimed));
