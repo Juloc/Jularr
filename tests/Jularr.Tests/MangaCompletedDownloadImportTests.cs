@@ -35,7 +35,7 @@ public sealed class MangaCompletedDownloadImportTests
     }
 
     [TestMethod]
-    public async Task ADefaultRootChosenInStorageReplacesTheLegacyLibraryFolderAndItsPlacementPolicy()
+    public async Task TheDefaultRootChosenInStorageReceivesTheReleaseWithItsOwnPlacementPolicy()
     {
         await using var host = await Host.CreateAsync(ImportMode.Move);
         var routedRoot = Path.Combine(host.Root, "routed");
@@ -46,12 +46,12 @@ public sealed class MangaCompletedDownloadImportTests
         await new Jularr.Web.Features.Storage.LibraryRootRoutingService(host.Db).AssignDefaultAsync(Jularr.Web.Features.Library.LibraryContentType.Manga, root.Id, Jularr.Web.Features.Library.LibraryPlacementPolicy.Copy);
         var download = host.Download("Frieren.Vol.01.CBZ", "Frieren Vol 01.cbz");
 
-        var result = await host.ImportAsync(download, provider: "manual", externalId: "frieren", routed: true);
+        var result = await host.ImportAsync(download, provider: "manual", externalId: "frieren");
 
         Assert.AreEqual(CompletedDownloadImportDisposition.Completed, result.Disposition, result.Message);
         Assert.IsTrue(File.Exists(Path.Combine(routedRoot, "Frieren", "Frieren.Vol.01.CBZ", "Frieren Vol 01.cbz")), "The Storage root receives the release.");
-        Assert.IsFalse(Directory.Exists(host.Library), "The legacy folder is not used once Storage has a default root.");
-        Assert.IsTrue(File.Exists(Path.Combine(download, "Frieren Vol 01.cbz")), "The root's Copy policy beats the legacy Move mode.");
+        Assert.IsFalse(Directory.Exists(host.Library), "Only the default root receives imports.");
+        Assert.IsTrue(File.Exists(Path.Combine(download, "Frieren Vol 01.cbz")), "The placement policy of the default root decides, here Copy.");
         Assert.AreEqual(ImportMode.Copy, result.Placement!.Mode);
     }
 
@@ -99,20 +99,14 @@ public sealed class MangaCompletedDownloadImportTests
     }
 
     [TestMethod]
-    public async Task WithoutALibraryTheDownloadIsReadInPlaceButStillJoinsTheMatchedSeries()
+    public async Task WithoutADefaultMangaRootTheImportWaitsInsteadOfReadingTheDownloadInPlace()
     {
         await using var host = await Host.CreateAsync(mode: null);
-        await host.ImportAsync(host.Download("Frieren.Vol.01", "v01.cbz"), provider: "manual", externalId: "frieren");
-        var series = await host.SingleSeriesAsync();
-        await host.Repository.UpdateMetadataAsync(
-            series.Id,
-            new MangaAniListCandidate("118586", "Frieren", null, null, null, null, "RELEASING"),
-            CancellationToken.None);
 
-        var second = await host.ImportAsync(host.Download("Frieren.Vol.02", "v02.cbz"), provider: "anilist", externalId: "118586");
+        var result = await host.ImportAsync(host.Download("Frieren.Vol.01", "v01.cbz"), provider: "manual", externalId: "frieren");
 
-        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, second.Disposition, second.Message);
-        Assert.AreEqual(series.Id, (await host.SingleSeriesAsync()).Id);
+        Assert.AreEqual(CompletedDownloadImportDisposition.RetryLater, result.Disposition);
+        StringAssert.Contains(result.Message, "Admin → Storage");
         Assert.IsFalse(Directory.Exists(host.Library));
     }
 
@@ -156,7 +150,7 @@ public sealed class MangaCompletedDownloadImportTests
     }
 
     [TestMethod]
-    public async Task MangaLibrarySettingSurvivesTheSettingsStore()
+    public async Task OnlyTheInboxAndTheMappingsSurviveTheSettingsStoreNeverALibraryFolder()
     {
         var root = Path.Combine(Path.GetTempPath(), $"jularr-library-settings-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -164,15 +158,14 @@ public sealed class MangaCompletedDownloadImportTests
         {
             await new AnimeImportSettingsStore(root).UpdateAsync(state => state with
             {
-                MediaLibraries = new() { [MediaAcquisitionKind.Manga] = new MediaLibraryTarget("/data/media/manga", ImportMode.Hardlink) }
+                MediaLibraries = new() { [MediaAcquisitionKind.Manga] = new MediaLibraryTarget("/data/media/manga", ImportMode.Hardlink, "/data/inbox/manga") }
             });
 
             var loaded = await new AnimeImportSettingsStore(root).LoadAsync();
 
-            Assert.AreEqual("/data/media/manga", loaded.LibraryFor(MediaAcquisitionKind.Manga)!.LibraryRoot);
-            Assert.AreEqual(ImportMode.Hardlink, loaded.ModeFor(MediaAcquisitionKind.Manga));
-            Assert.IsNull(loaded.LibraryFor(MediaAcquisitionKind.LightNovel));
-            Assert.AreEqual(ImportMode.Move, loaded.ModeFor(MediaAcquisitionKind.LightNovel));
+            Assert.AreEqual("/data/inbox/manga", loaded.InboxFor(MediaAcquisitionKind.Manga));
+            Assert.IsNull(loaded.LibraryFor(MediaAcquisitionKind.Manga), "The destination is Storage's, so the settings keep none.");
+            Assert.AreEqual(ImportMode.Move, loaded.ModeFor(MediaAcquisitionKind.Manga));
         }
         finally
         {
@@ -215,10 +208,7 @@ public sealed class MangaCompletedDownloadImportTests
             var host = new Host(root, db, settings);
             if (mode is { } importMode)
             {
-                await settings.UpdateAsync(state => state with
-                {
-                    MediaLibraries = new() { [MediaAcquisitionKind.Manga] = new MediaLibraryTarget(host.Library, importMode) }
-                });
+                await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Manga, host.Library, importMode);
             }
 
             return host;
@@ -243,8 +233,7 @@ public sealed class MangaCompletedDownloadImportTests
             string download,
             string provider,
             string externalId,
-            string title = "Frieren",
-            bool routed = false)
+            string title = "Frieren")
         {
             var adapter = new MangaCompletedDownloadImportAdapter(
                 Db,
@@ -255,7 +244,7 @@ public sealed class MangaCompletedDownloadImportTests
                 new FileSystemHardLinkCreator(),
                 NullLogger<MangaCompletedDownloadImportAdapter>.Instance,
                 Path.Combine(Root, "cache"),
-                routing: routed ? new Jularr.Web.Features.Storage.LibraryRootRoutingService(Db) : null);
+                routing: new Jularr.Web.Features.Storage.LibraryRootRoutingService(Db));
             var request = new AcquisitionRequest(
                 Guid.NewGuid(),
                 MediaAcquisitionKind.Manga,

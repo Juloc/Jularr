@@ -255,13 +255,7 @@ public sealed class BookCoverArtworkTests
             {
                 libraryRoot = Path.Combine(tempRoot, "media-books");
                 Directory.CreateDirectory(libraryRoot);
-                await importSettings.UpdateAsync(state => state with
-                {
-                    MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries)
-                    {
-                        [MediaAcquisitionKind.Book] = new MediaLibraryTarget(LibraryRoot: libraryRoot)
-                    }
-                });
+                await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Book, libraryRoot);
             }
 
             var config = new ConfigurationBuilder()
@@ -281,7 +275,8 @@ public sealed class BookCoverArtworkTests
                 config,
                 dataProtectionProvider: null,
                 discoverySettingsDirectory: null,
-                importSettings: importSettings);
+                importSettings: importSettings,
+                routing: new Jularr.Web.Features.Storage.LibraryRootRoutingService(db));
 
             return new Fixture(tempRoot, db, service, libraryRoot, coversPath);
         }

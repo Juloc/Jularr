@@ -84,27 +84,13 @@ public sealed class AcquisitionModel(
         return RedirectToPage();
     }
 
-    /// <summary>The reading media types with their own folders, in display order.</summary>
+    /// <summary>The media types with an inbox folder, in display order.</summary>
     public IReadOnlyList<MediaAcquisitionKind> MediaFolderKinds =>
         MediaInboxImportService.InboxKinds.Where(IsKindEnabled).ToArray();
 
     public MediaLibraryTarget FoldersFor(MediaAcquisitionKind kind) => ImportSettings.FoldersFor(kind);
 
-    /// <summary>
-    /// Every reading media type can retain its original files in a NAS library folder. The
-    /// database holds derived reader state; it is not the sole canonical media copy.
-    /// </summary>
-    public static bool HasLibraryFolder(MediaAcquisitionKind kind) =>
-        MediaFolderKindsStatic.Contains(kind);
-
-    /// <summary>Movies and TV place imports into the default LibraryRoot chosen in Admin → Storage instead of a folder set here.</summary>
-    public static bool IsRouted(MediaAcquisitionKind kind) =>
-        MediaInboxImportService.RoutedContentType(kind) is not null;
-
     public string ImportPolicyLabel(LibraryPlacementPolicy policy) => ImportModeLabel(ImportFileTransfer.ModeFor(policy));
-
-    private static readonly MediaAcquisitionKind[] MediaFolderKindsStatic =
-        [MediaAcquisitionKind.Manga, MediaAcquisitionKind.LightNovel, MediaAcquisitionKind.Book];
 
     /// <summary>The conventional folder name of a media type in the NAS layout (placeholders only).</summary>
     public static string FolderName(MediaAcquisitionKind kind) => kind switch
@@ -117,13 +103,10 @@ public sealed class AcquisitionModel(
     public string MediaLabel(MediaAcquisitionKind kind) => Ui[MediaKindLabelKeys.Folders(kind)];
 
     /// <summary>
-    /// Sets the folders of one reading media type: its durable library folder, import mode and
-    /// inbox folder. An empty field clears that folder.
+    /// Sets the inbox folder of one media type. An empty field clears it; the library destination belongs to Admin → Storage.
     /// </summary>
     public async Task<IActionResult> OnPostMediaFoldersAsync(
         MediaAcquisitionKind kind,
-        string? libraryRoot,
-        ImportMode? importMode,
         string? inboxRoot,
         CancellationToken cancellationToken)
     {
@@ -135,14 +118,13 @@ public sealed class AcquisitionModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        if (!MediaFolderKinds.Contains(kind) || importMode is { } mode && !Enum.IsDefined(mode))
+        if (!MediaFolderKinds.Contains(kind))
         {
             return BadRequest();
         }
 
-        var library = HasLibraryFolder(kind) ? Clean(libraryRoot) : null;
         var inbox = Clean(inboxRoot);
-        if (!IsAbsolute(library) || !IsAbsolute(inbox))
+        if (!IsAbsolute(inbox))
         {
             TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.libraryRootAbsolute"];
             return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "media-folders");
@@ -150,20 +132,9 @@ public sealed class AcquisitionModel(
 
         // An inbox that is, contains or sits inside any library root would import library files onto themselves.
         if (inbox is not null &&
-            MediaInboxImportService.RoutedContentType(kind) is not null &&
             await routing.FindOverlappingRootAsync(inbox, cancellationToken) is not null)
         {
             TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.inboxOverlapsDestination"];
-            return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "media-folders");
-        }
-
-        // Importing the inbox into the very folder it is scanned from would import files onto
-        // themselves; nested folders are only warned about next to the fields.
-        if (library is not null &&
-            inbox is not null &&
-            await folders.ComparePairAsync(library, inbox, cancellationToken) == FolderRelation.Same)
-        {
-            TempData["AcquisitionSettingsError"] = Ui["storage.pair.same"];
             return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "media-folders");
         }
 
@@ -174,8 +145,6 @@ public sealed class AcquisitionModel(
                 // The folders form does not touch the media type's remote path mappings.
                 var target = (libraries.TryGetValue(kind, out var existing) ? existing : new MediaLibraryTarget()) with
                 {
-                    LibraryRoot = library,
-                    ImportMode = HasLibraryFolder(kind) && library is not null ? importMode : null,
                     InboxRoot = inbox
                 };
                 if (target.IsEmpty)
@@ -608,7 +577,7 @@ public sealed class AcquisitionModel(
         var destinations = new Dictionary<MediaAcquisitionKind, LibraryRootRoute>();
         foreach (var kind in MediaInboxImportService.InboxKinds)
         {
-            if (MediaInboxImportService.RoutedContentType(kind) is { } contentType && await routing.ResolveDefaultAsync(contentType, cancellationToken) is { } route)
+            if (LibraryRootRoutingService.ContentTypeOf(kind) is { } contentType && await routing.ResolveDefaultAsync(contentType, cancellationToken) is { } route)
             {
                 destinations[kind] = route;
             }

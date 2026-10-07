@@ -143,7 +143,7 @@ public sealed class LibraryRootRoutingTests
     }
 
     [TestMethod]
-    public async Task StorageRootsReplaceTheLegacyLibraryFoldersOfReadingAndAudiobookTypesAndKeepTheirInboxAndMappings()
+    public async Task OnlyStorageRootsGiveTheReadingAndAudiobookTypesADestinationAndTheirInboxAndMappingsAreKept()
     {
         await using var db = await CreateDbAsync();
         var manga = new LibraryRoot { Name = "Manga", Path = "/media/manga", PlacementPolicy = LibraryPlacementPolicy.Copy };
@@ -160,8 +160,8 @@ public sealed class LibraryRootRoutingTests
         {
             MediaLibraries = new()
             {
-                [Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga] = new Jularr.Web.Features.Acquisition.Import.MediaLibraryTarget("/old/manga", Jularr.Web.Features.Acquisition.Import.ImportMode.Move, "/inbox/manga"),
-                [Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book] = new Jularr.Web.Features.Acquisition.Import.MediaLibraryTarget("/old/books")
+                [Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga] = new Jularr.Web.Features.Acquisition.Import.MediaLibraryTarget(null, null, "/inbox/manga"),
+                [Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book] = new Jularr.Web.Features.Acquisition.Import.MediaLibraryTarget(null, null, "/inbox/books")
             }
         };
 
@@ -171,7 +171,8 @@ public sealed class LibraryRootRoutingTests
         Assert.AreEqual("/media/manga", mangaTarget.LibraryRoot);
         Assert.AreEqual(Jularr.Web.Features.Acquisition.Import.ImportMode.Copy, mangaTarget.ImportMode);
         Assert.AreEqual("/inbox/manga", mangaTarget.InboxRoot, "The inbox is not a destination and stays as configured.");
-        Assert.AreEqual("/old/books", effective.LibraryFor(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book)!.LibraryRoot, "A type without an enabled default root keeps the settings folder.");
+        Assert.IsNull(effective.LibraryFor(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book), "A type without an enabled default root has no destination.");
+        Assert.AreEqual("/inbox/books", effective.InboxFor(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book));
     }
 
     [TestMethod]

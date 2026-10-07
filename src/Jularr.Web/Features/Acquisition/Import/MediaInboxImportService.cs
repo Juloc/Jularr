@@ -34,15 +34,6 @@ public sealed class MediaInboxImportService(
         MediaAcquisitionKind.Music
     ];
 
-    /// <summary>The LibraryRoot content type whose default root receives this media type's imports, or null while its importer still reads a per-media library folder.</summary>
-    public static LibraryContentType? RoutedContentType(MediaAcquisitionKind kind) => kind switch
-    {
-        MediaAcquisitionKind.Movie => LibraryContentType.Movie,
-        MediaAcquisitionKind.Tv => LibraryContentType.Tv,
-        MediaAcquisitionKind.Music => LibraryContentType.Music,
-        _ => null
-    };
-
     public async Task<string?> InboxAsync(
         MediaAcquisitionKind kind,
         CancellationToken cancellationToken) =>
@@ -77,7 +68,7 @@ public sealed class MediaInboxImportService(
         }
 
         // An inbox that is, contains or sits inside any LibraryRoot would import library files onto themselves (or another type's library).
-        if (RoutedContentType(kind) is not null && await routing.FindOverlappingRootAsync(root, cancellationToken) is { } overlapping)
+        if (await routing.FindOverlappingRootAsync(root, cancellationToken) is { } overlapping)
         {
             throw new InvalidOperationException($"The {Label(kind)} inbox overlaps the library root '{overlapping.Name}'. Choose an inbox outside every library root.");
         }

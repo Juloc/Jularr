@@ -100,16 +100,7 @@ public sealed class ReadingArtworkFoldersTests
     {
         await using var host = await ReadingArtworkTestHost.CreateAsync();
         Directory.CreateDirectory(Path.Combine(host.MangaRoot, "Frieren"));
-        await host.Settings.UpdateAsync(state => state with
-        {
-            MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries)
-            {
-                [MediaAcquisitionKind.Manga] = new MediaLibraryTarget(LibraryRoot: host.MangaRoot)
-                {
-                    RemotePathMappings = [new RemotePathMapping("/nas/manga", host.MangaRoot)]
-                }
-            }
-        });
+        await host.Settings.UpdateAsync(state => state.WithRemotePathMappings(MediaAcquisitionKind.Manga, [new RemotePathMapping("/nas/manga", host.MangaRoot)]));
         var series = await host.AddMangaAsync("/nas/manga/Frieren", createSource: false);
 
         Assert.AreEqual(

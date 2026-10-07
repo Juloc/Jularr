@@ -102,9 +102,6 @@ public sealed class IndexModel(
 
     public string ContentTypeLabel(LibraryContentType contentType) => Ui[MediaKindLabelKeys.Name(LibraryRootRoutingService.KindOf(contentType)!.Value)];
 
-    /// <summary>Whether an importer without a default root waits (Movie, TV, Music) or reads the folder of Import &amp; naming (reading and audiobook types).</summary>
-    public static bool WaitsForDefault(LibraryContentType contentType) => LibraryRootRoutingService.ImporterRoutedTypes.Contains(contentType);
-
     public string PlacementLabel(LibraryPlacementPolicy policy) =>
         ImportFileTransfer.ModeFor(policy) switch
         {

@@ -62,15 +62,15 @@ Downloads the owner sends by hand (an NZB URL or file on the Books page, kind `s
 
 ### Books
 
-A completed Books job is imported from its own folder, including subfolders, as one book: EPUB is preferred, PDF accepted. The book is linked to the requested catalog entry. A job without a readable EPUB or PDF is an unsuitable release, and Wanted tries the next one. A path Jularr cannot read is not the release's fault: the request waits as `Importing` with the path in its status. When a Books library folder is configured, the original EPUB/PDF is placed there with the chosen import mode and the parsed reader state is derived from that copy. Without one, EPUBs are read in place and PDFs use the legacy `Books:FilesPath`.
+A completed Books job is imported from its own folder, including subfolders, as one book: EPUB is preferred, PDF accepted. The book is linked to the requested catalog entry. A job without a readable EPUB or PDF is an unsuitable release, and Wanted tries the next one. A path Jularr cannot read is not the release's fault: the request waits as `Importing` with the path in its status. The original EPUB/PDF is placed in the default Book LibraryRoot of Admin → Storage with that root's placement policy, and the parsed reader state is derived from that copy. Without a default Book root the import waits (the request stays `Importing` and says to choose one in Storage); nothing is read in place from the download folder.
 
 ### Manga
 
-The Manga library folder (Settings → Acquisition → Media folders) is the final Manga folder on the NAS, for example `/data/media/manga`, with an optional own import mode. Without an own mode, Move / Copy / Hardlink / Hardlink or copy comes from the default import mode. The file operation is the shared `ImportFileTransfer`, the same one Anime uses.
+The default Manga LibraryRoot of Admin → Storage is the final Manga folder on the NAS, for example `/data/media/manga`; its placement policy (Move / Copy / Hardlink / Hardlink or copy) decides how files get there. The file operation is the shared `ImportFileTransfer`, the same one Anime uses. Manga, Light Novels, Books and Audiobooks have no library folder in the import settings any more: Storage owns it.
 
 - A completed download goes to `<library>/<series>/<release folder>/`. Only CBZ/ZIP archives and page images are placed. Existing files are never overwritten: an identical file is skipped, so a retry is safe, and a different one gets a numbered name.
 - A series is identified by its AniList entry. When a series already matched to the requested AniList id exists, the new volume joins that series instead of creating one series per release. It uses the series' own folder when that folder is inside the Manga library.
-- Without a Manga library folder, the download is read where the download client put it. It still joins the matched series.
+- Without a default Manga root the import waits until the owner chooses one in Storage.
 - `/data/manga-cache` stays a disposable page cache. It is not the library.
 
 ### Light Novels
@@ -149,7 +149,7 @@ All folders are settings; nothing is hard-coded. A layout that keeps completed d
 └── manga/                         Manga library folder
 ```
 
-Books and Light Novels can also have final library folders, for example `/data/media/books` and `/data/media/lightnovels`. Jularr keeps the original EPUB/PDF there according to Move / Copy / Hardlink / Hardlink or copy, while parsed chapters and cached assets remain rebuildable derived state. Enter every path as the Jularr container sees it. When SABnzbd runs in another container and reports different paths, add a remote path mapping (Settings → Acquisition), for example `/downloads -> /data/downloads`.
+Books and Light Novels have their own default roots, for example `/data/media/books` and `/data/media/lightnovels`. Jularr keeps the original EPUB/PDF there according to the root's placement policy, while parsed chapters and cached assets remain rebuildable derived state. Enter every path as the Jularr container sees it. When SABnzbd runs in another container and reports different paths, add a remote path mapping (Settings → Acquisition), for example `/downloads -> /data/downloads`.
 
 ## Operations
 

@@ -370,6 +370,9 @@ internal sealed class FixedVideoIndexer(IReadOnlyList<ProwlarrReleaseCandidate> 
     /// <summary>Lets a test hold a search open, to change something while a Wanted pass is running.</summary>
     public Func<Task>? OnSearch { get; set; }
 
+    /// <summary>What the Search Planner asked this indexer, in order.</summary>
+    public List<IndexerSearchQuery> Queries { get; } = [];
+
     public IndexerType Type => IndexerType.Newznab;
 
     public Task<IndexerConnectionTestResult> TestAsync(
@@ -382,6 +385,7 @@ internal sealed class FixedVideoIndexer(IReadOnlyList<ProwlarrReleaseCandidate> 
         IndexerSearchQuery query,
         CancellationToken cancellationToken)
     {
+        Queries.Add(query);
         if (OnSearch is { } gate)
         {
             await gate();

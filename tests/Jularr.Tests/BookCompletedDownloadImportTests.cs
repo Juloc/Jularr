@@ -24,6 +24,21 @@ namespace Jularr.Tests;
 public sealed class BookCompletedDownloadImportTests
 {
     [TestMethod]
+    public async Task WithoutADefaultBookRootTheImportWaitsInsteadOfReadingTheDownloadInPlace()
+    {
+        await using var host = await Host.CreateAsync();
+        var downloads = host.Folder("downloads");
+        File.WriteAllText(Path.Combine(downloads, "Dune.epub"), "book");
+        await new Jularr.Web.Features.Storage.LibraryRootRoutingService(host.Db).SetDefaultAsync(Jularr.Web.Features.Library.LibraryContentType.Book, null);
+
+        var result = await host.Adapter.ImportAsync(new CompletedDownloadImportRequest(null, null, downloads, MediaAcquisitionKind.Book), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.RetryLater, result.Disposition);
+        StringAssert.Contains(result.Message, "Admin → Storage");
+        Assert.AreEqual(0, await host.Db.BookFiles.CountAsync(), "Nothing is imported from where the download client left it.");
+    }
+
+    [TestMethod]
     public async Task InboxScanImportsEveryBookOnceAsARecordedOperation()
     {
         await using var host = await Host.CreateAsync();
@@ -192,7 +207,7 @@ public sealed class BookCompletedDownloadImportTests
         Assert.AreEqual(DownloadImportState.Completed, import.State);
         Assert.AreEqual("/downloads/books/manual", import.ReportedPath);
         Assert.AreEqual(job, import.LocalPath);
-        Assert.AreEqual(host.Books.FilesPath, import.Destination);
+        Assert.AreEqual(Path.Combine(host.Root, "default-library", "mnt-books-manual"), import.Destination, "The release is placed in the default Book root of Storage.");
         Assert.AreEqual(ImportMode.Copy, import.Mode);
         Assert.AreEqual(MediaAcquisitionKind.Book, details.MediaKind, "The routing details survive the import record.");
         var logs = await store.ListLogsAsync(new OperationLogFilter(OperationId: operationId));
@@ -314,6 +329,7 @@ public sealed class BookCompletedDownloadImportTests
                 .AddSingleton<Jularr.Web.Features.Storage.LibraryRootRoutingService>()
                 .AddSingleton<MediaInboxImportService>()
                 .BuildServiceProvider();
+            await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Book, Path.Combine(root, "default-library"), ImportMode.Copy);
             return new Host(root, services);
         }
 
@@ -330,15 +346,7 @@ public sealed class BookCompletedDownloadImportTests
                 return state with { MediaLibraries = libraries };
             });
 
-        public Task SetLibraryAsync(MediaAcquisitionKind kind, string library, ImportMode mode) =>
-            services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(state =>
-            {
-                var libraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries)
-                {
-                    [kind] = new MediaLibraryTarget(library, mode)
-                };
-                return state with { MediaLibraries = libraries };
-            });
+        public Task SetLibraryAsync(MediaAcquisitionKind kind, string library, ImportMode mode) => ReadingTestRoots.AssignAsync(Db, kind, library, mode);
 
         public CompletedDownloadImportService ImportService(ICompletedDownloadLocationResolver locations) =>
             new(

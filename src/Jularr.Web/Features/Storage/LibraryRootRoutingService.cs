@@ -10,20 +10,20 @@ namespace Jularr.Web.Features.Storage;
 public sealed class LibraryRootRoutingService(AppDbContext db)
 {
     /// <summary>
-    /// The content types whose importers resolve their destination and placement through this service. Types not listed here
-    /// still read their legacy per-media library folder until their importer is migrated.
+    /// The content types whose importers resolve their final destination and placement through this service, and so every content type the Admin
+    /// Storage page lets the owner route. A type without a default root imports nothing: its imports wait until the owner chooses one.
     /// </summary>
-    public static readonly LibraryContentType[] ImporterRoutedTypes = [LibraryContentType.Anime, LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music];
+    public static readonly LibraryContentType[] ImporterRoutedTypes =
+    [
+        LibraryContentType.Anime, LibraryContentType.Movie, LibraryContentType.Tv, LibraryContentType.Music,
+        LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook
+    ];
 
-    /// <summary>
-    /// The reading and audiobook types whose importers still read a per-media library folder from the import settings. Storage's default root of
-    /// the type replaces that folder once the owner chooses one (<see cref="WithRoutedLibrariesAsync"/>); until then the settings folder stays
-    /// the fallback, so an existing installation keeps importing where it did.
-    /// </summary>
-    public static readonly LibraryContentType[] SettingsFallbackTypes = [LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook];
+    /// <summary>The reading and audiobook importers read their destination as an import-settings view built from Storage (<see cref="WithRoutedLibrariesAsync"/>).</summary>
+    private static readonly LibraryContentType[] SettingsViewTypes = [LibraryContentType.Manga, LibraryContentType.LightNovel, LibraryContentType.Book, LibraryContentType.Audiobook];
 
     /// <summary>Every content type the Admin Storage page lets the owner route.</summary>
-    public static IReadOnlyList<LibraryContentType> ManagedTypes { get; } = [.. ImporterRoutedTypes, .. SettingsFallbackTypes];
+    public static IReadOnlyList<LibraryContentType> ManagedTypes => ImporterRoutedTypes;
 
     /// <summary>The acquisition kind whose importer serves a content type, or null for a type without one.</summary>
     public static MediaAcquisitionKind? KindOf(LibraryContentType contentType) =>
@@ -37,6 +37,21 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
             LibraryContentType.Tv => MediaAcquisitionKind.Tv,
             LibraryContentType.Audiobook => MediaAcquisitionKind.Audiobook,
             LibraryContentType.Music => MediaAcquisitionKind.Music,
+            _ => null
+        };
+
+    /// <summary>The content type whose default root receives the imports of a media type, or null for a media type that has none.</summary>
+    public static LibraryContentType? ContentTypeOf(MediaAcquisitionKind kind) =>
+        kind switch
+        {
+            MediaAcquisitionKind.Anime => LibraryContentType.Anime,
+            MediaAcquisitionKind.Manga => LibraryContentType.Manga,
+            MediaAcquisitionKind.LightNovel => LibraryContentType.LightNovel,
+            MediaAcquisitionKind.Book => LibraryContentType.Book,
+            MediaAcquisitionKind.Movie => LibraryContentType.Movie,
+            MediaAcquisitionKind.Tv => LibraryContentType.Tv,
+            MediaAcquisitionKind.Audiobook => LibraryContentType.Audiobook,
+            MediaAcquisitionKind.Music => LibraryContentType.Music,
             _ => null
         };
 
@@ -56,27 +71,30 @@ public sealed class LibraryRootRoutingService(AppDbContext db)
         .SingleOrDefaultAsync(cancellationToken);
 
     /// <summary>
-    /// Applies Storage's default roots to import settings: for every reading or audiobook type with an enabled default root, that root and its
-    /// placement policy replace the per-media library folder and import mode; the folder's inbox and remote path mappings are kept. A type
-    /// without a default root keeps what the settings say. This is the one place where the canonical owner and the legacy folder meet.
+    /// Gives the reading and audiobook importers their destination: for every such type with an enabled default root, that root and its placement
+    /// policy become the library folder and import mode of its entry in the import settings (the inbox and remote path mappings are kept). The
+    /// settings store no library folder of its own, so a type without a default root has no destination and its importer waits.
     /// </summary>
     public async Task<AnimeImportSettingsState> WithRoutedLibrariesAsync(AnimeImportSettingsState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        var types = SettingsFallbackTypes;
+        var types = SettingsViewTypes;
         var defaults = await (
                 from assignment in db.LibraryRootContentAssignments.AsNoTracking()
                 join root in db.LibraryRoots.AsNoTracking() on assignment.LibraryRootId equals root.Id
                 where assignment.IsDefault && root.IsEnabled && types.Contains(assignment.ContentType)
                 select new { assignment.ContentType, root.Path, root.PlacementPolicy })
             .ToListAsync(cancellationToken);
-        if (defaults.Count == 0)
+        var libraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries ?? []);
+        foreach (var type in types)
         {
-            return state;
+            if (KindOf(type) is { } kind && libraries.TryGetValue(kind, out var stored))
+            {
+                libraries[kind] = stored with { LibraryRoot = null, ImportMode = null };
+            }
         }
 
-        var libraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>(state.MediaLibraries ?? []);
         foreach (var route in defaults)
         {
             if (KindOf(route.ContentType) is not { } kind)

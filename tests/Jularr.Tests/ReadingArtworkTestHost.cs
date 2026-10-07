@@ -17,13 +17,21 @@ namespace Jularr.Tests;
 /// in-memory provider that serves cover images, and the real <see cref="ReadingCoverArtwork"/> on
 /// top -- the setup #581's folder-resolution and beside-media cover tests share.
 /// </summary>
+/// <summary>The import settings as the importers and the artwork see them: the stored inbox and mappings plus the destinations of Storage.</summary>
+internal sealed class RoutedSettings(AnimeImportSettingsStore store, AppDbContext db)
+{
+    public async Task<AnimeImportSettingsState> LoadAsync() => await new Jularr.Web.Features.Storage.LibraryRootRoutingService(db).WithRoutedLibrariesAsync(await store.LoadAsync());
+
+    public Task UpdateAsync(Func<AnimeImportSettingsState, AnimeImportSettingsState> update) => store.UpdateAsync(update);
+}
+
 internal sealed class ReadingArtworkTestHost : IAsyncDisposable
 {
     private ReadingArtworkTestHost(string root, AppDbContext db, AnimeImportSettingsStore settings)
     {
         Root = root;
         Db = db;
-        Settings = settings;
+        Settings = new RoutedSettings(settings, db);
         Http = new ProviderImages();
         Store = new BesideMediaArtworkStore(db);
         Cache = new BesideMediaArtworkCache(Store, Path.Combine(root, "cache"));
@@ -33,12 +41,13 @@ internal sealed class ReadingArtworkTestHost : IAsyncDisposable
             Store,
             Cache,
             new HandlerFactory(Http),
-            NullLogger<ReadingCoverArtwork>.Instance);
+            NullLogger<ReadingCoverArtwork>.Instance,
+            new Jularr.Web.Features.Storage.LibraryRootRoutingService(db));
     }
 
     public string Root { get; }
     public AppDbContext Db { get; }
-    public AnimeImportSettingsStore Settings { get; }
+    public RoutedSettings Settings { get; }
     public ProviderImages Http { get; }
     public BesideMediaArtworkStore Store { get; }
     public BesideMediaArtworkCache Cache { get; }
@@ -68,15 +77,28 @@ internal sealed class ReadingArtworkTestHost : IAsyncDisposable
         return host;
     }
 
-    public Task ConfigureLibraryRootsAsync(string? novelRoot, string? mangaRoot) =>
-        Settings.UpdateAsync(state => state with
+    /// <summary>The Light Novel and Manga roots become the default roots of Storage, which is where the importers and the artwork read them from; null clears the default.</summary>
+    public async Task ConfigureLibraryRootsAsync(string? novelRoot, string? mangaRoot)
+    {
+        var routing = new Jularr.Web.Features.Storage.LibraryRootRoutingService(Db);
+        if (novelRoot is null)
         {
-            MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>
-            {
-                [MediaAcquisitionKind.LightNovel] = new MediaLibraryTarget(LibraryRoot: novelRoot),
-                [MediaAcquisitionKind.Manga] = new MediaLibraryTarget(LibraryRoot: mangaRoot)
-            }
-        });
+            await routing.SetDefaultAsync(Jularr.Web.Features.Library.LibraryContentType.LightNovel, null);
+        }
+        else
+        {
+            await ReadingTestRoots.AssignAsync(Db, MediaAcquisitionKind.LightNovel, novelRoot);
+        }
+
+        if (mangaRoot is null)
+        {
+            await routing.SetDefaultAsync(Jularr.Web.Features.Library.LibraryContentType.Manga, null);
+        }
+        else
+        {
+            await ReadingTestRoots.AssignAsync(Db, MediaAcquisitionKind.Manga, mangaRoot);
+        }
+    }
 
     /// <summary>A Light Novel series whose EPUB volumes are the given (volume number, file path) pairs.</summary>
     public async Task<Guid> AddLightNovelAsync(params (int Volume, string? StoragePath)[] volumes)

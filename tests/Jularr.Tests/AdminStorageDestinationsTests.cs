@@ -149,7 +149,7 @@ public sealed class AdminStorageDestinationsTests
         StringAssert.Contains(owner, "name=\"libraryRootId\"");
         StringAssert.Contains(owner, "name=\"placementPolicy\"");
         StringAssert.Contains(owner, "No default root: imports of this type wait until one is chosen.", "TV has no default yet.");
-        StringAssert.Contains(owner, "No default root: the library folder of Import &amp; naming is used", "Manga falls back to the folder of Import & naming.");
+        Assert.IsFalse(owner.Contains("library folder of Import", StringComparison.Ordinal), "No media type falls back to a folder of Import & naming any more.");
         Assert.IsFalse(manager.Contains("handler=Destination", StringComparison.Ordinal), "A media manager sees the destinations but cannot change them.");
         StringAssert.Contains(manager, "Default destinations");
         StringAssert.Contains(manager, "Cinema");

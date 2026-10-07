@@ -896,7 +896,7 @@ public sealed class AnimeAcquisitionPipeline(
                 return false;
             }
 
-            var episodeTarget = SearchTargetFor(episode);
+            var episodeTarget = PlannedTargetFor(target, episode, allWanted);
             var result = await indexers.SearchAsync(
                 ToSearchIntent(episodeTarget),
                 new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(episodeTarget, releases) },
@@ -1291,6 +1291,12 @@ public sealed class AnimeAcquisitionPipeline(
 
     private static bool Covers(AnimeReleaseInfo release, AnimeEpisodeKey key)
     {
+        // A season pack names no episode range: it covers every wanted episode of its season.
+        if (release.IsSeasonPack && release.EpisodeStart is null && release.SeasonNumber is { } packSeason)
+        {
+            return packSeason == key.SeasonNumber;
+        }
+
         if (release.SeasonNumber is { } season && release.EpisodeStart is { } start && release.EpisodeEnd is { } end)
         {
             return season == key.SeasonNumber && key.EpisodeNumber >= start && key.EpisodeNumber <= end;
@@ -1300,6 +1306,20 @@ public sealed class AnimeAcquisitionPipeline(
                release.AbsoluteEpisodeStart is { } absoluteStart &&
                release.AbsoluteEpisodeEnd is { } absoluteEnd &&
                absolute >= absoluteStart && absolute <= absoluteEnd;
+    }
+
+    /// <summary>
+    /// What the shared Search Planner is asked for. A season of which every episode is wanted (and so none is in the library yet) is searched as
+    /// the season, so the planner asks for packs deliberately; a season that is partly there or still airing is searched episode by episode.
+    /// </summary>
+    private static ProwlarrAnimeSearchTarget PlannedTargetFor(AnimeAcquisitionTarget target, AnimeAcquisitionEpisode episode, IReadOnlyList<AnimeWantedEpisode> allWanted)
+    {
+        var season = episode.Key.SeasonNumber;
+        var inSeason = target.Episodes.Count(item => item.Key.SeasonNumber == season);
+        var wantedInSeason = allWanted.Count(item => item.Key.SeasonNumber == season);
+        return season > 0 && inSeason >= 2 && wantedInSeason == inSeason
+            ? new ProwlarrAnimeSearchTarget(episode.SearchTitle, Aliases(episode.SearchAliases, episode.SearchTitle), ProwlarrAnimeSearchMode.Season, season, null, null)
+            : SearchTargetFor(episode);
     }
 
     private static ProwlarrAnimeSearchTarget SearchTargetFor(AnimeAcquisitionEpisode episode) =>

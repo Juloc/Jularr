@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Library;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
@@ -69,43 +70,37 @@ public sealed partial class AudiobookCompletedDownloadImportAdapter(
             }
 
             var library = settings.LibraryFor(MediaAcquisitionKind.Audiobook);
-            string? libraryPath;
-            CompletedDownloadPlacement? placement = null;
-            var recorded = new List<AudiobookFileInput>();
-
-            if (library is not null)
+            if (library is null)
             {
-                var mode = settings.ModeFor(MediaAcquisitionKind.Audiobook);
-                var (action, allowFallback) = ImportFileTransfer.Resolve(mode);
-                var folder = Path.Combine(
-                    library.LibraryRoot!, AudiobookNaming.FolderPath(metadata.Author, metadata.Title, metadata.Year));
-                var placer = new LibraryFilePlacer(new ImportFileTransfer(hardLinks));
+                return CompletedDownloadImportResult.RetryLater(LibraryRootRoutingService.MissingDefaultMessage(LibraryContentType.Audiobook));
+            }
 
-                await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, "Placing the audiobook in the library.");
-                foreach (var file in audio)
+            var recorded = new List<AudiobookFileInput>();
+            var mode = settings.ModeFor(MediaAcquisitionKind.Audiobook);
+            var (action, allowFallback) = ImportFileTransfer.Resolve(mode);
+            var folder = Path.Combine(
+                library.LibraryRoot!, AudiobookNaming.FolderPath(metadata.Author, metadata.Title, metadata.Year));
+            var placer = new LibraryFilePlacer(new ImportFileTransfer(hardLinks));
+
+            await request.ReportProgressAsync(CompletedDownloadImportPhase.Importing, "Placing the audiobook in the library.");
+            foreach (var file in audio)
+            {
+                var leafName = audio.Count == 1
+                    ? AudiobookNaming.SingleFileName(metadata.Title, metadata.Year, Path.GetExtension(file.Path))
+                    : Path.GetFileName(file.Path);
+                var destination = Path.Combine(folder, leafName);
+
+                // Idempotent: a file already placed here is left as is (re-import only refreshes the record).
+                if (LibraryFilePlacer.FindDestinationConflict(destination, []) is null)
                 {
-                    var leafName = audio.Count == 1
-                        ? AudiobookNaming.SingleFileName(metadata.Title, metadata.Year, Path.GetExtension(file.Path))
-                        : Path.GetFileName(file.Path);
-                    var destination = Path.Combine(folder, leafName);
-
-                    // Idempotent: a file already placed here is left as is (re-import only refreshes the record).
-                    if (LibraryFilePlacer.FindDestinationConflict(destination, []) is null)
-                    {
-                        placer.Place(new LibraryFilePlacement(file.Path, destination, action, allowFallback, [], []));
-                    }
-
-                    recorded.Add(ToFileInput(destination, file.SizeBytes));
+                    placer.Place(new LibraryFilePlacement(file.Path, destination, action, allowFallback, [], []));
                 }
 
-                libraryPath = folder;
-                placement = new CompletedDownloadPlacement(folder, mode);
+                recorded.Add(ToFileInput(destination, file.SizeBytes));
             }
-            else
-            {
-                libraryPath = Path.GetDirectoryName(audio[0].Path);
-                recorded.AddRange(audio.Select(file => ToFileInput(file.Path, file.SizeBytes)));
-            }
+
+            var libraryPath = folder;
+            var placement = new CompletedDownloadPlacement(folder, mode);
 
             var entry = await audiobooks.EnsureAsync(
                 metadata.Title, metadata.Year, metadata.Author, metadata.Narrator, metadata.Asin,

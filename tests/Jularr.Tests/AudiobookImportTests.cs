@@ -20,18 +20,10 @@ public sealed class AudiobookImportTests
     private static MediaAcquisitionRegistry Registry() =>
         new([new AudiobookAcquisitionRegistration()]);
 
-    private static async Task<AnimeImportSettingsStore> SettingsWithLibraryAsync(string dataRoot, string libraryRoot)
+    private static async Task<AnimeImportSettingsStore> SettingsWithLibraryAsync(AppDbContext db, string dataRoot, string libraryRoot)
     {
-        var store = new AnimeImportSettingsStore(dataRoot);
-        await store.UpdateAsync(state => state with
-        {
-            DefaultImportMode = ImportMode.Copy,
-            MediaLibraries = new Dictionary<MediaAcquisitionKind, MediaLibraryTarget>
-            {
-                [MediaAcquisitionKind.Audiobook] = new MediaLibraryTarget(LibraryRoot: libraryRoot)
-            }
-        });
-        return store;
+        await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Audiobook, libraryRoot, ImportMode.Copy);
+        return new AnimeImportSettingsStore(dataRoot);
     }
 
     private static AudiobookCompletedDownloadImportAdapter Adapter(
@@ -41,7 +33,8 @@ public sealed class AudiobookImportTests
             Registry(),
             settings,
             new FileSystemHardLinkCreator(),
-            NullLogger<AudiobookCompletedDownloadImportAdapter>.Instance);
+            NullLogger<AudiobookCompletedDownloadImportAdapter>.Instance,
+            new Jularr.Web.Features.Storage.LibraryRootRoutingService(db));
 
     [TestMethod]
     public async Task M4bImportPlacesFileAndBridgesToBookWorkWithAudiobookEdition()
@@ -51,7 +44,7 @@ public sealed class AudiobookImportTests
         var download = temp.Dir("download");
         File.WriteAllText(Path.Combine(download, "Dune.2021.Unabridged.M4B-GROUP.m4b"), "audio");
         var library = temp.Dir("library");
-        var settings = await SettingsWithLibraryAsync(temp.Root, library);
+        var settings = await SettingsWithLibraryAsync(db, temp.Root, library);
 
         var result = await Adapter(db, settings).ImportAsync(
             new CompletedDownloadImportRequest(null, null, download, MediaAcquisitionKind.Audiobook), CancellationToken.None);
@@ -92,7 +85,7 @@ public sealed class AudiobookImportTests
         File.WriteAllText(Path.Combine(download, "The Hobbit - Part 02.mp3"), "audio");
         File.WriteAllText(Path.Combine(download, "The Hobbit - Part 03.mp3"), "audio");
         var library = temp.Dir("library");
-        var settings = await SettingsWithLibraryAsync(temp.Root, library);
+        var settings = await SettingsWithLibraryAsync(db, temp.Root, library);
 
         var result = await Adapter(db, settings).ImportAsync(
             new CompletedDownloadImportRequest(null, null, download, MediaAcquisitionKind.Audiobook), CancellationToken.None);

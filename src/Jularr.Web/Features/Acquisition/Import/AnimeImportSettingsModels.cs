@@ -37,19 +37,17 @@ public sealed record RemotePathMapping(string RemotePrefix, string LocalPrefix);
 /// path Jularr reads. Everything is optional.
 /// </summary>
 public sealed record MediaLibraryTarget(
-    string? LibraryRoot = null,
-    ImportMode? ImportMode = null,
+    [property: JsonIgnore] string? LibraryRoot = null,
+    [property: JsonIgnore] ImportMode? ImportMode = null,
     string? InboxRoot = null)
 {
     public List<RemotePathMapping> RemotePathMappings { get; init; } = [];
 
     /// <summary>
-    /// True when the target carries no folder and no path mapping and can be dropped from the
-    /// store (an import mode only overrides the mode of a library folder).
+    /// True when the target carries no inbox and no path mapping and can be dropped from the store.
     /// </summary>
     [JsonIgnore]
     public bool IsEmpty =>
-        string.IsNullOrWhiteSpace(LibraryRoot) &&
         string.IsNullOrWhiteSpace(InboxRoot) &&
         (RemotePathMappings is null || RemotePathMappings.Count == 0);
 }

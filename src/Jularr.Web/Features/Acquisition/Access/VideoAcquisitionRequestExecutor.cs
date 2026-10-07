@@ -491,12 +491,18 @@ public sealed partial class VideoAcquisitionEngine(
         CancellationToken cancellationToken)
     {
         var kind = request.Kind;
+
+        // A season of which every unit is wanted (nothing of it is in the library yet) is searched as the season, so the planner asks for
+        // packs deliberately; the judge below credits a pack with every wanted unit it covers. A season that is partly there or still airing
+        // is searched unit by unit.
+        var seasonUnits = unit is null ? 0 : scope.All.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber);
+        var searchWholeSeason = kind == MediaAcquisitionKind.Tv && unit is not null && unit.SeasonNumber > 0 && seasonUnits >= 2 && scope.Wanted.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber) == seasonUnits;
         var intent = new SearchIntent(kind, payload.Title)
         {
             Year = payload.Year,
             ExternalIds = externalIds,
             Season = unit?.SeasonNumber,
-            Episode = unit?.EpisodeNumber
+            Episode = searchWholeSeason ? null : unit?.EpisodeNumber
         };
         var parser = registry.ParserFor(kind);
         VideoJudgement Judge(ProwlarrReleaseCandidate release) => VideoReleaseJudge.Judge(parser, kind, payload.Title, payload.Year, unit, scope, release);

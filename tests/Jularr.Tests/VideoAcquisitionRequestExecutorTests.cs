@@ -37,6 +37,26 @@ public sealed class VideoAcquisitionRequestExecutorTests
     }
 
     [TestMethod]
+    public async Task ASeasonThatIsWhollyWantedIsSearchedAsTheSeasonAndASeasonThatIsPartlyThereEpisodeByEpisode()
+    {
+        await using var wholly = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", "Severance.S01.1080p.WEB-DL.x264-GROUP", addEpisode: true, addSecondEpisode: true);
+
+        var request = await wholly.StartAsync();
+
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
+        Assert.IsTrue(wholly.Indexer.Queries.Count > 0);
+        Assert.IsFalse(wholly.Indexer.Queries.Any(query => query.Query.Contains("E0", StringComparison.OrdinalIgnoreCase) || query.Parameters?.Any(parameter => parameter.Key == "ep") == true), "No query names an episode when the whole season is wanted: " + string.Join(" | ", wholly.Indexer.Queries.Select(query => query.Query)));
+        Assert.IsTrue(wholly.Indexer.Queries.Any(query => query.Query.Contains("S01", StringComparison.OrdinalIgnoreCase) || query.Parameters?.Any(parameter => parameter.Key == "season") == true), "The season is asked for.");
+
+        await using var partly = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", "Severance.S01E02.1080p.WEB-DL.x264-GROUP", addEpisode: true, addSecondEpisode: true);
+        await partly.AttachFileAsync(partly.EpisodeId);
+
+        await partly.StartAsync();
+
+        Assert.IsTrue(partly.Indexer.Queries.Any(query => query.Query.Contains("S01E02", StringComparison.OrdinalIgnoreCase) || query.Parameters?.Any(parameter => parameter.Key == "ep" && parameter.Value == "2") == true), "With the first episode in the library only the second is asked for: " + string.Join(" | ", partly.Indexer.Queries.Select(query => query.Query)));
+    }
+
+    [TestMethod]
     public async Task TvDefaultScopeAcquiresCurrentEpisodeAndKeepsFutureMonitoring()
     {
         await using var host = await VideoAcquisitionTestHost.CreateAsync(

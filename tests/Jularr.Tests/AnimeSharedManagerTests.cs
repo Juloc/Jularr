@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Pipeline;
@@ -63,6 +64,24 @@ public sealed class AnimeSharedManagerTests
 
         await waiting.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.AreEqual(1, environment.Scheduler.QueuedRequests, "The queued search is what the woken pass runs.");
+    }
+
+    [TestMethod]
+    public async Task ASeasonWhereEveryEpisodeIsWantedIsSearchedAsTheSeasonAndItsPackCoversAllOfThem()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync();
+        environment.Db.StoredFiles.RemoveRange(await environment.Db.StoredFiles.ToListAsync());
+        await environment.Db.SaveChangesAsync();
+        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release("Frieren.S01.1080p.WEB-DL.AAC.H.264-GRP", "pack"));
+
+        var run = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+
+        Assert.IsFalse(environment.Prowlarr.Queries.Any(query => query.Contains("E0", StringComparison.OrdinalIgnoreCase)), "No query names an episode: " + string.Join(" | ", environment.Prowlarr.Queries));
+        Assert.IsTrue(environment.Prowlarr.Queries.Any(query => query.Contains("S01", StringComparison.OrdinalIgnoreCase)), "The season is asked for: " + string.Join(" | ", environment.Prowlarr.Queries));
+        Assert.AreEqual(1, run.Grabs, run.ToString());
+        var acquisition = (await environment.Acquisitions.LoadAsync()).Acquisitions.Single();
+        Assert.AreEqual(2, acquisition.Episodes.Length, "One pack satisfies both wanted episodes.");
     }
 
     [TestMethod]

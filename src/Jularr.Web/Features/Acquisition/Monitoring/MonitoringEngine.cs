@@ -467,6 +467,12 @@ public static class MonitoringEngine
 
     private static bool MatchesEpisode(MonitoredUnitKey key, ReleaseInfo release)
     {
+        // A season pack names no episode range: it covers every episode of its season.
+        if (release.IsSeasonPack && release.EpisodeStart is null && release.SeasonNumber is int packSeason)
+        {
+            return packSeason == key.SeasonNumber;
+        }
+
         if (release.SeasonNumber is int season &&
             release.EpisodeStart is int start &&
             release.EpisodeEnd is int end)
