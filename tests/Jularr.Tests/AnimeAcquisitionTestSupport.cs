@@ -13,7 +13,6 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Naming;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
@@ -97,7 +96,6 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         await Db.LibraryRoots.Where(item => item.Id == Root.Id).ExecuteUpdateAsync(setters => setters.SetProperty(item => item.PlacementPolicy, policy));
 
     public AnimeImportSettingsStore ImportSettings => services.GetRequiredService<AnimeImportSettingsStore>();
-    public AcquisitionPolicyStore Policy => services.GetRequiredService<AcquisitionPolicyStore>();
     public AniListAutoMonitorSettingsStore AniListAutoMonitorSettings => services.GetRequiredService<AniListAutoMonitorSettingsStore>();
     public AniListAccountStore AniListAccounts => services.GetRequiredService<AniListAccountStore>();
 
@@ -573,7 +571,6 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddSingleton(new MediaMappingReviewStore(NullLogger<MediaMappingReviewStore>.Instance, integrations));
         collection.AddSingleton(new ReadingSegmentMappingStore(NullLogger<ReadingSegmentMappingStore>.Instance, integrations));
         collection.AddSingleton(new AnimeImportSettingsStore(DataRoot));
-        collection.AddSingleton(new AcquisitionPolicyStore(DataRoot));
         collection.AddSingleton(new AniListAutoMonitorSettingsStore(DataRoot));
         collection.AddSingleton<IHardLinkCreator>(HardLinkCreator);
         collection.AddSingleton<IHttpClientFactory>(new SingleHandlerHttpClientFactory(() => AniListHandler));

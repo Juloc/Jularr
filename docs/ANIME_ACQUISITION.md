@@ -54,7 +54,7 @@ monitored anime, recent decisions and recent imports.
 
 | Fact | Canonical store |
 | --- | --- |
-| Monitored flag, search-on-add, per-anime indexer IDs, tags, target root, wanted episodes, search attempts/backoff, schedule | `/data/acquisition/monitoring.json` (`AnimeMonitoringStore`) |
+| Monitored flag, search-on-add, per-anime indexer IDs, target root, wanted episodes, search attempts/backoff, schedule | `/data/acquisition/monitoring.json` (`AnimeMonitoringStore`) |
 | Quality profile per anime | `/data/acquisition/quality-profiles.json` (`QualityProfileStore`, keyed by media type; the default profile is not stored as an assignment) |
 | Indexer connections (Prowlarr, direct Newznab) | `/data/acquisition/indexers.json` (`IndexerStore`) |
 | Download client connections (SABnzbd) | `/data/acquisition/download-clients.json` (`DownloadClientStore`) |
@@ -64,14 +64,12 @@ monitored anime, recent decisions and recent imports.
 | Import plan, per-file result, manual-import state | `/data/acquisition/imports.json` (`AnimeImportStore`) |
 | Ownership (mode, Jularr/Sonarr jobs, owned paths) | `/data/acquisition/ownership.json` |
 | Default import mode of the media types without a LibraryRoot, per-media-type folders and remote path mappings, lossless playback optimization | `/data/acquisition/import-settings.json` (`AnimeImportSettingsStore`) |
-| Tag catalog, delay profiles, tag-scoped indexer restrictions | `/data/acquisition/acquisition-policy.json` (`AcquisitionPolicyStore`) |
 | Per-profile AniList Current/Planning auto-monitor opt-in | `/data/acquisition/anilist-auto-monitor.json` (`AniListAutoMonitorSettingsStore`) |
 | Per-episode grab/delay/import/upgrade history | the database (`AcquisitionHistoryEntry`, via `AcquisitionHistoryService`) |
 | Automation API keys (name, SHA-256 hash, created/last-used/revoked) — never the raw key | the database (`AcquisitionApiKey`, via `AcquisitionApiKeyService`) |
 | Episodes and files | the library database, updated only by the library scanner |
 
-`/Settings/Acquisition` is the one place to edit the default import mode, playback optimization, remote path mappings, tags, delay
-profiles, indexer restrictions, the current profile's AniList auto-monitor rule, and to export or
+`/Settings/Acquisition` is the one place to edit the default import mode, playback optimization, remote path mappings, the current profile's AniList auto-monitor rule, and to export or
 restore a JSON backup of every store above except `health.json` (runtime health state, not a
 setting, so it is never part of the backup). Indexer and download client API keys/passwords travel
 in that backup encrypted with this installation's Data Protection keys, never in plain text.
@@ -188,8 +186,7 @@ completed under the earlier behavior (on start) are left as they are.
 ## Search, scoring and grab
 
 For each wanted episode the pipeline creates an `anime-search` operation, queries every enabled,
-healthy indexer entry (Prowlarr and direct Newznab, narrowed by any tag-scoped indexer
-restriction) with the episode's titles, and evaluates every result:
+healthy indexer entry (Prowlarr and direct Newznab, narrowed by the profile's allowed sources) with the episode's titles, and evaluates every result:
 
 1. usenet with an NZB link, otherwise rejected;
 2. the parsed series title must match one of the anime's titles;
@@ -344,24 +341,6 @@ An anime's imports go to the library root its existing files already live in. A 
 with no folder yet uses its assigned **target root** (anime page → Acquisition, defaulting to
 "anime's current root") if one is set, otherwise the first enabled root.
 
-## Tags, delay profiles and indexer restrictions
-
-Anime carry simple owner-defined tags (catalog on `/Settings/Acquisition`, assignment on the anime
-page). A **delay profile** waits N minutes after an episode becomes wanted before grabbing a
-release that does not yet meet the quality profile's upgrade cutoff, so a preferred release has a
-chance to appear first; the most specific matching profile (quality profile + tag, then either
-alone, then an unscoped default) applies, and a release that already meets the cutoff always skips
-the wait. A held-back release is logged as *Delayed* (recent decisions, acquisition history) and
-does not count against the search-failure backoff. A **tag-scoped indexer restriction** narrows
-(never widens) which of the canonical indexer entries (`/Settings/Indexers`: a Prowlarr entry as a
-whole, or a direct Newznab entry) are searched at all for the tagged anime; several
-applicable restrictions intersect. When a restriction applies but has no overlap with any currently
-enabled entry, the anime is not silently searched with its unrestricted selection: no indexer is
-searched that pass, and a *Skipped* entry with the reason is recorded (recent decisions, acquisition
-history) instead — same as a delayed decision, not a search failure. (Separately, and unaffected by
-this restriction, an anime's own `IndexerIds` only ever narrows within a single Prowlarr entry's own
-sub-indexer aggregation — see Limits.)
-
 ## Richer acquisition history
 
 Every grab, delay, import and upgrade is recorded per episode (release, score, quality, indexer,
@@ -415,7 +394,7 @@ session).
 | Method & path | Purpose |
 | --- | --- |
 | `GET /monitored` | Monitored anime with management mode, assigned quality profile, wanted-episode count and Prowlarr indexer-id restriction. |
-| `GET /anime/{animeId}/monitoring` | One anime's monitoring settings: monitored, search-on-add, quality profile, indexer ids, tags, target root, management mode. |
+| `GET /anime/{animeId}/monitoring` | One anime's monitoring settings: monitored, search-on-add, quality profile, indexer ids, target root, management mode. |
 | `PUT /anime/{animeId}/monitoring` | Sets the same fields (same call as the owner's Acquisition settings form). Refused with `409` for an anime in read-only Sonarr coexistence. |
 | `GET /wanted?animeId=` | Wanted episodes (missing or upgrade-wanted), optionally filtered to one anime. |
 | `POST /search` | Queues a search for every monitored anime (same request "Search now" sends) and returns a tracking operation id. `409` when the scheduler's request queue is full. |
@@ -462,13 +441,13 @@ curl -i -H "X-Api-Key: $KEY" -X POST https://jularr.example/api/acquisition/v1/a
   a new anime to the library.
 - An anime's own `IndexerIds` selection (set on the anime page) only ever narrows within a single
   Prowlarr entry's own sub-indexer aggregation; it does not choose which whole indexer entries
-  (Prowlarr/Newznab) are searched. Only a tag-scoped indexer restriction operates at that entry
+  (Prowlarr/Newznab) are searched. Only the profile's allowed sources operate at that entry
   level.
 
 ## P2/P3 (issue #302): intentionally not implemented
 
-Every P1 item from #302 is done (hardlink imports, remote path mapping, delay profiles, richer
-upgrade scoring/history, multiple root folders, tags/per-series indexer restrictions, AniList
+Every P1 item from #302 is done (hardlink imports, remote path mapping, richer
+upgrade scoring/history, multiple root folders, AniList
 list-driven monitor, backup/restore, Prowlarr/SABnzbd health checks and the automation API — see
 the sections above). The P2/P3 list is deliberately left unimplemented; no concrete home-server use
 case justifies the added surface, and the issue itself rules out Sonarr checkbox parity:

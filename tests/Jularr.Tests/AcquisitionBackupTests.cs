@@ -1,6 +1,6 @@
 using Jularr.Web.Features.Acquisition.Backup;
 using Jularr.Web.Features.Acquisition.Import;
-using Jularr.Web.Features.Acquisition.Policy;
+using Jularr.Web.Features.Acquisition.Monitoring;
 
 namespace Jularr.Tests;
 
@@ -14,26 +14,22 @@ public sealed class AcquisitionBackupTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         await environment.ImportSettings.UpdateAsync(state => state with { DefaultImportMode = ImportMode.Copy });
-        await environment.Policy.UpdateAsync(state => state with { Tags = [new AcquisitionTag("t1", "Tag 1")] });
 
         var bundle = await environment.ExportBackupAsync();
         Assert.IsTrue(bundle.Files.ContainsKey("monitoring.json"));
         Assert.IsTrue(bundle.Files.ContainsKey("import-settings.json"));
-        Assert.IsTrue(bundle.Files.ContainsKey("acquisition-policy.json"));
         Assert.IsTrue(bundle.Files.ContainsKey("indexers.json"));
         Assert.IsTrue(bundle.Files.ContainsKey("download-clients.json"));
         Assert.IsFalse(bundle.Files.ContainsKey("health.json"), "Runtime health state is not a setting and is never backed up.");
 
         // Change settings after the export.
         await environment.ImportSettings.UpdateAsync(state => state with { DefaultImportMode = ImportMode.Move });
-        await environment.Policy.UpdateAsync(state => state with { Tags = [] });
 
         var restored = await environment.RestoreBackupAsync(bundle);
 
         Assert.IsTrue(restored.Success, string.Join(" ", restored.Errors));
         Assert.AreEqual(bundle.Files.Count, restored.FilesWritten);
         Assert.AreEqual(ImportMode.Copy, (await environment.ImportSettings.LoadAsync()).DefaultImportMode);
-        Assert.AreEqual("Tag 1", (await environment.Policy.LoadAsync()).Tags.Single().Name);
     }
 
     [TestMethod]
@@ -107,5 +103,28 @@ public sealed class AcquisitionBackupTests
         // The secret itself is never in plain text in the bundle.
         StringAssert.Contains(bundle.Files["indexers.json"], "protectedApiKey");
         StringAssert.DoesNotMatch(bundle.Files["indexers.json"], new System.Text.RegularExpressions.Regex("prowlarr-key"));
+    }
+
+    [TestMethod]
+    public async Task AMonitoringFileThatStillCarriesTagsLoadsAndIsSavedWithoutThem()
+    {
+        var root = Directory.CreateTempSubdirectory("jularr-tags-gone-");
+        try
+        {
+            var directory = Directory.CreateDirectory(Path.Combine(root.FullName, "acquisition"));
+            var path = Path.Combine(directory.FullName, "monitoring.json");
+            await File.WriteAllTextAsync(path, """{"version":1,"anime":{"frieren":{"animeKey":"frieren","monitored":true,"searchOnAdd":true,"seasonOverrides":{},"episodeOverrides":{},"tagIds":["slow"]}},"wanted":{},"attempts":{},"history":[]}""");
+            var store = new MonitoringStore(root.FullName);
+
+            var state = await store.LoadAsync();
+            await store.SaveAsync(state);
+
+            Assert.IsTrue(state.Anime["frieren"].Monitored);
+            Assert.DoesNotContain("tagIds", await File.ReadAllTextAsync(path), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
     }
 }

@@ -4,7 +4,6 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.History;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Monitoring;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Library;
 
 namespace Jularr.Tests;
@@ -149,93 +148,6 @@ public sealed class AcquisitionImportPolicyTests
         var location = await environment.GetLibraryLocationAsync(environment.AnimeId, secondRoot.Id);
 
         Assert.AreEqual(environment.Root.Id, location!.RootId, "An anime with existing files keeps importing into its current root.");
-    }
-
-    [TestMethod]
-    public async Task DelayProfileHoldsBackAReleaseBelowTheUpgradeCutoffUntilAPreferredReleaseAppears()
-    {
-        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync();
-        await environment.Scheduler.RunExclusiveAsync(
-            (pipeline, token) => pipeline.UpdateAnimeSettingsAsync(environment.AnimeId, true, false, null, [], token, tagIds: ["slow"]),
-            CancellationToken.None);
-        await environment.Policy.UpdateAsync(state => state with
-        {
-            Tags = [new AcquisitionTag("slow", "Slow")],
-            DelayProfiles = [new AnimeDelayProfile("delay-1", "Wait for BluRay", 60, null, ["slow"], false)]
-        });
-
-        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
-        var held = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-
-        Assert.AreEqual(0, held.Grabs, "A release below the profile's upgrade cutoff is delayed.");
-        Assert.AreEqual(0, environment.Sabnzbd.Grabs.Count);
-        var attempts = await environment.MonitoringStateAsync();
-        Assert.IsFalse(attempts.Attempts.ContainsKey("frieren:S01E02"), "A delay is not the exponential search-failure backoff.");
-
-        const string preferred = "Frieren.S01E02.1080p.BluRay.AAC.H.264-GRP";
-        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(preferred, "gbd"));
-        var grabbed = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-
-        Assert.AreEqual(1, grabbed.Grabs, "A release meeting the upgrade cutoff bypasses the delay immediately.");
-        Assert.AreEqual(preferred, environment.Sabnzbd.Grabs.Single().NzbName);
-    }
-
-    [TestMethod]
-    public async Task TagScopedIndexerRestrictionAllowsTheEnabledEntryWhileTheAnimesOwnProwlarrSubIndexerSelectionStaysIndependent()
-    {
-        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync();
-        await environment.Scheduler.RunExclusiveAsync(
-            (pipeline, token) => pipeline.UpdateAnimeSettingsAsync(environment.AnimeId, true, false, null, [1, 2, 3], token, tagIds: ["fast-track"]),
-            CancellationToken.None);
-        await environment.Policy.UpdateAsync(state => state with
-        {
-            Tags = [new AcquisitionTag("fast-track", "Fast track")],
-            IndexerRestrictions = [new AnimeIndexerRestriction("r1", "Trusted only", ["fast-track"], [environment.ProwlarrIndexerEntryId])]
-        });
-        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
-
-        var run = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-
-        Assert.AreEqual(1, run.Grabs, "The restriction allows the anime's only enabled indexer entry, so the search proceeds normally.");
-        var connection = environment.Prowlarr.Connections.Last();
-        CollectionAssert.AreEquivalent(new[] { 1, 2, 3 }, connection.Settings.IndexerIds, "The anime's own Prowlarr sub-indexer selection is a separate axis, unaffected by the entry-level restriction.");
-    }
-
-    [TestMethod]
-    public async Task ANonOverlappingIndexerRestrictionSearchesNoIndexersInsteadOfFallingBackToUnrestricted()
-    {
-        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
-        await environment.SeedFrierenAsync();
-        await environment.Scheduler.RunExclusiveAsync(
-            (pipeline, token) => pipeline.UpdateAnimeSettingsAsync(environment.AnimeId, true, false, null, [1, 2, 3], token, tagIds: ["fast-track"]),
-            CancellationToken.None);
-        await environment.Policy.UpdateAsync(state => state with
-        {
-            Tags = [new AcquisitionTag("fast-track", "Fast track")],
-            // References an indexer entry that is not the one enabled entry (the seeded Prowlarr
-            // connection): zero overlap with what is actually enabled.
-            IndexerRestrictions = [new AnimeIndexerRestriction("r1", "Trusted only", ["fast-track"], [Guid.NewGuid()])]
-        });
-        // A release exists and would otherwise be grabbed; it must never be found because the
-        // restriction leaves no indexer to search at all.
-        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
-
-        var run = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-
-        Assert.AreEqual(0, run.Grabs);
-        Assert.AreEqual(0, environment.Prowlarr.Queries.Count, "No indexers were searched at all; Prowlarr is never called with the anime's unrestricted selection.");
-        Assert.AreEqual(0, environment.Sabnzbd.Grabs.Count);
-
-        var monitoring = await environment.MonitoringStateAsync();
-        Assert.IsFalse(monitoring.Attempts.ContainsKey("frieren:S01E02"), "A restriction leaving no indexer is not the exponential search-failure backoff.");
-
-        var history = await environment.HistoryForAnimeAsync(environment.AnimeId);
-        var skipped = history.Single(entry => entry.EventKind == AcquisitionHistoryEventKind.Skipped);
-        StringAssert.Contains(skipped.Reason, "Trusted only");
-        StringAssert.Contains(skipped.Reason, "no enabled indexer");
-        Assert.IsNull(skipped.ReleaseTitle);
     }
 
     [TestMethod]

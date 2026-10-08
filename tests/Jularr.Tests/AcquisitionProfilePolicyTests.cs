@@ -1,5 +1,4 @@
 using Jularr.Web.Features.Acquisition.Access;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
@@ -159,101 +158,6 @@ public sealed class AcquisitionProfilePolicyTests
         {
             var text = File.ReadAllText(Path.Combine(web, file));
             Assert.IsTrue(text.Split("WithSourcePolicy(").Length - 1 >= minimum, $"{file} applies the profile's source policy to its searches.");
-        }
-    }
-
-    [TestMethod]
-    public void ADelayProfileMovesIntoItsQualityProfileAndBehavesTheSameAsTheLegacyTranslation()
-    {
-        var registry = Registry();
-        var anime = registry.DefaultProfileFor(MediaAcquisitionKind.Anime);
-        var delay = new AnimeDelayProfile("d1", "Wait for Blu-ray", 120, anime.Id, [], false);
-        var parser = registry.ParserFor(MediaAcquisitionKind.Anime);
-        var legacy = AcquisitionDelayEngine.WithDelayAsFallbackTier(anime, delay);
-
-        var plan = LegacyDelayMigration.Build([anime], [delay], new HashSet<string>());
-        var migrated = plan.ChangedProfiles.Single();
-        var again = LegacyDelayMigration.Build([migrated], [delay], new HashSet<string>());
-
-        CollectionAssert.AreEqual(legacy.FallbackTiers.Select(tier => (tier.AfterMinutes, string.Join(',', tier.AddedQualities))).ToArray(), migrated.FallbackTiers.Select(tier => (tier.AfterMinutes, string.Join(',', tier.AddedQualities))).ToArray());
-        CollectionAssert.AreEqual(legacy.AllowedQualities, migrated.AllowedQualities);
-        Assert.IsTrue(plan.MigratedDelayIds.Contains("d1"));
-        Assert.AreEqual(0, again.ChangedProfiles.Count, "Applying the migration twice changes nothing.");
-        Assert.IsTrue(again.MigratedDelayIds.Contains("d1"), "A restart after the profile was written still removes the legacy entry.");
-        foreach (var minutes in new[] { 0, 119, 120 })
-        {
-            Assert.AreEqual(
-                ProfileTest.Run(legacy, parser, "Show.S01E01.720p.WEB-DL.H264-GRP", null, null, TimeSpan.FromMinutes(minutes), Now).Decision,
-                ProfileTest.Run(migrated, parser, "Show.S01E01.720p.WEB-DL.H264-GRP", null, null, TimeSpan.FromMinutes(minutes), Now).Decision);
-        }
-    }
-
-    [TestMethod]
-    public void OnlyDelayProfilesWithoutATagMoveAndAGlobalOneReachesOnlyTheProfilesAnimeUses()
-    {
-        var registry = Registry();
-        var anime = registry.DefaultProfileFor(MediaAcquisitionKind.Anime);
-        var movie = registry.DefaultProfileFor(MediaAcquisitionKind.Movie);
-        var specific = anime with { Id = "anime-specific", Name = "Anime specific" };
-        var global = new AnimeDelayProfile("global", "Everything", 60, null, [], true);
-        var scoped = new AnimeDelayProfile("scoped", "Specific", 240, "anime-specific", [], false);
-        var tagged = new AnimeDelayProfile("tagged", "Fast track", 30, "other-profile", ["fast"], false);
-        var none = new AnimeDelayProfile("none", "No wait", 0, null, [], false);
-
-        var plan = LegacyDelayMigration.Build([anime, movie, specific], [global, scoped, tagged, none], new HashSet<string>(StringComparer.OrdinalIgnoreCase) { anime.Id, "anime-specific" });
-
-        CollectionAssert.AreEquivalent(new[] { "global", "scoped", "none" }, plan.MigratedDelayIds.ToArray());
-        Assert.IsFalse(plan.MigratedDelayIds.Contains("tagged"), "A tag-scoped delay profile has no profile to move to and stays, applied by the Anime compatibility path.");
-        Assert.AreEqual(60, plan.ChangedProfiles.Single(profile => profile.Id == anime.Id).FallbackTiers.Last().AfterMinutes);
-        Assert.AreEqual(240, plan.ChangedProfiles.Single(profile => profile.Id == "anime-specific").FallbackTiers.Last().AfterMinutes, "The more specific delay profile wins, as it always did.");
-        Assert.IsFalse(plan.ChangedProfiles.Any(profile => profile.Id == movie.Id), "A global Anime delay never leaks into another media kind's default profile.");
-    }
-
-    [TestMethod]
-    public void AProfileATagScopedDelayCanAlsoApplyToKeepsItsLegacyDelayProfilesSoTheTagStillWins()
-    {
-        var registry = Registry();
-        var anime = registry.DefaultProfileFor(MediaAcquisitionKind.Anime);
-        var global = new AnimeDelayProfile("global", "Everything", 60, null, [], true);
-        var tagged = new AnimeDelayProfile("tagged", "Fast track", 30, null, ["fast"], false);
-
-        var plan = LegacyDelayMigration.Build([anime], [global, tagged], new HashSet<string>(StringComparer.OrdinalIgnoreCase) { anime.Id });
-
-        Assert.AreEqual(0, plan.ChangedProfiles.Count, "Merging the global delay would take the place of the tag's own delay for the Anime that carry the tag.");
-        Assert.AreEqual(0, plan.MigratedDelayIds.Count);
-    }
-
-    [TestMethod]
-    public async Task TheStartupMigrationMovesTheLegacyEntryAndLeavesTagPolicyAlone()
-    {
-        var root = Directory.CreateTempSubdirectory("jularr-policy-migration-");
-        try
-        {
-            var registry = Registry();
-            var profiles = new QualityProfileStore(new DirectoryInfo(Path.Combine(root.FullName, "acquisition")), registry);
-            var policy = new AcquisitionPolicyStore(root.FullName);
-            var anime = (await profiles.LoadAsync()).Profiles.First(profile => profile.Id == registry.DefaultProfileFor(MediaAcquisitionKind.Anime).Id);
-            await policy.UpdateAsync(state => state with
-            {
-                DelayProfiles = [new AnimeDelayProfile("d1", "Wait", 90, null, [], true), new AnimeDelayProfile("d2", "Tagged", 30, "some-other-profile", ["fast"], false)],
-                IndexerRestrictions = [new AnimeIndexerRestriction("r1", "Only A", ["fast"], [Guid.NewGuid()])]
-            });
-            var migration = new AcquisitionPolicyMigration(policy, profiles, new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(), NullLogger<AcquisitionPolicyMigration>.Instance);
-
-            var moved = await migration.RunAsync(CancellationToken.None);
-            var movedAgain = await migration.RunAsync(CancellationToken.None);
-
-            var state = await policy.LoadAsync();
-            var changed = (await profiles.LoadAsync()).Profiles.Single(profile => profile.Id == anime.Id);
-            Assert.AreEqual(1, moved);
-            Assert.AreEqual(0, movedAgain);
-            CollectionAssert.AreEqual(new[] { "d2" }, state.DelayProfiles.Select(delay => delay.Id).ToArray());
-            Assert.AreEqual(1, state.IndexerRestrictions.Count, "No user-created restriction disappears.");
-            Assert.IsTrue(changed.FallbackTiers.Any(tier => tier.AfterMinutes == 90));
-        }
-        finally
-        {
-            root.Delete(recursive: true);
         }
     }
 

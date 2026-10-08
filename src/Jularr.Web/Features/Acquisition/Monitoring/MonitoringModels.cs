@@ -81,11 +81,8 @@ public sealed record MonitoredUnitKey(
 }
 
 // IndexerIds restricts automatic and interactive searches for this work to the given indexer ids;
-// null or empty uses the global indexer selection. TagIds are the work's assigned acquisition tags
-// (AcquisitionPolicyStore is the tag catalog); delay profiles and indexer restrictions can target
-// them. TargetRootId is the library root new imports go to when the work has no folder yet; null
-// defaults to the work's current root (or the first enabled root). Both TagIds and TargetRootId ride
-// along whenever MonitoringEngine.RekeyAnime moves this record to a new key after a folder rename.
+// null or empty uses the global indexer selection. TargetRootId is the library root new imports go to
+// when the work has no folder yet; null defaults to the work's current root (or the first enabled root).
 public sealed record MonitorSettings(
     string AnimeKey,
     bool Monitored,
@@ -93,7 +90,6 @@ public sealed record MonitorSettings(
     Dictionary<int, bool> SeasonOverrides,
     Dictionary<string, bool> EpisodeOverrides,
     int[]? IndexerIds = null,
-    string[]? TagIds = null,
     Guid? TargetRootId = null);
 
 // The one scheduler setting for periodic monitoring runs.
@@ -126,13 +122,10 @@ public sealed record MonitoringSearchRequest(
     WantedReason Reason,
     MonitoringSearchTrigger Trigger);
 
-// DelayedUntilUtc is set only when a delay profile is holding back an otherwise accepted candidate;
-// it is null for every ordinary accept/reject decision.
 public sealed record AutoGrabDecision(
     bool Grab,
     string Reason,
-    ReleaseScoreResult Candidate,
-    DateTimeOffset? DelayedUntilUtc = null);
+    ReleaseScoreResult Candidate);
 
 public sealed record AcquisitionAttempt(
     MonitoredUnitKey Key,

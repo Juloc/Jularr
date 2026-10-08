@@ -7,7 +7,6 @@ using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Ownership;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
@@ -85,7 +84,6 @@ public sealed class AnimeAcquisitionPipeline(
     SabnzbdAcquisitionService sabnzbd,
     AnimeImportStore imports,
     AnimeAcquisitionInventory inventory,
-    AcquisitionPolicyStore policyStore,
     AcquisitionHistoryService history,
     ILogger<AnimeAcquisitionPipeline> logger,
     TimeProvider clock,
@@ -124,7 +122,6 @@ public sealed class AnimeAcquisitionPipeline(
         }
 
         var snapshot = await observation.GetSnapshotAsync(forceRefresh: true, cancellationToken);
-        var policy = await policyStore.LoadAsync(cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var searches = 0;
         var grabs = 0;
@@ -195,7 +192,6 @@ public sealed class AnimeAcquisitionPipeline(
                     wanted,
                     request,
                     snapshot,
-                    policy,
                     cancellationToken);
                 if (grabbed)
                 {
@@ -266,17 +262,10 @@ public sealed class AnimeAcquisitionPipeline(
 
         try
         {
-            var policy = await policyStore.LoadAsync(cancellationToken);
-            var (allowedEntryIds, blockedReason) = await IndexerRestrictionForAsync(state, animeKey, policy, cancellationToken);
-            if (blockedReason is not null)
-            {
-                return new(target, episode?.Key, mode, [], [], blockedReason);
-            }
-
-            var searchOptions = new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(searchTarget, releases) };
+            var searchOptions = new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey), UsableCount = releases => AnimeUsableCount(searchTarget, releases) };
             var result = await indexers.SearchAsync(ToSearchIntent(searchTarget), searchOptions.WithSourcePolicy(target.Profile.SourcePolicy), cancellationToken);
             var snapshot = await observation.GetSnapshotAsync(forceRefresh: false, cancellationToken);
-            var candidates = Evaluate(target, scope, wanted, episode?.Key, result.Releases, state, snapshot, policy, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+            var candidates = Evaluate(target, scope, wanted, episode?.Key, result.Releases, state, snapshot, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
             return new(target, episode?.Key, mode, candidates, result.Warnings, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -614,7 +603,6 @@ public sealed class AnimeAcquisitionPipeline(
         string? profileId,
         int[] indexerIds,
         CancellationToken cancellationToken,
-        string[]? tagIds = null,
         Guid? targetRootId = null)
     {
         var animeKey = await db.Anime
@@ -644,12 +632,6 @@ public sealed class AnimeAcquisitionPipeline(
             {
                 var anime = new Dictionary<string, AnimeMonitorSettings>(current.Anime, StringComparer.OrdinalIgnoreCase);
                 var existing = anime.TryGetValue(animeKey, out var found) ? found : null;
-                var normalizedTags = (tagIds ?? [])
-                    .Select(id => id.Trim())
-                    .Where(id => id.Length > 0)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Order(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
                 anime[animeKey] = new AnimeMonitorSettings(
                     animeKey,
                     monitored,
@@ -657,7 +639,6 @@ public sealed class AnimeAcquisitionPipeline(
                     existing?.SeasonOverrides ?? [],
                     existing?.EpisodeOverrides ?? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase),
                     indexerIds.Length == 0 ? null : indexerIds.Where(id => id > 0).Distinct().Order().ToArray(),
-                    normalizedTags.Length == 0 ? null : normalizedTags,
                     targetRootId);
                 return current with { Anime = anime };
             },
@@ -698,7 +679,6 @@ public sealed class AnimeAcquisitionPipeline(
         var ownership = await ownershipStore.LoadAsync(cancellationToken);
         var relations = await acquisitions.LoadAsync(cancellationToken);
         var prowlarrConfigured = await IsProwlarrConfiguredAsync(cancellationToken);
-        var policy = await policyStore.LoadAsync(cancellationToken);
         var roots = await db.LibraryRoots.AsNoTracking().OrderBy(root => root.Name).ToArrayAsync(cancellationToken);
         var recentHistory = await history.ForAnimeAsync(animeId, 15, cancellationToken);
 
@@ -720,7 +700,6 @@ public sealed class AnimeAcquisitionPipeline(
             active,
             lastEvent is null ? null : $"{lastEvent.AtUtc:u} · {lastEvent.Key} · {lastEvent.Event}: {lastEvent.Reason}",
             prowlarrConfigured,
-            policy.Tags,
             roots,
             recentHistory);
     }
@@ -844,7 +823,6 @@ public sealed class AnimeAcquisitionPipeline(
         IReadOnlyList<AnimeWantedEpisode> allWanted,
         AnimeSearchRequest request,
         AcquisitionOwnershipSnapshot snapshot,
-        AcquisitionPolicyState policy,
         CancellationToken cancellationToken)
     {
         var operations = new OperationStore(db);
@@ -878,76 +856,20 @@ public sealed class AnimeAcquisitionPipeline(
 
         try
         {
-            var (allowedEntryIds, blockedReason) = await IndexerRestrictionForAsync(state, target.Anime.Key, policy, cancellationToken);
-            if (blockedReason is not null)
-            {
-                // A tag-scoped indexer restriction leaves this anime with no allowed indexer: not
-                // a search failure (no exponential backoff) and not a delay (no release exists to
-                // wait for) — search nothing this pass and record why, same as a delayed decision.
-                await monitoring.UpdateAsync(
-                    current => AnimeMonitoringEngine.ClearAttempt(current, episode.Key, now, blockedReason),
-                    cancellationToken);
-                await history.RecordAsync(
-                    new AcquisitionHistoryEntry
-                    {
-                        AnimeId = target.Anime.Id,
-                        SeasonNumber = episode.Key.SeasonNumber,
-                        EpisodeNumber = episode.Key.EpisodeNumber,
-                        AbsoluteEpisodeNumber = episode.Key.AbsoluteEpisodeNumber,
-                        EventKind = AcquisitionHistoryEventKind.Skipped,
-                        Reason = blockedReason,
-                        OccurredAtUtc = now.UtcDateTime
-                    },
-                    cancellationToken);
-                await operations.AppendLogAsync(operationId, OperationLogLevel.Warning, LogModule, blockedReason, cancellationToken);
-                await operations.MarkSucceededAsync(operationId, blockedReason, CancellationToken.None);
-                return false;
-            }
-
             var episodeTarget = PlannedTargetFor(target, episode, allWanted);
-            var searchOptions = new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key), AllowedEntryIds = allowedEntryIds, UsableCount = releases => AnimeUsableCount(episodeTarget, releases) };
+            var searchOptions = new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key), UsableCount = releases => AnimeUsableCount(episodeTarget, releases) };
             var result = await indexers.SearchAsync(ToSearchIntent(episodeTarget), searchOptions.WithSourcePolicy(target.Profile.SourcePolicy), cancellationToken);
             foreach (var warning in result.Warnings)
             {
                 await operations.AppendLogAsync(operationId, OperationLogLevel.Warning, LogModule, $"{warning.IndexerName}: {warning.Message}{(string.IsNullOrEmpty(warning.Query) ? "" : $" ({warning.Query})")}", cancellationToken);
             }
 
-            var candidates = Evaluate(target, [episode], allWanted, episode.Key, result.Releases, state, snapshot, policy, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+            var candidates = Evaluate(target, [episode], allWanted, episode.Key, result.Releases, state, snapshot, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
             await LogDecisionsAsync(operations, operationId, candidates, cancellationToken);
 
             var accepted = candidates.Where(candidate => candidate.Decision.Grab).ToArray();
             if (accepted.Length == 0)
             {
-                var delayed = candidates.FirstOrDefault(candidate => candidate.Decision.DelayedUntilUtc is not null);
-                if (delayed is not null)
-                {
-                    // A delay profile is holding back an otherwise-accepted release: keep the
-                    // episode searchable at the normal schedule instead of the exponential
-                    // search-failure backoff, and record why in the richer acquisition history.
-                    await monitoring.UpdateAsync(
-                        current => AnimeMonitoringEngine.ClearAttempt(current, episode.Key, now, delayed.Decision.Reason),
-                        cancellationToken);
-                    await history.RecordAsync(
-                        new AcquisitionHistoryEntry
-                        {
-                            AnimeId = target.Anime.Id,
-                            SeasonNumber = episode.Key.SeasonNumber,
-                            EpisodeNumber = episode.Key.EpisodeNumber,
-                            AbsoluteEpisodeNumber = episode.Key.AbsoluteEpisodeNumber,
-                            EventKind = AcquisitionHistoryEventKind.Delayed,
-                            ReleaseTitle = delayed.Release.Title,
-                            ReleaseKey = delayed.Release.ParsedRelease.ReleaseKey,
-                            Score = delayed.Score.Score,
-                            QualityKey = delayed.Score.QualityKey,
-                            Indexer = delayed.Release.Indexer,
-                            Reason = delayed.Decision.Reason ?? "",
-                            OccurredAtUtc = now.UtcDateTime
-                        },
-                        cancellationToken);
-                    await operations.MarkSucceededAsync(operationId, delayed.Decision.Reason!, CancellationToken.None);
-                    return false;
-                }
-
                 if (candidates.Count == 0 && result.EveryIndexerFailed)
                 {
                     // Nothing could be asked, so nothing was found: the outage is not a failed search and does not raise the back-off.
@@ -1090,7 +1012,7 @@ public sealed class AnimeAcquisitionPipeline(
     }
 
     // Anime supplies the facts of every result (does it carry this anime, which wanted episodes does it cover, may it be grabbed at all) and the
-    // shared selection engine decides: identity before profile, the profile's timed fallback ladder (a delay profile is one), quality tier,
+    // shared selection engine decides: identity before profile, the profile's timed fallback ladder, quality tier,
     // preference score, coverage and the stable winner. Whether a candidate may replace an installed file stays the shared upgrade policy.
     private static IReadOnlyList<AnimeSearchCandidate> Evaluate(
         AnimeAcquisitionTarget target,
@@ -1100,12 +1022,9 @@ public sealed class AnimeAcquisitionPipeline(
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
         AnimeMonitoringState state,
         AcquisitionOwnershipSnapshot snapshot,
-        AcquisitionPolicyState policy,
         DateTimeOffset now,
         ReleaseReliabilityLookup? reliability)
     {
-        var tagIds = state.Anime.TryGetValue(target.Anime.Key, out var animeSettings) ? animeSettings.TagIds : null;
-        var delayProfile = AcquisitionDelayEngine.SelectProfile(policy.DelayProfiles, target.Profile.Id, tagIds);
         var byIdentity = releases
             .GroupBy(release => release.Identity, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
@@ -1120,7 +1039,7 @@ public sealed class AnimeAcquisitionPipeline(
             StringComparer.OrdinalIgnoreCase);
         var wantedSince = (primary is not null ? wanted.FirstOrDefault(item => item.Key == primary) : wanted.OrderBy(item => item.BecameWantedAtUtc).FirstOrDefault())?.BecameWantedAtUtc ?? now;
         var selection = ReleaseSelectionEngine.Select(
-            AcquisitionDelayEngine.WithDelayAsFallbackTier(target.Profile, delayProfile),
+            target.Profile,
             new SelectionContext(now, wantedSince),
             [.. judged.Values.Select(item => item.Candidate)],
             reliability);
@@ -1132,7 +1051,7 @@ public sealed class AnimeAcquisitionPipeline(
             var fact = judged[release.Identity];
             // The score shown is the profile's own, so a release that only waits for a later fallback tier still reads as accepted.
             var score = AnimeReleaseScorer.Score(target.Profile, new AnimeReleaseCandidate(release.ParsedRelease, release.SizeBytes, release.Indexer, release.Identity));
-            candidates.Add(new AnimeSearchCandidate(release, score, Decide(target, scope, evaluation, fact, score, delayProfile), fact.Covered));
+            candidates.Add(new AnimeSearchCandidate(release, score, Decide(target, scope, evaluation, fact, score), fact.Covered));
         }
 
         return candidates.OrderByDescending(candidate => candidate.Decision.Grab).ToArray();
@@ -1206,8 +1125,7 @@ public sealed class AnimeAcquisitionPipeline(
         IReadOnlyList<AnimeAcquisitionEpisode> scope,
         CandidateEvaluation evaluation,
         AnimeReleaseFact fact,
-        AnimeReleaseScoreResult score,
-        AnimeDelayProfile? delayProfile)
+        AnimeReleaseScoreResult score)
     {
         if (!evaluation.IsSelectable)
         {
@@ -1221,10 +1139,9 @@ public sealed class AnimeAcquisitionPipeline(
                 return new(false, evaluation.Candidate.Identity.Detail, score);
             }
 
-            if (delayProfile is not null && fact.WantedEpisode is { } waiting && evaluation.Reasons.Any(reason => reason.Code == "WaitingForFallbackTier"))
+            if (evaluation.Reasons.FirstOrDefault(reason => reason.Code == "WaitingForFallbackTier") is { } waiting)
             {
-                var until = waiting.BecameWantedAtUtc + TimeSpan.FromMinutes(delayProfile.DelayMinutes);
-                return new(false, $"Delayed by profile '{delayProfile.Name}' until {until:u}, waiting for a preferred release.", score, until);
+                return new(false, waiting.Detail, score);
             }
 
             return new(false, "Candidate is rejected by the assigned quality profile.", score);
@@ -1372,37 +1289,6 @@ public sealed class AnimeAcquisitionPipeline(
     private static int[]? ProwlarrIndexerIdsFor(AnimeMonitoringState state, string animeKey) =>
         state.Anime.TryGetValue(animeKey, out var settings) ? settings.IndexerIds : null;
 
-    // Tag-scoped indexer restrictions (P1 item 5) now operate on the canonical indexer entry id
-    // (Guid), the one identifier that covers a whole Prowlarr entry and each direct Newznab
-    // entry alike — unlike ProwlarrIndexerIdsFor above, which only ever narrows within a
-    // single Prowlarr entry's own sub-indexer aggregation. When a restriction applies but has no
-    // overlap with the currently enabled entries, this is not silently ignored: the caller gets a
-    // BlockedReason and must search no indexers at all for this pass.
-    private async Task<(IReadOnlyList<Guid>? AllowedEntryIds, string? BlockedReason)> IndexerRestrictionForAsync(
-        AnimeMonitoringState state,
-        string animeKey,
-        AcquisitionPolicyState policy,
-        CancellationToken cancellationToken)
-    {
-        state.Anime.TryGetValue(animeKey, out var settings);
-        var restrictedEntryIds = AcquisitionDelayEngine.RestrictedIndexerEntryIds(policy.IndexerRestrictions, settings?.TagIds);
-        if (restrictedEntryIds is null)
-        {
-            return (null, null);
-        }
-
-        var enabled = await indexers.EnabledEntryIdsAsync(cancellationToken);
-        var overlap = enabled.Intersect(restrictedEntryIds).ToArray();
-        if (overlap.Length == 0)
-        {
-            var names = AcquisitionDelayEngine.ApplicableIndexerRestrictionNames(policy.IndexerRestrictions, settings?.TagIds);
-            var label = names.Length > 0 ? string.Join("', '", names) : "a tag-scoped indexer restriction";
-            return (null, $"Indexer restriction '{label}' leaves no enabled indexer allowed; no indexers were searched.");
-        }
-
-        return (overlap, null);
-    }
-
     private async Task<int> CountActiveDownloadsAsync(
         SabnzbdAcquisitionStoreState relations,
         string animeKey,
@@ -1439,7 +1325,6 @@ public sealed record AnimeAcquisitionPanel(
     int ActiveDownloads,
     string? LastEvent,
     bool ProwlarrConfigured,
-    IReadOnlyList<AcquisitionTag> Tags,
     IReadOnlyList<LibraryRoot> Roots,
     IReadOnlyList<AcquisitionHistoryEntry> RecentHistory)
 {

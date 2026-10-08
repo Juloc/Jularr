@@ -70,7 +70,7 @@ public sealed record SearchOptions
     /// </summary>
     public Func<IReadOnlyList<ProwlarrReleaseCandidate>, int>? UsableCount { get; init; }
 
-    /// <summary>Restricts the search to these indexer entries (tag-scoped restrictions); null searches every enabled entry.</summary>
+    /// <summary>Restricts the search to these indexer entries (the profile's allowed sources); null searches every enabled entry.</summary>
     public IReadOnlyCollection<Guid>? AllowedEntryIds { get; init; }
 
     /// <summary>Indexer entries whose releases win a tie against the same release from another entry (a profile's preferred sources).</summary>

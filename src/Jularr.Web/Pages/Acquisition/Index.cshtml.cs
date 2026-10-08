@@ -151,7 +151,6 @@ public sealed class IndexModel(
         bool searchOnAdd,
         string? profileId,
         string? indexerIds,
-        string[]? tagIds,
         Guid? targetRootId,
         string? returnUrl,
         CancellationToken cancellationToken)
@@ -173,7 +172,6 @@ public sealed class IndexModel(
                 string.IsNullOrWhiteSpace(profileId) ? null : profileId.Trim(),
                 ids,
                 cancellationToken,
-                tagIds,
                 targetRootId);
             if (update is null)
             {

@@ -116,7 +116,6 @@ public sealed class AniListAutoMonitorService(
                 profileId: null,
                 indexerIds: existing?.IndexerIds ?? [],
                 cancellationToken,
-                tagIds: existing?.TagIds,
                 targetRootId: existing?.TargetRootId);
             if (update is not null)
             {
