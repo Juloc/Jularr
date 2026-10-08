@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Monitoring;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -76,7 +77,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
     public T Get<T>() where T : notnull => services.GetRequiredService<T>();
     public AcquisitionAccessStore Requests => new(Environment.Db);
 
-    internal static ProwlarrReleaseCandidate Candidate(string title) =>
+    internal static AcquisitionCandidate Candidate(string title) =>
         new(
             title,
             "Video test indexer",
@@ -360,7 +361,7 @@ internal sealed class FixedAccessor(HttpContext context) : IHttpContextAccessor
     public HttpContext? HttpContext { get; set; } = context;
 }
 
-internal sealed class FixedVideoIndexer(IReadOnlyList<ProwlarrReleaseCandidate> releases) : IIndexer
+internal sealed class FixedVideoIndexer(IReadOnlyList<AcquisitionCandidate> releases) : IIndexer
 {
     /// <summary>Lets a test hold a search open, to change something while a Wanted pass is running.</summary>
     public Func<Task>? OnSearch { get; set; }
@@ -375,7 +376,7 @@ internal sealed class FixedVideoIndexer(IReadOnlyList<ProwlarrReleaseCandidate> 
         CancellationToken cancellationToken) =>
         Task.FromResult(new IndexerConnectionTestResult(true));
 
-    public async Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+    public async Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
         IndexerEntry entry,
         IndexerSearchQuery query,
         CancellationToken cancellationToken)

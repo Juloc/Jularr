@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Wanted;
@@ -222,7 +223,7 @@ public sealed class ReadingAcquisitionTests
         Assert.AreEqual(TimeSpan.FromHours(24), ReleaseRequestTracker.SearchBackoff(12));
     }
 
-    private static ProwlarrReleaseCandidate Candidate(
+    private static AcquisitionCandidate Candidate(
         string title,
         string protocol = "usenet") =>
         new(

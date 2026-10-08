@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 
@@ -100,7 +101,7 @@ public sealed record IndexerSearchWarning(
     string Message);
 
 /// <summary>
-/// One indexer implementation. <see cref="ProwlarrReleaseCandidate"/> is the
+/// One indexer implementation. <see cref="AcquisitionCandidate"/> is the
 /// one release-candidate model every indexer type and the quality scorer
 /// share; it already carries a per-result <c>Protocol</c> (usenet/torrent).
 /// </summary>
@@ -112,7 +113,7 @@ public interface IIndexer
         IndexerEntry entry,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+    Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
         IndexerEntry entry,
         IndexerSearchQuery query,
         CancellationToken cancellationToken);

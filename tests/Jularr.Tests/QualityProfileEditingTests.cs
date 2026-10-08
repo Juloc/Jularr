@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
@@ -10,7 +11,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class QualityProfileEditingTests
 {
-    private static ProwlarrReleaseCandidate Release(string title) =>
+    private static AcquisitionCandidate Release(string title) =>
         new(title, "Test indexer", 1, "usenet", 100L * 1024 * 1024, null, null, DateTimeOffset.UtcNow, 0, 1, title, null, AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.invalid/{Uri.EscapeDataString(title)}"), null);
 
     [TestMethod]

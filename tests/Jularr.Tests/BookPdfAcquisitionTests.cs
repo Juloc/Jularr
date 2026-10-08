@@ -1,4 +1,5 @@
 using System.Net;
+using Jularr.Web.Features.Acquisition.Core;
 using System.IO.Compression;
 using System.Security.Claims;
 using System.Text;
@@ -464,7 +465,7 @@ public sealed class BookPdfAcquisitionTests
         Assert.AreEqual(0, await environment.Db.NovelWorks.CountAsync());
     }
 
-    private static ProwlarrReleaseCandidate Release(string title, string key) =>
+    private static AcquisitionCandidate Release(string title, string key) =>
         new(title, "Test indexer", 1, "usenet", 4_000_000, null, null, DateTimeOffset.UtcNow, 1, 1, key, null,
             AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.example/{key}.nzb"), null);
 

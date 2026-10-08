@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jularr.Web.Features.Acquisition.Core;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -11,7 +12,7 @@ public interface IProwlarrClient
         ProwlarrConnection connection,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+    Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
         ProwlarrConnection connection,
         ProwlarrSearchQuery search,
         CancellationToken cancellationToken);
@@ -63,7 +64,7 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
         }
     }
 
-    public async Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+    public async Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
         ProwlarrConnection connection,
         ProwlarrSearchQuery search,
         CancellationToken cancellationToken)
@@ -112,7 +113,7 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
         }
     }
 
-    public static IReadOnlyList<ProwlarrReleaseCandidate> ParseSearchResponse(
+    public static IReadOnlyList<AcquisitionCandidate> ParseSearchResponse(
         string baseUrl,
         string query,
         string json)
@@ -123,7 +124,7 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
             throw new JsonException("Prowlarr search response must be an array.");
         }
 
-        var releases = new List<ProwlarrReleaseCandidate>();
+        var releases = new List<AcquisitionCandidate>();
 
         foreach (var item in document.RootElement.EnumerateArray())
         {
@@ -143,7 +144,7 @@ public sealed class ProwlarrClient(HttpClient httpClient) : IProwlarrClient
             var magnetUrl = ReadString(item, "magnetUrl");
 
             releases.Add(
-                new ProwlarrReleaseCandidate(
+                new AcquisitionCandidate(
                     title,
                     ReadString(item, "indexer"),
                     ReadInt(item, "indexerId"),

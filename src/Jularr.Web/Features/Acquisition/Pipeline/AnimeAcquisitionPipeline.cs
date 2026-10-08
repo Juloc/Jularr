@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.DownloadClients;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
@@ -32,7 +33,7 @@ public sealed record AnimeAcquisitionRunSummary(
 }
 
 public sealed record AnimeSearchCandidate(
-    ProwlarrReleaseCandidate Release,
+    AcquisitionCandidate Release,
     AnimeReleaseScoreResult Score,
     AnimeAutoGrabDecision Decision,
     IReadOnlyList<AnimeEpisodeKey> CoveredEpisodes);
@@ -1023,7 +1024,7 @@ public sealed class AnimeAcquisitionPipeline(
         IReadOnlyList<AnimeAcquisitionEpisode> scope,
         IReadOnlyList<AnimeWantedEpisode> wanted,
         AnimeEpisodeKey? primary,
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
+        IReadOnlyList<AcquisitionCandidate> releases,
         AnimeMonitoringState state,
         AcquisitionOwnershipSnapshot snapshot,
         DateTimeOffset now,
@@ -1062,7 +1063,7 @@ public sealed class AnimeAcquisitionPipeline(
     private sealed record AnimeReleaseFact(SelectionCandidate Candidate, IReadOnlyList<AnimeEpisodeKey> Covered, AnimeWantedEpisode? WantedEpisode);
 
     private static AnimeReleaseFact Judge(
-        ProwlarrReleaseCandidate release,
+        AcquisitionCandidate release,
         IReadOnlyList<string> aliases,
         IReadOnlyList<AnimeWantedEpisode> wanted,
         AnimeEpisodeKey? primary,
@@ -1276,7 +1277,7 @@ public sealed class AnimeAcquisitionPipeline(
         };
 
     /// <summary>The distinct releases that carry the anime title or one of its aliases, which is how many usable candidates the search has so far.</summary>
-    private static int AnimeUsableCount(ProwlarrAnimeSearchTarget target, IReadOnlyList<ProwlarrReleaseCandidate> releases)
+    private static int AnimeUsableCount(ProwlarrAnimeSearchTarget target, IReadOnlyList<AcquisitionCandidate> releases)
     {
         var titles = new[] { target.CanonicalTitle }.Concat(target.Aliases ?? []).ToArray();
         return releases.Count(release => TitleMatcher.MatchesAny(titles, release.ParsedRelease.SeriesTitle));

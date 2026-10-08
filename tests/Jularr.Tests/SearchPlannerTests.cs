@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Health;
 using Jularr.Web.Features.Acquisition.Indexers;
@@ -408,7 +409,7 @@ public sealed class SearchPlannerTests
     private static SearchHit Hit(string indexer, int priority, string title, long? size, string guid, DateTimeOffset posted) =>
         new(Release(indexer, title, size, guid, posted), Guid.NewGuid(), priority, indexer, new PlannedQuery("title", 0, IndexerSearchMode.Search, "Show S01E01", [], "Title + S01E01"));
 
-    private static ProwlarrReleaseCandidate Release(string indexer, string title, long? size, string guid, DateTimeOffset? posted = null) =>
+    private static AcquisitionCandidate Release(string indexer, string title, long? size, string guid, DateTimeOffset? posted = null) =>
         new(title, indexer, null, "usenet", size, null, null, posted ?? Posted, 1, 24, guid, null, AnimeReleaseParser.Parse(title), [], new Uri($"http://{indexer.Replace(' ', '-')}.example/nzb/{guid}"), null);
 
     private sealed class SearchHost : IDisposable
@@ -424,9 +425,9 @@ public sealed class SearchPlannerTests
             indexer = new ScriptedIndexer(this);
         }
 
-        public Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<ProwlarrReleaseCandidate>>? Script { get; set; }
+        public Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<AcquisitionCandidate>>? Script { get; set; }
 
-        public Func<IndexerEntry, IndexerSearchQuery, CancellationToken, Task<IReadOnlyList<ProwlarrReleaseCandidate>>>? AsyncScript { get; set; }
+        public Func<IndexerEntry, IndexerSearchQuery, CancellationToken, Task<IReadOnlyList<AcquisitionCandidate>>>? AsyncScript { get; set; }
 
         public IndexerSearchCoordinator Coordinator => coordinator ??= new IndexerSearchCoordinator(
             new Dictionary<IndexerType, IIndexer> { [IndexerType.Newznab] = indexer },
@@ -458,7 +459,7 @@ public sealed class SearchPlannerTests
             public Task<IndexerConnectionTestResult> TestAsync(IndexerEntry entry, CancellationToken cancellationToken) =>
                 Task.FromResult(new IndexerConnectionTestResult(true));
 
-            public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken)
+            public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken)
             {
                 if (host.AsyncScript is { } asyncScript)
                 {

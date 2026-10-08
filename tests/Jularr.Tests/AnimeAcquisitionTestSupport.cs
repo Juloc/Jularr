@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Monitoring;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.Access;
@@ -507,7 +508,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         services = Build();
     }
 
-    public static ProwlarrReleaseCandidate Release(string title, string guid, string protocol = "usenet") =>
+    public static AcquisitionCandidate Release(string title, string guid, string protocol = "usenet") =>
         new(
             title,
             "Test indexer",
@@ -708,7 +709,7 @@ internal sealed class FakeAnimeMetadataProvider : IAnimeMetadataProvider
 /// <summary>Returns the configured releases for every query and counts the queries.</summary>
 internal sealed class FakeProwlarrClient : IProwlarrClient
 {
-    public List<ProwlarrReleaseCandidate> Releases { get; } = [];
+    public List<AcquisitionCandidate> Releases { get; } = [];
     public List<string> Queries { get; } = [];
     public List<ProwlarrConnection> Connections { get; } = [];
 
@@ -718,7 +719,7 @@ internal sealed class FakeProwlarrClient : IProwlarrClient
     public Task<ProwlarrConnectionTestResult> TestAsync(ProwlarrConnection connection, CancellationToken cancellationToken) =>
         Task.FromResult(new ProwlarrConnectionTestResult(true, "test"));
 
-    public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+    public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
         ProwlarrConnection connection,
         ProwlarrSearchQuery search,
         CancellationToken cancellationToken)
@@ -730,7 +731,7 @@ internal sealed class FakeProwlarrClient : IProwlarrClient
             throw Failure;
         }
 
-        return Task.FromResult<IReadOnlyList<ProwlarrReleaseCandidate>>([.. Releases]);
+        return Task.FromResult<IReadOnlyList<AcquisitionCandidate>>([.. Releases]);
     }
 }
 

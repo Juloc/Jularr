@@ -1,9 +1,10 @@
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.Core;
 
 namespace Jularr.Web.Features.Acquisition.Search;
 
 /// <summary>One indexer's answer for a release together with the query that produced it.</summary>
-public sealed record SearchHit(ProwlarrReleaseCandidate Release, Guid EntryId, int Priority, string IndexerName, PlannedQuery Query);
+public sealed record SearchHit(AcquisitionCandidate Release, Guid EntryId, int Priority, string IndexerName, PlannedQuery Query);
 
 /// <summary>
 /// Cross-indexer deduplication: equivalent releases returned by several indexers become one logical candidate that keeps every
@@ -17,10 +18,10 @@ public static class ReleaseDeduplicator
     private static readonly TimeSpan PostedTolerance = TimeSpan.FromHours(72);
 
     /// <summary>The cheap key a running search uses to count distinct candidates; the final clustering uses <see cref="SameRelease"/>.</summary>
-    public static string ProvisionalKey(ProwlarrReleaseCandidate release) =>
+    public static string ProvisionalKey(AcquisitionCandidate release) =>
         $"{NormalizedTitle(release.Title)}|{release.SizeBytes?.ToString() ?? "?"}";
 
-    public static IReadOnlyList<ProwlarrReleaseCandidate> Merge(IEnumerable<SearchHit> hits)
+    public static IReadOnlyList<AcquisitionCandidate> Merge(IEnumerable<SearchHit> hits)
     {
         // A fixed order (indexer priority, then name, then identity) makes the primary source and the grouping independent of which
         // indexer answered first.
@@ -83,7 +84,7 @@ public static class ReleaseDeduplicator
         return a.PublishedAt is not { } postedA || b.PublishedAt is not { } postedB || (postedA - postedB).Duration() <= PostedTolerance;
     }
 
-    private static ProwlarrReleaseCandidate Build(List<SearchHit> cluster)
+    private static AcquisitionCandidate Build(List<SearchHit> cluster)
     {
         var primary = cluster[0].Release;
         var sources = cluster

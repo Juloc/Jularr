@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Monitoring;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -152,6 +153,9 @@ public sealed class MusicAcquisitionTests
         Assert.IsTrue(payload.NextSearchUtc > same.Clock.GetUtcNow().UtcDateTime);
     }
 
+    private static UpgradeWantedSource UpgradeSource(MusicHost host, UpgradeScanState scans) =>
+        new(MediaAcquisitionKind.Music, host.Get<WantedReconciler>(), host.Requests, scans);
+
     [TestMethod]
     public async Task AFinalAlbumStaysCompletedAndARaisedCutoffReopensItsRequestWithoutForgettingTriedReleases()
     {
@@ -165,17 +169,17 @@ public sealed class MusicAcquisitionTests
         var store = host.Get<QualityProfileStore>();
         await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Music, null)) with { UpgradeCutoffQuality = "MP3-320" });
 
-        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(new UpgradeScanState(), host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "320 kbit meets the cutoff now.");
+        Assert.AreEqual(0, await UpgradeSource(host, new UpgradeScanState()).PrepareAsync(host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "320 kbit meets the cutoff now.");
 
         await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Music, null)) with { UpgradeCutoffQuality = "FLAC" });
         var scans = new UpgradeScanState();
-        var reopened = await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(scans, host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None);
+        var reopened = await UpgradeSource(host, scans).PrepareAsync(host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None);
 
         Assert.AreEqual(1, reopened);
         var stored = (await host.Requests.GetAsync(request.Id, CancellationToken.None))!;
         Assert.AreEqual(AcquisitionRequestStatus.Approved, stored.Status);
         CollectionAssert.AreEqual(new[] { "earlier-release" }, MusicRequestPayload.Of(stored).TriedReleases!.ToArray());
-        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(scans, host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "The scan runs once per interval.");
+        Assert.AreEqual(0, await UpgradeSource(host, scans).PrepareAsync(host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "The scan runs once per interval.");
     }
 
     [TestMethod]
@@ -302,7 +306,7 @@ public sealed class MusicAcquisitionTests
         Assert.AreEqual((6, 5, 2), (artists.Single().Albums, artists.Single().Monitored, artists.Single().Available));
     }
 
-    private static ProwlarrReleaseCandidate Release(string title) =>
+    private static AcquisitionCandidate Release(string title) =>
         new(title, "Music test indexer", 1, "usenet", 400L * 1024 * 1024, null, null, DateTimeOffset.UtcNow, 0, 1, title, null, AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.invalid/download/{Uri.EscapeDataString(title)}"), null);
 
     private sealed class ManualClock(DateTimeOffset start) : TimeProvider
@@ -382,7 +386,8 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton<MusicLibraryService>()
                 .AddSingleton<CanonicalMediaStorageService>()
                 .AddSingleton<UpgradeScanState>()
-                .AddSingleton<MusicMonitoringService>()
+                .AddSingleton<IUpgradeAssessor, MusicUpgradeAssessor>()
+                .AddSingleton<UpgradeAssessors>()
                 .AddSingleton<MusicAcquisitionEngine>()
                 .AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>()
                 .AddSingleton<MusicManualSearchService>()

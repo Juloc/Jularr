@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 
 namespace Jularr.Web.Features.Acquisition.Search;
@@ -17,10 +18,10 @@ public sealed class SearchEvidenceCache(TimeProvider? clock = null)
     private const int MaximumEntries = 512;
 
     private readonly TimeProvider time = clock ?? TimeProvider.System;
-    private readonly ConcurrentDictionary<string, (DateTimeOffset At, IReadOnlyList<ProwlarrReleaseCandidate> Releases)> evidence = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, (DateTimeOffset At, IReadOnlyList<AcquisitionCandidate> Releases)> evidence = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<Guid, (DateTimeOffset Until, string Reason)> backoffs = new();
 
-    public bool TryGet(string key, out IReadOnlyList<ProwlarrReleaseCandidate> releases)
+    public bool TryGet(string key, out IReadOnlyList<AcquisitionCandidate> releases)
     {
         if (evidence.TryGetValue(key, out var entry) && time.GetUtcNow() - entry.At < EvidenceLifetime)
         {
@@ -32,7 +33,7 @@ public sealed class SearchEvidenceCache(TimeProvider? clock = null)
         return false;
     }
 
-    public void Set(string key, IReadOnlyList<ProwlarrReleaseCandidate> releases)
+    public void Set(string key, IReadOnlyList<AcquisitionCandidate> releases)
     {
         var now = time.GetUtcNow();
         if (evidence.Count >= MaximumEntries)

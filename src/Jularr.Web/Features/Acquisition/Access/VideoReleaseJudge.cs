@@ -31,7 +31,7 @@ public static partial class VideoReleaseJudge
     [GeneratedRegex(@"^(?:19|20)\d{2}$")]
     private static partial Regex YearToken();
 
-    public static ReleaseJudgement<VideoIdentityMatch> Judge(IReleaseParser parser, MediaAcquisitionKind kind, string title, int? year, VideoUnit? unit, VideoUnitScope scope, ProwlarrReleaseCandidate candidate)
+    public static ReleaseJudgement<VideoIdentityMatch> Judge(IReleaseParser parser, MediaAcquisitionKind kind, string title, int? year, VideoUnit? unit, VideoUnitScope scope, AcquisitionCandidate candidate)
     {
         if (candidate.InternalDownloadUri is null)
         {

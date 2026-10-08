@@ -26,6 +26,11 @@ public sealed class VideoWantedSource(MediaAcquisitionKind kind, WantedReconcile
             after = works[^1];
             foreach (var workId in works)
             {
+                if (await monitoring.IsLeftToOwnerAsync(kind, workId, cancellationToken))
+                {
+                    continue;
+                }
+
                 if (await monitoring.ReconcileAsync(workId, kind, wake: false, cancellationToken) == VideoMonitoringOutcome.Saved && ++opened >= WantedAcquisitionService.MaxRequestsPerKindPerPass)
                 {
                     break;

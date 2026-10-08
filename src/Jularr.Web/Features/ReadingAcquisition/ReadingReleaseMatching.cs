@@ -192,7 +192,7 @@ public static class ReadingReleaseJudge
             },
             release => Judge(release, target));
 
-    public static ReleaseJudgement<ReadingReleaseInfo> Judge(ProwlarrReleaseCandidate release, ReadingAcquisitionTarget target)
+    public static ReleaseJudgement<ReadingReleaseInfo> Judge(AcquisitionCandidate release, ReadingAcquisitionTarget target)
     {
         var parsed = ReadingReleaseParser.Parse(release.Title);
         var names = new[] { target.Title }

@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -160,7 +161,7 @@ public sealed class AcquisitionHealthTests
             "indexer-key");
 
     private sealed class FakeIndexer(
-        Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<ProwlarrReleaseCandidate>> search) : IIndexer
+        Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<AcquisitionCandidate>> search) : IIndexer
     {
         public IndexerType Type => IndexerType.Newznab;
 
@@ -178,7 +179,7 @@ public sealed class AcquisitionHealthTests
             }
         }
 
-        public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
             IndexerEntry entry,
             IndexerSearchQuery query,
             CancellationToken cancellationToken) =>

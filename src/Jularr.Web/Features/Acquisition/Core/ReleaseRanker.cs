@@ -8,8 +8,8 @@ namespace Jularr.Web.Features.Acquisition.Core;
 public sealed class ReleaseRanker(ReleaseReliabilityService? reliability = null)
 {
     public async Task<(SelectionResult Selection, IReadOnlyList<ReleaseEvaluation<TMatch>> Evaluations)> RankAsync<TMatch>(
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
-        Func<ProwlarrReleaseCandidate, ReleaseJudgement<TMatch>> judge,
+        IReadOnlyList<AcquisitionCandidate> releases,
+        Func<AcquisitionCandidate, ReleaseJudgement<TMatch>> judge,
         QualityProfile profile,
         CancellationToken cancellationToken,
         Dictionary<string, ReleaseJudgement<TMatch>>? judgements = null)
@@ -35,7 +35,7 @@ public sealed class ReleaseRanker(ReleaseReliabilityService? reliability = null)
         return (selection, evaluations);
     }
 
-    internal static ReleaseJudgement<TMatch> Judged<TMatch>(Dictionary<string, ReleaseJudgement<TMatch>> judgements, Func<ProwlarrReleaseCandidate, ReleaseJudgement<TMatch>> judge, ProwlarrReleaseCandidate release)
+    internal static ReleaseJudgement<TMatch> Judged<TMatch>(Dictionary<string, ReleaseJudgement<TMatch>> judgements, Func<AcquisitionCandidate, ReleaseJudgement<TMatch>> judge, AcquisitionCandidate release)
     {
         if (!judgements.TryGetValue(release.Identity, out var judgement))
         {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Access;
@@ -189,7 +190,7 @@ public sealed class BookWantedRequestHandler(
 }
 
 /// <summary>One indexer result as the book selector judged it; <see cref="Score"/> 0 means rejected.</summary>
-public sealed record RankedBookRelease(ProwlarrReleaseCandidate Release, int Score, string? RejectedBecause)
+public sealed record RankedBookRelease(AcquisitionCandidate Release, int Score, string? RejectedBecause)
 {
     public string? QualityKey { get; init; }
 
@@ -208,7 +209,7 @@ public sealed record BookUsenetSearchResult(
     /// <summary>True when no indexer could answer at all, so an empty result says nothing about the book.</summary>
     public bool EveryIndexerFailed { get; init; }
 
-    public ProwlarrReleaseCandidate? Picked => Ranked.FirstOrDefault(release => release.Score > 0)?.Release;
+    public AcquisitionCandidate? Picked => Ranked.FirstOrDefault(release => release.Score > 0)?.Release;
 
     public string FailureMessage =>
         Ranked.Count == 0
@@ -255,8 +256,8 @@ public static class BookReleaseSelector
 {
     private static readonly string[] UnsupportedFormats = ["mobi", "azw3", "azw", "djvu", "cbr", "cbz", "mp3", "m4b", "audiobook", "hörbuch"];
 
-    public static ProwlarrReleaseCandidate? Pick(
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
+    public static AcquisitionCandidate? Pick(
+        IReadOnlyList<AcquisitionCandidate> releases,
         string title,
         string? author,
         QualityProfile? profile = null) =>
@@ -264,7 +265,7 @@ public static class BookReleaseSelector
 
     /// <summary>Every release, best first; rejected releases (score 0) last, each with its reason.</summary>
     public static IReadOnlyList<RankedBookRelease> Rank(
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
+        IReadOnlyList<AcquisitionCandidate> releases,
         string title,
         string? author,
         QualityProfile? profile = null,
@@ -280,9 +281,9 @@ public static class BookReleaseSelector
         return [.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))];
     }
 
-    private sealed record BookJudgement(ProwlarrReleaseCandidate Release, SelectionCandidate Candidate, int MatchedTitleWords, int AuthorHits);
+    private sealed record BookJudgement(AcquisitionCandidate Release, SelectionCandidate Candidate, int MatchedTitleWords, int AuthorHits);
 
-    private static BookJudgement Judge(ProwlarrReleaseCandidate release, IReadOnlyCollection<string> titleWords, IReadOnlyCollection<string> authorWords)
+    private static BookJudgement Judge(AcquisitionCandidate release, IReadOnlyCollection<string> titleWords, IReadOnlyCollection<string> authorWords)
     {
         var words = Words(release.Title);
         var matchedTitle = titleWords.Count(words.Contains);

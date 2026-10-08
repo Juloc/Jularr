@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -68,7 +69,7 @@ public sealed record SearchOptions
     /// The media type's own count of candidates that are identity-valid for the target. Expansion stops once enough distinct usable
     /// candidates exist; without a counter every distinct candidate counts, which only stops expansion early.
     /// </summary>
-    public Func<IReadOnlyList<ProwlarrReleaseCandidate>, int>? UsableCount { get; init; }
+    public Func<IReadOnlyList<AcquisitionCandidate>, int>? UsableCount { get; init; }
 
     /// <summary>Restricts the search to these indexer entries (the profile's allowed sources); null searches every enabled entry.</summary>
     public IReadOnlyCollection<Guid>? AllowedEntryIds { get; init; }
@@ -185,7 +186,7 @@ public sealed record SearchTraceLine(
 /// per-indexer outcome and a trace. It says nothing about whether a candidate is acceptable.
 /// </summary>
 public sealed record AcquisitionSearchResult(
-    IReadOnlyList<ProwlarrReleaseCandidate> Releases,
+    IReadOnlyList<AcquisitionCandidate> Releases,
     IReadOnlyList<IndexerSearchOutcome> Outcomes,
     IReadOnlyList<SearchTraceLine> Trace,
     int RawResultCount)

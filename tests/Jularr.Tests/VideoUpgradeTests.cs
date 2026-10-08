@@ -151,6 +151,33 @@ public sealed class VideoUpgradeTests
     }
 
     [TestMethod]
+    public async Task AnInstalledMovieIsQueuedWhileItsProfileWantsMoreAndLeavesTheQueueWhenTheProfileIsSatisfied()
+    {
+        await using var world = await VideoRequestToPlayWorld.CreateAsync(MediaAcquisitionKind.Movie, Tmdb());
+        world.Indexer.Publish(DuneLow);
+        var request = await world.RequestAsync(DuneTmdb, "Dune");
+        await ImportAsync(world, request, DuneLow, size: 4);
+        var workId = await world.Db.Works.AsNoTracking().Select(work => work.Id).SingleAsync();
+        var reconciler = world.Services.GetRequiredService<WantedReconciler>();
+
+        await reconciler.ReconcileAsync(workId, CancellationToken.None);
+        var queued = Assert.ContainsSingle(await world.Db.WantedItems.AsNoTracking().ToListAsync());
+        Assert.AreEqual(workId, queued.TargetId, "720p is below the cutoff, so the installed movie is queued as an upgrade.");
+        Assert.IsEmpty(await reconciler.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Movie, Guid.Empty, 10, CancellationToken.None), "Nothing is missing, so no new request is opened for it.");
+
+        var store = world.Services.GetRequiredService<QualityProfileStore>();
+        await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Movie, null)) with { UpgradeCutoffQuality = "WEB-720p" });
+        await reconciler.ReconcileAsync(workId, CancellationToken.None);
+        Assert.IsEmpty(await world.Db.WantedItems.AsNoTracking().ToListAsync(), "A profile the installed quality satisfies leaves the queue.");
+
+        await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Movie, null)) with { UpgradeCutoffQuality = "BLURAY-1080p" });
+        var page = await reconciler.ReconcileUpgradesAsync(MediaAcquisitionKind.Movie, Guid.Empty, 10, CancellationToken.None);
+        Assert.AreEqual(workId, Assert.ContainsSingle(page.Works));
+        Assert.IsTrue(page.ReachedEnd);
+        Assert.AreEqual(workId, Assert.ContainsSingle(await world.Db.WantedItems.AsNoTracking().ToListAsync()).TargetId, "The upgrade scan queues what a raised cutoff makes upgradable.");
+    }
+
+    [TestMethod]
     public async Task AFinalMovieIsOnlyReplacedWhenTheProfileLaterWantsMoreAndNeverByAWorseOrEqualRelease()
     {
         await using var world = await VideoRequestToPlayWorld.CreateAsync(MediaAcquisitionKind.Movie, Tmdb());

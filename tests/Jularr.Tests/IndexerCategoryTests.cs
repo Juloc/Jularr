@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Health;
 using Jularr.Web.Features.Acquisition.Indexers;
@@ -107,12 +108,12 @@ public sealed class IndexerCategoryTests
         }
     }
 
-    private sealed class FakeIndexer(Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<ProwlarrReleaseCandidate>> search) : IIndexer
+    private sealed class FakeIndexer(Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<AcquisitionCandidate>> search) : IIndexer
     {
         public IndexerType Type => IndexerType.Newznab;
 
         public Task<IndexerConnectionTestResult> TestAsync(IndexerEntry entry, CancellationToken cancellationToken) => Task.FromResult(new IndexerConnectionTestResult(true));
 
-        public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken) => Task.FromResult(search(entry, query));
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken) => Task.FromResult(search(entry, query));
     }
 }

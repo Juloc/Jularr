@@ -19,7 +19,7 @@ public sealed record ReleaseJudgement<TMatch>(TMatch Match, ReleaseInfo? Parsed,
 }
 
 // One returned release as the shared selection engine ranked it.
-public sealed record ReleaseEvaluation<TMatch>(ProwlarrReleaseCandidate Candidate, ReleaseInfo? Parsed, TMatch Match, CandidateEvaluation Selection)
+public sealed record ReleaseEvaluation<TMatch>(AcquisitionCandidate Candidate, ReleaseInfo? Parsed, TMatch Match, CandidateEvaluation Selection)
 {
     public ReleaseScoreResult? Score => Selection.Score;
 
@@ -36,7 +36,7 @@ public sealed record SearchEvaluation<TMatch>(QualityProfile Profile, Acquisitio
 }
 
 // What a media adapter hands the core to search one target: the query facts and its identity judge.
-public sealed record MediaSearchPlan<TMatch>(SearchIntent Intent, Func<ProwlarrReleaseCandidate, ReleaseJudgement<TMatch>> Judge);
+public sealed record MediaSearchPlan<TMatch>(SearchIntent Intent, Func<AcquisitionCandidate, ReleaseJudgement<TMatch>> Judge);
 
 // How the winning release is queued in the download client and linked to its library target.
 public sealed record GrabTarget(string OperationKind, string OperationTitle, string DisplayTitle, MediaAcquisitionKind Kind, string MediaTargetKey, OperationPriority Priority = OperationPriority.Normal);

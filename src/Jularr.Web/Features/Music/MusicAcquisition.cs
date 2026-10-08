@@ -84,7 +84,7 @@ public static partial class MusicReleaseJudge
     [GeneratedRegex(@"^(?:19|20)\d{2}$")]
     private static partial Regex YearToken();
 
-    public static MusicJudgement Judge(IReleaseParser parser, string artist, string album, int? year, ProwlarrReleaseCandidate candidate)
+    public static MusicJudgement Judge(IReleaseParser parser, string artist, string album, int? year, AcquisitionCandidate candidate)
     {
         if (candidate.InternalDownloadUri is null)
         {

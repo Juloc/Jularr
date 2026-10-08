@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Auth;
@@ -187,7 +188,7 @@ public sealed class BookManualSearchModel(
         _ => $"{bytes.Value / 1024d:0} KB"
     };
 
-    public static string Format(ProwlarrReleaseCandidate release)
+    public static string Format(AcquisitionCandidate release)
     {
         var title = release.Title;
         if (title.Contains("epub", StringComparison.OrdinalIgnoreCase))

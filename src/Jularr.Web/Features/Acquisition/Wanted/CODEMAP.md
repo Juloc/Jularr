@@ -14,7 +14,13 @@ Canonical owners
 Intent sources (read, never copied)
 - Monitoring: effective state from `Features/Monitoring` (see its CODEMAP).
 - Requests: open approved requests (`RequestTargets`) want their target even when Monitoring is off or switched off later; a pending request wants nothing.
-- Why a row is wanted and whether it is missing or an upgrade is derived on read, not stored.
+- Why a row is wanted and whether it is missing or an upgrade is derived on read, not stored: a row whose target the library holds is an upgrade, one it lacks is missing.
+
+Upgrades
+- `IUpgradeAssessor` per media type (`VideoUpgradeAssessor` for Movie and each episode, `MusicUpgradeAssessor` for an album) tells which held targets the profile (`UpgradePolicy`) still wants better versions of; `UpgradeAssessors` is the registry. Other types have none, so their installed targets leave the queue.
+- `WantedReconciler.ReconcileAsync(workId)` runs the SQL reconcile (held rows of assessed types are kept, missing ones queued) and then `SyncUpgrades` with the assessor's answer; the full run skips the assessment.
+- `UpgradeWantedSource` (Movie, Tv, Music, hourly, bounded page, cursor in `UpgradeScanState`): reconciles the held Works of a page and continues the Completed request of a Work that has rows (tried releases stay remembered). `WorksWithoutOpenRequest` lists only Works that still miss something, so an upgrade never opens a second request.
+- Not defined yet: upgrades of Book, Light Novel, Manga (no installed quality or replace rule), Anime and Audiobook (not on this queue).
 
 Flow
 monitoring decisions + relation sources -> `WantedReconciler.ReconcileAsync(workId?)` -> `WantedItems`
@@ -32,4 +38,4 @@ Cost: a single-Work reconcile is index-driven (0.7 ms on 40k episodes), the full
 
 Persistence note: `WorkService.MergeWorksAsync` drops the absorbed Work's items.
 
-Tests: `WantedReconcilerTests` (incl. the SQL-ownership guard), `CanonicalMonitoringTests` (atomic commands), `WantedCoverageTests`, `VideoAdminSurfaceTests`, `MusicAcquisitionTests`.
+Tests: `WantedReconcilerTests` (incl. the SQL-ownership guard), `VideoUpgradeTests` (queue and scan), `MusicAcquisitionTests`, `CanonicalMonitoringTests` (atomic commands), `RequestTargetsMigrationTests`, `WantedCoverageTests`, `VideoAdminSurfaceTests`, `MusicAcquisitionTests`.

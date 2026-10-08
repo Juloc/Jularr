@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Health;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -126,15 +127,15 @@ public sealed class ProfileGrabAndSourcePolicyTests
     private static IndexerEntry NewEntry(string name, int priority) =>
         new(Guid.NewGuid(), name, IndexerType.Newznab, Enabled: true, priority, new IndexerSettings("https://indexer.example", [5030], [], 100), "indexer-key");
 
-    private static ProwlarrReleaseCandidate Release(string title, string indexer) =>
+    private static AcquisitionCandidate Release(string title, string indexer) =>
         new(title, indexer, null, "usenet", 100_000_000, null, null, Now, 1, 24, title, null, null!, [], new Uri("http://indexer.example/nzb/" + Uri.EscapeDataString(title + indexer)), null);
 
-    private sealed class FakeIndexer(Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<ProwlarrReleaseCandidate>> search) : IIndexer
+    private sealed class FakeIndexer(Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<AcquisitionCandidate>> search) : IIndexer
     {
         public IndexerType Type => IndexerType.Newznab;
 
         public Task<IndexerConnectionTestResult> TestAsync(IndexerEntry entry, CancellationToken cancellationToken) => Task.FromResult(new IndexerConnectionTestResult(true));
 
-        public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken) => Task.FromResult(search(entry, query));
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken) => Task.FromResult(search(entry, query));
     }
 }

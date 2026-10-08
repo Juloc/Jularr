@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
@@ -191,7 +192,7 @@ public sealed class AcquisitionProfilePolicyTests
         }
     }
 
-    private static ProwlarrReleaseCandidate Release(string title) =>
+    private static AcquisitionCandidate Release(string title) =>
         new(title, "Indexer", null, "usenet", 100_000_000, null, null, Now, 1, 24, title, null, AnimeReleaseParser.Parse(title), [], new Uri("http://indexer.example/nzb/" + Uri.EscapeDataString(title)), null);
 
     private static string RepositoryRoot()

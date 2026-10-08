@@ -311,6 +311,25 @@ public sealed class VideoMonitoringService(
                 ? new AcquisitionStatusOutcome(status, MonitoringChanged)
                 : new AcquisitionStatusOutcome(endStatus ?? status, MonitoringTurnedOff);
 
+    /// <summary>
+    /// Whether the title's latest request ended in a way only a person undoes (it gave up, or an owner rejected it), so the Wanted pass leaves it alone
+    /// instead of opening a fresh request every time. A request that only monitoring Off ended is not one of them.
+    /// </summary>
+    public async Task<bool> IsLeftToOwnerAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    {
+        AcquisitionRequest? latest = null;
+        foreach (var identity in await IdentitiesAsync(kind, workId, cancellationToken))
+        {
+            var candidate = await requests.FindLatestAsync(kind, identity.Provider, identity.ExternalId, cancellationToken);
+            if (candidate is not null && (latest is null || candidate.CreatedAt > latest.CreatedAt))
+            {
+                latest = candidate;
+            }
+        }
+
+        return latest is { Status: AcquisitionRequestStatus.Failed or AcquisitionRequestStatus.Rejected } && VideoRequestPayload.Parse(latest.PayloadJson) is not { EndedByMonitoring: true };
+    }
+
     /// <summary>The newest request monitoring Off ended for the Work, which turning monitoring on reopens.</summary>
     private async Task<AcquisitionRequest?> FindStoppedRequestAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
     {

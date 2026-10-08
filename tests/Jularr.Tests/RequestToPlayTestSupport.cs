@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jularr.Web.Features.Acquisition.Core;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -93,14 +94,14 @@ internal sealed class FakeTmdb : HttpMessageHandler
 /// <summary>A Usenet indexer whose releases the test changes between searches.</summary>
 internal sealed class ScriptedIndexer : IIndexer
 {
-    public List<ProwlarrReleaseCandidate> Releases { get; } = [];
+    public List<AcquisitionCandidate> Releases { get; } = [];
 
     public int Searches { get; private set; }
 
     public IndexerType Type => IndexerType.Newznab;
 
     public void Publish(string title) =>
-        Releases.Add(new ProwlarrReleaseCandidate(
+        Releases.Add(new AcquisitionCandidate(
             title,
             "Video test indexer",
             1,
@@ -121,10 +122,10 @@ internal sealed class ScriptedIndexer : IIndexer
     public Task<IndexerConnectionTestResult> TestAsync(IndexerEntry entry, CancellationToken cancellationToken) =>
         Task.FromResult(new IndexerConnectionTestResult(true));
 
-    public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken)
     {
         Searches++;
-        return Task.FromResult<IReadOnlyList<ProwlarrReleaseCandidate>>([.. Releases]);
+        return Task.FromResult<IReadOnlyList<AcquisitionCandidate>>([.. Releases]);
     }
 }
 
@@ -347,7 +348,8 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(registry)
             .AddSingleton(profileStore)
             .AddSingleton(installed)
-            .AddSingleton<IWantedSource>(new VideoUpgradeWantedSource(Kind, Db, new AcquisitionAccessStore(Db), MonitoringTestSupport.Resolver(Db), installed, profileStore, new UpgradeScanState()))
+            .AddSingleton(new WantedReconciler(Db, Clock, null, new UpgradeAssessors([new VideoUpgradeAssessor(Kind, installed, profileStore)])))
+            .AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(Kind, provider.GetRequiredService<WantedReconciler>(), new AcquisitionAccessStore(Db), new UpgradeScanState()))
             .AddSingleton(downloadClients)
             .AddSingleton(new DownloadClientSubmissionService(downloadClient, new DownloadClientSelector(downloadClients, health), Db, NullLogger<DownloadClientSubmissionService>.Instance))
             .AddSingleton<IDownloadClient>(downloadClient)
@@ -360,7 +362,6 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(MonitoringTestSupport.Resolver(Db))
             .AddSingleton(MonitoringTestSupport.Commands(Db))
             .AddSingleton(MonitoringTestSupport.Scopes(Db))
-            .AddSingleton(new WantedReconciler(Db, Clock))
             .AddSingleton<VideoAcquisitionEngine>()
             .AddSingleton<IJularrEventPublisher, RecordingEventPublisher>()
             .AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(Pages.Capabilities))

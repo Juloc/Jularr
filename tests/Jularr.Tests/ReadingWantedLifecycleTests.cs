@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Health;
@@ -245,7 +246,7 @@ public sealed class ReadingWantedLifecycleTests
         return count;
     }
 
-    private static ProwlarrReleaseCandidate Candidate(string title) =>
+    private static AcquisitionCandidate Candidate(string title) =>
         new(
             title,
             "Test indexer",
@@ -391,14 +392,14 @@ public sealed class ReadingWantedLifecycleTests
         }
     }
 
-    private sealed class FixedIndexer(IReadOnlyList<ProwlarrReleaseCandidate> releases) : IIndexer
+    private sealed class FixedIndexer(IReadOnlyList<AcquisitionCandidate> releases) : IIndexer
     {
         public IndexerType Type => IndexerType.Newznab;
 
         public Task<IndexerConnectionTestResult> TestAsync(IndexerEntry entry, CancellationToken cancellationToken) =>
             Task.FromResult(new IndexerConnectionTestResult(true));
 
-        public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
             IndexerEntry entry,
             IndexerSearchQuery query,
             CancellationToken cancellationToken) =>

@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -351,7 +352,7 @@ public sealed class BookSearchCoordinator(
         BookSearchWarning? Warning);
 
     private sealed record UsenetPool(
-        IReadOnlyList<ProwlarrReleaseCandidate> Releases,
+        IReadOnlyList<AcquisitionCandidate> Releases,
         IReadOnlyList<IndexerSearchWarning> Warnings,
         bool UsedCategoryFallback);
 }

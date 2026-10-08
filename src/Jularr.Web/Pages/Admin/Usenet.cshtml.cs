@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -35,7 +36,7 @@ public sealed record UsenetIndexerCard(IndexerEntry Entry, AcquisitionHealthStat
 public sealed record UsenetClientCard(DownloadClientEntry Entry, AcquisitionHealthStatus? Health);
 
 /// <summary>One release as the media type's own selector judged it; <see cref="Score"/> 0 means rejected.</summary>
-public sealed record UsenetTestRelease(ProwlarrReleaseCandidate Release, int Score, string? RejectedBecause);
+public sealed record UsenetTestRelease(AcquisitionCandidate Release, int Score, string? RejectedBecause);
 
 /// <summary>The search test result, from the same search and ranking automatic adding uses.</summary>
 public sealed record UsenetSearchTest(
@@ -43,7 +44,7 @@ public sealed record UsenetSearchTest(
     IReadOnlyList<UsenetTestRelease> Ranked,
     IReadOnlyList<IndexerSearchWarning> Warnings,
     bool UsedCategoryFallback,
-    ProwlarrReleaseCandidate? Picked,
+    AcquisitionCandidate? Picked,
     string FailureMessage);
 
 /// <summary>One SABnzbd job for the recent downloads list; <see cref="LocalPathReadable"/> is null when unknown.</summary>

@@ -1,4 +1,5 @@
 using System.Net;
+using Jularr.Web.Features.Acquisition.Core;
 using System.Text;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -143,12 +144,12 @@ public sealed class ProwlarrSearchTests
                 100),
             "secret-key");
 
-    private static ProwlarrReleaseCandidate Candidate(string guid)
+    private static AcquisitionCandidate Candidate(string guid)
     {
         var parsed = AnimeReleaseParser.Parse(
             "[Group] Anime - 01 WEB-DL 1080p AVC AAC");
 
-        return new ProwlarrReleaseCandidate(
+        return new AcquisitionCandidate(
             parsed.RawTitle,
             "Indexer",
             1,
@@ -195,7 +196,7 @@ public sealed class ProwlarrSearchTests
     }
 
     private sealed class FakeProwlarrClient(
-        Func<ProwlarrSearchQuery, CancellationToken, IReadOnlyList<ProwlarrReleaseCandidate>> search)
+        Func<ProwlarrSearchQuery, CancellationToken, IReadOnlyList<AcquisitionCandidate>> search)
         : IProwlarrClient
     {
         public Task<ProwlarrConnectionTestResult> TestAsync(
@@ -203,7 +204,7 @@ public sealed class ProwlarrSearchTests
             CancellationToken cancellationToken) =>
             Task.FromResult(new ProwlarrConnectionTestResult(true, "test"));
 
-        public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
             ProwlarrConnection connection,
             ProwlarrSearchQuery query,
             CancellationToken cancellationToken) =>
@@ -211,8 +212,8 @@ public sealed class ProwlarrSearchTests
     }
 }
 
-file static class ProwlarrReleaseCandidateTestExtensions
+file static class AcquisitionCandidateTestExtensions
 {
-    public static int? AbsoluteEpisode(this ProwlarrReleaseCandidate candidate) =>
+    public static int? AbsoluteEpisode(this AcquisitionCandidate candidate) =>
         candidate.ParsedRelease.AbsoluteEpisodeStart;
 }

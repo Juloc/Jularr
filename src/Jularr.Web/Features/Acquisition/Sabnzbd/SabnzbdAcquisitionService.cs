@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.DownloadClients;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -41,7 +42,7 @@ public sealed class SabnzbdAcquisitionService(
     /// using the canonical quality scorer.
     /// </summary>
     public static IReadOnlyList<SabnzbdAnimeReleaseCandidate> SelectAcceptedCandidates(
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
+        IReadOnlyList<AcquisitionCandidate> releases,
         AnimeQualityProfile profile)
     {
         ArgumentNullException.ThrowIfNull(releases);

@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Monitoring;
@@ -308,7 +309,7 @@ public sealed class SabnzbdAcquisitionTests
         return result.Failed.Single();
     }
 
-    private static ProwlarrReleaseCandidate Release(
+    private static AcquisitionCandidate Release(
         string title,
         string guid,
         int resolution,

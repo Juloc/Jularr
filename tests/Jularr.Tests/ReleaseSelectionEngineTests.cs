@@ -215,7 +215,7 @@ public sealed class ReleaseSelectionEngineTests
         Assert.AreEqual(3, multi.Coverage.WantedCovered);
     }
 
-    private static ProwlarrReleaseCandidate Release(string title, IReadOnlyList<QueryProvenance>? provenance = null) =>
+    private static AcquisitionCandidate Release(string title, IReadOnlyList<QueryProvenance>? provenance = null) =>
         new(title, "Indexer", null, "usenet", 2_000_000_000, null, null, Now, 1, 24, Guid.NewGuid().ToString("N"), null, ReleaseParser.Parse(title), [], new Uri("http://indexer.example/nzb/1"), null)
         {
             Provenance = provenance ?? []

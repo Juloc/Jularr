@@ -92,6 +92,19 @@ public sealed class WantedReconcilerTests
         Assert.AreEqual(1, (await host.Requests.ListAllAsync(10, CancellationToken.None)).Count(request => request.IsOpen));
     }
 
+    [TestMethod]
+    public async Task Source_AFailedRequestOfAMonitoredMovieIsNotOpenedAgainByThePass()
+    {
+        await using var host = await MovieAsync();
+        await MonitoringTestSupport.Commands(host.Environment.Db).SetAsync(MonitoringTargetKind.Work, host.Work.Id, true, CancellationToken.None);
+        var failed = await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year));
+        await host.Requests.UpdateStatusAsync(failed.Id, AcquisitionRequestStatus.Failed, "Gave up.", null, null, null, CancellationToken.None);
+        var source = new VideoWantedSource(MediaAcquisitionKind.Movie, host.Get<WantedReconciler>(), host.Get<Jularr.Web.Features.Acquisition.Monitoring.VideoMonitoringService>());
+
+        Assert.AreEqual(0, await source.PrepareAsync(DateTime.UtcNow, CancellationToken.None), "A request that gave up stays with its owner until they retry it.");
+        Assert.ContainsSingle(await host.Requests.ListAllAsync(10, CancellationToken.None));
+    }
+
     private static async Task<AcquisitionRequest> ApprovedWithChoiceAsync(VideoAcquisitionTestHost host, VideoRequestPayload payload, AcquisitionRequestStatus status = AcquisitionRequestStatus.Approved)
     {
         var request = await host.Requests.CreateAsync(

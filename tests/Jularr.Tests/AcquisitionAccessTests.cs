@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -170,7 +171,7 @@ public sealed class AcquisitionAccessTests
     [TestMethod]
     public void BookReleaseSelectorPrefersMatchingEpubThenAcceptsPdf()
     {
-        ProwlarrReleaseCandidate Release(string title, string protocol = "usenet", long size = 5_000_000) =>
+        AcquisitionCandidate Release(string title, string protocol = "usenet", long size = 5_000_000) =>
             new(title, "idx", 1, protocol, size, null, null, DateTimeOffset.UtcNow, 1, 1, Guid.NewGuid().ToString(), null,
                 Jularr.Web.Features.Acquisition.Release.ReleaseParser.Parse(title), [], new Uri("https://indexer.example/get/" + Guid.NewGuid()), null);
 
@@ -196,7 +197,7 @@ public sealed class AcquisitionAccessTests
     [TestMethod]
     public void BookReleaseSelectorRanksEpubOverPdfOverUnknownFormat()
     {
-        ProwlarrReleaseCandidate Release(string title) =>
+        AcquisitionCandidate Release(string title) =>
             new(title, "idx", 1, "usenet", 3_000_000, null, null, DateTimeOffset.UtcNow, 1, 1, Guid.NewGuid().ToString(), null,
                 Jularr.Web.Features.Acquisition.Release.ReleaseParser.Parse(title), [], new Uri("https://indexer.example/get/" + Guid.NewGuid()), null);
 
@@ -214,7 +215,7 @@ public sealed class AcquisitionAccessTests
     [TestMethod]
     public void BookReleaseSelectorIgnoresSubtitlesAndExplainsRejections()
     {
-        ProwlarrReleaseCandidate Release(string title, string protocol = "usenet") =>
+        AcquisitionCandidate Release(string title, string protocol = "usenet") =>
             new(title, "idx", 1, protocol, 2_000_000, null, null, DateTimeOffset.UtcNow, 1, 1, Guid.NewGuid().ToString(), null,
                 Jularr.Web.Features.Acquisition.Release.ReleaseParser.Parse(title), [], new Uri("https://indexer.example/get/" + Guid.NewGuid()), null);
 
@@ -239,7 +240,7 @@ public sealed class AcquisitionAccessTests
     [TestMethod]
     public void BookReleaseSelectorAppliesSharedProfileOnlyAfterIdentityMatch()
     {
-        ProwlarrReleaseCandidate Release(string title) =>
+        AcquisitionCandidate Release(string title) =>
             new(
                 title,
                 "idx",
@@ -292,7 +293,7 @@ public sealed class AcquisitionAccessTests
     [TestMethod]
     public void BookManualSearchOnlySelectsFreshAcceptedUntriedIdentity()
     {
-        ProwlarrReleaseCandidate Release(string title, string guid, string protocol = "usenet") =>
+        AcquisitionCandidate Release(string title, string guid, string protocol = "usenet") =>
             new(
                 title,
                 "idx",
