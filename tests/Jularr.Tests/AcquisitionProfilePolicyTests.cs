@@ -113,7 +113,7 @@ public sealed class AcquisitionProfilePolicyTests
         var web = Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Features");
         var searches = new (string File, int Minimum)[]
         {
-            ("Acquisition/Core/AcquisitionCore.cs", 1), ("Acquisition/Pipeline/AnimeAcquisitionPipeline.cs", 2), ("Books/BookAcquisitionExecutor.cs", 1)
+            ("Acquisition/Core/AcquisitionCore.cs", 1), ("Books/BookAcquisitionExecutor.cs", 1)
         };
 
         foreach (var (file, minimum) in searches)

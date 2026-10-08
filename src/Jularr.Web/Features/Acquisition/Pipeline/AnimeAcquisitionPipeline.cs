@@ -90,7 +90,7 @@ public sealed class AnimeAcquisitionPipeline(
     AcquisitionHistoryService history,
     ILogger<AnimeAcquisitionPipeline> logger,
     TimeProvider clock,
-    ReleaseReliabilityService? reliability = null)
+    AcquisitionCore core)
 {
     public const string SearchOperationKind = "anime-search";
     public const string GrabOperationKind = "anime-grab";
@@ -99,7 +99,6 @@ public sealed class AnimeAcquisitionPipeline(
     public const int MaxSearchesPerAnimePerRun = 6;
     public const int MaxSearchesPerRun = 30;
     public const int MaxLoggedDecisions = 25;
-    private const int MaxSearchAliases = 3;
 
     public async Task<AnimeAcquisitionRunSummary> RunAsync(
         AnimeSearchTrigger trigger,
@@ -254,22 +253,21 @@ public sealed class AnimeAcquisitionPipeline(
             .ToArray();
         var searchTarget = mode switch
         {
-            ProwlarrAnimeSearchMode.Episode => SearchTargetFor(episode!),
+            ProwlarrAnimeSearchMode.Episode => AnimeReleaseJudge.SearchTargetFor(episode!),
             ProwlarrAnimeSearchMode.Season => new ProwlarrAnimeSearchTarget(
                 scope.FirstOrDefault()?.SearchTitle ?? target.Anime.Title,
-                Aliases(scope.FirstOrDefault()?.SearchAliases ?? target.AllTitles, scope.FirstOrDefault()?.SearchTitle ?? target.Anime.Title),
+                AnimeReleaseJudge.Aliases(scope.FirstOrDefault()?.SearchAliases ?? target.AllTitles, scope.FirstOrDefault()?.SearchTitle ?? target.Anime.Title),
                 ProwlarrAnimeSearchMode.Season,
                 seasonNumber ?? episode?.Key.SeasonNumber ?? 1),
-            _ => new ProwlarrAnimeSearchTarget(target.Anime.Title, Aliases(target.AllTitles, target.Anime.Title), ProwlarrAnimeSearchMode.Anime)
+            _ => new ProwlarrAnimeSearchTarget(target.Anime.Title, AnimeReleaseJudge.Aliases(target.AllTitles, target.Anime.Title), ProwlarrAnimeSearchMode.Anime)
         };
 
         try
         {
-            var searchOptions = new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey), UsableCount = releases => AnimeUsableCount(searchTarget, releases) };
-            var result = await indexers.SearchAsync(ToSearchIntent(searchTarget), searchOptions.WithSourcePolicy(target.Profile.SourcePolicy), cancellationToken);
+            var searchOptions = new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey) };
             var snapshot = await observation.GetSnapshotAsync(forceRefresh: false, cancellationToken);
-            var candidates = Evaluate(target, scope, wanted, episode?.Key, result.Releases, state, snapshot, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
-            return new(target, episode?.Key, mode, candidates, result.Warnings, null);
+            var search = await core.SearchAsync(AnimeReleaseJudge.Plan(target, scope, wanted, episode?.Key, searchTarget, state, snapshot, now), target.Profile, searchOptions, cancellationToken);
+            return new(target, episode?.Key, mode, AnimeReleaseJudge.ToCandidates(target, scope, search), search.Search.Warnings, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -861,21 +859,21 @@ public sealed class AnimeAcquisitionPipeline(
 
         try
         {
-            var episodeTarget = PlannedTargetFor(target, episode, allWanted);
-            var searchOptions = new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key), UsableCount = releases => AnimeUsableCount(episodeTarget, releases) };
-            var result = await indexers.SearchAsync(ToSearchIntent(episodeTarget), searchOptions.WithSourcePolicy(target.Profile.SourcePolicy), cancellationToken);
-            foreach (var warning in result.Warnings)
+            var episodeTarget = AnimeReleaseJudge.PlannedTargetFor(target, episode, allWanted);
+            var searchOptions = new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key) };
+            var search = await core.SearchAsync(AnimeReleaseJudge.Plan(target, [episode], allWanted, episode.Key, episodeTarget, state, snapshot, now), target.Profile, searchOptions, cancellationToken);
+            foreach (var warning in search.Search.Warnings)
             {
                 await operations.AppendLogAsync(operationId, OperationLogLevel.Warning, LogModule, $"{warning.IndexerName}: {warning.Message}{(string.IsNullOrEmpty(warning.Query) ? "" : $" ({warning.Query})")}", cancellationToken);
             }
 
-            var candidates = Evaluate(target, [episode], allWanted, episode.Key, result.Releases, state, snapshot, now, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+            var candidates = AnimeReleaseJudge.ToCandidates(target, [episode], search);
             await LogDecisionsAsync(operations, operationId, candidates, cancellationToken);
 
             var accepted = candidates.Where(candidate => candidate.Decision.Grab).ToArray();
             if (accepted.Length == 0)
             {
-                if (candidates.Count == 0 && result.EveryIndexerFailed)
+                if (candidates.Count == 0 && search.Search.EveryIndexerFailed)
                 {
                     // Nothing could be asked, so nothing was found: the outage is not a failed search and does not raise the back-off.
                     const string outage = "No indexer could be searched; the search is repeated soon.";
@@ -1016,150 +1014,6 @@ public sealed class AnimeAcquisitionPipeline(
         return chosen;
     }
 
-    // Anime supplies the facts of every result (does it carry this anime, which wanted episodes does it cover, may it be grabbed at all) and the
-    // shared selection engine decides: identity before profile, the profile's timed fallback ladder, quality tier,
-    // preference score, coverage and the stable winner. Whether a candidate may replace an installed file stays the shared upgrade policy.
-    private static IReadOnlyList<AnimeSearchCandidate> Evaluate(
-        AnimeAcquisitionTarget target,
-        IReadOnlyList<AnimeAcquisitionEpisode> scope,
-        IReadOnlyList<AnimeWantedEpisode> wanted,
-        AnimeEpisodeKey? primary,
-        IReadOnlyList<AcquisitionCandidate> releases,
-        AnimeMonitoringState state,
-        AcquisitionOwnershipSnapshot snapshot,
-        DateTimeOffset now,
-        ReleaseReliabilityLookup? reliability)
-    {
-        var byIdentity = releases
-            .GroupBy(release => release.Identity, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-        var aliases = scope
-            .SelectMany(episode => new[] { episode.SearchTitle }.Concat(episode.SearchAliases))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        var judged = byIdentity.Values.ToDictionary(
-            release => release.Identity,
-            release => Judge(release, aliases, wanted, primary, state, snapshot, now),
-            StringComparer.OrdinalIgnoreCase);
-        var selection = ReleaseSelectionEngine.Select(
-            target.Profile,
-            [.. judged.Values.Select(item => item.Candidate)],
-            reliability);
-
-        var candidates = new List<AnimeSearchCandidate>();
-        foreach (var evaluation in selection.Ranked)
-        {
-            var release = byIdentity[evaluation.Candidate.Id];
-            var fact = judged[release.Identity];
-            // The score shown is the profile's own, so a release that only waits for a later fallback tier still reads as accepted.
-            var score = AnimeReleaseScorer.Score(target.Profile, new AnimeReleaseCandidate(release.ParsedRelease, release.SizeBytes, release.Indexer, release.Identity));
-            candidates.Add(new AnimeSearchCandidate(release, score, Decide(target, scope, evaluation, fact, score), fact.Covered));
-        }
-
-        return candidates.OrderByDescending(candidate => candidate.Decision.Grab).ToArray();
-    }
-
-    private sealed record AnimeReleaseFact(SelectionCandidate Candidate, IReadOnlyList<AnimeEpisodeKey> Covered, AnimeWantedEpisode? WantedEpisode);
-
-    private static AnimeReleaseFact Judge(
-        AcquisitionCandidate release,
-        IReadOnlyList<string> aliases,
-        IReadOnlyList<AnimeWantedEpisode> wanted,
-        AnimeEpisodeKey? primary,
-        AnimeMonitoringState state,
-        AcquisitionOwnershipSnapshot snapshot,
-        DateTimeOffset now)
-    {
-        var parsed = release.ParsedRelease;
-        var covered = wanted.Where(item => Covers(parsed, item.Key)).Select(item => item.Key).ToArray();
-        var wantedEpisode = primary is not null
-            ? wanted.FirstOrDefault(item => item.Key == primary)
-            : covered.Length > 0 ? wanted.First(item => item.Key == covered[0]) : null;
-
-        ReleaseIdentityEvidence identity;
-        if (!AnimeImportPlanner.SeriesMatches(aliases, parsed.SeriesTitle))
-        {
-            identity = ReleaseIdentityEvidence.Conflict("TitleDoesNotMatch", $"Series title '{parsed.SeriesTitle}' does not match this anime.");
-        }
-        else if (covered.Length == 0 || wantedEpisode is null || (primary is not null && !covered.Contains(primary)))
-        {
-            identity = ReleaseIdentityEvidence.Conflict("EpisodeNotCovered", "Release does not cover the requested episode.");
-        }
-        else
-        {
-            // Season and episode numbers are the release's own statement; an absolute number only agrees through the AniList mapping.
-            identity = parsed.SeasonNumber is not null && parsed.EpisodeStart is not null
-                ? ReleaseIdentityEvidence.Exact("EpisodeCovered", "The release names the wanted season and episode.")
-                : ReleaseIdentityEvidence.Strong("AbsoluteEpisodeCovered", "The release's absolute episode number covers the wanted episode.");
-        }
-
-        string? safety = null;
-        if (release.InternalDownloadUri is null || !string.Equals(release.Protocol, "usenet", StringComparison.OrdinalIgnoreCase))
-        {
-            safety = "Not a usenet release with an NZB link; only SABnzbd downloads are supported.";
-        }
-        else if (identity.Confidence != IdentityConfidence.Conflict)
-        {
-            safety = AnimeMonitoringEngine.FindGrabBlock(wantedEpisode!, parsed, state, snapshot, now);
-        }
-
-        var span = parsed.EpisodeStart is { } first && parsed.EpisodeEnd is { } last
-            ? last - first + 1
-            : parsed.AbsoluteEpisodeStart is { } absoluteFirst && parsed.AbsoluteEpisodeEnd is { } absoluteLast ? absoluteLast - absoluteFirst + 1 : 1;
-        var candidate = new SelectionCandidate(
-            release.Identity,
-            parsed,
-            release.SizeBytes,
-            release.Indexer,
-            release.Sources.FirstOrDefault()?.Priority ?? 0,
-            release.PublishedAt,
-            identity,
-            new SelectionCoverage(covered.Length, Math.Max(wanted.Count, covered.Length), Math.Max(0, span - covered.Length)))
-        {
-            SafetyRejection = safety
-        };
-        return new AnimeReleaseFact(candidate, covered, wantedEpisode);
-    }
-
-    // The engine's verdict as the grab decision the pipeline and the interactive search show, with the reasons people already read.
-    private static AnimeAutoGrabDecision Decide(
-        AnimeAcquisitionTarget target,
-        IReadOnlyList<AnimeAcquisitionEpisode> scope,
-        CandidateEvaluation evaluation,
-        AnimeReleaseFact fact,
-        AnimeReleaseScoreResult score)
-    {
-        if (!evaluation.IsSelectable)
-        {
-            if (evaluation.Reasons.FirstOrDefault(reason => reason.Kind == SelectionReasonKind.Safety) is { } safety)
-            {
-                return new(false, safety.Detail, score);
-            }
-
-            if (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict)
-            {
-                return new(false, evaluation.Candidate.Identity.Detail, score);
-            }
-
-            return new(false, "Candidate is rejected by the assigned quality profile.", score);
-        }
-
-        if (fact.WantedEpisode!.Reason == AnimeWantedReason.Missing)
-        {
-            return new(true, "Accepted candidate satisfies a missing monitored unit.", score);
-        }
-
-        var current = scope.FirstOrDefault(item => item.Key == fact.WantedEpisode.Key) is { } slot
-            ? AnimeAcquisitionInventory.ToInventory(slot, target.Profile).CurrentFile
-            : null;
-        return current is null
-            ? new(false, "Upgrade decision requires the current file score.", score)
-            : AnimeReleaseScorer.IsUpgrade(target.Profile, current, score)
-                ? new(true, "Accepted candidate is an upgrade over the current file.", score)
-                : new(false, "Candidate is not an upgrade over the current file.", score);
-    }
-
     private static async Task LogDecisionsAsync(
         OperationStore operations,
         Guid operationId,
@@ -1218,70 +1072,6 @@ public sealed class AnimeAcquisitionPipeline(
         AnimeReleaseParser.Parse(releaseTitle).ReleaseKey is { Length: > 0 } releaseKey
             ? releaseKey
             : releaseTitle;
-
-    private static bool Covers(AnimeReleaseInfo release, AnimeEpisodeKey key)
-    {
-        // A season pack names no episode range: it covers every wanted episode of its season.
-        if (release.IsSeasonPack && release.EpisodeStart is null && release.SeasonNumber is { } packSeason)
-        {
-            return packSeason == key.SeasonNumber;
-        }
-
-        if (release.SeasonNumber is { } season && release.EpisodeStart is { } start && release.EpisodeEnd is { } end)
-        {
-            return season == key.SeasonNumber && key.EpisodeNumber >= start && key.EpisodeNumber <= end;
-        }
-
-        return key.AbsoluteEpisodeNumber is { } absolute &&
-               release.AbsoluteEpisodeStart is { } absoluteStart &&
-               release.AbsoluteEpisodeEnd is { } absoluteEnd &&
-               absolute >= absoluteStart && absolute <= absoluteEnd;
-    }
-
-    /// <summary>
-    /// What the shared Search Planner is asked for. A season of which every episode is wanted (and so none is in the library yet) is searched as
-    /// the season, so the planner asks for packs deliberately; a season that is partly there or still airing is searched episode by episode.
-    /// </summary>
-    private static ProwlarrAnimeSearchTarget PlannedTargetFor(AnimeAcquisitionTarget target, AnimeAcquisitionEpisode episode, IReadOnlyList<AnimeWantedEpisode> allWanted)
-    {
-        var season = episode.Key.SeasonNumber;
-        var inSeason = target.Episodes.Count(item => item.Key.SeasonNumber == season);
-        var wantedInSeason = allWanted.Count(item => item.Key.SeasonNumber == season);
-        return season > 0 && inSeason >= 2 && wantedInSeason == inSeason
-            ? new ProwlarrAnimeSearchTarget(episode.SearchTitle, Aliases(episode.SearchAliases, episode.SearchTitle), ProwlarrAnimeSearchMode.Season, season, null, null)
-            : SearchTargetFor(episode);
-    }
-
-    private static ProwlarrAnimeSearchTarget SearchTargetFor(AnimeAcquisitionEpisode episode) =>
-        new(
-            episode.SearchTitle,
-            Aliases(episode.SearchAliases, episode.SearchTitle),
-            ProwlarrAnimeSearchMode.Episode,
-            episode.Key.SeasonNumber,
-            episode.Key.EpisodeNumber,
-            episode.Key.AbsoluteEpisodeNumber);
-
-    private static string[] Aliases(IReadOnlyList<string> aliases, string canonical) =>
-        aliases
-            .Where(alias => !alias.Equals(canonical, StringComparison.OrdinalIgnoreCase))
-            .Take(MaxSearchAliases)
-            .ToArray();
-
-    private static SearchIntent ToSearchIntent(ProwlarrAnimeSearchTarget target) =>
-        new(MediaAcquisitionKind.Anime, target.CanonicalTitle)
-        {
-            Aliases = target.Aliases ?? [],
-            Season = target.Mode == ProwlarrAnimeSearchMode.Anime ? null : target.SeasonNumber,
-            Episode = target.Mode == ProwlarrAnimeSearchMode.Episode ? target.EpisodeNumber : null,
-            AbsoluteEpisode = target.Mode == ProwlarrAnimeSearchMode.Episode ? target.AbsoluteEpisodeNumber : null
-        };
-
-    /// <summary>The distinct releases that carry the anime title or one of its aliases, which is how many usable candidates the search has so far.</summary>
-    private static int AnimeUsableCount(ProwlarrAnimeSearchTarget target, IReadOnlyList<AcquisitionCandidate> releases)
-    {
-        var titles = new[] { target.CanonicalTitle }.Concat(target.Aliases ?? []).ToArray();
-        return releases.Count(release => TitleMatcher.MatchesAny(titles, release.ParsedRelease.SeriesTitle));
-    }
 
     // Per-anime restriction only applies to Prowlarr's own indexer aggregation.
     private static int[]? ProwlarrIndexerIdsFor(AnimeMonitoringState state, string animeKey) =>

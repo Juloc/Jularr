@@ -14,3 +14,5 @@ Still the old owners (to be replaced slice by slice)
 Tests: `AnimeCanonicalEpisodesTests`, `AnimeAcquisitionPipelineTests`, `AnimeSharedManagerTests`.
 
 Wanted (done): anime episodes are reconciled by `WantedReconciler` like TV episodes (`WorkMediaType.Anime`, aired gate, installed = video asset on the `WorkEpisode`); `AnimeUpgradeAssessor` queues installed episodes below the profile's cutoff (profile assigned by legacy anime id). Nothing consumes the rows yet.
+
+Search and selection (done): `AnimeReleaseJudge` is the narrow adapter (title and aliases, wanted-episode / season-pack / absolute-number coverage through the AniList mapping, attempt and Sonarr ownership blocks); the pipeline searches and ranks through `AcquisitionCore`. Grabbing and attempt state are still the old owners.

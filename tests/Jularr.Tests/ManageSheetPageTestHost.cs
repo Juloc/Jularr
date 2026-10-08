@@ -209,6 +209,8 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                         services.AddScoped<AcquisitionHistoryService>();
                         services.AddMonitoringForTests();
                         services.AddScoped<AnimeAcquisitionPipeline>();
+                        services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.ReleaseRequestTracker>();
+                        services.AddScoped<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>();
                         // The Settings → Acquisition page (#389) lists the per-media-type remote
                         // path mappings; its other panels read the same empty stores.
                         services.AddSingleton(new AniListAutoMonitorSettingsStore(

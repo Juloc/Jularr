@@ -569,6 +569,8 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddScoped<IndexerSearchCoordinator>();
         collection.AddScoped<DownloadClientSelector>();
         collection.AddScoped<DownloadClientSubmissionService>();
+        collection.AddScoped<ReleaseRequestTracker>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>();
         collection.AddSingleton(new AnimeQualityProfileStore(acquisition));
         collection.AddSingleton(new AnimeMonitoringStore(DataRoot));
         collection.AddSingleton(new AnimeImportStore(acquisition));
