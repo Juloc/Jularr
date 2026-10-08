@@ -148,14 +148,14 @@ internal static class WantedSql
         """;
 
     // @mediaType: the Work type, @after: the last Work of the previous page, @kind: the request kind name, @musicBrainz: its provider key, @limit.
-    // Only Works with something still missing are listed: an installed target that wants a better version is reopened through its completed request.
-    private const string OpenRequestOf =
+    // Works with something still missing are listed, and so are Works that hold something upgradable and were never requested (an installed library
+    // item); one that has a request is continued through it (see UpgradeWantedSource), so an upgrade never opens a second request.
+    private const string RequestOf =
         """
         SELECT 1 FROM "AcquisitionRequests" request
         LEFT JOIN "WorkExternalIdentities" identity
                ON identity."WorkId" = work."Id" AND identity."Provider" = request."Provider" AND identity."ExternalId" = request."ExternalId"
         WHERE request."Kind" = @kind
-          AND request."Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing')
           AND (request."WorkId" = work."Id"::text
                OR identity."WorkId" IS NOT NULL
                OR EXISTS (SELECT 1 FROM "MusicAlbums" album
@@ -169,8 +169,8 @@ internal static class WantedSql
         JOIN "Works" work ON work."Id" = item."WorkId" AND work."MediaType" = @mediaType
         LEFT JOIN "WorkEpisodes" episode ON item."TargetKind" = 1 AND episode."Id" = item."TargetId"
         WHERE work."Id" > @after
-          AND NOT (CASE WHEN item."TargetKind" = 1 THEN {{EpisodeInstalled}} ELSE {{WorkInstalled}} END)
-          AND NOT EXISTS ({{OpenRequestOf}})
+          AND NOT EXISTS ({{RequestOf}} AND request."Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing'))
+          AND (NOT (CASE WHEN item."TargetKind" = 1 THEN {{EpisodeInstalled}} ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
         ORDER BY 1
         LIMIT @limit
         """;

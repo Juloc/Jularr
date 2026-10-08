@@ -154,7 +154,24 @@ public sealed class MusicAcquisitionTests
     }
 
     private static UpgradeWantedSource UpgradeSource(MusicHost host, UpgradeScanState scans) =>
-        new(MediaAcquisitionKind.Music, host.Get<WantedReconciler>(), host.Requests, scans);
+        new(MediaAcquisitionKind.Music, host.Get<WantedReconciler>(), host.Requests, host.Get<QualityProfileStore>(), scans);
+
+    [TestMethod]
+    public async Task AnImportedAlbumThatWasNeverRequestedIsRequestedOnceWhenItsProfileWantsBetter()
+    {
+        await using var host = await MusicHost.CreateAsync("Daft Punk - Homework (1997) [FLAC]");
+        var work = await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
+        await host.AttachAudioAsync(work, 1, "MP3-320");
+        var store = host.Get<QualityProfileStore>();
+        await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Music, null)) with { UpgradeCutoffQuality = "FLAC" });
+        var requests = new WantedRequestSource(MediaAcquisitionKind.Music, host.Get<WantedReconciler>(), host.Requests, host.Get<IWantedRequestDrafter>());
+        var now = host.Clock.GetUtcNow().UtcDateTime;
+
+        await UpgradeSource(host, new UpgradeScanState()).PrepareAsync(now, CancellationToken.None);
+
+        Assert.AreEqual(1, await requests.PrepareAsync(now, CancellationToken.None), "The library item is upgradable and has no request, so the canonical lifecycle gets one.");
+        Assert.AreEqual(0, await requests.PrepareAsync(now, CancellationToken.None), "The open request carries it; no second one is opened.");
+    }
 
     [TestMethod]
     public async Task AFinalAlbumStaysCompletedAndARaisedCutoffReopensItsRequestWithoutForgettingTriedReleases()

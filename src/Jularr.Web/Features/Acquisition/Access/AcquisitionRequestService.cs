@@ -94,7 +94,7 @@ public sealed class AcquisitionRequestService(
         AcquisitionRequest created;
         try
         {
-            created = await store.CreateAsync(draft, account.ProfileId, status, decidedBy, cancellationToken);
+            created = (await RecordedAsync(async () => await store.CreateAsync(draft, account.ProfileId, status, decidedBy, cancellationToken), cancellationToken))!;
         }
         catch (OpenRequestExistsException)
         {
@@ -108,7 +108,6 @@ public sealed class AcquisitionRequestService(
             return new AcquisitionSubmission(created, AlreadyRequested: false);
         }
 
-        await RecordIntentAsync(created, cancellationToken);
         return new AcquisitionSubmission(await ExecuteAsync(created, cancellationToken), AlreadyRequested: false);
     }
 
@@ -129,15 +128,15 @@ public sealed class AcquisitionRequestService(
         }
 
         // Conditional on the status read above: a requester's cancel that landed meanwhile keeps the request cancelled.
-        var decided = await store.TryTransitionStatusAsync(id, [request.Status], AcquisitionRequestStatus.Approved, null, null, null, false, account.ProfileId, cancellationToken);
-        if (decided is null)
+        var approved = await RecordedAsync(
+            async () => await store.TryTransitionStatusAsync(id, [request.Status], AcquisitionRequestStatus.Approved, null, null, null, false, account.ProfileId, cancellationToken) is null ? null : await RequireAsync(id, cancellationToken),
+            cancellationToken);
+        if (approved is null)
         {
             return await RequireAsync(id, cancellationToken);
         }
 
         await PublishDecisionAsync(request, JularrEventCategory.RequestApproved, cancellationToken);
-        var approved = await RequireAsync(id, cancellationToken);
-        await RecordIntentAsync(approved, cancellationToken);
         return await ExecuteAsync(approved, cancellationToken);
     }
 
@@ -385,21 +384,11 @@ public sealed class AcquisitionRequestService(
         return AutoApprovalEvaluator.Evaluate(rules, kind, profileId, used);
     }
 
-    // What an approved request names counts next to Monitoring, so switching Monitoring off never cancels it.
-    private async Task RecordIntentAsync(AcquisitionRequest request, CancellationToken cancellationToken)
-    {
-        if (intent is null)
-        {
-            return;
-        }
-
-        if (workBinder is not null && RequestWorkBinder.Applies(request.Kind))
-        {
-            request = await workBinder.EnsureBoundAsync(request, cancellationToken);
-        }
-
-        await intent.RecordAsync(request, cancellationToken);
-    }
+    // The change and what the request it leaves approved names are stored as one unit; that intent counts next to Monitoring, so switching Monitoring off never cancels it.
+    private async Task<AcquisitionRequest?> RecordedAsync(Func<Task<AcquisitionRequest?>> change, CancellationToken cancellationToken) =>
+        intent is null
+            ? await change()
+            : await intent.ChangeAndRecordAsync(change, workBinder is null ? null : request => RequestWorkBinder.Applies(request.Kind) ? workBinder.EnsureBoundAsync(request, cancellationToken) : Task.FromResult(request), cancellationToken);
 
     private async Task<AcquisitionRequest> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {

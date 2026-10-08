@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Quality;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
 
@@ -16,17 +17,34 @@ public sealed class UpgradeScanState
 
     private readonly ConcurrentDictionary<MediaAcquisitionKind, DateTime> next = new();
     private readonly ConcurrentDictionary<MediaAcquisitionKind, Guid> cursors = new();
+    private readonly ConcurrentDictionary<MediaAcquisitionKind, DateTime> profiles = new();
 
     /// <summary>The last title the previous scan looked at (empty before the first one), so a library larger than one scan is walked in turns instead of its first titles every hour.</summary>
     public Guid CursorOf(MediaAcquisitionKind kind) => cursors.GetValueOrDefault(kind);
 
-    /// <summary>Continues after <paramref name="last"/> next time, or from the start when the scan reached the end of the library.</summary>
-    public void Continue(MediaAcquisitionKind kind, Guid last, bool reachedEnd) => cursors[kind] = reachedEnd ? Guid.Empty : last;
-
-    /// <summary>Claims the scan of <paramref name="kind"/> when it is due and schedules the next one.</summary>
-    public bool TryStart(MediaAcquisitionKind kind, DateTime nowUtc, TimeSpan interval)
+    /// <summary>Continues after <paramref name="last"/> next time (at the next pass, as the library is not finished), or from the start when the scan reached the end of the library.</summary>
+    public void Continue(MediaAcquisitionKind kind, Guid last, bool reachedEnd)
     {
-        if (next.TryGetValue(kind, out var due) && due > nowUtc)
+        cursors[kind] = reachedEnd ? Guid.Empty : last;
+        if (!reachedEnd)
+        {
+            next[kind] = DateTime.MinValue;
+        }
+    }
+
+    /// <summary>
+    /// Claims the scan of <paramref name="kind"/> when it is due and schedules the next one. Profiles that changed since the previous claim
+    /// (<paramref name="profilesChangedAt"/>) make it due at once and start the library over, because what is upgradable may have changed for any title.
+    /// </summary>
+    public bool TryStart(MediaAcquisitionKind kind, DateTime nowUtc, TimeSpan interval, DateTime profilesChangedAt = default)
+    {
+        var profilesChanged = profiles.TryGetValue(kind, out var seen) && seen != profilesChangedAt;
+        profiles[kind] = profilesChangedAt;
+        if (profilesChanged)
+        {
+            cursors[kind] = Guid.Empty;
+        }
+        else if (next.TryGetValue(kind, out var due) && due > nowUtc)
         {
             return false;
         }
@@ -42,7 +60,7 @@ public sealed class UpgradeScanState
 /// whose request ended Completed continues that request, so its tried releases stay remembered and the same lifecycle searches, grabs and imports the
 /// better release. At most once per <see cref="UpgradeScanState.Interval"/>.
 /// </summary>
-public sealed class UpgradeWantedSource(MediaAcquisitionKind kind, WantedReconciler wanted, AcquisitionAccessStore requests, UpgradeScanState scans) : IWantedSource
+public sealed class UpgradeWantedSource(MediaAcquisitionKind kind, WantedReconciler wanted, AcquisitionAccessStore requests, QualityProfileStore profiles, UpgradeScanState scans) : IWantedSource
 {
     public const int MaxTitlesPerPass = 200;
 
@@ -50,7 +68,7 @@ public sealed class UpgradeWantedSource(MediaAcquisitionKind kind, WantedReconci
 
     public async Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
-        if (!scans.TryStart(kind, nowUtc, UpgradeScanState.Interval))
+        if (!scans.TryStart(kind, nowUtc, UpgradeScanState.Interval, profiles.ChangedAtUtc()))
         {
             return 0;
         }
@@ -69,19 +87,14 @@ public sealed class UpgradeWantedSource(MediaAcquisitionKind kind, WantedReconci
         return reopened;
     }
 
-    private async Task<bool> ReopenAsync(Guid requestId, CancellationToken cancellationToken)
-    {
-        await requests.PatchPayloadAsync(requestId, ResetSearch, cancellationToken);
-        return await requests.TryTransitionStatusAsync(
-                requestId,
-                [AcquisitionRequestStatus.Completed],
-                AcquisitionRequestStatus.Approved,
-                "A better release is wanted for the installed quality. Searching.",
-                operationId: null,
-                resultUrl: null,
-                clearOperation: true,
-                cancellationToken) is not null;
-    }
+    // One conditional write: the search state and the status move together, and only while the request is still Completed.
+    private async Task<bool> ReopenAsync(Guid requestId, CancellationToken cancellationToken) =>
+        await requests.PatchPayloadAsync(
+            requestId,
+            ResetSearch,
+            AcquisitionRequestStatus.Completed,
+            _ => new AcquisitionStatusOutcome(AcquisitionRequestStatus.Approved, "A better release is wanted for the installed quality. Searching.", ClearOperation: true),
+            cancellationToken);
 
     // Every release payload keeps its search state under the same names; the tried releases stay.
     private static string? ResetSearch(string? stored)

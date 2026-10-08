@@ -164,6 +164,22 @@ public sealed class WantedReconcilerTests
     }
 
     [TestMethod]
+    public async Task Request_AFailedIntentWriteLeavesNoRequestBehind()
+    {
+        await using var host = await SeriesAsync();
+        await host.Environment.Db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE FUNCTION fail_request_target() RETURNS trigger LANGUAGE plpgsql AS $body$ BEGIN RAISE EXCEPTION 'blocked'; END $body$;
+            CREATE TRIGGER fail_request_target BEFORE INSERT ON "RequestTargets" FOR EACH ROW EXECUTE FUNCTION fail_request_target();
+            """);
+        var draft = new AcquisitionRequestDraft(host.Kind, "tmdb", host.TmdbId, host.Work.CanonicalTitle, null, null, MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.WholeWork).Serialize());
+
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => host.Get<AcquisitionRequestService>().SubmitAsync(draft, CancellationToken.None));
+
+        Assert.IsEmpty(await host.Requests.ListAllAsync(10, CancellationToken.None), "The request and what it names are stored together or not at all.");
+    }
+
+    [TestMethod]
     public async Task Request_AnOpenRequestWithoutIntentEndsWhenMonitoringIsOff()
     {
         await using var host = await SeriesAsync();

@@ -376,7 +376,8 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                     : """
                       UPDATE "AcquisitionRequests"
                       SET "PayloadJson" = @next, "Status" = @status, "StatusMessage" = COALESCE(@message, "StatusMessage"),
-                          "ResultUrl" = COALESCE(@resultUrl, "ResultUrl"), "UpdatedAt" = CASE WHEN "Status" = @status THEN "UpdatedAt" ELSE @now END
+                          "ResultUrl" = COALESCE(@resultUrl, "ResultUrl"), "OperationId" = CASE WHEN @clearOperation THEN NULL ELSE "OperationId" END,
+                          "UpdatedAt" = CASE WHEN "Status" = @status THEN "UpdatedAt" ELSE @now END
                       WHERE "Id" = @id AND "PayloadJson" IS NOT DISTINCT FROM @current::text AND "Status" = @expected;
                       """;
                 Add(write, "@id", id.ToString());
@@ -389,6 +390,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                     Add(write, "@status", AcquisitionAccessNames.Status(outcome.Status));
                     Add(write, "@message", outcome.Message);
                     Add(write, "@resultUrl", outcome.ResultUrl);
+                    Add(write, "@clearOperation", outcome.ClearOperation);
                     Add(write, "@now", DateTime.UtcNow);
                 }
 

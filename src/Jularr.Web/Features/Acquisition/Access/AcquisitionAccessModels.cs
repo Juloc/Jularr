@@ -205,7 +205,7 @@ public sealed record AcquisitionSubmission(AcquisitionRequest Request, bool Alre
 public sealed record AcquisitionStatusTransition(AcquisitionRequestStatus PreviousStatus, string? PreviousMessage);
 
 /// <summary>The status a request moves to, with its message and result address.</summary>
-public sealed record AcquisitionStatusOutcome(AcquisitionRequestStatus Status, string? Message, string? ResultUrl = null);
+public sealed record AcquisitionStatusOutcome(AcquisitionRequestStatus Status, string? Message, string? ResultUrl = null, bool ClearOperation = false);
 
 public sealed record AcquisitionExecution(
     AcquisitionRequestStatus Status,

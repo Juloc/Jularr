@@ -61,7 +61,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         }
 
         var now = clock.GetUtcNow();
-        await InTransactionAsync(
+        await db.Database.InTransactionAsync(
             async () =>
             {
                 var written = await db.Database.ExecuteSqlRawAsync(UpsertManySql[kind], [new[] { targetId }, (short)kind, monitored.Value, now], cancellationToken);
@@ -85,7 +85,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
             return;
         }
 
-        await InTransactionAsync(() => SetEpisodesByNumberCoreAsync(workId, numbers, monitored, cancellationToken), cancellationToken);
+        await db.Database.InTransactionAsync(() => SetEpisodesByNumberCoreAsync(workId, numbers, monitored, cancellationToken), cancellationToken);
     }
 
     private async Task SetEpisodesByNumberCoreAsync(Guid workId, IReadOnlyCollection<(int Season, int Episode)> numbers, bool? monitored, CancellationToken cancellationToken)
@@ -125,7 +125,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         }
 
         var numbers = seasonNumbers.Distinct().ToArray();
-        await InTransactionAsync(
+        await db.Database.InTransactionAsync(
             async () =>
             {
                 var seasonIds = await EnsureSeasonsAsync(workId, numbers, cancellationToken);
@@ -136,24 +136,6 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
                     cancellationToken);
             },
             cancellationToken);
-    }
-
-    // Runs the statements as one unit, or inside the transaction the caller already holds.
-    private async Task InTransactionAsync(Func<Task> work, CancellationToken cancellationToken)
-    {
-        if (db.Database.CurrentTransaction is not null)
-        {
-            await work();
-            return;
-        }
-
-        await db.Database.CreateExecutionStrategy().ExecuteAsync(
-            async () =>
-            {
-                await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-                await work();
-                await transaction.CommitAsync(cancellationToken);
-            });
     }
 
     private async Task<Dictionary<int, Guid>> EnsureSeasonsAsync(Guid workId, int[] seasonNumbers, CancellationToken cancellationToken)
@@ -242,7 +224,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         var roles = source.Roles?.Select(role => role.Trim()).Where(role => role.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var normalized = roles is { Length: > 0 } ? roles : null;
         var now = clock.GetUtcNow();
-        await InTransactionAsync(() => AddRelationAsync(source, normalized, onlyFuture, now, cancellationToken), cancellationToken);
+        await db.Database.InTransactionAsync(() => AddRelationAsync(source, normalized, onlyFuture, now, cancellationToken), cancellationToken);
     }
 
     private async Task AddRelationAsync(MonitoringRelationSource source, string[]? normalized, bool onlyFuture, DateTimeOffset now, CancellationToken cancellationToken)

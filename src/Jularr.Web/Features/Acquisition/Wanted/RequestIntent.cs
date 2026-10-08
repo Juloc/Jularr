@@ -11,6 +11,24 @@ namespace Jularr.Web.Features.Acquisition.Wanted;
 // It is idempotent and a pending request has no intent yet.
 public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
 {
+    // Creates or approves a request and records what it names as one unit, so an approved request never exists without its intent. A change that
+    // returns null (the request was moved on meanwhile) records nothing; bind gives a request its canonical Work first.
+    public async Task<AcquisitionRequest?> ChangeAndRecordAsync(Func<Task<AcquisitionRequest?>> change, Func<AcquisitionRequest, Task<AcquisitionRequest>>? bind, CancellationToken cancellationToken)
+    {
+        AcquisitionRequest? changed = null;
+        await db.Database.InTransactionAsync(
+            async () =>
+            {
+                changed = await change();
+                if (changed is not null)
+                {
+                    await RecordAsync(bind is null ? changed : await bind(changed), cancellationToken);
+                }
+            },
+            cancellationToken);
+        return changed;
+    }
+
     public async Task RecordAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
         if (request.Status == AcquisitionRequestStatus.Pending || await WorkOfAsync(request, cancellationToken) is not { } workId)

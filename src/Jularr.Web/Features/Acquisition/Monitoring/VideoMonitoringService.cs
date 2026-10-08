@@ -48,7 +48,8 @@ public sealed class VideoMonitoringService(
     QualityProfileStore profiles,
     MonitoringCommands commands,
     MonitoringResolver monitoring,
-    RequestIntent? intent = null)
+    RequestIntent? intent = null,
+    WantedReconciler? wanted = null)
 {
     /// <summary>The scope value that stops all TV acquisition for a Work; the other values are the Request dialog's.</summary>
     public const string OffScope = "off";
@@ -203,6 +204,11 @@ public sealed class VideoMonitoringService(
             return VideoMonitoringOutcome.NotFound;
         }
 
+        if (wanted is not null)
+        {
+            await wanted.ReconcileAsync(workId, cancellationToken);
+        }
+
         var seed = new VideoRequestPayload(work.Id, work.CanonicalTitle, work.Year);
         AcquisitionRequestStatus? endStatus = null;
         try
@@ -237,7 +243,8 @@ public sealed class VideoMonitoringService(
                     return VideoMonitoringOutcome.Unchanged;
                 }
 
-                if (kind == MediaAcquisitionKind.Movie && await engine.HasMovieFileAsync(workId, cancellationToken))
+                // A Movie in the library has nothing to acquire unless its profile still wants a better version of it.
+                if (kind == MediaAcquisitionKind.Movie && await engine.HasMovieFileAsync(workId, cancellationToken) && !(wanted is not null && await wanted.AnyAsync(workId, cancellationToken)))
                 {
                     return VideoMonitoringOutcome.InLibrary;
                 }

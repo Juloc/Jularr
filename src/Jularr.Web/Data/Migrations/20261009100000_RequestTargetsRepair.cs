@@ -6,10 +6,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Jularr.Web.Data.Migrations;
 
-// Gives the open requests only what can be proven they asked for. The first version assumed a Work row for every open Movie, Book, Light Novel, Manga and
-// Music request, which also made requests that Monitoring or the Wanted pass opened look explicit. What is provable: a Movie or TV request that still carries its
+// Removes what RequestTargets assumed instead of recorded, and adds what can be proven. The first migration assumed a Work row for every open Movie, Book,
+// Light Novel, Manga and Music request in one statement, so those rows share one creation time across requests, which no row recorded when somebody
+// submitted or approved a request does; only those are removed, every recorded row stays. What is provable: a Movie or TV request that still carries its
 // choice (or has no payload, which the executor reads as the whole title) names exactly that; a request whose choice was applied earlier is not recoverable
-// and stays driven by Monitoring. Requests of the other media types record their intent when they are submitted or approved from now on.
+// and stays driven by Monitoring.
 [DbContext(typeof(AppDbContext))]
 [Migration("20261009100000_RequestTargetsRepair")]
 public partial class RequestTargetsRepair : Migration
@@ -18,7 +19,8 @@ public partial class RequestTargetsRepair : Migration
     {
         migrationBuilder.Sql(
             """
-            DELETE FROM "RequestTargets";
+            DELETE FROM "RequestTargets" target
+            WHERE EXISTS (SELECT 1 FROM "RequestTargets" other WHERE other."CreatedAt" = target."CreatedAt" AND other."RequestId" <> target."RequestId");
 
             CREATE FUNCTION pg_temp.payload(body text) RETURNS jsonb LANGUAGE plpgsql AS $body$
             BEGIN

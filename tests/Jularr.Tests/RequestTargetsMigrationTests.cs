@@ -82,10 +82,11 @@ public sealed class RequestTargetsMigrationTests
         var plainMovie = await AddRequestAsync(db, "movie", "4", null, movie);
         var appliedMovie = await AddRequestAsync(db, "movie", "5", new VideoRequestPayload(movie, "Harbor", 2024).Serialize(), movie);
         var book = await AddRequestAsync(db, "book", "6", null);
-        foreach (var (requestId, work) in new[] { (appliedMovie, movie), (book, movie) })
-        {
-            await db.Database.ExecuteSqlInterpolatedAsync($"""INSERT INTO "RequestTargets" ("RequestId", "WorkId", "TargetKind", "TargetId", "CreatedAt") VALUES ({requestId}, {work}, 0, {work}, now())""");
-        }
+        var recordedBook = await AddRequestAsync(db, "book", "8", null);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""INSERT INTO "RequestTargets" ("RequestId", "WorkId", "TargetKind", "TargetId", "CreatedAt") VALUES ({appliedMovie}, {movie}, 0, {movie}, now()), ({book}, {movie}, 0, {movie}, now())""");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""INSERT INTO "RequestTargets" ("RequestId", "WorkId", "TargetKind", "TargetId", "CreatedAt") VALUES ({recordedBook}, {movie}, 0, {movie}, {DateTime.UtcNow.AddMinutes(3)})""");
 
         await db.Database.MigrateAsync();
 
@@ -96,5 +97,6 @@ public sealed class RequestTargetsMigrationTests
         Assert.AreEqual(movie, Assert.ContainsSingle(await TargetsOfAsync(db, plainMovie)).Target, "A request without a payload is a request for the title.");
         Assert.IsEmpty(await TargetsOfAsync(db, appliedMovie), "A Movie request that Monitoring may have opened proves nothing, so the earlier assumption is dropped.");
         Assert.IsEmpty(await TargetsOfAsync(db, book), "A Book request that the Wanted pass may have opened proves nothing, so the earlier assumption is dropped.");
+        Assert.AreEqual(movie, Assert.ContainsSingle(await TargetsOfAsync(db, recordedBook)).Target, "What somebody recorded when submitting a request is kept.");
     }
 }

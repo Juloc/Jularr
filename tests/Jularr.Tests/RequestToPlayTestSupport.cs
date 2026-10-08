@@ -349,7 +349,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(profileStore)
             .AddSingleton(installed)
             .AddSingleton(new WantedReconciler(Db, Clock, null, new UpgradeAssessors([new VideoUpgradeAssessor(Kind, installed, profileStore)])))
-            .AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(Kind, provider.GetRequiredService<WantedReconciler>(), new AcquisitionAccessStore(Db), new UpgradeScanState()))
+            .AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(Kind, provider.GetRequiredService<WantedReconciler>(), new AcquisitionAccessStore(Db), profileStore, new UpgradeScanState()))
             .AddSingleton(downloadClients)
             .AddSingleton(new DownloadClientSubmissionService(downloadClient, new DownloadClientSelector(downloadClients, health), Db, NullLogger<DownloadClientSubmissionService>.Instance))
             .AddSingleton<IDownloadClient>(downloadClient)

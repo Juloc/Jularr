@@ -34,6 +34,9 @@ public sealed class QualityProfileStore
         this.registry = registry ?? new MediaAcquisitionRegistry([new AnimeAcquisitionRegistration()]);
     }
 
+    // When the profiles were last written, so a consumer that keeps results derived from them can tell they may be stale.
+    public DateTime ChangedAtUtc() => File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+
     public async Task<QualityProfileState> LoadAsync(
         CancellationToken cancellationToken = default)
     {

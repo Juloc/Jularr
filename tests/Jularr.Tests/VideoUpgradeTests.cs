@@ -178,6 +178,24 @@ public sealed class VideoUpgradeTests
     }
 
     [TestMethod]
+    public async Task AnInstalledMovieThatWasNeverRequestedIsRequestedOnceWhenItsProfileWantsBetter()
+    {
+        await using var world = await VideoRequestToPlayWorld.CreateAsync(MediaAcquisitionKind.Movie, Tmdb());
+        world.Indexer.Publish(DuneLow);
+        var request = await world.RequestAsync(DuneTmdb, "Dune");
+        await ImportAsync(world, request, DuneLow, size: 4);
+        await world.Db.Database.ExecuteSqlRawAsync("""DELETE FROM "RequestTargets"; DELETE FROM "AcquisitionRequests";""");
+        var reconciler = world.Services.GetRequiredService<WantedReconciler>();
+        var source = new VideoWantedSource(MediaAcquisitionKind.Movie, reconciler, ActivatorUtilities.CreateInstance<VideoMonitoringService>(world.Services));
+        var workId = await world.Db.Works.AsNoTracking().Select(work => work.Id).SingleAsync();
+        await reconciler.ReconcileAsync(workId, CancellationToken.None);
+
+        Assert.AreEqual(1, await source.PrepareAsync(world.Clock.UtcNow, CancellationToken.None), "The library movie is upgradable and has no request, so the canonical lifecycle gets one.");
+        Assert.AreEqual(0, await source.PrepareAsync(world.Clock.UtcNow, CancellationToken.None), "The open request carries it.");
+        Assert.AreEqual(1, (await world.Requests.ListAllAsync(10, CancellationToken.None)).Count(open => open.IsOpen));
+    }
+
+    [TestMethod]
     public async Task AFinalMovieIsOnlyReplacedWhenTheProfileLaterWantsMoreAndNeverByAWorseOrEqualRelease()
     {
         await using var world = await VideoRequestToPlayWorld.CreateAsync(MediaAcquisitionKind.Movie, Tmdb());
@@ -254,6 +272,23 @@ public sealed class VideoUpgradeTests
         var qualities = await world.Db.WorkVersions.AsNoTracking().OrderBy(version => version.UnitKey).Select(version => version.Quality).ToListAsync();
         CollectionAssert.AreEqual(new[] { "WEB-1080p", "WEB-720p" }, qualities);
         Assert.IsEmpty(Directory.GetFiles(world.LibraryRoot, "*.replaced-*", SearchOption.AllDirectories));
+    }
+
+    [TestMethod]
+    public void AnUpgradeScanIsDueAtOnceWhileTheLibraryIsNotFinishedAndWhenTheProfilesChanged()
+    {
+        var scans = new UpgradeScanState();
+        var now = DateTime.UtcNow;
+        var written = now.AddDays(-1);
+
+        Assert.IsTrue(scans.TryStart(MediaAcquisitionKind.Movie, now, UpgradeScanState.Interval, written));
+        Assert.IsFalse(scans.TryStart(MediaAcquisitionKind.Movie, now.AddMinutes(2), UpgradeScanState.Interval, written), "A finished scan waits for the interval.");
+        scans.Continue(MediaAcquisitionKind.Movie, Guid.NewGuid(), reachedEnd: false);
+        Assert.IsTrue(scans.TryStart(MediaAcquisitionKind.Movie, now.AddMinutes(2), UpgradeScanState.Interval, written), "An unfinished library continues at the next pass.");
+
+        scans.Continue(MediaAcquisitionKind.Movie, Guid.NewGuid(), reachedEnd: true);
+        Assert.IsTrue(scans.TryStart(MediaAcquisitionKind.Movie, now.AddMinutes(4), UpgradeScanState.Interval, now), "Changed profiles start the scan over without waiting.");
+        Assert.AreEqual(Guid.Empty, scans.CursorOf(MediaAcquisitionKind.Movie));
     }
 
     [TestMethod]
