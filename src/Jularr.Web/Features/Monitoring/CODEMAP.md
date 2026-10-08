@@ -3,7 +3,7 @@
 One monitoring system for every media type. A decision says what the owner wants; the effective state is derived, never stored twice.
 
 ## Model (`MonitoringModels.cs`)
-- `WorkMonitoring` rows: `Kind` (Work, Season, Episode, Volume, Chapter, Track), `TargetId` (unique), `Monitored`.
+- `WorkMonitoring` rows: `Kind` (Work, Season, Episode, Volume, Chapter, Track, Edition), `TargetId` (unique), `Monitored`.
   No row means Inherit. There is no persisted mode ("future", "all"), no timestamp, no tags.
 - `WorkMonitoringSources` rows: a relation to follow (Person with role filter, Studio, Collection, Artist), `Roles`, `Label`.
 - `WorkMonitoringView`: the read model of one Work. `IsMonitored(node, parent)` is the single answer.
