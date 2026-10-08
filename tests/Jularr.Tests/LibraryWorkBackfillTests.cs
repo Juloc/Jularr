@@ -77,6 +77,8 @@ public sealed class LibraryWorkBackfillTests
         Assert.IsTrue(await db.Set<WorkExternalIdentity>().AnyAsync(identity => identity.WorkId == workId && identity.ExternalId == evidence.ExternalId));
         var target = await RequestWorkTestSupport.Binder(db).LegacyTargetAsync(request, WorkSourceKind.NovelWork, kind == MediaAcquisitionKind.Book ? BookCatalogService.ImportedBookProvider : null, CancellationToken.None);
         Assert.AreEqual(entry.Id, target, "The import goes into the library entry that carries the Work.");
+        Assert.IsNull(await RequestWorkTestSupport.Binder(db).BindImportedAsync(request, WorkSourceKind.NovelWork, entry.Id, CancellationToken.None), "Importing into that entry is no conflict: it already belongs to the request's Work.");
+        Assert.AreEqual(workId, await WorkOfAsync(db, entry));
 
         var directory = Directory.CreateTempSubdirectory("jularr-backfill-profile-");
         try
