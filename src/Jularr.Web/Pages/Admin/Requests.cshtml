@@ -15,20 +15,8 @@
 }
 @section Scripts {
     <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+    <script src="~/js/admin-requests.js" asp-append-version="true" defer></script>
 }
-
-<header class="page-header">
-    <div>
-        <h1>@ui["admin.requests.title"]</h1>
-        <p>@ui["admin.requests.subtitle"]</p>
-    </div>
-    @if (User.IsInRole(AccountRoles.Owner))
-    {
-        <div class="inline-actions">
-            <a class="button" href="/Admin/Capabilities">@ui["admin.capabilities.title"]</a>
-        </div>
-    }
-</header>
 
 <partial name="_AdminNavigation" model="Model.Ui" />
 
@@ -51,6 +39,7 @@
 }
 
 <section class="admreq" aria-label="@ui["admin.requests.title"]">
+    <div class="admreq-control-surface">
     <nav class="library-type-tabs admreq-tabs" aria-label="@ui["admin.requests.tabsAria"]">
         @foreach (var (tab, label) in tabs)
         {
@@ -61,15 +50,15 @@
         }
     </nav>
 
-    <form method="get" action="/Admin/Requests" class="admreq-filters">
+    <form method="get" action="/Admin/Requests" class="admreq-filters" data-admreq-filters>
         @if (filter.Tab != AdminRequestTab.All)
         {
             <input type="hidden" name="tab" value="@AdminRequestQuery.TabName(filter.Tab)" />
         }
         <div class="admreq-search">
             <input type="search" name="q" value="@filter.Search" maxlength="120"
-                   placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" />
-            <button class="button" type="submit">@ui["common.search"]</button>
+                   placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
+            <button class="admreq-search-submit" type="submit" aria-label="@ui["common.search"]" title="@ui["common.search"]"><partial name="_AdminIcon" model='"search"' /></button>
         </div>
         <div class="admreq-selects">
             <select name="type" aria-label="@ui["admin.requests.filter.type"]">
@@ -108,6 +97,11 @@
             }
         </div>
     </form>
+    @if (User.IsInRole(AccountRoles.Owner))
+    {
+        <a class="admreq-capabilities-link" href="/Admin/Capabilities">@ui["admin.capabilities.title"]</a>
+    }
+    </div>
 
     @if (Model.QueueFailed)
     {
@@ -128,11 +122,19 @@
             <table class="admreq-table" data-admin-requests>
                 <thead>
                     <tr>
+                        <th class="admreq-cell-selection" scope="col">
+                            <input type="checkbox" aria-label="@ui["admin.requests.title"]" data-admreq-select-all />
+                        </th>
                         <th scope="col">@ui["admin.requests.col.title"]</th>
+                        <th scope="col" class="admreq-cell-type">@ui["admin.requests.filter.type"]</th>
                         <th scope="col">@ui["admin.requests.col.requester"]</th>
                         <th scope="col">@ui["admin.requests.col.language"]</th>
                         <th scope="col">@ui["admin.requests.col.requested"]</th>
+                        <th scope="col" class="admreq-cell-modified">Modified</th>
+                        <th scope="col" class="admreq-cell-profile">Profile</th>
                         <th scope="col">@ui["admin.requests.col.status"]</th>
+                        <th scope="col" class="admreq-cell-media">Media status</th>
+                        <th scope="col" class="admreq-cell-details">Details</th>
                         <th scope="col">@ui["admin.requests.col.actions"]</th>
                     </tr>
                 </thead>
@@ -145,7 +147,11 @@
                         var requester = Model.ProfileNames.GetValueOrDefault(request.RequestedByProfileId) ?? request.RequestedByProfileId;
                         var isBookLike = request.Kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel;
                         var isVideo = request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv;
-                        <tr class="admreq-row">
+                        var titleId = $"request-title-{request.Id:N}";
+                        <tr class="admreq-row" data-admreq-row tabindex="0">
+                            <td class="admreq-cell-selection">
+                                <input type="checkbox" aria-labelledby="@titleId" data-admreq-select />
+                            </td>
                             <td class="admreq-cell-title">
                               <div class="admreq-title-wrap">
                                 <span class="admreq-cover">
@@ -157,13 +163,12 @@
                                 <span class="admreq-copy">
                                     @if (Model.ViewUrl(request) is { } resultUrl)
                                     {
-                                        <a class="admreq-title" href="@resultUrl">@request.Title</a>
+                                        <a class="admreq-title" id="@titleId" href="@resultUrl">@request.Title</a>
                                     }
                                     else
                                     {
-                                        <strong class="admreq-title">@request.Title</strong>
+                                        <strong class="admreq-title" id="@titleId">@request.Title</strong>
                                     }
-                                    <span class="admin-tag admin-tag-text" data-kind="@AcquisitionAccessNames.Kind(request.Kind)">@ui["admin.requests.kind." + AcquisitionAccessNames.Kind(request.Kind)]</span>
                                     @if (!string.IsNullOrWhiteSpace(request.Subtitle))
                                     {
                                         <small>@request.Subtitle</small>
@@ -178,6 +183,9 @@
                                     }
                                 </span>
                               </div>
+                            </td>
+                            <td class="admreq-cell-type">
+                                <span class="admin-tag admin-tag-text" data-kind="@AcquisitionAccessNames.Kind(request.Kind)">@ui["admin.requests.kind." + AcquisitionAccessNames.Kind(request.Kind)]</span>
                             </td>
                             <td class="admreq-cell-who">@requester</td>
                             <td class="admreq-cell-lang">
@@ -206,11 +214,41 @@
                                     <small>@Clock(request.CreatedAt)</small>
                                 </time>
                             </td>
+                            <td class="admreq-cell-modified">
+                                <span class="admreq-unavailable" title="Modified timestamps are not connected yet.">&mdash;</span>
+                            </td>
+                            <td class="admreq-cell-profile">
+                                @if (options.Count > 0)
+                                {
+                                    <span>@options[0]</span>
+                                }
+                                else
+                                {
+                                    <span class="admreq-unavailable" title="The selected profile is not connected yet.">&mdash;</span>
+                                }
+                            </td>
                             <td class="admreq-cell-state">
                                 <span class="admin-tag admin-tag-@AdminStatusTone.Of(request.Status)" data-status="@status">
                                     <partial name="_RequestStatusIcon" model="status" />
                                     @ui["requests.status." + status]
                                 </span>
+                            </td>
+                            <td class="admreq-cell-media">
+                                <span class="admreq-unavailable" title="Media availability is not connected yet.">&mdash;</span>
+                            </td>
+                            <td class="admreq-cell-details">
+                                @if (options.Count > 0)
+                                {
+                                    <span>@string.Join(" · ", options)</span>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(request.Subtitle))
+                                {
+                                    <span>@request.Subtitle</span>
+                                }
+                                else
+                                {
+                                    <span class="admreq-unavailable">&mdash;</span>
+                                }
                             </td>
                             <td class="admreq-cell-actions">
                                 @{
@@ -301,6 +339,16 @@
                 </tbody>
             </table>
         </div>
+
+        <aside class="admreq-bulk" data-admreq-bulk hidden aria-live="polite">
+            <span class="admreq-bulk-count"><strong data-admreq-selected-count>0</strong> selected</span>
+            <span title="Batch actions need the queue API integration."><button class="button button-primary" type="button" disabled>Approve</button></span>
+            <span title="Batch actions need the queue API integration."><button class="button button-danger" type="button" disabled>Reject</button></span>
+            <span title="Batch actions need the queue API integration."><button class="button" type="button" disabled>Mark as added</button></span>
+            <span title="Batch actions need the queue API integration."><button class="button" type="button" disabled>Change profile</button></span>
+            <span title="Batch actions need the queue API integration."><button class="button" type="button" disabled>Remove media</button></span>
+            <span title="Batch actions need the queue API integration."><button class="button button-danger admreq-bulk-delete" type="button" disabled>Delete request</button></span>
+        </aside>
 
         <div class="admreq-footer">
             <span>@ui.Format("admin.requests.showing", ("from", (queue.Page - 1) * AdminRequestQuery.PageSize + 1), ("to", (queue.Page - 1) * AdminRequestQuery.PageSize + queue.Items.Count), ("total", queue.Total))</span>

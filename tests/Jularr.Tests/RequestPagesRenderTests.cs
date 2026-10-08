@@ -167,6 +167,10 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(all, "Deutsch");
         StringAssert.Contains(all, "data-status=\"pending\"");
         StringAssert.Contains(all, "data-status=\"downloading\"");
+        StringAssert.Contains(all, "data-admreq-select-all");
+        StringAssert.Contains(all, "data-admreq-select");
+        StringAssert.Contains(all, "data-admreq-bulk");
+        StringAssert.Contains(all, "admin-requests.js");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "button-primary\" type=\"submit\">\\s*Approve\\s*</button>").Count, "Only the pending request can be approved.");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "type=\"submit\">Reject</button>").Count);
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "type=\"submit\">Reopen</button>").Count);

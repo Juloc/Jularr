@@ -1,115 +1,166 @@
-/* Admin → Requests (docs/mockups/admin-requests/SPEC.md): status tabs, filter bar, request table that turns
-   into stacked cards when its own container is narrow (a phone, or a tablet next to the sidebar), and the
-   collapsed rules section. Theme tokens only, so light, dark and every accent work unchanged. State and media
-   type are the shared outlined Admin tags (admin-controls.css) — never a coloured edge on a row or card. */
-
-.admreq { display: grid; gap: 14px; margin-bottom: 20px; }
-.admreq-tabs { margin: 0; }
+/* Admin → Requests: the queue consumes shared theme and admin-control tokens, so the same layout is
+   legible in light and dark modes. Batch controls deliberately stay disabled until their API exists. */
+.admreq { display: grid; gap: 18px; margin-bottom: 24px; }
+.admreq-control-surface {
+    display: grid; grid-template-columns: auto minmax(260px, 1fr) auto; align-items: center; gap: 10px 14px;
+    padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 18px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-card);
+}
+.admreq-tabs { align-self: center; height: fit-content; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.admreq-tabs .library-type-tab { padding: 9px 13px; border-radius: 999px; font-size: 12px; }
 .admreq-count {
-    margin-inline-start: 6px; padding: 1px 7px; border-radius: 999px;
-    background: var(--surface-2); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums;
+    display: inline-grid; place-items: center; min-width: 18px; margin-inline-start: 5px; padding: 1px 5px; border-radius: 999px;
+    background: var(--surface-2); color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums;
 }
 .library-type-tab.active .admreq-count { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-text); }
 
-/* Filter bar --------------------------------------------------------------------------------- */
-.admreq-filters { display: grid; gap: 10px; }
-.admreq-search { display: flex; gap: 8px; }
+/* Filters remain a normal GET form. JavaScript merely submits the existing form after a short pause. */
+.admreq-filters { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.admreq-search { position: relative; flex: 1 1 230px; min-width: 160px; }
 .admreq-search input {
-    flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
-    background: var(--field-bg); color: var(--text); font: inherit;
+    width: 100%; min-height: 40px; padding: 9px 40px 9px 13px; border: 1px solid var(--border); border-radius: 999px;
+    outline: none; background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px;
 }
-.admreq-selects { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admreq-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.admreq-search-submit {
+    position: absolute; inset-block: 0; inset-inline-end: 0; display: grid; place-items: center; width: 40px; padding: 0; border: 0;
+    border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer;
+}
+.admreq-search-submit:hover { color: var(--accent-text); }
+.admreq-search-submit .admin-icon { width: 17px; height: 17px; }
+.admreq-selects { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
 .admreq-selects select {
-    min-width: 0; max-width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
-    background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px;
+    max-width: 158px; min-height: 40px; padding: 8px 27px 8px 11px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--field-bg); color: var(--text); font: inherit; font-size: 12px; font-weight: 700;
 }
-.admreq-selects .text-link { margin-inline-start: auto; color: var(--accent-text); }
+.admreq-selects .text-link { margin-inline-start: 4px; color: var(--accent-text); font-size: 12px; font-weight: 700; }
+.admreq-capabilities-link { color: var(--accent-text); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.admreq-capabilities-link:hover { text-decoration: underline; }
 
-/* States: error, empty ------------------------------------------------------------------------ */
 .admreq-message {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
-    margin: 0; padding: 18px; border: 1px dashed var(--border); border-radius: var(--radius-card);
+    margin: 0; padding: 18px; border: 1px dashed var(--border); border-radius: var(--radius-card); background: var(--surface);
 }
 .admreq-message p { margin: 0; }
 .admreq-message[role="alert"] { border-style: solid; border-color: color-mix(in srgb, var(--danger-text) 40%, var(--border)); color: var(--danger-text); }
 
-/* Table -------------------------------------------------------------------------------------- */
-/* The wrap is the size container of the card layout below and stays overflow-visible so a row's menu is never clipped. */
+/* The desktop table intentionally contains the information needed to moderate a request without opening it. */
 .admreq-table-wrap {
-    container-type: inline-size; border: 1px solid var(--border); border-radius: var(--radius-card);
+    container-type: inline-size; overflow: auto; border: 1px solid var(--border); border-radius: 18px;
     background: var(--surface); box-shadow: var(--shadow-card);
 }
-.admreq-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admreq-table { width: 100%; min-width: 1180px; border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .admreq-table th {
-    padding: 10px 12px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em;
-    text-align: start; text-transform: uppercase; white-space: nowrap;
+    padding: 13px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; font-weight: 850;
+    letter-spacing: .07em; text-align: start; text-transform: uppercase; white-space: nowrap;
 }
-.admreq-table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; }
-.admreq-table tbody tr:hover { background: var(--surface-2); }
-.admreq-table tbody tr:last-child:hover { border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.admreq-table td { padding: 10px; border-bottom: 1px solid color-mix(in srgb, var(--border) 74%, transparent); vertical-align: middle; }
+.admreq-table tbody tr { outline: none; transition: background-color .16s ease, box-shadow .16s ease; }
+.admreq-table tbody tr:hover, .admreq-table tbody tr:focus-visible { background: var(--surface-2); }
+.admreq-table tbody tr:focus-visible { box-shadow: inset 3px 0 var(--accent); }
+.admreq-table tbody tr.is-selected { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.admreq-table tbody tr:last-child td { border-bottom: 0; }
 .admreq-table th:last-child, .admreq-cell-actions { text-align: end; }
-
-.admreq-cell-title { min-width: 200px; }
-.admreq-title-wrap { display: flex; align-items: center; gap: 12px; }
-.admreq-cover { flex: none; width: 40px; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 6px; background: var(--surface-2); }
-.admreq-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.admreq-cell-selection { width: 42px; text-align: center !important; }
+.admreq-cell-selection input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.admreq-cell-title { min-width: 250px; }
+.admreq-title-wrap { display: flex; align-items: center; gap: 11px; }
+.admreq-cover { flex: none; width: 42px; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 7px; background: var(--surface-2); }
+.admreq-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .admreq-copy { min-width: 0; display: grid; justify-items: start; gap: 3px; }
-.admreq-title { color: var(--text); font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+.admreq-title { color: var(--text); font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
 a.admreq-title:hover { color: var(--accent-text); }
-.admreq-copy small, .admreq-cell-lang small, .admreq-cell-when small { color: var(--muted); font-size: 12px; }
+.admreq-copy small, .admreq-cell-lang small, .admreq-cell-when small { color: var(--muted); font-size: 11px; }
 .admreq-stack, .admreq-cell-when time { display: grid; gap: 2px; }
-.admreq-cell-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.admreq-cell-who { font-weight: 600; overflow-wrap: anywhere; }
-
+.admreq-cell-who { min-width: 90px; font-weight: 700; overflow-wrap: anywhere; }
+.admreq-cell-when { min-width: 94px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.admreq-cell-type { min-width: 78px; }
+.admreq-cell-modified, .admreq-cell-profile, .admreq-cell-media { min-width: 88px; }
+.admreq-cell-details { min-width: 126px; color: var(--muted); line-height: 1.35; }
+.admreq-cell-profile { color: var(--text); font-weight: 650; }
+.admreq-unavailable { color: var(--muted); }
 .admreq-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .admreq-actions form { margin: 0; }
-.admreq-actions .button { white-space: nowrap; }
+.admreq .button { border-radius: 999px; }
+.admreq-actions .button { min-height: 34px; padding-inline: 13px; white-space: nowrap; }
+.admreq-actions .admin-icon-button { border-radius: 999px; }
+
+.admreq-bulk {
+    position: sticky; z-index: 8; bottom: 18px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: fit-content; max-width: 100%; margin: -6px auto 0; padding: 10px; overflow-x: auto; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+    border-radius: 18px; background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: 0 16px 38px rgba(0,0,0,.16); backdrop-filter: blur(18px);
+}
+.admreq-bulk[hidden] { display: none; }
+.admreq-bulk-count { flex: none; padding: 0 5px; color: var(--text); font-size: 12px; white-space: nowrap; }
+.admreq-bulk > span:not(.admreq-bulk-count) { flex: none; }
+.admreq-bulk .button { min-height: 34px; padding-inline: 13px; font-size: 12px; white-space: nowrap; }
+.admreq-bulk .button:disabled { opacity: .52; cursor: not-allowed; }
+.admreq-bulk-delete { color: var(--danger-text); }
 
 .admreq-footer {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
     color: var(--muted); font-size: 13px;
 }
-.admreq-pager { display: flex; align-items: center; gap: 10px; }
+.admreq-pager { display: flex; align-items: center; gap: 8px; }
+.admreq-pager .button { min-height: 34px; padding-inline: 12px; font-size: 12px; }
 
-/* Rules ---------------------------------------------------------------------------------------- */
-.admreq-settings { margin-top: 4px; }
+/* Rules remain available but do not compete with the moderation surface. */
+.admreq-settings { margin-top: 8px; }
 .admreq-settings > summary {
-    width: fit-content; margin-bottom: 14px; padding: 8px 12px; border: 1px solid var(--border);
-    border-radius: 10px; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer;
+    width: fit-content; margin-bottom: 14px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 750; cursor: pointer;
 }
-.admreq-settings > summary:hover { color: var(--text); background: var(--surface-2); }
-.admreq-settings[open] > summary { color: var(--text); }
+.admreq-settings > summary:hover, .admreq-settings[open] > summary { color: var(--text); background: var(--surface-2); }
 
-/* Card layout: a phone, or any container too narrow for the six columns ------------------------- */
-@container (max-width: 880px) {
-    .admreq-table, .admreq-table tbody { display: grid; gap: 0; }
+/* Cards preserve the real single-request actions and discard only columns whose data has no mobile value. */
+@container (max-width: 960px) {
+    .admreq-table-wrap { overflow: visible; }
+    .admreq-table, .admreq-table tbody { display: grid; min-width: 0; }
     .admreq-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .admreq-table tbody { gap: 8px; padding: 8px; }
     .admreq-table tr {
-        display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 12px; padding: 12px;
-        border-top: 1px solid var(--border);
+        display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 8px 11px;
+        padding: 10px; border: 1px solid var(--border); border-radius: 14px;
     }
-    .admreq-table tbody tr:first-child { border-top: 0; }
     .admreq-table td { display: block; padding: 0; border: 0; }
-    .admreq-cell-title { grid-column: 1; grid-row: 1; min-width: 0; }
+    .admreq-cell-selection { grid-column: 1; grid-row: 1; padding-top: 6px !important; }
+    .admreq-cell-title { grid-column: 2; grid-row: 1; min-width: 0; }
+    .admreq-cell-state { grid-column: 3; grid-row: 1; }
+    .admreq-cell-type { grid-column: 2; grid-row: 2; }
+    .admreq-cell-who { grid-column: 2; grid-row: 3; color: var(--muted); font-weight: 650; }
+    .admreq-cell-when { grid-column: 3; grid-row: 3; text-align: end; }
+    .admreq-cell-lang { grid-column: 2 / -1; grid-row: 4; color: var(--muted); }
+    .admreq-cell-details { grid-column: 2 / -1; grid-row: 5; }
+    .admreq-cell-actions { grid-column: 2 / -1; grid-row: 6; padding-top: 3px !important; text-align: start; }
+    .admreq-cell-modified, .admreq-cell-profile, .admreq-cell-media { display: none !important; }
     .admreq-title-wrap { align-items: flex-start; }
-    .admreq-cover { width: 56px; }
-    .admreq-cell-state { grid-column: 2; grid-row: 1; }
-    .admreq-cell-who { grid-column: 1; grid-row: 2; color: var(--text); }
-    .admreq-cell-when { grid-column: 2; grid-row: 2; }
-    .admreq-cell-when time { display: block; }
-    .admreq-cell-when time small { display: none; }
-    .admreq-cell-lang { grid-column: 1 / -1; grid-row: 3; color: var(--muted); }
-    .admreq-cell-lang:has(.admreq-none):not(:has(small)) { display: none; }
-    .admreq-cell-actions { grid-column: 1 / -1; grid-row: 4; text-align: start; }
+    .admreq-cover { width: 54px; }
     .admreq-actions { justify-content: flex-start; flex-wrap: wrap; }
-    .admreq-actions > form:has(.button) { flex: 1 1 120px; }
-    .admreq-actions .button { width: 100%; min-height: 46px; display: flex; align-items: center; justify-content: center; }
-    .admreq-actions .admin-icon-button { min-height: 46px; }
+    .admreq-actions > form:has(.button) { flex: 1 1 132px; }
+    .admreq-actions .button { width: 100%; min-height: 42px; }
+    .admreq-actions .admin-icon-button { min-height: 42px; }
     .admreq-actions .admin-icon-label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
 }
 
+@media (max-width: 1500px) {
+    .admreq-control-surface { grid-template-columns: 1fr; }
+    .admreq-tabs { overflow-x: auto; }
+    .admreq-filters { flex-wrap: wrap; }
+    .admreq-selects { justify-content: flex-start; }
+    .admreq-capabilities-link { justify-self: start; }
+}
+
 @media (max-width: 760px) {
-    .admreq-selects select { flex: 1 1 calc(50% - 8px); }
-    .admreq-selects .text-link { flex: 1 0 100%; margin-inline-start: 0; padding: 6px 0; }
-    .admreq-footer { justify-content: center; }
+    .admreq { gap: 14px; }
+    .admreq-control-surface { margin-inline: -4px; padding: 9px; border-radius: 15px; }
+    .admreq-search { flex-basis: 100%; }
+    .admreq-selects { width: 100%; }
+    .admreq-selects select { flex: 1 1 calc(50% - 4px); max-width: none; }
+    .admreq-selects .text-link { flex: 1 0 100%; margin-inline-start: 0; padding: 5px 2px; }
+    .admreq-bulk { justify-content: flex-start; width: calc(100% + 8px); margin-inline: -4px; border-radius: 15px; }
+    .admreq-footer { justify-content: center; text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admreq-table tbody tr { transition: none; }
 }
