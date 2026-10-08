@@ -1,5 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Api;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.AniListAutoMonitor;
 using Jularr.Web.Features.Acquisition.Backup;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -556,6 +557,11 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.LibraryWorkBac
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestProfileAssignment>();
 builder.Services.AddHostedService<Jularr.Web.Features.Acquisition.Access.LibraryWorkBackfillService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService>();
+builder.Services.AddScoped<Jularr.Web.Features.Monitoring.MonitoringResolver>();
+builder.Services.AddScoped<Jularr.Web.Features.Monitoring.MonitoringCommands>();
+builder.Services.AddScoped<Jularr.Web.Features.Monitoring.MonitoringFollower>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Monitoring.AnimeMonitoring>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Monitoring.AnimeMonitoringMigration>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestScopeResolver>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestWorkResolver>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Monitoring.VideoMonitoringService>();
@@ -592,6 +598,18 @@ foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.Media
 {
     builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.VideoUpgradeWantedSource>(services, upgradeKind));
 }
+foreach (var monitoredKind in new[]
+{
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie,
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv,
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book,
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.LightNovel,
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga
+})
+{
+    builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Monitoring.MonitoringWantedSource>(services, monitoredKind));
+}
+
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicMonitoringService>();
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicQuery>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
@@ -806,6 +824,7 @@ app.MapClientApiV1();
 app.MapClientApiPlaybackPlanV1();
 app.MapClientApiPlaybackIntentsV1();
 app.MapAcquisitionApiV1();
+app.MapMonitoringApiV1();
 app.MapClientApiOfflineV1();
 app.MapClientApiOfflineMediaPackageV1();
 app.MapClientApiOfflinePackagesV1();
@@ -828,6 +847,16 @@ try
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
     Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} Database ready. Starting web server.");
+    try
+    {
+        // Idempotent: a failure is repeated at the next start.
+        await using var scope = app.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<Jularr.Web.Features.Acquisition.Monitoring.AnimeMonitoringMigration>().RunAsync(CancellationToken.None);
+    }
+    catch (Exception monitoringException)
+    {
+        Console.Error.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} The anime monitoring could not be moved into the canonical Monitoring state: {monitoringException.Message}");
+    }
 }
 catch (Exception ex)
 {

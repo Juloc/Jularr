@@ -20,7 +20,7 @@ internal sealed class AnimeRequestObservation(
     AnimeAcquisitionInventory inventory,
     AnimeAcquisitionPipeline pipeline,
     ReleaseCalendarCacheStore calendar,
-    AnimeMonitoringState monitoring,
+    AnimeMonitoring animeMonitoring,
     AcquisitionOwnershipState ownership,
     AnimeAcquisitionSnapshot acquisitions,
     IReadOnlyDictionary<string, ReleaseCacheSource> releaseSources,
@@ -52,7 +52,8 @@ internal sealed class AnimeRequestObservation(
         var resultUrl = $"/Library/Anime/{slots.Anime.Id}";
         var airedUpTo = await AiredUpToAsync(slots, cancellationToken);
         var options = request.Options;
-        var inScope = slots.Slots.Where(slot => options.Includes(slot.Key.SeasonNumber, slot.Key.EpisodeNumber) && AnimeMonitoringEngine.IsMonitored(monitoring, slot.Key)).ToArray();
+        var view = await animeMonitoring.LoadAsync(slots.Anime.Key, cancellationToken);
+        var inScope = slots.Slots.Where(slot => options.Includes(slot.Key.SeasonNumber, slot.Key.EpisodeNumber) && AnimeMonitoring.IsUnitMonitored(view, slot.Key)).ToArray();
         var requested = inScope.Where(slot => !IsKnownNotAired(slot, airedUpTo)).ToArray();
         var missing = requested.Where(slot => !slot.HasFile).Select(slot => slot.Key).ToArray();
 

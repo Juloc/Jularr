@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Monitoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
@@ -21,6 +22,7 @@ public sealed class WantedListService(
     AnimeQualityProfileStore qualityProfiles,
     AppDbContext db,
     VideoRequestWorkResolver videoWorks,
+    MonitoringResolver workMonitoring,
     IEnumerable<IAcquisitionRequestExecutor> executors,
     TimeProvider clock)
 {
@@ -95,6 +97,7 @@ public sealed class WantedListService(
                 .ToHashSet();
 
         var now = clock.GetUtcNow().UtcDateTime;
+        var views = await workMonitoring.LoadManyAsync([.. works.Values.Select(work => work.WorkId)], cancellationToken);
         var rows = new List<WantedItem>(items.Count);
         foreach (var item in items)
         {
@@ -112,7 +115,7 @@ public sealed class WantedListService(
             }
 
             var workId = work.WorkId;
-            var selection = VideoRequestSelection.For(request, workId);
+            var view = views[workId];
             var profileId = profiles.ResolveProfileId(item.Kind, workId);
             var videoRow = item with
             {
@@ -120,7 +123,7 @@ public sealed class WantedListService(
                 DetailUrl = VideoWorkLinks.DetailPath(item.Kind, workId),
                 ProfileId = profileId,
                 ProfileName = profileId is null ? null : ProfileName(profiles, profileId),
-                CanSearch = item.CanSearch && selection.Payload.Monitored
+                CanSearch = item.CanSearch && view.IsAnyMonitored
             };
             if (item.Kind == MediaAcquisitionKind.Movie)
             {
@@ -129,9 +132,9 @@ public sealed class WantedListService(
                 continue;
             }
 
-            var payload = selection.Payload;
+            var payload = VideoRequestPayload.Of(request, workId, request.Title, null);
             var missing = episodes
-                .Where(episode => episode.WorkId == workId && !withFiles.Contains(episode.Id) && (episode.AiredAt is null || episode.AiredAt <= now) && selection.Includes(episode.Id, episode.SeasonId, episode.AiredAt))
+                .Where(episode => episode.WorkId == workId && !withFiles.Contains(episode.Id) && (episode.AiredAt is null || episode.AiredAt <= now) && view.IsMonitored(episode.Id, episode.SeasonId))
                 .GroupBy(episode => episode.SeasonNumber)
                 .OrderBy(season => season.Key)
                 .ToArray();

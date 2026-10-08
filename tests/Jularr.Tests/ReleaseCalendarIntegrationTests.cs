@@ -31,11 +31,7 @@ public sealed class ReleaseCalendarIntegrationTests
         var novel = await fixture.AddNovelAsync();
         var book = await fixture.AddBookAsync("2026-10-05");
         await fixture.AddBookAsync("an unknown year");
-        await fixture.Monitoring.UpdateAsync(state =>
-        {
-            state.Anime["frieren"] = new AnimeMonitorSettings("frieren", true, false, new(), new());
-            return state;
-        });
+        await MonitoringTestSupport.Anime(fixture.Db).SetMonitoredAsync(anime.Id, true, CancellationToken.None);
 
         fixture.Client.Responses.Enqueue(new AniListReleaseSchedule(
             [
@@ -364,7 +360,7 @@ public sealed class ReleaseCalendarIntegrationTests
         public ReleaseCalendarService Service() =>
             new(
                 [
-                    new AniListReleaseEventSource(Db, new ReleaseCalendarCacheStore(Db), Mappings, Monitoring),
+                    new AniListReleaseEventSource(Db, new ReleaseCalendarCacheStore(Db), Mappings, Monitoring, MonitoringTestSupport.Anime(Db)),
                     new NovelChapterReleaseEventSource(Db),
                     new BookReleaseEventSource(Db),
                     new WatchlistReleaseEventSource(

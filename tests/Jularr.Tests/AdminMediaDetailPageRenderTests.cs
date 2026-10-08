@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -134,7 +135,7 @@ public sealed class AdminMediaDetailPageRenderTests
     }
 
     [TestMethod]
-    public async Task SeasonAndEpisodeSwitchesWriteOnlyOverridesThatDifferFromWhatIsInherited()
+    public async Task SeasonAndEpisodeSwitchesWriteOnlyDecisionsThatDifferFromWhatIsInherited()
     {
         await using var host = await MediaHost.CreateAsync();
         var animeId = await host.SeedAsync();
@@ -146,11 +147,10 @@ public sealed class AdminMediaDetailPageRenderTests
         Assert.AreEqual(HttpStatusCode.Redirect, season.StatusCode);
         Assert.AreEqual($"/Admin/Media/{animeId}?open=s1", season.Headers.Location?.OriginalString);
 
-        var state = await host.Monitoring.LoadAsync();
-        var settings = state.Anime["starfall"];
-        Assert.IsFalse(settings.SeasonOverrides.ContainsKey(1), "Season 1 now matches the medium, so nothing is stored.");
-        Assert.AreEqual(0, settings.EpisodeOverrides.Count, "The single-episode override inside the season is gone.");
-        Assert.IsTrue(settings.Monitored);
+        var view = await host.AnimeMonitoringAsync("starfall");
+        Assert.IsTrue(view.IsSeasonMonitored(1));
+        Assert.IsTrue(view.IsEpisodeMonitored(1, 5), "The single-episode decision inside the season is gone.");
+        Assert.IsTrue(view.IsWorkMonitored);
 
         var episode = await host.PostAsync(
             $"/Admin/Media/{animeId}",
@@ -158,7 +158,7 @@ public sealed class AdminMediaDetailPageRenderTests
             new Dictionary<string, string> { ["season"] = "1", ["episode"] = "3", ["monitored"] = "false", ["open"] = "s1" });
         Assert.AreEqual(HttpStatusCode.Redirect, episode.StatusCode);
         Assert.AreEqual($"/Admin/Media/{animeId}?open=s1&ep=1x3", episode.Headers.Location?.OriginalString);
-        Assert.IsFalse((await host.Monitoring.LoadAsync()).Anime["starfall"].EpisodeOverrides["S01E03"]);
+        Assert.IsFalse((await host.AnimeMonitoringAsync("starfall")).IsEpisodeMonitored(1, 3));
 
         var html = await host.GetHtmlAsync($"/Admin/Media/{animeId}?open=s1");
         StringAssert.Contains(html, "admmd-monitoring-partial");
@@ -309,6 +309,8 @@ public sealed class AdminMediaDetailPageRenderTests
 
         public AnimeMonitoringStore Monitoring { get; }
 
+        public async Task<WorkMonitoringView> AnimeMonitoringAsync(string animeKey) => await MonitoringTestSupport.Anime(Db).LoadAsync(animeKey, CancellationToken.None);
+
         public AnimeImportStore Imports { get; }
 
         public AniListAccountStore AniList { get; }
@@ -356,6 +358,7 @@ public sealed class AdminMediaDetailPageRenderTests
                         services.AddSingleton(ownership);
                         services.AddScoped<AcquisitionAccessStore>();
                         services.AddScoped<AcquisitionHistoryService>();
+                        services.AddMonitoringForTests();
                         services.AddScoped<AdminMediaDetailService>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                         services.AddSingleton<IMediaProbeRunner, FakeMediaProbeRunner>();
@@ -482,14 +485,16 @@ public sealed class AdminMediaDetailPageRenderTests
                 state.Anime["starfall"] = new AnimeManagementAssignment("starfall", AnimeManagementMode.JularrManaged, now);
                 return state with { };
             });
+            var animeMonitoring = MonitoringTestSupport.Anime(Db);
+            await animeMonitoring.SetMonitoredAsync(anime.Id, monitored, CancellationToken.None);
+            if (monitored)
+            {
+                await animeMonitoring.SetUnitsAsync(anime.Id, [], [(1, 5)], false, CancellationToken.None);
+            }
+
             await Monitoring.UpdateAsync(state =>
             {
-                var settings = new AnimeMonitorSettings(
-                    "starfall",
-                    monitored,
-                    true,
-                    [],
-                    new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { ["S01E05"] = false });
+                var settings = new AnimeMonitorSettings("starfall", true);
                 state.Anime["starfall"] = settings;
                 var upgrade = new AnimeEpisodeKey("starfall", 1, 1);
                 var downloading = new AnimeEpisodeKey("starfall", 1, 4);

@@ -87,7 +87,8 @@ public sealed class AniListReleaseEventSource(
     AppDbContext db,
     ReleaseCalendarCacheStore cache,
     AniListAccountStore mappingStore,
-    AnimeMonitoringStore monitoringStore) : IReleaseEventSource
+    AnimeMonitoringStore monitoringStore,
+    AnimeMonitoring animeMonitoring) : IReleaseEventSource
 {
     public string Name => "anilist";
 
@@ -224,6 +225,7 @@ public sealed class AniListReleaseEventSource(
         }).ToArray();
 
         var monitoring = await monitoringStore.LoadAsync(cancellationToken);
-        return AnimeReleaseStateResolver.ToEvents(releases, library, monitoring, query.Now, query.Zone);
+        var views = await animeMonitoring.LoadAsync([.. library.Select(entry => entry.AnimeKey)], cancellationToken);
+        return AnimeReleaseStateResolver.ToEvents(releases, library, monitoring, views, query.Now, query.Zone);
     }
 }

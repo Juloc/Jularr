@@ -85,10 +85,7 @@ public sealed record MonitoredUnitKey(
 // when the work has no folder yet; null defaults to the work's current root (or the first enabled root).
 public sealed record MonitorSettings(
     string AnimeKey,
-    bool Monitored,
     bool SearchOnAdd,
-    Dictionary<int, bool> SeasonOverrides,
-    Dictionary<string, bool> EpisodeOverrides,
     int[]? IndexerIds = null,
     Guid? TargetRootId = null);
 

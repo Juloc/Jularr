@@ -209,11 +209,11 @@ public sealed class RequestOptionsTests
 
         Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "The request is only completed by the import of the requested episodes.");
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
-        var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
-        Assert.IsTrue(settings.Monitored);
-        Assert.AreEqual(true, settings.EpisodeOverrides["S01E02"]);
-        Assert.AreEqual(true, settings.EpisodeOverrides["S01E03"]);
-        Assert.AreEqual(false, settings.SeasonOverrides[1], "The rest of the season is switched off, so episodes that air later are not picked up unasked.");
+        var view = await environment.AnimeMonitoringAsync();
+        Assert.IsTrue(view.IsEpisodeMonitored(1, 2));
+        Assert.IsTrue(view.IsEpisodeMonitored(1, 3));
+        Assert.IsFalse(view.IsEpisodeMonitored(1, 1));
+        Assert.IsFalse(view.IsSeasonMonitored(1), "The rest of the season is not monitored, so episodes that air later are not picked up unasked.");
         Assert.AreEqual("anime-720p", (await profiles.LoadAsync()).WorkAssignments[anime.Id.ToString("D")]);
         Assert.AreEqual(1, environment.Scheduler.QueuedRequests);
     }
@@ -230,9 +230,10 @@ public sealed class RequestOptionsTests
 
         Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "The request is only completed by the import of the requested episodes.");
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
-        var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
-        Assert.AreEqual(false, settings.SeasonOverrides[1]);
-        Assert.AreEqual(true, settings.SeasonOverrides[2]);
+        var view = await environment.AnimeMonitoringAsync();
+        Assert.IsFalse(view.IsSeasonMonitored(1));
+        Assert.IsTrue(view.IsSeasonMonitored(2));
+        Assert.IsNotNull(anime);
     }
 
     [TestMethod]
@@ -243,18 +244,19 @@ public sealed class RequestOptionsTests
 
         await environment.ExecuteAnimeRequestAsync(FrierenId);
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
-        var whole = (await environment.MonitoringStateAsync()).Anime[anime.Key];
-        Assert.AreEqual(0, whole.SeasonOverrides.Count);
-        Assert.AreEqual(0, whole.EpisodeOverrides.Count);
+        var whole = await environment.AnimeMonitoringAsync();
+        Assert.IsTrue(whole.IsWorkMonitored);
+        Assert.IsFalse(whole.HasNodeDecisions);
 
-        // The title is monitored as a whole; asking for one more episode only adds an "on" override.
+        // The title is monitored as a whole; asking for one more episode of it changes nothing.
         await environment.ExecuteAnimeRequestAsync(
             FrierenId,
             new AcquisitionRequestOptions { Scope = RequestScope.Episodes, Episodes = [new RequestEpisode(1, 2)] }.Validate().ToPayloadJson());
 
-        var after = (await environment.MonitoringStateAsync()).Anime[anime.Key];
-        Assert.AreEqual(true, after.EpisodeOverrides["S01E02"]);
-        Assert.AreEqual(0, after.SeasonOverrides.Count, "Nothing already monitored is switched off by a later request.");
+        var after = await environment.AnimeMonitoringAsync();
+        Assert.IsTrue(after.IsEpisodeMonitored(1, 2));
+        Assert.IsTrue(after.IsWorkMonitored, "Nothing already monitored is switched off by a later request.");
+        Assert.IsNotNull(anime);
     }
 
     private static AcquisitionRequestDraft AnimeDraft(AcquisitionRequestOptions options, string id = FrierenId) =>

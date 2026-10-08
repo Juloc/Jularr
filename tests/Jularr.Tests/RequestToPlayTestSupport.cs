@@ -347,7 +347,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(registry)
             .AddSingleton(profileStore)
             .AddSingleton(installed)
-            .AddSingleton<IWantedSource>(new VideoUpgradeWantedSource(Kind, Db, new AcquisitionAccessStore(Db), installed, profileStore, new UpgradeScanState()))
+            .AddSingleton<IWantedSource>(new VideoUpgradeWantedSource(Kind, Db, new AcquisitionAccessStore(Db), MonitoringTestSupport.Resolver(Db), installed, profileStore, new UpgradeScanState()))
             .AddSingleton(downloadClients)
             .AddSingleton(new DownloadClientSubmissionService(downloadClient, new DownloadClientSelector(downloadClients, health), Db, NullLogger<DownloadClientSubmissionService>.Instance))
             .AddSingleton<IDownloadClient>(downloadClient)
@@ -356,6 +356,9 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(AcquisitionAccessFixture.Account(Owner, AccountRole.Owner))
             .AddSingleton<ReleaseRequestTracker>()
             .AddSingleton<VideoRequestWorkResolver>()
+            .AddSingleton(MonitoringTestSupport.Resolver(Db))
+            .AddSingleton(MonitoringTestSupport.Commands(Db))
+            .AddSingleton(MonitoringTestSupport.Scopes(Db))
             .AddSingleton<VideoAcquisitionEngine>()
             .AddSingleton<IJularrEventPublisher, RecordingEventPublisher>()
             .AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(Pages.Capabilities))
@@ -444,7 +447,7 @@ internal static class DiscoverPageFactory
         var settings = new AcquisitionRequestSettingsStore(settingsDirectory);
         var store = new AcquisitionAccessStore(db);
         var requests = new AcquisitionRequestService(store, executors, account, new MediaCapabilityService(capabilities), settings, new RecordingEventPublisher(), NullLogger<AcquisitionRequestService>.Instance);
-        var scopes = new VideoRequestScopeResolver(db);
+        var scopes = MonitoringTestSupport.Scopes(db);
         var page = new DiscoverIndexModel(null!, null!, tmdb!, db, null!, null!, account, null!, requests, store, scopes, null!, null!, null!, null!, null!, NullLogger<DiscoverIndexModel>.Instance);
         var requestServices = new ServiceCollection().AddSingleton<IModelMetadataProvider, EmptyModelMetadataProvider>().BuildServiceProvider();
         page.PageContext = new PageContext

@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Music;
@@ -67,7 +68,7 @@ public sealed class CanonicalMonitoringTests
 
         await commands.SetAsync(MonitoringTargetKind.Episode, series.EpisodeIds[0][1], null, CancellationToken.None);
         Assert.IsFalse((await resolver.LoadAsync(series.WorkId, CancellationToken.None)).IsMonitored(series.EpisodeIds[0][1], series.SeasonIds[0]), "Inherit goes back to the season's decision.");
-        Assert.IsFalse(await commands.SetAsync(MonitoringTargetKind.Season, Guid.NewGuid(), true, CancellationToken.None), "An unknown node is reported, not created.");
+        Assert.IsNull(await commands.SetAsync(MonitoringTargetKind.Season, Guid.NewGuid(), true, CancellationToken.None), "An unknown node is reported, not created.");
     }
 
     [TestMethod]
@@ -169,13 +170,16 @@ public sealed class CanonicalMonitoringTests
         var works = new WorkService(db);
         var album = await works.CreateWorkAsync(WorkMediaType.Music, "Tides", 2019, CancellationToken.None);
         var later = await works.CreateWorkAsync(WorkMediaType.Music, "Undertow", 2025, CancellationToken.None);
-        var artistId = Guid.NewGuid();
-        await db.Database.ExecuteSqlInterpolatedAsync($"""INSERT INTO "MusicArtists" ("Id", "Name", "SortName", "Monitor", "MonitorFromUtc", "AddedAt") VALUES ({artistId}, 'Waves', 'Waves', 1, now(), now())""");
-        await db.Database.ExecuteSqlInterpolatedAsync($"""INSERT INTO "MusicAlbums" ("WorkId", "ArtistId", "Type", "Monitored", "CreatedAt") VALUES ({album.Id}, {artistId}, 0, TRUE, now())""");
+        var artist = new MusicArtist { Name = "Waves", SortName = "Waves", MusicBrainzId = Guid.NewGuid().ToString() };
+        db.MusicArtists.Add(artist);
+        db.MusicAlbums.Add(new MusicAlbum { WorkId = album.Id, ArtistId = artist.Id, Type = MusicAlbumType.Album });
+        await db.SaveChangesAsync();
+        var artistId = artist.Id;
         var commands = Commands(db);
 
         await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Artist, artistId.ToString(), "Waves", null, "owner"), true, onlyFuture: true, CancellationToken.None);
-        await db.Database.ExecuteSqlInterpolatedAsync($"""INSERT INTO "MusicAlbums" ("WorkId", "ArtistId", "Type", "Monitored", "CreatedAt") VALUES ({later.Id}, {artistId}, 0, TRUE, now())""");
+        db.MusicAlbums.Add(new MusicAlbum { WorkId = later.Id, ArtistId = artistId, Type = MusicAlbumType.Album });
+        await db.SaveChangesAsync();
         var resolver = new MonitoringResolver(db);
 
         Assert.IsFalse((await resolver.LoadAsync(album.Id, CancellationToken.None)).IsWorkMonitored, "Future: the album that exists today is switched off by a decision.");
@@ -203,5 +207,73 @@ public sealed class CanonicalMonitoringTests
         var monitored = await new MonitoringResolver(db).MonitoredWorkIdsAsync(WorkMediaType.Series, Guid.Empty, 50, CancellationToken.None);
 
         CollectionAssert.AreEqual(new[] { series.WorkId }, monitored.ToArray());
+    }
+
+    [TestMethod]
+    public async Task SeveralRelationsReachingOneMovieCreateOneRequestThatTheNextPassDoesNotRepeat()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var movie = await new WorkService(db).CreateWorkAsync(WorkMediaType.Movie, "Shared", 2020, CancellationToken.None);
+        db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = movie.Id, MediaType = WorkMediaType.Movie, Provider = "tmdb", ExternalId = "4711", IsPrimary = true, Evidence = "test" });
+        await db.SaveChangesAsync();
+        await AddCreditAsync(db, movie.Id, "p1", WorkCreditKind.Crew, "Director");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""INSERT INTO "WorkMetadataFacts" ("WorkId", "OriginalLanguage", "Studios", "ProductionCountries", "UpdatedAt") VALUES ({movie.Id}, 'en', ARRAY['Studio X'], ARRAY[]::text[], now())""");
+        var commands = Commands(db);
+        await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Person, "p1", "Pat", null, "owner"), true, false, CancellationToken.None);
+        await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Studio, "studio x", "Studio X", null, "owner"), true, false, CancellationToken.None);
+        var source = new MonitoringWantedSource(MediaAcquisitionKind.Movie, db, new AcquisitionAccessStore(db), new MonitoringResolver(db));
+
+        var first = await source.PrepareAsync(DateTime.UtcNow, CancellationToken.None);
+        var second = await source.PrepareAsync(DateTime.UtcNow, CancellationToken.None);
+
+        Assert.AreEqual((1, 0), (first, second), "The relations are not Wanted items; the Work they reach is requested once.");
+        Assert.AreEqual(1, (await new AcquisitionAccessStore(db).ListAllAsync(10, CancellationToken.None)).Count);
+    }
+
+    [TestMethod]
+    public async Task ARequestChoiceBecomesOrdinaryDecisionsOfTheWork()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var series = await AddSeriesAsync(db, "Harbor", 2, 2);
+        var resolver = new MonitoringResolver(db);
+
+        await MonitoringTestSupport.ApplyAsync(db, series.WorkId, VideoRequestScope.AllCurrentAndFuture, future: true);
+        var all = await resolver.LoadAsync(series.WorkId, CancellationToken.None);
+        Assert.IsTrue(all.IsWorkMonitored && !all.HasNodeDecisions, "All is the Work monitored and nothing else.");
+
+        await MonitoringTestSupport.ApplyAsync(db, series.WorkId, VideoRequestScope.FutureOnly, future: true);
+        var future = await resolver.LoadAsync(series.WorkId, CancellationToken.None);
+        Assert.IsTrue(future.IsWorkMonitored);
+        Assert.IsFalse(future.IsMonitored(series.EpisodeIds[0][0], series.SeasonIds[0]), "Future switches the episodes that exist off and leaves the Work on.");
+
+        await MonitoringTestSupport.ApplyAsync(db, series.WorkId, VideoRequestScope.Custom, [series.EpisodeIds[1][1]]);
+        var custom = await resolver.LoadAsync(series.WorkId, CancellationToken.None);
+        Assert.IsFalse(custom.IsWorkMonitored);
+        Assert.IsTrue(custom.IsMonitored(series.EpisodeIds[1][1], series.SeasonIds[1]));
+        Assert.IsFalse(custom.IsMonitored(series.EpisodeIds[1][0], series.SeasonIds[1]));
+    }
+
+    [TestMethod]
+    public async Task MergingWorksKeepsTheSurvivorsOwnDecisionAndOtherwiseTakesTheAbsorbedOne()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var works = new WorkService(db);
+        var commands = Commands(db);
+        var decided = await works.CreateWorkAsync(WorkMediaType.Movie, "Decided", 2020, CancellationToken.None);
+        var absorbedA = await works.CreateWorkAsync(WorkMediaType.Movie, "Absorbed A", 2020, CancellationToken.None);
+        var undecided = await works.CreateWorkAsync(WorkMediaType.Movie, "Undecided", 2021, CancellationToken.None);
+        var absorbedB = await works.CreateWorkAsync(WorkMediaType.Movie, "Absorbed B", 2021, CancellationToken.None);
+        await commands.SetAsync(MonitoringTargetKind.Work, decided.Id, false, CancellationToken.None);
+        await commands.SetAsync(MonitoringTargetKind.Work, absorbedA.Id, true, CancellationToken.None);
+        await commands.SetAsync(MonitoringTargetKind.Work, absorbedB.Id, true, CancellationToken.None);
+
+        await works.MergeWorksAsync(decided.Id, absorbedA.Id, "test", CancellationToken.None);
+        await works.MergeWorksAsync(undecided.Id, absorbedB.Id, "test", CancellationToken.None);
+
+        var resolver = new MonitoringResolver(db);
+        Assert.IsFalse((await resolver.LoadAsync(decided.Id, CancellationToken.None)).IsWorkMonitored, "The survivor decided for itself.");
+        Assert.IsTrue((await resolver.LoadAsync(undecided.Id, CancellationToken.None)).IsWorkMonitored, "The survivor had no decision and takes the absorbed one.");
+        Assert.AreEqual(2, await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WorkMonitoring" """).SingleAsync(), "Nothing of the absorbed Works is left behind.");
     }
 }

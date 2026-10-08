@@ -353,7 +353,7 @@ public sealed class RequestPagesRenderTests
                         services.AddScoped<ConsumerAcquisitionQuery>();
                         services.AddScoped<RequestArtworkResolver>();
                         services.AddScoped<RequestStatusQuery>();
-                        services.AddScoped<VideoRequestScopeResolver>();
+                        services.AddMonitoringForTests();
                         services.AddScoped<AcquisitionRequestService>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                     })

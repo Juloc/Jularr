@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,7 +45,7 @@ public sealed record MusicAlbumRow(
     int TracksWithFiles,
     string? RequestMessage);
 
-public sealed record MusicArtistView(MusicArtist Artist, IReadOnlyList<MusicAlbumRow> Albums);
+public sealed record MusicArtistView(MusicArtist Artist, IReadOnlyList<MusicAlbumRow> Albums, MusicMonitorMode Monitor);
 
 public sealed record MusicTrackRow(Guid Id, int Disc, int Number, string Title, int? DurationMs, string? Path);
 
@@ -55,23 +56,37 @@ public sealed record MusicAlbumView(MusicAlbumRow Album, MusicArtist Artist, str
 /// derived from canonical records (assets and files, the album's monitoring, the album's request) in set-based queries, so the pages never
 /// keep a second copy of what is wanted or available.
 /// </summary>
-public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
+public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests, MonitoringResolver monitoring)
 {
     public async Task<IReadOnlyList<MusicArtistRow>> ListArtistsAsync(CancellationToken cancellationToken)
     {
         var withFiles = AlbumsWithFiles();
-        return await db.MusicArtists.AsNoTracking()
+        var artists = await db.MusicArtists.AsNoTracking()
             .OrderBy(artist => artist.SortName)
-            .Select(artist => new MusicArtistRow(
+            .Select(artist => new
+            {
                 artist.Id,
                 artist.Name,
-                artist.Monitor,
-                db.MusicAlbums.Count(album => album.ArtistId == artist.Id),
-                db.MusicAlbums.Count(album => album.ArtistId == artist.Id && album.Monitored),
-                db.MusicAlbums.Count(album => album.ArtistId == artist.Id && withFiles.Contains(album.WorkId)),
-                artist.LastRefreshedAt))
+                artist.LastRefreshedAt,
+                Albums = db.MusicAlbums.Count(album => album.ArtistId == artist.Id),
+                Available = db.MusicAlbums.Count(album => album.ArtistId == artist.Id && withFiles.Contains(album.WorkId))
+            })
             .ToListAsync(cancellationToken);
+        var albumWorks = await db.MusicAlbums.AsNoTracking().Select(album => new { album.ArtistId, album.WorkId }).ToListAsync(cancellationToken);
+        var views = await monitoring.LoadManyAsync([.. albumWorks.Select(album => album.WorkId)], cancellationToken);
+        var monitoredAlbums = albumWorks.Where(album => views[album.WorkId].IsWorkMonitored).GroupBy(album => album.ArtistId).ToDictionary(group => group.Key, group => group.Count());
+        var monitoredArtists = await MonitoredArtistIdsAsync(cancellationToken);
+        return [.. artists.Select(artist => new MusicArtistRow(artist.Id, artist.Name, ModeOf(monitoredArtists, artist.Id), artist.Albums, monitoredAlbums.GetValueOrDefault(artist.Id), artist.Available, artist.LastRefreshedAt))];
     }
+
+    /// <summary>The ids of the artists that are monitored as a whole.</summary>
+    private async Task<HashSet<Guid>> MonitoredArtistIdsAsync(CancellationToken cancellationToken) =>
+        (await db.Database.SqlQuery<string>($"""SELECT "SourceKey" AS "Value" FROM "WorkMonitoringSources" WHERE "Kind" = 3""").ToListAsync(cancellationToken))
+        .Select(key => Guid.TryParse(key, out var id) ? id : Guid.Empty)
+        .ToHashSet();
+
+    /// <summary>A monitored artist reads as "all": whether it was added for what appears from now on is not kept, only the decisions that followed.</summary>
+    private static MusicMonitorMode ModeOf(HashSet<Guid> monitoredArtists, Guid artistId) => monitoredArtists.Contains(artistId) ? MusicMonitorMode.All : MusicMonitorMode.None;
 
     public async Task<MusicArtistView?> GetArtistAsync(Guid artistId, CancellationToken cancellationToken)
     {
@@ -83,9 +98,9 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
 
         var albums = await db.MusicAlbums.AsNoTracking()
             .Where(album => album.ArtistId == artistId)
-            .Join(db.Works.AsNoTracking(), album => album.WorkId, work => work.Id, (album, work) => new AlbumBase(album.WorkId, work.CanonicalTitle, work.Year, album.Type, album.ReleaseDate, album.Monitored, album.MusicBrainzReleaseGroupId))
+            .Join(db.Works.AsNoTracking(), album => album.WorkId, work => work.Id, (album, work) => new AlbumBase(album.WorkId, work.CanonicalTitle, work.Year, album.Type, album.ReleaseDate, album.MusicBrainzReleaseGroupId))
             .ToListAsync(cancellationToken);
-        return new MusicArtistView(artist, await ToRowsAsync(albums, cancellationToken));
+        return new MusicArtistView(artist, await ToRowsAsync(albums, cancellationToken), ModeOf(await MonitoredArtistIdsAsync(cancellationToken), artistId));
     }
 
     public async Task<MusicAlbumView?> GetAlbumAsync(Guid workId, CancellationToken cancellationToken)
@@ -95,7 +110,7 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
                 join work in db.Works.AsNoTracking() on detail.WorkId equals work.Id
                 join artist in db.MusicArtists.AsNoTracking() on detail.ArtistId equals artist.Id
                 where detail.WorkId == workId
-                select new { Base = new AlbumBase(detail.WorkId, work.CanonicalTitle, work.Year, detail.Type, detail.ReleaseDate, detail.Monitored, detail.MusicBrainzReleaseGroupId), Artist = artist })
+                select new { Base = new AlbumBase(detail.WorkId, work.CanonicalTitle, work.Year, detail.Type, detail.ReleaseDate, detail.MusicBrainzReleaseGroupId), Artist = artist })
             .FirstOrDefaultAsync(cancellationToken);
         if (row is null)
         {
@@ -130,6 +145,7 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
         }
 
         var workIds = albums.Select(album => album.WorkId).ToArray();
+        var views = await monitoring.LoadManyAsync(workIds, cancellationToken);
         var trackCounts = await db.WorkTracks.AsNoTracking().Where(track => workIds.Contains(track.WorkId)).GroupBy(track => track.WorkId)
             .Select(group => new { WorkId = group.Key, Count = group.Count() })
             .ToDictionaryAsync(item => item.WorkId, item => item.Count, cancellationToken);
@@ -150,7 +166,8 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
                 var tracks = trackCounts.GetValueOrDefault(album.WorkId);
                 var withFiles = fileCounts.GetValueOrDefault(album.WorkId);
                 var request = album.GroupId is null ? null : latest.GetValueOrDefault(album.GroupId);
-                return new MusicAlbumRow(album.WorkId, album.Title, album.Year, album.Type, album.ReleaseDate, album.Monitored, StateOf(album.Monitored, tracks, withFiles, request?.Status), tracks, withFiles, request?.StatusMessage);
+                var monitored = views[album.WorkId].IsWorkMonitored;
+                return new MusicAlbumRow(album.WorkId, album.Title, album.Year, album.Type, album.ReleaseDate, monitored, StateOf(monitored, tracks, withFiles, request?.Status), tracks, withFiles, request?.StatusMessage);
             })];
     }
 
@@ -170,7 +187,7 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests)
         };
     }
 
-    private sealed record AlbumBase(Guid WorkId, string Title, int? Year, MusicAlbumType Type, DateTime? ReleaseDate, bool Monitored, string? GroupId);
+    private sealed record AlbumBase(Guid WorkId, string Title, int? Year, MusicAlbumType Type, DateTime? ReleaseDate, string? GroupId);
 }
 
 /// <summary>How the Admin and the Library pages say what state an album is in, so both read the same derived state the same way.</summary>

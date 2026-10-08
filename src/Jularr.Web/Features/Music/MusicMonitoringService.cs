@@ -6,6 +6,7 @@ using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,8 +18,11 @@ namespace Jularr.Web.Features.Music;
 /// most once at a time (the store's unique open-request index), an owner's rejection or a request that gave up is respected, and a library
 /// album that lost its files is wanted again.
 /// </summary>
-public sealed class MusicMonitoringService(AppDbContext db, AcquisitionAccessStore requests, TimeProvider clock, QualityProfileStore? profiles = null, CanonicalMediaStorageService? storage = null)
+public sealed class MusicMonitoringService(AppDbContext db, AcquisitionAccessStore requests, MonitoringResolver monitoring, TimeProvider clock, QualityProfileStore? profiles = null, CanonicalMediaStorageService? storage = null)
 {
+    /// <summary>How many monitored albums one page of a scan looks at.</summary>
+    private const int PageSize = 500;
+
     /// <summary>How many albums one upgrade scan looks at; the rest follow in later scans because the monitored albums are read oldest request first.</summary>
     public const int MaxUpgradeScanAlbums = 200;
 
@@ -38,10 +42,10 @@ public sealed class MusicMonitoringService(AppDbContext db, AcquisitionAccessSto
         }
 
         var after = scans.CursorOf(MediaAcquisitionKind.Music);
+        var monitored = await monitoring.MonitoredWorkIdsAsync(WorkMediaType.Music, after, PageSize, cancellationToken);
         var albums = await (
                 from album in db.MusicAlbums.AsNoTracking()
-                join artist in db.MusicArtists.AsNoTracking() on album.ArtistId equals artist.Id
-                where album.WorkId.CompareTo(after) > 0 && album.Monitored && artist.Monitor != MusicMonitorMode.None && album.MusicBrainzReleaseGroupId != null
+                where monitored.Contains(album.WorkId) && album.MusicBrainzReleaseGroupId != null
                       && db.MediaAssets.Any(asset => asset.WorkId == album.WorkId && asset.Kind == MediaAssetKind.Audio
                                                       && db.WorkVersions.Any(version => version.Id == asset.WorkVersionId && version.Quality != null)
                                                       && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
@@ -49,7 +53,8 @@ public sealed class MusicMonitoringService(AppDbContext db, AcquisitionAccessSto
                 select new { album.WorkId, GroupId = album.MusicBrainzReleaseGroupId! })
             .Take(MaxUpgradeScanAlbums)
             .ToListAsync(cancellationToken);
-        scans.Continue(MediaAcquisitionKind.Music, albums.Count == 0 ? Guid.Empty : albums[^1].WorkId, albums.Count < MaxUpgradeScanAlbums);
+        var pageFull = monitored.Count == PageSize;
+        scans.Continue(MediaAcquisitionKind.Music, pageFull ? monitored[^1] : Guid.Empty, reachedEnd: !pageFull);
         var reopened = 0;
         foreach (var album in albums)
         {
@@ -73,24 +78,42 @@ public sealed class MusicMonitoringService(AppDbContext db, AcquisitionAccessSto
     public async Task<int> EnsureRequestsAsync(CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow().UtcDateTime;
+        var created = 0;
+        var after = Guid.Empty;
+        while (created < MaxRequestsPerPass)
+        {
+            // The monitored albums are read in id order, a page at a time, so albums that already have files never hide the ones that are still missing.
+            var monitored = await monitoring.MonitoredWorkIdsAsync(WorkMediaType.Music, after, PageSize, cancellationToken);
+            if (monitored.Count == 0)
+            {
+                break;
+            }
+
+            after = monitored[^1];
+            created += await RequestMissingAsync(monitored, now, MaxRequestsPerPass - created, cancellationToken);
+        }
+
+        return created;
+    }
+
+    private async Task<int> RequestMissingAsync(IReadOnlyList<Guid> monitored, DateTime now, int allowed, CancellationToken cancellationToken)
+    {
         var candidates = await (
                 from album in db.MusicAlbums.AsNoTracking()
                 join artist in db.MusicArtists.AsNoTracking() on album.ArtistId equals artist.Id
                 join work in db.Works.AsNoTracking() on album.WorkId equals work.Id
-                where album.Monitored
-                      && artist.Monitor != MusicMonitorMode.None
+                where monitored.Contains(album.WorkId)
                       && album.MusicBrainzReleaseGroupId != null
                       && (album.ReleaseDate == null || album.ReleaseDate <= now)
                       && !db.MediaAssets.Any(asset => asset.WorkId == album.WorkId && asset.Kind == MediaAssetKind.Audio && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
                 orderby album.ReleaseDate descending
                 select new { album.WorkId, GroupId = album.MusicBrainzReleaseGroupId!, work.CanonicalTitle, work.Year, artist.Name, artist.AddedByProfileId })
-            .Take(MaxRequestsPerPass * 4)
             .ToListAsync(cancellationToken);
 
         var created = 0;
         foreach (var candidate in candidates)
         {
-            if (created >= MaxRequestsPerPass)
+            if (created >= allowed)
             {
                 break;
             }
@@ -135,8 +158,11 @@ public sealed class MusicWantedSource(AppDbContext db, MusicLibraryService libra
     public async Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
         var due = nowUtc - MusicLibraryService.RefreshInterval;
+        var monitoredArtists = (await db.Database.SqlQuery<string>($"""SELECT "SourceKey" AS "Value" FROM "WorkMonitoringSources" WHERE "Kind" = 3""").ToListAsync(cancellationToken))
+            .Select(key => Guid.TryParse(key, out var id) ? id : Guid.Empty)
+            .ToList();
         var artists = await db.MusicArtists.AsNoTracking()
-            .Where(artist => artist.Monitor != MusicMonitorMode.None && artist.MusicBrainzId != null && (artist.LastRefreshedAt == null || artist.LastRefreshedAt < due))
+            .Where(artist => monitoredArtists.Contains(artist.Id) && artist.MusicBrainzId != null && (artist.LastRefreshedAt == null || artist.LastRefreshedAt < due))
             .OrderBy(artist => artist.LastRefreshedAt)
             .Select(artist => artist.Id)
             .Take(MaxRefreshesPerPass)

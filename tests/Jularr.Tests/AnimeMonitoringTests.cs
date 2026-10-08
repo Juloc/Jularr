@@ -10,35 +10,16 @@ public sealed class AnimeMonitoringTests
     private static readonly AnimeQualityProfile Profile = AnimeQualityProfiles.CreateDefaultAnime1080p();
 
     [TestMethod]
-    public void EpisodeOverrideWinsOverSeasonAndAnime()
-    {
-        var state = State(new AnimeMonitorSettings(
-            "anime",
-            Monitored: true,
-            SearchOnAdd: true,
-            SeasonOverrides: new Dictionary<int, bool> { [2] = false },
-            EpisodeOverrides: new Dictionary<string, bool>
-            {
-                [AnimeMonitoringEngine.EpisodeOverrideKey(2, 3)] = true
-            }));
-
-        Assert.IsTrue(AnimeMonitoringEngine.IsMonitored(state, new AnimeEpisodeKey("anime", 2, 3)));
-        Assert.IsFalse(AnimeMonitoringEngine.IsMonitored(state, new AnimeEpisodeKey("anime", 2, 4)));
-        Assert.IsTrue(AnimeMonitoringEngine.IsMonitored(state, new AnimeEpisodeKey("anime", 1, 1)));
-    }
-
-    [TestMethod]
     public void MissingAiredEpisodeBecomesWantedButFutureEpisodeDoesNot()
     {
         var now = DateTimeOffset.Parse("2026-09-25T18:00:00Z");
-        var state = State(DefaultSettings());
         var inventory = new[]
         {
             new AnimeEpisodeInventory(new AnimeEpisodeKey("anime", 1, 1), now.AddMinutes(-5), false, null),
             new AnimeEpisodeInventory(new AnimeEpisodeKey("anime", 1, 2), now.AddHours(2), false, null)
         };
 
-        var wanted = AnimeMonitoringEngine.GetWanted(state, inventory, Profile, now);
+        var wanted = AnimeMonitoringEngine.GetWanted(_ => true, inventory, Profile, now);
 
         Assert.AreEqual(1, wanted.Count);
         Assert.AreEqual(1, wanted[0].Key.EpisodeNumber);
@@ -55,7 +36,7 @@ public sealed class AnimeMonitoringTests
             new AnimeEpisodeInventory(new AnimeEpisodeKey("anime", 1, 1), now.AddDays(-1), true, current)
         };
 
-        var wanted = AnimeMonitoringEngine.GetWanted(State(DefaultSettings()), inventory, Profile, now);
+        var wanted = AnimeMonitoringEngine.GetWanted(_ => true, inventory, Profile, now);
 
         Assert.AreEqual(1, wanted.Count);
         Assert.AreEqual(AnimeWantedReason.CutoffUnmet, wanted[0].Reason);
@@ -183,8 +164,8 @@ public sealed class AnimeMonitoringTests
             new AnimeEpisodeInventory(key, now.AddHours(-1), false, null)
         };
 
-        var first = AnimeMonitoringEngine.RefreshWanted(State(DefaultSettings()), inventory, Profile, now);
-        var second = AnimeMonitoringEngine.RefreshWanted(first, inventory, Profile, now.AddMinutes(10));
+        var first = AnimeMonitoringEngine.RefreshWanted(AnimeMonitoringState.Empty(), _ => true, inventory, Profile, now);
+        var second = AnimeMonitoringEngine.RefreshWanted(first, _ => true, inventory, Profile, now.AddMinutes(10));
 
         Assert.AreEqual(1, second.Wanted.Count);
         Assert.AreEqual(now, second.Wanted[key.ToString()].BecameWantedAtUtc);
@@ -246,13 +227,7 @@ public sealed class AnimeMonitoringTests
             Profile,
             new AnimeReleaseCandidate(AnimeReleaseParser.Parse(title), size));
 
-    private static AnimeMonitorSettings DefaultSettings() =>
-        new(
-            "anime",
-            Monitored: true,
-            SearchOnAdd: true,
-            SeasonOverrides: new Dictionary<int, bool>(),
-            EpisodeOverrides: new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase));
+    private static AnimeMonitorSettings DefaultSettings() => new("anime", SearchOnAdd: true);
 
     private static AnimeMonitoringState State(AnimeMonitorSettings settings)
     {

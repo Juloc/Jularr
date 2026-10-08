@@ -21,38 +21,14 @@ public sealed class GenericMonitoringTests
     // ---- Whole-item granularity (movies, audiobooks, books) ------------------------------------
 
     [TestMethod]
-    public void WholeItemIsMonitoredFromSettingsAndIgnoresSeasonEpisodeOverrides()
-    {
-        // Overrides only exist for season/episode granularity; a whole-item unit reads the work flag.
-        var settings = new MonitorSettings(
-            "movie",
-            Monitored: true,
-            SearchOnAdd: true,
-            SeasonOverrides: new Dictionary<int, bool> { [0] = false },
-            EpisodeOverrides: new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
-            {
-                [MonitoringEngine.EpisodeOverrideKey(0, 0)] = false
-            });
-        var state = State(settings);
-
-        Assert.IsTrue(MonitoringEngine.IsMonitored(state, MonitoredUnitKey.ForItem("movie")));
-        Assert.IsFalse(MonitoringEngine.IsMonitored(state, MonitoredUnitKey.ForItem("other")));
-    }
-
-    [TestMethod]
     public void MissingWholeItemBecomesWantedAndAcceptedReleaseAutoGrabs()
     {
         var now = DateTimeOffset.Parse("2026-09-25T18:00:00Z");
         var key = MonitoredUnitKey.ForItem("movie");
-        var state = State(new MonitorSettings(
-            "movie",
-            Monitored: true,
-            SearchOnAdd: true,
-            SeasonOverrides: new Dictionary<int, bool>(),
-            EpisodeOverrides: new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)));
+        var state = State(new MonitorSettings("movie", SearchOnAdd: true));
 
         var wanted = MonitoringEngine.GetWanted(
-            state,
+            _ => true,
             new[] { new MonitoredUnitInventory(key, null, HasFile: false, null) },
             MovieProfile,
             now);
@@ -71,31 +47,11 @@ public sealed class GenericMonitoringTests
     // ---- Season granularity (series season packs) ----------------------------------------------
 
     [TestMethod]
-    public void SeasonUnitRespectsSeasonOverride()
-    {
-        var settings = new MonitorSettings(
-            "series",
-            Monitored: true,
-            SearchOnAdd: true,
-            SeasonOverrides: new Dictionary<int, bool> { [2] = false },
-            EpisodeOverrides: new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase));
-        var state = State(settings);
-
-        Assert.IsFalse(MonitoringEngine.IsMonitored(state, MonitoredUnitKey.ForSeason("series", 2)));
-        Assert.IsTrue(MonitoringEngine.IsMonitored(state, MonitoredUnitKey.ForSeason("series", 1)));
-    }
-
-    [TestMethod]
     public void SeasonPackGrabsButSingleEpisodeAndWrongSeasonDoNot()
     {
         var now = DateTimeOffset.UtcNow;
         var key = MonitoredUnitKey.ForSeason("series", 2);
-        var state = State(new MonitorSettings(
-            "series",
-            Monitored: true,
-            SearchOnAdd: true,
-            SeasonOverrides: new Dictionary<int, bool>(),
-            EpisodeOverrides: new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)));
+        var state = State(new MonitorSettings("series", SearchOnAdd: true));
         var wanted = new WantedUnit(key, WantedReason.Missing, now);
 
         var seasonPack = Score(TvProfile, "Series Title S02 1080p WEB-DL x264-GRP", 20_000_000_000);
@@ -180,7 +136,6 @@ public sealed class GenericMonitoringTests
             var attempt = state.Attempts["anime:S01E01"];
             Assert.AreEqual(MonitoringGranularity.Episode, attempt.Key.Granularity);
             Assert.AreEqual(AcquisitionAttemptStatus.Failed, attempt.Status);
-            Assert.IsTrue(MonitoringEngine.IsMonitored(state, new MonitoredUnitKey("anime", 1, 1)));
         }
         finally
         {
@@ -193,14 +148,6 @@ public sealed class GenericMonitoringTests
 
     private static ReleaseScoreResult Score(QualityProfile profile, string title, long size) =>
         ReleaseScorer.Score(profile, new ReleaseCandidate(ReleaseParser.Parse(title), size));
-
-    private static MonitorSettings EpisodeSettings(string key) =>
-        new(
-            key,
-            Monitored: true,
-            SearchOnAdd: true,
-            SeasonOverrides: new Dictionary<int, bool>(),
-            EpisodeOverrides: new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase));
 
     private static MonitoringState State(MonitorSettings settings)
     {

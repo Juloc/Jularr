@@ -327,6 +327,7 @@ public sealed class WorkService(AppDbContext db)
             summary: $"Merged \"{source.CanonicalTitle}\" into \"{target.CanonicalTitle}\"",
             details);
         await db.SaveChangesAsync(cancellationToken);
+        await MoveMonitoringAsync(sourceWorkId, targetWorkId, cancellationToken);
 
         db.Set<Work>().Remove(source);
         await db.SaveChangesAsync(cancellationToken);
@@ -336,6 +337,25 @@ public sealed class WorkService(AppDbContext db)
         return new WorkMergeResult(
             targetWorkId, sourceWorkId, sourceLinks, identities, titles, relations, structure, provenance);
     }
+
+    /// <summary>
+    /// The monitoring decisions follow the structure that moved: a decision of a node the survivor already had goes with that node, the others now belong to
+    /// the survivor, and the absorbed Work's own decision becomes the survivor's unless the survivor decided for itself.
+    /// </summary>
+    private Task<int> MoveMonitoringAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken) =>
+        db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            DELETE FROM "WorkMonitoring" m WHERE m."WorkId" = {sourceWorkId} AND m."TargetId" <> {sourceWorkId}
+              AND NOT EXISTS (SELECT 1 FROM "WorkSeasons" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkEpisodes" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkVolumes" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkChapters" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkTracks" x WHERE x."Id" = m."TargetId");
+            UPDATE "WorkMonitoring" SET "WorkId" = {targetWorkId} WHERE "WorkId" = {sourceWorkId} AND "TargetId" <> {sourceWorkId};
+            DELETE FROM "WorkMonitoring" WHERE "TargetId" = {sourceWorkId} AND EXISTS (SELECT 1 FROM "WorkMonitoring" t WHERE t."TargetId" = {targetWorkId});
+            UPDATE "WorkMonitoring" SET "TargetId" = {targetWorkId}, "WorkId" = {targetWorkId} WHERE "TargetId" = {sourceWorkId}
+            """,
+            cancellationToken);
 
     private async Task<int> MoveSourceLinksAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
     {

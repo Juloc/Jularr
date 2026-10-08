@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -380,6 +381,8 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton<AcquisitionRequestService>()
                 .AddSingleton<IMusicMetadataProvider, MusicLibraryTests.FakeMusicProvider>()
                 .AddSingleton(new WorkService(db))
+                .AddSingleton(MonitoringTestSupport.Resolver(db))
+                .AddSingleton(MonitoringTestSupport.Commands(db))
                 .AddSingleton<MusicLibraryService>()
                 .AddSingleton<CanonicalMediaStorageService>()
                 .AddSingleton<UpgradeScanState>()
@@ -412,8 +415,13 @@ public sealed class MusicAcquisitionTests
             var work = new Work { MediaType = WorkMediaType.Music, CanonicalTitle = title, Year = year };
             db.Works.Add(work);
             db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = work.Id, MediaType = WorkMediaType.Music, Provider = "musicbrainz", ExternalId = groupId, IsPrimary = true, Evidence = "test" });
-            db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, Type = MusicAlbumType.Album, ReleaseDate = releaseDate ?? new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc), MusicBrainzReleaseGroupId = groupId, Monitored = monitored });
+            db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, Type = MusicAlbumType.Album, ReleaseDate = releaseDate ?? new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc), MusicBrainzReleaseGroupId = groupId });
             await db.SaveChangesAsync();
+            if (monitored)
+            {
+                await MonitoringTestSupport.Commands(db).SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+            }
+
             return work.Id;
         }
 

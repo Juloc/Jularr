@@ -119,7 +119,7 @@ public sealed class AcquisitionBackupTests
             var state = await store.LoadAsync();
             await store.SaveAsync(state);
 
-            Assert.IsTrue(state.Anime["frieren"].Monitored);
+            Assert.IsTrue(state.Anime["frieren"].SearchOnAdd);
             Assert.DoesNotContain("tagIds", await File.ReadAllTextAsync(path), StringComparison.OrdinalIgnoreCase);
         }
         finally

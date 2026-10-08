@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
@@ -72,8 +73,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
         var payload = VideoRequestPayload.Parse(request.PayloadJson)
             ?? throw new AssertFailedException("Expected video request payload.");
-        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, payload.Scope);
-        Assert.IsTrue(payload.MonitorFuture);
+        Assert.IsTrue((await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None)).IsWorkMonitored, "A request that names nothing monitors the whole Series, today's and later episodes.");
         Assert.AreEqual(host.EpisodeId, payload.ActiveWorkEpisodeId);
 
         host.CompleteInSabnzbd(request, "/downloads/tv/Severance.S01E01");
@@ -107,13 +107,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
             addEpisode: true,
             addSecondEpisode: true);
 
-        var custom = new VideoRequestPayload(
-            host.Work.Id,
-            host.Work.CanonicalTitle,
-            host.Work.Year,
-            VideoRequestScope.Custom,
-            [host.SecondEpisodeId!.Value],
-            MonitorFuture: false);
+        var custom = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.SecondEpisodeId!.Value]);
 
         var request = await host.StartAsync(custom);
         var payload = VideoRequestPayload.Parse(request.PayloadJson)
@@ -151,14 +145,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
         episodes[1].AiredAt = DateTime.UtcNow.AddDays(2);
         await host.Environment.Db.SaveChangesAsync();
 
-        var custom = new VideoRequestPayload(
-            host.Work.Id,
-            host.Work.CanonicalTitle,
-            host.Work.Year,
-            VideoRequestScope.Custom,
-            [],
-            MonitorFuture: false,
-            SelectedSeasonIds: [season.Id]);
+        var custom = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [], seasons: [season.Id]);
 
         var request = await host.StartAsync(custom);
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status);
@@ -174,7 +161,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
         Assert.AreEqual(AcquisitionRequestStatus.Approved, monitoring.Status);
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
         Assert.IsTrue(await host.HasPlayableAsync(host.EpisodeId));
-        CollectionAssert.Contains(payload.SelectedSeasonIds!, season.Id);
+        Assert.IsTrue((await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None)).IsMonitored(host.EpisodeId!.Value, season.Id));
         Assert.IsNotNull(payload.NextSearchUtc);
         Assert.IsNull(payload.ActiveWorkEpisodeId);
     }
@@ -196,13 +183,7 @@ public sealed class VideoAcquisitionRequestExecutorTests
         selectedEpisode.AiredAt = DateTime.UtcNow.AddDays(2);
         await host.Environment.Db.SaveChangesAsync();
 
-        var custom = new VideoRequestPayload(
-            host.Work.Id,
-            host.Work.CanonicalTitle,
-            host.Work.Year,
-            VideoRequestScope.Custom,
-            [selectedEpisodeId],
-            MonitorFuture: false);
+        var custom = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [selectedEpisodeId]);
 
         var request = await host.StartAsync(custom);
         var payload = VideoRequestPayload.Parse(request.PayloadJson)

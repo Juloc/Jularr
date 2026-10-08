@@ -177,7 +177,7 @@ public sealed class WorkMetadataReadTests
         var catalog = new UiTranslationCatalogStore(fixture.Db);
         await catalog.AddLocaleAsync("de-AT", CancellationToken.None);
         await catalog.SetProfileLocaleAsync("viewer", "de-AT", CancellationToken.None);
-        var query = new VideoDetailQuery(fixture.Db, new AcquisitionAccessStore(fixture.Db), new VideoProgressService(fixture.Db), fixture.Clock);
+        var query = new VideoDetailQuery(fixture.Db, new AcquisitionAccessStore(fixture.Db), new VideoProgressService(fixture.Db), MonitoringTestSupport.Resolver(fixture.Db), fixture.Clock);
 
         var german = (await query.GetAsync("viewer", work.Id, WorkMediaType.Movie, [WorkMediaType.Movie], CancellationToken.None))!;
         var english = (await query.GetAsync("someone-else", work.Id, WorkMediaType.Movie, [WorkMediaType.Movie], CancellationToken.None))!;
@@ -208,7 +208,7 @@ public sealed class WorkMetadataReadTests
     {
         await using var fixture = await WorkMetadataFixture.CreateAsync();
         var work = await fixture.AddMovieAsync();
-        var query = new VideoDetailQuery(fixture.Db, new AcquisitionAccessStore(fixture.Db), new VideoProgressService(fixture.Db), fixture.Clock);
+        var query = new VideoDetailQuery(fixture.Db, new AcquisitionAccessStore(fixture.Db), new VideoProgressService(fixture.Db), MonitoringTestSupport.Resolver(fixture.Db), fixture.Clock);
 
         var detail = (await query.GetAsync("viewer", work.Id, WorkMediaType.Movie, [WorkMediaType.Movie], CancellationToken.None))!;
         await new LibraryMediaCardQuery(fixture.Db, fixture.Clock).GetEntriesAsync("viewer", [WorkMediaType.Movie], CancellationToken.None);

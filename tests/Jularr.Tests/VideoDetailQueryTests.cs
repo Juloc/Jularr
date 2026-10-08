@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Data.Common;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
@@ -19,7 +20,7 @@ public sealed class VideoDetailQueryTests
     private const string Bob = "bob";
     private static readonly WorkMediaType[] AllVideo = [WorkMediaType.Anime, WorkMediaType.Series, WorkMediaType.Movie];
 
-    private static VideoDetailQuery Query(AppDbContext db) => new(db, new AcquisitionAccessStore(db), new VideoProgressService(db), TimeProvider.System);
+    private static VideoDetailQuery Query(AppDbContext db) => new(db, new AcquisitionAccessStore(db), new VideoProgressService(db), new MonitoringResolver(db), TimeProvider.System);
 
     private static readonly InstantPlayPolicy Playing = new(MediaTypeEnabled: true, AcquisitionEnabled: true, PlaybackEnabled: true, CanRequest: true, AutoApproves: false, AcquisitionReady: true);
 
@@ -123,39 +124,6 @@ public sealed class VideoDetailQueryTests
         var requestable = VideoDetailView.RequestableEpisodes(all);
 
         Assert.AreEqual(AnimeEpisodeAvailability.Unavailable, Assert.ContainsSingle(requestable).Availability);
-    }
-
-    // ---- What a request covers ----------------------------------------------------------------------------------------
-
-    [TestMethod]
-    public void TheRequestScopeDecidesWhichEpisodesItCovers()
-    {
-        var created = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
-        var seasonId = Guid.NewGuid();
-        var selected = Guid.NewGuid();
-        var other = Guid.NewGuid();
-        var aired = created.AddDays(-30);
-        var upcoming = created.AddDays(7);
-
-        VideoRequestPayload Payload(VideoRequestScope scope, bool future = false, Guid[]? seasons = null) => new(Guid.NewGuid(), "T", 2020, scope, [selected], future, SelectedSeasonIds: seasons);
-
-        var all = new VideoRequestSelection(Payload(VideoRequestScope.AllCurrentAndFuture), created);
-        Assert.IsTrue(all.Includes(other, null, aired) && all.Includes(other, null, upcoming));
-
-        var futureOnly = new VideoRequestSelection(Payload(VideoRequestScope.FutureOnly), created);
-        Assert.IsFalse(futureOnly.Includes(other, null, aired));
-        Assert.IsTrue(futureOnly.Includes(other, null, upcoming));
-        Assert.IsFalse(futureOnly.Includes(other, null, null), "An episode without an air date is not known to be future.");
-
-        var custom = new VideoRequestSelection(Payload(VideoRequestScope.Custom, seasons: [seasonId]), created);
-        Assert.IsTrue(custom.Includes(selected, null, aired), "A selected episode.");
-        Assert.IsTrue(custom.Includes(other, seasonId, aired), "An episode of a selected season.");
-        Assert.IsFalse(custom.Includes(other, Guid.NewGuid(), aired));
-        Assert.IsFalse(custom.Includes(other, null, upcoming), "Future episodes only when future releases are included.");
-
-        var withFuture = new VideoRequestSelection(Payload(VideoRequestScope.Custom, future: true), created);
-        Assert.IsTrue(withFuture.Includes(other, null, upcoming));
-        Assert.IsFalse(withFuture.Includes(other, null, aired));
     }
 
     private sealed class CommandCounter : DbCommandInterceptor

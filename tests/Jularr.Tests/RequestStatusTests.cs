@@ -47,7 +47,7 @@ public sealed class RequestStatusTests
             await fixture.Store.CreateAsync(Book("imported"), "alice", AcquisitionRequestStatus.Completed, "owner", CancellationToken.None),
             await fixture.Store.CreateAsync(Book("failed"), "alice", AcquisitionRequestStatus.Failed, "owner", CancellationToken.None)
         };
-        var projection = new ConsumerAcquisitionQuery(fixture.Db, fixture.Store, new VideoRequestWorkResolver(fixture.Db), TimeProvider.System);
+        var projection = new ConsumerAcquisitionQuery(fixture.Db, fixture.Store, new VideoRequestWorkResolver(fixture.Db), MonitoringTestSupport.Resolver(fixture.Db), TimeProvider.System);
 
         var rows = await fixture.StatusQuery().RowsAsync(requests, "alice", CancellationToken.None);
 
@@ -131,7 +131,8 @@ public sealed class RequestStatusTests
         }
 
         await fixture.Db.SaveChangesAsync();
-        var payload = new VideoRequestPayload(work.Id, work.CanonicalTitle, 2025, VideoRequestScope.AllCurrentAndFuture, [], true) { NextSearchUtc = Now.AddDays(1) };
+        await MonitoringTestSupport.ApplyAsync(fixture.Db, work.Id, VideoRequestScope.AllCurrentAndFuture, future: true);
+        var payload = new VideoRequestPayload(work.Id, work.CanonicalTitle, 2025) { NextSearchUtc = Now.AddDays(1) };
         var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", "504", work.CanonicalTitle, null, null, payload.Serialize());
         var request = await fixture.Store.CreateAsync(draft, "alice", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
 
@@ -211,7 +212,7 @@ public sealed class RequestStatusTests
     public void TheSavedIntentIsReadBackInTheWordsOfTheRequestDialog()
     {
         var ui = UiTextBundle.English;
-        var series = new VideoRequestPayload(Guid.NewGuid(), "T", 2022, VideoRequestScope.FutureOnly, [], true);
+        var series = MonitoringTestSupport.Choosing(Guid.NewGuid(), "T", 2022, VideoRequestScope.FutureOnly, future: true);
         var tv = new AcquisitionRequest(Guid.NewGuid(), MediaAcquisitionKind.Tv, "tmdb", "1", "T", null, null, series.Serialize(), "alice", AcquisitionRequestStatus.Pending, null, null, null, Now, Now, null, null);
         var options = new AcquisitionRequestOptions { Scope = RequestScope.Seasons, Seasons = [1, 2], AudioLanguage = "ja", SubtitleLanguage = "off", QualityProfileId = "profile" };
         var anime = tv with { Kind = MediaAcquisitionKind.Anime, PayloadJson = options.ToPayloadJson() };
@@ -232,7 +233,7 @@ public sealed class RequestStatusTests
     }
 
     private static AcquisitionRequestDraft Movie(string tmdbId, Work work) =>
-        new(MediaAcquisitionKind.Movie, "tmdb", tmdbId, work.CanonicalTitle, null, null, new VideoRequestPayload(work.Id, work.CanonicalTitle, work.Year, VideoRequestScope.WholeWork, [], false).Serialize());
+        new(MediaAcquisitionKind.Movie, "tmdb", tmdbId, work.CanonicalTitle, null, null, MonitoringTestSupport.Choosing(work.Id, work.CanonicalTitle, work.Year, VideoRequestScope.WholeWork).Serialize());
 
     private static AcquisitionRequestDraft Book(string id) => new(MediaAcquisitionKind.Book, "test", id, id, "Author", null);
 }

@@ -26,7 +26,7 @@ namespace Jularr.Web.Pages.Admin;
 public sealed class MediaDetailModel(
     AppDbContext db,
     AdminMediaDetailService details,
-    AnimeMonitoringStore monitoring,
+    AnimeMonitoring animeMonitoring,
     CurrentAccountContext currentAccount,
     ILogger<MediaDetailModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
@@ -161,18 +161,16 @@ public sealed class MediaDetailModel(
             return NotFound();
         }
 
-        if (await AnimeKeyAsync(id, cancellationToken) is not { } animeKey)
+        if (await AnimeKeyAsync(id, cancellationToken) is null)
         {
             return NotFound();
         }
 
-        await monitoring.UpdateAsync(
-            state => Apply(state, animeKey, settings => AdminMediaMonitoringEdit.SetSeason(settings, season, monitored)),
-            cancellationToken);
+        await animeMonitoring.SetUnitsAsync(id, [season], [], monitored, cancellationToken);
         return Redirect(Href(id, AdminMediaDetailView.IsAniList(view), $"s{season}"));
     }
 
-    /// <summary>Monitors or unmonitors one episode; the override is dropped when it matches what the season inherits.</summary>
+    /// <summary>Monitors or unmonitors one episode.</summary>
     public async Task<IActionResult> OnPostEpisodeMonitorAsync(
         Guid id,
         int season,
@@ -187,14 +185,12 @@ public sealed class MediaDetailModel(
             return NotFound();
         }
 
-        if (await AnimeKeyAsync(id, cancellationToken) is not { } animeKey)
+        if (await AnimeKeyAsync(id, cancellationToken) is null)
         {
             return NotFound();
         }
 
-        await monitoring.UpdateAsync(
-            state => Apply(state, animeKey, settings => AdminMediaMonitoringEdit.SetEpisode(settings, season, episode, monitored)),
-            cancellationToken);
+        await animeMonitoring.SetUnitsAsync(id, [], [(season, episode)], monitored, cancellationToken);
         return Redirect(Href(
             id,
             AdminMediaDetailView.IsAniList(view),
@@ -248,12 +244,4 @@ public sealed class MediaDetailModel(
 
     private Task<string?> AnimeKeyAsync(Guid id, CancellationToken cancellationToken) =>
         db.Anime.AsNoTracking().Where(item => item.Id == id).Select(item => item.Key).SingleOrDefaultAsync(cancellationToken);
-
-    private static MonitoringState Apply(MonitoringState state, string animeKey, Func<MonitorSettings, MonitorSettings> edit)
-    {
-        var anime = new Dictionary<string, MonitorSettings>(state.Anime, StringComparer.OrdinalIgnoreCase);
-        var current = anime.TryGetValue(animeKey, out var found) ? found : AdminMediaMonitoringEdit.Empty(animeKey);
-        anime[animeKey] = edit(current);
-        return state with { Anime = anime };
-    }
 }

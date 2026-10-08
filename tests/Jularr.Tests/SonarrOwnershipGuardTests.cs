@@ -237,7 +237,7 @@ public sealed class SonarrOwnershipGuardTests
         // Sonarr applied the unmonitor request; the next observation reflects it.
         var after = Sonarr(frierenMonitored: false);
         var ownership = new AcquisitionOwnershipSnapshot(state, after);
-        var monitoring = MonitoringState("frieren", "meshi");
+        var monitoring = AnimeMonitoringState.Empty();
 
         // Frieren: Jularr grabs the wanted episode exactly once.
         var frierenWanted = new AnimeWantedEpisode(new AnimeEpisodeKey("frieren", 1, 8), AnimeWantedReason.Missing, Now);
@@ -265,7 +265,7 @@ public sealed class SonarrOwnershipGuardTests
             frierenWanted,
             frierenRelease,
             null,
-            MonitoringState("frieren", "meshi"),
+            AnimeMonitoringState.Empty(),
             ownership,
             Now);
         Assert.IsFalse(duplicateAfterRestart.Grab, "The ownership store alone must prevent a duplicate Jularr grab.");
@@ -393,22 +393,6 @@ public sealed class SonarrOwnershipGuardTests
 
     private static AnimeReleaseScoreResult Score(string title) =>
         AnimeReleaseScorer.Score(Profile, new AnimeReleaseCandidate(AnimeReleaseParser.Parse(title), 900_000_000));
-
-    private static AnimeMonitoringState MonitoringState(params string[] animeKeys)
-    {
-        var state = AnimeMonitoringState.Empty();
-        foreach (var key in animeKeys)
-        {
-            state.Anime[key] = new AnimeMonitorSettings(
-                key,
-                Monitored: true,
-                SearchOnAdd: true,
-                SeasonOverrides: new Dictionary<int, bool>(),
-                EpisodeOverrides: new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase));
-        }
-
-        return state;
-    }
 
     private static AnimeImportPlanContext MeshiContext(string jobId, string downloadId) =>
         new(

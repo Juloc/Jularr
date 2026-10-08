@@ -1,8 +1,18 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Monitoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Acquisition.Access;
+
+/// <summary>The vocabulary of the Request dialog. It is a command, applied as ordinary monitoring decisions, and is never stored as a state.</summary>
+public enum VideoRequestScope
+{
+    WholeWork,
+    AllCurrentAndFuture,
+    FutureOnly,
+    Custom
+}
 
 public sealed record VideoRequestEpisode(Guid Id, int Number, string? Title, DateTime? AiredAt);
 
@@ -12,7 +22,7 @@ public sealed record VideoRequestEpisode(Guid Id, int Number, string? Title, Dat
 /// </summary>
 public sealed record VideoRequestSeason(Guid? Id, int Number, bool IsSpecial, IReadOnlyList<VideoRequestEpisode> Episodes);
 
-/// <summary>What a requester chose for a TV title. The ids come from the browser and are only trusted after <see cref="VideoRequestScopeResolver.BuildTvPayloadAsync"/>.</summary>
+/// <summary>What a requester chose for a title. The ids come from the browser and are only trusted after <see cref="VideoRequestScopeResolver.ValidateTvAsync"/>.</summary>
 public sealed record VideoRequestScopeChoice(
     VideoRequestScope Scope,
     IReadOnlyCollection<Guid> SeasonIds,
@@ -20,12 +30,11 @@ public sealed record VideoRequestScopeChoice(
     bool MonitorFuture);
 
 /// <summary>
-/// The canonical owner of the TV scope a requester may choose: it reads the structure of the selected Work
-/// for the Request dialog and turns the browser's choice into the <see cref="VideoRequestPayload"/> the
-/// executor consumes. Season and episode ids must belong to that Work, so a forged id can never widen a
-/// request to another title.
+/// The canonical owner of what a requester may choose to monitor: it reads the structure of the selected Work for the Request dialog, checks the
+/// browser's choice against that structure, applies it as monitoring decisions once the request is approved, and reads the current decisions back as
+/// a choice for the dialog. Season and episode ids must belong to the Work, so a forged id can never widen a request to another title.
 /// </summary>
-public sealed class VideoRequestScopeResolver(AppDbContext db)
+public sealed class VideoRequestScopeResolver(AppDbContext db, MonitoringCommands commands, MonitoringResolver monitoring)
 {
     public const int MaxSelectedSeasons = 200;
     public const int MaxSelectedEpisodes = 5000;
@@ -58,15 +67,11 @@ public sealed class VideoRequestScopeResolver(AppDbContext db)
         ];
     }
 
-    /// <summary>The same for a request that only knows the id of its Work; null when that Work is gone.</summary>
-    public async Task<VideoRequestPayload?> BuildTvPayloadAsync(Guid workId, VideoRequestScopeChoice choice, CancellationToken cancellationToken) =>
-        await db.Works.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workId, cancellationToken) is { } work ? await BuildTvPayloadAsync(work, choice, cancellationToken) : null;
-
     /// <summary>
-    /// Validates the choice against the Work's own structure and returns the request payload. Throws
-    /// <see cref="ArgumentException"/> for an unknown id, an empty custom selection or ids sent with a scope that has none.
+    /// Checks the choice against the Work's own structure and returns it without duplicates. Throws <see cref="ArgumentException"/> for an unknown id,
+    /// an empty custom selection or ids sent with a scope that has none.
     /// </summary>
-    public async Task<VideoRequestPayload> BuildTvPayloadAsync(Work work, VideoRequestScopeChoice choice, CancellationToken cancellationToken)
+    public async Task<VideoRequestScopeChoice> ValidateTvAsync(Guid workId, VideoRequestScopeChoice choice, CancellationToken cancellationToken)
     {
         var seasonIds = choice.SeasonIds.Distinct().ToArray();
         var episodeIds = choice.EpisodeIds.Distinct().ToArray();
@@ -77,12 +82,9 @@ public sealed class VideoRequestScopeResolver(AppDbContext db)
 
         if (choice.Scope != VideoRequestScope.Custom)
         {
-            if (seasonIds.Length > 0 || episodeIds.Length > 0)
-            {
-                throw new ArgumentException("Only a custom scope selects seasons or episodes.", nameof(choice));
-            }
-
-            return Payload(work, choice.Scope, [], [], monitorFuture: true);
+            return seasonIds.Length > 0 || episodeIds.Length > 0
+                ? throw new ArgumentException("Only a custom scope selects seasons or episodes.", nameof(choice))
+                : new VideoRequestScopeChoice(choice.Scope, [], [], MonitorFuture: true);
         }
 
         if (seasonIds.Length == 0 && episodeIds.Length == 0 && !choice.MonitorFuture)
@@ -95,16 +97,47 @@ public sealed class VideoRequestScopeResolver(AppDbContext db)
             throw new ArgumentException("The selection is too large.", nameof(choice));
         }
 
-        var knownSeasons = await db.WorkSeasons.AsNoTracking().CountAsync(x => x.WorkId == work.Id && seasonIds.Contains(x.Id), cancellationToken);
-        var knownEpisodes = await db.WorkEpisodes.AsNoTracking().CountAsync(x => x.WorkId == work.Id && episodeIds.Contains(x.Id), cancellationToken);
-        if (knownSeasons != seasonIds.Length || knownEpisodes != episodeIds.Length)
-        {
-            throw new ArgumentException("The selection contains a season or episode that does not belong to this title.", nameof(choice));
-        }
-
-        return Payload(work, VideoRequestScope.Custom, seasonIds, episodeIds, choice.MonitorFuture);
+        var knownSeasons = await db.WorkSeasons.AsNoTracking().CountAsync(x => x.WorkId == workId && seasonIds.Contains(x.Id), cancellationToken);
+        var knownEpisodes = await db.WorkEpisodes.AsNoTracking().CountAsync(x => x.WorkId == workId && episodeIds.Contains(x.Id), cancellationToken);
+        return knownSeasons != seasonIds.Length || knownEpisodes != episodeIds.Length
+            ? throw new ArgumentException("The selection contains a season or episode that does not belong to this title.", nameof(choice))
+            : new VideoRequestScopeChoice(VideoRequestScope.Custom, seasonIds, episodeIds, choice.MonitorFuture);
     }
 
-    private static VideoRequestPayload Payload(Work work, VideoRequestScope scope, Guid[] seasonIds, Guid[] episodeIds, bool monitorFuture) =>
-        new(work.Id, work.CanonicalTitle, work.Year, scope, episodeIds, monitorFuture, SelectedSeasonIds: seasonIds);
+    /// <summary>Applies a validated choice as monitoring decisions: all and the Movie switch the Work on, future and a custom selection write their ordinary decisions.</summary>
+    public Task ApplyAsync(Guid workId, VideoRequestScopeChoice? choice, CancellationToken cancellationToken) => choice?.Scope switch
+    {
+        VideoRequestScope.FutureOnly => commands.FutureAsync(workId, cancellationToken),
+        VideoRequestScope.Custom => commands.ApplySelectionAsync(workId, choice.SeasonIds, choice.EpisodeIds, choice.MonitorFuture, cancellationToken),
+        _ => commands.SetAsync(MonitoringTargetKind.Work, workId, true, cancellationToken)
+    };
+
+    /// <summary>
+    /// The current monitoring of a Series as a choice for the dialog, or null when nothing is monitored. Everything on and nothing decided is "all"; the
+    /// Work on with every known episode off is "future"; anything else is a custom selection of the seasons and episodes that are on.
+    /// </summary>
+    public async Task<VideoRequestScopeChoice?> ChoiceOfAsync(Guid workId, CancellationToken cancellationToken)
+    {
+        var view = await monitoring.LoadAsync(workId, cancellationToken);
+        if (!view.IsAnyMonitored)
+        {
+            return null;
+        }
+
+        var structure = await LoadStructureAsync(workId, cancellationToken);
+        var seasonIds = view.DecidedIds(MonitoringTargetKind.Season, monitored: true).ToArray();
+        var seasonOf = structure.SelectMany(season => season.Episodes.Select(episode => (Episode: episode.Id, Season: season.Id))).ToDictionary(pair => pair.Episode, pair => pair.Season);
+        if (view.IsWorkMonitored && !view.HasNodeDecisions)
+        {
+            return new VideoRequestScopeChoice(VideoRequestScope.AllCurrentAndFuture, [], [], MonitorFuture: true);
+        }
+
+        if (view.IsWorkMonitored && seasonIds.Length == 0 && seasonOf.Keys.All(id => view.DecisionOf(id) == false))
+        {
+            return new VideoRequestScopeChoice(VideoRequestScope.FutureOnly, [], [], MonitorFuture: true);
+        }
+
+        var episodes = seasonOf.Keys.Where(id => view.IsMonitored(id, seasonOf[id]) && !(seasonOf[id] is { } season && seasonIds.Contains(season))).ToArray();
+        return new VideoRequestScopeChoice(VideoRequestScope.Custom, seasonIds, episodes, view.IsWorkMonitored);
+    }
 }

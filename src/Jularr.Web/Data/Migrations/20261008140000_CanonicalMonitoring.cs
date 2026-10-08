@@ -46,6 +46,82 @@ public partial class CanonicalMonitoring : Migration
                 CONSTRAINT "CK_WorkMonitoringSources_Kind" CHECK ("Kind" BETWEEN 0 AND 3)
             );
             """);
+
+        // The Movie and TV monitoring that lived in the request payloads becomes ordinary decisions, equal for every episode known today: the Work and the
+        // seasons carry what the old scope said for what is added later, and an episode only gets a decision of its own where the old rule differs from what
+        // it now inherits. The newest request of a Work is the one that was current. The payload then loses the fields that held the state.
+        migrationBuilder.Sql(
+            """
+            CREATE TEMP TABLE "_VideoMonitoring" ON COMMIT DROP AS
+            SELECT DISTINCT ON ((j->>'workId')::uuid)
+                   r."Kind", (j->>'workId')::uuid AS "WorkId",
+                   COALESCE((j->>'monitored')::boolean, TRUE) AS "Monitored",
+                   COALESCE((j->>'scope')::int, 0) AS "Scope",
+                   COALESCE((j->>'monitorFuture')::boolean, FALSE) AS "Future",
+                   COALESCE((j->>'monitorFutureFromUtc')::timestamptz, r."CreatedAt"::timestamptz) AS "FutureFrom",
+                   COALESCE(j->'selectedEpisodeIds', '[]'::jsonb) AS "SelectedEpisodes",
+                   COALESCE(j->'selectedSeasonIds', '[]'::jsonb) AS "SelectedSeasons",
+                   COALESCE(j->'excludedEpisodeIds', '[]'::jsonb) AS "ExcludedEpisodes",
+                   COALESCE(j->'excludedSeasonIds', '[]'::jsonb) AS "ExcludedSeasons"
+            FROM (SELECT x.*, CASE WHEN x."PayloadJson" IS JSON OBJECT THEN x."PayloadJson"::jsonb END AS j
+                  FROM "AcquisitionRequests" x WHERE x."Kind" IN ('movie', 'tv')) r
+            WHERE j ? 'workId' AND EXISTS (SELECT 1 FROM "Works" w WHERE w."Id" = (j->>'workId')::uuid)
+            ORDER BY (j->>'workId')::uuid, r."CreatedAt" DESC;
+
+            INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
+            SELECT v."WorkId", 0, v."WorkId",
+                   v."Monitored" AND (v."Kind" = 'movie' OR v."Scope" IN (1, 2) OR (v."Scope" = 3 AND v."Future")), now()
+            FROM "_VideoMonitoring" v;
+
+            INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
+            SELECT v."WorkId", 1, s."Id", NOT (v."ExcludedSeasons" ? s."Id"::text), now()
+            FROM "_VideoMonitoring" v JOIN "WorkSeasons" s ON s."WorkId" = v."WorkId"
+            WHERE v."Kind" = 'tv' AND v."Monitored" AND (v."SelectedSeasons" ? s."Id"::text OR v."ExcludedSeasons" ? s."Id"::text);
+
+            INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
+            SELECT v."WorkId", 2, e."Id", w."Included", now()
+            FROM "_VideoMonitoring" v
+            JOIN "WorkEpisodes" e ON e."WorkId" = v."WorkId"
+            CROSS JOIN LATERAL (SELECT
+                v."Monitored"
+                AND NOT (v."ExcludedEpisodes" ? e."Id"::text)
+                AND (e."SeasonId" IS NULL OR NOT (v."ExcludedSeasons" ? e."SeasonId"::text) OR v."SelectedEpisodes" ? e."Id"::text)
+                AND (CASE v."Scope"
+                        WHEN 1 THEN TRUE
+                        WHEN 2 THEN v."SelectedEpisodes" ? e."Id"::text
+                                    OR (e."SeasonId" IS NOT NULL AND v."SelectedSeasons" ? e."SeasonId"::text)
+                                    OR (e."AiredAt" IS NOT NULL AND e."AiredAt" > v."FutureFrom")
+                        WHEN 3 THEN v."SelectedEpisodes" ? e."Id"::text
+                                    OR (e."SeasonId" IS NOT NULL AND v."SelectedSeasons" ? e."SeasonId"::text)
+                                    OR (v."Future" AND e."AiredAt" IS NOT NULL AND e."AiredAt" > v."FutureFrom")
+                        ELSE FALSE END) AS "Included") w
+            WHERE v."Kind" = 'tv'
+              AND w."Included" IS DISTINCT FROM COALESCE(
+                    (SELECT m."Monitored" FROM "WorkMonitoring" m WHERE m."TargetId" = e."SeasonId"),
+                    (SELECT m."Monitored" FROM "WorkMonitoring" m WHERE m."TargetId" = v."WorkId"));
+
+            UPDATE "AcquisitionRequests" r SET "PayloadJson" = (
+                (r."PayloadJson"::jsonb - 'scope' - 'selectedEpisodeIds' - 'monitorFuture' - 'selectedSeasonIds' - 'monitored' - 'monitorFutureFromUtc'
+                    - 'excludedEpisodeIds' - 'excludedSeasonIds' - 'scopeRevision')
+                || jsonb_build_object(
+                    'monitoringRevision', COALESCE((r."PayloadJson"::jsonb->>'scopeRevision')::int, 0),
+                    'endedByMonitoring', NOT COALESCE((r."PayloadJson"::jsonb->>'monitored')::boolean, TRUE)))::text
+            WHERE r."Kind" IN ('movie', 'tv') AND r."PayloadJson" IS JSON OBJECT;
+            """);
+
+        // Music: an artist that was monitored becomes a monitored artist source (it reaches its albums and EPs); an album whose old state differs from what that
+        // gives it keeps a decision of its own.
+        migrationBuilder.Sql(
+            """
+            INSERT INTO "WorkMonitoringSources" ("Kind", "SourceKey", "Label", "Roles", "AddedByProfileId", "UpdatedAt")
+            SELECT 3, a."Id"::text, a."Name", NULL, COALESCE(a."AddedByProfileId", 'owner'), now() FROM "MusicArtists" a WHERE a."Monitor" <> 0;
+
+            INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
+            SELECT al."WorkId", 0, al."WorkId", al."Monitored", now()
+            FROM "MusicAlbums" al JOIN "MusicArtists" a ON a."Id" = al."ArtistId"
+            WHERE a."Monitor" <> 0 AND al."Monitored" <> (al."Type" IN (0, 1))
+            ON CONFLICT ("TargetId") DO NOTHING;
+            """);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)

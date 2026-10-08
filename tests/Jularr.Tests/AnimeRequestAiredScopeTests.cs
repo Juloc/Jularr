@@ -48,7 +48,7 @@ public sealed class AnimeRequestAiredScopeTests
         request = await environment.GetRequestAsync(request.Id);
         Assert.AreEqual(AcquisitionRequestStatus.Completed, request.Status, request.StatusMessage);
         Assert.AreEqual(3, await environment.Db.MediaFiles.CountAsync());
-        Assert.IsTrue((await environment.MonitoringStateAsync()).Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored, "Later episodes are still searched by the series' monitoring.");
+        Assert.IsTrue((await environment.AnimeMonitoringAsync()).IsWorkMonitored, "Later episodes are still searched by the series' monitoring.");
     }
 
     [TestMethod]

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Monitoring;
@@ -152,7 +153,7 @@ public sealed class VideoUpgradeTests
         world.Indexer.Publish(DuneLow);
         var request = await world.RequestAsync(DuneTmdb, "Dune");
         await ImportAsync(world, request, DuneLow, size: 4);
-        var wanted = new WantedListService(world.Requests, new AnimeMonitoringStore(Path.Combine(Path.GetTempPath(), "jularr-wanted-" + Guid.NewGuid().ToString("N"))), world.Services.GetRequiredService<QualityProfileStore>(), world.Db, new VideoRequestWorkResolver(world.Db), [], world.Clock);
+        var wanted = new WantedListService(world.Requests, new AnimeMonitoringStore(Path.Combine(Path.GetTempPath(), "jularr-wanted-" + Guid.NewGuid().ToString("N"))), world.Services.GetRequiredService<QualityProfileStore>(), world.Db, new VideoRequestWorkResolver(world.Db), new MonitoringResolver(world.Db), [], world.Clock);
 
         var row = Assert.ContainsSingle(await wanted.LoadAsync(CancellationToken.None));
 

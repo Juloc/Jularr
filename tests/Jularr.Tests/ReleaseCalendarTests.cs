@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Localization;
@@ -331,12 +332,19 @@ public sealed class ReleaseCalendarTests
         Assert.AreEqual((1, 15), AnimeReleaseStateResolver.ResolveLocalSlot(offset, "300", 3), "Absolute local numbering is kept.");
     }
 
+    private static WorkMonitoringView View(bool workMonitored, Dictionary<(int, int), bool>? episodes = null)
+    {
+        var workId = Guid.NewGuid();
+        var decisions = new Dictionary<Guid, MonitoringDecision> { [workId] = new(MonitoringTargetKind.Work, workMonitored) };
+        return new WorkMonitoringView(workId, decisions, relationMonitored: false, new NumberedDecisions(episodes ?? [], new Dictionary<int, bool>()));
+    }
+
     [TestMethod]
     public void LocalStateComesFromLibraryFilesAndMonitoring()
     {
         var entry = Entry("100", null, (1, 1, true), (1, 2, false), (1, 3, false), (1, 4, false), (1, 5, false));
         var monitoring = AnimeMonitoringState.Empty();
-        monitoring.Anime["frieren"] = new AnimeMonitorSettings("frieren", true, false, new(), new Dictionary<string, bool> { ["S01E07"] = false });
+        var view = View(workMonitored: true, episodes: new Dictionary<(int, int), bool> { [(1, 7)] = false });
         var key3 = new AnimeEpisodeKey("frieren", 1, 3);
         var key4 = new AnimeEpisodeKey("frieren", 1, 4);
         var key5 = new AnimeEpisodeKey("frieren", 1, 5);
@@ -345,7 +353,7 @@ public sealed class ReleaseCalendarTests
         monitoring.Wanted[key5.ToString()] = new AnimeWantedEpisode(key5, AnimeWantedReason.Missing, Now);
 
         ReleaseLocalState State(int episode, bool released) =>
-            AnimeReleaseStateResolver.Resolve(entry, (1, episode), monitoring, released).State;
+            AnimeReleaseStateResolver.Resolve(entry, (1, episode), monitoring, view, released).State;
 
         Assert.AreEqual(ReleaseLocalState.Available, State(1, true));
         Assert.AreEqual(ReleaseLocalState.Missing, State(2, true));
@@ -354,13 +362,13 @@ public sealed class ReleaseCalendarTests
         Assert.AreEqual(ReleaseLocalState.Wanted, State(5, true));
         Assert.AreEqual(ReleaseLocalState.Monitored, State(6, false), "Upcoming and monitored.");
         Assert.AreEqual(ReleaseLocalState.NotMonitored, State(7, true), "The episode override turns monitoring off.");
-        Assert.IsTrue(AnimeReleaseStateResolver.Resolve(entry, (1, 6), monitoring, false).Monitored);
+        Assert.IsTrue(AnimeReleaseStateResolver.Resolve(entry, (1, 6), monitoring, view, false).Monitored);
 
-        var unmonitored = AnimeReleaseStateResolver.Resolve(entry, (1, 2), AnimeMonitoringState.Empty(), released: true);
+        var unmonitored = AnimeReleaseStateResolver.Resolve(entry, (1, 2), AnimeMonitoringState.Empty(), View(workMonitored: false), released: true);
         Assert.AreEqual(ReleaseLocalState.NotMonitored, unmonitored.State, "A release date alone never makes an episode wanted.");
         Assert.AreEqual(false, unmonitored.Monitored);
 
-        var unplaced = AnimeReleaseStateResolver.Resolve(entry, null, monitoring, released: true);
+        var unplaced = AnimeReleaseStateResolver.Resolve(entry, null, monitoring, view, released: true);
         Assert.AreEqual(ReleaseLocalState.None, unplaced.State);
         Assert.IsTrue(unplaced.InLibrary);
     }
@@ -376,7 +384,7 @@ public sealed class ReleaseCalendarTests
             new CachedRelease("anilist", "999", ReleaseKind.Episode, 2, ReleaseDate.FromInstant(Now.AddDays(1)))
         };
 
-        var events = AnimeReleaseStateResolver.ToEvents(releases, [entry], AnimeMonitoringState.Empty(), Now, Utc);
+        var events = AnimeReleaseStateResolver.ToEvents(releases, [entry], AnimeMonitoringState.Empty(), new Dictionary<string, WorkMonitoringView> { ["frieren"] = View(workMonitored: false) }, Now, Utc);
 
         Assert.AreEqual(2, events.Count);
         var premiere = events.Single(release => release.Kind == ReleaseKind.SeasonPremiere);

@@ -6,6 +6,7 @@
     var ui = Model.Ui;
     var artist = Model.View!.Artist;
     var albums = Model.View.Albums;
+    var monitor = Model.View.Monitor;
     ViewData["Title"] = artist.Name;
 }
 @section Head {
@@ -40,7 +41,7 @@
         <span class="admmusic-cover" aria-hidden="true">@WatchlistLabels.Initial(artist.Name)</span>
         <div class="admmusic-hero-copy">
             <div class="admmusic-tags">
-                <span class="admin-tag admin-tag-@(artist.Monitor == MusicMonitorMode.None ? "text" : artist.Monitor == MusicMonitorMode.All ? "accent" : "info")">@Model.MonitorLabel(artist.Monitor)</span>
+                <span class="admin-tag admin-tag-@(monitor == MusicMonitorMode.None ? "text" : "accent")">@Model.MonitorLabel(monitor)</span>
                 <span class="admin-tag admin-tag-text">@ui.Format("music.summary", ("albums", albums.Count), ("available", albums.Count(album => album.State == MusicAlbumState.Available)))</span>
             </div>
             <div class="admset-actions">
@@ -49,7 +50,7 @@
                     <select id="monitor-mode" class="admset-control admset-control-fit" name="mode">
                         @foreach (var mode in new[] { MusicMonitorMode.All, MusicMonitorMode.Future, MusicMonitorMode.None })
                         {
-                            <option value="@((int)mode)" selected="@(artist.Monitor == mode)">@Model.MonitorLabel(mode)</option>
+                            <option value="@((int)mode)" selected="@(monitor == mode)">@Model.MonitorLabel(mode)</option>
                         }
                     </select>
                     <button class="button" type="submit">@ui["common.save"]</button>

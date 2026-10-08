@@ -267,7 +267,7 @@ public sealed class AnimeNamingRenameTests
             {
                 Anime = new Dictionary<string, AnimeMonitorSettings>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["frieren"] = new("frieren", true, true, [], [], TargetRootId: fixture.Root.Id)
+                    ["frieren"] = new("frieren", true, TargetRootId: fixture.Root.Id)
                 },
                 Wanted = new Dictionary<string, AnimeWantedEpisode>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -314,7 +314,7 @@ public sealed class AnimeNamingRenameTests
         Assert.AreEqual("frieren (2023)", acquisition.Episodes.Single().AnimeKey);
         Assert.AreEqual("frieren (2023)", acquisitions.Blocklist.Single().AnimeKey);
         var monitoring = await fixture.Monitoring.LoadAsync();
-        Assert.IsTrue(monitoring.Anime["frieren (2023)"].Monitored, "Monitoring settings follow the new anime key.");
+        Assert.IsTrue(monitoring.Anime["frieren (2023)"].SearchOnAdd, "Monitoring settings follow the new anime key.");
         Assert.IsFalse(monitoring.Anime.ContainsKey("frieren"));
         Assert.AreEqual(fixture.Root.Id, monitoring.Anime["frieren (2023)"].TargetRootId, "The target root assignment follows the new anime key.");
         Assert.AreEqual("frieren (2023)", monitoring.Wanted.Values.Single().Key.AnimeKey);

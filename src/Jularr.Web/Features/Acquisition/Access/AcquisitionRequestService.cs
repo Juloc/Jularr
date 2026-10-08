@@ -301,11 +301,11 @@ public sealed class AcquisitionRequestService(
     }
 
     /// <summary>
-    /// Saves new settings of a request that still waits for approval: the series scope of a Tv request, or the audio and subtitle language of
+    /// Saves new settings of a request that still waits for approval: what a Tv request monitors (applied when it is approved), or the audio and subtitle language of
     /// an anime request (its scope and quality profile stay as the request was made). Both are validated by the caller against the title.
     /// The write only lands while the request is still pending, so an approval that wins the race keeps the intent it executed.
     /// </summary>
-    public async Task<RequestEditOutcome> EditAsync(Guid id, VideoRequestPayload? tvScope, AcquisitionRequestOptions? animeLanguages, CancellationToken cancellationToken)
+    public async Task<RequestEditOutcome> EditAsync(Guid id, VideoRequestScopeChoice? tvScope, AcquisitionRequestOptions? animeLanguages, CancellationToken cancellationToken)
     {
         var request = await RequireAsync(id, cancellationToken);
         RequireRequesterOrManager(request);
@@ -316,7 +316,7 @@ public sealed class AcquisitionRequestService(
         }
 
         Func<string?, string?> patch = tvScope is { } scope
-            ? stored => VideoRequestPayload.Parse(stored) is { } current ? current.WithRequesterScope(scope).Serialize() : scope.Serialize()
+            ? stored => VideoRequestPayload.Parse(stored) is { } current ? (current with { Requested = scope, MonitoringRevision = current.MonitoringRevision + 1 }).Serialize() : stored
             : stored => (AcquisitionRequestOptions.FromPayload(stored) with { AudioLanguage = animeLanguages!.AudioLanguage, SubtitleLanguage = animeLanguages.SubtitleLanguage }).Validate().ToPayloadJson();
         return await store.PatchPayloadAsync(id, patch, AcquisitionRequestStatus.Pending, AcquisitionRequestStatus.Pending, null, cancellationToken)
             ? RequestEditOutcome.Saved

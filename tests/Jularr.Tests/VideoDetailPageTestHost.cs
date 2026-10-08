@@ -157,6 +157,7 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddScoped<DownloadClientSubmissionService>();
                     services.AddScoped<ReleaseRequestTracker>();
                     services.AddScoped<VideoRequestWorkResolver>();
+                    services.AddMonitoringForTests();
                     services.AddScoped<VideoAcquisitionEngine>();
                     services.AddInstantPlay();
                     services.AddSingleton<IMediaProbeRunner>(probe);

@@ -1,5 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,22 +12,12 @@ namespace Jularr.Web.Features.Music;
 /// creates the requests, the Wanted pass searches and imports) does the rest. Reads and refreshes are idempotent: the same release group
 /// always resolves to the same Work, so a refresh never duplicates an album.
 /// </summary>
-public sealed class MusicLibraryService(AppDbContext db, IMusicMetadataProvider provider, WorkService works, TimeProvider clock)
+public sealed class MusicLibraryService(AppDbContext db, IMusicMetadataProvider provider, WorkService works, MonitoringCommands commands, TimeProvider clock)
 {
     /// <summary>The albums of an artist are read again when the last read is older than this.</summary>
     public static readonly TimeSpan RefreshInterval = TimeSpan.FromHours(24);
 
-    /// <summary>Whether an album of the artist is wanted under its monitor mode: studio albums and EPs only, and with Future only those released after the artist was added.</summary>
-    public static bool ShouldMonitor(MusicMonitorMode mode, DateTime monitorFromUtc, MusicAlbumType type, DateTime? releaseDate) =>
-        type is MusicAlbumType.Album or MusicAlbumType.Ep
-        && mode switch
-        {
-            MusicMonitorMode.All => true,
-            MusicMonitorMode.Future => releaseDate is { } date && date > monitorFromUtc,
-            _ => false
-        };
-
-    /// <summary>Adds the artist (or returns the one already added), sets its monitor mode and reads its discography.</summary>
+    /// <summary>Adds the artist (or returns the one already added), applies the monitor command and reads its discography.</summary>
     public async Task<MusicArtist> AddArtistAsync(string musicBrainzId, MusicMonitorMode mode, string? addedByProfileId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(musicBrainzId);
@@ -41,23 +32,20 @@ public sealed class MusicLibraryService(AppDbContext db, IMusicMetadataProvider 
                 Name = summary.Name,
                 SortName = summary.SortName,
                 MusicBrainzId = id,
-                Monitor = mode,
-                MonitorFromUtc = clock.GetUtcNow().UtcDateTime,
                 AddedAt = clock.GetUtcNow().UtcDateTime,
                 AddedByProfileId = addedByProfileId
             };
             db.MusicArtists.Add(existing);
             await db.SaveChangesAsync(cancellationToken);
         }
-        else if (existing.Monitor != mode)
-        {
-            await SetArtistMonitorAsync(existing.Id, mode, cancellationToken);
-        }
 
-        return await RefreshArtistAsync(existing.Id, cancellationToken);
+        // The discography is read first, so "future" can switch off the albums that exist today.
+        var refreshed = await RefreshArtistAsync(existing.Id, cancellationToken);
+        await SetArtistMonitorAsync(existing.Id, mode, cancellationToken);
+        return refreshed;
     }
 
-    /// <summary>Reads the discography and upserts one album Work per release group; only a new album is given the monitor decision.</summary>
+    /// <summary>Reads the discography and upserts one album Work per release group. An album without a decision of its own inherits the artist's monitoring.</summary>
     public async Task<MusicArtist> RefreshArtistAsync(Guid artistId, CancellationToken cancellationToken)
     {
         var artist = await db.MusicArtists.FirstOrDefaultAsync(candidate => candidate.Id == artistId, cancellationToken)
@@ -94,7 +82,6 @@ public sealed class MusicLibraryService(AppDbContext db, IMusicMetadataProvider 
                 Type = group.Type,
                 ReleaseDate = group.ReleaseDate,
                 MusicBrainzReleaseGroupId = group.MusicBrainzId,
-                Monitored = ShouldMonitor(artist.Monitor, artist.MonitorFromUtc, group.Type, group.ReleaseDate),
                 CreatedAt = clock.GetUtcNow().UtcDateTime
             });
         }
@@ -104,31 +91,29 @@ public sealed class MusicLibraryService(AppDbContext db, IMusicMetadataProvider 
         return artist;
     }
 
-    /// <summary>Changes how the artist's albums are monitored; the new mode is applied to every album of the artist, so it overrides earlier per-album choices.</summary>
+    /// <summary>
+    /// Applies a monitor command to the artist: All monitors the artist (every release of it, today's and later ones), Future monitors only what appears
+    /// from now on, None stops monitoring. A command replaces the earlier choices on the artist's albums.
+    /// </summary>
     public async Task SetArtistMonitorAsync(Guid artistId, MusicMonitorMode mode, CancellationToken cancellationToken)
     {
-        var artist = await db.MusicArtists.FirstOrDefaultAsync(candidate => candidate.Id == artistId, cancellationToken)
+        var artist = await db.MusicArtists.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == artistId, cancellationToken)
             ?? throw new InvalidOperationException("The artist no longer exists.");
-        artist.Monitor = mode;
-        if (mode == MusicMonitorMode.Future)
-        {
-            artist.MonitorFromUtc = clock.GetUtcNow().UtcDateTime;
-        }
-
-        foreach (var album in await db.MusicAlbums.Where(candidate => candidate.ArtistId == artistId).ToListAsync(cancellationToken))
-        {
-            album.Monitored = ShouldMonitor(mode, artist.MonitorFromUtc, album.Type, album.ReleaseDate);
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""DELETE FROM "WorkMonitoring" WHERE "Kind" = 0 AND "TargetId" IN (SELECT "WorkId" FROM "MusicAlbums" WHERE "ArtistId" = {artistId})""",
+            cancellationToken);
+        var source = new MonitoringRelationSource(MonitoringRelationKind.Artist, artistId.ToString(), artist.Name, null, artist.AddedByProfileId ?? "owner");
+        await commands.SetRelationAsync(source, mode != MusicMonitorMode.None, onlyFuture: mode == MusicMonitorMode.Future, cancellationToken);
     }
 
     public async Task SetAlbumMonitoredAsync(Guid workId, bool monitored, CancellationToken cancellationToken)
     {
-        var album = await db.MusicAlbums.FirstOrDefaultAsync(candidate => candidate.WorkId == workId, cancellationToken)
-            ?? throw new InvalidOperationException("The album no longer exists.");
-        album.Monitored = monitored;
-        await db.SaveChangesAsync(cancellationToken);
+        if (!await db.MusicAlbums.AnyAsync(candidate => candidate.WorkId == workId, cancellationToken))
+        {
+            throw new InvalidOperationException("The album no longer exists.");
+        }
+
+        await commands.SetAsync(MonitoringTargetKind.Work, workId, monitored, cancellationToken);
     }
 
     /// <summary>Stores the track list of an album when it has none yet. Returns false while the provider knows no tracks, so the caller waits instead of importing against an unknown list.</summary>

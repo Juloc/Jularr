@@ -20,8 +20,8 @@ public enum MusicAlbumType
 }
 
 /// <summary>
-/// An artist the owner manages: the owner of a set of album Works, the way a Series owns episodes. It is not a Work itself.
-/// <see cref="MonitorFromUtc"/> anchors "Future": only albums released after it become wanted.
+/// An artist the owner manages: the owner of a set of album Works, the way a Series owns episodes. It is not a Work itself. Whether the artist is
+/// monitored is canonical Monitoring state (an artist source), not a field of the artist.
 /// </summary>
 public sealed class MusicArtist
 {
@@ -33,10 +33,6 @@ public sealed class MusicArtist
 
     /// <summary>The provider identity (MusicBrainz artist id); unique when set.</summary>
     public string? MusicBrainzId { get; set; }
-
-    public MusicMonitorMode Monitor { get; set; } = MusicMonitorMode.All;
-
-    public DateTime MonitorFromUtc { get; set; } = DateTime.UtcNow;
 
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
 
@@ -63,7 +59,6 @@ public sealed class MusicAlbum
     public string? MusicBrainzReleaseGroupId { get; set; }
 
     /// <summary>Whether a missing album is wanted. The artist's monitor mode sets it when the album is added; the owner can switch it per album.</summary>
-    public bool Monitored { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

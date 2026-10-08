@@ -83,7 +83,7 @@ public sealed partial class VideoAcquisitionEngine
         }
 
         var unit = missing.FirstOrDefault(x => x.Id == payload.ActiveWorkEpisodeId)
-                   ?? await FindNextTvUnitAsync(request, payload, cancellationToken)
+                   ?? await FindNextTvUnitAsync(payload, await monitoring.LoadAsync(target.WorkId, cancellationToken), cancellationToken)
                    ?? missing.FirstOrDefault();
         return new VideoManualTarget(target.WorkId, target.Title, target.Year, payload, unit, missing, profile, HasLocalFile: false) { ExternalIds = target.ExternalIds, AllUnits = all };
     }

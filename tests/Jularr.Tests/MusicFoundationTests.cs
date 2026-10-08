@@ -100,7 +100,7 @@ public sealed class MusicFoundationTests
         var work = new Work { MediaType = WorkMediaType.Music, CanonicalTitle = "Random Access Memories", Year = 2013 };
         db.MusicArtists.Add(artist);
         db.Works.Add(work);
-        db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, Type = MusicAlbumType.Album, MusicBrainzReleaseGroupId = "aa1c3a1a-0000-0000-0000-000000000001", Monitored = true });
+        db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, Type = MusicAlbumType.Album, MusicBrainzReleaseGroupId = "aa1c3a1a-0000-0000-0000-000000000001" });
         var track = new WorkTrack { WorkId = work.Id, Disc = 1, Number = 1, Title = "Give Life Back to Music" };
         db.WorkTracks.Add(track);
         await db.SaveChangesAsync();

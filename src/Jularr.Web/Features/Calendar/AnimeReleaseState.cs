@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Metadata;
 
@@ -90,16 +91,16 @@ public static class AnimeReleaseStateResolver
         AnimeReleaseLibraryEntry entry,
         (int Season, int Episode)? slot,
         AnimeMonitoringState monitoring,
+        WorkMonitoringView view,
         bool released)
     {
         if (slot is not { } place)
         {
-            bool? seriesMonitored = monitoring.Anime.TryGetValue(entry.AnimeKey, out var settings) ? settings.Monitored : false;
-            return new ReleaseLocalStatus(true, seriesMonitored, ReleaseLocalState.None);
+            return new ReleaseLocalStatus(true, view.IsWorkMonitored, ReleaseLocalState.None);
         }
 
         var key = new AnimeEpisodeKey(entry.AnimeKey, place.Season, place.Episode);
-        var monitored = AnimeMonitoringEngine.IsMonitored(monitoring, key);
+        var monitored = AnimeMonitoring.IsUnitMonitored(view, key);
         if (entry.Episodes.TryGetValue(place, out var local) && local.HasFile)
         {
             return new ReleaseLocalStatus(true, monitored, ReleaseLocalState.Available);
@@ -137,6 +138,7 @@ public static class AnimeReleaseStateResolver
         IEnumerable<CachedRelease> releases,
         IReadOnlyList<AnimeReleaseLibraryEntry> library,
         AnimeMonitoringState monitoring,
+        IReadOnlyDictionary<string, WorkMonitoringView> views,
         DateTimeOffset now,
         TimeZoneInfo zone)
     {
@@ -169,7 +171,7 @@ public static class AnimeReleaseStateResolver
                     release.Date,
                     release.Provider,
                     release.ExternalId,
-                    Resolve(entry, slot, monitoring, release.Date.IsReleased(now, zone)),
+                    Resolve(entry, slot, monitoring, views[entry.AnimeKey], release.Date.IsReleased(now, zone)),
                     entry.CoverImageUrl));
             }
         }

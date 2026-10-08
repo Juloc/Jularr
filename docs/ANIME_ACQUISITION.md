@@ -54,7 +54,8 @@ monitored anime, recent decisions and recent imports.
 
 | Fact | Canonical store |
 | --- | --- |
-| Monitored flag, search-on-add, per-anime indexer IDs, target root, wanted episodes, search attempts/backoff, schedule | `/data/acquisition/monitoring.json` (`AnimeMonitoringStore`) |
+| Search-on-add, per-anime indexer IDs, target root, wanted episodes, search attempts/backoff, schedule | `/data/acquisition/monitoring.json` (`AnimeMonitoringStore`) |
+| Whether the anime, a season or an episode is monitored | the canonical Monitoring state of the anime's Work (`WorkMonitoring`, read through `AnimeMonitoring`; see `Features/Monitoring/CODEMAP.md`) |
 | Quality profile per anime | `/data/acquisition/quality-profiles.json` (`QualityProfileStore`, keyed by media type; the default profile is not stored as an assignment) |
 | Indexer connections (Prowlarr, direct Newznab) | `/data/acquisition/indexers.json` (`IndexerStore`) |
 | Download client connections (SABnzbd) | `/data/acquisition/download-clients.json` (`DownloadClientStore`) |
@@ -165,7 +166,7 @@ completed under the earlier behavior (on start) are left as they are.
 
 ### Known gaps
 
-- **TV and Anime disagree on "current + future".** A TV request with future monitoring (`VideoRequestPayload.MonitorFuture`, "All current +
+- **TV and Anime disagree on "current + future".** A TV request that monitors the whole Series (the Series Work is monitored, so later episodes are too, "All current +
   future") stays open and Approved while it waits for the next episode (`KeepOpen`, asserted in `RequestToPlayTvTests`), whereas an Anime
   request completes once its aired scope is satisfied and monitoring continues on the series. The status surface specifies "Available" and
   a separate "Monitoring future releases" state, but no consumer state for the latter exists in `src`. Proposed unification: both complete

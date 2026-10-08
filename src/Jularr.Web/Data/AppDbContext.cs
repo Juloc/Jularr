@@ -789,7 +789,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.SortName).HasMaxLength(300);
             entity.Property(x => x.MusicBrainzId).HasMaxLength(64);
             entity.Property(x => x.AddedByProfileId).HasMaxLength(64);
-            entity.Property(x => x.Monitor).HasConversion<int>();
             entity.HasIndex(x => x.MusicBrainzId).IsUnique().HasFilter("\"MusicBrainzId\" IS NOT NULL");
             entity.HasIndex(x => x.SortName);
         });
@@ -802,7 +801,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasOne<Work>().WithOne().HasForeignKey<MusicAlbum>(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<MusicArtist>().WithMany().HasForeignKey(x => x.ArtistId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => x.MusicBrainzReleaseGroupId).IsUnique().HasFilter("\"MusicBrainzReleaseGroupId\" IS NOT NULL");
-            entity.HasIndex(x => new { x.ArtistId, x.Monitored });
         });
 
         modelBuilder.Entity<WorkVolume>(entity =>

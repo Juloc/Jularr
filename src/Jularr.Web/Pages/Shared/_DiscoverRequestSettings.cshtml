@@ -19,8 +19,8 @@
         season.IsSpecial ? ui["discover.request.specials"] : ui.Format("discover.request.season", ("number", season.Number));
     var saved = Model.SavedScope;
     var currentScope = saved?.Scope switch { VideoRequestScope.FutureOnly => scopes[1], VideoRequestScope.Custom => scopes[2], _ => scopes[0] };
-    var savedSeasons = saved?.SelectedSeasonIds ?? [];
-    var savedEpisodes = saved?.SelectedEpisodeIds ?? [];
+    IReadOnlyCollection<Guid> savedSeasons = saved?.SeasonIds ?? [];
+    IReadOnlyCollection<Guid> savedEpisodes = saved?.EpisodeIds ?? [];
     bool SeasonSaved(VideoRequestSeason season) => saved?.Scope == VideoRequestScope.Custom && season.Id is { } id && savedSeasons.Contains(id);
     bool EpisodeSaved(VideoRequestSeason season, VideoRequestEpisode episode) => saved?.Scope == VideoRequestScope.Custom && (SeasonSaved(season) || savedEpisodes.Contains(episode.Id));
     string EpisodeCount(VideoRequestSeason season)

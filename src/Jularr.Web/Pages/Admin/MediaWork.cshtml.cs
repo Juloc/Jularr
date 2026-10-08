@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Operations;
 using Microsoft.AspNetCore.Authorization;
@@ -24,6 +25,7 @@ public sealed class MediaWorkModel(
     AppDbContext db,
     AdminVideoMediaService details,
     VideoMonitoringService monitoring,
+    MonitoringResolver monitoringState,
     AcquisitionRequestService requests,
     CurrentAccountContext currentAccount,
     RequestArtworkResolver artwork,
@@ -114,7 +116,7 @@ public sealed class MediaWorkModel(
         }
 
         var open = await monitoring.FindOpenRequestAsync(mediaKind, id, cancellationToken);
-        if (open?.Status != AcquisitionRequestStatus.Approved || !VideoRequestPayload.Of(open, id, open.Title, null).Monitored)
+        if (open?.Status != AcquisitionRequestStatus.Approved || !(await monitoringState.LoadAsync(id, cancellationToken)).IsAnyMonitored)
         {
             TempData["Error"] = Ui["admin.media.video.noRequest"];
             return Back(mediaKind, id);

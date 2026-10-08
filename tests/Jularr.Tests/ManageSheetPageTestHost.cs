@@ -207,6 +207,7 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                         services.AddScoped<AnimeAcquisitionInventory>();
                         services.AddScoped<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
                         services.AddScoped<AcquisitionHistoryService>();
+                        services.AddMonitoringForTests();
                         services.AddScoped<AnimeAcquisitionPipeline>();
                         // The Settings → Acquisition page (#389) lists the per-media-type remote
                         // path mappings; its other panels read the same empty stores.

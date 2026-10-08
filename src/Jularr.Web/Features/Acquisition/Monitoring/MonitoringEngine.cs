@@ -15,13 +15,14 @@ namespace Jularr.Web.Features.Acquisition.Monitoring;
 /// </summary>
 public static class MonitoringEngine
 {
+    /// <param name="isMonitored">Whether a unit is monitored: the canonical Monitoring state of the Work, resolved by the caller.</param>
     public static IReadOnlyList<WantedUnit> GetWanted(
-        MonitoringState state,
+        Func<MonitoredUnitKey, bool> isMonitored,
         IEnumerable<MonitoredUnitInventory> inventory,
         QualityProfile profile,
         DateTimeOffset now)
     {
-        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(isMonitored);
         ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(profile);
 
@@ -29,7 +30,7 @@ public static class MonitoringEngine
 
         foreach (var unit in inventory)
         {
-            if (!IsMonitored(state, unit.Key))
+            if (!isMonitored(unit.Key))
             {
                 continue;
             }
@@ -64,11 +65,12 @@ public static class MonitoringEngine
 
     public static MonitoringState RefreshWanted(
         MonitoringState state,
+        Func<MonitoredUnitKey, bool> isMonitored,
         IEnumerable<MonitoredUnitInventory> inventory,
         QualityProfile profile,
         DateTimeOffset now)
     {
-        var computed = GetWanted(state, inventory, profile, now);
+        var computed = GetWanted(isMonitored, inventory, profile, now);
         var wanted = new Dictionary<string, WantedUnit>(StringComparer.OrdinalIgnoreCase);
         var history = state.History.ToList();
 
@@ -116,6 +118,7 @@ public static class MonitoringEngine
     public static MonitoringState RefreshWantedForAnime(
         MonitoringState state,
         string animeKey,
+        Func<MonitoredUnitKey, bool> isMonitored,
         IEnumerable<MonitoredUnitInventory> inventory,
         QualityProfile profile,
         DateTimeOffset now)
@@ -132,7 +135,7 @@ public static class MonitoringEngine
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase)
         };
 
-        var refreshed = RefreshWanted(scoped, inventory, profile, now);
+        var refreshed = RefreshWanted(scoped, isMonitored, inventory, profile, now);
         foreach (var pair in refreshed.Wanted)
         {
             others[pair.Key] = pair.Value;
@@ -438,44 +441,10 @@ public static class MonitoringEngine
         };
     }
 
-    public static bool IsMonitored(MonitoringState state, MonitoredUnitKey key)
-    {
-        if (!state.Anime.TryGetValue(key.AnimeKey, out var settings))
-        {
-            return false;
-        }
-
-        // Whole-item units carry no season/episode, so overrides never apply: the work's own
-        // monitored flag is the answer.
-        if (key.Granularity == MonitoringGranularity.Item)
-        {
-            return settings.Monitored;
-        }
-
-        if (key.Granularity == MonitoringGranularity.Episode)
-        {
-            var episodeKey = EpisodeOverrideKey(key.SeasonNumber, key.EpisodeNumber);
-            if (settings.EpisodeOverrides.TryGetValue(episodeKey, out var episodeOverride))
-            {
-                return episodeOverride;
-            }
-        }
-
-        if (settings.SeasonOverrides.TryGetValue(key.SeasonNumber, out var seasonOverride))
-        {
-            return seasonOverride;
-        }
-
-        return settings.Monitored;
-    }
-
     public static bool IsCutoffMet(
         QualityProfile profile,
         ReleaseScoreResult current) =>
         Selection.UpgradePolicy.IsCutoffMet(profile, current.QualityKey);
-
-    public static string EpisodeOverrideKey(int season, int episode) =>
-        $"S{season:00}E{episode:00}";
 
     // Whether a parsed release satisfies the wanted unit, per its granularity:
     //  - Item: the media type's search already found this release for the work, so any accepted

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.Access;
@@ -477,6 +478,13 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
 
     public async Task<AnimeMonitoringState> MonitoringStateAsync() => await Monitoring.LoadAsync();
 
+    /// <summary>The canonical Monitoring state of the anime, addressed by season and episode number.</summary>
+    public async Task<Jularr.Web.Features.Monitoring.WorkMonitoringView> AnimeMonitoringAsync(string animeKey = AnimeKey)
+    {
+        await using var scope = services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<AnimeMonitoring>().LoadAsync(animeKey, CancellationToken.None);
+    }
+
     public async Task<MediaFile?> MediaFileAsync(int season, int episode)
     {
         Db.ChangeTracker.Clear();
@@ -583,6 +591,9 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddScoped<Jularr.Web.Features.MediaCore.WorkService>();
         collection.AddScoped<Jularr.Web.Features.MediaCore.WorkStructureService>();
         collection.AddScoped<Jularr.Web.Features.MediaCore.LegacyWorkBridge>();
+        collection.AddScoped<Jularr.Web.Features.Monitoring.MonitoringResolver>();
+        collection.AddScoped<Jularr.Web.Features.Monitoring.MonitoringCommands>();
+        collection.AddScoped<AnimeMonitoring>();
         collection.AddScoped<AnimeAcquisitionRequestExecutor>();
         collection.AddScoped<IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<AnimeAcquisitionRequestExecutor>());
         collection.AddScoped<IMonitoredAcquisitionExecutor>(provider => provider.GetRequiredService<AnimeAcquisitionRequestExecutor>());

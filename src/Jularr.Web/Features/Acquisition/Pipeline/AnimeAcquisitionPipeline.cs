@@ -6,6 +6,7 @@ using Jularr.Web.Features.Acquisition.History;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
@@ -84,6 +85,7 @@ public sealed class AnimeAcquisitionPipeline(
     SabnzbdAcquisitionService sabnzbd,
     AnimeImportStore imports,
     AnimeAcquisitionInventory inventory,
+    AnimeMonitoring animeMonitoring,
     AcquisitionHistoryService history,
     ILogger<AnimeAcquisitionPipeline> logger,
     TimeProvider clock,
@@ -107,9 +109,7 @@ public sealed class AnimeAcquisitionPipeline(
         await ReconcileAttemptsAsync(cancellationToken);
 
         var state = await monitoring.LoadAsync(cancellationToken);
-        var keys = animeKey is null
-            ? state.Anime.Values.Where(settings => settings.Monitored).Select(settings => settings.AnimeKey).ToArray()
-            : [animeKey];
+        var keys = animeKey is null ? [.. await animeMonitoring.MonitoredKeysAsync(cancellationToken)] : new[] { animeKey };
         if (keys.Length == 0)
         {
             return new(0, 0, 0, ["No anime is monitored."]);
@@ -141,10 +141,12 @@ public sealed class AnimeAcquisitionPipeline(
                 notes.Add($"{target.Anime.Title}: {target.Diagnostic}");
             }
 
+            var view = await animeMonitoring.LoadAsync(key, cancellationToken);
             state = await monitoring.UpdateAsync(
                 current => AnimeMonitoringEngine.RefreshWantedForAnime(
                     current,
                     key,
+                    unit => AnimeMonitoring.IsUnitMonitored(view, unit),
                     target.Episodes.Select(episode => AnimeAcquisitionInventory.ToInventory(episode, target.Profile)),
                     target.Profile,
                     now),
@@ -615,8 +617,7 @@ public sealed class AnimeAcquisitionPipeline(
             return null;
         }
 
-        var wasMonitored = (await monitoring.LoadAsync(cancellationToken)).Anime
-            .TryGetValue(animeKey, out var previous) && previous.Monitored;
+        var wasMonitored = (await animeMonitoring.LoadAsync(animeKey, cancellationToken)).IsWorkMonitored;
         var profileState = await profiles.LoadAsync(cancellationToken);
         var animeDefaultProfileId = profileState.DefaultProfileIdFor(MediaAcquisitionKind.Anime)
             ?? AnimeQualityProfiles.DefaultAnime1080pId;
@@ -634,16 +635,14 @@ public sealed class AnimeAcquisitionPipeline(
                 var existing = anime.TryGetValue(animeKey, out var found) ? found : null;
                 anime[animeKey] = new AnimeMonitorSettings(
                     animeKey,
-                    monitored,
                     searchOnAdd,
-                    existing?.SeasonOverrides ?? [],
-                    existing?.EpisodeOverrides ?? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase),
                     indexerIds.Length == 0 ? null : indexerIds.Where(id => id > 0).Distinct().Order().ToArray(),
                     targetRootId);
                 return current with { Anime = anime };
             },
             cancellationToken);
 
+        await animeMonitoring.SetMonitoredAsync(animeId, monitored, cancellationToken);
         return new AnimeSettingsUpdate(animeKey, monitored && !wasMonitored);
     }
 
@@ -683,6 +682,7 @@ public sealed class AnimeAcquisitionPipeline(
         var recentHistory = await history.ForAnimeAsync(animeId, 15, cancellationToken);
 
         state.Anime.TryGetValue(animeKey, out var settings);
+        var monitored = (await animeMonitoring.LoadAsync(animeKey, cancellationToken)).IsWorkMonitored;
         var assigned = profileState.ResolveProfileId(MediaAcquisitionKind.Anime, animeId)
             ?? AnimeQualityProfiles.DefaultAnime1080pId;
         var active = await CountActiveDownloadsAsync(relations, animeKey, cancellationToken);
@@ -694,6 +694,7 @@ public sealed class AnimeAcquisitionPipeline(
             animeKey,
             SonarrParallelSafety.GetMode(ownership, animeKey),
             settings,
+            monitored,
             assigned,
             profileState.Profiles,
             state.Wanted.Values.Count(item => item.Key.AnimeKey.Equals(animeKey, StringComparison.OrdinalIgnoreCase)),
@@ -730,7 +731,9 @@ public sealed class AnimeAcquisitionPipeline(
         var profileState = await profiles.LoadAsync(cancellationToken);
         var operations = new OperationStore(db);
 
+        var monitoredKeys = await animeMonitoring.MonitoredKeysAsync(cancellationToken);
         var keys = state.Anime.Keys
+            .Concat(monitoredKeys)
             .Concat(state.Wanted.Values.Select(item => item.Key.AnimeKey))
             .Concat(relations.Acquisitions.Select(item => item.AnimeKey))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -741,11 +744,12 @@ public sealed class AnimeAcquisitionPipeline(
             .Select(item => new { item.Id, item.Key, item.Title })
             .ToDictionaryAsync(item => item.Key, StringComparer.OrdinalIgnoreCase, cancellationToken);
 
-        var monitored = state.Anime.Values
-            .Where(settings => settings.Monitored && anime.ContainsKey(settings.AnimeKey))
-            .Select(settings =>
+        var monitored = monitoredKeys
+            .Where(anime.ContainsKey)
+            .Select(monitoredKey =>
             {
-                var entry = anime[settings.AnimeKey];
+                var entry = anime[monitoredKey];
+                state.Anime.TryGetValue(monitoredKey, out var settings);
                 var profile = profileState.ResolveProfileId(MediaAcquisitionKind.Anime, entry.Id)
                     ?? AnimeQualityProfiles.DefaultAnime1080pId;
                 return new AnimeMonitoredRow(
@@ -755,7 +759,7 @@ public sealed class AnimeAcquisitionPipeline(
                     SonarrParallelSafety.GetMode(ownership, entry.Key),
                     profile,
                     state.Wanted.Values.Count(item => item.Key.AnimeKey.Equals(entry.Key, StringComparison.OrdinalIgnoreCase)),
-                    settings.IndexerIds ?? []);
+                    settings?.IndexerIds ?? []);
             })
             .OrderBy(row => row.Title, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -1319,6 +1323,7 @@ public sealed record AnimeAcquisitionPanel(
     string AnimeKey,
     AnimeManagementMode Mode,
     AnimeMonitorSettings? Settings,
+    bool Monitored,
     string ProfileId,
     IReadOnlyList<AnimeQualityProfile> Profiles,
     int WantedCount,
@@ -1328,7 +1333,6 @@ public sealed record AnimeAcquisitionPanel(
     IReadOnlyList<LibraryRoot> Roots,
     IReadOnlyList<AcquisitionHistoryEntry> RecentHistory)
 {
-    public bool Monitored => Settings?.Monitored == true;
     public bool CanAcquire => Mode != AnimeManagementMode.ReadOnlyCoexistence;
 }
 

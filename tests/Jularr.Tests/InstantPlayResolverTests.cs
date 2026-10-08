@@ -34,10 +34,10 @@ public sealed class InstantPlayResolverTests
 
     /// <param name="prioritized">A profile already waits for the Movie, so the intent has nothing left to add.</param>
     private static OpenRequestFacts Open(AcquisitionRequestStatus status, bool prioritized = true, bool monitored = true) =>
-        new(status, monitored, CoversWork: true, new HashSet<Guid>(), new HashSet<Guid>(), prioritized, new HashSet<Guid>());
+        new(status, monitored, CoversWork: true, new HashSet<Guid>(), prioritized, new HashSet<Guid>());
 
-    private static OpenRequestFacts OpenSeries(AcquisitionRequestStatus status, Guid[] covers, Guid[]? prioritized = null, Guid[]? excluded = null, bool monitored = true) =>
-        new(status, monitored, CoversWork: false, covers.ToHashSet(), (excluded ?? []).ToHashSet(), false, (prioritized ?? []).ToHashSet());
+    private static OpenRequestFacts OpenSeries(AcquisitionRequestStatus status, Guid[] covers, Guid[]? prioritized = null, bool monitored = true) =>
+        new(status, monitored, CoversWork: false, covers.ToHashSet(), false, (prioritized ?? []).ToHashSet());
 
     private static OpenRequestFacts Pending() => Open(AcquisitionRequestStatus.Pending);
 
@@ -283,14 +283,11 @@ public sealed class InstantPlayResolverTests
     }
 
     [TestMethod]
-    public void AdminCurationBeatsAPlaybackIntent()
+    public void MonitoringTurnedOffBeatsAPlaybackIntent()
     {
         var units = new[] { Unit(1, 1, local: false), Unit(1, 2, local: false) };
-        var excluded = Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, [units[1].Id], excluded: [units[0].Id]));
         var stopped = Series(units, open: OpenSeries(AcquisitionRequestStatus.Approved, [units[0].Id, units[1].Id], monitored: false));
 
-        AssertAction(PrimaryActionResolver.Resolve(excluded, Everything), PrimaryActionKind.None, PrimaryActionReason.ExcludedFromRequest, units[0].Id);
-        AssertAction(PrimaryActionResolver.Resolve(excluded, Everything, units[0].Id), PrimaryActionKind.None, PrimaryActionReason.ExcludedFromRequest, units[0].Id);
         AssertAction(PrimaryActionResolver.Resolve(stopped, Everything), PrimaryActionKind.None, PrimaryActionReason.MonitoringStopped, units[0].Id);
         AssertAction(PrimaryActionResolver.Resolve(Movie(false, open: Open(AcquisitionRequestStatus.Approved, monitored: false)), Everything), PrimaryActionKind.None, PrimaryActionReason.MonitoringStopped);
     }

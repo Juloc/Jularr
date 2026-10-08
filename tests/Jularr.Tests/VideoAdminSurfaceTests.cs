@@ -6,6 +6,7 @@ using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Operations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -131,31 +132,34 @@ public sealed class VideoAdminSurfaceTests
     }
 
     [TestMethod]
-    public async Task SwitchingOneEpisodeOffKeepsTheAllScopeSoLaterEpisodesAreStillMonitored()
+    public async Task SwitchingOneEpisodeOffDecidesOnlyThatEpisodeSoLaterEpisodesAreStillMonitored()
     {
         await using var host = await SeriesHostAsync();
         var request = await host.CreateApprovedAsync();
         var monitoring = host.Get<VideoMonitoringService>();
         var details = host.Get<AdminVideoMediaService>();
+        var resolver = host.Get<MonitoringResolver>();
 
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, false, CancellationToken.None));
 
-        var stored = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, stored.Scope, "One switch never rewrites the scope into a list of every episode.");
-        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, stored.ExcludedEpisodeIds);
-        Assert.AreEqual(0, stored.SelectedEpisodeIds.Length);
+        var view = await resolver.LoadAsync(host.Work.Id, CancellationToken.None);
+        Assert.IsFalse(view.IsMonitored(host.SecondEpisodeId!.Value), "The episode itself is off.");
+        Assert.IsTrue(view.IsWorkMonitored, "One switch never rewrites the Work into a list of every episode.");
+        Assert.AreEqual(1, view.DecidedIds(MonitoringTargetKind.Episode, monitored: false).Count());
+        Assert.AreEqual(0, view.DecidedIds(MonitoringTargetKind.Episode, monitored: true).Count());
 
         var later = await host.AddEpisodeAsync(1, 9);
         var detail = (await details.LoadAsync(MediaAcquisitionKind.Tv, host.Work.Id, CancellationToken.None))!;
         Assert.AreEqual(AdminMediaMonitoring.Partial, detail.MediumMonitoring);
         Assert.IsFalse(detail.Episodes.Single(episode => episode.Id == host.SecondEpisodeId).Monitored);
-        Assert.IsTrue(detail.Episodes.Single(episode => episode.Id == later.Id).Monitored, "An episode a metadata refresh adds later is monitored, as the All scope says.");
+        Assert.IsTrue(detail.Episodes.Single(episode => episode.Id == later.Id).Monitored, "An episode a metadata refresh adds later is monitored, as the Work says.");
 
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, true, CancellationToken.None));
-        stored = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
-        Assert.AreEqual(0, stored.ExcludedEpisodeIds!.Length, "Switching it back on removes the exclusion.");
+        Assert.IsNull((await resolver.LoadAsync(host.Work.Id, CancellationToken.None)).DecisionOf(host.SecondEpisodeId!.Value), "Switching it back to what it inherits removes its decision.");
+        Assert.AreEqual(VideoMonitoringOutcome.Unchanged, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, true, CancellationToken.None));
         Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetSeasonMonitoredAsync(host.Work.Id, 9, true, CancellationToken.None));
         Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, Guid.NewGuid(), true, CancellationToken.None));
+        Assert.IsNotNull(request);
     }
 
     [TestMethod]
@@ -170,7 +174,7 @@ public sealed class VideoAdminSurfaceTests
         }
 
         await host.Environment.Db.SaveChangesAsync();
-        var request = await host.CreateApprovedAsync();
+        await host.CreateApprovedAsync();
         var monitoring = host.Get<VideoMonitoringService>();
         var details = host.Get<AdminVideoMediaService>();
 
@@ -187,8 +191,8 @@ public sealed class VideoAdminSurfaceTests
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetSeasonMonitoredAsync(host.Work.Id, 1, true, CancellationToken.None));
         detail = (await details.LoadAsync(MediaAcquisitionKind.Tv, host.Work.Id, CancellationToken.None))!;
         Assert.AreEqual(AdminMediaMonitoring.On, detail.Seasons.Single().Monitoring);
-        var stored = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
-        Assert.AreEqual(0, stored.ExcludedSeasonIds!.Length);
+        var view = await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None);
+        Assert.AreEqual(0, view.DecidedIds(MonitoringTargetKind.Episode, monitored: true).Count() + view.DecidedIds(MonitoringTargetKind.Episode, monitored: false).Count(), "The season's decision took the episode decisions with it.");
     }
 
     [TestMethod]
@@ -203,17 +207,18 @@ public sealed class VideoAdminSurfaceTests
         }
 
         await host.Environment.Db.SaveChangesAsync();
-        var request = await host.CreateApprovedAsync();
+        await host.CreateApprovedAsync();
         var monitoring = host.Get<VideoMonitoringService>();
+        var resolver = host.Get<MonitoringResolver>();
         await host.SetCustomScopeAsync([season.Id], [], false);
         await monitoring.SetSeriesAsync(host.Work.Id, VideoMonitoringService.OffScope, CancellationToken.None);
-        Assert.IsFalse(VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!.Monitored);
+        Assert.IsFalse((await resolver.LoadAsync(host.Work.Id, CancellationToken.None)).IsAnyMonitored);
 
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, true, CancellationToken.None));
 
-        var stored = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
-        Assert.IsTrue(stored.Monitored);
-        Assert.AreEqual(0, stored.SelectedSeasonIds!.Length, "The season selected before monitoring went off is not brought back.");
+        var view = await resolver.LoadAsync(host.Work.Id, CancellationToken.None);
+        Assert.IsTrue(view.IsAnyMonitored);
+        Assert.IsNull(view.DecisionOf(season.Id), "The season selected before monitoring went off is not brought back.");
         var detail = (await host.Get<AdminVideoMediaService>().LoadAsync(MediaAcquisitionKind.Tv, host.Work.Id, CancellationToken.None))!;
         Assert.AreEqual(1, detail.Episodes.Count(episode => episode.Monitored));
     }
@@ -224,60 +229,19 @@ public sealed class VideoAdminSurfaceTests
         await using var host = await SeriesHostAsync(episodes: true);
         var request = await host.CreateApprovedAsync();
         var monitoring = host.Get<VideoMonitoringService>();
+        var resolver = host.Get<MonitoringResolver>();
         await host.SetCustomScopeAsync([], [host.EpisodeId!.Value], false);
 
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, false, CancellationToken.None));
-        Assert.IsFalse(VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!.Monitored, "Nothing is left to monitor, so the request ends like monitoring Off.");
+        Assert.IsFalse((await resolver.LoadAsync(host.Work.Id, CancellationToken.None)).IsAnyMonitored, "Nothing is left to monitor, so the request ends like monitoring Off.");
+        Assert.AreEqual(AcquisitionRequestStatus.Rejected, (await host.GetAsync(request.Id)).Status);
         Assert.AreEqual(VideoMonitoringOutcome.Unchanged, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, false, CancellationToken.None));
 
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, true, CancellationToken.None));
-        var payload = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
-        Assert.IsTrue(payload.Monitored);
-        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, payload.SelectedEpisodeIds);
+        var view = await resolver.LoadAsync(host.Work.Id, CancellationToken.None);
+        Assert.IsTrue(view.IsMonitored(host.SecondEpisodeId!.Value));
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, (await host.GetAsync(request.Id)).Status, "The request the Off ended is the one that reopens.");
         Assert.AreEqual(1, (await host.Requests.ListAllAsync(100, CancellationToken.None)).Count);
-    }
-
-    [TestMethod]
-    public void UnitSwitchesComposeWhateverOrderTheyLandInAndNeverGrowWithTheEpisodeCount()
-    {
-        var created = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var now = created.AddDays(30);
-        var season = Guid.NewGuid();
-        var episodes = Enumerable.Range(1, 6000).Select(number => new VideoEpisodeRef(Guid.NewGuid(), season, 1, created.AddDays(-number))).ToList();
-        var baseline = new VideoRequestPayload(Guid.NewGuid(), "Long runner", 2000, VideoRequestScope.AllCurrentAndFuture, [], true);
-
-        var first = VideoUnitMonitoring.Switch(baseline, created, now, [episodes[0]], null, false);
-        var bothOrders = VideoUnitMonitoring.Switch(first, created, now, [episodes[1]], null, false);
-        var reverse = VideoUnitMonitoring.Switch(VideoUnitMonitoring.Switch(baseline, created, now, [episodes[1]], null, false), created, now, [episodes[0]], null, false);
-
-        CollectionAssert.AreEquivalent(bothOrders.ExcludedEpisodeIds!, reverse.ExcludedEpisodeIds!, "A switch applied to the state the other one already wrote keeps it, in either order.");
-        Assert.AreEqual(2, bothOrders.ExcludedEpisodeIds!.Length);
-        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, bothOrders.Scope);
-
-        var seasonOff = VideoUnitMonitoring.Switch(baseline, created, now, episodes, season, false);
-        Assert.AreEqual(0, seasonOff.ExcludedEpisodeIds!.Length, "A whole season is one exclusion, not one per episode.");
-        CollectionAssert.AreEqual(new[] { season }, seasonOff.ExcludedSeasonIds);
-        Assert.IsFalse(new VideoRequestSelection(seasonOff, created).Includes(episodes[0].Id, season, episodes[0].AiredAt));
-    }
-
-    [TestMethod]
-    public void AnEpisodeSwitchedOnUnderTheFutureScopeStaysAFutureScopeAndSelectsOnlyThatEpisode()
-    {
-        var created = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var past = new VideoEpisodeRef(Guid.NewGuid(), null, 1, created.AddDays(-400));
-        var future = new VideoEpisodeRef(Guid.NewGuid(), null, 1, created.AddDays(5));
-        var baseline = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.FutureOnly, [], true);
-
-        var on = VideoUnitMonitoring.Switch(baseline, created, created, [past], null, true);
-
-        Assert.AreEqual(VideoRequestScope.FutureOnly, on.Scope);
-        CollectionAssert.AreEqual(new[] { past.Id }, on.SelectedEpisodeIds);
-        var selection = new VideoRequestSelection(on, created);
-        Assert.IsTrue(selection.Includes(past.Id, null, past.AiredAt));
-        Assert.IsTrue(selection.Includes(future.Id, null, future.AiredAt));
-        var off = VideoUnitMonitoring.Switch(on, created, created, [future], null, false);
-        CollectionAssert.AreEqual(new[] { future.Id }, off.ExcludedEpisodeIds);
-        Assert.IsFalse(VideoUnitMonitoring.Switch(baseline with { Monitored = false }, created, created, [past], null, false).Monitored, "Switching a unit off while nothing is monitored changes nothing.");
     }
 
     [TestMethod]
@@ -297,33 +261,31 @@ public sealed class VideoAdminSurfaceTests
     }
 
     [TestMethod]
-    public async Task AnEpisodeSwitchedOnWhileAnotherIsSwitchedOffKeepsTheRequestOpenBecauseTheStatusFollowsTheWrittenPayload()
+    public async Task AnEpisodeSwitchedOnAndTheLastOneSwitchedOffLeaveTheRequestOpenInAnyOrder()
     {
-        await using var host = await SeriesHostAsync(episodes: true);
-        var request = await host.CreateApprovedAsync();
-        await host.SetCustomScopeAsync([], [host.EpisodeId!.Value], false);
-        var paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var slow = new VideoMonitoringService(
-            host.Environment.Db,
-            host.Requests,
-            host.Get<AcquisitionRequestService>(),
-            host.Get<VideoAcquisitionEngine>(),
-            host.Get<QualityProfileStore>(),
-            new PausingClock(paused, resume.Task));
+        foreach (var onFirst in new[] { true, false })
+        {
+            await using var host = await SeriesHostAsync(episodes: true);
+            var request = await host.CreateApprovedAsync();
+            await host.SetCustomScopeAsync([], [host.EpisodeId!.Value], false);
+            var monitoring = host.Get<VideoMonitoringService>();
 
-        // The first admin read "the last selected episode goes off" and stops right after that read.
-        var lastOff = Task.Run(() => slow.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, false, CancellationToken.None));
-        await paused.Task;
-        Assert.AreEqual(VideoMonitoringOutcome.Saved, await host.Get<VideoMonitoringService>().SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, true, CancellationToken.None));
-        resume.SetResult();
+            if (onFirst)
+            {
+                await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, true, CancellationToken.None);
+                await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, false, CancellationToken.None);
+            }
+            else
+            {
+                await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.EpisodeId!.Value, false, CancellationToken.None);
+                await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, true, CancellationToken.None);
+            }
 
-        Assert.AreEqual(VideoMonitoringOutcome.Saved, await lastOff);
-        var stored = await host.GetAsync(request.Id);
-        var payload = VideoRequestPayload.Parse(stored.PayloadJson)!;
-        Assert.IsTrue(payload.Monitored);
-        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, payload.SelectedEpisodeIds, "Both switches landed.");
-        Assert.AreEqual(AcquisitionRequestStatus.Approved, stored.Status, "A request is only closed together with a payload that is unmonitored.");
+            var view = await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None);
+            Assert.IsTrue(view.IsMonitored(host.SecondEpisodeId!.Value), $"Both switches landed (on first: {onFirst}).");
+            Assert.IsFalse(view.IsMonitored(host.EpisodeId!.Value));
+            Assert.AreEqual(AcquisitionRequestStatus.Approved, (await host.GetAsync(request.Id)).Status, "A request is only closed while nothing is monitored.");
+        }
     }
 
     [TestMethod]
@@ -339,13 +301,13 @@ public sealed class VideoAdminSurfaceTests
         Assert.AreEqual(VideoMonitoringOutcome.Unchanged, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId!.Value, false, CancellationToken.None), "A double click.");
 
         var after = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
-        Assert.AreEqual(before.ScopeRevision, after.ScopeRevision);
+        Assert.AreEqual(before.MonitoringRevision, after.MonitoringRevision);
         Assert.AreEqual(2, after.Searches);
         Assert.AreEqual("No release matched.", after.LastProblem);
     }
 
     [TestMethod]
-    public async Task ASeasonSwitchedOffIsStillExcludedAfterTheEngineWroteItsOwnState()
+    public async Task ASeasonSwitchedOffIsStillOffAfterTheEngineWroteItsOwnState()
     {
         await using var host = await SeriesHostAsync();
         var first = new WorkSeason { WorkId = host.Work.Id, SeasonNumber = 1, Title = "Season 1" };
@@ -365,76 +327,7 @@ public sealed class VideoAdminSurfaceTests
 
         var payload = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
         Assert.IsTrue(payload.Searches > 0 || payload.ActiveWorkEpisodeId is not null, "The engine searched and wrote its own fields.");
-        CollectionAssert.AreEqual(new[] { first.Id }, payload.ExcludedSeasonIds, "The season exclusion is Admin-owned and survives an engine write.");
-    }
-
-    [TestMethod]
-    public void TheSeasonExclusionIsAdminOwnedAndOlderPayloadsWithoutItStillRead()
-    {
-        var season = Guid.NewGuid();
-        var engine = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.AllCurrentAndFuture, [], true) { Searches = 3 };
-        var stored = engine with { ExcludedSeasonIds = [season], ScopeRevision = 4 };
-
-        var merged = (VideoRequestPayload)engine.Reconcile(stored.Serialize());
-
-        CollectionAssert.AreEqual(new[] { season }, merged.ExcludedSeasonIds);
-        Assert.AreEqual(4, merged.ScopeRevision);
-
-        var legacy = VideoRequestPayload.Parse("""{"workId":"00000000-0000-0000-0000-000000000001","title":"Show","scope":1,"selectedEpisodeIds":[],"monitorFuture":true}""")!;
-        Assert.IsNotNull(legacy.ExcludedSeasonIds);
-        Assert.AreEqual(0, legacy.ExcludedSeasonIds.Length);
-        Assert.IsTrue(new VideoRequestSelection(legacy, DateTime.UtcNow).Includes(Guid.NewGuid(), Guid.NewGuid(), null));
-    }
-
-    [TestMethod]
-    public void AWholeSeasonSwitchesAsOneUnitUnderEveryScopeAndAnIdlessSeasonFallsBackToItsEpisodes()
-    {
-        var created = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var season = Guid.NewGuid();
-        var other = Guid.NewGuid();
-        var inSeason = new[] { new VideoEpisodeRef(Guid.NewGuid(), season, 1, created.AddDays(-30)), new VideoEpisodeRef(Guid.NewGuid(), season, 1, created.AddDays(-20)) };
-        var elsewhere = new VideoEpisodeRef(Guid.NewGuid(), other, 2, created.AddDays(-10));
-
-        foreach (var scope in new[] { VideoRequestScope.AllCurrentAndFuture, VideoRequestScope.FutureOnly })
-        {
-            var payload = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, scope, [], true);
-            var off = VideoUnitMonitoring.Switch(payload, created, created, inSeason, season, false);
-            Assert.AreEqual(scope, off.Scope);
-            var offSelection = new VideoRequestSelection(off, created);
-            Assert.IsFalse(inSeason.Any(episode => offSelection.Includes(episode.Id, season, episode.AiredAt)));
-            Assert.IsTrue(offSelection.Includes(elsewhere.Id, other, created.AddDays(2)), "Other seasons are untouched.");
-
-            var on = VideoUnitMonitoring.Switch(off, created, created, inSeason, season, true);
-            Assert.AreEqual(0, on.ExcludedSeasonIds!.Length);
-            var onSelection = new VideoRequestSelection(on, created);
-            Assert.IsTrue(inSeason.All(episode => onSelection.Includes(episode.Id, season, episode.AiredAt)), "Switched back on it covers its past episodes too.");
-        }
-
-        var idless = inSeason.Select(episode => episode with { SeasonId = null }).ToList();
-        var all = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.AllCurrentAndFuture, [], true);
-        var idlessOff = VideoUnitMonitoring.Switch(all, created, created, idless, null, false);
-        CollectionAssert.AreEquivalent(idless.Select(episode => episode.Id).ToArray(), idlessOff.ExcludedEpisodeIds!, "Without a season id each existing episode is excluded.");
-        Assert.AreEqual(0, idlessOff.ExcludedSeasonIds!.Length);
-    }
-
-    [TestMethod]
-    public void AnEpisodeOffInASelectedSeasonIsExcludedAndTheCapIsEnforcedWithoutASeasonId()
-    {
-        var created = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var season = Guid.NewGuid();
-        var episode = new VideoEpisodeRef(Guid.NewGuid(), season, 1, created.AddDays(-5));
-        var custom = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.Custom, [], false, SelectedSeasonIds: [season]);
-
-        var off = VideoUnitMonitoring.Switch(custom, created, created, [episode], null, false);
-
-        CollectionAssert.AreEqual(new[] { episode.Id }, off.ExcludedEpisodeIds);
-        CollectionAssert.AreEqual(new[] { season }, off.SelectedSeasonIds);
-        Assert.IsTrue(off.Monitored);
-        Assert.AreSame(off, VideoUnitMonitoring.Switch(off, created, created, [episode], null, false), "Excluding an excluded episode changes nothing.");
-
-        var many = Enumerable.Range(0, 5001).Select(_ => new VideoEpisodeRef(Guid.NewGuid(), null, 1, created.AddDays(-5))).ToList();
-        var fromNothing = new VideoRequestPayload(Guid.NewGuid(), "Show", 2020, VideoRequestScope.Custom, [], false) { Monitored = false };
-        Assert.ThrowsExactly<ArgumentException>(() => VideoUnitMonitoring.Switch(fromNothing, created, created, many, null, true));
+        Assert.AreEqual(false, (await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None)).DecisionOf(first.Id), "The season's decision is not the engine's to write and survives its writes.");
     }
 
     [TestMethod]
@@ -460,7 +353,7 @@ public sealed class VideoAdminSurfaceTests
         Assert.IsNotNull(VideoRequestPayload.Parse(waiting.PayloadJson)!.NextSearchUtc);
 
         await using var all = await SeriesHostAsync();
-        var allRequest = await all.CreateApprovedAsync(new VideoRequestPayload(all.Work.Id, all.Work.CanonicalTitle, all.Work.Year, VideoRequestScope.Custom, [all.SecondEpisodeId!.Value], MonitorFuture: false));
+        var allRequest = await all.CreateApprovedAsync(MonitoringTestSupport.Choosing(all.Work.Id, all.Work.CanonicalTitle, all.Work.Year, VideoRequestScope.Custom, [all.SecondEpisodeId!.Value]));
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await all.Get<VideoMonitoringService>().SetSeriesAsync(all.Work.Id, "all", CancellationToken.None));
         await all.ProcessAsync(DateTime.UtcNow);
         var searching = VideoRequestPayload.Parse((await all.GetAsync(allRequest.Id)).PayloadJson)!;
@@ -686,33 +579,26 @@ public sealed class VideoAdminSurfaceTests
     }
 
     [TestMethod]
-    public async Task AnUncheckedEpisodeStaysUncheckedAndATickedSeasonKeepsCoveringItsLaterEpisodes()
+    public async Task AnUncheckedEpisodeStaysUncheckedAndFutureKeepsCoveringLaterEpisodes()
     {
         await using var host = await SeriesHostAsync();
-        var season = new WorkSeason { WorkId = host.Work.Id, SeasonNumber = 1 };
-        host.Environment.Db.WorkSeasons.Add(season);
-        foreach (var existing in host.Environment.Db.WorkEpisodes.Where(episode => episode.WorkId == host.Work.Id))
-        {
-            existing.SeasonId = season.Id;
-        }
-
-        await host.Environment.Db.SaveChangesAsync();
-        var upcoming = await host.AddEpisodeAsync(1, 3, DateTime.UtcNow.AddDays(3), season.Id);
+        var upcoming = await host.AddEpisodeAsync(1, 3, DateTime.UtcNow.AddDays(3));
         await host.CreateApprovedAsync();
-        var monitoring = host.Get<VideoMonitoringService>();
         var details = host.Get<AdminVideoMediaService>();
 
         async Task<Guid[]> MonitoredAsync() =>
             [.. (await details.LoadAsync(MediaAcquisitionKind.Tv, host.Work.Id, CancellationToken.None))!.Episodes.Where(episode => episode.Monitored).Select(episode => episode.Id).Order()];
 
-        await host.SetCustomScopeAsync([season.Id], [host.EpisodeId!.Value, upcoming.Id], true);
+        await host.SetCustomScopeAsync([], [host.EpisodeId!.Value, upcoming.Id], true);
         CollectionAssert.AreEqual(new[] { host.EpisodeId!.Value, upcoming.Id }.Order().ToArray(), await MonitoredAsync(), "The unchecked episode stays unchecked after saving and reloading.");
 
-        var later = await host.AddEpisodeAsync(1, 4, DateTime.UtcNow.AddDays(10), season.Id);
-        CollectionAssert.Contains(await MonitoredAsync(), later.Id, "A ticked season keeps covering the episodes that are added to it.");
+        var later = await host.AddEpisodeAsync(1, 4, DateTime.UtcNow.AddDays(10));
+        CollectionAssert.Contains(await MonitoredAsync(), later.Id, "With future on, an episode that is added later is monitored.");
 
         await host.SetCustomScopeAsync([], [host.EpisodeId!.Value], true);
-        CollectionAssert.AreEqual(new[] { host.EpisodeId!.Value }, await MonitoredAsync(), "Episodes aired after the anchor can be unchecked while future episodes are on.");
+        CollectionAssert.AreEquivalent(new[] { host.EpisodeId!.Value }, await MonitoredAsync(), "Episodes that exist and were left unchecked stay unchecked, aired or not.");
+        var newest = await host.AddEpisodeAsync(1, 5, DateTime.UtcNow.AddDays(20));
+        CollectionAssert.Contains(await MonitoredAsync(), newest.Id, "Only episodes that appear afterwards follow the Series.");
     }
 
     [TestMethod]
@@ -738,9 +624,10 @@ public sealed class VideoAdminSurfaceTests
         var payload = VideoRequestPayload.Parse(after.PayloadJson)!;
         Assert.AreEqual(0, host.Environment.Client.Grabs.Count, "The episode the search was for is no longer monitored.");
         Assert.AreEqual(AcquisitionRequestStatus.Approved, after.Status);
-        Assert.AreEqual(VideoRequestScope.Custom, payload.Scope);
-        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, payload.SelectedEpisodeIds);
-        Assert.AreEqual(1, payload.ScopeRevision);
+        var view = await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None);
+        Assert.IsTrue(view.IsMonitored(host.SecondEpisodeId!.Value));
+        Assert.IsFalse(view.IsMonitored(host.EpisodeId!.Value));
+        Assert.AreEqual(1, payload.MonitoringRevision);
 
         host.Indexer.OnSearch = null;
         await host.ProcessAsync(DateTime.UtcNow.AddMinutes(1));
@@ -772,31 +659,29 @@ public sealed class VideoAdminSurfaceTests
     }
 
     [TestMethod]
-    public void AStalePayloadNeverOverwritesAdminOwnedFieldsAndAnEditKeepsItsWakeUp()
+    public void AStalePayloadNeverOverwritesTheMonitoringFieldsAndAChangeKeepsItsWakeUp()
     {
         var work = Guid.NewGuid();
-        var episode = Guid.NewGuid();
-        var stale = new VideoRequestPayload(work, "Show", null, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true) { Searches = 3, NextSearchUtc = DateTime.UtcNow.AddHours(6), TriedReleases = ["tried"] };
-        var stored = new VideoRequestPayload(work, "Show", null, VideoRequestScope.Custom, [episode], MonitorFuture: false) { Monitored = false, ScopeRevision = 1 }.Serialize();
+        var stale = new VideoRequestPayload(work, "Show", null) { Searches = 3, NextSearchUtc = DateTime.UtcNow.AddHours(6), TriedReleases = ["tried"] };
+        var stored = new VideoRequestPayload(work, "Show", null) { EndedByMonitoring = true, MonitoringRevision = 1 }.Serialize();
 
         var merged = (VideoRequestPayload)stale.Reconcile(stored);
 
-        Assert.AreEqual(VideoRequestScope.Custom, merged.Scope);
-        CollectionAssert.AreEqual(new[] { episode }, merged.SelectedEpisodeIds);
-        Assert.IsFalse(merged.Monitored);
-        Assert.AreEqual(0, merged.Searches, "The edit's wake-up wins over the back-off the stale search computed.");
+        Assert.IsTrue(merged.EndedByMonitoring);
+        Assert.AreEqual(1, merged.MonitoringRevision);
+        Assert.AreEqual(0, merged.Searches, "The change's wake-up wins over the back-off the stale search computed.");
         Assert.IsNull(merged.NextSearchUtc);
         CollectionAssert.AreEqual(new[] { "tried" }, merged.TriedReleases!.ToArray(), "What the search did stays.");
 
-        var current = (VideoRequestPayload)(stale with { ScopeRevision = 1 }).Reconcile(stored);
-        Assert.AreEqual(3, current.Searches, "Without an edit in between the search state is the search's.");
+        var current = (VideoRequestPayload)(stale with { MonitoringRevision = 1 }).Reconcile(stored);
+        Assert.AreEqual(3, current.Searches, "Without a change in between the search state is the search's.");
     }
 
     [TestMethod]
     public async Task APayloadPatchRunsAgainOnTheNewerTextWhenSomeoneElseWroteFirst()
     {
         await using var host = await MovieHostAsync();
-        var request = await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, "Dune", 2021, VideoRequestScope.WholeWork, [], MonitorFuture: false) { Searches = 1 });
+        var request = await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, "Dune", 2021) { Searches = 1 });
         var attempts = 0;
 
         await host.Requests.PatchPayloadAsync(
@@ -809,14 +694,14 @@ public sealed class VideoAdminSurfaceTests
                     host.Requests.UpdatePayloadAsync(request.Id, (VideoRequestPayload.Parse(stored)! with { Searches = 7 }).Serialize(), CancellationToken.None).GetAwaiter().GetResult();
                 }
 
-                return (VideoRequestPayload.Parse(stored)! with { ScopeRevision = (VideoRequestPayload.Parse(stored)!.ScopeRevision) + 1 }).Serialize();
+                return (VideoRequestPayload.Parse(stored)! with { MonitoringRevision = VideoRequestPayload.Parse(stored)!.MonitoringRevision + 1 }).Serialize();
             },
             CancellationToken.None);
 
         var payload = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
         Assert.AreEqual(2, attempts);
         Assert.AreEqual(7, payload.Searches, "The other writer's change is not lost.");
-        Assert.AreEqual(1, payload.ScopeRevision);
+        Assert.AreEqual(1, payload.MonitoringRevision);
     }
 
     [TestMethod]
@@ -841,38 +726,33 @@ public sealed class VideoAdminSurfaceTests
     }
 
     [TestMethod]
-    public async Task APayloadWrittenBeforeTheMonitoringFieldsExistedStillWorks()
+    public async Task ARequestWithoutAPayloadStartsMonitoredAndOneThatAlreadyAppliedItsChoiceFollowsTheWork()
     {
         await using var host = await MovieHostAsync();
-        var current = new VideoRequestPayload(host.Work.Id, "Dune", 2021, VideoRequestScope.WholeWork, [], MonitorFuture: false).Serialize();
-        var legacy = new System.Text.Json.Nodes.JsonObject(System.Text.Json.Nodes.JsonNode.Parse(current)!.AsObject()
-            .Where(pair => pair.Key is not ("monitored" or "monitorFutureFromUtc" or "excludedEpisodeIds" or "scopeRevision"))
-            .Select(pair => new KeyValuePair<string, System.Text.Json.Nodes.JsonNode?>(pair.Key, pair.Value?.DeepClone())));
-        Assert.IsFalse(legacy.ContainsKey("monitored"));
-
-        var parsed = VideoRequestPayload.Parse(legacy.ToJsonString())!;
-        Assert.IsTrue(parsed.Monitored, "A request made before monitoring was a field is monitored.");
-        Assert.IsNull(parsed.MonitorFutureFromUtc);
-        Assert.AreEqual(0, parsed.ScopeRevision);
-
-        var request = await host.Requests.CreateAsync(
-            new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", host.TmdbId, "Dune", null, null, legacy.ToJsonString()),
+        var plain = await host.Requests.CreateAsync(
+            new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", host.TmdbId, "Dune", null, null),
             "owner",
             AcquisitionRequestStatus.Approved,
             "owner",
             CancellationToken.None);
         await host.ProcessAsync(DateTime.UtcNow);
 
-        Assert.AreEqual(AcquisitionRequestStatus.Downloading, (await host.GetAsync(request.Id)).Status);
-        var selection = new VideoRequestSelection(parsed with { Scope = VideoRequestScope.FutureOnly }, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-        Assert.IsTrue(selection.Includes(Guid.NewGuid(), null, new DateTime(2020, 6, 1, 0, 0, 0, DateTimeKind.Utc)), "Future counts from the request creation when no anchor was stored.");
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, (await host.GetAsync(plain.Id)).Status, "A request that carries nothing monitors the whole Movie.");
+        Assert.IsTrue((await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None)).IsWorkMonitored);
+        Assert.IsNull(VideoRequestPayload.Parse((await host.GetAsync(plain.Id)).PayloadJson)!.Requested, "The choice is applied once and then gone from the request.");
+
+        await using var applied = await MovieHostAsync();
+        var request = await applied.CreateApprovedAsync(new VideoRequestPayload(applied.Work.Id, "Dune", 2021));
+        await applied.ProcessAsync(DateTime.UtcNow);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Rejected, (await applied.GetAsync(request.Id)).Status, "Nothing monitors the Movie and the request carries no choice, so it ends like monitoring Off.");
     }
 
     [TestMethod]
     public async Task AStatusAndPayloadChangeLandsTogetherOrNotAtAll()
     {
         await using var host = await MovieHostAsync();
-        var request = await host.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021));
+        var request = await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, "Dune", 2021));
         var interleaved = false;
 
         // Somebody switches monitoring on between the moment the Off is decided and the moment it is written.
@@ -883,10 +763,10 @@ public sealed class VideoAdminSurfaceTests
                 if (!interleaved)
                 {
                     interleaved = true;
-                    host.Requests.UpdatePayloadAsync(request.Id, (VideoRequestPayload.Parse(stored)! with { Monitored = true, ScopeRevision = 5 }).Serialize(), CancellationToken.None).GetAwaiter().GetResult();
+                    host.Requests.UpdatePayloadAsync(request.Id, (VideoRequestPayload.Parse(stored)! with { EndedByMonitoring = false, MonitoringRevision = 5 }).Serialize(), CancellationToken.None).GetAwaiter().GetResult();
                 }
 
-                return (VideoRequestPayload.Parse(stored)! with { Monitored = false }).Serialize();
+                return (VideoRequestPayload.Parse(stored)! with { EndedByMonitoring = true }).Serialize();
             },
             AcquisitionRequestStatus.Approved,
             AcquisitionRequestStatus.Rejected,
@@ -897,8 +777,8 @@ public sealed class VideoAdminSurfaceTests
         var payload = VideoRequestPayload.Parse(after.PayloadJson);
         Assert.IsTrue(offLanded);
         Assert.AreEqual(AcquisitionRequestStatus.Rejected, after.Status);
-        Assert.IsFalse(payload!.Monitored, "Status and payload agree: the write ran again on the newer payload.");
-        Assert.AreEqual(5, payload.ScopeRevision);
+        Assert.IsTrue(payload!.EndedByMonitoring, "Status and payload agree: the write ran again on the newer payload.");
+        Assert.AreEqual(5, payload.MonitoringRevision);
 
         var stale = await host.Requests.PatchPayloadAsync(request.Id, stored => stored, AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Completed, null, CancellationToken.None);
         Assert.IsFalse(stale, "A request that is not in the expected status is left alone.");
@@ -943,22 +823,22 @@ public sealed class VideoAdminSurfaceTests
     }
 
     [TestMethod]
-    public async Task AnEngineWriteKeepsAnExcludedEpisodeExcludedAndAdminWritesKeepWhatTheSearchDid()
+    public async Task AnEngineWriteKeepsAnUncheckedEpisodeUncheckedAndMonitoringChangesKeepWhatTheSearchDid()
     {
         await using var host = await SeriesHostAsync();
-        var upcoming = await host.AddEpisodeAsync(1, 3, DateTime.UtcNow.AddDays(4));
         var request = await host.CreateApprovedAsync();
-        await host.SetCustomScopeAsync([], [host.EpisodeId!.Value], true);
+        await host.SetCustomScopeAsync([], [host.EpisodeId!.Value], false);
+        var resolver = host.Get<MonitoringResolver>();
 
         await host.ProcessAsync(DateTime.UtcNow);
 
         var payload = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
         Assert.AreEqual(host.EpisodeId, payload.ActiveWorkEpisodeId, "The search's own fields are written.");
-        CollectionAssert.Contains(payload.ExcludedEpisodeIds!, upcoming.Id, "The unchecked future episode stays excluded after the engine wrote.");
+        Assert.IsFalse((await resolver.LoadAsync(host.Work.Id, CancellationToken.None)).IsMonitored(host.SecondEpisodeId!.Value), "The unchecked episode stays unchecked after the engine wrote.");
 
-        await host.SetCustomScopeAsync([], [host.EpisodeId!.Value, host.SecondEpisodeId!.Value], true);
+        await host.SetCustomScopeAsync([], [host.EpisodeId!.Value, host.SecondEpisodeId!.Value], false);
         var afterEdit = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
-        Assert.AreEqual(host.EpisodeId, afterEdit.ActiveWorkEpisodeId, "An Admin edit does not forget the download that is in flight.");
+        Assert.AreEqual(host.EpisodeId, afterEdit.ActiveWorkEpisodeId, "A monitoring change does not forget the download that is in flight.");
         Assert.IsNotNull(afterEdit.TriedReleases);
     }
 
@@ -984,7 +864,7 @@ public sealed class VideoAdminSurfaceTests
         var after = await host.GetAsync(request.Id);
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, after.Status, "The download was handed over before the Off, so it is recorded and imported.");
         Assert.IsNotNull(after.OperationId);
-        Assert.IsFalse(VideoRequestPayload.Parse(after.PayloadJson)!.Monitored, "Monitoring stays off.");
+        Assert.IsFalse((await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None)).IsAnyMonitored, "Monitoring stays off.");
 
         host.Environment.Client.BeforeGrab = null;
         host.CompleteInSabnzbd(after, "/downloads/movies/Dune.2021");
@@ -993,7 +873,7 @@ public sealed class VideoAdminSurfaceTests
 
         var done = await host.GetAsync(request.Id);
         Assert.AreEqual(AcquisitionRequestStatus.Completed, done.Status);
-        Assert.IsFalse(VideoRequestPayload.Parse(done.PayloadJson)!.Monitored);
+        Assert.IsFalse((await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None)).IsAnyMonitored);
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
     }
 
@@ -1001,14 +881,15 @@ public sealed class VideoAdminSurfaceTests
     public async Task AnOffResultIsDroppedWhenAnAdminEditFollowedWhatTheRunRead()
     {
         await using var host = await MovieHostAsync();
-        var request = await host.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021));
+        var request = await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, "Dune", 2021));
         var monitoring = host.Get<VideoMonitoringService>();
         var requests = host.Get<AcquisitionRequestService>();
+        await monitoring.SetMovieMonitoredAsync(host.Work.Id, true, CancellationToken.None);
         await host.Requests.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
         await monitoring.SetMovieMonitoredAsync(host.Work.Id, false, CancellationToken.None);
         var read = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!;
-        Assert.IsFalse(read.Monitored);
-        var offResult = new AcquisitionExecution(AcquisitionRequestStatus.Rejected, VideoMonitoringService.MonitoringTurnedOff) { StillApplies = VideoRequestPayload.StillAtRevision(read.ScopeRevision) };
+        Assert.IsFalse((await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None)).IsAnyMonitored);
+        var offResult = new AcquisitionExecution(AcquisitionRequestStatus.Rejected, VideoMonitoringService.MonitoringTurnedOff) { StillApplies = VideoRequestPayload.StillAtRevision(read.MonitoringRevision) };
 
         // Admin switches monitoring on after the run read Off and before its result is written.
         await monitoring.SetMovieMonitoredAsync(host.Work.Id, true, CancellationToken.None);
@@ -1016,9 +897,9 @@ public sealed class VideoAdminSurfaceTests
 
         var after = await host.GetAsync(request.Id);
         Assert.AreEqual(AcquisitionRequestStatus.Approved, after.Status, "The stale Off does not end a request that was switched on again.");
-        Assert.IsTrue(VideoRequestPayload.Parse(after.PayloadJson)!.Monitored);
+        Assert.IsTrue((await host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None)).IsAnyMonitored);
 
-        await requests.ApplyManualExecutionAsync(request.Id, offResult with { StillApplies = VideoRequestPayload.StillAtRevision(VideoRequestPayload.Parse(after.PayloadJson)!.ScopeRevision) }, CancellationToken.None);
+        await requests.ApplyManualExecutionAsync(request.Id, offResult with { StillApplies = VideoRequestPayload.StillAtRevision(VideoRequestPayload.Parse(after.PayloadJson)!.MonitoringRevision) }, CancellationToken.None);
         Assert.AreEqual(AcquisitionRequestStatus.Approved, (await host.GetAsync(request.Id)).Status, "Only a request that is still being searched is ended by a result.");
     }
 
@@ -1031,7 +912,7 @@ public sealed class VideoAdminSurfaceTests
         var requests = host.Get<AcquisitionRequestService>();
         await host.SetCustomScopeAsync([], [host.EpisodeId!.Value], false);
         await host.Requests.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
-        var revision = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!.ScopeRevision;
+        var revision = VideoRequestPayload.Parse((await host.GetAsync(request.Id)).PayloadJson)!.MonitoringRevision;
         var allAvailable = new AcquisitionExecution(AcquisitionRequestStatus.Completed, "All requested TV episodes are available.") { StillApplies = VideoRequestPayload.StillAtRevision(revision) };
 
         await requests.ApplyManualExecutionAsync(request.Id, allAvailable, CancellationToken.None);
@@ -1041,14 +922,14 @@ public sealed class VideoAdminSurfaceTests
         var second = await widened.CreateApprovedAsync();
         await widened.SetCustomScopeAsync([], [widened.EpisodeId!.Value], false);
         await widened.Requests.TryTransitionStatusAsync(second.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
-        var read = VideoRequestPayload.Parse((await widened.GetAsync(second.Id)).PayloadJson)!.ScopeRevision;
+        var read = VideoRequestPayload.Parse((await widened.GetAsync(second.Id)).PayloadJson)!.MonitoringRevision;
         await widened.Get<VideoMonitoringService>().SetSeriesAsync(widened.Work.Id, "all", CancellationToken.None);
 
         await widened.Get<AcquisitionRequestService>().ApplyManualExecutionAsync(second.Id, allAvailable with { StillApplies = VideoRequestPayload.StillAtRevision(read) }, CancellationToken.None);
 
         var after = await widened.GetAsync(second.Id);
         Assert.AreEqual(AcquisitionRequestStatus.Approved, after.Status, "A result computed from the narrower scope does not end the widened one.");
-        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, VideoRequestPayload.Parse(after.PayloadJson)!.Scope);
+        Assert.IsTrue((await widened.Get<MonitoringResolver>().LoadAsync(widened.Work.Id, CancellationToken.None)).IsWorkMonitored);
     }
 
     [TestMethod]
@@ -1095,7 +976,7 @@ public sealed class VideoAdminSurfaceTests
     public async Task AnEditDoesNotRestartTheStaleClockOfAClaimedRequest()
     {
         await using var host = await MovieHostAsync();
-        var request = await host.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021));
+        var request = await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, "Dune", 2021));
         await host.Requests.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Approved], AcquisitionRequestStatus.Searching, null, null, CancellationToken.None);
         var claimed = await host.GetAsync(request.Id);
 
@@ -1110,7 +991,7 @@ public sealed class VideoAdminSurfaceTests
     public async Task ARefusedDownloadAfterAnEditKeepsItsBackOffAndProblem()
     {
         await using var host = await MovieHostAsync();
-        var request = await host.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021));
+        var request = await host.CreateApprovedAsync();
         host.Environment.Client.GrabResults.Enqueue(new Jularr.Web.Features.Acquisition.Sabnzbd.SabnzbdGrabResult(false, [], "Invalid NZB"));
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1134,12 +1015,11 @@ public sealed class VideoAdminSurfaceTests
     }
 
     [TestMethod]
-    public async Task AFailedRequestThatWasSwitchedOffOffersNoSearchAndAnEditReplacesAStaleMessage()
+    public async Task AFailedRequestThatWasSwitchedOffOffersNoSearchAndAChangeReplacesAStaleMessage()
     {
         await using var host = await MovieHostAsync();
-        var off = VideoRequestPayload.Default(MediaAcquisitionKind.Movie, host.Work.Id, "Dune", 2021) with { Monitored = false };
         var failed = await host.Requests.CreateAsync(
-            new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", host.TmdbId, "Dune", null, null, off.Serialize()),
+            new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", host.TmdbId, "Dune", null, null, new VideoRequestPayload(host.Work.Id, "Dune", 2021).Serialize()),
             "owner",
             AcquisitionRequestStatus.Failed,
             "owner",
@@ -1148,11 +1028,12 @@ public sealed class VideoAdminSurfaceTests
 
         Assert.IsFalse((await wanted.LoadAsync(CancellationToken.None)).Single().CanSearch, "A request that is off is not searched or retried.");
 
-        await host.Requests.PatchPayloadAsync(failed.Id, stored => (VideoRequestPayload.Parse(stored)! with { Monitored = true }).Serialize(), CancellationToken.None);
+        await host.Get<MonitoringCommands>().SetAsync(MonitoringTargetKind.Work, host.Work.Id, true, CancellationToken.None);
         Assert.IsTrue((await wanted.LoadAsync(CancellationToken.None)).Single().CanSearch);
+        Assert.IsNotNull(failed);
 
         await using var waiting = await MovieHostAsync();
-        var request = await waiting.CreateApprovedAsync(VideoRequestPayload.Default(MediaAcquisitionKind.Movie, waiting.Work.Id, "Dune", 2021));
+        var request = await waiting.CreateApprovedAsync(new VideoRequestPayload(waiting.Work.Id, "Dune", 2021));
         await waiting.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Approved, "No release found. Searching again 2030-01-01 00:00 UTC.", null, null, null, CancellationToken.None);
 
         await waiting.Get<VideoMonitoringService>().SetMovieMonitoredAsync(waiting.Work.Id, true, CancellationToken.None);
@@ -1170,6 +1051,7 @@ public sealed class VideoAdminSurfaceTests
             host.Get<QualityProfileStore>(),
             db,
             new VideoRequestWorkResolver(db),
+            new MonitoringResolver(db),
             host.Services.GetServices<IAcquisitionRequestExecutor>(),
             TimeProvider.System);
 
@@ -1189,23 +1071,6 @@ public sealed class VideoAdminSurfaceTests
         {
             Count++;
             return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
-        }
-    }
-
-    /// <summary>A clock that stops the first caller until the test lets it go, so a second admin can act between that caller's read and its write.</summary>
-    private sealed class PausingClock(TaskCompletionSource paused, Task resume) : TimeProvider
-    {
-        private int calls;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            if (Interlocked.Increment(ref calls) == 1)
-            {
-                paused.TrySetResult();
-                resume.Wait();
-            }
-
-            return DateTimeOffset.UtcNow;
         }
     }
 }

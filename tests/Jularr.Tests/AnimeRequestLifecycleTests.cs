@@ -138,7 +138,7 @@ public sealed class AnimeRequestLifecycleTests
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
         await environment.Scheduler.RunNowAsync(anime.Key, AnimeSearchTrigger.SearchOnAdd, CancellationToken.None);
         await environment.RequestPassAsync();
-        var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
+        var before = await environment.AnimeMonitoringAsync(anime.Key);
 
         // A second request for the same title is the open one; a retry or a background continue runs the executor again.
         Assert.AreEqual(request.Id, (await environment.SubmitRequestAsync(FrierenId)).Id);
@@ -150,9 +150,9 @@ public sealed class AnimeRequestLifecycleTests
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, continued.Status, continued.StatusMessage);
         Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count, "The release is submitted once, whatever the number of runs and restarts.");
         Assert.AreEqual(1, await environment.Db.Anime.CountAsync());
-        var after = (await environment.MonitoringStateAsync()).Anime[anime.Key];
-        Assert.AreEqual(settings.Monitored, after.Monitored);
-        CollectionAssert.AreEquivalent(settings.SeasonOverrides.ToArray(), after.SeasonOverrides.ToArray());
+        var after = await environment.AnimeMonitoringAsync(anime.Key);
+        Assert.AreEqual(before.IsWorkMonitored, after.IsWorkMonitored);
+        Assert.AreEqual(before.HasNodeDecisions, after.HasNodeDecisions);
     }
 
     [TestMethod]

@@ -36,7 +36,7 @@ public sealed class AnimeAcquisitionRequestExecutorTests
         Assert.AreEqual($"/Library/Anime/{anime.Id}", Assert.ContainsSingle(library.Entries).Card.Href, "A requested anime is in the Library before any scan or file.");
 
         var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
-        Assert.IsTrue(settings.Monitored);
+        Assert.IsTrue((await environment.AnimeMonitoringAsync()).IsWorkMonitored);
         Assert.IsTrue(settings.SearchOnAdd);
         Assert.AreEqual(environment.Root.Id, settings.TargetRootId);
         Assert.AreEqual(AnimeManagementMode.JularrManaged, SonarrParallelSafety.GetMode(await environment.Ownership.LoadAsync(), anime.Key));
@@ -94,7 +94,7 @@ public sealed class AnimeAcquisitionRequestExecutorTests
 
         Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "S01E02 has aired (the series is finished) and is missing, so the request is not completed.");
         Assert.AreEqual(1, await environment.Db.Anime.CountAsync());
-        Assert.IsTrue((await environment.MonitoringStateAsync()).Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored);
+        Assert.IsTrue((await environment.AnimeMonitoringAsync()).IsWorkMonitored);
         Assert.AreEqual(1, environment.Scheduler.QueuedRequests);
     }
 

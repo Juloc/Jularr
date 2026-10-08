@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -205,6 +206,8 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
             .AddSingleton<AcquisitionRequestService>()
             .AddSingleton(new AnimeMonitoringStore(directory.FullName))
             .AddSingleton<VideoRequestWorkResolver>()
+            .AddSingleton<MonitoringResolver>()
+            .AddSingleton<MonitoringCommands>()
             .AddSingleton<VideoRequestScopeResolver>()
             .AddSingleton<VideoMonitoringService>()
             .AddSingleton<AdminVideoMediaService>()
@@ -232,51 +235,39 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
         return new VideoAcquisitionTestHost(environment, services.BuildServiceProvider(), services, importer, kind, work, tmdbId, indexer, episode?.Id, secondEpisode?.Id);
     }
 
-    /// <summary>Creates the approved request of the host's Work without running the Wanted pass, so a test can change monitoring before the first search.</summary>
-    public Task<AcquisitionRequest> CreateApprovedAsync(VideoRequestPayload? payload = null) =>
-        Requests.CreateAsync(
-            new AcquisitionRequestDraft(Kind, "tmdb", TmdbId, Work.CanonicalTitle, null, null, payload?.Serialize()),
+    /// <summary>
+    /// Creates the approved request of the host's Work without running the Wanted pass, so a test can change monitoring before the first search. What the
+    /// requester chose is applied as monitoring decisions right away, the way the first run of the request would.
+    /// </summary>
+    public async Task<AcquisitionRequest> CreateApprovedAsync(VideoRequestPayload? payload = null)
+    {
+        var created = await Requests.CreateAsync(
+            new AcquisitionRequestDraft(Kind, "tmdb", TmdbId, Work.CanonicalTitle, null, null, (payload ?? VideoRequestPayload.Default(Work.Id, Work.CanonicalTitle, Work.Year)).Serialize()),
             "owner",
             AcquisitionRequestStatus.Approved,
             "owner",
             CancellationToken.None);
+        if (VideoRequestPayload.Parse(created.PayloadJson)?.Requested is { } choice)
+        {
+            await Get<VideoRequestScopeResolver>().ApplyAsync(Work.Id, choice, CancellationToken.None);
+            await Requests.PatchPayloadAsync(created.Id, stored => VideoRequestPayload.Parse(stored) is { } current ? (current with { Requested = null }).Serialize() : stored, CancellationToken.None);
+            created = await GetAsync(created.Id);
+        }
+
+        return created;
+    }
 
     /// <summary>
-    /// Puts the Series on a custom selection the way an Admin edit stores one (a new scope revision and a fresh search; what the selection
-    /// would include but the list left out is excluded), so a test can start from the state a Request-dialog request has.
+    /// Puts the Series on a custom selection the way an Admin edit stores one: ordinary monitoring decisions, and the request wakes for a fresh search. What the
+    /// request itself still carried to apply is dropped, so the first run does not replace the selection.
     /// </summary>
     public async Task SetCustomScopeAsync(IReadOnlyCollection<Guid> seasonIds, IReadOnlyCollection<Guid> episodeIds, bool monitorFuture)
     {
-        var open = await Get<VideoMonitoringService>().FindOpenRequestAsync(Kind, Work.Id, CancellationToken.None) ?? await CreateApprovedAsync();
-        var chosen = await Get<VideoRequestScopeResolver>().BuildTvPayloadAsync(Work, new VideoRequestScopeChoice(VideoRequestScope.Custom, seasonIds, episodeIds, monitorFuture), CancellationToken.None);
-        var now = DateTime.UtcNow;
-        var selection = new VideoRequestSelection(chosen with { MonitorFutureFromUtc = now }, now);
-        var checkedEpisodes = episodeIds.ToHashSet();
-        var episodes = await Environment.Db.WorkEpisodes.AsNoTracking().Where(x => x.WorkId == Work.Id).ToListAsync();
-        var excluded = episodes.Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt) && !checkedEpisodes.Contains(x.Id)).Select(x => x.Id).ToArray();
-        VideoRequestPayload Current(string? stored) => VideoRequestPayload.Parse(stored) ?? VideoRequestPayload.Default(Kind, Work.Id, Work.CanonicalTitle, Work.Year);
-        var patched = await Requests.PatchPayloadAsync(
-            open.Id,
-            stored => (Current(stored) with
-            {
-                Monitored = true,
-                Scope = chosen.Scope,
-                SelectedEpisodeIds = chosen.SelectedEpisodeIds,
-                SelectedSeasonIds = chosen.SelectedSeasonIds,
-                MonitorFuture = chosen.MonitorFuture,
-                MonitorFutureFromUtc = now,
-                ExcludedEpisodeIds = excluded,
-                ExcludedSeasonIds = [],
-                ScopeRevision = Current(stored).ScopeRevision + 1,
-                Searches = 0,
-                NextSearchUtc = null,
-                LastProblem = null
-            }).Serialize(),
-            open.Status,
-            open.Status,
-            open.Status == AcquisitionRequestStatus.Approved ? VideoMonitoringService.MonitoringChanged : null,
-            CancellationToken.None);
-        Assert.IsTrue(patched, "The request changed while the test set it up.");
+        var open = await Get<VideoMonitoringService>().FindOpenRequestAsync(Kind, Work.Id, CancellationToken.None) ?? await CreateApprovedAsync(new VideoRequestPayload(Work.Id, Work.CanonicalTitle, Work.Year));
+        await Requests.PatchPayloadAsync(open.Id, stored => VideoRequestPayload.Parse(stored) is { } current ? (current with { Requested = null }).Serialize() : stored, CancellationToken.None);
+        var scopes = Get<VideoRequestScopeResolver>();
+        await scopes.ApplyAsync(Work.Id, await scopes.ValidateTvAsync(Work.Id, new VideoRequestScopeChoice(VideoRequestScope.Custom, seasonIds, episodeIds, monitorFuture), CancellationToken.None), CancellationToken.None);
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, await Get<VideoMonitoringService>().ReconcileAsync(Work.Id, Kind, wake: true, CancellationToken.None));
     }
 
     public async Task<AcquisitionRequest> StartAsync(VideoRequestPayload? payload = null)

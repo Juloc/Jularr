@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Net;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
@@ -140,7 +141,7 @@ public sealed class VideoAdminPagesRenderTests
     }
 
     [TestMethod]
-    public async Task AMovieInTheLibraryListsItsFilesAndMonitoringItHasNothingToAcquire()
+    public async Task AMovieInTheLibraryListsItsFilesAndMonitoringItHasNothingToAcquireButIsKeptForUpgrades()
     {
         await using var movie = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Movie, "Dune", 2021, "438631", DuneRelease);
         await movie.AttachFileAsync(null, "Dune.2021.1080p.mkv", 2048);
@@ -151,7 +152,7 @@ public sealed class VideoAdminPagesRenderTests
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=MovieMonitor", [new("monitored", "true")]));
 
         Assert.AreEqual(0, (await movie.Requests.ListAllAsync(10, CancellationToken.None)).Count, "Nothing is requested for a movie that is there.");
-        StringAssert.Contains(await host.GetHtmlAsync(page), "aria-checked=\"false\"");
+        StringAssert.Contains(await host.GetHtmlAsync(page), "aria-checked=\"true\"");
     }
 
     [TestMethod]
@@ -180,9 +181,9 @@ public sealed class VideoAdminPagesRenderTests
 
         var second = series.SecondEpisodeId!.Value.ToString();
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=EpisodeMonitor", [new("episodeId", second), new("monitored", "false")]));
-        var payload = VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, payload.Scope);
-        CollectionAssert.Contains(payload.ExcludedEpisodeIds!, series.SecondEpisodeId!.Value);
+        var view = await series.Get<MonitoringResolver>().LoadAsync(series.Work.Id, CancellationToken.None);
+        Assert.IsTrue(view.IsWorkMonitored);
+        Assert.IsFalse(view.IsMonitored(series.SecondEpisodeId!.Value));
         var partial = await host.GetHtmlAsync(page);
         StringAssert.Contains(partial, "Partial");
         StringAssert.Contains(partial, "aria-checked=\"mixed\"");
@@ -190,8 +191,8 @@ public sealed class VideoAdminPagesRenderTests
 
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "2"), new("monitored", "false")]));
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "1"), new("monitored", "true")]));
-        var restored = VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!;
-        CollectionAssert.DoesNotContain(restored.ExcludedEpisodeIds!, series.SecondEpisodeId!.Value, "Switching a season on monitors all of its episodes again.");
+        var restored = await series.Get<MonitoringResolver>().LoadAsync(series.Work.Id, CancellationToken.None);
+        Assert.IsTrue(restored.IsMonitored(series.SecondEpisodeId!.Value), "Switching a season on monitors all of its episodes again.");
         Assert.AreEqual(HttpStatusCode.BadRequest, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("monitored", "false")]), "A missing season never means the specials.");
 
         var before = (await series.GetAsync(request.Id)).PayloadJson;
@@ -200,7 +201,9 @@ public sealed class VideoAdminPagesRenderTests
         Assert.AreEqual(before, (await series.GetAsync(request.Id)).PayloadJson, "An episode or season that is not part of the Series changes nothing.");
 
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeriesScope", [new("scope", "future")]));
-        Assert.AreEqual(VideoRequestScope.FutureOnly, VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!.Scope);
+        var future = await series.Get<MonitoringResolver>().LoadAsync(series.Work.Id, CancellationToken.None);
+        Assert.IsTrue(future.IsWorkMonitored);
+        Assert.IsFalse(future.IsMonitored(series.EpisodeId!.Value), "Future only switches the episodes that are already out off.");
         Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(page, $"/Admin/Media/series/{Guid.NewGuid():D}?handler=SeriesScope", [new("scope", "all")]));
     }
 

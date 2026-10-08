@@ -165,18 +165,18 @@ public sealed class RequestActionTests
     {
         await using var fixture = await AcquisitionAccessFixture.CreateAsync();
         var (work, season) = await SeriesAsync(fixture);
-        var original = new VideoRequestPayload(work.Id, work.CanonicalTitle, 2022, VideoRequestScope.AllCurrentAndFuture, [], true) { ScopeRevision = 3 };
+        var original = MonitoringTestSupport.Choosing(work.Id, work.CanonicalTitle, 2022, VideoRequestScope.AllCurrentAndFuture, future: true) with { MonitoringRevision = 3 };
         var request = await fixture.Store.CreateAsync(TvDraft(original), "alice", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
-        var scoped = await new VideoRequestScopeResolver(fixture.Db).BuildTvPayloadAsync(work.Id, new VideoRequestScopeChoice(VideoRequestScope.Custom, [season.Id], [], MonitorFuture: false), CancellationToken.None);
+        var scoped = await MonitoringTestSupport.Scopes(fixture.Db).ValidateTvAsync(work.Id, new VideoRequestScopeChoice(VideoRequestScope.Custom, [season.Id], [], MonitorFuture: false), CancellationToken.None);
 
         Assert.AreEqual(RequestEditOutcome.Saved, await fixture.Service("alice", AccountRole.User).EditAsync(request.Id, scoped, null, CancellationToken.None));
 
         var saved = VideoRequestPayload.Parse((await fixture.Store.GetAsync(request.Id, CancellationToken.None))!.PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.Custom, saved.Scope);
-        CollectionAssert.AreEqual(new[] { season.Id }, saved.SelectedSeasonIds);
-        Assert.IsFalse(saved.MonitorFuture);
+        Assert.AreEqual(VideoRequestScope.Custom, saved.Requested!.Scope);
+        CollectionAssert.AreEqual(new[] { season.Id }, saved.Requested.SeasonIds.ToArray());
+        Assert.IsFalse(saved.Requested.MonitorFuture);
         Assert.AreEqual(work.Id, saved.WorkId);
-        Assert.AreEqual(4, saved.ScopeRevision, "A search that started before the edit can tell it happened.");
+        Assert.AreEqual(4, saved.MonitoringRevision, "A search that started before the edit can tell it happened.");
         Assert.AreEqual(AcquisitionRequestStatus.Pending, (await fixture.Store.GetAsync(request.Id, CancellationToken.None))!.Status);
     }
 

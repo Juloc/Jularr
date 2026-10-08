@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Net;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
@@ -312,7 +313,8 @@ public sealed class VideoDetailPageTests
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var series = await SeedSeriesAsync(host);
-        var scope = new VideoRequestPayload(series.Work.Id, "Dark Harbor", 2021, VideoRequestScope.Custom, [series.S1E3.Id], false);
+        await MonitoringTestSupport.ApplyAsync(host.Db, series.Work.Id, VideoRequestScope.Custom, [series.S1E3.Id]);
+        var scope = new VideoRequestPayload(series.Work.Id, "Dark Harbor", 2021);
         var open = await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "1399", "Dark Harbor", AcquisitionRequestStatus.Approved, scope.Serialize());
 
         var html = await host.GetOkAsync($"/Library/Series/{series.Work.Id}");
@@ -327,11 +329,12 @@ public sealed class VideoDetailPageTests
     }
 
     [TestMethod]
-    public async Task ARequestWithoutAReadablePayloadCoversTheWholeSeriesLikeTheExecutorTreatsIt()
+    public async Task ARequestWithoutAReadablePayloadFollowsTheMonitoringOfTheSeries()
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var series = await SeedSeriesAsync(host);
         await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "1399", "Dark Harbor", AcquisitionRequestStatus.Approved);
+        await MonitoringTestSupport.Commands(host.Db).SetAsync(MonitoringTargetKind.Work, series.Work.Id, true, CancellationToken.None);
 
         var html = await host.GetOkAsync($"/Library/Series/{series.Work.Id}");
 
@@ -357,7 +360,8 @@ public sealed class VideoDetailPageTests
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var series = await SeedSeriesAsync(host);
-        var scope = new VideoRequestPayload(series.Work.Id, "Dark Harbor", 2021, VideoRequestScope.AllCurrentAndFuture, [], true, ActiveWorkEpisodeId: series.S1E3.Id);
+        await MonitoringTestSupport.ApplyAsync(host.Db, series.Work.Id, VideoRequestScope.AllCurrentAndFuture, future: true);
+        var scope = new VideoRequestPayload(series.Work.Id, "Dark Harbor", 2021, ActiveWorkEpisodeId: series.S1E3.Id);
         await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "1399", "Dark Harbor", AcquisitionRequestStatus.Downloading, scope.Serialize());
 
         var html = await host.GetOkAsync($"/Library/Series/{series.Work.Id}");
@@ -478,7 +482,8 @@ public sealed class VideoDetailPageTests
         var seed = new LibraryCanonicalSeed(host.Db);
         var first = await seed.AddEpisodeAsync(work, 1, 1);
         var second = await seed.AddEpisodeAsync(work, 1, 2);
-        var scope = new VideoRequestPayload(work.Id, "Dark Harbor", 2021, VideoRequestScope.Custom, [second.Id], MonitorFuture: false);
+        await MonitoringTestSupport.ApplyAsync(host.Db, work.Id, VideoRequestScope.Custom, [second.Id]);
+        var scope = new VideoRequestPayload(work.Id, "Dark Harbor", 2021);
         await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "1399", "Dark Harbor", AcquisitionRequestStatus.Approved, scope.Serialize());
 
         var html = await host.GetOkAsync($"/Library/Series/{work.Id}", asOwner: true);

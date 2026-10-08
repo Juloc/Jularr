@@ -4,6 +4,7 @@ using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Ui;
@@ -75,10 +76,10 @@ public sealed record VideoDetail(
 /// The one read model behind the Movie and Series detail pages. A fixed number of set-based queries, whatever the
 /// episode count: Work, titles, provider identity, files, tracks, episodes, progress, relations, the open request and the persisted
 /// metadata. It never calls a provider and never writes: missing metadata is left null for the page to omit.
-/// Request state per episode comes from the shared request payload through <see cref="VideoRequestSelection"/>, so
-/// the page and the acquisition executor agree on what a request covers.
+/// Request state per episode follows the canonical monitoring of the Work, so
+/// the page and the acquisition executor agree on what is wanted.
 /// </summary>
-public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore requests, VideoProgressService progress, TimeProvider clock)
+public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore requests, VideoProgressService progress, MonitoringResolver monitoring, TimeProvider clock)
 {
     private static readonly List<string> GroupOrder = [.. FranchiseLabels.RelationGroupOrder];
 
@@ -132,7 +133,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             versions = [.. movieFiles.Select(file => ToVersion(file, tracks.Where(x => x.FileId == file.FileId)))];
             movieProgress = snapshots.FirstOrDefault(x => x.WorkEpisodeId is null);
             var now = clock.GetUtcNow();
-            var openFacts = open is null ? null : OpenRequestFacts.ForMovie(open, now.UtcDateTime);
+            var openFacts = open is null ? null : OpenRequestFacts.ForMovie(open, await monitoring.LoadAsync(workId, cancellationToken), now.UtcDateTime);
             playback = new MoviePlaybackFacts(workId, tmdbId is not null, openFacts, versions.Count > 0, movieProgress, work.Year is null || work.Year <= now.Year);
         }
         else
@@ -246,7 +247,8 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var tracksByEpisode = tracks.Where(x => x.WorkEpisodeId is not null).ToLookup(x => x.WorkEpisodeId!.Value);
         var progressByEpisode = snapshots.Where(x => x.WorkEpisodeId is not null).ToDictionary(x => x.WorkEpisodeId!.Value);
         var now = clock.GetUtcNow().UtcDateTime;
-        var selection = open is null ? null : VideoRequestSelection.For(open, workId, now);
+        var view = open is null ? null : await monitoring.LoadAsync(workId, cancellationToken);
+        var activeEpisodeId = open is null ? null : VideoRequestPayload.Of(open, workId, open.Title, null).ActiveWorkEpisodeId;
         var units = new List<SeriesUnit>(rows.Count);
 
         var episodes = rows.Select(row =>
@@ -259,8 +261,8 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
 
                 // A request covers the title as a whole; only the episodes its scope includes show its state, and while
                 // it is downloading only the episode the executor is on is "Downloading" (the rest wait as "Requested").
-                var requestStatus = selection is not null && selection.Includes(row.Id, row.SeasonId, row.AiredAt) ? open!.Status : (AcquisitionRequestStatus?)null;
-                if (requestStatus is AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing && selection!.Payload.ActiveWorkEpisodeId is { } active && active != row.Id)
+                var requestStatus = view is not null && view.IsMonitored(row.Id, row.SeasonId) ? open!.Status : (AcquisitionRequestStatus?)null;
+                if (requestStatus is AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing && activeEpisodeId is { } active && active != row.Id)
                 {
                     requestStatus = AcquisitionRequestStatus.Approved;
                 }
@@ -285,7 +287,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var progress = snapshots
             .Where(x => x.WorkEpisodeId is not null && x.UpdatedAt is not null)
             .ToDictionary(x => x.WorkEpisodeId!.Value, x => new EpisodeProgressState(x.WorkEpisodeId!.Value, x.PositionMs, x.IsCompleted, x.UpdatedAt!.Value));
-        var openFacts = open is null ? null : OpenRequestFacts.ForSeries(open, selection!, rows.Select(x => (x.Id, x.SeasonId, x.AiredAt)), now);
+        var openFacts = open is null ? null : OpenRequestFacts.ForSeries(open, view!, rows.Select(x => (x.Id, x.SeasonId, x.AiredAt)), now);
         return (episodes, new SeriesPlaybackFacts(workId, hasRequestIdentity, openFacts, units, progress));
     }
 

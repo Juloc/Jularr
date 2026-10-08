@@ -48,7 +48,7 @@ internal sealed class GlobalSearchFixture : IAsyncDisposable
     public LegacyWorkBridge Bridge { get; }
     public FranchiseStore Franchises { get; }
 
-    public MediaSearchService Service => new(Db, Monitoring, Requests);
+    public MediaSearchService Service => new(Db, Monitoring, MonitoringTestSupport.Anime(Db), Requests);
 
     public static async Task<GlobalSearchFixture> CreateAsync()
     {
@@ -287,10 +287,12 @@ internal sealed class GlobalSearchFixture : IAsyncDisposable
         return franchiseId;
     }
 
-    public Task MonitorAnimeAsync(Anime anime, bool wanted = false) =>
-        Monitoring.UpdateAsync(state =>
+    public async Task MonitorAnimeAsync(Anime anime, bool wanted = false)
+    {
+        await MonitoringTestSupport.Anime(Db).SetMonitoredAsync(anime.Id, true, CancellationToken.None);
+        await Monitoring.UpdateAsync(state =>
         {
-            state.Anime[anime.Key] = new MonitorSettings(anime.Key, true, false, [], []);
+            state.Anime[anime.Key] = new MonitorSettings(anime.Key, false);
             if (wanted)
             {
                 var key = MonitoredUnitKey.ForEpisode(anime.Key, 1, 1);
@@ -299,6 +301,7 @@ internal sealed class GlobalSearchFixture : IAsyncDisposable
 
             return state;
         });
+    }
 
     public Task<AcquisitionRequest> OpenRequestAsync(MediaAcquisitionKind kind, string provider, string externalId, string title) =>
         Requests.CreateAsync(

@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Monitoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Library;
@@ -122,6 +123,8 @@ public sealed record AdminVideoMediaDetail(
 public sealed class AdminVideoMediaService(
     AppDbContext db,
     VideoMonitoringService monitoring,
+    MonitoringResolver monitoringState,
+    VideoRequestScopeResolver scopes,
     QualityProfileStore profiles,
     IEnumerable<IAcquisitionRequestExecutor> executors,
     TimeProvider clock,
@@ -186,11 +189,12 @@ public sealed class AdminVideoMediaService(
 
         var open = await monitoring.FindOpenRequestAsync(kind, workId, cancellationToken);
         var payload = open is null ? null : VideoRequestPayload.Of(open, workId, work.CanonicalTitle, work.Year);
+        var view = await monitoringState.LoadAsync(workId, cancellationToken);
         var profile = await profiles.ResolveAsync(kind, workId, cancellationToken);
         var profileState = await profiles.LoadAsync(cancellationToken);
         var acquisition = new AdminVideoAcquisition(
             await CanAcquireAsync(kind, workId, cancellationToken),
-            open?.Status == AcquisitionRequestStatus.Approved && payload!.Monitored,
+            open?.Status == AcquisitionRequestStatus.Approved && view.IsAnyMonitored,
             open,
             profile.Id,
             profile.Name,
@@ -204,7 +208,7 @@ public sealed class AdminVideoMediaService(
                 workId,
                 work.CanonicalTitle,
                 work.Year,
-                new AdminVideoMonitoring(payload?.Monitored == true, "", false),
+                new AdminVideoMonitoring(view.IsAnyMonitored, "", false),
                 acquisition,
                 [
                     .. fileRows
@@ -220,15 +224,16 @@ public sealed class AdminVideoMediaService(
             workId,
             work.CanonicalTitle,
             work.Year,
-            TvMonitoring(payload),
+            TvMonitoring(await scopes.ChoiceOfAsync(workId, cancellationToken)),
             acquisition,
             [],
-            await LoadSeasonsAsync(workId, open, fileRows.Where(row => row.WorkEpisodeId is not null).ToLookup(row => row.WorkEpisodeId!.Value, row => row.File), cancellationToken));
+            await LoadSeasonsAsync(workId, open, view, fileRows.Where(row => row.WorkEpisodeId is not null).ToLookup(row => row.WorkEpisodeId!.Value, row => row.File), cancellationToken));
     }
 
     private async Task<IReadOnlyList<AdminVideoSeason>> LoadSeasonsAsync(
         Guid workId,
         AcquisitionRequest? open,
+        WorkMonitoringView view,
         ILookup<Guid, AdminVideoFile> files,
         CancellationToken cancellationToken)
     {
@@ -240,8 +245,7 @@ public sealed class AdminVideoMediaService(
             .Select(x => new { x.Id, x.SeasonId, x.SeasonNumber, x.EpisodeNumber, x.Title, x.AiredAt })
             .ToListAsync(cancellationToken);
 
-        var selection = open is null ? null : VideoRequestSelection.For(open, workId);
-        var payload = selection?.Payload;
+        var payload = open is null ? null : VideoRequestPayload.Of(open, workId, open.Title, null);
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = episodeRows.Select(row =>
         {
@@ -255,7 +259,7 @@ public sealed class AdminVideoMediaService(
                 row.Title,
                 row.AiredAt,
                 upcoming,
-                selection?.Includes(row.Id, row.SeasonId, row.AiredAt) == true,
+                view.IsMonitored(row.Id, row.SeasonId),
                 local.Count > 0 ? AdminMediaState.Available : ActiveState(open, payload, row.Id),
                 local);
         }).ToList();
@@ -281,20 +285,20 @@ public sealed class AdminVideoMediaService(
             }
             : AdminMediaState.Missing;
 
-    private static AdminVideoMonitoring TvMonitoring(VideoRequestPayload? payload)
+    private static AdminVideoMonitoring TvMonitoring(VideoRequestScopeChoice? choice)
     {
-        if (payload is not { Monitored: true })
+        if (choice is null)
         {
             return new AdminVideoMonitoring(false, VideoMonitoringService.OffScope, false);
         }
 
-        var scope = payload.Scope switch
+        var scope = choice.Scope switch
         {
             VideoRequestScope.AllCurrentAndFuture => "all",
             VideoRequestScope.FutureOnly => "future",
             _ => "custom"
         };
-        return new AdminVideoMonitoring(true, scope, payload.MonitorFuture);
+        return new AdminVideoMonitoring(true, scope, choice.MonitorFuture);
     }
 
     private static List<string> Languages(IEnumerable<TrackRow> tracks, MediaTrackKind kind) =>

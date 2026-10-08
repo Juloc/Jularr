@@ -27,6 +27,7 @@ namespace Jularr.Web.Features.Search;
 internal sealed class MediaSearchFactsLoader(
     AppDbContext db,
     MonitoringStore monitoring,
+    AnimeMonitoring animeMonitoring,
     AcquisitionAccessStore requests)
 {
     private readonly record struct RequestKey(MediaAcquisitionKind Kind, string Provider, string ExternalId);
@@ -121,6 +122,7 @@ internal sealed class MediaSearchFactsLoader(
             .ToLookup(x => x.AnimeId, x => x.Code!);
 
         var state = await monitoring.LoadAsync(cancellationToken);
+        var views = await animeMonitoring.LoadAsync([.. rows.Select(row => row.Key)], cancellationToken);
         var wantedKeys = state.Wanted.Values
             .Select(wanted => wanted.Key.AnimeKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -132,7 +134,7 @@ internal sealed class MediaSearchFactsLoader(
                 DistinctSorted(languages[row.Id]),
                 [],
                 withFiles.Contains(row.Id),
-                state.Anime.TryGetValue(row.Key, out var settings) && settings.Monitored,
+                views[row.Key].IsWorkMonitored,
                 wantedKeys.Contains(row.Key)
                 || IsRequested(open, MediaAcquisitionKind.Anime, (row.Provider, row.ExternalId))));
     }

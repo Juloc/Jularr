@@ -80,7 +80,7 @@ public sealed class DetailsModel(
         if (request.Kind == MediaAcquisitionKind.Tv)
         {
             return VideoRequestPayload.Parse(request.PayloadJson) is { } saved
-                ? Partial("~/Pages/Shared/_DiscoverRequestSettings.cshtml", new DiscoverRequestSettingsView(ui, request.Kind, null, await scopes.LoadStructureAsync(saved.WorkId, cancellationToken), null, null, saved))
+                ? Partial("~/Pages/Shared/_DiscoverRequestSettings.cshtml", new DiscoverRequestSettingsView(ui, request.Kind, null, await scopes.LoadStructureAsync(saved.WorkId, cancellationToken), null, null, saved.Requested))
                 : StatusCode(StatusCodes.Status409Conflict);
         }
 
@@ -105,8 +105,8 @@ public sealed class DetailsModel(
                     return BadRequest();
                 }
 
-                var payload = await scopes.BuildTvPayloadAsync(saved.WorkId, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
-                outcome = payload is null ? RequestEditOutcome.NotEditable : await requests.EditAsync(id, payload, null, cancellationToken);
+                var choice = await scopes.ValidateTvAsync(saved.WorkId, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
+                outcome = await requests.EditAsync(id, choice, null, cancellationToken);
             }
             else if (request.Kind == MediaAcquisitionKind.Anime && !form.HasScope)
             {

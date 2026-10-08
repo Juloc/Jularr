@@ -4,6 +4,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
 
@@ -51,6 +52,7 @@ public sealed class VideoUpgradeWantedSource(
     MediaAcquisitionKind kind,
     AppDbContext db,
     AcquisitionAccessStore requests,
+    MonitoringResolver monitoring,
     InstalledVideoVersions installed,
     QualityProfileStore profiles,
     UpgradeScanState scans) : IWantedSource
@@ -112,7 +114,7 @@ public sealed class VideoUpgradeWantedSource(
         foreach (var identity in identities)
         {
             if (await requests.FindLatestAsync(kind, identity.Provider, identity.ExternalId, cancellationToken) is not { Status: AcquisitionRequestStatus.Completed } request
-                || VideoRequestPayload.Parse(request.PayloadJson) is not { Monitored: true } payload)
+                || !(await monitoring.LoadAsync(workId, cancellationToken)).IsAnyMonitored)
             {
                 continue;
             }
@@ -124,7 +126,7 @@ public sealed class VideoUpgradeWantedSource(
                 AcquisitionRequestStatus.Approved,
                 "A better release is wanted for the installed quality. Searching.",
                 operationId: null,
-                resultUrl: VideoWorkLinks.DetailPath(kind, payload.WorkId),
+                resultUrl: VideoWorkLinks.DetailPath(kind, workId),
                 clearOperation: true,
                 cancellationToken);
             return transition is not null;
