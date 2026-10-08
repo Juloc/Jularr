@@ -53,24 +53,18 @@ public sealed class ReadingAcquisitionEngine(
         var payload = ReadPayload(request, initialTarget);
         var target = ToTarget(request.Kind, payload);
 
-        if (!await indexers.HasEnabledIndexerAsync(cancellationToken))
-        {
-            return new AcquisitionExecution(
-                AcquisitionRequestStatus.Failed,
-                "No Usenet indexer is configured.");
-        }
-
-        if (!(await downloadClients.LoadAllAsync(cancellationToken))
-            .Any(entry => entry.Enabled && entry.Type == DownloadClientType.Sabnzbd))
-        {
-            return new AcquisitionExecution(
-                AcquisitionRequestStatus.Failed,
-                "SABnzbd is not configured.");
-        }
-
+        // Without Usenet configured only a direct source (a public web copy) can serve the request.
+        var usenetProblem = !await indexers.HasEnabledIndexerAsync(cancellationToken)
+            ? "No Usenet indexer is configured."
+            : !(await downloadClients.LoadAllAsync(cancellationToken)).Any(entry => entry.Enabled && entry.Type == DownloadClientType.Sabnzbd)
+                ? "SABnzbd is not configured."
+                : null;
         var profile = profiles is null ? ReadingQualityProfiles.For(request.Kind) : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
         var search = await core.SearchAsync(ReadingReleaseJudge.Plan(target), profile, new SearchOptions(), cancellationToken);
-        return await GrabAsync(request, payload, search.Grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);
+        var grabbable = search.Grabbable.Where(release => usenetProblem is null || release.Candidate.Type == AcquisitionType.DirectImport).ToArray();
+        return grabbable.Length == 0 && usenetProblem is not null
+            ? new AcquisitionExecution(AcquisitionRequestStatus.Failed, usenetProblem)
+            : await GrabAsync(request, payload, grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);
     }
 
     // Runs the shared grab over the releases (best first); Manual Search passes the one the owner selected.
@@ -185,9 +179,7 @@ public sealed class MangaAcquisitionRequestExecutor(
 public sealed class LightNovelAcquisitionRequestExecutor(
     ReadingAcquisitionEngine engine,
     NovelAniListProvider aniList,
-    NovelImportService webNovels,
-    ReadingCatalogSearchService catalogSearch,
-    ReadingSourceSettingsStore sourceSettings) : IAcquisitionRequestExecutor
+    NovelImportService webNovels) : IAcquisitionRequestExecutor
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.LightNovel;
 
@@ -215,123 +207,10 @@ public sealed class LightNovelAcquisitionRequestExecutor(
             };
         }
 
-        // Search every enabled Reading source before Usenet. Only a source explicitly marked as
-        // PublicFullText may be imported automatically; previews, shops and reference-only results
-        // remain discovery evidence and can never bypass the normal acquisition path.
-        var publicCopy = await TryImportPublicCopyAsync(
-            payload,
-            cancellationToken);
-        if (publicCopy is not null)
-        {
-            return publicCopy;
-        }
-
         return await engine.ExecuteAsync(
             request,
             ReadingAcquisitionEngine.ToTarget(MediaAcquisitionKind.LightNovel, payload),
             cancellationToken);
-    }
-
-    private async Task<AcquisitionExecution?> TryImportPublicCopyAsync(
-        ReadingRequestPayload payload,
-        CancellationToken cancellationToken)
-    {
-        ReadingSourceSettingsState settings;
-        try
-        {
-            settings = await sourceSettings.LoadAsync(cancellationToken);
-        }
-        catch (Exception exception) when (
-            exception is IOException or
-            InvalidDataException or
-            UnauthorizedAccessException)
-        {
-            // Source configuration is optional enrichment for this acquisition attempt. Usenet
-            // remains available even when reading-source settings cannot be loaded.
-            return null;
-        }
-
-        var queries = new[] { payload.Title }
-            .Concat(payload.Aliases ?? [])
-            .Where(query => !string.IsNullOrWhiteSpace(query))
-            .Select(query => query.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(3)
-            .ToArray();
-
-        foreach (var query in queries)
-        {
-            var outcome = await catalogSearch.SearchLightNovelsAsync(
-                settings,
-                query,
-                limit: 12,
-                cancellationToken);
-
-            foreach (var candidate in outcome.Candidates)
-            {
-                if (!CanAutoImport(payload, candidate, settings))
-                {
-                    continue;
-                }
-
-                var definition = ReadingSourceCatalog.GetRequired(candidate.Provider);
-                var sourceUrl = definition.DirectImportUrl!(candidate.ExternalId);
-                try
-                {
-                    var workId = await webNovels.ImportWorkAsync(
-                        sourceUrl,
-                        cancellationToken);
-                    return new AcquisitionExecution(
-                        AcquisitionRequestStatus.Completed,
-                        $"Imported a public copy from {definition.Name}.",
-                        ResultUrl: $"/Novels/Work/{workId}");
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception exception) when (
-                    exception is InvalidOperationException or
-                    HttpRequestException or
-                    TaskCanceledException)
-                {
-                    // A catalog result is evidence, not a guarantee that the full text is still
-                    // reachable. Try the remaining candidates and ultimately the normal Usenet path.
-                }
-            }
-        }
-
-        return null;
-    }
-
-    public static bool CanAutoImport(
-        ReadingRequestPayload payload,
-        ReadingCatalogCandidate candidate,
-        ReadingSourceSettingsState settings)
-    {
-        ArgumentNullException.ThrowIfNull(payload);
-        ArgumentNullException.ThrowIfNull(candidate);
-        ArgumentNullException.ThrowIfNull(settings);
-
-        if (!candidate.IsPublicWebSource
-            || !settings.IsEnabled(candidate.Provider)
-            || !ReadingSourceCatalog.TryGet(candidate.Provider, out var definition)
-            || !definition.SupportsDirectImport
-            || definition.DirectImportUrl is null
-            || !definition.IsValidExternalId(candidate.ExternalId))
-        {
-            return false;
-        }
-
-        // Never infer identity from a loose contains/prefix search result. At least one canonical
-        // title or alias from the request must exactly match the result's title/native title after
-        // the same normalization the Reading catalog uses for ranking.
-        var names = new[] { payload.Title }
-            .Concat(payload.Aliases ?? [])
-            .Where(name => !string.IsNullOrWhiteSpace(name));
-
-        return names.Any(name =>
-            ReadingCatalogSearch.MatchScore(name, candidate) >= 1000);
     }
 
     /// <summary>

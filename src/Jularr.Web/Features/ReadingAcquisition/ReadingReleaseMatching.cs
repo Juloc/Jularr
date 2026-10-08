@@ -206,6 +206,16 @@ public static class ReadingReleaseJudge
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray() ?? [];
 
+        // A direct source found the candidate for this very request, and a public full-text copy holds every volume of the series.
+        if (release.Type == AcquisitionType.DirectImport)
+        {
+            var direct = release.Offer!.IdentityIsExact ? ReleaseIdentityEvidence.Exact("PublicCopy", "A public full-text copy of the requested title.") : ReleaseIdentityEvidence.Strong("Title", "The title matches.");
+            return new ReleaseJudgement<ReadingReleaseInfo>(parsed, ReadingReleaseEvidenceParser.Instance.Parse(release.Title), direct, SelectionCoverage.Single, null)
+            {
+                ContextScore = target.RequestedVolume is null ? 12 : 24
+            };
+        }
+
         string? safety = null;
         if (release.InternalDownloadUri is null)
         {

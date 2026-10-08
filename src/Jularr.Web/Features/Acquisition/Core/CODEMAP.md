@@ -1,7 +1,7 @@
 # Acquisition core (search, selection, grab)
 
 Purpose: one search -> rank -> grab path for every media type; adapters only supply facts.
-Sources: Usenet (Prowlarr/Newznab indexers, SABnzbd) and direct sources (`IDirectSource`, registered per media type; today Book: free catalog edition and OPDS). Both return `AcquisitionCandidate`s that one selection ranks together before the winner is routed by `AcquisitionType` (UsenetDownload: download client and the completed-download dispatcher; DirectImport: the source imports it). Anna's Archive does not exist in Jularr; the other media types have no direct source on the core yet (Light Novel web import and Manga reading sources still run their own path).
+Sources: Usenet (Prowlarr/Newznab indexers, SABnzbd) and direct sources (`IDirectSource`, registered per media type; today Book: free catalog edition and OPDS; Light Novel: public full-text web copies). Both return `AcquisitionCandidate`s that one selection ranks together before the winner is routed by `AcquisitionType` (UsenetDownload: download client and the completed-download dispatcher; DirectImport: the source imports it). Anna's Archive does not exist in Jularr; Manga, Music and Video have no direct source; a Syosetu ncode request is an explicit web import and does not search.
 
 Canonical owners
 - `AcquisitionCore`: `SearchAsync` (indexer search, identity judgement, `ReleaseSelectionEngine` ranking) and `GrabAsync` (`ReleaseRequestTracker` lifecycle, `DownloadClientSubmissionService`).
@@ -16,7 +16,7 @@ WantedItems / request -> media adapter builds `MediaSearchPlan` -> `AcquisitionC
 Media adapters on the core
 - Video (Movie, Tv): `VideoAcquisitionEngine` (`VideoReleaseJudge`, unit and season-pack coverage, playback priority).
 - Music: `MusicAcquisitionEngine` (`MusicReleaseJudge`).
-- Manga and Light Novel: `ReadingAcquisitionEngine` (`ReadingReleaseJudge.Plan/Judge`, `DisplayScore` for the pages).
+- Manga and Light Novel: `ReadingAcquisitionEngine` (`ReadingReleaseJudge.Plan/Judge`, `DisplayScore` for the pages); Light Novel adds `LightNovelWebDirectSource`. Without a configured indexer or SABnzbd only a direct candidate can serve the request.
 
 - Book: `BookAcquisitionExecutor` (`BookReleaseSelector.Plan` and `Judge`, `BookCatalogDirectSource`, `BookOpdsDirectSource`); the free edition wins a tie with an equal Usenet EPUB through the lowest source priority, a better quality wins before source preference.
 
