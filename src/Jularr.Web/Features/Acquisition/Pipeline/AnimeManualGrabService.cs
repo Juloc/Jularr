@@ -9,7 +9,7 @@ namespace Jularr.Web.Features.Acquisition.Pipeline;
 
 /// <summary>
 /// The owner's grab of one interactive search result: the anime's request is claimed (a request with a grab in flight is not claimable, so nothing is grabbed twice),
-/// the release goes through the same core as an automatic grab, and the Wanted pass follows and imports it. Ownership and the open legacy downloads always apply; a
+/// the release goes through the same core as an automatic grab, and the Wanted pass follows and imports it. Ownership always applies; a
 /// rejected release may be chosen because the owner picked it.
 /// </summary>
 public sealed class AnimeManualGrabService(
@@ -68,11 +68,6 @@ public sealed class AnimeManualGrabService(
         if (!ownership.Allowed)
         {
             return new AnimeGrabResult(false, $"Ownership: {ownership.Reason}");
-        }
-
-        if (await pipeline.FindOpenAcquisitionAsync(animeKey, episodes, cancellationToken) is { } open)
-        {
-            return new AnimeGrabResult(false, open);
         }
 
         if (await starter.EnsureRequestAsync(animeKey, cancellationToken) is not var (request, _))

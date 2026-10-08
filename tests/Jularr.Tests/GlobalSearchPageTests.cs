@@ -187,7 +187,6 @@ public sealed class GlobalSearchPageTests
                         services.AddSingleton(capabilities);
                         services.AddScoped<IMediaCapabilityService, MediaCapabilityService>();
                         services.AddScoped<IAppShellService, AppShellService>();
-                        services.AddSingleton(fixture.Monitoring);
                         services.AddScoped<AcquisitionAccessStore>();
                         services.AddMonitoringForTests();
                         services.AddScoped<MediaSearchService>();

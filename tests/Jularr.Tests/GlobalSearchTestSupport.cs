@@ -2,6 +2,7 @@ using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Audiobooks;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Franchises;
@@ -34,7 +35,6 @@ internal sealed class GlobalSearchFixture : IAsyncDisposable
     {
         Db = db;
         this.dataRoot = dataRoot;
-        Monitoring = new MonitoringStore(dataRoot);
         Requests = new AcquisitionAccessStore(db);
         Works = new WorkService(db);
         Bridge = new LegacyWorkBridge(db, Works, new WorkStructureService(db));
@@ -42,13 +42,12 @@ internal sealed class GlobalSearchFixture : IAsyncDisposable
     }
 
     public AppDbContext Db { get; }
-    public MonitoringStore Monitoring { get; }
     public AcquisitionAccessStore Requests { get; }
     public WorkService Works { get; }
     public LegacyWorkBridge Bridge { get; }
     public FranchiseStore Franchises { get; }
 
-    public MediaSearchService Service => new(Db, Monitoring, MonitoringTestSupport.Anime(Db), Requests);
+    public MediaSearchService Service => new(Db, MonitoringTestSupport.Anime(Db), Requests);
 
     public static async Task<GlobalSearchFixture> CreateAsync()
     {
@@ -290,17 +289,14 @@ internal sealed class GlobalSearchFixture : IAsyncDisposable
     public async Task MonitorAnimeAsync(Anime anime, bool wanted = false)
     {
         await MonitoringTestSupport.Anime(Db).SetMonitoredAsync(anime.Id, true, CancellationToken.None);
-        await Monitoring.UpdateAsync(state =>
+        if (wanted)
         {
-            state.Anime[anime.Key] = new MonitorSettings(anime.Key, false);
-            if (wanted)
-            {
-                var key = MonitoredUnitKey.ForEpisode(anime.Key, 1, 1);
-                state.Wanted[key.ToString()] = new WantedUnit(key, WantedReason.Missing, Stamp);
-            }
-
-            return state;
-        });
+            var workId = await Bridge.EnsureWorkForAnimeAsync(anime, CancellationToken.None);
+            var episode = new WorkEpisode { WorkId = workId, SeasonNumber = 1, EpisodeNumber = 1 };
+            Db.WorkEpisodes.Add(episode);
+            Db.WantedItems.Add(new WantedItem { WorkId = workId, TargetKind = WantedTargetKind.Episode, TargetId = episode.Id, CreatedAt = Stamp });
+            await Db.SaveChangesAsync();
+        }
     }
 
     public Task<AcquisitionRequest> OpenRequestAsync(MediaAcquisitionKind kind, string provider, string externalId, string title) =>

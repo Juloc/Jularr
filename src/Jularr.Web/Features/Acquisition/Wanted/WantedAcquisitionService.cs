@@ -109,9 +109,6 @@ public sealed class WantedAcquisitionService(
 
     private static readonly TimeSpan SlowStep = TimeSpan.FromSeconds(1);
 
-    /// <summary>How many open requests of a monitored media type are read from the store at a time; a pass walks every batch.</summary>
-    public const int FollowBatchSize = 50;
-
     /// <summary>
     /// How long a finished download may wait for its files before the request stops waiting and
     /// asks the owner for attention (the shared completed-download import timeout).
@@ -236,21 +233,6 @@ public sealed class WantedAcquisitionService(
                 nowUtc,
                 cancellationToken);
             NoteIfSlow(slowSteps, $"follow {handler.Kind}", started);
-        }
-
-        // Media types whose own monitoring pipeline searches, grabs and imports (Anime) have no download lifecycle of their own to
-        // follow here: their requests are brought to the state of that pipeline.
-        foreach (var executor in services.GetServices<IMonitoredAcquisitionExecutor>())
-        {
-            if (instance is not null && !instance.IsEnabled(AcquisitionInstanceModules.For(executor.Kind)))
-            {
-                continue;
-            }
-
-            var started = Stopwatch.GetTimestamp();
-            advanced += await RecoverStaleSearchingAsync(services, executor.Kind, nowUtc, cancellationToken);
-            advanced += await FollowMonitoredAsync(services, executor, nowUtc, cancellationToken);
-            NoteIfSlow(slowSteps, $"follow {executor.Kind}", started);
         }
 
         // Manual downloads (no request) go through the same importer.
@@ -531,65 +513,6 @@ public sealed class WantedAcquisitionService(
         }
 
         return recovered;
-    }
-
-    /// <summary>
-    /// Brings every open request of a monitored media type to the state of its pipeline, batch by batch by id so none is left out however
-    /// many there are. The pipeline's state is loaded once for the whole pass. A request whose observation fails is logged with its cause and
-    /// left as it is, so one broken request neither stops the others nor the rest of the pass. An approved request whose executor never
-    /// ran for it (the pass found no series: a crash after the approval, an Anime module that was off when it was approved) is run again once it has
-    /// waited <see cref="StaleSearchingAfter"/> without being touched, at most <see cref="MaxRequestsPerKindPerPass"/> per pass. Returns how many
-    /// requests changed.
-    /// </summary>
-    private static async Task<int> FollowMonitoredAsync(IServiceProvider services, IMonitoredAcquisitionExecutor executor, DateTime nowUtc, CancellationToken cancellationToken)
-    {
-        var logger = services.GetService<ILogger<WantedAcquisitionService>>() ?? NullLogger<WantedAcquisitionService>.Instance;
-        IRequestObservation observation;
-        try
-        {
-            observation = await executor.BeginObservationAsync(nowUtc, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-        {
-            logger.LogWarning(exception, "Could not read the state of the {Kind} pipeline; its requests are not followed in this pass.", executor.Kind);
-            return 0;
-        }
-
-        var store = services.GetRequiredService<AcquisitionAccessStore>();
-        var requestService = services.GetRequiredService<AcquisitionRequestService>();
-        var followed = 0;
-        var rerun = 0;
-        Guid? after = null;
-        while (true)
-        {
-            var batch = await store.ListObservedFromMonitoringAsync(executor.Kind, after, FollowBatchSize, cancellationToken);
-            foreach (var request in batch)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    var outcome = await requestService.FollowMonitoredAsync(request, observation, cancellationToken);
-                    followed += outcome == MonitoredFollowOutcome.Changed ? 1 : 0;
-                    if (outcome == MonitoredFollowOutcome.NotExecuted && rerun < MaxRequestsPerKindPerPass && nowUtc - request.UpdatedAt >= StaleSearchingAfter)
-                    {
-                        rerun++;
-                        followed++;
-                        await requestService.ContinueAsync(request.Id, cancellationToken);
-                    }
-                }
-                catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-                {
-                    logger.LogWarning(exception, "Could not follow {Kind} request {RequestId}; it stays as it is.", request.Kind, request.Id);
-                }
-            }
-
-            if (batch.Count < FollowBatchSize)
-            {
-                return followed;
-            }
-
-            after = batch[^1].Id;
-        }
     }
 
     private static async Task<int> SearchDueAsync(

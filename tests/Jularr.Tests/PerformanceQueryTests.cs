@@ -40,7 +40,6 @@ public sealed class PerformanceQueryTests
 
         var search = new MediaSearchService(
             db,
-            new Jularr.Web.Features.Acquisition.Monitoring.MonitoringStore(Path.GetTempPath()),
             MonitoringTestSupport.Anime(db),
             new Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore(db));
         var results = await search.SearchAsync(new MediaSearchRequest("Number 02500", Limit: 20));

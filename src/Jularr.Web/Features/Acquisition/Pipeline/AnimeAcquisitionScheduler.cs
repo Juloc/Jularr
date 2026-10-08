@@ -27,25 +27,22 @@ public sealed class AnimeAcquisitionScheduler(
     private readonly ConcurrentQueue<AnimeAcquisitionRunRequest> requests = new();
     private bool recovered;
 
-    public DateTimeOffset? LastRunAtUtc { get; private set; }
-    public AnimeAcquisitionRunSummary? LastRun { get; private set; }
-    public string? LastRunError { get; private set; }
-    public DateTimeOffset? NextRunAtUtc { get; private set; }
-    public bool IsRunning => gate.CurrentCount == 0;
+    private DateTimeOffset? nextRunAtUtc;
+
     public int QueuedRequests => requests.Count;
 
     /// <summary>
     /// Queues a run (all monitored anime when <paramref name="animeKey"/> is null) and asks the Wanted pass to take it now. Returns false when
     /// too many requests are already waiting.
     /// </summary>
-    public bool RequestRun(string? animeKey = null, AnimeSearchTrigger trigger = AnimeSearchTrigger.Manual)
+    public bool RequestRun(string? animeKey = null)
     {
         if (requests.Count >= MaxQueuedRequests)
         {
             return false;
         }
 
-        requests.Enqueue(new AnimeAcquisitionRunRequest(animeKey, trigger));
+        requests.Enqueue(new AnimeAcquisitionRunRequest(animeKey));
         wanted?.Request();
         return true;
     }
@@ -74,18 +71,12 @@ public sealed class AnimeAcquisitionScheduler(
         }
     }
 
-    public async Task<AnimeAcquisitionRunSummary> RunNowAsync(
-        string? animeKey,
-        AnimeSearchTrigger trigger,
-        CancellationToken cancellationToken)
+    /// <summary>"Search now": the monitored anime (or one) get their request, made due so the Wanted pass searches it at once. Returns how many requests it made due.</summary>
+    public async Task<int> RunNowAsync(string? animeKey, CancellationToken cancellationToken)
     {
         if (!await IsAnimeEnabledAsync(cancellationToken))
         {
-            return new AnimeAcquisitionRunSummary(
-                0,
-                0,
-                0,
-                ["Anime module is disabled."]);
+            return 0;
         }
 
         return await RunExclusiveAsync(
@@ -93,23 +84,13 @@ public sealed class AnimeAcquisitionScheduler(
             {
                 await ResumeImportsAsync(token);
                 await using var scope = scopeFactory.CreateAsyncScope();
-                var started = await scope.ServiceProvider.GetRequiredService<AnimeRequestStarter>().StartAsync(animeKey, token);
-                var summary = new AnimeAcquisitionRunSummary(started, 0, 0, [started == 0 ? "Nothing is monitored that can be requested." : "The requests of the monitored anime are searched by the Wanted pass."]);
-                if (animeKey is null)
-                {
-                    LastRunAtUtc = DateTimeOffset.UtcNow;
-                    LastRun = summary;
-                    LastRunError = null;
-                }
-
-                return summary;
+                return await scope.ServiceProvider.GetRequiredService<AnimeRequestStarter>().StartAsync(animeKey, token);
             },
             cancellationToken);
     }
 
     /// <summary>
-    /// Startup recovery: resumes interrupted or missed imports and brings monitoring attempts in
-    /// line with the acquisition relation and Operations. Safe to run more than once.
+    /// Startup recovery: moves downloads of the old pipeline onto requests and resumes interrupted or missed imports. Safe to run more than once.
     /// </summary>
     public async Task<int> RecoverAsync(CancellationToken cancellationToken)
     {
@@ -119,14 +100,12 @@ public sealed class AnimeAcquisitionScheduler(
         }
 
         return await RunExclusiveAsync(
-            async (pipeline, token) =>
+            async (_, token) =>
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
-                var recovered = await scope.ServiceProvider
-                    .GetRequiredService<AnimeImportRecovery>()
-                    .RecoverAsync(token);
-                await pipeline.ReconcileAttemptsAsync(token);
-                return recovered;
+                // Downloads of the old pipeline move onto requests first: the import recovery needs their request to know the episodes.
+                await scope.ServiceProvider.GetRequiredService<AnimeLegacyAcquisitionMigration>().RunAsync(token);
+                return await scope.ServiceProvider.GetRequiredService<AnimeImportRecovery>().RecoverAsync(token);
             },
             cancellationToken);
     }
@@ -159,19 +138,19 @@ public sealed class AnimeAcquisitionScheduler(
             }
         }
 
-        NextRunAtUtc ??= nowUtc + StartupDelay;
+        nextRunAtUtc ??= nowUtc + StartupDelay;
         if (!requests.IsEmpty)
         {
             return await RunRequestsAsync(cancellationToken);
         }
 
-        if (nowUtc < NextRunAtUtc)
+        if (nowUtc < nextRunAtUtc)
         {
             return 0;
         }
 
         // Searching is the requests' business (the shared Wanted pass, their own back-off); the periodic step keeps the monitored list in line with the owner's AniList lists.
-        NextRunAtUtc = nowUtc + AniListAutoMonitorInterval;
+        nextRunAtUtc = nowUtc + AniListAutoMonitorInterval;
         await RunAniListAutoMonitorAsync(cancellationToken);
         return 1;
     }
@@ -207,7 +186,7 @@ public sealed class AnimeAcquisitionScheduler(
         foreach (var request in batch)
         {
             stoppingToken.ThrowIfCancellationRequested();
-            await RunSafelyAsync(request.AnimeKey, request.Trigger, stoppingToken);
+            await RunSafelyAsync(request.AnimeKey, stoppingToken);
         }
 
         return batch.Length;
@@ -215,7 +194,6 @@ public sealed class AnimeAcquisitionScheduler(
 
     private async Task RunSafelyAsync(
         string? animeKey,
-        AnimeSearchTrigger trigger,
         CancellationToken stoppingToken)
     {
         if (!await IsAnimeEnabledAsync(stoppingToken))
@@ -225,12 +203,8 @@ public sealed class AnimeAcquisitionScheduler(
 
         try
         {
-            var summary = await RunNowAsync(animeKey, trigger, stoppingToken);
-            logger.LogInformation(
-                "Anime acquisition run ({Trigger}, {Scope}) finished: {Summary}",
-                trigger,
-                animeKey ?? "all monitored anime",
-                summary);
+            var started = await RunNowAsync(animeKey, stoppingToken);
+            logger.LogInformation("Anime search now ({Scope}) made {Count} request(s) due.", animeKey ?? "all monitored anime", started);
             if (animeKey is null)
             {
                 await RunAniListAutoMonitorAsync(stoppingToken);
@@ -241,12 +215,6 @@ public sealed class AnimeAcquisitionScheduler(
         }
         catch (Exception exception)
         {
-            if (animeKey is null)
-            {
-                LastRunAtUtc = DateTimeOffset.UtcNow;
-                LastRunError = exception.Message;
-            }
-
             logger.LogWarning(exception, "Anime acquisition run failed.");
         }
     }
@@ -308,6 +276,4 @@ public sealed class AnimeAcquisitionScheduler(
     }
 }
 
-public sealed record AnimeAcquisitionRunRequest(
-    string? AnimeKey,
-    AnimeSearchTrigger Trigger);
+public sealed record AnimeAcquisitionRunRequest(string? AnimeKey);

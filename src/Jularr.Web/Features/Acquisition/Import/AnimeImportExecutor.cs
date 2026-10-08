@@ -44,7 +44,6 @@ public sealed class AnimeImportExecutor(
     AcquisitionAccessStore requests,
     AnimeQualityProfileStore profiles,
     AnimeImportStore imports,
-    SabnzbdAcquisitionStore acquisitions,
     AcquisitionOwnershipStore ownershipStore,
     SonarrObservationService observation,
     AnimeAcquisitionInventory inventory,
@@ -78,18 +77,11 @@ public sealed class AnimeImportExecutor(
         ExecutionGate.Wait(0) ? new ExecutionLease() : null;
 
     public static bool IsAnimeDownload(OperationSnapshot operation) =>
-        operation.Kind is SabnzbdAcquisitionService.OperationKind or AnimeAcquisitionEngine.OperationKind;
+        operation.Kind is AnimeAcquisitionEngine.LegacyOperationKind or AnimeAcquisitionEngine.OperationKind;
 
-    // The legacy relation names its own acquisition; a shared download is answered by the request that owns its operation.
+    // The request that owns the download's operation names its episodes.
     private async Task<AnimeDownloadTarget?> ResolveTargetAsync(OperationSnapshot download, CancellationToken cancellationToken)
     {
-        if (download.Kind == SabnzbdAcquisitionService.OperationKind)
-        {
-            return (await acquisitions.FindByOperationAsync(download.Id, cancellationToken))?.Acquisition is { } acquisition
-                ? new AnimeDownloadTarget(acquisition.Id, acquisition.AnimeKey, acquisition.AnimeTitle, acquisition.Episodes, acquisition.ProfileId)
-                : null;
-        }
-
         if (await requests.FindByOperationAsync(download.Id, cancellationToken) is not { } request || AnimeRequestPayload.Of(request) is not { AnimeKey: { Length: > 0 } key, Episodes: { Count: > 0 } episodes })
         {
             return null;
@@ -234,7 +226,7 @@ public sealed class AnimeImportExecutor(
                 OperationKind,
                 OperationCategory,
                 "Anime import",
-                $"{acquisition.AnimeTitle} · {SabnzbdAcquisitionService.FormatEpisodes(acquisition.Episodes)}",
+                $"{acquisition.AnimeTitle} · {AnimeAcquisitionPipeline.FormatEpisodes(acquisition.Episodes)}",
                 acquisition.ProfileId,
                 OperationLane.Normal,
                 Retryable: false),
@@ -415,6 +407,12 @@ public sealed class AnimeImportExecutor(
             operationId,
             cancellationToken);
         await RecordOnDownloadAsync(finished, cancellationToken);
+
+        // The request that waited for this decision goes on: the next Wanted pass reads the imported record and completes or continues it.
+        if (finished.Status == AnimeImportStatus.Imported && await requests.FindByOperationAsync(record.DownloadOperationId, cancellationToken) is { Status: AcquisitionRequestStatus.Failed } blocked)
+        {
+            await requests.TryTransitionStatusAsync(blocked.Id, [AcquisitionRequestStatus.Failed], AcquisitionRequestStatus.Importing, "The owner imported the download.", record.DownloadOperationId, cancellationToken);
+        }
 
         return executed.Status == AnimeImportFileStatus.Imported
             ? new(true, $"Imported as S{seasonNumber:00}E{episodeNumber:00}.")

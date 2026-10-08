@@ -145,13 +145,6 @@ public sealed record AcquisitionRequest(
 
     public bool IsOpen => AcquisitionAccessNames.IsOpen(Status);
 
-    /// <summary>
-    /// Whether a pass reads this request back from its media type's monitoring pipeline: an acquisition that is underway, or one that
-    /// failed on a download the owner had to resolve (it keeps that download linked), which can be resolved without a retry.
-    /// </summary>
-    public bool IsObservedFromMonitoring =>
-        AcquisitionAccessNames.UnderwayStatuses.Contains(Status) || (Status == AcquisitionRequestStatus.Failed && OperationId is not null);
-
     /// <summary>Whether an auto-approval rule (not a person) approved this request.</summary>
     public bool WasAutoApproved => AcquisitionAutoApproval.TryParseRuleId(DecidedByProfileId, out _);
 
@@ -227,36 +220,6 @@ public interface IAcquisitionRequestExecutor
     MediaAcquisitionKind Kind { get; }
 
     Task<AcquisitionExecution> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken);
-}
-
-/// <summary>
-/// An executor of a media type that is searched, downloaded and imported by its own monitoring pipeline instead of by the request
-/// (Anime). Executing the request only puts the title under monitoring; an observation reads where that pipeline stands for a
-/// request, so a request is never reported further along than the media actually is. Observing only reads and never starts a search.
-/// </summary>
-public interface IMonitoredAcquisitionExecutor : IAcquisitionRequestExecutor
-{
-    /// <summary>Loads what every request of the media type shares once, as of <paramref name="nowUtc"/>; the observation answers many requests from it.</summary>
-    Task<IRequestObservation> BeginObservationAsync(DateTime nowUtc, CancellationToken cancellationToken);
-}
-
-/// <summary>Where the monitoring pipeline stands for one request, read against the state loaded when the observation began.</summary>
-public interface IRequestObservation
-{
-    /// <summary>The state to bring the request to, or null when its executor has not run for it yet, so the pipeline has nothing to report.</summary>
-    Task<AcquisitionExecution?> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken);
-}
-
-/// <summary>What following a request of a monitored media type did.</summary>
-public enum MonitoredFollowOutcome
-{
-    /// <summary>The request already is where its pipeline is, or somebody else moved it on meanwhile.</summary>
-    Unchanged,
-
-    Changed,
-
-    /// <summary>The request is approved but its executor has not run for it (its series does not exist), so there is no pipeline state to follow.</summary>
-    NotExecuted
 }
 
 /// <summary>What cancelling a request came to; a request that is no longer pending is reported, never overwritten.</summary>

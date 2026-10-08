@@ -14,6 +14,16 @@ public sealed record AnimeRequestPayload(string? AnimeKey = null, IReadOnlyList<
 {
     public static AnimeRequestPayload Of(AcquisitionRequest request) => Parse(request.PayloadJson) ?? new AnimeRequestPayload();
 
+    /// <summary>The stored payload with the anime key of a renamed series folder, so the download in flight still imports into the same anime.</summary>
+    public static string? Rekey(string? stored, string oldKey, string newKey) =>
+        Parse(stored) is { } payload && string.Equals(payload.AnimeKey, oldKey, StringComparison.OrdinalIgnoreCase)
+            ? (payload with
+            {
+                AnimeKey = newKey,
+                Episodes = payload.Episodes?.Select(episode => string.Equals(episode.AnimeKey, oldKey, StringComparison.OrdinalIgnoreCase) ? episode with { AnimeKey = newKey } : episode).ToArray()
+            }).Serialize()
+            : stored;
+
     public static AnimeRequestPayload? Parse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))

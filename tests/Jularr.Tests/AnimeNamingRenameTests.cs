@@ -1,8 +1,11 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Naming;
 using Jularr.Web.Features.Acquisition.Ownership;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Metadata;
@@ -246,37 +249,21 @@ public sealed class AnimeNamingRenameTests
         await fixture.Naming.UpsertAsync(RenameFixture.SimpleProfile() with { SeriesFolderFormat = "{Series TitleYear}" });
         var now = DateTimeOffset.UtcNow;
         var acquisitionId = Guid.NewGuid();
-        await fixture.Acquisitions.UpdateAsync(state =>
+        await fixture.Acquisitions.UpdateAsync(state => state.Blocklist.Add(new SabnzbdBlockedRelease("release-1", "Frieren - 02", "frieren", SabnzbdFailureKind.Download, "failed", null, now)));
+        var requests = new AcquisitionAccessStore(fixture.Db);
+        var inFlight = await requests.CreateAsync(
+            new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", "154587", "Frieren", null, null, new AnimeRequestPayload("frieren", [new AnimeEpisodeKey("frieren", 1, 2)]).Serialize()),
+            "owner",
+            AcquisitionRequestStatus.Downloading,
+            "owner",
+            CancellationToken.None);
+        await fixture.Monitoring.UpdateAsync(state => state with
         {
-            state.Acquisitions.Add(new SabnzbdAcquisition(
-                acquisitionId,
-                "frieren",
-                "Frieren",
-                [new AnimeEpisodeKey("frieren", 1, 2)],
-                null,
-                3,
-                [],
-                [],
-                now,
-                now));
-            state.Blocklist.Add(new SabnzbdBlockedRelease("release-1", "Frieren - 02", "frieren", SabnzbdFailureKind.Download, "failed", null, now));
-        });
-        var wantedKey = new AnimeEpisodeKey("frieren", 1, 2);
-        await fixture.Monitoring.UpdateAsync(state => AnimeMonitoringEngine.MarkGrabbed(
-            state with
+            Anime = new Dictionary<string, AnimeMonitorSettings>(StringComparer.OrdinalIgnoreCase)
             {
-                Anime = new Dictionary<string, AnimeMonitorSettings>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["frieren"] = new("frieren", true, TargetRootId: fixture.Root.Id)
-                },
-                Wanted = new Dictionary<string, AnimeWantedEpisode>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [wantedKey.ToString()] = new(wantedKey, AnimeWantedReason.Missing, now)
-                }
-            },
-            wantedKey,
-            "frieren-02",
-            now));
+                ["frieren"] = new("frieren", true, TargetRootId: fixture.Root.Id)
+            }
+        });
         var importId = Guid.NewGuid();
         await fixture.Imports.UpsertAsync(new AnimeImportRecord(
             importId,
@@ -308,17 +295,14 @@ public sealed class AnimeNamingRenameTests
         var ownership = await fixture.Ownership.LoadAsync();
         Assert.IsTrue(ownership.Anime.ContainsKey("frieren (2023)"));
         Assert.IsFalse(ownership.Anime.ContainsKey("frieren"));
-        var acquisitions = await fixture.Acquisitions.LoadAsync();
-        var acquisition = acquisitions.Acquisitions.Single(x => x.Id == acquisitionId);
-        Assert.AreEqual("frieren (2023)", acquisition.AnimeKey, "In-flight downloads follow the new anime key.");
-        Assert.AreEqual("frieren (2023)", acquisition.Episodes.Single().AnimeKey);
-        Assert.AreEqual("frieren (2023)", acquisitions.Blocklist.Single().AnimeKey);
+        var payload = AnimeRequestPayload.Of((await requests.GetAsync(inFlight.Id, CancellationToken.None))!);
+        Assert.AreEqual("frieren (2023)", payload.AnimeKey, "In-flight downloads follow the new anime key.");
+        Assert.AreEqual("frieren (2023)", payload.Episodes!.Single().AnimeKey);
+        Assert.AreEqual("frieren (2023)", (await fixture.Acquisitions.LoadAsync()).Blocklist.Single().AnimeKey);
         var monitoring = await fixture.Monitoring.LoadAsync();
         Assert.IsTrue(monitoring.Anime["frieren (2023)"].SearchOnAdd, "Monitoring settings follow the new anime key.");
         Assert.IsFalse(monitoring.Anime.ContainsKey("frieren"));
         Assert.AreEqual(fixture.Root.Id, monitoring.Anime["frieren (2023)"].TargetRootId, "The target root assignment follows the new anime key.");
-        Assert.AreEqual("frieren (2023)", monitoring.Wanted.Values.Single().Key.AnimeKey);
-        Assert.AreEqual(AnimeAcquisitionAttemptStatus.Grabbed, monitoring.Attempts["frieren (2023):S01E02"].Status);
         var import = await fixture.Imports.GetAsync(importId);
         Assert.AreEqual("frieren (2023)", import!.AnimeKey, "Pending manual imports follow the new anime key.");
         Assert.AreEqual(target, import.Files.Single().ImportedPath);
@@ -446,7 +430,7 @@ public sealed class AnimeNamingRenameTests
             Naming = new AnimeNamingProfileStore(new DirectoryInfo(Path.Combine(tempRoot, "acquisition")));
             Ownership = new AcquisitionOwnershipStore(tempRoot);
             var protection = DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(tempRoot, "keys")));
-            Acquisitions = new SabnzbdAcquisitionStore(protection, new DirectoryInfo(Path.Combine(tempRoot, "acquisition")));
+            Acquisitions = new SabnzbdAcquisitionStore(new DirectoryInfo(Path.Combine(tempRoot, "acquisition")));
             FileSystem = new TestFileSystem();
             Monitoring = new AnimeMonitoringStore(tempRoot);
             Imports = new AnimeImportStore(new DirectoryInfo(Path.Combine(tempRoot, "acquisition")));
@@ -462,6 +446,7 @@ public sealed class AnimeNamingRenameTests
                 Naming,
                 Ownership,
                 Acquisitions,
+                new AcquisitionAccessStore(db),
                 Monitoring,
                 Imports,
                 observation,

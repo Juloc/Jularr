@@ -163,12 +163,19 @@ public sealed class AdminWantedPageRenderTests
 
         await using var broken = await WantedHost.CreateAsync();
         await broken.Db.Database.ExecuteSqlRawAsync("ALTER TABLE \"WantedItems\" RENAME TO \"WantedItemsOld\"");
-
-        var failed = await broken.GetHtmlAsync("/Admin/Wanted");
-        StringAssert.Contains(failed, "role=\"alert\"");
-        StringAssert.Contains(failed, "The wanted list could not be loaded.");
-        StringAssert.Contains(failed, "href=\"/Admin/Wanted\"");
-        Assert.IsFalse(failed.Contains("data-admin-wanted>", StringComparison.Ordinal));
+        try
+        {
+            var failed = await broken.GetHtmlAsync("/Admin/Wanted");
+            StringAssert.Contains(failed, "role=\"alert\"");
+            StringAssert.Contains(failed, "The wanted list could not be loaded.");
+            StringAssert.Contains(failed, "href=\"/Admin/Wanted\"");
+            Assert.IsFalse(failed.Contains("data-admin-wanted>", StringComparison.Ordinal));
+        }
+        finally
+        {
+            // The database is reused by later tests.
+            await broken.Db.Database.ExecuteSqlRawAsync("ALTER TABLE \"WantedItemsOld\" RENAME TO \"WantedItems\"");
+        }
     }
 
     [TestMethod]

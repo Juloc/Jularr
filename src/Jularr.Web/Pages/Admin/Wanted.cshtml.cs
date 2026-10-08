@@ -215,7 +215,7 @@ public sealed class WantedModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        TempData["Status"] = scheduler.RequestRun(animeKey.Trim(), AnimeSearchTrigger.Manual)
+        TempData["Status"] = scheduler.RequestRun(animeKey.Trim())
             ? Ui["admin.wanted.searchQueued"]
             : Ui["acquisition.error.tooManyQueued"];
         return Back(returnUrl);

@@ -237,15 +237,13 @@ public sealed class SonarrOwnershipGuardTests
         // Sonarr applied the unmonitor request; the next observation reflects it.
         var after = Sonarr(frierenMonitored: false);
         var ownership = new AcquisitionOwnershipSnapshot(state, after);
-        var monitoring = AnimeMonitoringState.Empty();
 
         // Frieren: Jularr grabs the wanted episode exactly once.
         var frierenWanted = new AnimeWantedEpisode(new AnimeEpisodeKey("frieren", 1, 8), AnimeWantedReason.Missing, Now);
         var frierenRelease = Score("Frieren - S01E08 WEB-DL 1080p AVC AAC[JA]");
-        var grab = AnimeMonitoringEngine.EvaluateCandidate(Profile, frierenWanted, frierenRelease, null, monitoring, ownership, Now);
-        Assert.IsTrue(grab.Grab, grab.Reason);
+        var grab = SonarrParallelSafety.CanGrab(ownership, GrabRequest(frierenWanted.Key, frierenRelease.Candidate.Release), Now);
+        Assert.IsTrue(grab.Allowed, grab.Reason);
 
-        monitoring = AnimeMonitoringEngine.MarkGrabbed(monitoring, frierenWanted.Key, frierenRelease.Candidate.Release.ReleaseKey, Now);
         state = SonarrParallelSafety.RegisterJob(
             state,
             new AcquisitionOwnership(
@@ -258,32 +256,15 @@ public sealed class SonarrOwnershipGuardTests
                 "jularr-nzo-frieren-08"));
         ownership = new AcquisitionOwnershipSnapshot(state, after);
 
-        var duplicate = AnimeMonitoringEngine.EvaluateCandidate(Profile, frierenWanted, frierenRelease, null, monitoring, ownership, Now);
-        Assert.IsFalse(duplicate.Grab);
-        var duplicateAfterRestart = AnimeMonitoringEngine.EvaluateCandidate(
-            Profile,
-            frierenWanted,
-            frierenRelease,
-            null,
-            AnimeMonitoringState.Empty(),
-            ownership,
-            Now);
-        Assert.IsFalse(duplicateAfterRestart.Grab, "The ownership store alone must prevent a duplicate Jularr grab.");
+        var duplicate = SonarrParallelSafety.CanGrab(ownership, GrabRequest(frierenWanted.Key, frierenRelease.Candidate.Release), Now);
+        Assert.IsFalse(duplicate.Allowed, "The ownership store alone must prevent a duplicate Jularr grab.");
 
         // Dungeon Meshi: Jularr never grabs, even for episodes Sonarr is not downloading.
         foreach (var episode in new[] { 5, 6 })
         {
             var wanted = new AnimeWantedEpisode(new AnimeEpisodeKey("meshi", 1, episode), AnimeWantedReason.Missing, Now);
-            var decision = AnimeMonitoringEngine.EvaluateCandidate(
-                Profile,
-                wanted,
-                Score($"Dungeon Meshi - S01E{episode:00} WEB-DL 1080p AVC AAC[JA]"),
-                null,
-                monitoring,
-                ownership,
-                Now);
-            Assert.IsFalse(decision.Grab);
-            StringAssert.StartsWith(decision.Reason, "Ownership:");
+            var decision = SonarrParallelSafety.CanGrab(ownership, GrabRequest(wanted.Key, Score($"Dungeon Meshi - S01E{episode:00} WEB-DL 1080p AVC AAC[JA]").Candidate.Release), Now);
+            Assert.IsFalse(decision.Allowed);
         }
 
         // Import: Jularr imports its own Frieren download and leaves Sonarr's Meshi download alone.
@@ -390,6 +371,9 @@ public sealed class SonarrOwnershipGuardTests
 
     private static AcquisitionGrabRequest Grab(string animeKey, int episode) =>
         new(animeKey, $"{animeKey}-release-{episode}", 1, episode, episode, episode, episode);
+
+    private static AcquisitionGrabRequest GrabRequest(AnimeEpisodeKey key, Jularr.Web.Features.Acquisition.Release.ReleaseInfo release) =>
+        new(key.AnimeKey, release.ReleaseKey, release.SeasonNumber ?? key.SeasonNumber, release.EpisodeStart ?? key.EpisodeNumber, release.EpisodeEnd ?? key.EpisodeNumber, release.AbsoluteEpisodeStart, release.AbsoluteEpisodeEnd);
 
     private static AnimeReleaseScoreResult Score(string title) =>
         AnimeReleaseScorer.Score(Profile, new AnimeReleaseCandidate(AnimeReleaseParser.Parse(title), 900_000_000));

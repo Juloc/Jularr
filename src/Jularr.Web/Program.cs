@@ -579,6 +579,8 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AnimeAcquisiti
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
 builder.Services.AddScoped<AnimeAcquisitionEngine>();
 builder.Services.AddScoped<AnimeManualGrabService>();
+builder.Services.AddScoped<AnimeEpisodeStates>();
+builder.Services.AddScoped<AnimeLegacyAcquisitionMigration>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, AnimeWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
@@ -704,7 +706,6 @@ builder.Services.AddHostedService<AcquisitionHealthCheckService>();
 
 builder.Services.AddScoped<SabnzbdDownloadService>();
 builder.Services.AddScoped<IOperationActions, OperationActions>();
-builder.Services.AddScoped<SabnzbdAcquisitionService>();
 builder.Services.AddHostedService<SabnzbdOperationMonitorService>();
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.WantedPassTrigger>();
 builder.Services.AddHostedService<Jularr.Web.Features.Acquisition.Wanted.WantedAcquisitionService>();

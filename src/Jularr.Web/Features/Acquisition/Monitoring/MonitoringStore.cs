@@ -94,13 +94,22 @@ public sealed class MonitoringStore
         string newKey,
         CancellationToken cancellationToken = default)
     {
-        var current = await LoadAsync(cancellationToken);
-        if (ReferenceEquals(MonitoringEngine.RekeyAnime(current, oldKey, newKey), current))
+        ArgumentException.ThrowIfNullOrWhiteSpace(oldKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newKey);
+        if (oldKey.Equals(newKey, StringComparison.Ordinal) || !(await LoadAsync(cancellationToken)).Anime.Values.Any(item => item.AnimeKey.Equals(oldKey, StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }
 
-        await UpdateAsync(state => MonitoringEngine.RekeyAnime(state, oldKey, newKey), cancellationToken);
+        // A series-folder rename changes the library key; the per-anime settings follow it.
+        await UpdateAsync(
+            state => state with
+            {
+                Anime = state.Anime.Values
+                    .Select(item => item.AnimeKey.Equals(oldKey, StringComparison.OrdinalIgnoreCase) ? item with { AnimeKey = newKey } : item)
+                    .ToDictionary(item => item.AnimeKey, StringComparer.OrdinalIgnoreCase)
+            },
+            cancellationToken);
         return true;
     }
 

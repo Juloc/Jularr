@@ -8,45 +8,27 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Acquisition.Access;
 
-/// <summary>
-/// Where the Anime monitoring pipeline stands for Anime requests, read against the monitoring state, ownership, acquisition relations
-/// and release calendar loaded once when the observation began (<see cref="AnimeAcquisitionRequestExecutor.BeginObservationAsync"/>).
-/// A request covers the monitored episodes of its scope that the pipeline tracks and that have aired; it is Completed when all of them
-/// have a file and at least one does. Episodes that air later are picked up by the series' monitoring without the request staying open
-/// for them. Otherwise it reports the furthest stage of the download in flight. Nothing here writes.
-/// </summary>
 /// <summary>What an Anime request covers: the slots of its series, the requested ones that have aired, the ones still without a file, and whether nothing can be tracked for it.</summary>
 public sealed record AnimeRequestScope(AnimeEpisodeSlots Slots, IReadOnlyList<AnimeEpisodeSlot> Requested, IReadOnlyList<AnimeEpisodeKey> Missing, bool Untracked, string ResultUrl);
 
-public sealed class AnimeRequestObservation(
+/// <summary>
+/// Reads what an Anime request covers against the monitoring, ownership and release calendar loaded once for the reader. A request covers the monitored episodes of
+/// its scope that the anime tracks and that have aired; it is Completed when all of them have a file and at least one does. Episodes that air later are picked up by
+/// the series' monitoring without the request staying open for them. Nothing here writes.
+/// </summary>
+public sealed class AnimeRequestScopeReader(
     AppDbContext db,
     AnimeAcquisitionInventory inventory,
-    AnimeAcquisitionPipeline pipeline,
     ReleaseCalendarCacheStore calendar,
     AnimeMonitoring animeMonitoring,
     AcquisitionOwnershipState ownership,
-    AnimeAcquisitionSnapshot acquisitions,
     IReadOnlyDictionary<string, ReleaseCacheSource> releaseSources,
-    bool searchConfigured,
-    DateTime nowUtc) : IRequestObservation
+    DateTime nowUtc)
 {
     public const string ReadOnlyMessage = "Sonarr manages this series — the owner decides in Sonarr migration.";
     private const string FinishedStatus = "FINISHED";
     private const string LookingMessage = "Looking for the requested episodes.";
     private const string NoEpisodeListMessage = "Not available yet. There is no episode list for this title, so nothing can be searched yet.";
-    private const string SearchNotSetUpMessage = "Not available yet. Searching is not set up on this server.";
-
-    public async Task<AcquisitionExecution?> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken)
-    {
-        var scope = await ReadScopeAsync(request, cancellationToken);
-        return scope is null ? SeriesMissing(request) : await DecideAsync(request, scope, cancellationToken);
-    }
-
-    // An approved request whose series does not exist yet has not been executed: creating the series is the executor's job.
-    public static AcquisitionExecution? SeriesMissing(AcquisitionRequest request) =>
-        request.Status == AcquisitionRequestStatus.Approved
-            ? null
-            : new AcquisitionExecution(AcquisitionRequestStatus.Failed, "The series is no longer in the library.");
 
     /// <summary>The episodes a request covers: its scope of the monitored slots, what has aired, and what of that is still missing. Null when the series does not exist.</summary>
     public async Task<AnimeRequestScope?> ReadScopeAsync(AcquisitionRequest request, CancellationToken cancellationToken)
@@ -71,14 +53,14 @@ public sealed class AnimeRequestObservation(
         var requested = inScope.Where(slot => !IsKnownNotAired(slot, airedUpTo)).ToArray();
         var missing = requested.Where(slot => !slot.HasFile).Select(slot => slot.Key).ToArray();
 
-        // Nothing the pipeline tracks for this request can be searched, or episodes have aired that it does not track at all: the request is not
+        // Nothing the anime tracks for this request can be searched, or episodes have aired that it does not track at all: the request is not
         // available however many files exist, and it says why instead of looking like a search that is running.
         var untracked = inScope.Length == 0 || (slots.ExpectedEpisodesUnknown && AiredBeyondTracked(slots, airedUpTo));
         return new AnimeRequestScope(slots, requested, missing, untracked, resultUrl);
     }
 
-    /// <summary>Where the request stands against its scope: Completed when everything requested that has aired is in the library, else what the pipeline in flight says.</summary>
-    public async Task<AcquisitionExecution> DecideAsync(AcquisitionRequest request, AnimeRequestScope scope, CancellationToken cancellationToken)
+    /// <summary>Where the request stands against its scope: Completed when everything requested that has aired is in the library, held back when Sonarr owns the series, else waiting for a search.</summary>
+    public AcquisitionExecution Decide(AnimeRequestScope scope)
     {
         var (slots, requested, missing, untracked, resultUrl) = scope;
         if (!untracked && missing.Count == 0 && requested.Any(slot => slot.HasFile))
@@ -91,25 +73,7 @@ public sealed class AnimeRequestObservation(
             return new AcquisitionExecution(AcquisitionRequestStatus.Approved, ReadOnlyMessage, ResultUrl: resultUrl);
         }
 
-        var open = await pipeline.ListOpenAcquisitionsAsync(acquisitions, slots.Anime.Key, missing, nowUtc, cancellationToken);
-        if (open.FirstOrDefault(item => item.Stage == AnimeOpenAcquisitionStage.Downloading) is { } downloading)
-        {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Downloading, "Download is in progress.", downloading.Download.Id, resultUrl);
-        }
-
-        if (open.FirstOrDefault(item => item.Stage == AnimeOpenAcquisitionStage.Importing) is { } importing)
-        {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Importing, "Download complete. Importing into the library.", importing.Download.Id, resultUrl);
-        }
-
-        if (open.FirstOrDefault(item => item.Stage == AnimeOpenAcquisitionStage.NeedsOwner) is { } needsOwner)
-        {
-            var reason = string.IsNullOrWhiteSpace(needsOwner.ImportMessage) ? "The completed download needs a decision from the owner." : needsOwner.ImportMessage;
-            return new AcquisitionExecution(AcquisitionRequestStatus.Failed, reason, needsOwner.Download.Id, resultUrl);
-        }
-
-        var message = untracked ? NoEpisodeListMessage : searchConfigured ? LookingMessage : SearchNotSetUpMessage;
-        return new AcquisitionExecution(AcquisitionRequestStatus.Approved, message, ResultUrl: resultUrl);
+        return new AcquisitionExecution(AcquisitionRequestStatus.Approved, untracked ? NoEpisodeListMessage : LookingMessage, ResultUrl: resultUrl);
     }
 
     /// <summary>
@@ -166,7 +130,7 @@ public sealed class AnimeRequestObservation(
     /// <summary>
     /// An episode is out of the request only when its AniList entry is known and the episode is beyond what has aired and has no file.
     /// An entry nothing is known about (a releasing series the calendar has no row for yet) keeps all its episodes in the request, so
-    /// it is not reported complete before every episode the pipeline tracks has a file.
+    /// it is not reported complete before every episode the anime tracks has a file.
     /// </summary>
     private static bool IsKnownNotAired(AnimeEpisodeSlot slot, IReadOnlyDictionary<string, int> airedUpTo) =>
         !slot.HasFile

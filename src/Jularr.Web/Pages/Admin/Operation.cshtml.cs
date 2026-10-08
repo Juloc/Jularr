@@ -24,9 +24,7 @@ public sealed class OperationModel(
 
     public OperationSnapshot Operation { get; private set; } = null!;
     public IReadOnlyList<OperationLogEntry> Logs { get; private set; } = [];
-    public SabnzbdAcquisition? Acquisition { get; private set; }
-    public SabnzbdAcquisitionAttempt? AcquisitionAttempt { get; private set; }
-    public IReadOnlyList<SabnzbdBlockedRelease> AcquisitionBlocklist { get; private set; } = [];
+    public SabnzbdBlockedRelease? BlockedRelease { get; private set; }
 
     /// <summary>Routing and completed-download import details of an external download, when recorded.</summary>
     public DownloadOperationDetails? DownloadDetails { get; private set; }
@@ -144,21 +142,7 @@ public sealed class OperationModel(
             new OperationLogFilter(OperationId: id, Limit: 300),
             cancellationToken);
 
-        if (operation.Kind == SabnzbdAcquisitionService.OperationKind)
-        {
-            var state = await acquisitions.LoadAsync(cancellationToken);
-            if (state.FindByOperation(id) is { } relation)
-            {
-                Acquisition = relation.Acquisition;
-                AcquisitionAttempt = relation.Attempt;
-                var identities = relation.Acquisition.Attempts
-                    .Select(attempt => attempt.ReleaseIdentity)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                AcquisitionBlocklist = state.Blocklist
-                    .Where(entry => identities.Contains(entry.ReleaseIdentity))
-                    .ToArray();
-            }
-        }
+        BlockedRelease = (await acquisitions.LoadAsync(cancellationToken)).Blocklist.FirstOrDefault(entry => entry.OperationId == id);
 
         return true;
     }

@@ -1,5 +1,6 @@
 using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Metadata;
@@ -343,28 +344,30 @@ public sealed class ReleaseCalendarTests
     public void LocalStateComesFromLibraryFilesAndMonitoring()
     {
         var entry = Entry("100", null, (1, 1, true), (1, 2, false), (1, 3, false), (1, 4, false), (1, 5, false));
-        var monitoring = AnimeMonitoringState.Empty();
         var view = View(workMonitored: true, episodes: new Dictionary<(int, int), bool> { [(1, 7)] = false });
         var key3 = new AnimeEpisodeKey("frieren", 1, 3);
         var key4 = new AnimeEpisodeKey("frieren", 1, 4);
         var key5 = new AnimeEpisodeKey("frieren", 1, 5);
-        monitoring.Attempts[key3.ToString()] = new AnimeAcquisitionAttempt(key3, AnimeAcquisitionAttemptStatus.Grabbed, "release", 0, Now, null);
-        monitoring.Attempts[key4.ToString()] = new AnimeAcquisitionAttempt(key4, AnimeAcquisitionAttemptStatus.Failed, "release", 1, Now, Now.AddHours(1));
-        monitoring.Wanted[key5.ToString()] = new AnimeWantedEpisode(key5, AnimeWantedReason.Missing, Now);
+        var wanted = new[] { new AnimeWantedEpisode(key4, AnimeWantedReason.Missing, Now), new AnimeWantedEpisode(key5, AnimeWantedReason.Missing, Now) };
+        // The request of the anime has episode 3 on its way, or came back from a search with nothing; without a request the wanted episodes only wait.
+        var grabbing = new AnimeEpisodeStateMap(wanted, new Dictionary<string, AnimeRequestPayload> { ["frieren"] = new("frieren", [key3]) });
+        var searched = new AnimeEpisodeStateMap(wanted, new Dictionary<string, AnimeRequestPayload> { ["frieren"] = new("frieren") { Searches = 1, NextSearchUtc = Now.UtcDateTime.AddHours(1) } });
+        var waiting = new AnimeEpisodeStateMap(wanted, new Dictionary<string, AnimeRequestPayload>());
+        var monitoring = waiting;
 
-        ReleaseLocalState State(int episode, bool released) =>
-            AnimeReleaseStateResolver.Resolve(entry, (1, episode), monitoring, view, released).State;
+        ReleaseLocalState State(int episode, bool released, AnimeEpisodeStateMap? states = null) =>
+            AnimeReleaseStateResolver.Resolve(entry, (1, episode), states ?? waiting, view, released).State;
 
         Assert.AreEqual(ReleaseLocalState.Available, State(1, true));
         Assert.AreEqual(ReleaseLocalState.Missing, State(2, true));
-        Assert.AreEqual(ReleaseLocalState.Grabbed, State(3, true));
-        Assert.AreEqual(ReleaseLocalState.Failed, State(4, true));
+        Assert.AreEqual(ReleaseLocalState.Grabbed, State(3, true, grabbing));
+        Assert.AreEqual(ReleaseLocalState.Failed, State(4, true, searched));
         Assert.AreEqual(ReleaseLocalState.Wanted, State(5, true));
         Assert.AreEqual(ReleaseLocalState.Monitored, State(6, false), "Upcoming and monitored.");
         Assert.AreEqual(ReleaseLocalState.NotMonitored, State(7, true), "The episode override turns monitoring off.");
         Assert.IsTrue(AnimeReleaseStateResolver.Resolve(entry, (1, 6), monitoring, view, false).Monitored);
 
-        var unmonitored = AnimeReleaseStateResolver.Resolve(entry, (1, 2), AnimeMonitoringState.Empty(), View(workMonitored: false), released: true);
+        var unmonitored = AnimeReleaseStateResolver.Resolve(entry, (1, 2), AnimeEpisodeStateMap.Empty, View(workMonitored: false), released: true);
         Assert.AreEqual(ReleaseLocalState.NotMonitored, unmonitored.State, "A release date alone never makes an episode wanted.");
         Assert.AreEqual(false, unmonitored.Monitored);
 
@@ -384,7 +387,7 @@ public sealed class ReleaseCalendarTests
             new CachedRelease("anilist", "999", ReleaseKind.Episode, 2, ReleaseDate.FromInstant(Now.AddDays(1)))
         };
 
-        var events = AnimeReleaseStateResolver.ToEvents(releases, [entry], AnimeMonitoringState.Empty(), new Dictionary<string, WorkMonitoringView> { ["frieren"] = View(workMonitored: false) }, Now, Utc);
+        var events = AnimeReleaseStateResolver.ToEvents(releases, [entry], AnimeEpisodeStateMap.Empty, new Dictionary<string, WorkMonitoringView> { ["frieren"] = View(workMonitored: false) }, Now, Utc);
 
         Assert.AreEqual(2, events.Count);
         var premiere = events.Single(release => release.Kind == ReleaseKind.SeasonPremiere);

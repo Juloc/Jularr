@@ -1,7 +1,9 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Ownership;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Library;
@@ -18,13 +20,14 @@ namespace Jularr.Web.Features.Acquisition.Naming;
 // read-only mounts, cross-device moves, existing targets and library identity before anything
 // changes. Execution runs as an Operation, rolls filesystem moves back on failure and updates the
 // path-based canonical records (media files, subtitle sources, anime key) in one database
-// transaction, with the ownership and SABnzbd acquisition stores rekeyed alongside it, so
+// transaction, with the ownership store, the blocklist and the downloads in flight (the payload of the anime's request) rekeyed alongside it, so
 // progress and episode identity survive without a rescan.
 public sealed class AnimeRenameService(
     AppDbContext db,
     AnimeNamingProfileStore namingStore,
     AcquisitionOwnershipStore ownershipStore,
     SabnzbdAcquisitionStore acquisitionStore,
+    AcquisitionAccessStore requests,
     AnimeMonitoringStore monitoringStore,
     AnimeImportStore importStore,
     SonarrObservationService observation,
@@ -37,6 +40,24 @@ public sealed class AnimeRenameService(
     // Acquisition imports move files into series folders and rescan them, so they conflict too.
     internal static readonly string[] ConflictingOperationKinds = [LibraryScanCoordinator.OperationKind, OperationKind, AnimeImportExecutor.OperationKind];
     private static readonly string[] SidecarDirectoryNames = ["Subs", "Subtitles"];
+
+    private async Task<bool> RekeyRequestsAsync(string oldKey, string newKey)
+    {
+        var changed = false;
+        foreach (var status in new[] { AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Searching, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Importing })
+        {
+            foreach (var request in await requests.ListByStatusAsync(MediaAcquisitionKind.Anime, status, CancellationToken.None))
+            {
+                if (string.Equals(AnimeRequestPayload.Of(request).AnimeKey, oldKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    await requests.PatchPayloadAsync(request.Id, stored => AnimeRequestPayload.Rekey(stored, oldKey, newKey), CancellationToken.None);
+                    changed = true;
+                }
+            }
+        }
+
+        return changed;
+    }
 
     public async Task<AnimeRenamePlan?> PlanAsync(
         Guid animeId,
@@ -460,6 +481,11 @@ public sealed class AnimeRenameService(
             if (await acquisitionStore.RekeyAnimeAsync(plan.AnimeKey, plan.TargetAnimeKey, CancellationToken.None))
             {
                 compensations.Add(() => acquisitionStore.RekeyAnimeAsync(plan.TargetAnimeKey, plan.AnimeKey, CancellationToken.None));
+            }
+
+            if (await RekeyRequestsAsync(plan.AnimeKey, plan.TargetAnimeKey))
+            {
+                compensations.Add(() => RekeyRequestsAsync(plan.TargetAnimeKey, plan.AnimeKey));
             }
 
             if (await monitoringStore.RekeyAnimeAsync(plan.AnimeKey, plan.TargetAnimeKey, CancellationToken.None))

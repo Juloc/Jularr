@@ -1,217 +1,28 @@
-using Jularr.Web.Features.Acquisition;
-using Jularr.Web.Features.Acquisition.Monitoring;
-using Jularr.Web.Features.Acquisition.Quality;
-
 namespace Jularr.Tests;
 
 [TestClass]
 public sealed class AnimeMonitoringTests
 {
-    private static readonly AnimeQualityProfile Profile = AnimeQualityProfiles.CreateDefaultAnime1080p();
+    private static string NewRoot() => Path.Combine(Path.GetTempPath(), "jularr-monitoring-" + Guid.NewGuid());
 
     [TestMethod]
-    public void MissingAiredEpisodeBecomesWantedButFutureEpisodeDoesNot()
+    public async Task SettingsSurviveARestartAndFollowASeriesFolderRename()
     {
-        var now = DateTimeOffset.Parse("2026-09-25T18:00:00Z");
-        var inventory = new[]
-        {
-            new AnimeEpisodeInventory(new AnimeEpisodeKey("anime", 1, 1), now.AddMinutes(-5), false, null),
-            new AnimeEpisodeInventory(new AnimeEpisodeKey("anime", 1, 2), now.AddHours(2), false, null)
-        };
-
-        var wanted = AnimeMonitoringEngine.GetWanted(_ => true, inventory, Profile, now);
-
-        Assert.AreEqual(1, wanted.Count);
-        Assert.AreEqual(1, wanted[0].Key.EpisodeNumber);
-        Assert.AreEqual(AnimeWantedReason.Missing, wanted[0].Reason);
-    }
-
-    [TestMethod]
-    public void FileBelowCutoffAppearsAsCutoffUnmet()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var current = Score("Anime - S01E01 WEB-DL 720p AVC AAC[JA]", 500_000_000);
-        var inventory = new[]
-        {
-            new AnimeEpisodeInventory(new AnimeEpisodeKey("anime", 1, 1), now.AddDays(-1), true, current)
-        };
-
-        var wanted = AnimeMonitoringEngine.GetWanted(_ => true, inventory, Profile, now);
-
-        Assert.AreEqual(1, wanted.Count);
-        Assert.AreEqual(AnimeWantedReason.CutoffUnmet, wanted[0].Reason);
-    }
-
-    [TestMethod]
-    public void SearchPlanningRespectsSearchOnAddAndRetryBackoff()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var key = new AnimeEpisodeKey("anime", 1, 1);
-        var settings = DefaultSettings() with { SearchOnAdd = false };
-        var state = State(settings);
-        var wanted = new[] { new AnimeWantedEpisode(key, AnimeWantedReason.Missing, now) };
-
-        Assert.AreEqual(
-            0,
-            AnimeMonitoringEngine.PlanSearches(state, wanted, AnimeSearchTrigger.SearchOnAdd, now).Count);
-
-        var failed = AnimeMonitoringEngine.MarkFailed(state, key, null, now);
-        Assert.AreEqual(
-            0,
-            AnimeMonitoringEngine.PlanSearches(failed, wanted, AnimeSearchTrigger.PeriodicMissing, now.AddMinutes(1)).Count);
-
-        Assert.AreEqual(
-            1,
-            AnimeMonitoringEngine.PlanSearches(failed, wanted, AnimeSearchTrigger.PeriodicMissing, now.AddMinutes(6)).Count);
-    }
-
-    [TestMethod]
-    public void FailureBackoffIsBoundedAndExponential()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var key = new AnimeEpisodeKey("anime", 1, 1);
-        var state = State(DefaultSettings());
-
-        for (var i = 0; i < 10; i++)
-        {
-            state = AnimeMonitoringEngine.MarkFailed(state, key, null, now);
-            now = state.Attempts[key.ToString()].NextRetryAtUtc!.Value;
-        }
-
-        var last = state.Attempts[key.ToString()];
-        Assert.IsTrue(last.NextRetryAtUtc!.Value - last.LastAttemptAtUtc!.Value <= TimeSpan.FromHours(6));
-        Assert.AreEqual(10, last.FailureCount);
-    }
-
-    [TestMethod]
-    public void AnOutageDelaysTheNextSearchWithoutCountingAsAFailureOrRaisingTheBackoff()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var key = new AnimeEpisodeKey("anime", 1, 1);
-        var wanted = new[] { new AnimeWantedEpisode(key, AnimeWantedReason.Missing, now) };
-        var state = AnimeMonitoringEngine.MarkFailed(AnimeMonitoringEngine.MarkFailed(State(DefaultSettings()), key, null, now), key, null, now);
-        var failures = state.Attempts[key.ToString()].FailureCount;
-
-        var outage = AnimeMonitoringEngine.MarkUnavailable(state, key, now, TimeSpan.FromMinutes(30), "No indexer could be searched.");
-
-        var attempt = outage.Attempts[key.ToString()];
-        Assert.AreEqual(failures, attempt.FailureCount, "The failure count, which drives the back-off, is untouched.");
-        Assert.AreNotEqual(AcquisitionAttemptStatus.Failed, attempt.Status);
-        Assert.AreEqual(now + TimeSpan.FromMinutes(30), attempt.NextRetryAtUtc);
-        Assert.AreEqual(0, AnimeMonitoringEngine.PlanSearches(outage, wanted, AnimeSearchTrigger.PeriodicMissing, now.AddMinutes(29)).Count, "No search before the retry delay.");
-        Assert.AreEqual(1, AnimeMonitoringEngine.PlanSearches(outage, wanted, AnimeSearchTrigger.PeriodicMissing, now.AddMinutes(31)).Count, "The episode is searched again once it has passed.");
-        Assert.AreEqual("unavailable", outage.History[^1].Event);
-    }
-
-    [TestMethod]
-    public void CandidateForMissingEpisodeCanAutoGrab()
-    {
-        var key = new AnimeEpisodeKey("anime", 1, 1);
-        var wanted = new AnimeWantedEpisode(key, AnimeWantedReason.Missing, DateTimeOffset.UtcNow);
-        var candidate = Score("Anime - S01E01 WEB-DL 1080p AVC AAC[JA]", 900_000_000);
-
-        var decision = AnimeMonitoringEngine.EvaluateCandidate(
-            Profile,
-            wanted,
-            candidate,
-            null,
-            State(DefaultSettings()));
-
-        Assert.IsTrue(decision.Grab);
-    }
-
-    [TestMethod]
-    public void CandidateForWrongEpisodeIsRejected()
-    {
-        var key = new AnimeEpisodeKey("anime", 1, 1);
-        var wanted = new AnimeWantedEpisode(key, AnimeWantedReason.Missing, DateTimeOffset.UtcNow);
-        var candidate = Score("Anime - S01E02 WEB-DL 1080p AVC AAC[JA]", 900_000_000);
-
-        var decision = AnimeMonitoringEngine.EvaluateCandidate(
-            Profile,
-            wanted,
-            candidate,
-            null,
-            State(DefaultSettings()));
-
-        Assert.IsFalse(decision.Grab);
-    }
-
-    [TestMethod]
-    public void AbsoluteNumberedCandidateMatchesMappedLocalEpisode()
-    {
-        var key = new AnimeEpisodeKey("anime", 2, 1, 13);
-        var wanted = new AnimeWantedEpisode(key, AnimeWantedReason.Missing, DateTimeOffset.UtcNow);
-        var candidate = Score("[Group] Anime - 13 WEB-DL 1080p AVC AAC[JA]", 900_000_000);
-
-        var decision = AnimeMonitoringEngine.EvaluateCandidate(
-            Profile,
-            wanted,
-            candidate,
-            null,
-            State(DefaultSettings()));
-
-        Assert.IsTrue(decision.Grab);
-    }
-
-    [TestMethod]
-    public void RefreshWantedPersistsBecameWantedAndHistoryWithoutDuplicates()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var key = new AnimeEpisodeKey("anime", 1, 1);
-        var inventory = new[]
-        {
-            new AnimeEpisodeInventory(key, now.AddHours(-1), false, null)
-        };
-
-        var first = AnimeMonitoringEngine.RefreshWanted(AnimeMonitoringState.Empty(), _ => true, inventory, Profile, now);
-        var second = AnimeMonitoringEngine.RefreshWanted(first, _ => true, inventory, Profile, now.AddMinutes(10));
-
-        Assert.AreEqual(1, second.Wanted.Count);
-        Assert.AreEqual(now, second.Wanted[key.ToString()].BecameWantedAtUtc);
-        Assert.AreEqual(1, second.History.Count(entry => entry.Event == "wanted"));
-    }
-
-    [TestMethod]
-    public void DuplicateReleaseKeyIsNotGrabbedTwice()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var key = new AnimeEpisodeKey("anime", 1, 1);
-        var candidate = Score("Anime - S01E01 WEB-DL 1080p AVC AAC[JA]", 900_000_000);
-        var state = AnimeMonitoringEngine.MarkGrabbed(
-            State(DefaultSettings()),
-            key,
-            candidate.Candidate.Release.ReleaseKey,
-            now);
-
-        var decision = AnimeMonitoringEngine.EvaluateCandidate(
-            Profile,
-            new AnimeWantedEpisode(key, AnimeWantedReason.Missing, now),
-            candidate,
-            null,
-            state);
-
-        Assert.IsFalse(decision.Grab);
-    }
-
-    [TestMethod]
-    public async Task StorePersistsSchedulerStateAcrossRestart()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "jularr-monitoring-" + Guid.NewGuid());
+        var root = NewRoot();
         try
         {
             var store = new AnimeMonitoringStore(root);
-            var now = DateTimeOffset.UtcNow;
-            var key = new AnimeEpisodeKey("anime", 1, 1);
-            var state = AnimeMonitoringEngine.MarkFailed(State(DefaultSettings()), key, "release", now);
-
-            await store.SaveAsync(state);
+            await store.UpdateAsync(state => state with { Anime = new Dictionary<string, AnimeMonitorSettings>(StringComparer.OrdinalIgnoreCase) { ["anime"] = new("anime", true, [3, 5], Guid.Parse("00000000-0000-0000-0000-0000000000a0")) } });
 
             var reloaded = await new AnimeMonitoringStore(root).LoadAsync();
+            Assert.IsTrue(reloaded.Anime["anime"].SearchOnAdd);
+            CollectionAssert.AreEqual(new[] { 3, 5 }, reloaded.Anime["anime"].IndexerIds);
 
-            Assert.AreEqual(1, reloaded.Attempts.Count);
-            Assert.AreEqual(1, reloaded.History.Count);
-            Assert.AreEqual(AnimeAcquisitionAttemptStatus.Failed, reloaded.Attempts[key.ToString()].Status);
+            Assert.IsTrue(await store.RekeyAnimeAsync("anime", "anime (2023)"));
+            var renamed = await store.LoadAsync();
+            Assert.IsFalse(renamed.Anime.ContainsKey("anime"));
+            Assert.AreEqual("anime (2023)", renamed.Anime["anime (2023)"].AnimeKey);
+            Assert.IsFalse(await store.RekeyAnimeAsync("unknown", "other"));
         }
         finally
         {
@@ -222,17 +33,36 @@ public sealed class AnimeMonitoringTests
         }
     }
 
-    private static AnimeReleaseScoreResult Score(string title, long size) =>
-        AnimeReleaseScorer.Score(
-            Profile,
-            new AnimeReleaseCandidate(AnimeReleaseParser.Parse(title), size));
-
-    private static AnimeMonitorSettings DefaultSettings() => new("anime", SearchOnAdd: true);
-
-    private static AnimeMonitoringState State(AnimeMonitorSettings settings)
+    [TestMethod]
+    public async Task AnOlderFileWithAttemptsWantedEpisodesHistoryAndScheduleStillLoadsItsSettings()
     {
-        var state = AnimeMonitoringState.Empty();
-        state.Anime[settings.AnimeKey] = settings;
-        return state;
+        var root = NewRoot();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "acquisition"));
+            await File.WriteAllTextAsync(
+                Path.Combine(root, "acquisition", "monitoring.json"),
+                """
+                {
+                  "version": 1,
+                  "anime": { "anime": { "animeKey": "anime", "searchOnAdd": true } },
+                  "wanted": { "anime:S01E01": { "key": { "animeKey": "anime", "seasonNumber": 1, "episodeNumber": 1 }, "reason": 0, "becameWantedAtUtc": "2026-01-01T00:00:00+00:00" } },
+                  "attempts": { "anime:S01E01": { "key": { "animeKey": "anime", "seasonNumber": 1, "episodeNumber": 1 }, "status": 3, "failureCount": 1 } },
+                  "history": [],
+                  "schedule": { "enabled": true, "intervalMinutes": 30 }
+                }
+                """);
+
+            var state = await new AnimeMonitoringStore(root).LoadAsync();
+
+            Assert.IsTrue(state.Anime["anime"].SearchOnAdd);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 }

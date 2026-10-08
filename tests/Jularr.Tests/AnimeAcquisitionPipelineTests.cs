@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Media.Optimization;
+using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.Sonarr;
 using Microsoft.Extensions.DependencyInjection;
@@ -223,9 +224,11 @@ public sealed class AnimeAcquisitionPipelineTests
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync(episodeCount: 1);
+        // AniList numbers the second season on from the first: its episode 13 is local S02E01.
+        await environment.AniListAccounts.TryAddEpisodeMappingAsync(new AnimeEpisodeMetadataMapping(Guid.NewGuid(), environment.AnimeId, 2, 1, 12, 13, "anilist", "154587", "Frieren", 12, DateTimeOffset.UtcNow), CancellationToken.None);
         const string title = "[Group] Frieren - 13 WEB-DL 1080p HEVC AAC[JA]";
         var started = await environment.StartAcquisitionAsync([new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 2, 1, 13)], title);
-        Assert.IsTrue(started.Submitted, started.Message);
+        Assert.IsTrue(started.Success, started.Message);
 
         var download = environment.AddCompletedDownload(title, $"{title}.mkv");
         var record = await environment.ImportCompletedAsync(await environment.CompleteLatestDownloadAsync(download), download);
@@ -320,7 +323,6 @@ public sealed class AnimeAcquisitionPipelineTests
         Assert.IsNotNull(await environment.MediaFileAsync(1, 2));
         var record = (await environment.Imports.LoadAsync()).Imports.Single();
         Assert.AreEqual(AnimeImportStatus.Imported, record.Status, record.Message);
-        Assert.IsFalse((await environment.MonitoringStateAsync()).Attempts.ContainsKey("frieren:S01E02"), "Recovery also clears the finished attempt.");
         Assert.AreEqual(0, await environment.Scheduler.RecoverAsync(CancellationToken.None));
     }
 

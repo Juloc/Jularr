@@ -1,5 +1,7 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Library;
@@ -360,7 +362,7 @@ public sealed class ReleaseCalendarIntegrationTests
         public ReleaseCalendarService Service() =>
             new(
                 [
-                    new AniListReleaseEventSource(Db, new ReleaseCalendarCacheStore(Db), Mappings, Monitoring, MonitoringTestSupport.Anime(Db)),
+                    new AniListReleaseEventSource(Db, new ReleaseCalendarCacheStore(Db), Mappings, new AnimeEpisodeStates(Db, new AcquisitionAccessStore(Db)), MonitoringTestSupport.Anime(Db)),
                     new NovelChapterReleaseEventSource(Db),
                     new BookReleaseEventSource(Db),
                     new WatchlistReleaseEventSource(

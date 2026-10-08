@@ -14,7 +14,7 @@ namespace Jularr.Web.Features.Acquisition.Pipeline;
 public sealed record AnimeMatch(IReadOnlyList<AnimeEpisodeKey> Covered, AnimeWantedEpisode? WantedEpisode);
 
 // What is Anime-specific about judging a release: does it carry this anime (title and aliases), which wanted episodes does it cover (season, absolute numbers and
-// packs, through the AniList mapping of each slot), and may it be grabbed at all (attempt state, Sonarr ownership). The shared core searches and its one selection
+// packs, through the AniList mapping of each slot), and may it be grabbed at all (blocklist, Sonarr ownership). The shared core searches and its one selection
 // ranks; this only supplies the facts.
 public static class AnimeReleaseJudge
 {
@@ -26,13 +26,12 @@ public static class AnimeReleaseJudge
         IReadOnlyList<AnimeWantedEpisode> wanted,
         AnimeEpisodeKey? primary,
         ProwlarrAnimeSearchTarget searchTarget,
-        AnimeMonitoringState state,
         AcquisitionOwnershipSnapshot snapshot,
         DateTimeOffset now,
         Func<string, bool>? isBlocked = null)
     {
         var aliases = scope.SelectMany(episode => new[] { episode.SearchTitle }.Concat(episode.SearchAliases)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        return new MediaSearchPlan<AnimeMatch>(ToSearchIntent(searchTarget), release => Judge(release, aliases, wanted, primary, state, snapshot, now, isBlocked));
+        return new MediaSearchPlan<AnimeMatch>(ToSearchIntent(searchTarget), release => Judge(release, aliases, wanted, primary, snapshot, now, isBlocked));
     }
 
     // The ranked releases as the grab decisions the pipeline and the interactive search show, with the reasons people already read.
@@ -52,7 +51,6 @@ public static class AnimeReleaseJudge
         IReadOnlyList<string> aliases,
         IReadOnlyList<AnimeWantedEpisode> wanted,
         AnimeEpisodeKey? primary,
-        AnimeMonitoringState state,
         AcquisitionOwnershipSnapshot snapshot,
         DateTimeOffset now,
         Func<string, bool>? isBlocked)
@@ -91,7 +89,19 @@ public static class AnimeReleaseJudge
         }
         else if (identity.Confidence != IdentityConfidence.Conflict)
         {
-            safety = AnimeMonitoringEngine.FindGrabBlock(wantedEpisode!, parsed, state, snapshot, now);
+            var key = wantedEpisode!.Key;
+            var ownership = SonarrParallelSafety.CanGrab(
+                snapshot,
+                new AcquisitionGrabRequest(
+                    key.AnimeKey,
+                    parsed.ReleaseKey,
+                    parsed.SeasonNumber ?? key.SeasonNumber,
+                    parsed.EpisodeStart ?? key.EpisodeNumber,
+                    parsed.EpisodeEnd ?? key.EpisodeNumber,
+                    parsed.AbsoluteEpisodeStart ?? key.AbsoluteEpisodeNumber,
+                    parsed.AbsoluteEpisodeEnd ?? key.AbsoluteEpisodeNumber),
+                now);
+            safety = ownership.Allowed ? null : $"Ownership: {ownership.Reason}";
         }
 
         var span = parsed.EpisodeStart is { } first && parsed.EpisodeEnd is { } last

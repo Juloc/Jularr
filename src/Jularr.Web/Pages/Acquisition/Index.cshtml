@@ -274,10 +274,6 @@
                 <a class="operation-row operation-row-detailed" asp-page="/Admin/Operation" asp-route-id="@download.Operation.Id">
                     <div class="operation-copy">
                         <strong>@download.Title</strong>
-                        @if (download.Attempt is { } attempt)
-                        {
-                            <span>@ui.Format("acquisition.attemptOf", ("title", attempt.ReleaseTitle), ("number", attempt.Number), ("max", download.MaxAttempts))</span>
-                        }
                         @if (!string.IsNullOrWhiteSpace(download.Operation.Message))
                         {
                             <small>@download.Operation.Message</small>

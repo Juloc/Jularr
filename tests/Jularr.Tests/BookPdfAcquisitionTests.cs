@@ -768,7 +768,7 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton(new IndexerStore(protection, data));
             collection.AddSingleton(new DownloadClientStore(protection, data));
             collection.AddSingleton(new AcquisitionHealthStore(data));
-            collection.AddSingleton(new SabnzbdAcquisitionStore(protection, data));
+            collection.AddSingleton(new SabnzbdAcquisitionStore(data));
             collection.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(provider =>
                 new Dictionary<IndexerType, IIndexer>
                 {

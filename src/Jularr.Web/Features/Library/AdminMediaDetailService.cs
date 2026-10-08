@@ -34,7 +34,7 @@ public sealed class AdminMediaDetailService(
     AnimeImportStore imports,
     AniListAccountStore aniList,
     AcquisitionHistoryService history,
-    AcquisitionAccessStore requests)
+    AnimeEpisodeStates episodeStates)
 {
     public const int HistoryLimit = 12;
     public const int OperationLimit = 6;
@@ -54,9 +54,8 @@ public sealed class AdminMediaDetailService(
         var state = await monitoring.LoadAsync(cancellationToken);
         var settings = state.Anime.GetValueOrDefault(anime.Key);
         var view = await animeMonitoring.LoadAsync(anime.Key, cancellationToken);
-        var wantedEpisodes = await AnimeCanonicalEpisodes.WantedAsync(db, anime.Key, cancellationToken);
-        var request = metadata is null ? null : await requests.FindOpenAsync(MediaAcquisitionKind.Anime, metadata.Provider, metadata.ExternalId, cancellationToken);
-        var episodes = await LoadEpisodesAsync(anime, wantedEpisodes, request is null ? null : AnimeRequestPayload.Of(request), view, cancellationToken);
+        var states = await episodeStates.LoadAsync(anime.Key, cancellationToken);
+        var episodes = await LoadEpisodesAsync(anime, states, view, cancellationToken);
 
         var profileState = await profiles.LoadAsync(cancellationToken);
         var profileId = profileState.ResolveProfileId(MediaAcquisitionKind.Anime, id)
@@ -71,7 +70,7 @@ public sealed class AdminMediaDetailService(
             [.. profileState.Profiles.Select(profile => (profile.Id, profile.Name))],
             settings?.IndexerIds ?? [],
             settings?.TargetRootId,
-            wantedEpisodes.Count);
+            states.Wanted.Count);
 
         var (ranges, rangesFailed) = await LoadRangesAsync(id, cancellationToken);
         var mapping = new AdminMediaMapping(
@@ -118,13 +117,11 @@ public sealed class AdminMediaDetailService(
 
     private async Task<IReadOnlyList<AdminMediaEpisode>> LoadEpisodesAsync(
         Anime anime,
-        IReadOnlyList<AnimeWantedEpisode> wantedEpisodes,
-        AnimeRequestPayload? payload,
+        AnimeEpisodeStateMap states,
         WorkMonitoringView view,
         CancellationToken cancellationToken)
     {
         var id = anime.Id;
-        var wanted = wantedEpisodes.ToDictionary(item => (item.Key.SeasonNumber, item.Key.EpisodeNumber));
         var episodeRows = await db.Episodes
             .AsNoTracking()
             .Where(item => item.AnimeId == id)
@@ -206,12 +203,6 @@ public sealed class AdminMediaDetailService(
                 : [];
 
             var unit = MonitoredUnitKey.ForEpisode(anime.Key, season, number);
-            wanted.TryGetValue((season, number), out var wantedEpisode);
-
-            // The request of the anime says what is on its way (the episodes of the grab in flight) and that a search for the wanted ones found nothing.
-            var grabbed = payload?.Episodes?.Any(item => item.SeasonNumber == season && item.EpisodeNumber == number) == true;
-            var searchedInVain = wantedEpisode is not null && payload is { Searches: > 0, NextSearchUtc: not null };
-            AcquisitionAttemptStatus? attempt = grabbed ? AcquisitionAttemptStatus.Grabbed : searchedInVain ? AcquisitionAttemptStatus.Failed : null;
 
             string? quality = null;
             foreach (var file in files)
@@ -225,9 +216,9 @@ public sealed class AdminMediaDetailService(
                 episodeId,
                 title,
                 AnimeMonitoring.IsUnitMonitored(view, unit),
-                AdminMediaDetailView.StateOf(files.Length > 0, attempt),
-                wantedEpisode?.Reason == WantedReason.CutoffUnmet,
-                searchedInVain ? payload!.Searches : 0,
+                AdminMediaDetailView.StateOf(files.Length > 0, states.AttemptOf(unit)),
+                states.WantedOf(unit)?.Reason == WantedReason.CutoffUnmet,
+                states.FailuresOf(unit),
                 quality,
                 LanguageSet(files.SelectMany(file => file.Audio).Select(track => track.Language)),
                 LanguageSet(
@@ -243,7 +234,7 @@ public sealed class AdminMediaDetailService(
 
         // Episodes acquisition wants but the library has no row for yet still belong on the page.
         var known = rows.Select(row => (row.Season, row.Number)).ToHashSet();
-        foreach (var episode in wantedEpisodes)
+        foreach (var episode in states.Wanted)
         {
             if (known.Add((episode.Key.SeasonNumber, episode.Key.EpisodeNumber)))
             {

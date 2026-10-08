@@ -157,7 +157,7 @@ public sealed class IndexModel(
             }
 
             var queued = update.StartedMonitoring && searchOnAdd &&
-                         scheduler.RequestRun(update.AnimeKey, AnimeSearchTrigger.SearchOnAdd);
+                         scheduler.RequestRun(update.AnimeKey);
             TempData["AcquisitionNotice"] = queued
                 ? Ui["acquisition.status.settingsSavedSearching"]
                 : Ui["acquisition.status.settingsSaved"];
@@ -200,17 +200,6 @@ public sealed class IndexModel(
         CancellationToken cancellationToken)
     {
         var result = await importExecutor.ImportManuallyAsync(recordId, sourcePath, season, episode, cancellationToken);
-        if (result.Success)
-        {
-            await scheduler.RunExclusiveAsync(
-                async (runner, token) =>
-                {
-                    await runner.ReconcileAttemptsAsync(token);
-                    return true;
-                },
-                cancellationToken);
-        }
-
         TempData[result.Success ? "AcquisitionNotice" : "AcquisitionError"] = result.Message;
         return RedirectToPage();
     }

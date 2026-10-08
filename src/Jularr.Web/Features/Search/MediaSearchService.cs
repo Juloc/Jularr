@@ -36,7 +36,6 @@ namespace Jularr.Web.Features.Search;
 /// </summary>
 public sealed class MediaSearchService(
     AppDbContext db,
-    MonitoringStore monitoring,
     AnimeMonitoring animeMonitoring,
     AcquisitionAccessStore requests,
     IInstanceModuleService? instanceModules = null)
@@ -98,7 +97,7 @@ public sealed class MediaSearchService(
 
         var (workOf, workYear) = await ResolveWorksAsync(variants, cancellationToken);
         var groups = MediaSearchGrouping.Group(variants, workOf);
-        var variantFacts = await new MediaSearchFactsLoader(db, monitoring, animeMonitoring, requests)
+        var variantFacts = await new MediaSearchFactsLoader(db, animeMonitoring, requests)
             .LoadAsync(variants, cancellationToken);
 
         var works = groups

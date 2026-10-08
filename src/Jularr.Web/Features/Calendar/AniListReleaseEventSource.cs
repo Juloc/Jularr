@@ -1,6 +1,7 @@
 using System.Data;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Tracking;
 using Microsoft.EntityFrameworkCore;
@@ -87,7 +88,7 @@ public sealed class AniListReleaseEventSource(
     AppDbContext db,
     ReleaseCalendarCacheStore cache,
     AniListAccountStore mappingStore,
-    AnimeMonitoringStore monitoringStore,
+    AnimeEpisodeStates episodeStates,
     AnimeMonitoring animeMonitoring) : IReleaseEventSource
 {
     public string Name => "anilist";
@@ -224,8 +225,8 @@ public sealed class AniListReleaseEventSource(
                         group => new AnimeReleaseLocalEpisode(group.First().Id, group.Any(episode => episode.HasFile))));
         }).ToArray();
 
-        var monitoring = await monitoringStore.LoadAsync(cancellationToken);
+        var states = await episodeStates.LoadAsync(null, cancellationToken);
         var views = await animeMonitoring.LoadAsync([.. library.Select(entry => entry.AnimeKey)], cancellationToken);
-        return AnimeReleaseStateResolver.ToEvents(releases, library, monitoring, views, query.Now, query.Zone);
+        return AnimeReleaseStateResolver.ToEvents(releases, library, states, views, query.Now, query.Zone);
     }
 }

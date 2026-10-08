@@ -363,6 +363,7 @@ public sealed class AdminMediaDetailPageRenderTests
                         services.AddScoped<AcquisitionHistoryService>();
                         services.AddMonitoringForTests();
                         services.AddScoped<AdminMediaDetailService>();
+                        services.AddScoped<AnimeEpisodeStates>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                         services.AddSingleton<IMediaProbeRunner, FakeMediaProbeRunner>();
                         services.AddSingleton<MediaInventoryService>();

@@ -31,14 +31,6 @@ public enum WantedReason
     CutoffUnmet
 }
 
-public enum MonitoringSearchTrigger
-{
-    SearchOnAdd,
-    PeriodicMissing,
-    Rss,
-    Manual
-}
-
 public enum AcquisitionAttemptStatus
 {
     None,
@@ -100,42 +92,12 @@ public sealed record WantedUnit(
     WantedReason Reason,
     DateTimeOffset BecameWantedAtUtc);
 
-public sealed record MonitoringSearchRequest(
-    MonitoredUnitKey Key,
-    WantedReason Reason,
-    MonitoringSearchTrigger Trigger);
-
 public sealed record AutoGrabDecision(
     bool Grab,
     string Reason,
     ReleaseScoreResult Candidate);
 
-public sealed record AcquisitionAttempt(
-    MonitoredUnitKey Key,
-    AcquisitionAttemptStatus Status,
-    string? ReleaseKey,
-    int FailureCount,
-    DateTimeOffset? LastAttemptAtUtc,
-    DateTimeOffset? NextRetryAtUtc);
-
-public sealed record MonitoringHistoryEntry(
-    DateTimeOffset AtUtc,
-    MonitoredUnitKey Key,
-    string Event,
-    string Reason);
-
-public sealed record MonitoringState(
-    int Version,
-    Dictionary<string, MonitorSettings> Anime,
-    Dictionary<string, WantedUnit> Wanted,
-    Dictionary<string, AcquisitionAttempt> Attempts,
-    List<MonitoringHistoryEntry> History)
+public sealed record MonitoringState(int Version, Dictionary<string, MonitorSettings> Anime)
 {
-    public static MonitoringState Empty() =>
-        new(
-            1,
-            new Dictionary<string, MonitorSettings>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, WantedUnit>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, AcquisitionAttempt>(StringComparer.OrdinalIgnoreCase),
-            []);
+    public static MonitoringState Empty() => new(1, new Dictionary<string, MonitorSettings>(StringComparer.OrdinalIgnoreCase));
 }

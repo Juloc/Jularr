@@ -2,6 +2,7 @@ using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Learning.Courses;
 using Jularr.Web.Features.Mapping;
@@ -20,13 +21,12 @@ namespace Jularr.Web.Features.Search;
 /// chapters; a novel or book has its source language (the <c>EPUB:de</c> format) or that content
 /// language, plus every language a chapter was translated into. Local content means something
 /// playable or readable exists on this server. Monitored and wanted come from the acquisition state
-/// (the monitoring store for anime, open requests for every type). Nothing is inferred: a fact a
+/// (the Wanted queue for anime, open requests for every type). Nothing is inferred: a fact a
 /// source cannot know stays empty.
 /// </para>
 /// </summary>
 internal sealed class MediaSearchFactsLoader(
     AppDbContext db,
-    MonitoringStore monitoring,
     AnimeMonitoring animeMonitoring,
     AcquisitionAccessStore requests)
 {
@@ -121,9 +121,8 @@ internal sealed class MediaSearchFactsLoader(
             .Where(x => x.Code is not null)
             .ToLookup(x => x.AnimeId, x => x.Code!);
 
-        var state = await monitoring.LoadAsync(cancellationToken);
         var views = await animeMonitoring.LoadAsync([.. rows.Select(row => row.Key)], cancellationToken);
-        var wantedKeys = state.Wanted.Values
+        var wantedKeys = (await AnimeCanonicalEpisodes.WantedAsync(db, null, cancellationToken))
             .Select(wanted => wanted.Key.AnimeKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 

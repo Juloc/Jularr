@@ -37,6 +37,9 @@ public sealed class AnimeAcquisitionEngine(
 {
     public const string OperationKind = "anime-usenet-download";
 
+    /// <summary>The kind of the downloads the old Anime pipeline started; they still exist as Operations and are imported like the ones of requests.</summary>
+    public const string LegacyOperationKind = "anime-sabnzbd-download";
+
     /// <summary>How long a request with nothing to search for yet waits before it looks again (a releasing series gains an episode every week at most).</summary>
     public static readonly TimeSpan IdleWait = TimeSpan.FromHours(6);
 
@@ -85,7 +88,7 @@ public sealed class AnimeAcquisitionEngine(
         var settings = (await monitoringStore.LoadAsync(cancellationToken)).Anime.GetValueOrDefault(key);
         var snapshot = await observation.GetSnapshotAsync(forceRefresh: true, cancellationToken);
         var blocked = (await blocklist.LoadAsync(cancellationToken)).IsBlocked;
-        var plan = AnimeReleaseJudge.Plan(target, [slot], wantedEpisodes, slot.Key, searchTarget, MonitoringState.Empty(), snapshot, now, blocked);
+        var plan = AnimeReleaseJudge.Plan(target, [slot], wantedEpisodes, slot.Key, searchTarget, snapshot, now, blocked);
         var search = await core.SearchAsync(plan, target.Profile, new SearchOptions { ProwlarrIndexerIds = settings?.IndexerIds }, cancellationToken);
 
         var candidates = AnimeReleaseJudge.ToCandidates(target, [slot], search);
@@ -120,7 +123,7 @@ public sealed class AnimeAcquisitionEngine(
         if (execution.Status == AcquisitionRequestStatus.Downloading && next is not null && execution.OperationId is { } operationId)
         {
             await RecordGrabAsync(target, payload.Episodes!, next, operationId, now, cancellationToken);
-            var message = $"Sent to SABnzbd: {next.Candidate.Title} for {SabnzbdAcquisitionService.FormatEpisodes(payload.Episodes!)}.";
+            var message = $"Sent to SABnzbd: {next.Candidate.Title} for {AnimeAcquisitionPipeline.FormatEpisodes(payload.Episodes!)}.";
             await operations.AppendLogAsync(searchOperation, OperationLogLevel.Information, AnimeAcquisitionPipeline.LogModule, message, cancellationToken);
             await operations.MarkSucceededAsync(searchOperation, message, CancellationToken.None);
         }

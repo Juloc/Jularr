@@ -113,7 +113,7 @@ public sealed class AnimeRequestLifecycleTests
         // A second request for the same title is the open one; a retry or a background continue runs the executor again.
         Assert.AreEqual(request.Id, (await environment.SubmitRequestAsync(FrierenId)).Id);
         var continued = await environment.RunRequestAsync(request.Id, continued: true);
-        await environment.Scheduler.RunNowAsync(anime.Key, AnimeSearchTrigger.Manual, CancellationToken.None);
+        await environment.Scheduler.RunNowAsync(anime.Key, CancellationToken.None);
         await environment.RestartAsync();
         await environment.SearchNowAsync();
 
@@ -147,11 +147,12 @@ public sealed class AnimeRequestLifecycleTests
         Assert.AreEqual(record.Message, request.StatusMessage, "The importer's own reason is the request's reason.");
         Assert.AreEqual(0, await environment.RequestPassAsync(), "A failed request waits for the owner.");
 
-        // The owner resolves the import (here as the Imports page does) and runs the request again: it is complete without another search.
+        // The owner resolves the import (here as the Imports page does): the next pass completes the request without another search.
         File.Delete(blocker);
         var manual = await environment.ImportManuallyAsync(record.Id, record.Files.Single(file => file.SourcePath.EndsWith(".mkv", StringComparison.Ordinal)).SourcePath, 1, 2);
         Assert.IsTrue(manual.Success, manual.Message);
-        request = await environment.RunRequestAsync(request.Id);
+        await environment.RequestPassAsync();
+        request = await environment.GetRequestAsync(request.Id);
         Assert.AreEqual(AcquisitionRequestStatus.Completed, request.Status, request.StatusMessage);
         Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count);
     }
