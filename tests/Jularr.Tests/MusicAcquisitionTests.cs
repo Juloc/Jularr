@@ -375,6 +375,7 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton(_ => new AcquisitionAccessStore(db))
                 .AddSingleton(new CurrentAccountContext(new FixedAccessor(new DefaultHttpContext { User = VideoAcquisitionTestHost.OwnerPrincipal() })))
                 .AddSingleton<ReleaseRequestTracker>()
+                .AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>()
                 .AddSingleton<IJularrEventPublisher, RecordingEventPublisher>()
                 .AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(new MediaCapabilityStore(directory.FullName)))
                 .AddSingleton(new AcquisitionRequestSettingsStore(directory.FullName))

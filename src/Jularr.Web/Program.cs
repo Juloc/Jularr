@@ -624,6 +624,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.IMediaInboxImp
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Music.MusicAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.ReleaseRequestTracker>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.ICompletedDownloadImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>());
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Import.IMediaInboxImportAdapter>(services => services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>());

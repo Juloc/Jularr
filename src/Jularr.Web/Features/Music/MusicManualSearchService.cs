@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Search;
@@ -149,7 +150,7 @@ public sealed class MusicManualSearchService(
         return new AlbumRef(row.GroupId, payload, draft);
     }
 
-    private static MusicManualCandidate ToCandidate(MusicReleaseEvaluation evaluation, HashSet<string> tried)
+    private static MusicManualCandidate ToCandidate(ReleaseEvaluation<MusicJudgement> evaluation, HashSet<string> tried)
     {
         var candidate = evaluation.Candidate;
         var selection = evaluation.Selection;

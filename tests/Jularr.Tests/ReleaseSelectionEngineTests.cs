@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
@@ -236,7 +237,7 @@ public sealed class ReleaseSelectionEngineTests
     public void AMovieSequelIsAmbiguousAndAWrongYearIsAConflict()
     {
         var parser = SceneReleaseParser.Instance;
-        VideoJudgement Judge(string release, int? year = 2021, IReadOnlyList<QueryProvenance>? origin = null) =>
+        ReleaseJudgement<VideoIdentityMatch> Judge(string release, int? year = 2021, IReadOnlyList<QueryProvenance>? origin = null) =>
             VideoReleaseJudge.Judge(parser, MediaAcquisitionKind.Movie, "Dune", year, null, VideoUnitScope.Empty, Release(release, origin));
 
         Assert.AreEqual(IdentityConfidence.Exact, Judge("Dune.2021.1080p.BluRay.x264-GRP").Evidence.Confidence);

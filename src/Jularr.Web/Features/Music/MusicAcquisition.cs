@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -146,19 +147,6 @@ public static partial class MusicReleaseJudge
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }
 
-/// <summary>One release as the Music pipeline judged it, in selection order.</summary>
-public sealed record MusicReleaseEvaluation(ProwlarrReleaseCandidate Candidate, ReleaseInfo? Parsed, CandidateEvaluation Selection)
-{
-    public bool IsGrabbable => Selection.IsSelectable && Candidate.InternalDownloadUri is not null;
-
-    public bool IsManuallyGrabbable => (IsGrabbable || Selection.Decision == SelectionDecision.ManualReview) && Candidate.InternalDownloadUri is not null;
-}
-
-public sealed record MusicSearchEvaluation(QualityProfile Profile, AcquisitionSearchResult Search, IReadOnlyList<MusicReleaseEvaluation> Releases, SelectionResult Selection)
-{
-    public IReadOnlyList<MusicReleaseEvaluation> Grabbable => [.. Releases.Where(release => release.IsGrabbable)];
-}
-
 /// <summary>
 /// The Music request-to-download path on the shared pipeline: the album's Work and tracks, the shared Search Planner and executor, the shared
 /// selection engine with the Music profile, and the shared release-request lifecycle (tried releases, back-off, give-up) that submits through
@@ -168,15 +156,13 @@ public sealed class MusicAcquisitionEngine(
     AppDbContext db,
     IndexerSearchCoordinator indexers,
     DownloadClientStore downloadClients,
-    DownloadClientSubmissionService downloads,
+    AcquisitionCore core,
     MediaAcquisitionRegistry registry,
     QualityProfileStore profiles,
     ReleaseRequestTracker tracker,
     MusicLibraryService library,
-    TimeProvider clock,
     ILogger<MusicAcquisitionEngine> logger,
-    CanonicalMediaStorageService? storage = null,
-    ReleaseReliabilityService? reliability = null)
+    CanonicalMediaStorageService? storage = null)
 {
     public const string OperationKind = "music-usenet-download";
 
@@ -258,91 +244,32 @@ public sealed class MusicAcquisitionEngine(
         return UpgradePolicy.Assess(profile, quality).IsUpgradable ? quality : null;
     }
 
-    /// <summary>
-    /// Runs the tracker lifecycle over the given releases (best first) and submits the first untried one through the shared download-client path.
-    /// Automatic acquisition passes every grabbable release; Manual Search passes the one the owner selected.
-    /// </summary>
     public async Task<AcquisitionExecution> GrabAsync(
         AcquisitionRequest request,
         MusicRequestPayload payload,
-        IReadOnlyList<MusicReleaseEvaluation> releases,
+        IReadOnlyList<ReleaseEvaluation<MusicJudgement>> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
         ManualGrabProgress? progress = null,
         bool searchUnavailable = false)
     {
-        var workId = payload.WorkId;
-        var candidates = releases
-            .Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri!, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))
-            .ToArray();
-        var byIdentity = releases.ToDictionary(release => release.Candidate.Identity, release => release.Candidate, StringComparer.Ordinal);
-        var title = $"{payload.Artist} - {payload.Album}";
-        var execution = await tracker.ContinueAsync(
-            request,
-            payload,
-            candidates,
-            noReleaseReason,
-            async release =>
-            {
-                progress?.SubmitStarted = true;
-                var sources = byIdentity[release.Identity].Sources.Select(source => source.DownloadUri).OfType<Uri>().Distinct().ToArray();
-                var outcome = await downloads.SubmitFirstAcceptedAsync(
-                    sources.Length == 0 ? [release.DownloadUri] : sources,
-                    uri => new DownloadSubmissionSpec(OperationKind, "Download Music", title, request.RequestedByProfileId, uri, release.Title, MediaAcquisitionKind.Music, MediaTargetKey: $"work:{workId:D}", ReleaseSource: release.Source, ReleaseGroup: release.ReleaseGroup),
-                    cancellationToken);
-                if (outcome.Accepted && progress is not null)
-                {
-                    progress.Accepted = true;
-                    progress.OperationId = outcome.OperationId;
-                }
-
-                return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
-            },
-            cancellationToken,
-            searchUnavailable);
-        return execution with { ResultUrl = MusicLinks.AlbumPath(workId) };
+        var target = new GrabTarget(OperationKind, "Download Music", $"{payload.Artist} - {payload.Album}", MediaAcquisitionKind.Music, $"work:{payload.WorkId:D}");
+        var execution = await core.GrabAsync(request, payload, releases, noReleaseReason, target, cancellationToken, progress, searchUnavailable);
+        return execution with { ResultUrl = MusicLinks.AlbumPath(payload.WorkId) };
     }
 
-    /// <summary>The one search + selection pipeline: automatic acquisition and Manual Search read their candidates from here.</summary>
-    public async Task<MusicSearchEvaluation> SearchAsync(
-        DateTime wantedSinceUtc,
-        MusicRequestPayload payload,
-        QualityProfile profile,
-        SearchOptions options,
-        CancellationToken cancellationToken)
+    public Task<SearchEvaluation<MusicJudgement>> SearchAsync(DateTime wantedSinceUtc, MusicRequestPayload payload, QualityProfile profile, SearchOptions options, CancellationToken cancellationToken)
     {
-        var intent = new SearchIntent(MediaAcquisitionKind.Music, payload.Album) { Creator = payload.Artist, Year = payload.Year };
         var parser = registry.ParserFor(MediaAcquisitionKind.Music);
-        MusicJudgement Judge(ProwlarrReleaseCandidate release) => MusicReleaseJudge.Judge(parser, payload.Artist, payload.Album, payload.Year, release);
-        var search = await indexers.SearchAsync(
-            intent,
-            options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong && Judge(release).SafetyRejection is null) },
-            cancellationToken);
-
-        var judged = search.Releases
-            .GroupBy(release => release.Identity, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => (Release: group.First(), Judgement: Judge(group.First())), StringComparer.Ordinal);
-        var wantedSince = new DateTimeOffset(DateTime.SpecifyKind(wantedSinceUtc, DateTimeKind.Utc));
-        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
-        var selection = ReleaseSelectionEngine.Select(
-            profile,
-            new SelectionContext(clock.GetUtcNow(), wantedSince),
-            [.. judged.Select(pair => new SelectionCandidate(
-                pair.Key,
-                pair.Value.Judgement.Parsed,
-                pair.Value.Release.SizeBytes,
-                pair.Value.Release.Indexer,
-                pair.Value.Release.Sources.FirstOrDefault()?.Priority ?? 0,
-                pair.Value.Release.PublishedAt,
-                pair.Value.Judgement.Evidence,
-                SelectionCoverage.Single)
+        var plan = new MediaSearchPlan<MusicJudgement>(
+            new SearchIntent(MediaAcquisitionKind.Music, payload.Album) { Creator = payload.Artist, Year = payload.Year },
+            release =>
             {
-                SafetyRejection = pair.Value.Judgement.SafetyRejection
-            })], lookup);
-        var evaluations = selection.Ranked
-            .Select(ranked => new MusicReleaseEvaluation(judged[ranked.Candidate.Id].Release, judged[ranked.Candidate.Id].Judgement.Parsed, ranked))
-            .ToArray();
-        return new MusicSearchEvaluation(profile, search, evaluations, selection);
+                var judgement = MusicReleaseJudge.Judge(parser, payload.Artist, payload.Album, payload.Year, release);
+                return new ReleaseJudgement<MusicJudgement>(judgement, judgement.Parsed, judgement.Evidence, SelectionCoverage.Single, judgement.SafetyRejection);
+            },
+            wantedSinceUtc);
+        return core.SearchAsync(plan, profile, options, cancellationToken);
     }
 
     /// <summary>Whether any track file of the album is already in the library, so a request never downloads what exists.</summary>
@@ -361,7 +288,7 @@ public sealed class MusicAcquisitionEngine(
     }
 
     /// <summary>What an empty or unusable search means: an indexer problem, nothing found, only other albums, or the profile refusing what was found.</summary>
-    private static string FailureMessage(MusicSearchEvaluation evaluation)
+    private static string FailureMessage(SearchEvaluation<MusicJudgement> evaluation)
     {
         var search = evaluation.Search;
         if (search.Releases.Count == 0)

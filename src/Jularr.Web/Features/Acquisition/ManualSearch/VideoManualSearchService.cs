@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Core;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
@@ -194,12 +195,12 @@ public sealed partial class VideoManualSearchService(
     private static int? ResolutionOf(string qualityKey) =>
         int.TryParse(qualityKey[(qualityKey.LastIndexOf('-') + 1)..].TrimEnd('p'), out var resolution) ? resolution : null;
 
-    private static ManualSearchCandidate ToCandidate(MediaAcquisitionKind kind, VideoReleaseEvaluation evaluation, HashSet<string> tried, int? bestResolution)
+    private static ManualSearchCandidate ToCandidate(MediaAcquisitionKind kind, ReleaseEvaluation<VideoIdentityMatch> evaluation, HashSet<string> tried, int? bestResolution)
     {
         var candidate = evaluation.Candidate;
         var parsed = evaluation.Parsed;
         var isTried = tried.Contains(candidate.Identity);
-        var reasons = new List<ManualSearchReason> { new(IdentityReason(evaluation.Identity)) };
+        var reasons = new List<ManualSearchReason> { new(IdentityReason(evaluation.Match)) };
         if (evaluation.Score is { } score)
         {
             reasons.AddRange(score.RejectionReasons.Select(reason => new ManualSearchReason(ManualSearchReasonCode.ProfileRejected, reason)));

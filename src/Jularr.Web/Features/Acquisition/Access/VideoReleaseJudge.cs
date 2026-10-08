@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Core;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Release;
@@ -11,14 +12,6 @@ public sealed record VideoUnitScope(IReadOnlyList<VideoUnit> All, IReadOnlyList<
 {
     public static VideoUnitScope Empty { get; } = new([], []);
 }
-
-/// <summary>What the Movie/TV media type concluded about one release before any profile rule is looked at.</summary>
-public sealed record VideoJudgement(
-    VideoIdentityMatch Match,
-    ReleaseInfo? Parsed,
-    ReleaseIdentityEvidence Evidence,
-    SelectionCoverage Coverage,
-    string? SafetyRejection);
 
 /// <summary>
 /// The Movie/TV side of release identity: is this release the requested title (and year), season and episode, and which wanted units
@@ -38,7 +31,7 @@ public static partial class VideoReleaseJudge
     [GeneratedRegex(@"^(?:19|20)\d{2}$")]
     private static partial Regex YearToken();
 
-    public static VideoJudgement Judge(IReleaseParser parser, MediaAcquisitionKind kind, string title, int? year, VideoUnit? unit, VideoUnitScope scope, ProwlarrReleaseCandidate candidate)
+    public static ReleaseJudgement<VideoIdentityMatch> Judge(IReleaseParser parser, MediaAcquisitionKind kind, string title, int? year, VideoUnit? unit, VideoUnitScope scope, ProwlarrReleaseCandidate candidate)
     {
         if (candidate.InternalDownloadUri is null)
         {
@@ -59,13 +52,13 @@ public static partial class VideoReleaseJudge
         var (titleMatch, titleEvidence) = kind == MediaAcquisitionKind.Movie ? JudgeMovieTitle(title, year, parsed, viaId) : JudgeSeriesTitle(title, parsed, viaId);
         if (titleEvidence.Confidence == IdentityConfidence.Conflict || unit is null)
         {
-            return new VideoJudgement(titleMatch, parsed, titleEvidence, SelectionCoverage.Single, null);
+            return new ReleaseJudgement<VideoIdentityMatch>(titleMatch, parsed, titleEvidence, SelectionCoverage.Single, null);
         }
 
         return JudgeUnit(titleMatch, titleEvidence, parsed, unit, scope, viaId);
     }
 
-    private static VideoJudgement Unusable(VideoIdentityMatch match, string reason) =>
+    private static ReleaseJudgement<VideoIdentityMatch> Unusable(VideoIdentityMatch match, string reason) =>
         new(match, null, ReleaseIdentityEvidence.Strong(match.ToString(), reason), SelectionCoverage.Single, reason);
 
     private static (VideoIdentityMatch Match, ReleaseIdentityEvidence Evidence) JudgeSeriesTitle(string requested, ReleaseInfo parsed, bool viaId)
@@ -108,11 +101,11 @@ public static partial class VideoReleaseJudge
         return (VideoIdentityMatch.Matches, viaId || hasYear ? ReleaseIdentityEvidence.Exact("Matches", viaId ? "Found by the provider id; the title agrees." : "Title and year match.") : ReleaseIdentityEvidence.Strong("Matches", "The title matches."));
     }
 
-    private static VideoJudgement JudgeUnit(VideoIdentityMatch titleMatch, ReleaseIdentityEvidence title, ReleaseInfo parsed, VideoUnit unit, VideoUnitScope scope, bool viaId)
+    private static ReleaseJudgement<VideoIdentityMatch> JudgeUnit(VideoIdentityMatch titleMatch, ReleaseIdentityEvidence title, ReleaseInfo parsed, VideoUnit unit, VideoUnitScope scope, bool viaId)
     {
         if (parsed.SeasonNumber != unit.SeasonNumber)
         {
-            return new VideoJudgement(VideoIdentityMatch.WrongSeason, parsed, ReleaseIdentityEvidence.Conflict("WrongSeason", $"The release is for season {parsed.SeasonNumber?.ToString() ?? "?"}, not {unit.SeasonNumber}."), SelectionCoverage.Single, null);
+            return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.WrongSeason, parsed, ReleaseIdentityEvidence.Conflict("WrongSeason", $"The release is for season {parsed.SeasonNumber?.ToString() ?? "?"}, not {unit.SeasonNumber}."), SelectionCoverage.Single, null);
         }
 
         // An ambiguous title (found by id, named differently) stays ambiguous whatever the numbering says; otherwise exact numbering after an exact title is exact.
@@ -123,16 +116,16 @@ public static partial class VideoReleaseJudge
         if (parsed.IsSeasonPack)
         {
             var covered = scope.Wanted.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber);
-            return new VideoJudgement(VideoIdentityMatch.ContainsTarget, parsed, Fit("ContainsTarget", "A season pack that contains the requested episode."), new SelectionCoverage(covered, scope.Wanted.Count, Math.Max(0, seasonUnits.Length - covered)), null);
+            return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.ContainsTarget, parsed, Fit("ContainsTarget", "A season pack that contains the requested episode."), new SelectionCoverage(covered, scope.Wanted.Count, Math.Max(0, seasonUnits.Length - covered)), null);
         }
 
         if (parsed.EpisodeStart is int start && parsed.EpisodeEnd is int end && unit.EpisodeNumber >= start && unit.EpisodeNumber <= end)
         {
             var covered = scope.Wanted.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber && candidate.EpisodeNumber >= start && candidate.EpisodeNumber <= end);
-            return new VideoJudgement(titleMatch == VideoIdentityMatch.AmbiguousTitle ? VideoIdentityMatch.AmbiguousTitle : VideoIdentityMatch.Matches, parsed, Fit("Matches", "The episode numbering matches."), new SelectionCoverage(Math.Max(1, covered), scope.Wanted.Count, Math.Max(0, end - start + 1 - covered)), null);
+            return new ReleaseJudgement<VideoIdentityMatch>(titleMatch == VideoIdentityMatch.AmbiguousTitle ? VideoIdentityMatch.AmbiguousTitle : VideoIdentityMatch.Matches, parsed, Fit("Matches", "The episode numbering matches."), new SelectionCoverage(Math.Max(1, covered), scope.Wanted.Count, Math.Max(0, end - start + 1 - covered)), null);
         }
 
-        return new VideoJudgement(VideoIdentityMatch.WrongEpisode, parsed, ReleaseIdentityEvidence.Conflict("WrongEpisode", "The release is for another episode."), SelectionCoverage.Single, null);
+        return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.WrongEpisode, parsed, ReleaseIdentityEvidence.Conflict("WrongEpisode", "The release is for another episode."), SelectionCoverage.Single, null);
     }
 
     private static HashSet<string> Words(string value) =>

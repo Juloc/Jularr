@@ -198,6 +198,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
             .AddSingleton(_ => new AcquisitionAccessStore(db))
             .AddSingleton(new CurrentAccountContext(new FixedAccessor(new DefaultHttpContext { User = OwnerPrincipal() })))
             .AddSingleton<ReleaseRequestTracker>()
+            .AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>()
             .AddSingleton<VideoAcquisitionEngine>()
             .AddSingleton<IJularrEventPublisher, RecordingEventPublisher>()
             .AddSingleton<IMediaCapabilityService>(

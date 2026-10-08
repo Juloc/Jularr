@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Search;
@@ -92,7 +93,7 @@ public sealed partial class VideoAcquisitionEngine
     /// Searches the configured indexers for the target and evaluates every candidate with the profile of the Work. The depth and a refresh
     /// belong to this search only; they never change the persistent Acquisition Profile of the Work.
     /// </summary>
-    public Task<VideoSearchEvaluation> SearchManualAsync(AcquisitionRequest request, VideoManualTarget target, CancellationToken cancellationToken, SearchDepth depth = SearchDepth.Normal, bool refresh = false) =>
+    public Task<SearchEvaluation<VideoIdentityMatch>> SearchManualAsync(AcquisitionRequest request, VideoManualTarget target, CancellationToken cancellationToken, SearchDepth depth = SearchDepth.Normal, bool refresh = false) =>
         SearchAndEvaluateAsync(
             request,
             target.Payload,
@@ -107,7 +108,7 @@ public sealed partial class VideoAcquisitionEngine
     /// Submits the one release the owner selected through the shared grab path. The caller has already verified that it is grabbable
     /// and not yet tried; the tracker records it as tried so neither automatic acquisition nor a second selection submits it again.
     /// </summary>
-    public Task<AcquisitionExecution> GrabManualAsync(AcquisitionRequest request, VideoManualTarget target, VideoReleaseEvaluation selected, ManualGrabProgress progress, CancellationToken cancellationToken)
+    public Task<AcquisitionExecution> GrabManualAsync(AcquisitionRequest request, VideoManualTarget target, ReleaseEvaluation<VideoIdentityMatch> selected, ManualGrabProgress progress, CancellationToken cancellationToken)
     {
         if (!selected.IsManuallyGrabbable)
         {

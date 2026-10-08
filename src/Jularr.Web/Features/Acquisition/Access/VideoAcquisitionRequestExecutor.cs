@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Core;
 using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -149,6 +150,7 @@ public sealed partial class VideoAcquisitionEngine(
     QualityProfileStore profiles,
     ReleaseRequestTracker tracker,
     AcquisitionAccessStore requestStore,
+    AcquisitionCore core,
     VideoRequestWorkResolver works,
     MonitoringResolver monitoring,
     WantedReconciler wanted,
@@ -286,7 +288,7 @@ public sealed partial class VideoAcquisitionEngine(
     /// (the same facts the selection engine ranked by), and once every such release was tried or none exists the request waits a bounded
     /// <see cref="UpgradePolicy.SearchInterval"/> instead of failing, because nothing is missing. The wait is stored in the request, so it survives a restart.
     /// </summary>
-    private async Task<AcquisitionExecution> UpgradeOrWaitAsync(AcquisitionRequest request, VideoRequestPayload payload, VideoUnit? unit, VideoSearchEvaluation evaluation, string installedQuality, CancellationToken cancellationToken)
+    private async Task<AcquisitionExecution> UpgradeOrWaitAsync(AcquisitionRequest request, VideoRequestPayload payload, VideoUnit? unit, SearchEvaluation<VideoIdentityMatch> evaluation, string installedQuality, CancellationToken cancellationToken)
     {
         var better = evaluation.Grabbable.Where(release => release.Score is { } score && UpgradePolicy.IsUpgrade(evaluation.Profile, installedQuality, score.QualityKey)).ToArray();
         var what = unit is null ? "Movie" : $"S{unit.SeasonNumber:00}E{unit.EpisodeNumber:00}";
@@ -338,7 +340,7 @@ public sealed partial class VideoAcquisitionEngine(
         AcquisitionRequest request,
         VideoRequestPayload payload,
         VideoUnit? unit,
-        IReadOnlyList<VideoReleaseEvaluation> releases,
+        IReadOnlyList<ReleaseEvaluation<VideoIdentityMatch>> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
         ManualGrabProgress? progress = null,
@@ -352,41 +354,16 @@ public sealed partial class VideoAcquisitionEngine(
             return stopped;
         }
 
-        var downloadTitle = request.Kind == MediaAcquisitionKind.Movie ? "Download Movie" : "Download TV";
         // A unit a profile asked to watch now overtakes the other queued work, in the download client as well.
         var prioritized = payload.IsPlaybackUnit(unit?.Id, clock.GetUtcNow().UtcDateTime);
-        var priority = prioritized ? OperationPriority.High : OperationPriority.Normal;
-        var mediaTarget = unit is null ? VideoWorkLinks.WorkTarget(payload.WorkId) : VideoWorkLinks.EpisodeTarget(unit.Id);
-        var candidates = releases.Select(x => new ReleaseRequestCandidate(x.Candidate.Identity, x.Candidate.Title, x.Candidate.InternalDownloadUri!, x.Candidate.Indexer, x.Candidate.ParsedRelease.ReleaseGroup)).ToArray();
-        var byIdentity = releases.ToDictionary(x => x.Candidate.Identity, x => x.Candidate, StringComparer.Ordinal);
-        var execution = await tracker.ContinueAsync(
-            request,
-            payload,
-            candidates,
-            noReleaseReason,
-            async release =>
-            {
-                progress?.SubmitStarted = true;
-
-                // A release several indexers returned is one candidate with several sources: when the download client refuses the first
-                // source, the next one is offered before the release counts as failed.
-                var sources = byIdentity[release.Identity].Sources.Select(source => source.DownloadUri).OfType<Uri>().Distinct().ToArray();
-                var outcome = await downloads.SubmitFirstAcceptedAsync(
-                    sources.Length == 0 ? [release.DownloadUri] : sources,
-                    uri => new DownloadSubmissionSpec(OperationKind, downloadTitle, payload.Title, request.RequestedByProfileId, uri, release.Title, request.Kind, MediaTargetKey: mediaTarget, Priority: priority, ReleaseSource: release.Source, ReleaseGroup: release.ReleaseGroup),
-                    cancellationToken);
-
-                if (outcome.Accepted && progress is not null)
-                {
-                    progress.Accepted = true;
-                    progress.OperationId = outcome.OperationId;
-                }
-
-                return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
-            },
-            cancellationToken,
-            searchUnavailable);
-
+        var target = new GrabTarget(
+            OperationKind,
+            request.Kind == MediaAcquisitionKind.Movie ? "Download Movie" : "Download TV",
+            payload.Title,
+            request.Kind,
+            unit is null ? VideoWorkLinks.WorkTarget(payload.WorkId) : VideoWorkLinks.EpisodeTarget(unit.Id),
+            prioritized ? OperationPriority.High : OperationPriority.Normal);
+        var execution = await core.GrabAsync(request, payload, releases, noReleaseReason, target, cancellationToken, progress, searchUnavailable);
         return execution with { ResultUrl = VideoWorkLinks.DetailPath(request.Kind, payload.WorkId) };
     }
 
@@ -400,7 +377,7 @@ public sealed partial class VideoAcquisitionEngine(
         };
 
     /// <summary>The one search + scoring pipeline: automatic acquisition and Manual Search both read their candidates from here.</summary>
-    private async Task<VideoSearchEvaluation> SearchAndEvaluateAsync(
+    private async Task<SearchEvaluation<VideoIdentityMatch>> SearchAndEvaluateAsync(
         AcquisitionRequest request,
         VideoRequestPayload payload,
         VideoUnit? unit,
@@ -425,35 +402,11 @@ public sealed partial class VideoAcquisitionEngine(
             Episode = searchWholeSeason ? null : unit?.EpisodeNumber
         };
         var parser = registry.ParserFor(kind);
-        VideoJudgement Judge(ProwlarrReleaseCandidate release) => VideoReleaseJudge.Judge(parser, kind, payload.Title, payload.Year, unit, scope, release);
-        var search = await indexers.SearchAsync(
+        var plan = new MediaSearchPlan<VideoIdentityMatch>(
             intent,
-            options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong) },
-            cancellationToken);
-
-        // One selection for the whole result: the same engine ranks what automatic acquisition grabs and what Manual Search lists.
-        var judged = search.Releases.GroupBy(release => release.Identity, StringComparer.Ordinal).ToDictionary(group => group.Key, group => (Release: group.First(), Judgement: Judge(group.First())), StringComparer.Ordinal);
-        var wantedSince = new DateTimeOffset(DateTime.SpecifyKind(unit?.AiredAt is { } aired && aired > request.CreatedAt ? aired : request.CreatedAt, DateTimeKind.Utc));
-        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
-        var selection = ReleaseSelectionEngine.Select(
-            profile,
-            new SelectionContext(clock.GetUtcNow(), wantedSince),
-            [.. judged.Select(pair => new SelectionCandidate(
-                pair.Key,
-                pair.Value.Judgement.Parsed,
-                pair.Value.Release.SizeBytes,
-                pair.Value.Release.Indexer,
-                pair.Value.Release.Sources.FirstOrDefault()?.Priority ?? 0,
-                pair.Value.Release.PublishedAt,
-                pair.Value.Judgement.Evidence,
-                pair.Value.Judgement.Coverage)
-            {
-                SafetyRejection = pair.Value.Judgement.SafetyRejection
-            })], lookup);
-        var evaluations = selection.Ranked
-            .Select(ranked => new VideoReleaseEvaluation(judged[ranked.Candidate.Id].Release, judged[ranked.Candidate.Id].Judgement.Parsed, judged[ranked.Candidate.Id].Judgement.Match, ranked))
-            .ToArray();
-        return new VideoSearchEvaluation(profile, search, evaluations, selection);
+            release => VideoReleaseJudge.Judge(parser, kind, payload.Title, payload.Year, unit, scope, release),
+            unit?.AiredAt is { } aired && aired > request.CreatedAt ? aired : request.CreatedAt);
+        return await core.SearchAsync(plan, profile, options, cancellationToken);
     }
 
     /// <summary>
@@ -709,7 +662,7 @@ public sealed partial class VideoAcquisitionEngine(
     }
 
     /// <summary>What an empty or unusable search means: an indexer problem, nothing found, only another title, or the profile refusing what was found.</summary>
-    private static string FailureMessage(VideoSearchEvaluation evaluation, MediaAcquisitionKind kind)
+    private static string FailureMessage(SearchEvaluation<VideoIdentityMatch> evaluation, MediaAcquisitionKind kind)
     {
         var search = evaluation.Search;
         var what = kind == MediaAcquisitionKind.Movie ? "Movie" : "TV";

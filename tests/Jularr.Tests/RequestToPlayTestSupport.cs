@@ -355,6 +355,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(new AcquisitionAccessStore(Db))
             .AddSingleton(AcquisitionAccessFixture.Account(Owner, AccountRole.Owner))
             .AddSingleton<ReleaseRequestTracker>()
+            .AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>()
             .AddSingleton<VideoRequestWorkResolver>()
             .AddSingleton(MonitoringTestSupport.Resolver(Db))
             .AddSingleton(MonitoringTestSupport.Commands(Db))
