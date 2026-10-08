@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Monitoring;
@@ -135,6 +136,47 @@ public sealed class WantedReconcilerTests
     }
 
     [TestMethod]
+    public async Task Request_TheMonitoringPathKeepsAnApprovedRequestThatNamesEpisodesWhileMonitoringIsOff()
+    {
+        await using var host = await SeriesAsync();
+        var request = await ApprovedWithChoiceAsync(host, MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.SecondEpisodeId!.Value]));
+
+        var outcome = await host.Get<VideoMonitoringService>().ReconcileAsync(host.Work.Id, MediaAcquisitionKind.Tv, wake: true, CancellationToken.None);
+        var after = await host.GetAsync(request.Id);
+
+        Assert.AreEqual(VideoMonitoringOutcome.Saved, outcome);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, after.Status);
+        Assert.IsFalse(VideoRequestPayload.Parse(after.PayloadJson)!.EndedByMonitoring);
+        Assert.AreEqual(host.SecondEpisodeId, Assert.ContainsSingle(await ListAsync(host)).TargetId);
+    }
+
+    [TestMethod]
+    public async Task Request_AnOpenRequestWithoutIntentEndsWhenMonitoringIsOff()
+    {
+        await using var host = await SeriesAsync();
+        var request = await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year));
+
+        await host.Get<VideoMonitoringService>().ReconcileAsync(host.Work.Id, MediaAcquisitionKind.Tv, wake: true, CancellationToken.None);
+
+        Assert.AreNotEqual(AcquisitionRequestStatus.Approved, (await host.GetAsync(request.Id)).Status);
+    }
+
+    [TestMethod]
+    public async Task Intent_APlainRequestIsTheWholeTitleAndOneThatMonitoringOpenedNamesNothing()
+    {
+        await using var plain = await MovieAsync();
+        var plainRequest = await plain.Requests.CreateAsync(new AcquisitionRequestDraft(plain.Kind, "tmdb", plain.TmdbId, plain.Work.CanonicalTitle, null, null), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
+        await plain.Get<RequestIntent>().RecordAsync(plainRequest, CancellationToken.None);
+        Assert.AreEqual(plain.Work.Id, Assert.ContainsSingle(await ListAsync(plain)).TargetId, "Without a payload the executor reads the request as the whole title.");
+
+        await using var opened = await MovieAsync();
+        var seed = new VideoRequestPayload(opened.Work.Id, opened.Work.CanonicalTitle, opened.Work.Year);
+        var monitoringRequest = await opened.CreateApprovedAsync(seed);
+        await opened.Get<RequestIntent>().RecordAsync(monitoringRequest, CancellationToken.None);
+        Assert.IsFalse(await opened.Get<RequestIntent>().HasAsync(monitoringRequest.Id, CancellationToken.None), "A request Monitoring opened asks for nothing of its own.");
+    }
+
+    [TestMethod]
     public void WantedStatementsLiveInWantedSqlAndTakeNamedParametersOnly()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -144,10 +186,15 @@ public sealed class WantedReconcilerTests
         }
 
         var wanted = Path.Combine(directory!.FullName, "src", "Jularr.Web", "Features", "Acquisition", "Wanted");
-        var statements = new Regex(@"(SELECT|INSERT INTO|DELETE FROM|UPDATE)[^;]*FROM|INSERT INTO", RegexOptions.IgnoreCase);
-        var others = Directory.EnumerateFiles(wanted, "*.cs").Where(path => Path.GetFileName(path) != "WantedSql.cs");
+        var positional = new Regex(@"\{\d+\}");
+        var rawSqlOutsideWantedSql = new Regex(@"ExecuteSqlInterpolated|\bSqlQuery<|(ExecuteSqlRawAsync|SqlQueryRaw<[^>]+>)\((?>\s*)(?!WantedSql\.)");
+        Assert.IsTrue(positional.IsMatch("WHERE x = {0}") && rawSqlOutsideWantedSql.IsMatch("db.Database.ExecuteSqlRawAsync(\"DELETE\", ") && !rawSqlOutsideWantedSql.IsMatch("db.Database.ExecuteSqlRawAsync(WantedSql.Reconcile, "), "The guard patterns must recognise what they forbid.");
 
-        Assert.IsEmpty(others.Where(path => statements.IsMatch(File.ReadAllText(path))).Select(Path.GetFileName), "SQL belongs in WantedSql.");
-        Assert.IsFalse(Regex.IsMatch(File.ReadAllText(Path.Combine(wanted, "WantedSql.cs")), @"{d+}"), "A positional placeholder would hide what each parameter is.");
+        var files = Directory.EnumerateFiles(wanted, "*.cs").ToArray();
+        var withPositional = files.Where(path => positional.IsMatch(File.ReadAllText(path))).Select(Path.GetFileName);
+        var withOtherSql = files.Where(path => rawSqlOutsideWantedSql.IsMatch(File.ReadAllText(path))).Select(Path.GetFileName);
+
+        Assert.IsEmpty(withPositional, "A positional placeholder hides what each parameter is; use a named parameter.");
+        Assert.IsEmpty(withOtherSql, "Wanted statements belong in WantedSql.");
     }
 }

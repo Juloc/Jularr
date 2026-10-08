@@ -103,7 +103,13 @@ public sealed class AcquisitionRequestService(
             return new AcquisitionSubmission(winner, AlreadyRequested: true);
         }
 
-        return new AcquisitionSubmission(status == AcquisitionRequestStatus.Pending ? created : await ExecuteAsync(created, cancellationToken), AlreadyRequested: false);
+        if (status == AcquisitionRequestStatus.Pending)
+        {
+            return new AcquisitionSubmission(created, AlreadyRequested: false);
+        }
+
+        await RecordIntentAsync(created, cancellationToken);
+        return new AcquisitionSubmission(await ExecuteAsync(created, cancellationToken), AlreadyRequested: false);
     }
 
     public async Task<AcquisitionRequest> ApproveAsync(Guid id, CancellationToken cancellationToken)
@@ -130,7 +136,9 @@ public sealed class AcquisitionRequestService(
         }
 
         await PublishDecisionAsync(request, JularrEventCategory.RequestApproved, cancellationToken);
-        return await ExecuteAsync(await RequireAsync(id, cancellationToken), cancellationToken);
+        var approved = await RequireAsync(id, cancellationToken);
+        await RecordIntentAsync(approved, cancellationToken);
+        return await ExecuteAsync(approved, cancellationToken);
     }
 
     /// <summary>
@@ -377,6 +385,22 @@ public sealed class AcquisitionRequestService(
         return AutoApprovalEvaluator.Evaluate(rules, kind, profileId, used);
     }
 
+    // What an approved request names counts next to Monitoring, so switching Monitoring off never cancels it.
+    private async Task RecordIntentAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    {
+        if (intent is null)
+        {
+            return;
+        }
+
+        if (workBinder is not null && RequestWorkBinder.Applies(request.Kind))
+        {
+            request = await workBinder.EnsureBoundAsync(request, cancellationToken);
+        }
+
+        await intent.RecordAsync(request, cancellationToken);
+    }
+
     private async Task<AcquisitionRequest> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
         if (instanceModules is not null)
@@ -395,17 +419,6 @@ public sealed class AcquisitionRequestService(
                     cancellationToken);
                 return await RequireAsync(request.Id, cancellationToken);
             }
-        }
-
-        if (intent is not null)
-        {
-            // What the approved request asks for counts next to Monitoring, so switching Monitoring off never cancels it.
-            if (workBinder is not null && RequestWorkBinder.Applies(request.Kind))
-            {
-                request = await workBinder.EnsureBoundAsync(request, cancellationToken);
-            }
-
-            await intent.RecordAsync(request, cancellationToken);
         }
 
         var executor = executors.FirstOrDefault(candidate => candidate.Kind == request.Kind);

@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Monitoring;
 using Microsoft.EntityFrameworkCore;
@@ -46,7 +47,8 @@ public sealed class VideoMonitoringService(
     VideoAcquisitionEngine engine,
     QualityProfileStore profiles,
     MonitoringCommands commands,
-    MonitoringResolver monitoring)
+    MonitoringResolver monitoring,
+    RequestIntent? intent = null)
 {
     /// <summary>The scope value that stops all TV acquisition for a Work; the other values are the Request dialog's.</summary>
     public const string OffScope = "off";
@@ -207,9 +209,11 @@ public sealed class VideoMonitoringService(
         {
             for (var attempt = 0; attempt < MaxAttempts; attempt++)
             {
-                var on = (await monitoring.LoadAsync(workId, cancellationToken)).IsAnyMonitored;
+                var monitored = (await monitoring.LoadAsync(workId, cancellationToken)).IsAnyMonitored;
                 if (await FindOpenRequestAsync(kind, workId, cancellationToken) is { } open)
                 {
+                    // What the request itself names stays wanted with Monitoring off; only a request without such intent ends with Monitoring.
+                    var on = monitored || (intent is not null && await intent.HasAsync(open.Id, cancellationToken));
                     if (!wake)
                     {
                         return VideoMonitoringOutcome.Unchanged;
@@ -228,7 +232,7 @@ public sealed class VideoMonitoringService(
                     continue;
                 }
 
-                if (!on)
+                if (!monitored)
                 {
                     return VideoMonitoringOutcome.Unchanged;
                 }

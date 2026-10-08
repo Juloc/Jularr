@@ -111,6 +111,11 @@ internal static class WantedSql
         ON CONFLICT DO NOTHING
         """;
 
+    public const string HasRequestTargets =
+        """
+        SELECT EXISTS (SELECT 1 FROM "RequestTargets" target WHERE target."RequestId" = @requestId) AS "Value"
+        """;
+
     // @episodeIds and @seasonIds: what a custom request names; a season stands for all of its episodes.
     public const string RecordEpisodes =
         """

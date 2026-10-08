@@ -7,7 +7,8 @@ Canonical owners
 - `WantedReconciler`: the only writer. Set-based and idempotent: intent minus installed coverage is upserted, anything else for that scope is deleted. All statements live in `WantedSql` (named parameters only).
 - `WantedReconcileState`: when the whole library was last reconciled (singleton); every source of a pass asks, only the first one in 10 minutes runs. A Work is reconciled where it changes (request approval, executor), the full run only catches unannounced changes.
 - `IWantedSource` / `WantedAcquisitionService`: the shared 2-minute pass that prepares sources, follows downloads and imports.
-- `RequestIntent` (table `RequestTargets`): what an approved request names (the Work or single episodes), recorded when the request is approved and executed; rows end with the request.
+- `RequestIntent` (table `RequestTargets`): what a request somebody made names (the Work or single episodes), recorded by `AcquisitionRequestService` when it is submitted approved or approved. A request the Wanted pass or Monitoring opened records nothing; a video request without a payload is the whole title, one with a payload but no choice asks for nothing. Rows count while the request is open. `VideoMonitoringService.ReconcileAsync` keeps a request alive with Monitoring off when it has rows (`HasAsync`).
+- Migration `RequestTargetsRepair` keeps only provable intent for existing requests (a Movie or TV request that still carries its choice or has no payload); a choice applied earlier is not recoverable and stays Monitoring-driven.
 - `WantedRequestSource` + `IWantedRequestDrafter`: opens the request that carries each wanted Work (`VideoWantedSource` does it for Movie and Tv through `VideoMonitoringService`).
 
 Intent sources (read, never copied)
