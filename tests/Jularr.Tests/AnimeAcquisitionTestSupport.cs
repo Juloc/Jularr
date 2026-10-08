@@ -612,6 +612,7 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddScoped<SabnzbdDownloadService>();
         collection.AddScoped<SabnzbdAcquisitionService>();
         collection.AddScoped<AnimeAcquisitionInventory>();
+        collection.AddScoped<AnimeCanonicalEpisodes>();
         collection.AddScoped<AnimeAcquisitionPipeline>();
         collection.AddScoped<AnimeImportExecutor>();
         collection.AddScoped<AcquisitionAccessStore>();
