@@ -1,5 +1,7 @@
+using Jularr.Web.Features.Acquisition.Search;
 using System.Text.Json;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.ManualSearch;
@@ -28,10 +30,8 @@ public sealed record ReadingRequestPayload(
 public sealed class ReadingAcquisitionEngine(
     IndexerSearchCoordinator indexers,
     DownloadClientStore downloadClients,
-    DownloadClientSubmissionService downloads,
-    ReleaseRequestTracker tracker,
+    AcquisitionCore core,
     QualityProfileStore? profiles = null,
-    ReleaseReliabilityService? reliability = null,
     RequestWorkBinder? binder = null)
 {
     public const string OperationKind = "reading-usenet-download";
@@ -68,79 +68,36 @@ public sealed class ReadingAcquisitionEngine(
                 "SABnzbd is not configured.");
         }
 
-        var profile = profiles is null ? null : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
-        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile, reliability: lookup, wantedSince: SelectionContext.SinceCreated(request.CreatedAt));
-
-        return await GrabAsync(request, payload, Candidates(search), search.FailureMessage, cancellationToken, searchUnavailable: search.Search?.EveryIndexerFailed == true);
+        var profile = profiles is null ? ReadingQualityProfiles.For(request.Kind) : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
+        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(target, request.CreatedAt), profile, new SearchOptions(), cancellationToken);
+        return await GrabAsync(request, payload, search.Grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);
     }
 
-    /// <summary>
-    /// Runs the tracker lifecycle over the given releases (best first) and submits the first untried one through the shared download-client path.
-    /// Automatic acquisition passes every accepted release; Manual Search passes the one the owner selected.
-    /// </summary>
+    // Runs the shared grab over the releases (best first); Manual Search passes the one the owner selected.
     public async Task<AcquisitionExecution> GrabAsync(
         AcquisitionRequest request,
         ReadingRequestPayload payload,
-        IReadOnlyList<ReleaseRequestCandidate> candidates,
+        IReadOnlyList<ReleaseEvaluation<ReadingReleaseInfo>> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
         ManualGrabProgress? progress = null,
         bool searchUnavailable = false) =>
-        await tracker.ContinueAsync(
+        await core.GrabAsync(
             request,
             payload,
-            candidates,
+            releases,
             noReleaseReason,
-            async release =>
-            {
-                progress?.SubmitStarted = true;
-                var outcome = await downloads.SubmitAsync(
-                    new DownloadSubmissionSpec(
-                        OperationKind,
-                        request.Kind == MediaAcquisitionKind.Manga
-                            ? "Download Manga"
-                            : "Download Light Novel",
-                        payload.Title,
-                        request.RequestedByProfileId,
-                        release.DownloadUri,
-                        release.Title,
-                        request.Kind,
-                        ReleaseSource: release.Source,
-                        ReleaseGroup: release.ReleaseGroup),
-                    cancellationToken);
-                if (outcome.Accepted && progress is not null)
-                {
-                    progress.Accepted = true;
-                    progress.OperationId = outcome.OperationId;
-                }
-
-                return new ReleaseRequestSubmission(
-                    outcome.Accepted,
-                    outcome.OperationId,
-                    outcome.Message);
-            },
+            new GrabTarget(OperationKind, request.Kind == MediaAcquisitionKind.Manga ? "Download Manga" : "Download Light Novel", payload.Title, request.Kind, string.Empty),
             cancellationToken,
+            progress,
             searchUnavailable);
 
-    /// <summary>The releases the reading matcher accepted, best first; each is tried once by its identity.</summary>
-    public static IReadOnlyList<ReleaseRequestCandidate> Candidates(
-        ReadingUsenetSearchResult search)
-    {
-        ArgumentNullException.ThrowIfNull(search);
-
-        return search.Ranked
-            .Where(candidate =>
-                candidate.Score > 0 &&
-                candidate.Release.InternalDownloadUri is not null)
-            .Select(candidate => new ReleaseRequestCandidate(
-                candidate.Release.Identity,
-                candidate.Release.Title,
-                candidate.Release.InternalDownloadUri!,
-                candidate.Release.Indexer,
-                candidate.Release.ParsedRelease.ReleaseGroup))
-            .ToArray();
-    }
+    public static string FailureMessage(SearchEvaluation<ReadingReleaseInfo> search) =>
+        search.Releases.Count == 0
+            ? search.Search.Warnings.Count > 0
+                ? $"No release found on the indexers ({search.Search.Warnings[0].IndexerName}: {search.Search.Warnings[0].Message})."
+                : "No release found on the indexers."
+            : "No suitable release matched the requested title, format, volume, chapter or language.";
 
     public static ReadingRequestPayload ReadPayload(
         AcquisitionRequest request,

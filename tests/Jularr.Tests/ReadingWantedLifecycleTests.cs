@@ -318,6 +318,7 @@ public sealed class ReadingWantedLifecycleTests
                 .AddSingleton(_ => new AcquisitionAccessStore(environment.Db))
                 .AddSingleton(AcquisitionAccessFixture.Account("owner", AccountRole.Owner))
                 .AddSingleton<ReleaseRequestTracker>()
+                .AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>()
                 .AddSingleton(new Jularr.Web.Features.Acquisition.Release.MediaAcquisitionRegistry([new MangaAcquisitionRegistration(), new LightNovelAcquisitionRegistration()]))
                 .AddSingleton(provider => new Jularr.Web.Features.Acquisition.Quality.QualityProfileStore(new DirectoryInfo(Path.Combine(directory.FullName, "quality-profiles")), provider.GetRequiredService<Jularr.Web.Features.Acquisition.Release.MediaAcquisitionRegistry>()))
                 .AddSingleton<ReadingAcquisitionEngine>()

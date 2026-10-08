@@ -132,8 +132,8 @@ public sealed class AcquisitionProfilePolicyTests
         var readingProfile = reading with { AllowedQualities = [.. reading.QualityOrder.Skip(1)], FallbackTiers = [new FallbackTier(90, [readingQuality])] };
         var volume = Release($"Frieren Vol 01 {readingQuality}");
 
-        var readingWaiting = ReadingReleaseSelector.Rank([volume], target, readingProfile, null, DateTimeOffset.UtcNow.AddMinutes(-30));
-        var readingDue = ReadingReleaseSelector.Rank([volume], target, readingProfile, null, DateTimeOffset.UtcNow.AddMinutes(-100));
+        var readingWaiting = ReadingRank.Rank([volume], target, readingProfile, DateTimeOffset.UtcNow.AddMinutes(-30));
+        var readingDue = ReadingRank.Rank([volume], target, readingProfile, DateTimeOffset.UtcNow.AddMinutes(-100));
 
         Assert.AreEqual(0, readingWaiting[0].Score);
         Assert.IsTrue(readingDue[0].Score > 0);
@@ -149,8 +149,7 @@ public sealed class AcquisitionProfilePolicyTests
             .ToArray();
         var searches = new (string File, int Minimum)[]
         {
-            ("Acquisition/Access/VideoAcquisitionRequestExecutor.cs", 1), ("Acquisition/Pipeline/AnimeAcquisitionPipeline.cs", 2), ("Books/BookAcquisitionExecutor.cs", 1),
-            ("ReadingAcquisition/ReadingReleaseMatching.cs", 1), ("Music/MusicAcquisition.cs", 1)
+            ("Acquisition/Core/AcquisitionCore.cs", 1), ("Acquisition/Pipeline/AnimeAcquisitionPipeline.cs", 2), ("Books/BookAcquisitionExecutor.cs", 1)
         };
 
         Assert.AreEqual(0, offenders.Length, "A selection that is asked with 'wanted since now' can never reach a fallback tier: " + string.Join(", ", offenders));

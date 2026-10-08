@@ -47,7 +47,7 @@ public sealed class QualityProfileEditingTests
             var edited = QualityProfileEditing.Parse(form);
 
             Assert.IsTrue(edited.IsValid);
-            Assert.AreEqual($"Frieren Vol 01 CBZ-{preferred}", ReadingReleaseSelector.Rank(releases, target, edited.Profile)[0].Release.Title, "The rule the owner wrote decides between otherwise equal releases.");
+            Assert.AreEqual($"Frieren Vol 01 CBZ-{preferred}", ReadingRank.Rank(releases, target, edited.Profile)[0].Release.Title, "The rule the owner wrote decides between otherwise equal releases.");
         }
     }
 
@@ -60,7 +60,7 @@ public sealed class QualityProfileEditingTests
         form.MaximumSizeMegabytes = "50";
 
         var profile = QualityProfileEditing.Parse(form).Profile!;
-        var ranked = ReadingReleaseSelector.Rank([Release("Frieren Vol 01 CBZ-BAD"), Release("Frieren Vol 02 CBZ-OK")], target, profile);
+        var ranked = ReadingRank.Rank([Release("Frieren Vol 01 CBZ-BAD"), Release("Frieren Vol 02 CBZ-OK")], target, profile);
 
         Assert.AreEqual(0, ranked.Single(item => item.Release.Title.EndsWith("BAD", StringComparison.Ordinal)).Score, "A rejecting rule is a gate, not a penalty.");
         Assert.AreEqual(0, ranked.Single(item => item.Release.Title.EndsWith("OK", StringComparison.Ordinal)).Score, "The 100 MB release is above the 50 MB limit.");

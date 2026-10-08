@@ -72,6 +72,7 @@ public sealed class UsenetModel(
     IndexerStore indexerStore,
     IReadOnlyDictionary<IndexerType, IIndexer> indexers,
     IndexerSearchCoordinator searchCoordinator,
+    Jularr.Web.Features.Acquisition.Core.AcquisitionCore core,
     QualityProfileStore qualityProfiles,
     DownloadClientStore clientStore,
     IDownloadClient downloadClient,
@@ -208,22 +209,18 @@ public sealed class UsenetModel(
                 book.FailureMessage);
         }
 
-        var reading = await ReadingUsenetSearch.SearchAsync(
-            searchCoordinator,
-            new ReadingAcquisitionTarget(
-                kind,
-                title.Trim(),
-                [],
-                string.IsNullOrWhiteSpace(author) ? null : author.Trim()),
-            cancellationToken,
-            new SearchOptions { Purpose = SearchPurpose.Interactive });
+        var reading = await core.SearchAsync(
+            ReadingReleaseJudge.Plan(new ReadingAcquisitionTarget(kind, title.Trim(), [], string.IsNullOrWhiteSpace(author) ? null : author.Trim()), DateTime.UtcNow),
+            ReadingQualityProfiles.For(kind),
+            new SearchOptions { Purpose = SearchPurpose.Interactive },
+            cancellationToken);
         return new UsenetSearchTest(
-            reading.Queries,
-            reading.Ranked.Select(ranked => new UsenetTestRelease(ranked.Release, ranked.Score, ranked.RejectedBecause)).ToArray(),
-            reading.Warnings,
-            reading.UsedCategoryFallback,
-            reading.Picked,
-            reading.FailureMessage);
+            [.. reading.Search.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
+            reading.Releases.Select(evaluation => new UsenetTestRelease(evaluation.Candidate, ReadingReleaseJudge.DisplayScore(evaluation), ReadingReleaseJudge.RejectedBecause(evaluation))).ToArray(),
+            reading.Search.Warnings,
+            reading.Search.Trace.Any(line => line.Stage == "any-category" && line.Results > 0),
+            reading.Grabbable.FirstOrDefault()?.Candidate,
+            ReadingAcquisitionEngine.FailureMessage(reading));
     }
 
     public async Task<IActionResult> OnPostTestIndexerAsync(Guid id, CancellationToken cancellationToken)

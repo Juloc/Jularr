@@ -42,10 +42,10 @@ public sealed class ReadingAcquisitionTests
             "Frieren Beyond Journey's End",
             ["Sousou no Frieren"]);
 
-        var wrong = ReadingReleaseSelector.Judge(
+        var wrong = ReadingRank.Judge(
             Candidate("Another Manga Vol 1.cbz"),
             target);
-        var epub = ReadingReleaseSelector.Judge(
+        var epub = ReadingRank.Judge(
             Candidate("Frieren Beyond Journey's End Vol 1.epub"),
             target);
 
@@ -64,7 +64,7 @@ public sealed class ReadingAcquisitionTests
             ["Sousou no Frieren"],
             RequestedChapterStart: 117);
 
-        var ranked = ReadingReleaseSelector.Judge(
+        var ranked = ReadingRank.Judge(
             Candidate("Sousou no Frieren Ch 111-118 [Digital] CBZ"),
             target);
 
@@ -82,7 +82,7 @@ public sealed class ReadingAcquisitionTests
             [],
             RequestedChapterStart: 50);
 
-        var ranked = ReadingReleaseSelector.Judge(
+        var ranked = ReadingRank.Judge(
             Candidate("Frieren Ch 20-30 CBZ"),
             target);
 
@@ -99,13 +99,13 @@ public sealed class ReadingAcquisitionTests
             [],
             "Miya Kazuki");
 
-        var epub = ReadingReleaseSelector.Judge(
+        var epub = ReadingRank.Judge(
             Candidate("Ascendance of a Bookworm Volume 1 English EPUB"),
             target);
-        var unknown = ReadingReleaseSelector.Judge(
+        var unknown = ReadingRank.Judge(
             Candidate("Ascendance of a Bookworm Volume 1 English"),
             target);
-        var pdf = ReadingReleaseSelector.Judge(
+        var pdf = ReadingRank.Judge(
             Candidate("Ascendance of a Bookworm Volume 1 English PDF"),
             target);
 
@@ -122,10 +122,10 @@ public sealed class ReadingAcquisitionTests
             [],
             RequestedVolume: 8);
 
-        var wrong = ReadingReleaseSelector.Judge(
+        var wrong = ReadingRank.Judge(
             Candidate("Re Zero Vol 7 EPUB"),
             target);
-        var right = ReadingReleaseSelector.Judge(
+        var right = ReadingRank.Judge(
             Candidate("Re Zero Vol 8 EPUB"),
             target);
 
@@ -142,10 +142,10 @@ public sealed class ReadingAcquisitionTests
             [],
             PreferredLanguages: ["de", "en"]);
 
-        var japanese = ReadingReleaseSelector.Judge(
+        var japanese = ReadingRank.Judge(
             Candidate("Spice and Wolf Vol 1 Japanese EPUB"),
             target);
-        var german = ReadingReleaseSelector.Judge(
+        var german = ReadingRank.Judge(
             Candidate("Spice and Wolf Vol 1 German EPUB"),
             target);
 
@@ -166,7 +166,7 @@ public sealed class ReadingAcquisitionTests
             Protocol = "torrent"
         };
 
-        var ranked = ReadingReleaseSelector.Judge(
+        var ranked = ReadingRank.Judge(
             release,
             target);
 
@@ -201,39 +201,16 @@ public sealed class ReadingAcquisitionTests
     }
 
     [TestMethod]
-    public void OnlyAcceptedReleasesBecomeCandidatesInRankOrder()
+    public void OnlyAcceptedReleasesAreRankedAheadOfRejectedOnes()
     {
-        var first = Candidate("Frieren Vol 1 CBZ");
-        var second = Candidate("Frieren Vol 1 Digital CBZ");
-        var rejected = Candidate("Frieren Vol 2 CBZ");
-        var search = new ReadingUsenetSearchResult(
-            [],
-            [
-                new RankedReadingRelease(
-                    first,
-                    ReadingReleaseParser.Parse(first.Title),
-                    150,
-                    null),
-                new RankedReadingRelease(
-                    second,
-                    ReadingReleaseParser.Parse(second.Title),
-                    140,
-                    null),
-                new RankedReadingRelease(
-                    rejected,
-                    ReadingReleaseParser.Parse(rejected.Title),
-                    0,
-                    "wrong volume")
-            ],
-            [],
-            UsedCategoryFallback: false);
+        var target = new ReadingAcquisitionTarget(MediaAcquisitionKind.Manga, "Frieren", [], RequestedVolume: 1);
+        var releases = new[] { Candidate("Frieren Vol 1 CBZ"), Candidate("Frieren Vol 1 Digital CBZ"), Candidate("Frieren Vol 2 CBZ") };
 
-        var candidates = ReadingAcquisitionEngine.Candidates(search);
+        var ranked = ReadingRank.Rank(releases, target);
 
-        CollectionAssert.AreEqual(
-            new[] { first.Identity, second.Identity },
-            candidates.Select(candidate => candidate.Identity).ToArray(),
-            "Rejected releases are never candidates; the shared tracker skips tried ones.");
+        CollectionAssert.AreEquivalent(new[] { releases[0].Identity, releases[1].Identity }, ranked.Where(item => item.Score > 0).Select(item => item.Release.Identity).ToArray());
+        Assert.AreEqual(0, ranked[^1].Score);
+        Assert.AreEqual(releases[2].Identity, ranked[^1].Release.Identity, "A release for another volume is rejected and listed last.");
     }
 
     [TestMethod]

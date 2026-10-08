@@ -13,7 +13,10 @@ using Jularr.Web.Features.Operations;
 namespace Jularr.Web.Features.Acquisition.Core;
 
 // What a media type concluded about one release before any profile rule is looked at; Match is its own finding (video identity, music evidence).
-public sealed record ReleaseJudgement<TMatch>(TMatch Match, ReleaseInfo? Parsed, ReleaseIdentityEvidence Evidence, SelectionCoverage Coverage, string? SafetyRejection);
+public sealed record ReleaseJudgement<TMatch>(TMatch Match, ReleaseInfo? Parsed, ReleaseIdentityEvidence Evidence, SelectionCoverage Coverage, string? SafetyRejection)
+{
+    public int ContextScore { get; init; }
+}
 
 // One returned release as the shared selection engine ranked it.
 public sealed record ReleaseEvaluation<TMatch>(ProwlarrReleaseCandidate Candidate, ReleaseInfo? Parsed, TMatch Match, CandidateEvaluation Selection)
@@ -41,42 +44,16 @@ public sealed record GrabTarget(string OperationKind, string OperationTitle, str
 // The one search, rank and grab path every media type runs; adapters only supply the plan and the grab target.
 public sealed class AcquisitionCore(IndexerSearchCoordinator indexers, ReleaseRequestTracker tracker, DownloadClientSubmissionService downloads, TimeProvider clock, ReleaseReliabilityService? reliability = null)
 {
+    private readonly ReleaseRanker ranker = new(clock, reliability);
+
     public async Task<SearchEvaluation<TMatch>> SearchAsync<TMatch>(MediaSearchPlan<TMatch> plan, QualityProfile profile, SearchOptions options, CancellationToken cancellationToken)
     {
         var judgements = new Dictionary<string, ReleaseJudgement<TMatch>>(StringComparer.Ordinal);
-        ReleaseJudgement<TMatch> Judge(ProwlarrReleaseCandidate release)
-        {
-            if (!judgements.TryGetValue(release.Identity, out var judgement))
-            {
-                judgements[release.Identity] = judgement = plan.Judge(release);
-            }
-
-            return judgement;
-        }
-
         var search = await indexers.SearchAsync(
             plan.Intent,
-            options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => Judge(release) is { SafetyRejection: null, Evidence.Confidence: IdentityConfidence.Exact or IdentityConfidence.Strong }) },
+            options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => ReleaseRanker.Judged(judgements, plan.Judge, release) is { SafetyRejection: null, Evidence.Confidence: IdentityConfidence.Exact or IdentityConfidence.Strong }) },
             cancellationToken);
-
-        var distinct = search.Releases.GroupBy(release => release.Identity, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        var wantedSince = new DateTimeOffset(DateTime.SpecifyKind(plan.WantedSinceUtc, DateTimeKind.Utc));
-        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
-        var selection = ReleaseSelectionEngine.Select(
-            profile,
-            new SelectionContext(clock.GetUtcNow(), wantedSince),
-            [.. distinct.Select(pair =>
-            {
-                var judgement = Judge(pair.Value);
-                return new SelectionCandidate(pair.Key, judgement.Parsed, pair.Value.SizeBytes, pair.Value.Indexer, pair.Value.Sources.FirstOrDefault()?.Priority ?? 0, pair.Value.PublishedAt, judgement.Evidence, judgement.Coverage)
-                {
-                    SafetyRejection = judgement.SafetyRejection
-                };
-            })],
-            lookup);
-        var evaluations = selection.Ranked
-            .Select(ranked => new ReleaseEvaluation<TMatch>(distinct[ranked.Candidate.Id], Judge(distinct[ranked.Candidate.Id]).Parsed, Judge(distinct[ranked.Candidate.Id]).Match, ranked))
-            .ToArray();
+        var (selection, evaluations) = await ranker.RankAsync(search.Releases, plan.Judge, profile, plan.WantedSinceUtc, cancellationToken, judgements);
         return new SearchEvaluation<TMatch>(profile, search, evaluations, selection);
     }
 

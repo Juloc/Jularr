@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
@@ -57,12 +58,11 @@ public sealed record ReadingManualSearchResult(ReadingManualSearchTarget Target,
 /// </summary>
 public sealed class ReadingManualSearchService(
     AcquisitionAccessStore requests,
-    IndexerSearchCoordinator indexers,
+    AcquisitionCore core,
     ReadingAcquisitionEngine engine,
     ManualGrabCoordinator coordinator,
     QualityProfileStore profiles,
     TimeProvider clock,
-    ReleaseReliabilityService? reliability = null,
     RequestWorkBinder? binder = null)
 {
     /// <summary>The request with its canonical Work: a request that predates the binding is bound now, so Manual Search resolves the same profile as the automatic search.</summary>
@@ -83,14 +83,13 @@ public sealed class ReadingManualSearchService(
 
         var payload = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request));
         var profile = await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
-        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
         var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh };
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, options, profile, lookup, SelectionContext.SinceCreated(request.CreatedAt));
+        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(ReadingAcquisitionEngine.ToTarget(request.Kind, payload), request.CreatedAt), profile, options, cancellationToken);
         var target = await TargetOfAsync(request, cancellationToken);
         var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
-        var candidates = search.Ranked.Select(ranked => ToCandidate(ranked, tried, target.CanSearch)).ToArray();
-        var summary = new ManualSearchSummary(depth, search.Search?.RawResultCount ?? 0, search.Search?.Releases.Count ?? 0, search.Search?.Outcomes ?? [], search.Search?.Trace ?? []);
-        return new ReadingManualSearchResult(target, candidates, summary, search.WinnerReason);
+        var candidates = search.Releases.Select(evaluation => ToCandidate(evaluation, tried, target.CanSearch)).ToArray();
+        var summary = new ManualSearchSummary(depth, search.Search.RawResultCount, search.Search.Releases.Count, search.Search.Outcomes, search.Search.Trace);
+        return new ReadingManualSearchResult(target, candidates, summary, search.Selection.WinnerReason);
     }
 
     public async Task<ManualGrabOutcome> GrabAsync(Guid requestId, string releaseIdentity, CancellationToken cancellationToken)
@@ -108,16 +107,14 @@ public sealed class ReadingManualSearchService(
         }
 
         var profile = await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
-        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
         var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true };
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, options, profile, lookup, SelectionContext.SinceCreated(request.CreatedAt));
-        var selected = search.Ranked.FirstOrDefault(ranked => ranked.Release.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
-        if (selected is null || selected.Score <= 0 || selected.Release.InternalDownloadUri is null)
+        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(ReadingAcquisitionEngine.ToTarget(request.Kind, payload), request.CreatedAt), profile, options, cancellationToken);
+        var selected = search.Releases.FirstOrDefault(evaluation => evaluation.Candidate.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
+        if (selected is null || !selected.IsGrabbable)
         {
             return new ManualGrabOutcome(ManualGrabStatus.NotAvailable, null, null);
         }
 
-        var candidate = new ReleaseRequestCandidate(selected.Release.Identity, selected.Release.Title, selected.Release.InternalDownloadUri, selected.Release.Indexer, selected.Release.ParsedRelease.ReleaseGroup);
         return await coordinator.GrabAsync(
             request,
             [AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending],
@@ -126,7 +123,7 @@ public sealed class ReadingManualSearchService(
                 var fresh = ReadingAcquisitionEngine.ReadPayload(claimed, ReadingAcquisitionEngine.FallbackTarget(claimed));
                 return (fresh.TriedReleases ?? []).Contains(releaseIdentity, StringComparer.OrdinalIgnoreCase)
                     ? null
-                    : await engine.GrabAsync(claimed, fresh, [candidate], "The selected release is no longer available.", cancellationToken, progress);
+                    : await engine.GrabAsync(claimed, fresh, [selected], "The selected release is no longer available.", cancellationToken, progress);
             },
             cancellationToken);
     }
@@ -143,16 +140,16 @@ public sealed class ReadingManualSearchService(
         return new ReadingManualSearchTarget(request.Id, request.Kind, payload.Title, payload.Author, payload.RequestedVolume, profile.Name, request.Status, request.StatusMessage, payload.Searches, payload.NextSearchUtc, payload.TriedReleases ?? []);
     }
 
-    private ReadingManualCandidate ToCandidate(RankedReadingRelease ranked, HashSet<string> tried, bool requestIsOpen)
+    private ReadingManualCandidate ToCandidate(ReleaseEvaluation<ReadingReleaseInfo> evaluation, HashSet<string> tried, bool requestIsOpen)
     {
-        var release = ranked.Release;
-        var selection = ranked.Selection;
-        var isSelectable = selection?.IsSelectable == true && ranked.Score > 0 && release.InternalDownloadUri is not null;
+        var release = evaluation.Candidate;
+        var selection = evaluation.Selection;
+        var isSelectable = evaluation.IsGrabbable;
         var isTried = tried.Contains(release.Identity);
         var verdict = !isSelectable
             ? ManualSearchVerdict.Rejected
-            : selection!.Decision == SelectionDecision.Temporary ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
-        var parsed = ranked.Parsed;
+            : selection.Decision == SelectionDecision.Temporary ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
+        var parsed = evaluation.Match;
         var chapters = parsed.ChapterStart is { } start
             ? parsed.ChapterEnd is { } end && end != start ? $"{start:0.##}-{end:0.##}" : $"{start:0.##}"
             : null;
@@ -162,16 +159,16 @@ public sealed class ReadingManualSearchService(
             [.. release.Sources.Select(source => source.Indexer).DefaultIfEmpty(release.Indexer ?? "—")],
             release.SizeBytes,
             release.PublishedAt is { } published ? Math.Max(0, (int)(clock.GetUtcNow() - published).TotalDays) : null,
-            selection?.Score?.QualityKey ?? ReadingReleaseEvidenceParser.QualityOf(parsed.Format),
+            selection.Score?.QualityKey ?? ReadingReleaseEvidenceParser.QualityOf(parsed.Format),
             parsed.Language,
             parsed.VolumeNumber,
             chapters,
             parsed.IsCompleteOrBatch,
-            selection?.Candidate.Identity.Confidence ?? IdentityConfidence.Conflict,
+            selection.Candidate.Identity.Confidence,
             verdict,
-            isSelectable ? ranked.Score : null,
-            selection?.Reasons ?? [],
-            ranked.RejectedBecause,
+            isSelectable ? ReadingReleaseJudge.DisplayScore(evaluation) : null,
+            selection.Reasons,
+            ReadingReleaseJudge.RejectedBecause(evaluation),
             isTried,
             isSelectable && !isTried && requestIsOpen,
             release.Provenance);
