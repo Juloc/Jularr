@@ -61,8 +61,8 @@ public sealed class MusicAcquisitionTests
         var owned = await host.AddAlbumAsync("rg-d", "Discovery", 2001, monitored: true);
         await host.AttachAudioAsync(owned, 1);
 
-        var created = await host.Get<MusicMonitoringService>().EnsureRequestsAsync(CancellationToken.None);
-        var again = await host.Get<MusicMonitoringService>().EnsureRequestsAsync(CancellationToken.None);
+        var created = await host.WantedRequestsAsync();
+        var again = await host.WantedRequestsAsync();
 
         Assert.AreEqual(1, created);
         Assert.AreEqual(0, again, "An open request is the Wanted state; nothing is requested twice.");
@@ -77,7 +77,7 @@ public sealed class MusicAcquisitionTests
         Assert.AreNotEqual(unreleased, missing);
 
         await host.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Failed, "Gave up.", null, null, null, CancellationToken.None);
-        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().EnsureRequestsAsync(CancellationToken.None), "A request that gave up waits for the owner.");
+        Assert.AreEqual(0, await host.WantedRequestsAsync(), "A request that gave up waits for the owner.");
     }
 
     [TestMethod]
@@ -120,7 +120,7 @@ public sealed class MusicAcquisitionTests
         Assert.AreEqual(AcquisitionRequestStatus.Completed, done!.Status, done.StatusMessage);
         Assert.AreEqual(1, host.Importer.Imports, "A repeated pass never imports the same download again.");
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
-        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().EnsureRequestsAsync(CancellationToken.None), "An album with files is not wanted any more.");
+        Assert.AreEqual(0, await host.WantedRequestsAsync(), "An album with files is not wanted any more.");
         Assert.IsTrue(await host.Get<MusicAcquisitionEngine>().HasAudioFilesAsync(work, CancellationToken.None));
     }
 
@@ -395,6 +395,9 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton<IAcquisitionRequestExecutor, MusicAcquisitionRequestExecutor>()
                 .AddSingleton<IWantedRequestHandler, MusicWantedRequestHandler>()
                 .AddSingleton<IWantedSource, MusicWantedSource>()
+                .AddSingleton<WantedReconciler>()
+                .AddSingleton<IWantedRequestDrafter, MusicRequestDrafter>()
+                .AddSingleton<IWantedSource>(provider => new WantedRequestSource(MediaAcquisitionKind.Music, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<IWantedRequestDrafter>()))
                 .AddSingleton<ICompletedDownloadImportAdapter>(importer)
                 .AddSingleton<CompletedDownloadDispatcher>()
                 .AddSingleton<CompletedDownloadImportService>()
@@ -402,6 +405,8 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
             return new MusicHost(environment, services.BuildServiceProvider(), importer, clock);
         }
+
+        public Task<int> WantedRequestsAsync() => Get<IEnumerable<IWantedSource>>().OfType<WantedRequestSource>().Single().PrepareAsync(DateTime.UtcNow, CancellationToken.None);
 
         public async Task<Guid> AddAlbumAsync(string groupId, string title, int year, bool monitored, DateTime? releaseDate = null)
         {

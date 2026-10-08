@@ -1,6 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
-using Jularr.Web.Features.MediaCore;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
 
@@ -13,13 +12,12 @@ public sealed class VideoWantedSource(MediaAcquisitionKind kind, WantedReconcile
 
     public async Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
-        var type = VideoWorkLinks.WorkType(kind);
         await wanted.ReconcileAsync(null, cancellationToken);
         var opened = 0;
         var after = Guid.Empty;
         while (opened < WantedAcquisitionService.MaxRequestsPerKindPerPass)
         {
-            var works = await wanted.WorksWithoutOpenRequestAsync(type, after, PageSize, cancellationToken);
+            var works = await wanted.WorksWithoutOpenRequestAsync(kind, after, PageSize, cancellationToken);
             if (works.Count == 0)
             {
                 break;

@@ -599,14 +599,29 @@ foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.Media
 {
     builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.VideoUpgradeWantedSource>(services, upgradeKind));
 }
-foreach (var monitoredKind in new[]
+foreach (var wantedKind in new[]
 {
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book,
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.LightNovel,
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga
 })
 {
-    builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Monitoring.MonitoringWantedSource>(services, monitoredKind));
+    builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestDrafter>(services => new Jularr.Web.Features.Acquisition.Wanted.IdentityRequestDrafter(wantedKind, services.GetRequiredService<Jularr.Web.Data.AppDbContext>()));
+}
+
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestDrafter, Jularr.Web.Features.Music.MusicRequestDrafter>();
+foreach (var sourceKind in new[]
+{
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book,
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.LightNovel,
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga,
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Music
+})
+{
+    builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.WantedRequestSource>(
+        services,
+        sourceKind,
+        services.GetServices<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestDrafter>().Single(drafter => drafter.Kind == sourceKind)));
 }
 
 foreach (var videoKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv })

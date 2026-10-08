@@ -23,7 +23,6 @@ pass must look at (any node switched on counts).
 
 ## Wanted
 Monitoring only states intent. `Features/Acquisition/Wanted` (see its CODEMAP) reconciles it into `WantedItems` and the engines read that queue.
-Books, Light Novels and Manga still use `MonitoringWantedSource` until they move onto it.
 
 ## API (`MonitoringEndpoints.cs`, `/api/monitoring/v1`)
 `GET works/{id}`, `PUT targets/{kind}/{id}`, `POST works/{id}/future`, `PUT relations/{kind}/{key}`.

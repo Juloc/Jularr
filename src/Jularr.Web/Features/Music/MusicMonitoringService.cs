@@ -13,10 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Music;
 
 /// <summary>
-/// Turns monitoring into Wanted: a monitored album without files, whose artist is monitored and which has been released, gets one approved
-/// request on the shared lifecycle. The request is the only Wanted state; this service creates it and never searches. A title is requested at
-/// most once at a time (the store's unique open-request index), an owner's rejection or a request that gave up is respected, and a library
-/// album that lost its files is wanted again.
+/// The Music upgrade scan: an installed album whose quality is below what its profile wants is wanted again through its completed request.
 /// </summary>
 public sealed class MusicMonitoringService(AppDbContext db, AcquisitionAccessStore requests, MonitoringResolver monitoring, TimeProvider clock, QualityProfileStore? profiles = null, CanonicalMediaStorageService? storage = null)
 {
@@ -74,78 +71,11 @@ public sealed class MusicMonitoringService(AppDbContext db, AcquisitionAccessSto
 
         return reopened;
     }
-
-    public async Task<int> EnsureRequestsAsync(CancellationToken cancellationToken)
-    {
-        var now = clock.GetUtcNow().UtcDateTime;
-        var created = 0;
-        var after = Guid.Empty;
-        while (created < MaxRequestsPerPass)
-        {
-            // The monitored albums are read in id order, a page at a time, so albums that already have files never hide the ones that are still missing.
-            var monitored = await monitoring.MonitoredWorkIdsAsync(WorkMediaType.Music, after, PageSize, cancellationToken);
-            if (monitored.Count == 0)
-            {
-                break;
-            }
-
-            after = monitored[^1];
-            created += await RequestMissingAsync(monitored, now, MaxRequestsPerPass - created, cancellationToken);
-        }
-
-        return created;
-    }
-
-    private async Task<int> RequestMissingAsync(IReadOnlyList<Guid> monitored, DateTime now, int allowed, CancellationToken cancellationToken)
-    {
-        var candidates = await (
-                from album in db.MusicAlbums.AsNoTracking()
-                join artist in db.MusicArtists.AsNoTracking() on album.ArtistId equals artist.Id
-                join work in db.Works.AsNoTracking() on album.WorkId equals work.Id
-                where monitored.Contains(album.WorkId)
-                      && album.MusicBrainzReleaseGroupId != null
-                      && (album.ReleaseDate == null || album.ReleaseDate <= now)
-                      && !db.MediaAssets.Any(asset => asset.WorkId == album.WorkId && asset.Kind == MediaAssetKind.Audio && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
-                orderby album.ReleaseDate descending
-                select new { album.WorkId, GroupId = album.MusicBrainzReleaseGroupId!, work.CanonicalTitle, work.Year, artist.Name, artist.AddedByProfileId })
-            .ToListAsync(cancellationToken);
-
-        var created = 0;
-        foreach (var candidate in candidates)
-        {
-            if (created >= allowed)
-            {
-                break;
-            }
-
-            if (await requests.FindLatestAsync(MediaAcquisitionKind.Music, ProviderKeys.MusicBrainz, candidate.GroupId, cancellationToken) is { } latest
-                && latest.Status != AcquisitionRequestStatus.Completed)
-            {
-                // Open, failed (waits for the owner) or rejected: monitoring never overrides what the lifecycle or the owner decided.
-                continue;
-            }
-
-            var payload = new MusicRequestPayload(candidate.WorkId, candidate.Name, candidate.CanonicalTitle, candidate.Year);
-            var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Music, ProviderKeys.MusicBrainz, candidate.GroupId, candidate.CanonicalTitle, candidate.Name, null, JsonSerializer.Serialize(payload, JsonSerializerOptions.Web));
-            var requester = candidate.AddedByProfileId ?? "owner";
-            try
-            {
-                await requests.CreateAsync(draft, requester, AcquisitionRequestStatus.Approved, requester, cancellationToken);
-                created++;
-            }
-            catch (OpenRequestExistsException)
-            {
-                // Another pass or an owner requested the album in the same moment; the open request is the Wanted state.
-            }
-        }
-
-        return created;
-    }
 }
 
 /// <summary>
 /// The Music part of the shared Wanted pass: reads the discography of artists whose last read is old (new albums appear and a monitored
-/// artist's new release becomes wanted), then requests the monitored albums that are missing. A provider outage is logged and retried by
+/// artist's new release becomes wanted), then reopens upgrades. A provider outage is logged and retried by
 /// the next pass; it never fails the pass.
 /// </summary>
 public sealed class MusicWantedSource(AppDbContext db, MusicLibraryService library, MusicMonitoringService monitoring, ILogger<MusicWantedSource> logger, UpgradeScanState? scans = null) : IWantedSource
@@ -180,7 +110,6 @@ public sealed class MusicWantedSource(AppDbContext db, MusicLibraryService libra
             }
         }
 
-        var created = await monitoring.EnsureRequestsAsync(cancellationToken);
-        return scans is null ? created : created + await monitoring.ReopenUpgradesAsync(scans, nowUtc, cancellationToken);
+        return scans is null ? 0 : await monitoring.ReopenUpgradesAsync(scans, nowUtc, cancellationToken);
     }
 }
