@@ -597,7 +597,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequest
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Music.MusicWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, Jularr.Web.Features.Music.MusicWantedSource>();
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.UpgradeScanState>();
-foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Music })
+foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Music, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book })
 {
     builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.UpgradeWantedSource>(services, upgradeKind));
 }
@@ -606,6 +606,7 @@ foreach (var assessedKind in new[] { Jularr.Web.Features.Acquisition.Access.Medi
     builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.VideoUpgradeAssessor>(services, assessedKind));
 }
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, Jularr.Web.Features.Music.MusicUpgradeAssessor>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, Jularr.Web.Features.Books.BookUpgradeAssessor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Core.IDirectSource, Jularr.Web.Features.Books.BookCatalogDirectSource>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Core.IDirectSource, Jularr.Web.Features.Books.BookOpdsDirectSource>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Core.IDirectSource, Jularr.Web.Features.ReadingAcquisition.LightNovelWebDirectSource>();

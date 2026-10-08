@@ -17,10 +17,10 @@ Intent sources (read, never copied)
 - Why a row is wanted and whether it is missing or an upgrade is derived on read, not stored: a row whose target the library holds is an upgrade, one it lacks is missing.
 
 Upgrades
-- `IUpgradeAssessor` per media type (`VideoUpgradeAssessor` for Movie and each episode, `MusicUpgradeAssessor` for an album) tells which held targets the profile (`UpgradePolicy`) still wants better versions of; `UpgradeAssessors` is the registry. Other types have none, so their installed targets leave the queue.
+- `IUpgradeAssessor` per media type (`VideoUpgradeAssessor` for Movie and each episode, `MusicUpgradeAssessor` for an album, `BookUpgradeAssessor` for the best file format of a Book) tells which held targets the profile (`UpgradePolicy`) still wants better versions of; `UpgradeAssessors` is the registry. Other types have none, so their installed targets leave the queue.
 - `WantedReconciler.ReconcileAsync(workId)` runs the SQL reconcile (held rows of assessed types are kept, missing ones queued) and then `SyncUpgrades` with the assessor's answer; the full run skips the assessment.
-- `UpgradeWantedSource` (Movie, Tv, Music, bounded page, cursor in `UpgradeScanState`): reconciles the held Works of a page and continues the Completed request of a Work that has rows in one conditional write (search state and status together; tried releases stay remembered). The scan runs hourly, at the next pass while the library is unfinished, and starts over at once when the profile file changed. `WorksWithoutOpenRequest` lists Works that miss something and held Works that were never requested (opened by the Video/Request sources), so an upgrade never opens a second request.
-- Not defined yet: upgrades of Book, Light Novel, Manga (no installed quality or replace rule), Anime and Audiobook (not on this queue).
+- `UpgradeWantedSource` (Movie, Tv, Music, Book, bounded page, cursor in `UpgradeScanState`): reconciles the held Works of a page and continues the Completed request of a Work that has rows in one conditional write (search state and status together; tried releases stay remembered). The scan runs hourly, at the next pass while the library is unfinished, and starts over at once when the profile file changed. `WorksWithoutOpenRequest` lists Works that miss something and held Works that were never requested (opened by the Video/Request sources), so an upgrade never opens a second request.
+- Not defined yet: upgrades of Light Novel and Manga (no installed quality rule), Anime (its own AniList slot inventory, see the Core CODEMAP) and Audiobook (no target identity for an edition that does not exist yet).
 
 Flow
 monitoring decisions + relation sources -> `WantedReconciler.ReconcileAsync(workId?)` -> `WantedItems`

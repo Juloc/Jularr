@@ -9,6 +9,7 @@ using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Data;
 
 namespace Jularr.Web.Features.Books;
 
@@ -32,6 +33,8 @@ public sealed class BookAcquisitionExecutor(
     DownloadClientStore downloadClients,
     AcquisitionCore core,
     QualityProfileStore profiles,
+    ReleaseRequestTracker tracker,
+    AppDbContext db,
     RequestWorkBinder? binder = null) : IAcquisitionRequestExecutor
 {
     /// <summary>Operation kind of a request-backed Books download.</summary>
@@ -55,6 +58,29 @@ public sealed class BookAcquisitionExecutor(
             return new AcquisitionExecution(
                 AcquisitionRequestStatus.Failed,
                 $"No direct/free or OPDS edition is available{(problems.Length == 0 ? string.Empty : $" ({problems})")} and no indexer or download client is configured.");
+        }
+
+        // A Book that is in the library is only searched again while its profile wants a better format, and then only a better one is taken.
+        if (request.WorkId is { } workId && await BookInstalledQuality.BestAsync(db, profile, workId, cancellationToken) is { } installed)
+        {
+            if (!UpgradePolicy.Assess(profile, installed).IsUpgradable)
+            {
+                return new AcquisitionExecution(AcquisitionRequestStatus.Completed, $"The book is in the library as {installed}.", ResultUrl: $"/Books/Library/{workId}");
+            }
+
+            var better = grabbable.Where(release => release.Score is { } score && UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey)).ToArray();
+            var waiting = await tracker.WaitForUpgradeAsync(
+                request,
+                payload,
+                [.. better.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))],
+                $"The book is in the library as {installed} and no better release is known yet.",
+                cancellationToken);
+            if (waiting is not null)
+            {
+                return waiting;
+            }
+
+            grabbable = better;
         }
 
         return await core.GrabAsync(

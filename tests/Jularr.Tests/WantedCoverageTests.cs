@@ -1,4 +1,6 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.MediaCore;
@@ -64,6 +66,32 @@ public sealed class WantedCoverageTests
         await db.SaveChangesAsync();
 
         Assert.IsFalse(await IsWantedAsync(db, work));
+    }
+
+    [TestMethod]
+    public async Task Book_AnInstalledPdfIsQueuedAsAnUpgradeUntilTheProfileIsSatisfied()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var work = await MonitoredWorkAsync(db, WorkMediaType.Book);
+        var novel = new NovelWork { SourceProvider = "upload", SourceKey = "dune", SourceUrl = "u", Title = "Dune" };
+        db.NovelWorks.Add(novel);
+        await db.SaveChangesAsync();
+        var edition = new BookEdition { WorkId = novel.Id, EditionKey = "e1" };
+        db.BookEditions.Add(edition);
+        await db.SaveChangesAsync();
+        await LinkAsync(db, work, WorkSourceKind.BookEdition, edition.Id);
+        db.BookFiles.Add(new BookFile { EditionId = edition.Id, FileKey = "f1", FileName = "dune.pdf", Format = BookFileFormats.Pdf });
+        await db.SaveChangesAsync();
+        var profiles = new QualityProfileStore(new DirectoryInfo(Path.Combine(Path.GetTempPath(), "jularr-book-upgrade-" + Guid.NewGuid().ToString("N"))), new MediaAcquisitionRegistry([new BookAcquisitionRegistration()]));
+        var reconciler = new WantedReconciler(db, TimeProvider.System, null, new UpgradeAssessors([new BookUpgradeAssessor(db, profiles)]));
+
+        await reconciler.ReconcileAsync(work.Id, CancellationToken.None);
+        Assert.IsTrue(await db.WantedItems.AnyAsync(item => item.WorkId == work.Id), "A PDF is below the EPUB cutoff of the default Book profile.");
+
+        db.BookFiles.Add(new BookFile { EditionId = edition.Id, FileKey = "f2", FileName = "dune.epub", Format = BookFileFormats.Epub });
+        await db.SaveChangesAsync();
+        await reconciler.ReconcileAsync(work.Id, CancellationToken.None);
+        Assert.IsFalse(await db.WantedItems.AnyAsync(item => item.WorkId == work.Id), "With an EPUB next to it the Book is final.");
     }
 
     [TestMethod]
