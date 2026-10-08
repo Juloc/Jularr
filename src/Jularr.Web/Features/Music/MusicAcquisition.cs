@@ -212,7 +212,7 @@ public sealed class MusicAcquisitionEngine(
         }
 
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId.Value, cancellationToken);
-        var evaluation = await SearchAsync(request.CreatedAt, payload, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
+        var evaluation = await SearchAsync(payload, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
         if (installedQuality is null)
         {
             return await GrabAsync(request, payload, evaluation.Grabbable, FailureMessage(evaluation), cancellationToken, searchUnavailable: evaluation.Search.EveryIndexerFailed);
@@ -258,7 +258,7 @@ public sealed class MusicAcquisitionEngine(
         return execution with { ResultUrl = MusicLinks.AlbumPath(payload.WorkId) };
     }
 
-    public Task<SearchEvaluation<MusicJudgement>> SearchAsync(DateTime wantedSinceUtc, MusicRequestPayload payload, QualityProfile profile, SearchOptions options, CancellationToken cancellationToken)
+    public Task<SearchEvaluation<MusicJudgement>> SearchAsync(MusicRequestPayload payload, QualityProfile profile, SearchOptions options, CancellationToken cancellationToken)
     {
         var parser = registry.ParserFor(MediaAcquisitionKind.Music);
         var plan = new MediaSearchPlan<MusicJudgement>(
@@ -267,8 +267,7 @@ public sealed class MusicAcquisitionEngine(
             {
                 var judgement = MusicReleaseJudge.Judge(parser, payload.Artist, payload.Album, payload.Year, release);
                 return new ReleaseJudgement<MusicJudgement>(judgement, judgement.Parsed, judgement.Evidence, SelectionCoverage.Single, judgement.SafetyRejection);
-            },
-            wantedSinceUtc);
+            });
         return core.SearchAsync(plan, profile, options, cancellationToken);
     }
 

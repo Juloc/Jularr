@@ -1041,10 +1041,8 @@ public sealed class AnimeAcquisitionPipeline(
             release => release.Identity,
             release => Judge(release, aliases, wanted, primary, state, snapshot, now),
             StringComparer.OrdinalIgnoreCase);
-        var wantedSince = (primary is not null ? wanted.FirstOrDefault(item => item.Key == primary) : wanted.OrderBy(item => item.BecameWantedAtUtc).FirstOrDefault())?.BecameWantedAtUtc ?? now;
         var selection = ReleaseSelectionEngine.Select(
             target.Profile,
-            new SelectionContext(now, wantedSince),
             [.. judged.Values.Select(item => item.Candidate)],
             reliability);
 
@@ -1141,11 +1139,6 @@ public sealed class AnimeAcquisitionPipeline(
             if (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict)
             {
                 return new(false, evaluation.Candidate.Identity.Detail, score);
-            }
-
-            if (evaluation.Reasons.FirstOrDefault(reason => reason.Code == "WaitingForFallbackTier") is { } waiting)
-            {
-                return new(false, waiting.Detail, score);
             }
 
             return new(false, "Candidate is rejected by the assigned quality profile.", score);

@@ -36,8 +36,6 @@ public enum ManualSearchReasonCode
     NoDownload,
     ProfileRejected,
     LowerQuality,
-    FallbackTier,
-    WaitingForFallbackTier,
     AlreadyTried
 }
 

@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Jularr.Tests;
 
 /// <summary>
-/// The rest of the one Acquisition Profile policy (#396): a good enough release skips the wait for its fallback tier, a source is a rule like any other
+/// The rest of the one Acquisition Profile policy: a preference never repairs a gate or an identity, a source is a rule like any other
 /// (penalty, preference, reject on the indexer), and a fallback-only indexer is asked only when the others found nothing.
 /// </summary>
 [TestClass]
@@ -19,51 +19,28 @@ public sealed class ProfileGrabAndSourcePolicyTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 8, 12, 0, 0, TimeSpan.Zero);
 
-    private static QualityProfile LadderProfile() => VideoQualityProfiles.CreateDefaultTv1080p() with
+    private static QualityProfile PreferringProfile() => VideoQualityProfiles.CreateDefaultTv1080p() with
     {
-        AllowedQualities = ["WEB-1080p"],
-        FallbackTiers = [new FallbackTier(120, ["WEB-720p"])],
+        AllowedQualities = ["WEB-1080p", "WEB-720p"],
         ScoreRules = [new("Trusted group", ReleaseRuleField.ReleaseGroup, ReleaseRuleMatch.Equals, "GRP", 50)]
     };
 
     private static SelectionCandidate Candidate(string id, string title, string indexer = "Indexer") =>
         new(id, ReleaseParser.Parse(title), 2_000_000_000, indexer, 0, Now.AddDays(-1), ReleaseIdentityEvidence.Strong("Matches", "ok"), SelectionCoverage.Single);
 
-    private static SelectionResult SelectAfter(QualityProfile profile, TimeSpan waited, params SelectionCandidate[] candidates) =>
-        ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now - waited), candidates);
-
     [TestMethod]
-    public void AReleaseOfAWaitingTierIsTakenAtOnceOnlyWhenItsScoreReachesTheThreshold()
+    public void AHighPreferenceNeverRepairsARejectRuleOrAWrongIdentity()
     {
-        var profile = LadderProfile() with { GrabImmediatelyScore = 40 };
-        var trusted = Candidate("trusted", "Show.S01E01.720p.WEB-DL.H264-GRP");
-        var other = Candidate("other", "Show.S01E01.720p.WEB-DL.H264-OTHER");
-
-        var good = SelectAfter(profile, TimeSpan.FromMinutes(10), trusted);
-        var plain = SelectAfter(profile, TimeSpan.FromMinutes(10), other);
-        var withoutThreshold = SelectAfter(LadderProfile(), TimeSpan.FromMinutes(10), trusted);
-
-        Assert.AreEqual("trusted", good.Winner!.Candidate.Id);
-        Assert.AreEqual(SelectionDecision.Temporary, good.Winner.Decision, "It is a fallback release, so the target stays wanted for an upgrade.");
-        Assert.IsTrue(good.Winner.Reasons.Any(reason => reason.Code == "GrabImmediately"));
-        Assert.IsNull(plain.Winner, "A score below the threshold waits for the fallback tier like before.");
-        Assert.IsNull(withoutThreshold.Winner, "Without a threshold nothing changes.");
-    }
-
-    [TestMethod]
-    public void TheGrabAtOnceNeverRelaxesAGateOrAnIdentity()
-    {
-        var profile = LadderProfile() with
+        var profile = PreferringProfile() with
         {
-            GrabImmediatelyScore = 40,
-            ScoreRules = [.. LadderProfile().ScoreRules, new("No bad group", ReleaseRuleField.ReleaseGroup, ReleaseRuleMatch.Equals, "BAD", 0) { Effect = ReleaseRuleEffect.Reject }, new("Bad bonus", ReleaseRuleField.ReleaseGroup, ReleaseRuleMatch.Equals, "BAD", 500)]
+            ScoreRules = [.. PreferringProfile().ScoreRules, new("No bad group", ReleaseRuleField.ReleaseGroup, ReleaseRuleMatch.Equals, "BAD", 0) { Effect = ReleaseRuleEffect.Reject }, new("Bad bonus", ReleaseRuleField.ReleaseGroup, ReleaseRuleMatch.Equals, "BAD", 500)]
         };
         var rejected = Candidate("bad", "Show.S01E01.720p.WEB-DL.H264-BAD");
         var wrong = new SelectionCandidate("wrong", ReleaseParser.Parse("Show.S01E02.720p.WEB-DL.H264-GRP"), 2_000_000_000, "Indexer", 0, Now.AddDays(-1), ReleaseIdentityEvidence.Conflict("WrongEpisode", "Another episode."), SelectionCoverage.Single);
 
-        var result = SelectAfter(profile, TimeSpan.FromMinutes(10), rejected, wrong);
+        var result = ReleaseSelectionEngine.Select(profile, [rejected, wrong]);
 
-        Assert.IsNull(result.Winner, "A reject rule and a wrong identity are not repaired by a high score.");
+        Assert.IsNull(result.Winner, "A reject rule and a wrong identity are not repaired by a high preference.");
     }
 
     [TestMethod]
@@ -72,7 +49,6 @@ public sealed class ProfileGrabAndSourcePolicyTests
         var release = ReleaseParser.Parse("Show.S01E01.1080p.WEB-DL.H264-GRP");
         var profile = VideoQualityProfiles.CreateDefaultTv1080p() with
         {
-            MinimumScore = -100,
             ScoreRules =
             [
                 new("Slow indexer", ReleaseRuleField.Indexer, ReleaseRuleMatch.Equals, "Slow", -30),
@@ -129,14 +105,13 @@ public sealed class ProfileGrabAndSourcePolicyTests
     }
 
     [TestMethod]
-    public void TheGrabThresholdAndTheFallbackOnlySourcesSurviveEditingAndAFallbackSourceOutsideTheAllowedListIsNotKept()
+    public void TheFallbackOnlySourcesSurviveEditingAndAFallbackSourceOutsideTheAllowedListIsNotKept()
     {
         var a = Guid.NewGuid();
         var b = Guid.NewGuid();
         var stranger = Guid.NewGuid();
-        var form = QualityProfileEditing.ToForm(LadderProfile());
+        var form = QualityProfileEditing.ToForm(PreferringProfile());
         form.Id = "ladder";
-        form.GrabImmediatelyScore = "40";
         form.AllowedSources = [a, b];
         form.FallbackOnlySources = [b, stranger];
 
@@ -144,11 +119,8 @@ public sealed class ProfileGrabAndSourcePolicyTests
         var again = QualityProfileEditing.ToForm(parsed.Profile!);
 
         Assert.AreEqual(0, parsed.Errors.Count);
-        Assert.AreEqual(40, parsed.Profile!.GrabImmediatelyScore);
-        CollectionAssert.AreEqual(new[] { b }, parsed.Profile.SourcePolicy.FallbackOnlyEntryIds);
-        Assert.AreEqual("40", again.GrabImmediatelyScore);
-        form.GrabImmediatelyScore = "many";
-        Assert.IsTrue(QualityProfileEditing.Parse(form).Errors.Any(error => error.Field == nameof(QualityProfileForm.GrabImmediatelyScore) && error.Code == "number"));
+        CollectionAssert.AreEqual(new[] { b }, parsed.Profile!.SourcePolicy.FallbackOnlyEntryIds);
+        CollectionAssert.AreEqual(new[] { b }, again.FallbackOnlySources);
     }
 
     private static IndexerEntry NewEntry(string name, int priority) =>

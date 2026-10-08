@@ -212,11 +212,6 @@ public sealed partial class VideoManualSearchService(
             reasons.Add(new ManualSearchReason(ManualSearchReasonCode.LowerQuality, evaluation.Score!.QualityKey));
         }
 
-        // The engine's own findings beyond identity and the profile rules (a fallback tier that is active or still waiting) are shown as they are.
-        reasons.AddRange(evaluation.Selection.Reasons
-            .Where(reason => reason.Kind == SelectionReasonKind.Fallback)
-            .Select(reason => new ManualSearchReason(reason.Code == "FallbackTier" ? ManualSearchReasonCode.FallbackTier : ManualSearchReasonCode.WaitingForFallbackTier, reason.Detail)));
-
         if (isTried)
         {
             reasons.Add(new ManualSearchReason(ManualSearchReasonCode.AlreadyTried));
@@ -224,7 +219,7 @@ public sealed partial class VideoManualSearchService(
 
         var verdict = !evaluation.IsManuallyGrabbable
             ? ManualSearchVerdict.Rejected
-            : lowerQuality || evaluation.Selection.Decision is SelectionDecision.Temporary or SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
+            : lowerQuality || evaluation.Selection.Decision == SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
         return new ManualSearchCandidate(
             candidate.Identity,
             candidate.Title,

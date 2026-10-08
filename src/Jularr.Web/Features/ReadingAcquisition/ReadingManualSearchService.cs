@@ -84,7 +84,7 @@ public sealed class ReadingManualSearchService(
         var payload = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request));
         var profile = await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
         var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh };
-        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(ReadingAcquisitionEngine.ToTarget(request.Kind, payload), request.CreatedAt), profile, options, cancellationToken);
+        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(ReadingAcquisitionEngine.ToTarget(request.Kind, payload)), profile, options, cancellationToken);
         var target = await TargetOfAsync(request, cancellationToken);
         var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
         var candidates = search.Releases.Select(evaluation => ToCandidate(evaluation, tried, target.CanSearch)).ToArray();
@@ -108,7 +108,7 @@ public sealed class ReadingManualSearchService(
 
         var profile = await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
         var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true };
-        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(ReadingAcquisitionEngine.ToTarget(request.Kind, payload), request.CreatedAt), profile, options, cancellationToken);
+        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(ReadingAcquisitionEngine.ToTarget(request.Kind, payload)), profile, options, cancellationToken);
         var selected = search.Releases.FirstOrDefault(evaluation => evaluation.Candidate.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
         if (selected is null || !selected.IsGrabbable)
         {
@@ -148,7 +148,7 @@ public sealed class ReadingManualSearchService(
         var isTried = tried.Contains(release.Identity);
         var verdict = !isSelectable
             ? ManualSearchVerdict.Rejected
-            : selection.Decision == SelectionDecision.Temporary ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
+            : ManualSearchVerdict.Eligible;
         var parsed = evaluation.Match;
         var chapters = parsed.ChapterStart is { } start
             ? parsed.ChapterEnd is { } end && end != start ? $"{start:0.##}-{end:0.##}" : $"{start:0.##}"

@@ -69,7 +69,7 @@ public sealed class ReadingAcquisitionEngine(
         }
 
         var profile = profiles is null ? ReadingQualityProfiles.For(request.Kind) : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
-        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(target, request.CreatedAt), profile, new SearchOptions(), cancellationToken);
+        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(target), profile, new SearchOptions(), cancellationToken);
         return await GrabAsync(request, payload, search.Grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);
     }
 

@@ -37,15 +37,13 @@ public sealed class ManagerAdminPagesRenderTests
         Assert.AreEqual("BLURAY-1080p", (await store.ResolveAsync(MediaAcquisitionKind.Movie, null)).UpgradeCutoffQuality, "The saved cutoff is what the engine resolves next.");
 
         form.Rules.Add(new ScoreRuleRow { Effect = "Reject", Field = "ReleaseGroup", Match = "Equals", Value = "BAD" });
-        form.Tiers.Add(new FallbackTierRow { Minutes = "120", Qualities = [form.QualityOrder[^1]] });
         Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Save", FormFields(form)));
         var stored = await store.ResolveAsync(MediaAcquisitionKind.Movie, null);
         Assert.AreEqual(ReleaseRuleEffect.Reject, stored.ScoreRules.Single(rule => rule.Value == "BAD").EffectiveEffect, "A rule row the owner added is stored with its effect.");
-        Assert.AreEqual(120, stored.FallbackTiers.Single().AfterMinutes);
 
         // Wait & sources: the section lists the configured indexers, a saved allow list is the profile's source policy and the test explains a release.
         var entry = (await video.Get<Jularr.Web.Features.Acquisition.Indexers.IndexerStore>().LoadAllAsync()).Single();
-        StringAssert.Contains(html, "Wait & sources");
+        StringAssert.Contains(html, "Sources");
         StringAssert.Contains(html, entry.Name);
         form.AllowedSources = [entry.Id];
         form.PreferredSources = [entry.Id];
@@ -53,7 +51,7 @@ public sealed class ManagerAdminPagesRenderTests
         var restricted = (await store.ResolveAsync(MediaAcquisitionKind.Movie, null)).SourcePolicy;
         CollectionAssert.AreEqual(new[] { entry.Id }, restricted.AllowedEntryIds);
         CollectionAssert.AreEqual(new[] { entry.Id }, restricted.PreferredEntryIds);
-        var tested = await host.PostHtmlAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Test", [.. FormFields(form), new("testTitle", "Dune.2021.720p.WEB-DL.x264-GROUP"), new("testSource", Guid.NewGuid().ToString()), new("testWantedMinutes", "0")]);
+        var tested = await host.PostHtmlAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Test", [.. FormFields(form), new("testTitle", "Dune.2021.720p.WEB-DL.x264-GROUP"), new("testSource", Guid.NewGuid().ToString())]);
         StringAssert.Contains(tested, "data-profile-test-result");
         StringAssert.Contains(tested, "Would not be found: the profile does not search this indexer.");
         form.AllowedSources = [];
@@ -61,7 +59,7 @@ public sealed class ManagerAdminPagesRenderTests
         Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Save", FormFields(form)));
         Assert.IsFalse((await store.ResolveAsync(MediaAcquisitionKind.Movie, null)).SourcePolicy.IsRestricted);
 
-        form.Rules = [new ScoreRuleRow { Effect = "Prefer", Field = "NoSuchField", Match = "Equals", Value = "x", Score = "5", Name = "broken" }];
+        form.Rules = [new ScoreRuleRow { Effect = "Prefer", Field = "NoSuchField", Match = "Equals", Value = "x", Name = "broken" }];
         var rejected = await host.PostAsync("/Admin/AcquisitionProfiles", "/Admin/AcquisitionProfiles?handler=Save", FormFields(form));
         Assert.AreEqual(HttpStatusCode.OK, rejected, "An invalid rule is explained on the page, not stored.");
         Assert.AreEqual(0, (await store.ResolveAsync(MediaAcquisitionKind.Movie, null)).ScoreRules.Count(rule => rule.Name == "Rule 1"));
@@ -155,9 +153,6 @@ public sealed class ManagerAdminPagesRenderTests
             new("UpgradeAllowed", form.UpgradeAllowed ? "true" : "false"),
             new("UpgradeCutoffQuality", form.UpgradeCutoffQuality ?? ""),
             new("UpgradeMinimumQualitySteps", form.UpgradeMinimumQualitySteps ?? ""),
-            new("UpgradeMinimumScoreDelta", form.UpgradeMinimumScoreDelta ?? ""),
-            new("UpgradeUntilScore", form.UpgradeUntilScore ?? ""),
-            new("MinimumScore", form.MinimumScore ?? ""),
             new("MinimumSizeMegabytes", form.MinimumSizeMegabytes ?? ""),
             new("MaximumSizeMegabytes", form.MaximumSizeMegabytes ?? ""),
             new("MustContain", form.MustContain),
@@ -172,14 +167,7 @@ public sealed class ManagerAdminPagesRenderTests
         for (var index = 0; index < form.Rules.Count; index++)
         {
             var rule = form.Rules[index];
-            fields.AddRange([new("Rules.Index", index.ToString()), new($"Rules[{index}].Effect", rule.Effect ?? ""), new($"Rules[{index}].Field", rule.Field ?? ""), new($"Rules[{index}].Match", rule.Match ?? ""), new($"Rules[{index}].Value", rule.Value ?? ""), new($"Rules[{index}].Score", rule.Score ?? ""), new($"Rules[{index}].Name", rule.Name ?? "")]);
-        }
-
-        for (var index = 0; index < form.Tiers.Count; index++)
-        {
-            fields.Add(new("Tiers.Index", index.ToString()));
-            fields.Add(new($"Tiers[{index}].Minutes", form.Tiers[index].Minutes ?? ""));
-            fields.AddRange(form.Tiers[index].Qualities.Select(quality => new KeyValuePair<string, string>($"Tiers[{index}].Qualities", quality)));
+            fields.AddRange([new("Rules.Index", index.ToString()), new($"Rules[{index}].Effect", rule.Effect ?? ""), new($"Rules[{index}].Field", rule.Field ?? ""), new($"Rules[{index}].Match", rule.Match ?? ""), new($"Rules[{index}].Value", rule.Value ?? ""), new($"Rules[{index}].Name", rule.Name ?? "")]);
         }
 
         return fields;

@@ -47,7 +47,6 @@ public sealed class AnimeReleaseScoringTests
     {
         var profile = AnimeQualityProfiles.CreateDefaultAnime1080p() with
         {
-            MinimumScore = 40,
             MustContain = ["WEB-DL"],
             MustNotContain = ["CAM"],
             RequiredRegex = [@"\b1080p\b"],
@@ -84,23 +83,6 @@ public sealed class AnimeReleaseScoringTests
         CollectionAssert.AreEqual(
             new[] { "Preferred group: +20", "German audio: +25", "HEVC: +5" },
             result.ScoreReasons.ToArray());
-    }
-
-    [TestMethod]
-    public void MinimumScoreRejectsOtherwiseValidRelease()
-    {
-        var profile = AnimeQualityProfiles.CreateDefaultAnime1080p() with
-        {
-            MinimumScore = 10,
-            ScoreRules = []
-        };
-        var release = AnimeReleaseParser.Parse(
-            "[Group] Anime - 01 WEB-DL 1080p AVC AAC");
-
-        var result = AnimeReleaseScorer.Score(profile, new AnimeReleaseCandidate(release));
-
-        Assert.IsFalse(result.Accepted);
-        Assert.IsTrue(result.RejectionReasons.Any(reason => reason.Contains("below minimum", StringComparison.OrdinalIgnoreCase)));
     }
 
     [TestMethod]
@@ -147,25 +129,6 @@ public sealed class AnimeReleaseScoringTests
     }
 
     [TestMethod]
-    public void SameQualityCanUpgradeByScoreBeforeCutoff()
-    {
-        var profile = AnimeQualityProfiles.CreateDefaultAnime1080p() with
-        {
-            UpgradeCutoffQuality = "WEB-1080p"
-        };
-        var current = AnimeReleaseScorer.Score(
-            profile,
-            new AnimeReleaseCandidate(
-                AnimeReleaseParser.Parse("[A] Anime - 01 WEB-DL 720p AVC AAC")));
-        var candidate = AnimeReleaseScorer.Score(
-            profile,
-            new AnimeReleaseCandidate(
-                AnimeReleaseParser.Parse("[B] Anime - 01 WEB-DL 720p AVC AAC Proper")));
-
-        Assert.IsTrue(AnimeReleaseScorer.IsUpgrade(profile, current, candidate));
-    }
-
-    [TestMethod]
     public async Task StorePersistsNamedProfileAndPerAnimeAssignment()
     {
         var directory = CreateTemporaryDirectory();
@@ -176,7 +139,6 @@ public sealed class AnimeReleaseScoringTests
             {
                 Id = "german-dual",
                 Name = "German Dual Audio",
-                MinimumScore = 25,
                 ScoreRules =
                 [
                     new(
@@ -196,7 +158,7 @@ public sealed class AnimeReleaseScoringTests
             var resolved = await reloaded.ResolveAsync(animeId);
 
             Assert.AreEqual("german-dual", resolved.Id);
-            Assert.AreEqual(25, resolved.MinimumScore);
+            Assert.AreEqual(1, resolved.ScoreRules.Length);
         }
         finally
         {

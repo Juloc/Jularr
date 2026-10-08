@@ -121,11 +121,6 @@ public static class ReleaseScorer
             }
         }
 
-        if (score < profile.MinimumScore)
-        {
-            rejections.Add($"Score {score} is below minimum {profile.MinimumScore}.");
-        }
-
         return new ReleaseScoreResult(
             candidate,
             Accepted: rejections.Count == 0,
@@ -161,7 +156,7 @@ public static class ReleaseScorer
         ArgumentNullException.ThrowIfNull(candidate);
 
         return candidate.Accepted
-            && Selection.UpgradePolicy.IsUpgrade(profile, current.QualityKey, candidate.QualityKey, current.Score, candidate.Score, upgradeUnknownInstalled: true);
+            && Selection.UpgradePolicy.IsUpgrade(profile, current.QualityKey, candidate.QualityKey, upgradeUnknownInstalled: true);
     }
 
     public static IReadOnlyList<string> ValidateProfile(QualityProfile profile)
@@ -233,27 +228,9 @@ public static class ReleaseScorer
             ValidateRegex(pattern, errors);
         }
 
-        var previousWait = -1;
-        foreach (var tier in profile.FallbackTiers ?? [])
+        if (profile.UpgradeMinimumQualitySteps < 1)
         {
-            if (tier.AfterMinutes <= previousWait)
-            {
-                errors.Add("Fallback tiers must wait longer than the tier before them.");
-            }
-
-            previousWait = tier.AfterMinutes;
-            foreach (var added in tier.AddedQualities ?? [])
-            {
-                if (!profile.QualityOrder.Contains(added, StringComparer.OrdinalIgnoreCase))
-                {
-                    errors.Add($"Fallback quality '{added}' is missing from quality order.");
-                }
-            }
-        }
-
-        if (profile.UpgradeMinimumScoreDelta < 1 || profile.UpgradeMinimumQualitySteps < 1)
-        {
-            errors.Add("Upgrade benefit thresholds must be at least 1.");
+            errors.Add("The upgrade quality steps must be at least 1.");
         }
 
         foreach (var rule in profile.ScoreRules)

@@ -55,8 +55,7 @@ public sealed class MusicManualSearchService(
         var open = await requests.FindOpenAsync(MediaAcquisitionKind.Music, ProviderKeys.MusicBrainz, album.GroupId, cancellationToken);
         var payload = open is null ? album.Payload : MusicRequestPayload.Of(open) with { WorkId = workId };
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId, cancellationToken);
-        var wantedSince = open?.CreatedAt ?? clock.GetUtcNow().UtcDateTime;
-        var evaluation = await engine.SearchAsync(wantedSince, payload, profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, cancellationToken);
+        var evaluation = await engine.SearchAsync(payload, profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, cancellationToken);
         var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
         var candidates = evaluation.Releases.Select(release => ToCandidate(release, tried)).ToArray();
         return new MusicManualSearchResult(
@@ -111,7 +110,7 @@ public sealed class MusicManualSearchService(
         }
 
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId, cancellationToken);
-        var evaluation = await engine.SearchAsync(request.CreatedAt, payload, profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true }, cancellationToken);
+        var evaluation = await engine.SearchAsync(payload, profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true }, cancellationToken);
         var selected = evaluation.Releases.FirstOrDefault(release => release.Candidate.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
         if (selected is null || !selected.IsManuallyGrabbable)
         {
@@ -155,10 +154,9 @@ public sealed class MusicManualSearchService(
         var candidate = evaluation.Candidate;
         var selection = evaluation.Selection;
         var isTried = tried.Contains(candidate.Identity);
-        var lower = evaluation.IsGrabbable && selection.Decision == SelectionDecision.Temporary;
         var verdict = !evaluation.IsManuallyGrabbable
             ? ManualSearchVerdict.Rejected
-            : lower || selection.Decision == SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
+            : selection.Decision == SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
         return new MusicManualCandidate(
             candidate.Identity,
             candidate.Title,

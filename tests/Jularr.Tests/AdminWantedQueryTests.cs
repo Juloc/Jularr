@@ -16,8 +16,8 @@ public sealed class AdminWantedQueryTests
     private static readonly QualityProfileState Profiles = new(
         QualityProfileState.CurrentVersion,
         [
-            new QualityProfile("default-anime", "Anime 1080p", [], [], false, null, 0, null, null, [], [], [], [], []),
-            new QualityProfile("remux", "Remux", [], [], false, null, 0, null, null, [], [], [], [], [])
+            new QualityProfile("default-anime", "Anime 1080p", [], [], false, null, null, null, [], [], [], [], []),
+            new QualityProfile("remux", "Remux", [], [], false, null, null, null, [], [], [], [], [])
         ],
         new Dictionary<string, string> { ["anime"] = "default-anime" },
         new Dictionary<string, string>());

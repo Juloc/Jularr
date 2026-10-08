@@ -29,7 +29,6 @@ public static class AudiobookQualityProfiles
             ],
             UpgradeAllowed: true,
             UpgradeCutoffQuality: "M4B",
-            MinimumScore: 0,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,
             MustContain: [],

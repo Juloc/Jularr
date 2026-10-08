@@ -210,7 +210,7 @@ public sealed class UsenetModel(
         }
 
         var reading = await core.SearchAsync(
-            ReadingReleaseJudge.Plan(new ReadingAcquisitionTarget(kind, title.Trim(), [], string.IsNullOrWhiteSpace(author) ? null : author.Trim()), DateTime.UtcNow),
+            ReadingReleaseJudge.Plan(new ReadingAcquisitionTarget(kind, title.Trim(), [], string.IsNullOrWhiteSpace(author) ? null : author.Trim())),
             ReadingQualityProfiles.For(kind),
             new SearchOptions { Purpose = SearchPurpose.Interactive },
             cancellationToken);

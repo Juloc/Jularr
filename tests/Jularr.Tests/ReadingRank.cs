@@ -10,11 +10,10 @@ internal sealed record RankedReading(ProwlarrReleaseCandidate Release, ReadingRe
 // Ranks Manga and Light Novel releases the way the acquisition core does, without an indexer search.
 internal static class ReadingRank
 {
-    public static IReadOnlyList<RankedReading> Rank(IReadOnlyList<ProwlarrReleaseCandidate> releases, ReadingAcquisitionTarget target, QualityProfile? profile = null, DateTimeOffset? wantedSince = null)
+    public static IReadOnlyList<RankedReading> Rank(IReadOnlyList<ProwlarrReleaseCandidate> releases, ReadingAcquisitionTarget target, QualityProfile? profile = null)
     {
-        var now = DateTimeOffset.UtcNow;
-        var (_, evaluations) = new ReleaseRanker(TimeProvider.System)
-            .RankAsync(releases, release => ReadingReleaseJudge.Judge(release, target), profile ?? ReadingQualityProfiles.For(target.Kind), (wantedSince ?? now).UtcDateTime, CancellationToken.None)
+        var (_, evaluations) = new ReleaseRanker()
+            .RankAsync(releases, release => ReadingReleaseJudge.Judge(release, target), profile ?? ReadingQualityProfiles.For(target.Kind), CancellationToken.None)
             .GetAwaiter()
             .GetResult();
         return [.. evaluations.Select(evaluation => new RankedReading(evaluation.Candidate, evaluation.Match, ReadingReleaseJudge.DisplayScore(evaluation), ReadingReleaseJudge.RejectedBecause(evaluation)))];

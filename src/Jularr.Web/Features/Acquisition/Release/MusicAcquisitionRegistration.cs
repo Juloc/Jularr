@@ -103,9 +103,8 @@ public sealed partial class MusicReleaseParser : IReleaseParser
 }
 
 /// <summary>
-/// Seed Music profile for the shared acquisition engine. Lossless and the two high-quality MP3 encodings are accepted straight away;
-/// lossy releases of lower quality become acceptable through explicit fallback tiers and the album then stays wanted for an upgrade.
-/// A release without a declared format is the last tier because the importer validates the actual files.
+/// Seed Music profile for the shared acquisition engine. Lossless and every lossy encoding are accepted at once, ordered from lossless down, and the album stays wanted for an
+/// upgrade up to lossless. A release without a declared format is last in the order because the importer validates the actual files.
 /// </summary>
 public static class MusicQualityProfiles
 {
@@ -115,11 +114,10 @@ public static class MusicQualityProfiles
         new(
             DefaultMusicId,
             "Music",
-            ["FLAC", "MP3-320", "MP3-V0"],
+            ["FLAC", "MP3-320", "MP3-V0", "MP3-256", "AAC", "MP3", "UNKNOWN-UNKNOWN"],
             ["FLAC", "MP3-320", "MP3-V0", "MP3-256", "AAC", "MP3", "UNKNOWN-UNKNOWN"],
             UpgradeAllowed: true,
             UpgradeCutoffQuality: "FLAC",
-            MinimumScore: 0,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,
             MustContain: [],
@@ -130,14 +128,7 @@ public static class MusicQualityProfiles
             [
                 new("Prefer retail", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "retail", 2),
                 new("Prefer CD source", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Regex, @"(?<![A-Za-z0-9])CD(?:DA)?(?![A-Za-z0-9])", 2)
-            ])
-        {
-            FallbackTiers =
-            [
-                new FallbackTier(360, ["MP3-256", "AAC"]),
-                new FallbackTier(1440, ["MP3", "UNKNOWN-UNKNOWN"])
-            ]
-        };
+            ]);
 }
 
 /// <summary>Music participates in the shared acquisition registry at whole-item (album) granularity.</summary>

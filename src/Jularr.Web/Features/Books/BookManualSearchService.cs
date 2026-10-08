@@ -58,7 +58,6 @@ public sealed class BookManualSearchService(
             target.Payload.Title,
             target.Payload.Author,
             cancellationToken,
-            SelectionContext.SinceCreated(target.Request.CreatedAt),
             target.Request.WorkId);
         SearchCache[requestId] = new SearchCacheEntry(
             now,
@@ -87,7 +86,6 @@ public sealed class BookManualSearchService(
             payload.Title,
             payload.Author,
             cancellationToken,
-            SelectionContext.SinceCreated(request.CreatedAt),
             request.WorkId);
         SearchCache.TryRemove(requestId, out _);
         var selected = SelectRelease(

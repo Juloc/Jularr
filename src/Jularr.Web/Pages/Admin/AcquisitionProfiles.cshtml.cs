@@ -24,13 +24,11 @@ public sealed record ProfileRuleRowView(ScoreRuleRow Row, string Index, IReadOnl
 public sealed record ProfileSourceRow(Guid Id, string Name, bool Enabled, bool Missing);
 
 /// <summary>What was typed into the profile test, kept so the result page shows it again.</summary>
-public sealed record ProfileTestInput(string? Title, string? SizeMegabytes, Guid? Source, string? WantedMinutes);
-
-public sealed record ProfileTierRowView(FallbackTierRow Row, string Index, IReadOnlyList<string> Qualities, UiTextBundle Ui);
+public sealed record ProfileTestInput(string? Title, string? SizeMegabytes, Guid? Source);
 
 /// <summary>
 /// The one Admin editor of Acquisition Profiles, for every media type that has an acquisition kind: the profile list with where each is used,
-/// and the selected profile's quality order, upgrade policy, release rules, waiting steps and sources, with a test of one release name against the profile as edited. It edits the generic <see cref="QualityProfile"/>
+/// and the selected profile's quality order, upgrade policy, release rules and sources, with a test of one release name against the profile as edited. It edits the generic <see cref="QualityProfile"/>
 /// of the shared store; a media type only decides which profile is its default and which rule fields its releases carry.
 /// </summary>
 [Authorize(Policy = JularrPolicies.AcquisitionSettings)]
@@ -40,7 +38,7 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
 
     public ProfileTestResult? TestResult { get; private set; }
 
-    public ProfileTestInput TestInput { get; private set; } = new(null, null, null, "0");
+    public ProfileTestInput TestInput { get; private set; } = new(null, null, null);
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -111,7 +109,7 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
     }
 
     /// <summary>Runs one release name through the shared selection engine with the profile exactly as it is in the form, saving nothing.</summary>
-    public async Task<IActionResult> OnPostTestAsync(QualityProfileForm form, string? testTitle, string? testSizeMegabytes, Guid? testSource, string? testWantedMinutes, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostTestAsync(QualityProfileForm form, string? testTitle, string? testSizeMegabytes, Guid? testSource, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         await LoadAsync(form.Id, cancellationToken);
@@ -123,12 +121,11 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
         var result = QualityProfileEditing.Parse(form);
         Errors = result.Errors;
         Form = form;
-        TestInput = new ProfileTestInput(testTitle, testSizeMegabytes, testSource, testWantedMinutes);
+        TestInput = new ProfileTestInput(testTitle, testSizeMegabytes, testSource);
         if (result.Profile is { } profile && !string.IsNullOrWhiteSpace(testTitle))
         {
             long? size = long.TryParse(testSizeMegabytes, out var megabytes) && megabytes > 0 ? megabytes * 1024 * 1024 : null;
-            var minutes = int.TryParse(testWantedMinutes, out var waited) && waited >= 0 ? waited : 0;
-            TestResult = ProfileTest.Run(profile, registry.ParserFor(KindsOf(Selected)[0]), testTitle.Trim(), size, testSource, TimeSpan.FromMinutes(minutes), (clock ?? TimeProvider.System).GetUtcNow());
+            TestResult = ProfileTest.Run(profile, registry.ParserFor(KindsOf(Selected)[0]), testTitle.Trim(), size, testSource);
         }
 
         return Page();
@@ -189,14 +186,12 @@ public sealed class AcquisitionProfilesModel(AppDbContext db, QualityProfileStor
         return RedirectToPage(new { id });
     }
 
-    /// <summary>The verdict of a profile test in words: taken now, taken as a temporary choice, waiting until a time, or not taken.</summary>
+    /// <summary>The verdict of a profile test in words: taken now, left to a person, or not taken.</summary>
     public string TestVerdict(ProfileTestResult test) =>
-        test.EligibleAt is { } until ? Ui.Format("admin.profiles.test.waiting", ("time", until.ToString("u")))
-            : test.SourceProblem is not null ? Ui["admin.profiles.test.notFound"]
+        test.SourceProblem is not null ? Ui["admin.profiles.test.notFound"]
             : test.Decision switch
             {
                 SelectionDecision.Eligible => Ui["admin.profiles.test.grab"],
-                SelectionDecision.Temporary => Ui["admin.profiles.test.temporary"],
                 SelectionDecision.ManualReview => Ui["admin.profiles.test.manual"],
                 _ => Ui["admin.profiles.test.rejected"]
             };

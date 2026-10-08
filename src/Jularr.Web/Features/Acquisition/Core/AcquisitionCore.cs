@@ -35,16 +35,16 @@ public sealed record SearchEvaluation<TMatch>(QualityProfile Profile, Acquisitio
     public IReadOnlyList<ReleaseEvaluation<TMatch>> Grabbable => [.. Releases.Where(release => release.IsGrabbable)];
 }
 
-// What a media adapter hands the core to search one target: the query facts, its identity judge and when the target became wanted.
-public sealed record MediaSearchPlan<TMatch>(SearchIntent Intent, Func<ProwlarrReleaseCandidate, ReleaseJudgement<TMatch>> Judge, DateTime WantedSinceUtc);
+// What a media adapter hands the core to search one target: the query facts and its identity judge.
+public sealed record MediaSearchPlan<TMatch>(SearchIntent Intent, Func<ProwlarrReleaseCandidate, ReleaseJudgement<TMatch>> Judge);
 
 // How the winning release is queued in the download client and linked to its library target.
 public sealed record GrabTarget(string OperationKind, string OperationTitle, string DisplayTitle, MediaAcquisitionKind Kind, string MediaTargetKey, OperationPriority Priority = OperationPriority.Normal);
 
 // The one search, rank and grab path every media type runs; adapters only supply the plan and the grab target.
-public sealed class AcquisitionCore(IndexerSearchCoordinator indexers, ReleaseRequestTracker tracker, DownloadClientSubmissionService downloads, TimeProvider clock, ReleaseReliabilityService? reliability = null)
+public sealed class AcquisitionCore(IndexerSearchCoordinator indexers, ReleaseRequestTracker tracker, DownloadClientSubmissionService downloads, ReleaseReliabilityService? reliability = null)
 {
-    private readonly ReleaseRanker ranker = new(clock, reliability);
+    private readonly ReleaseRanker ranker = new(reliability);
 
     public async Task<SearchEvaluation<TMatch>> SearchAsync<TMatch>(MediaSearchPlan<TMatch> plan, QualityProfile profile, SearchOptions options, CancellationToken cancellationToken)
     {
@@ -53,7 +53,7 @@ public sealed class AcquisitionCore(IndexerSearchCoordinator indexers, ReleaseRe
             plan.Intent,
             options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => ReleaseRanker.Judged(judgements, plan.Judge, release) is { SafetyRejection: null, Evidence.Confidence: IdentityConfidence.Exact or IdentityConfidence.Strong }) },
             cancellationToken);
-        var (selection, evaluations) = await ranker.RankAsync(search.Releases, plan.Judge, profile, plan.WantedSinceUtc, cancellationToken, judgements);
+        var (selection, evaluations) = await ranker.RankAsync(search.Releases, plan.Judge, profile, cancellationToken, judgements);
         return new SearchEvaluation<TMatch>(profile, search, evaluations, selection);
     }
 

@@ -83,8 +83,7 @@
         var unranked = known.Where(quality => !ranked.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
         var fields = Model.RuleFields(selected);
         var qualityTemplate = new ProfileQualityRowView("__quality__", true, false, ui);
-        var ruleTemplate = new ProfileRuleRowView(new ScoreRuleRow { Effect = nameof(ReleaseRuleEffect.Prefer), Field = fields[0].ToString(), Match = nameof(ReleaseRuleMatch.Equals), Score = "10" }, "__index__", fields, ui);
-        var tierTemplate = new ProfileTierRowView(new FallbackTierRow(), "__index__", ranked, ui);
+        var ruleTemplate = new ProfileRuleRowView(new ScoreRuleRow { Effect = nameof(ReleaseRuleEffect.Prefer), Field = fields[0].ToString(), Match = nameof(ReleaseRuleMatch.Equals) }, "__index__", fields, ui);
         <div class="admprofiles-editor">
             <section class="admset-section" aria-labelledby="admprofiles-edit-heading">
                 <div class="admset-head">
@@ -181,29 +180,12 @@
                             <label for="admprofiles-steps">@ui["admin.profiles.field.upgradeMinimumQualitySteps"]</label>
                             <input id="admprofiles-steps" type="number" min="1" inputmode="numeric" name="UpgradeMinimumQualitySteps" value="@Model.Form.UpgradeMinimumQualitySteps" />
                         </div>
-                        <div class="admset-field">
-                            <label for="admprofiles-delta">@ui["admin.profiles.field.upgradeMinimumScoreDelta"]</label>
-                            <input id="admprofiles-delta" type="number" min="1" inputmode="numeric" name="UpgradeMinimumScoreDelta" value="@Model.Form.UpgradeMinimumScoreDelta" />
-                        </div>
-                        <div class="admset-field">
-                            <label for="admprofiles-until">@ui["admin.profiles.field.upgradeUntilScore"]</label>
-                            <input id="admprofiles-until" type="number" min="0" inputmode="numeric" name="UpgradeUntilScore" value="@Model.Form.UpgradeUntilScore" />
-                        </div>
-                        <div class="admset-field">
-                            <label for="admprofiles-grab">@ui["admin.profiles.field.grabImmediatelyScore"]</label>
-                            <input id="admprofiles-grab" type="number" inputmode="numeric" name="GrabImmediatelyScore" value="@Model.Form.GrabImmediatelyScore" />
-                            <span class="admset-hint">@ui["admin.profiles.field.grabImmediatelyScore.hint"]</span>
-                        </div>
                     </div>
                 </section>
 
                 <section class="admset-section" aria-labelledby="admprofiles-limits">
                     <div class="admset-head"><div><h2 id="admprofiles-limits">@ui["admin.profiles.section.limits"]</h2></div></div>
                     <div class="admset-fields">
-                        <div class="admset-field">
-                            <label for="admprofiles-minscore">@ui["admin.profiles.field.minimumScore"]</label>
-                            <input id="admprofiles-minscore" type="number" inputmode="numeric" name="MinimumScore" value="@Model.Form.MinimumScore" />
-                        </div>
                         <div class="admset-field">
                             <label for="admprofiles-minsize">@ui["admin.profiles.field.minimumSizeMegabytes"]</label>
                             <input id="admprofiles-minsize" type="number" min="0" inputmode="numeric" name="MinimumSizeMegabytes" value="@Model.Form.MinimumSizeMegabytes" />
@@ -225,7 +207,6 @@
                                     <th scope="col">@ui["admin.profiles.rule.field"]</th>
                                     <th scope="col">@ui["admin.profiles.rule.match"]</th>
                                     <th scope="col">@ui["admin.profiles.rule.value"]</th>
-                                    <th scope="col">@ui["admin.profiles.rule.score"]</th>
                                     <th scope="col">@ui["admin.profiles.rule.name"]</th>
                                     <th scope="col"><span class="visually-hidden">@ui["admin.requests.col.actions"]</span></th>
                                 </tr>
@@ -264,21 +245,8 @@
                     <p class="admset-hint">@ui["admin.profiles.hint.terms"]</p>
                 </section>
 
-                <section class="admset-section" aria-labelledby="admprofiles-waiting">
-                    <div class="admset-head"><div><h2 id="admprofiles-waiting">@ui["admin.profiles.section.waiting"]</h2><p>@ui["admin.profiles.tiers.hint"]</p></div></div>
-                    <div data-repeat="tiers" data-next="@Model.Form.Tiers.Count">
-                        <ul class="admprofiles-tiers" data-repeat-list>
-                            @for (var index = 0; index < Model.Form.Tiers.Count; index++)
-                            {
-                                <partial name="_AcquisitionProfileTierRow" model="new ProfileTierRowView(Model.Form.Tiers[index], index.ToString(), ranked, ui)" />
-                            }
-                        </ul>
-                        <template data-repeat-template>
-                            <ul><partial name="_AcquisitionProfileTierRow" model="tierTemplate" /></ul>
-                        </template>
-                        <button type="button" class="button" data-repeat-add><partial name="_AdminIcon" model='"plus"' />@ui["admin.profiles.tier.add"]</button>
-                    </div>
-                    <h3 class="admset-label">@ui["admin.profiles.sources"]</h3>
+                <section class="admset-section" aria-labelledby="admprofiles-sources">
+                    <div class="admset-head"><div><h2 id="admprofiles-sources">@ui["admin.profiles.sources"]</h2></div></div>
                     <p class="admset-hint">@ui["admin.profiles.sources.hint"]</p>
                     @if (Model.Sources.Count == 0)
                     {
@@ -312,7 +280,6 @@
                     <div class="admset-grid">
                         <label class="admset-field"><span class="admset-label">@ui["admin.profiles.test.title"]</span><input class="admset-control" name="testTitle" value="@Model.TestInput.Title" spellcheck="false" /></label>
                         <label class="admset-field"><span class="admset-label">@ui["admin.profiles.test.size"]</span><input class="admset-control" type="number" min="0" name="testSizeMegabytes" value="@Model.TestInput.SizeMegabytes" /></label>
-                        <label class="admset-field"><span class="admset-label">@ui["admin.profiles.test.wanted"]</span><input class="admset-control" type="number" min="0" name="testWantedMinutes" value="@Model.TestInput.WantedMinutes" /></label>
                         <label class="admset-field">
                             <span class="admset-label">@ui["admin.profiles.test.source"]</span>
                             <select class="admset-control" name="testSource">
@@ -331,7 +298,7 @@
                             <p><strong>@Model.TestVerdict(test)</strong></p>
                             @if (test.QualityKey.Length > 0)
                             {
-                                <p>@ui.Format("admin.profiles.test.quality", ("quality", test.QualityKey), ("score", test.Score))</p>
+                                <p>@ui.Format("admin.profiles.test.quality", ("quality", test.QualityKey))</p>
                             }
                             @if (test.Reasons.Count > 0)
                             {

@@ -3,8 +3,8 @@ using System.Globalization;
 namespace Jularr.Web.Features.Acquisition.Quality;
 
 /// <summary>
-/// One Acquisition Profile as the Admin editor posts it: the ranked qualities in the order of their rows, one row per rule and per waiting step,
-/// and one term per line for the plain term lists. Nothing here is a second profile model, it is only the form of <see cref="QualityProfile"/>.
+/// One Acquisition Profile as the Admin editor posts it: the ranked qualities in the order of their rows, one row per rule in the order of its
+/// preference, and one term per line for the plain term lists. Nothing here is a second profile model, it is only the form of <see cref="QualityProfile"/>.
 /// </summary>
 public sealed class QualityProfileForm
 {
@@ -18,23 +18,11 @@ public sealed class QualityProfileForm
     /// <summary>The qualities taken at once; a profile that stores none takes every quality of the order, so the form shows them all.</summary>
     public List<string> AllowedQualities { get; set; } = [];
 
-    /// <summary>The fallback steps: after the wait of a step its qualities are allowed too and taken as temporary.</summary>
-    public List<FallbackTierRow> Tiers { get; set; } = [];
-
     public bool UpgradeAllowed { get; set; }
 
     public string? UpgradeCutoffQuality { get; set; }
 
     public string? UpgradeMinimumQualitySteps { get; set; }
-
-    public string? UpgradeMinimumScoreDelta { get; set; }
-
-    public string? UpgradeUntilScore { get; set; }
-
-    /// <summary>A release of a fallback tier not yet reached is taken at once from this preference score; empty always waits for the ladder.</summary>
-    public string? GrabImmediatelyScore { get; set; }
-
-    public string? MinimumScore { get; set; }
 
     public string? MinimumSizeMegabytes { get; set; }
 
@@ -62,16 +50,6 @@ public sealed class QualityProfileForm
     public List<ScoreRuleRow> Rules { get; set; } = [];
 }
 
-/// <summary>One waiting step as posted: the wait in minutes and the qualities that join the allowed ones after it.</summary>
-public sealed class FallbackTierRow
-{
-    public string? Minutes { get; set; }
-
-    public List<string> Qualities { get; set; } = [];
-
-    public bool IsBlank => string.IsNullOrWhiteSpace(Minutes) && Qualities.Count == 0;
-}
-
 /// <summary>One preference or gate as posted, every part as the owner chose or typed it.</summary>
 public sealed class ScoreRuleRow
 {
@@ -83,8 +61,6 @@ public sealed class ScoreRuleRow
 
     public string? Value { get; set; }
 
-    public string? Score { get; set; }
-
     public string? Name { get; set; }
 
     /// <summary>An untouched row (the one the editor offers for adding a rule) is not a rule and not an error.</summary>
@@ -92,8 +68,8 @@ public sealed class ScoreRuleRow
 }
 
 /// <param name="Field">The form field that is wrong.</param>
-/// <param name="Line">The 1-based row of a list field (a rule or a waiting step), or null for a single value.</param>
-/// <param name="Code">What is wrong: <c>number</c>, <c>rule</c>, <c>tier</c>, <c>quality</c>, <c>allowed</c> (no quality is taken at once) or <c>profile</c> (the profile as a whole is invalid; <paramref name="Detail"/> says why).</param>
+/// <param name="Line">The 1-based row of a list field (a rule), or null for a single value.</param>
+/// <param name="Code">What is wrong: <c>number</c>, <c>rule</c>, <c>allowed</c> (no quality is taken at once) or <c>profile</c> (the profile as a whole is invalid; <paramref name="Detail"/> says why).</param>
 public sealed record ProfileEditError(string Field, int? Line, string Code, string? Detail = null);
 
 public sealed record ProfileEditResult(QualityProfile? Profile, IReadOnlyList<ProfileEditError> Errors)
@@ -113,14 +89,9 @@ public static class QualityProfileEditing
             Name = profile.Name,
             QualityOrder = [.. profile.QualityOrder],
             AllowedQualities = [.. profile.AllowedQualities.Length == 0 ? profile.QualityOrder : profile.AllowedQualities],
-            Tiers = [.. profile.FallbackTiers.Select(tier => new FallbackTierRow { Minutes = tier.AfterMinutes.ToString(CultureInfo.InvariantCulture), Qualities = [.. tier.AddedQualities] })],
             UpgradeAllowed = profile.UpgradeAllowed,
             UpgradeCutoffQuality = profile.UpgradeCutoffQuality,
             UpgradeMinimumQualitySteps = profile.UpgradeMinimumQualitySteps.ToString(CultureInfo.InvariantCulture),
-            UpgradeMinimumScoreDelta = profile.UpgradeMinimumScoreDelta.ToString(CultureInfo.InvariantCulture),
-            UpgradeUntilScore = profile.UpgradeUntilScore?.ToString(CultureInfo.InvariantCulture),
-            GrabImmediatelyScore = profile.GrabImmediatelyScore?.ToString(CultureInfo.InvariantCulture),
-            MinimumScore = profile.MinimumScore.ToString(CultureInfo.InvariantCulture),
             MinimumSizeMegabytes = profile.MinimumSizeBytes is { } minimum ? (minimum / Megabyte).ToString(CultureInfo.InvariantCulture) : null,
             MaximumSizeMegabytes = profile.MaximumSizeBytes is { } maximum ? (maximum / Megabyte).ToString(CultureInfo.InvariantCulture) : null,
             AllowAmbiguousIdentity = profile.AllowAmbiguousIdentity,
@@ -131,7 +102,7 @@ public static class QualityProfileEditing
             MustNotContain = string.Join('\n', profile.MustNotContain),
             RequiredRegex = string.Join('\n', profile.RequiredRegex),
             RejectedRegex = string.Join('\n', profile.RejectedRegex),
-            Rules = [.. profile.ScoreRules.Select(ToRow)]
+            Rules = [.. InPreferenceOrder(profile.ScoreRules).Select(ToRow)]
         };
 
     private static ScoreRuleRow ToRow(ReleaseScoreRule rule) =>
@@ -141,7 +112,6 @@ public static class QualityProfileEditing
             Field = rule.Field.ToString(),
             Match = rule.Match.ToString(),
             Value = rule.Value,
-            Score = rule.Score.ToString(CultureInfo.InvariantCulture),
             Name = rule.Name
         };
 
@@ -162,20 +132,6 @@ public static class QualityProfileEditing
             errors.Add(new ProfileEditError(nameof(QualityProfileForm.AllowedQualities), null, "allowed"));
         }
 
-        var tiers = new List<FallbackTier>();
-        var tierRows = form.Tiers.Where(row => !row.IsBlank).ToArray();
-        for (var index = 0; index < tierRows.Length; index++)
-        {
-            var qualities = Distinct(tierRows[index].Qualities);
-            if (!int.TryParse(tierRows[index].Minutes?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) || minutes < 1 || qualities.Length == 0)
-            {
-                errors.Add(new ProfileEditError(nameof(QualityProfileForm.Tiers), index + 1, "tier"));
-                continue;
-            }
-
-            tiers.Add(new FallbackTier(minutes, qualities));
-        }
-
         var rules = new List<ReleaseScoreRule>();
         var ruleRows = form.Rules.Where(row => !row.IsBlank).ToArray();
         for (var index = 0; index < ruleRows.Length; index++)
@@ -191,13 +147,14 @@ public static class QualityProfileEditing
         }
 
         var steps = Number(form.UpgradeMinimumQualitySteps, 1, nameof(QualityProfileForm.UpgradeMinimumQualitySteps), errors);
-        var delta = Number(form.UpgradeMinimumScoreDelta, 1, nameof(QualityProfileForm.UpgradeMinimumScoreDelta), errors);
-        var until = Optional(form.UpgradeUntilScore, nameof(QualityProfileForm.UpgradeUntilScore), errors);
-        var grabImmediately = Optional(form.GrabImmediatelyScore, nameof(QualityProfileForm.GrabImmediatelyScore), errors);
-        var minimumScore = Number(form.MinimumScore, 0, nameof(QualityProfileForm.MinimumScore), errors, allowNegative: true);
         var minimumSize = Optional(form.MinimumSizeMegabytes, nameof(QualityProfileForm.MinimumSizeMegabytes), errors);
         var maximumSize = Optional(form.MaximumSizeMegabytes, nameof(QualityProfileForm.MaximumSizeMegabytes), errors);
         var cutoff = string.IsNullOrWhiteSpace(form.UpgradeCutoffQuality) ? null : form.UpgradeCutoffQuality.Trim();
+        if (rules.Count(rule => rule.EffectiveEffect is ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid) > MaxPreferenceRules)
+        {
+            errors.Add(new ProfileEditError(nameof(QualityProfileForm.Rules), null, "rule"));
+        }
+
         if (errors.Count > 0)
         {
             return new ProfileEditResult(null, errors);
@@ -210,34 +167,21 @@ public static class QualityProfileEditing
             order,
             form.UpgradeAllowed,
             cutoff,
-            minimumScore,
             minimumSize is { } minimumMegabytes ? minimumMegabytes * Megabyte : null,
             maximumSize is { } maximumMegabytes ? maximumMegabytes * Megabyte : null,
             Lines(form.MustContain),
             Lines(form.MustNotContain),
             Lines(form.RequiredRegex),
             Lines(form.RejectedRegex),
-            [.. rules])
+            [.. WithOrderedWeights(rules)])
         {
-            FallbackTiers = [.. tiers.OrderBy(tier => tier.AfterMinutes)],
             UpgradeMinimumQualitySteps = steps,
-            UpgradeMinimumScoreDelta = delta,
-            UpgradeUntilScore = until,
-            GrabImmediatelyScore = grabImmediately,
             AllowAmbiguousIdentity = form.AllowAmbiguousIdentity,
             SourcePolicy = SourcePolicyOf(form)
         };
         foreach (var problem in ReleaseScorer.ValidateProfile(profile))
         {
             errors.Add(new ProfileEditError("Profile", null, "profile", problem));
-        }
-
-        foreach (var tier in profile.FallbackTiers)
-        {
-            foreach (var quality in tier.AddedQualities.Where(quality => !order.Contains(quality, StringComparer.OrdinalIgnoreCase)))
-            {
-                errors.Add(new ProfileEditError(nameof(QualityProfileForm.Tiers), null, "quality", quality));
-            }
         }
 
         return errors.Count == 0 ? new ProfileEditResult(profile, []) : new ProfileEditResult(null, errors);
@@ -252,6 +196,36 @@ public static class QualityProfileEditing
         return new AcquisitionSourcePolicy(allowed, preferred) { FallbackOnlyEntryIds = fallbackOnly } is { IsDefault: false } policy ? policy : AcquisitionSourcePolicy.Unrestricted;
     }
 
+    /// <summary>The most Prefer and Avoid rules one profile holds: each takes a power of two as its weight, so an earlier rule always outweighs every later one.</summary>
+    public const int MaxPreferenceRules = 30;
+
+    // The rows the editor shows: gates in their stored order, then the preferences strongest first and the avoided traits strongest first.
+    private static IEnumerable<ReleaseScoreRule> InPreferenceOrder(IEnumerable<ReleaseScoreRule> rules)
+    {
+        var all = rules.ToArray();
+        return all.Where(rule => rule.EffectiveEffect is not (ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid))
+            .Concat(all.Where(rule => rule.EffectiveEffect == ReleaseRuleEffect.Prefer).OrderByDescending(rule => rule.Score))
+            .Concat(all.Where(rule => rule.EffectiveEffect == ReleaseRuleEffect.Avoid).OrderBy(rule => rule.Score));
+    }
+
+    // The order of the rows is the whole preference: a Prefer rule above another outweighs it and everything below, every Prefer outweighs all Avoid rules.
+    private static IEnumerable<ReleaseScoreRule> WithOrderedWeights(IReadOnlyList<ReleaseScoreRule> rules)
+    {
+        var avoids = rules.Count(rule => rule.EffectiveEffect == ReleaseRuleEffect.Avoid);
+        var prefers = rules.Count(rule => rule.EffectiveEffect == ReleaseRuleEffect.Prefer);
+        var preferIndex = 0;
+        var avoidIndex = 0;
+        foreach (var rule in rules)
+        {
+            yield return rule.EffectiveEffect switch
+            {
+                ReleaseRuleEffect.Prefer => rule with { Score = 1 << (avoids + prefers - 1 - preferIndex++) },
+                ReleaseRuleEffect.Avoid => rule with { Score = -(1 << (avoids - 1 - avoidIndex++)) },
+                _ => rule with { Score = 0 }
+            };
+        }
+    }
+
     private static ReleaseScoreRule? ParseRule(ScoreRuleRow row, int number)
     {
         if (!Enum.TryParse<ReleaseRuleEffect>(row.Effect, ignoreCase: true, out var effect)
@@ -262,15 +236,8 @@ public static class QualityProfileEditing
             return null;
         }
 
-        // A rule of a gate effect has no score of its own: it only keeps a release in or out.
-        var score = 0;
-        if (effect is ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid && !int.TryParse(row.Score?.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out score))
-        {
-            return null;
-        }
-
         var name = string.IsNullOrWhiteSpace(row.Name) ? $"Rule {number}" : row.Name.Trim();
-        return new ReleaseScoreRule(name, field, match, row.Value.Trim(), score) { Effect = effect };
+        return new ReleaseScoreRule(name, field, match, row.Value.Trim(), 0) { Effect = effect };
     }
 
     private static string[] Distinct(IEnumerable<string>? values) =>
@@ -279,14 +246,14 @@ public static class QualityProfileEditing
     private static string[] Lines(string? text) =>
         (text ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    private static int Number(string? text, int fallback, string field, List<ProfileEditError> errors, bool allowNegative = false)
+    private static int Number(string? text, int fallback, string field, List<ProfileEditError> errors)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             return fallback;
         }
 
-        if (int.TryParse(text.Trim(), allowNegative ? NumberStyles.AllowLeadingSign : NumberStyles.None, CultureInfo.InvariantCulture, out var value) && (allowNegative || value >= 1))
+        if (int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value >= 1)
         {
             return value;
         }

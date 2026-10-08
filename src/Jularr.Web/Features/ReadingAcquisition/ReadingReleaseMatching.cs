@@ -178,10 +178,10 @@ public static class ReadingReleaseJudge
             : evaluation.Selection.Reasons.FirstOrDefault(reason => reason.Kind == SelectionReasonKind.Safety)?.Detail
               ?? (evaluation.Selection.Candidate.Identity.Confidence == IdentityConfidence.Conflict
                   ? evaluation.Selection.Candidate.Identity.Detail
-                  : evaluation.Selection.Reasons.FirstOrDefault(reason => reason.Code == "WaitingForFallbackTier")?.Detail ?? string.Join("; ", evaluation.Selection.Score?.RejectionReasons ?? []));
+                  : string.Join("; ", evaluation.Selection.Score?.RejectionReasons ?? []));
 
     // The search facts and identity judge of one Manga or Light Novel target for the shared acquisition core.
-    public static MediaSearchPlan<ReadingReleaseInfo> Plan(ReadingAcquisitionTarget target, DateTime wantedSinceUtc) =>
+    public static MediaSearchPlan<ReadingReleaseInfo> Plan(ReadingAcquisitionTarget target) =>
         new(
             new SearchIntent(target.Kind, target.Title)
             {
@@ -190,8 +190,7 @@ public static class ReadingReleaseJudge
                 Volume = target.RequestedVolume,
                 Chapter = target.RequestedChapterStart is { } chapter ? (decimal)chapter : null
             },
-            release => Judge(release, target),
-            wantedSinceUtc);
+            release => Judge(release, target));
 
     public static ReleaseJudgement<ReadingReleaseInfo> Judge(ProwlarrReleaseCandidate release, ReadingAcquisitionTarget target)
     {

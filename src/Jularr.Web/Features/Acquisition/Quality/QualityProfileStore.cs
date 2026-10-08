@@ -243,6 +243,15 @@ public sealed class QualityProfileStore
                 ? parsedVersion
                 : 0;
 
+            if (version == 2)
+            {
+                var upgraded = JsonSerializer.Deserialize<QualityProfileState>(FoldFallbackTiers(json), JsonOptions)
+                    ?? throw new InvalidDataException("Quality profile file is empty.");
+                var current = upgraded with { Version = QualityProfileState.CurrentVersion };
+                ValidateState(current);
+                return (current, true);
+            }
+
             if (version < QualityProfileState.CurrentVersion)
             {
                 var migrated = MigrateLegacy(document.RootElement);
@@ -263,6 +272,38 @@ public sealed class QualityProfileStore
                 "Quality profile file contains invalid JSON.",
                 exception);
         }
+    }
+
+    // Version 2 profiles waited before taking lower qualities; a wait is no part of a profile any more, so those qualities are simply allowed.
+    private static string FoldFallbackTiers(string json)
+    {
+        var root = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+        foreach (var profile in root["profiles"]?.AsArray() ?? [])
+        {
+            if (profile is not System.Text.Json.Nodes.JsonObject entry)
+            {
+                continue;
+            }
+
+            if (entry["allowedQualities"] is System.Text.Json.Nodes.JsonArray { Count: > 0 } allowed)
+            {
+                var known = allowed.Select(node => node!.GetValue<string>()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var tier in entry["fallbackTiers"]?.AsArray() ?? [])
+                {
+                    foreach (var quality in tier?["addedQualities"]?.AsArray() ?? [])
+                    {
+                        if (known.Add(quality!.GetValue<string>()))
+                        {
+                            allowed.Add(quality.GetValue<string>());
+                        }
+                    }
+                }
+            }
+
+            entry.Remove("fallbackTiers");
+        }
+
+        return root.ToJsonString();
     }
 
     // Version 1 was anime-only: { version, defaultProfileId, profiles, animeProfileAssignments }.

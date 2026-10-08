@@ -404,8 +404,7 @@ public sealed partial class VideoAcquisitionEngine(
         var parser = registry.ParserFor(kind);
         var plan = new MediaSearchPlan<VideoIdentityMatch>(
             intent,
-            release => VideoReleaseJudge.Judge(parser, kind, payload.Title, payload.Year, unit, scope, release),
-            unit?.AiredAt is { } aired && aired > request.CreatedAt ? aired : request.CreatedAt);
+            release => VideoReleaseJudge.Judge(parser, kind, payload.Title, payload.Year, unit, scope, release));
         return await core.SearchAsync(plan, profile, options, cancellationToken);
     }
 

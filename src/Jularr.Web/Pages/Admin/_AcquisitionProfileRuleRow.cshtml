@@ -4,7 +4,6 @@
 @{
     var ui = Model.Ui;
     var row = Model.Row;
-    var gate = row.Effect is nameof(ReleaseRuleEffect.Require) or nameof(ReleaseRuleEffect.Reject) or nameof(ReleaseRuleEffect.Info);
 }
 <tr data-rule-row>
     <td data-label="@ui["admin.profiles.rule.effect"]">
@@ -33,9 +32,10 @@
         </select>
     </td>
     <td data-label="@ui["admin.profiles.rule.value"]"><input class="admset-control" type="text" name="Rules[@(Model.Index)].Value" value="@row.Value" spellcheck="false" aria-label="@ui["admin.profiles.rule.value"]" /></td>
-    <td data-label="@ui["admin.profiles.rule.score"]"><input class="admset-control admprofiles-score" type="number" name="Rules[@(Model.Index)].Score" value="@row.Score" data-rule-score disabled="@gate" aria-label="@ui["admin.profiles.rule.score"]" /></td>
     <td data-label="@ui["admin.profiles.rule.name"]"><input class="admset-control" type="text" name="Rules[@(Model.Index)].Name" value="@row.Name" maxlength="80" aria-label="@ui["admin.profiles.rule.name"]" /></td>
     <td class="admset-cell-actions">
+        <button type="button" class="admin-icon-button" data-move="up" aria-label="@ui["admin.profiles.rule.moveUp"]"><partial name="_AdminIcon" model='"arrow-up"' /></button>
+        <button type="button" class="admin-icon-button" data-move="down" aria-label="@ui["admin.profiles.rule.moveDown"]"><partial name="_AdminIcon" model='"arrow-down"' /></button>
         <button type="button" class="admin-icon-button" data-remove-row aria-label="@ui["admin.profiles.rule.remove"]"><partial name="_AdminIcon" model='"close"' /></button>
     </td>
 </tr>

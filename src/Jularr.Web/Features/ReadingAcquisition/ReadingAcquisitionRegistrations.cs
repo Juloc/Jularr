@@ -68,7 +68,6 @@ public static class ReadingQualityProfiles
             [preferred, "ZIP", "UNKNOWN-UNKNOWN"],
             UpgradeAllowed: false,
             UpgradeCutoffQuality: null,
-            MinimumScore: 0,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,
             MustContain: [],

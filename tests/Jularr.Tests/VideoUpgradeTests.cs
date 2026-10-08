@@ -65,17 +65,6 @@ public sealed class VideoUpgradeTests
     }
 
     [TestMethod]
-    public void AQualityOnlyAFallbackTierAllowedIsTemporaryEvenWhenTheProfileDoesNotUpgrade()
-    {
-        var strict = s_profile with { AllowedQualities = ["WEB-1080p", "BLURAY-1080p"], UpgradeAllowed = false, FallbackTiers = [new FallbackTier(60, ["WEB-720p"])] };
-
-        Assert.IsTrue(UpgradePolicy.Assess(strict, "WEB-720p").IsUpgradable, "A temporary acceptance stays wanted for the profile's own qualities.");
-        Assert.IsTrue(UpgradePolicy.IsUpgrade(strict, "WEB-720p", "WEB-1080p"));
-        Assert.AreEqual(UpgradeState.Final, UpgradePolicy.Assess(strict, "WEB-1080p").State);
-        Assert.IsFalse(UpgradePolicy.IsUpgrade(strict, "WEB-1080p", "BLURAY-1080p"), "A profile that does not upgrade keeps what it accepted.");
-    }
-
-    [TestMethod]
     public void AnUpgradeNeedsTheProfilesMinimumNumberOfQualityStepsAndNeverMovesDown()
     {
         var steps = s_profile with { UpgradeMinimumQualitySteps = 2, UpgradeCutoffQuality = "BLURAY-1080p" };

@@ -118,11 +118,10 @@ public sealed class ReleaseReliabilityTests
         var web = Candidate("bad-web1080", "Movie.2021.1080p.WEB-DL.x264-BAD");
         var otherWeb = Candidate("good-web1080", "Movie.2021.1080p.WEB-DL.x264-GOOD");
         var bluRay = Candidate("bad-bluray1080", "Movie.2021.1080p.BluRay.x264-BAD");
-        var context = new SelectionContext(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
-        var tie = ReleaseSelectionEngine.Select(s_profile, context, [web, otherWeb], good);
-        var withQuality = ReleaseSelectionEngine.Select(s_profile, context, [otherWeb, bluRay], good);
-        var withoutEvidence = ReleaseSelectionEngine.Select(s_profile, context, [web, otherWeb]);
+        var tie = ReleaseSelectionEngine.Select(s_profile, [web, otherWeb], good);
+        var withQuality = ReleaseSelectionEngine.Select(s_profile, [otherWeb, bluRay], good);
+        var withoutEvidence = ReleaseSelectionEngine.Select(s_profile, [web, otherWeb]);
 
         Assert.AreEqual("good-web1080", tie.Winner!.Candidate.Id);
         Assert.AreEqual("A better track record of its release group or indexer.", tie.WinnerReason);

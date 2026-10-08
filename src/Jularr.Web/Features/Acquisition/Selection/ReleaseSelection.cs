@@ -84,11 +84,8 @@ public sealed record SelectionCandidate(
 
 public enum SelectionDecision
 {
-    /// <summary>Fully acceptable now.</summary>
+    /// <summary>Acceptable now.</summary>
     Eligible,
-
-    /// <summary>Acceptable through a fallback tier: it may be taken now and the target stays wanted for an upgrade.</summary>
-    Temporary,
 
     /// <summary>Only an owner may take it (ambiguous identity).</summary>
     ManualReview,
@@ -101,8 +98,7 @@ public enum SelectionReasonKind
     Safety,
     Identity,
     Profile,
-    Quality,
-    Fallback
+    Quality
 }
 
 public sealed record SelectionReason(SelectionReasonKind Kind, string Code, string Detail);
@@ -111,11 +107,10 @@ public sealed record CandidateEvaluation(
     SelectionCandidate Candidate,
     SelectionDecision Decision,
     ReleaseScoreResult? Score,
-    int FallbackTier,
     int ReliabilityPoints,
     IReadOnlyList<SelectionReason> Reasons)
 {
-    public bool IsSelectable => Decision is SelectionDecision.Eligible or SelectionDecision.Temporary;
+    public bool IsSelectable => Decision == SelectionDecision.Eligible;
 
     public int QualityRank => Score?.QualityRank ?? int.MaxValue;
 
@@ -132,39 +127,29 @@ public enum SelectionOutcome
     Usable
 }
 
-public sealed record SelectionContext(DateTimeOffset Now, DateTimeOffset WantedSince)
-{
-    /// <summary>The start of a request's wait: the stored creation time, so the wait of a request survives a restart and never starts over.</summary>
-    public static DateTimeOffset SinceCreated(DateTime createdUtc) => new(DateTime.SpecifyKind(createdUtc, DateTimeKind.Utc));
-}
-
 public sealed record SelectionResult(
     IReadOnlyList<CandidateEvaluation> Ranked,
     CandidateEvaluation? Winner,
     string? WinnerReason,
-    SelectionOutcome Outcome,
-    int ActiveFallbackTier);
+    SelectionOutcome Outcome);
 
 /// <summary>
 /// The one release-selection engine of automatic acquisition, Manual Search and profile tests. It decides in a fixed hierarchy:
-/// hard safety, then identity, then the profile gates (Require, Reject, quality, size) with the active fallback tier, then orders what
-/// is left by fallback tier, quality tier, preference score, identity strength, coverage, bounded reliability, indexer priority and a stable final
-/// tiebreak. A positive score can never repair a wrong identity, a violated gate or an unsafe candidate, and the response order of
-/// the indexers is never a tiebreak, so the same candidates, profile and clock always pick the same winner.
+/// hard safety, then identity, then the profile gates (Require, Reject, allowed quality, size), then orders what is left by quality tier,
+/// preference, identity strength, coverage, bounded reliability, indexer priority and a stable final tiebreak. A preference can never repair
+/// a wrong identity, a violated gate or an unsafe candidate, and the response order of the indexers is never a tiebreak, so the same
+/// candidates and profile always pick the same winner.
 /// </summary>
 public static class ReleaseSelectionEngine
 {
-    public static SelectionResult Select(QualityProfile profile, SelectionContext context, IReadOnlyList<SelectionCandidate> candidates, ReleaseReliabilityLookup? reliability = null)
+    public static SelectionResult Select(QualityProfile profile, IReadOnlyList<SelectionCandidate> candidates, ReleaseReliabilityLookup? reliability = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(candidates);
 
-        var activeTier = ActiveTier(profile, context);
-        var effective = profile with { AllowedQualities = AllowedAt(profile, activeTier) };
         var ranked = candidates
-            .Select(candidate => Evaluate(profile, effective, context, activeTier, candidate, reliability))
-            .OrderBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible or SelectionDecision.Temporary => 0, SelectionDecision.ManualReview => 1, _ => 2 })
-            .ThenBy(evaluation => evaluation.FallbackTier)
+            .Select(candidate => Evaluate(profile, candidate, reliability))
+            .OrderBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
             .ThenBy(evaluation => evaluation.QualityRank)
             .ThenByDescending(evaluation => evaluation.PreferenceScore)
             .ThenBy(evaluation => evaluation.Candidate.Identity.Confidence)
@@ -177,128 +162,46 @@ public static class ReleaseSelectionEngine
 
         var winner = ranked.FirstOrDefault(evaluation => evaluation.IsSelectable);
         var runnerUp = winner is null ? null : ranked.Skip(1).FirstOrDefault(evaluation => evaluation.IsSelectable);
-        return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(winner, runnerUp), OutcomeOf(ranked), activeTier);
+        return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(winner, runnerUp), OutcomeOf(ranked));
     }
 
-    /// <summary>The fallback tier a target waiting since <see cref="SelectionContext.WantedSince"/> has reached: 0 is the profile itself.</summary>
-    public static int ActiveTier(QualityProfile profile, SelectionContext context)
-    {
-        var waited = context.Now - context.WantedSince;
-        var tier = 0;
-        for (var index = 0; index < profile.FallbackTiers.Length; index++)
-        {
-            if (waited >= TimeSpan.FromMinutes(profile.FallbackTiers[index].AfterMinutes))
-            {
-                tier = index + 1;
-            }
-        }
-
-        return tier;
-    }
-
-    private static string[] AllowedAt(QualityProfile profile, int tier) =>
-        profile.AllowedQualities.Length == 0
-            ? []
-            : [.. profile.AllowedQualities.Concat(profile.FallbackTiers.Take(tier).SelectMany(fallback => fallback.AddedQualities)).Distinct(StringComparer.OrdinalIgnoreCase)];
-
-    private static CandidateEvaluation Evaluate(QualityProfile profile, QualityProfile effective, SelectionContext context, int activeTier, SelectionCandidate candidate, ReleaseReliabilityLookup? lookup)
+    private static CandidateEvaluation Evaluate(QualityProfile profile, SelectionCandidate candidate, ReleaseReliabilityLookup? lookup)
     {
         var reasons = new List<SelectionReason>();
         var reliability = (candidate.Reliability ?? lookup?.For(candidate.Indexer, candidate.Parsed?.ReleaseGroup))?.Points ?? 0;
         if (candidate.SafetyRejection is { } safety)
         {
             reasons.Add(new SelectionReason(SelectionReasonKind.Safety, "Safety", safety));
-            return new CandidateEvaluation(candidate, SelectionDecision.Rejected, null, 0, reliability, reasons);
+            return new CandidateEvaluation(candidate, SelectionDecision.Rejected, null, reliability, reasons);
         }
 
         if (candidate.Parsed is null)
         {
             reasons.Add(new SelectionReason(SelectionReasonKind.Safety, "Unparseable", "The release name could not be parsed."));
-            return new CandidateEvaluation(candidate, SelectionDecision.Rejected, null, 0, reliability, reasons);
+            return new CandidateEvaluation(candidate, SelectionDecision.Rejected, null, reliability, reasons);
         }
 
         // The score is computed for every parsed candidate so Manual Search can show it, but it is only consulted after identity.
-        var release = new ReleaseCandidate(candidate.Parsed, candidate.SizeBytes, candidate.Indexer, candidate.Id);
-        var score = ReleaseScorer.Score(effective, release);
+        var score = ReleaseScorer.Score(profile, new ReleaseCandidate(candidate.Parsed, candidate.SizeBytes, candidate.Indexer, candidate.Id));
         reasons.Add(new SelectionReason(SelectionReasonKind.Identity, candidate.Identity.Code, candidate.Identity.Detail));
         if (candidate.Identity.Confidence == IdentityConfidence.Conflict)
         {
-            return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, 0, reliability, reasons);
-        }
-
-        // A release a later fallback tier would allow skips the wait when its preference score is high enough: the whole ladder is tried for it, the gates stay.
-        if (!score.Accepted && profile.GrabImmediatelyScore is { } immediately && activeTier < profile.FallbackTiers.Length)
-        {
-            var ladder = ReleaseScorer.Score(profile with { AllowedQualities = AllowedAt(profile, profile.FallbackTiers.Length) }, release);
-            if (ladder.Accepted && ladder.Score + candidate.ContextScore >= immediately)
-            {
-                score = ladder;
-                reasons.Add(new SelectionReason(SelectionReasonKind.Fallback, "GrabImmediately", $"Preference score {ladder.Score + candidate.ContextScore} reaches {immediately}, so {ladder.QualityKey} is taken without waiting for its fallback tier."));
-            }
+            return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, reliability, reasons);
         }
 
         foreach (var rejection in score.RejectionReasons)
         {
-            reasons.Add(ProfileReason(profile, context, activeTier, rejection));
+            reasons.Add(new SelectionReason(rejection.StartsWith("Quality '", StringComparison.Ordinal) ? SelectionReasonKind.Quality : SelectionReasonKind.Profile, rejection.StartsWith("Quality '", StringComparison.Ordinal) ? "QualityNotAllowed" : "ProfileRejected", rejection));
         }
 
         if (!score.Accepted)
         {
-            return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, 0, reliability, reasons);
+            return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, reliability, reasons);
         }
 
-        var tier = TierOf(profile, score.QualityKey);
-        if (tier > 0)
-        {
-            reasons.Add(new SelectionReason(SelectionReasonKind.Fallback, "FallbackTier", $"Taken from fallback tier {tier}: {score.QualityKey} is below the profile's preferred qualities, so the target stays wanted for an upgrade."));
-        }
-
-        if (candidate.Identity.Confidence == IdentityConfidence.Ambiguous && !profile.AllowAmbiguousIdentity)
-        {
-            return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, tier, reliability, reasons);
-        }
-
-        return new CandidateEvaluation(candidate, tier > 0 ? SelectionDecision.Temporary : SelectionDecision.Eligible, score, tier, reliability, reasons);
-    }
-
-    /// <summary>The lowest fallback tier that allows the quality: 0 when the profile itself does.</summary>
-    private static int TierOf(QualityProfile profile, string qualityKey)
-    {
-        if (profile.AllowedQualities.Length == 0 || profile.AllowedQualities.Contains(qualityKey, StringComparer.OrdinalIgnoreCase))
-        {
-            return 0;
-        }
-
-        for (var index = 0; index < profile.FallbackTiers.Length; index++)
-        {
-            if (profile.FallbackTiers[index].AddedQualities.Contains(qualityKey, StringComparer.OrdinalIgnoreCase))
-            {
-                return index + 1;
-            }
-        }
-
-        return 0;
-    }
-
-    // A quality a later fallback tier would allow is not "not allowed": it is waiting, and the reason says until when.
-    private static SelectionReason ProfileReason(QualityProfile profile, SelectionContext context, int activeTier, string rejection)
-    {
-        if (!rejection.StartsWith("Quality '", StringComparison.Ordinal))
-        {
-            return new SelectionReason(SelectionReasonKind.Profile, "ProfileRejected", rejection);
-        }
-
-        var quality = rejection["Quality '".Length..rejection.IndexOf('\'', "Quality '".Length)];
-        for (var index = activeTier; index < profile.FallbackTiers.Length; index++)
-        {
-            if (profile.FallbackTiers[index].AddedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase))
-            {
-                var after = profile.FallbackTiers[index].AfterMinutes;
-                return new SelectionReason(SelectionReasonKind.Fallback, "WaitingForFallbackTier", $"{quality} is allowed from fallback tier {index + 1}, after {after} minutes of waiting (from {context.WantedSince.AddMinutes(after):u}).");
-            }
-        }
-
-        return new SelectionReason(SelectionReasonKind.Quality, "QualityNotAllowed", rejection);
+        return candidate.Identity.Confidence == IdentityConfidence.Ambiguous && !profile.AllowAmbiguousIdentity
+            ? new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons)
+            : new CandidateEvaluation(candidate, SelectionDecision.Eligible, score, reliability, reasons);
     }
 
     private static SelectionOutcome OutcomeOf(IReadOnlyList<CandidateEvaluation> ranked)
@@ -318,7 +221,7 @@ public static class ReleaseSelectionEngine
             return SelectionOutcome.ManualReviewOnly;
         }
 
-        return ranked.Any(evaluation => evaluation.Reasons.Any(reason => reason.Kind is SelectionReasonKind.Profile or SelectionReasonKind.Quality or SelectionReasonKind.Fallback))
+        return ranked.Any(evaluation => evaluation.Reasons.Any(reason => reason.Kind is SelectionReasonKind.Profile or SelectionReasonKind.Quality))
             ? SelectionOutcome.ProfileRejected
             : SelectionOutcome.IdentityInvalid;
     }
@@ -329,11 +232,6 @@ public static class ReleaseSelectionEngine
         if (runnerUp is null)
         {
             return "The only candidate that passes identity and the profile.";
-        }
-
-        if (winner.FallbackTier != runnerUp.FallbackTier)
-        {
-            return $"It needs fallback tier {winner.FallbackTier}; the other needs tier {runnerUp.FallbackTier}.";
         }
 
         if (winner.QualityRank != runnerUp.QualityRank)

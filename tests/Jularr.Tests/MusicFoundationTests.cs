@@ -42,7 +42,7 @@ public sealed class MusicFoundationTests
     }
 
     [TestMethod]
-    public void TheDefaultProfileTakesLosslessFirstAndLossyOnlyThroughTheTimedFallback()
+    public void TheDefaultProfileTakesLosslessFirstAndEveryLossyEncodingBehindIt()
     {
         var profile = MusicQualityProfiles.CreateDefaultMusic();
         SelectionCandidate Candidate(string id, string name) =>
@@ -51,12 +51,12 @@ public sealed class MusicFoundationTests
         var mp3 = Candidate("mp3-320", "Artist - Album (2020) MP3 320");
         var weak = Candidate("mp3-256", "Artist - Album (2020) MP3 256");
 
-        var first = ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now), [weak, mp3, flac]);
-        var later = ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now.AddHours(-7)), [weak]);
+        var all = ReleaseSelectionEngine.Select(profile, [weak, mp3, flac]);
+        var onlyWeak = ReleaseSelectionEngine.Select(profile, [weak]);
 
-        Assert.AreEqual("flac", first.Winner!.Candidate.Id);
-        Assert.IsFalse(first.Ranked.Single(evaluation => evaluation.Candidate.Id == "mp3-256").IsSelectable, "A 256 kbit release waits for its fallback tier.");
-        Assert.AreEqual(SelectionDecision.Temporary, later.Winner!.Decision);
+        CollectionAssert.AreEqual(new[] { "flac", "mp3-320", "mp3-256" }, all.Ranked.Select(evaluation => evaluation.Candidate.Id).ToArray());
+        Assert.IsTrue(all.Ranked.All(evaluation => evaluation.IsSelectable));
+        Assert.AreEqual(SelectionDecision.Eligible, onlyWeak.Winner!.Decision, "A lossy release is taken at once when nothing better exists, and the album stays wanted for lossless.");
         Assert.AreEqual(0, ReleaseScorer.ValidateProfile(profile).Count);
     }
 

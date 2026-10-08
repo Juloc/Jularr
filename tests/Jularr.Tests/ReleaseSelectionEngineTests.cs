@@ -29,7 +29,7 @@ public sealed class ReleaseSelectionEngineTests
         };
 
     private static SelectionResult Select(QualityProfile profile, params SelectionCandidate[] candidates) =>
-        ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now), candidates);
+        ReleaseSelectionEngine.Select(profile, candidates);
 
     [TestMethod]
     public void AHighScoreNeverRepairsAWrongIdentity()
@@ -84,28 +84,6 @@ public sealed class ReleaseSelectionEngineTests
         Assert.AreEqual(SelectionDecision.ManualReview, strict.Ranked[0].Decision);
         Assert.AreEqual(SelectionOutcome.ManualReviewOnly, strict.Outcome);
         Assert.AreEqual("maybe", lenient.Winner!.Candidate.Id);
-    }
-
-    [TestMethod]
-    public void FallbackTiersOpenOnlyAfterTheirWaitAndTheResultIsTemporary()
-    {
-        var profile = Profile() with
-        {
-            AllowedQualities = ["WEB-1080p"],
-            FallbackTiers = [new FallbackTier(120, ["WEB-720p"]), new FallbackTier(1440, ["HDTV-720p"])]
-        };
-        var hd = Candidate("hd", "Show.S01E01.1080p.WEB-DL.H264-GRP");
-        var lower = Candidate("lower", "Show.S01E01.720p.WEB-DL.H264-GRP");
-
-        var early = ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now.AddMinutes(-30)), [lower]);
-        var later = ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now.AddMinutes(-180)), [lower]);
-        var both = ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now.AddMinutes(-180)), [lower, hd]);
-
-        Assert.IsNull(early.Winner);
-        Assert.IsTrue(early.Ranked[0].Reasons.Any(reason => reason.Code == "WaitingForFallbackTier" && reason.Detail.Contains("120 minutes")));
-        Assert.AreEqual(SelectionDecision.Temporary, later.Winner!.Decision);
-        Assert.AreEqual(1, later.Winner.FallbackTier);
-        Assert.AreEqual("hd", both.Winner!.Candidate.Id, "A candidate that fits the profile itself always beats a fallback.");
     }
 
     [TestMethod]
@@ -179,26 +157,6 @@ public sealed class ReleaseSelectionEngineTests
     }
 
     [TestMethod]
-    public void AProfilesFallbackTierIsTheSharedEnginesTimedLadder()
-    {
-        var profile = AnimeQualityProfiles.CreateDefaultAnime1080p();
-        var ladder = profile with
-        {
-            AllowedQualities = ["BLURAY-1080p"],
-            FallbackTiers = [new FallbackTier(60, [.. profile.AllowedQualities.Except(["BLURAY-1080p"], StringComparer.OrdinalIgnoreCase)])]
-        };
-        var web = Candidate("web", "Show.S01E01.1080p.WEB-DL.H264-GRP");
-        var bluRay = Candidate("bluray", "Show.S01E01.1080p.BluRay.H264-GRP");
-
-        CollectionAssert.AreEqual(new[] { "BLURAY-1080p" }, ladder.AllowedQualities, "Only the qualities that reach the cutoff are allowed at once.");
-        Assert.AreEqual(60, Assert.ContainsSingle(ladder.FallbackTiers).AfterMinutes);
-        Assert.AreEqual(SelectionOutcome.ProfileRejected, ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now), [web]).Outcome, "A release below the cutoff waits.");
-        Assert.AreEqual("bluray", ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now), [web, bluRay]).Winner!.Candidate.Id, "A release that meets the cutoff bypasses the wait.");
-        var afterWait = ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now.AddMinutes(-61)), [web]);
-        Assert.AreEqual(SelectionDecision.Temporary, afterWait.Winner!.Decision, "After the wait the lower quality is taken, and the target stays wanted for an upgrade.");
-    }
-
-    [TestMethod]
     public void AFileWhoseQualityCannotBeReadIsReplacedByAnyKnownQualityOnlyWhereTheMediaTypeAsksForIt()
     {
         var profile = Profile() with { UpgradeCutoffQuality = "BLURAY-1080p" };
@@ -210,27 +168,14 @@ public sealed class ReleaseSelectionEngineTests
     [TestMethod]
     public void UpgradeNeedsAMeaningfulBenefit()
     {
-        var profile = Profile() with { UpgradeMinimumScoreDelta = 10, UpgradeUntilScore = 40, UpgradeCutoffQuality = "BLURAY-1080p" };
+        var profile = Profile() with { UpgradeCutoffQuality = "BLURAY-1080p" };
         ReleaseScoreResult Result(string quality, int rank, int score) => new(new ReleaseCandidate(ReleaseParser.Parse("Show.S01E01.1080p.WEB-DL.H264-GRP")), true, score, quality, rank, [], []);
         var current = Result("WEB-1080p", 1, 10);
 
-        Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, current, Result("WEB-1080p", 1, 14)), "A small score difference never churns files.");
-        Assert.IsTrue(ReleaseScorer.IsUpgrade(profile, current, Result("WEB-1080p", 1, 25)));
+        Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, current, Result("WEB-1080p", 1, 90)), "A better preference within the same quality never churns files.");
         Assert.IsTrue(ReleaseScorer.IsUpgrade(profile, current, Result("BLURAY-1080p", 0, 10)), "A better quality tier is an upgrade.");
-        Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, Result("WEB-1080p", 1, 45), Result("WEB-1080p", 1, 90)), "Upgrades stop at the configured score.");
         Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, current, Result("HDTV-1080p", 2, 99)), "Never a downgrade.");
         Assert.IsFalse(ReleaseScorer.IsUpgrade(Profile() with { UpgradeMinimumQualitySteps = 2, UpgradeCutoffQuality = "BLURAY-1080p" }, current, Result("BLURAY-1080p", 0, 10)), "One step is not enough when two are required.");
-    }
-
-    [TestMethod]
-    public void ProfileValidationRejectsUnorderedFallbackTiersAndUnknownQualities()
-    {
-        var unordered = Profile() with { FallbackTiers = [new FallbackTier(600, ["WEB-720p"]), new FallbackTier(60, ["HDTV-720p"])] };
-        var unknown = Profile() with { FallbackTiers = [new FallbackTier(60, ["WEB-480p"])] };
-
-        Assert.IsTrue(ReleaseScorer.ValidateProfile(unordered).Any(error => error.Contains("wait longer")));
-        Assert.IsTrue(ReleaseScorer.ValidateProfile(unknown).Any(error => error.Contains("WEB-480p")));
-        Assert.AreEqual(0, ReleaseScorer.ValidateProfile(Profile()).Count);
     }
 
     [TestMethod]
