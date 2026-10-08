@@ -328,6 +328,7 @@ public sealed class WorkService(AppDbContext db)
             details);
         await db.SaveChangesAsync(cancellationToken);
         await MoveMonitoringAsync(sourceWorkId, targetWorkId, cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "WantedItems" WHERE "WorkId" = {sourceWorkId}""", cancellationToken);
 
         db.Set<Work>().Remove(source);
         await db.SaveChangesAsync(cancellationToken);

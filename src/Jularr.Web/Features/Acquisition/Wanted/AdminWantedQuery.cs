@@ -53,7 +53,7 @@ public enum AdminWantedSort
 }
 
 /// <summary>One thing Jularr still needs, from any source, in the shape the Wanted page shows.</summary>
-public sealed record WantedItem(
+public sealed record WantedRow(
     string Id,
     WantedSource Source,
     MediaAcquisitionKind Kind,
@@ -138,7 +138,7 @@ public sealed record AdminWantedFilter(
 
 /// <summary>One page of the wanted list plus what the filter bar, the tabs and the pager need.</summary>
 public sealed record AdminWantedPage(
-    IReadOnlyList<WantedItem> Items,
+    IReadOnlyList<WantedRow> Items,
     AdminWantedFilter Filter,
     IReadOnlyDictionary<AdminWantedTab, int> TabCounts,
     IReadOnlyList<MediaAcquisitionKind> Kinds,
@@ -167,7 +167,7 @@ public enum WantedAgeUnit
 
 /// <summary>
 /// Admin → Wanted: the acquisition worklist. Approved requests of every media type and the
-/// monitored anime episodes that are missing arrive as <see cref="WantedItem"/>s; this class
+/// monitored anime episodes that are missing arrive as <see cref="WantedRow"/>s; this class
 /// decides which state each one is in, narrows, sorts and pages them. The list of one server is
 /// small, so it is read once and narrowed here; that keeps tab counts and filters consistent.
 /// </summary>
@@ -284,7 +284,7 @@ public static class AdminWantedQuery
             : (WantedAgeUnit.Days, (int)span.TotalDays);
     }
 
-    public static AdminWantedPage Build(IReadOnlyList<WantedItem> items, AdminWantedFilter filter)
+    public static AdminWantedPage Build(IReadOnlyList<WantedRow> items, AdminWantedFilter filter)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(filter);
@@ -340,13 +340,13 @@ public static class AdminWantedQuery
         return new AdminWantedPage(pageItems, filter with { Page = page }, counts, kinds, languages, profiles, matching.Length, pageCount);
     }
 
-    private static bool Matches(WantedItem item, string search) =>
+    private static bool Matches(WantedRow item, string search) =>
         item.Title.Contains(search, StringComparison.CurrentCultureIgnoreCase)
         || (item.Selection?.Contains(search, StringComparison.CurrentCultureIgnoreCase) ?? false);
 
-    private static IEnumerable<WantedItem> Sort(IEnumerable<WantedItem> items, AdminWantedSort sort)
+    private static IEnumerable<WantedRow> Sort(IEnumerable<WantedRow> items, AdminWantedSort sort)
     {
-        static IOrderedEnumerable<WantedItem> Unit(IOrderedEnumerable<WantedItem> ordered) => ordered
+        static IOrderedEnumerable<WantedRow> Unit(IOrderedEnumerable<WantedRow> ordered) => ordered
             .ThenBy(item => item.Season ?? 0)
             .ThenBy(item => item.Episode ?? 0)
             .ThenBy(item => item.Volume ?? 0)

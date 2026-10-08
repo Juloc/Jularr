@@ -210,28 +210,6 @@ public sealed class CanonicalMonitoringTests
     }
 
     [TestMethod]
-    public async Task SeveralRelationsReachingOneMovieCreateOneRequestThatTheNextPassDoesNotRepeat()
-    {
-        await using var db = await MediaCoreTestSupport.CreateDbAsync();
-        var movie = await new WorkService(db).CreateWorkAsync(WorkMediaType.Movie, "Shared", 2020, CancellationToken.None);
-        db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = movie.Id, MediaType = WorkMediaType.Movie, Provider = "tmdb", ExternalId = "4711", IsPrimary = true, Evidence = "test" });
-        await db.SaveChangesAsync();
-        await AddCreditAsync(db, movie.Id, "p1", WorkCreditKind.Crew, "Director");
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""INSERT INTO "WorkMetadataFacts" ("WorkId", "OriginalLanguage", "Studios", "ProductionCountries", "UpdatedAt") VALUES ({movie.Id}, 'en', ARRAY['Studio X'], ARRAY[]::text[], now())""");
-        var commands = Commands(db);
-        await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Person, "p1", "Pat", null, "owner"), true, false, CancellationToken.None);
-        await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Studio, "studio x", "Studio X", null, "owner"), true, false, CancellationToken.None);
-        var source = new MonitoringWantedSource(MediaAcquisitionKind.Movie, db, new AcquisitionAccessStore(db), new MonitoringResolver(db));
-
-        var first = await source.PrepareAsync(DateTime.UtcNow, CancellationToken.None);
-        var second = await source.PrepareAsync(DateTime.UtcNow, CancellationToken.None);
-
-        Assert.AreEqual((1, 0), (first, second), "The relations are not Wanted items; the Work they reach is requested once.");
-        Assert.AreEqual(1, (await new AcquisitionAccessStore(db).ListAllAsync(10, CancellationToken.None)).Count);
-    }
-
-    [TestMethod]
     public async Task ARequestChoiceBecomesOrdinaryDecisionsOfTheWork()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();

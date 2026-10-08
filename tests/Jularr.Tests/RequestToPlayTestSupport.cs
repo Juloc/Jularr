@@ -359,6 +359,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(MonitoringTestSupport.Resolver(Db))
             .AddSingleton(MonitoringTestSupport.Commands(Db))
             .AddSingleton(MonitoringTestSupport.Scopes(Db))
+            .AddSingleton(new WantedReconciler(Db, Clock))
             .AddSingleton<VideoAcquisitionEngine>()
             .AddSingleton<IJularrEventPublisher, RecordingEventPublisher>()
             .AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(Pages.Capabilities))

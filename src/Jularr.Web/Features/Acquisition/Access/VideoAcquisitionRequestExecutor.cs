@@ -151,6 +151,7 @@ public sealed partial class VideoAcquisitionEngine(
     AcquisitionAccessStore requestStore,
     VideoRequestWorkResolver works,
     MonitoringResolver monitoring,
+    WantedReconciler wanted,
     VideoRequestScopeResolver scopes,
     TimeProvider clock,
     InstalledVideoVersions? installed = null,
@@ -736,16 +737,18 @@ public sealed partial class VideoAcquisitionEngine(
         CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow().UtcDateTime;
+        await wanted.ReconcileAsync(payload.WorkId, cancellationToken);
+        var wantedIds = await wanted.TargetIdsAsync(payload.WorkId, WantedTargetKind.Episode, cancellationToken);
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
-        var wanted = episodes
+        var next = episodes
             .Where(x => !x.HasFile)
-            .Where(x => IsWanted(view, payload, now, x))
+            .Where(x => wantedIds.Contains(x.Id) || (view.IsAnyMonitored && payload.IsPlaybackUnit(x.Id, now)))
             .Where(x => x.AiredAt is null || x.AiredAt <= now)
             .OrderBy(x => payload.IsPlaybackUnit(x.Id, now) ? 0 : 1)
             .ThenBy(x => x.SeasonNumber)
             .ThenBy(x => x.EpisodeNumber)
             .ToArray();
-        return new VideoUnitScope(episodes, wanted);
+        return new VideoUnitScope(episodes, next);
     }
 
     /// <summary>Whether an episode is wanted: its monitoring, or a playback intent for it while anything of the Work is monitored.</summary>

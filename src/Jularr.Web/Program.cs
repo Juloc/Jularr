@@ -582,6 +582,7 @@ builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisi
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.WantedReconciler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.VideoManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.MovieAcquisitionRequestExecutor>();
@@ -600,14 +601,17 @@ foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.Media
 }
 foreach (var monitoredKind in new[]
 {
-    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie,
-    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv,
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book,
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.LightNovel,
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga
 })
 {
     builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Monitoring.MonitoringWantedSource>(services, monitoredKind));
+}
+
+foreach (var videoKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv })
+{
+    builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.VideoWantedSource>(services, videoKind));
 }
 
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicMonitoringService>();

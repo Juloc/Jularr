@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Acquisition.Api;
 using Jularr.Web.Features.Acquisition.History;
 using Jularr.Web.Features.Ai;
@@ -55,6 +56,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
     public DbSet<StoredFile> MediaFiles => StoredFiles;
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
+
+    public DbSet<WantedItem> WantedItems => Set<WantedItem>();
     public DbSet<LibraryReconciliationPlan> LibraryReconciliationPlans => Set<LibraryReconciliationPlan>();
     public DbSet<LibraryReconciliationPlanItem> LibraryReconciliationPlanItems => Set<LibraryReconciliationPlanItem>();
     public DbSet<LibraryReconciliationLogicalGroup> LibraryReconciliationLogicalGroups => Set<LibraryReconciliationLogicalGroup>();
@@ -315,6 +318,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasOne<WorkVersion>().WithMany().HasForeignKey(x => x.WorkVersionId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.WorkVersionId, x.Kind }).IsUnique();
             entity.HasIndex(x => new { x.WorkId, x.WorkEpisodeId, x.Kind });
+        });
+
+        modelBuilder.Entity<WantedItem>(entity =>
+        {
+            entity.ToTable("WantedItems", table => table.HasCheckConstraint("CK_WantedItems_TargetKind", "\"TargetKind\" >= 0 AND \"TargetKind\" <= 6"));
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.TargetKind).HasConversion<short>();
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.TargetKind, x.TargetId }).IsUnique();
+            entity.HasIndex(x => x.WorkId);
         });
 
         modelBuilder.Entity<StoredFile>(entity =>

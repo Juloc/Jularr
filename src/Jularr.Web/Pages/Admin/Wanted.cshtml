@@ -16,7 +16,7 @@
         (AdminWantedTab.Searching, ui["admin.wanted.status.searching"]),
         (AdminWantedTab.Failed, ui["admin.wanted.status.failed"])
     };
-    string? ManualSearchUrl(WantedItem item)
+    string? ManualSearchUrl(WantedRow item)
     {
         if (!item.CanSearch)
         {

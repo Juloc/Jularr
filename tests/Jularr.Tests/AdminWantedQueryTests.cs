@@ -329,7 +329,7 @@ public sealed class AdminWantedQueryTests
         Assert.IsNull(orphan.DetailUrl);
     }
 
-    private static WantedItem Item(
+    private static WantedRow Item(
         string id,
         MediaAcquisitionKind kind,
         WantedStatus status,

@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Monitoring;
 
 /// <summary>
-/// The Wanted side of relation monitoring for Movies, Series, Books, Light Novels and Manga: a Work that is monitored (through a person, a studio, a
+/// The Wanted side of relation monitoring for Books, Light Novels and Manga: a Work that is monitored (through a person, a studio, a
 /// collection or its own decision) and was never requested gets one approved request on the shared lifecycle. The request is the only Wanted state, so a
 /// Work reached by several sources still has one request (the store's unique open-request index). Nothing is searched here, and a Work that was requested
 /// before keeps the request it has.
@@ -22,8 +22,6 @@ public sealed class MonitoringWantedSource(MediaAcquisitionKind kind, AppDbConte
 
     public static WorkMediaType WorkTypeOf(MediaAcquisitionKind kind) => kind switch
     {
-        MediaAcquisitionKind.Movie => WorkMediaType.Movie,
-        MediaAcquisitionKind.Tv => WorkMediaType.Series,
         MediaAcquisitionKind.Book => WorkMediaType.Book,
         MediaAcquisitionKind.LightNovel => WorkMediaType.LightNovel,
         MediaAcquisitionKind.Manga => WorkMediaType.Manga,
@@ -78,10 +76,7 @@ public sealed class MonitoringWantedSource(MediaAcquisitionKind kind, AppDbConte
         return created;
     }
 
-    /// <summary>A Movie or Series is requested by its TMDB, TVDB or IMDb id, the others by the id their request flow uses.</summary>
-    private bool CanBeRequested(string provider, string externalId) => kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
-        ? provider is "tmdb" or "tvdb" or "imdb"
-        : RequestWorkBinder.IsTrustworthy(kind, provider, externalId);
+    private bool CanBeRequested(string provider, string externalId) => RequestWorkBinder.IsTrustworthy(kind, provider, externalId);
 
     private sealed record Candidate(Guid WorkId, string Provider, string ExternalId, string Title);
 }

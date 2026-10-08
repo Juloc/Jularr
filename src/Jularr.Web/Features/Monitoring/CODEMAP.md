@@ -21,10 +21,9 @@ pass must look at (any node switched on counts).
 - `ApplySelectionAsync`, `SetEpisodesByNumberAsync`, `SetSeasonsByNumberAsync`: request dialog and anime (addressed by number).
 - `SetRelationAsync(source, monitored, onlyFuture)`: add or remove a relation source.
 
-## Wanted reconciliation (`MonitoringWantedSource.cs`)
-`IWantedSource` per media kind. A monitored Work that was never requested gets one approved request (the request is the
-Wanted state; the unique open-request index prevents duplicates, several relations reaching one Work make one request).
-The acquisition engines then read the same view per unit (`VideoAcquisitionEngine.IsWanted`, `AnimeMonitoring.IsUnitMonitored`).
+## Wanted
+Monitoring only states intent. `Features/Acquisition/Wanted` (see its CODEMAP) reconciles it into `WantedItems` and the engines read that queue.
+Books, Light Novels and Manga still use `MonitoringWantedSource` until they move onto it.
 
 ## API (`MonitoringEndpoints.cs`, `/api/monitoring/v1`)
 `GET works/{id}`, `PUT targets/{kind}/{id}`, `POST works/{id}/future`, `PUT relations/{kind}/{key}`.

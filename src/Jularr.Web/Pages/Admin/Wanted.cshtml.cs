@@ -49,7 +49,7 @@ public sealed class WantedModel(
     public IReadOnlyDictionary<Guid, string> WorkPosters { get; private set; } = new Dictionary<Guid, string>();
 
     /// <summary>The cover of a row: the canonical Work poster of a Movie or Series, the cover the source carries for everything else.</summary>
-    public string? CoverOf(WantedItem item) => item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
+    public string? CoverOf(WantedRow item) => item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
         ? item.WorkId is { } workId ? WorkPosters.GetValueOrDefault(workId) : null
         : item.CoverUrl;
 
@@ -79,7 +79,7 @@ public sealed class WantedModel(
     }
 
     /// <summary>The unit a row is about: "Season 2, episode 13", "Volume 42", the requested seasons, or nothing for a whole title.</summary>
-    public string? UnitLabel(WantedItem item)
+    public string? UnitLabel(WantedRow item)
     {
         if (item.Scope == RequestScope.Seasons && item.Selection is { } seasons)
         {
@@ -133,7 +133,7 @@ public sealed class WantedModel(
     }
 
     /// <summary>What the last search of a row came to, in a few words; the acquisition's own message wins.</summary>
-    public string? ResultLabel(WantedItem item)
+    public string? ResultLabel(WantedRow item)
     {
         if (item.Note is { } note)
         {
