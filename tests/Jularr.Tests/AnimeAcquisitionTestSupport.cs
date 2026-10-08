@@ -302,9 +302,10 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         int? episodeCount = 2,
         AnimeManagementMode? mode = AnimeManagementMode.JularrManaged,
         bool seasonFolders = true,
-        string? status = null)
+        string? status = null,
+        string firstEpisodeFile = "Frieren - S01E01 - Episode 1.mkv")
     {
-        AddLibraryFile(seasonFolders ? ["Frieren", "Season 01", "Frieren - S01E01 - Episode 1.mkv"] : ["Frieren", "Frieren - S01E01 - Episode 1.mkv"]);
+        AddLibraryFile(seasonFolders ? ["Frieren", "Season 01", firstEpisodeFile] : ["Frieren", firstEpisodeFile]);
         await ScanAsync();
 
         var anime = await Db.Anime.AsNoTracking().SingleAsync(item => item.Key == AnimeKey);
@@ -657,6 +658,8 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(provider => new SwitchedAnimeWantedSource(provider.GetRequiredService<AnimeWantedSwitch>(), new AnimeWantedSource(provider.GetRequiredService<AnimeAcquisitionScheduler>())));
         collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(provider => new SwitchedAnimeWantedSource(provider.GetRequiredService<AnimeWantedSwitch>(), new AnimeEpisodesWantedSource(provider.GetRequiredService<AnimeCanonicalEpisodes>(), provider.GetRequiredService<AnimeCanonicalEpisodesState>())));
         collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(provider => new SwitchedAnimeWantedSource(provider.GetRequiredService<AnimeWantedSwitch>(), new Jularr.Web.Features.Acquisition.Wanted.WantedRequestSource(MediaAcquisitionKind.Anime, provider.GetRequiredService<Jularr.Web.Features.Acquisition.Wanted.WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<AnimeRequestDrafter>())));
+        collection.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.UpgradeScanState>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(provider => new SwitchedAnimeWantedSource(provider.GetRequiredService<AnimeWantedSwitch>(), ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.UpgradeWantedSource>(provider, MediaAcquisitionKind.Anime)));
         collection.AddScoped<AcquisitionApiKeyService>();
         collection.AddScoped<AcquisitionApiService>();
         collection.AddHttpClient();

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -50,7 +51,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
 
             if (choice.Scope is VideoRequestScope.WholeWork or VideoRequestScope.AllCurrentAndFuture)
             {
-                await InsertWorkAsync(id, workId, now, WantedTargetKind.Work, cancellationToken);
+                await InsertWorkAsync(id, workId, now, cancellationToken);
             }
             else if (choice.Scope == VideoRequestScope.Custom)
             {
@@ -71,11 +72,16 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
 
         if (request.Kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Manga or MediaAcquisitionKind.Music)
         {
-            await InsertWorkAsync(id, workId, now, WantedTargetKind.Work, cancellationToken);
+            await InsertWorkAsync(id, workId, now, cancellationToken);
         }
         else if (request.Kind == MediaAcquisitionKind.Audiobook)
         {
-            await InsertWorkAsync(id, workId, now, WantedTargetKind.Edition, cancellationToken);
+            // The audio edition of the Book Work is a canonical edition of its own, made now so it is wanted before any file exists.
+            var editionId = await AudiobookEditions.EnsureAsync(db, workId, cancellationToken);
+            await db.Database.ExecuteSqlRawAsync(
+                WantedSql.RecordEdition,
+                [new NpgsqlParameter("requestId", id), new NpgsqlParameter("editionId", editionId), new NpgsqlParameter("now", now)],
+                cancellationToken);
         }
     }
 
@@ -83,11 +89,11 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
     public async Task<bool> HasAsync(Guid requestId, CancellationToken cancellationToken) =>
         await db.Database.SqlQueryRaw<bool>(WantedSql.HasRequestTargets, new NpgsqlParameter("requestId", requestId.ToString())).SingleAsync(cancellationToken);
 
-    // The Work row says the whole title; an audiobook request names the audio edition of the Work, which has no row of its own, so it is the Work's id as an edition target.
-    private async Task InsertWorkAsync(string requestId, Guid workId, DateTime now, WantedTargetKind kind, CancellationToken cancellationToken) =>
+    // The Work row says the whole title.
+    private async Task InsertWorkAsync(string requestId, Guid workId, DateTime now, CancellationToken cancellationToken) =>
         await db.Database.ExecuteSqlRawAsync(
             WantedSql.RecordWork,
-            [new NpgsqlParameter("requestId", requestId), new NpgsqlParameter("workId", workId), new NpgsqlParameter("now", now), new NpgsqlParameter<short>("targetKind", (short)kind)],
+            [new NpgsqlParameter("requestId", requestId), new NpgsqlParameter("workId", workId), new NpgsqlParameter("now", now)],
             cancellationToken);
 
     // The canonical Work a request is about: the bound Work, else the one its payload names (video and music payloads carry it), else the one its

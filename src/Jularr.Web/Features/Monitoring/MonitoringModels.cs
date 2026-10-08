@@ -8,7 +8,10 @@ public enum MonitoringTargetKind : short
     Episode = 2,
     Volume = 3,
     Chapter = 4,
-    Track = 5
+    Track = 5,
+
+    /// <summary>The audio edition of a Book Work: decided on its own, never by the Book's decision.</summary>
+    Edition = 6
 }
 
 /// <summary>A canonical relation that can be monitored as a whole; every Work it reaches is monitored unless that Work decides otherwise.</summary>
@@ -56,6 +59,9 @@ public sealed class WorkMonitoringView(Guid workId, IReadOnlyDictionary<Guid, Mo
 
     /// <summary>Whether any season, episode, volume, chapter or track carries a decision of its own.</summary>
     public bool HasNodeDecisions => decisions.Values.Any(decision => decision.Kind != MonitoringTargetKind.Work);
+
+    /// <summary>Whether the audio edition is monitored: only its own decision says so, whatever the Book itself is.</summary>
+    public bool IsEditionMonitored(Guid editionId) => DecisionOf(editionId) ?? false;
 
     public bool? DecisionOf(Guid targetId) => decisions.TryGetValue(targetId, out var decision) ? decision.Monitored : null;
 

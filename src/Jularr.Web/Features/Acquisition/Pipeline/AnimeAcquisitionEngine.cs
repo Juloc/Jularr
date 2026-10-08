@@ -32,7 +32,6 @@ public sealed class AnimeAcquisitionEngine(
     AcquisitionOwnershipStore ownershipStore,
     SabnzbdAcquisitionStore blocklist,
     AcquisitionHistoryService history,
-    WantedReconciler wanted,
     TimeProvider clock)
 {
     public const string OperationKind = "anime-usenet-download";
@@ -70,7 +69,7 @@ public sealed class AnimeAcquisitionEngine(
             return new AcquisitionExecution(AcquisitionRequestStatus.Failed, "The series is no longer in the library.");
         }
 
-        var wantedEpisodes = await WantedEpisodesAsync(scope, target, now, cancellationToken);
+        var wantedEpisodes = WantedEpisodes(scope, now);
         if (wantedEpisodes.Count == 0)
         {
             return await WaitAsync(request, payload, now + IdleWait, waitingMessage, scope.ResultUrl, cancellationToken);
@@ -152,26 +151,11 @@ public sealed class AnimeAcquisitionEngine(
     }
 
     // The wanted episodes of the request in order: what is missing first, then what the shared upgrade policy still wants better.
-    private async Task<IReadOnlyList<AnimeWantedEpisode>> WantedEpisodesAsync(AnimeRequestScope scope, AnimeAcquisitionTarget target, DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        var missing = scope.Missing.Select(key => new AnimeWantedEpisode(key, AnimeWantedReason.Missing, now)).ToList();
-        var workId = await db.WorkSourceLinks.AsNoTracking().Where(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == scope.Slots.Anime.Id).Select(link => (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
-        if (workId is not { } work)
-        {
-            return missing;
-        }
-
-        await wanted.ReconcileAsync(work, cancellationToken);
-        var rows = await wanted.TargetIdsAsync(work, WantedTargetKind.Episode, cancellationToken);
-        var upgradable = (await db.WorkEpisodes.AsNoTracking().Where(episode => rows.Contains(episode.Id)).Select(episode => new { episode.SeasonNumber, episode.EpisodeNumber }).ToListAsync(cancellationToken))
-            .Select(episode => target.Find(episode.SeasonNumber, episode.EpisodeNumber))
-            .OfType<AnimeAcquisitionEpisode>()
-            .Where(slot => slot.HasFile && scope.Requested.Any(requested => requested.Key.SeasonNumber == slot.Key.SeasonNumber && requested.Key.EpisodeNumber == slot.Key.EpisodeNumber))
-            .OrderBy(slot => slot.Key.SeasonNumber)
-            .ThenBy(slot => slot.Key.EpisodeNumber)
-            .Select(slot => new AnimeWantedEpisode(slot.Key, AnimeWantedReason.CutoffUnmet, now));
-        return [.. missing, .. upgradable];
-    }
+    private static IReadOnlyList<AnimeWantedEpisode> WantedEpisodes(AnimeRequestScope scope, DateTimeOffset now) =>
+    [
+        .. scope.Missing.Select(key => new AnimeWantedEpisode(key, AnimeWantedReason.Missing, now)),
+        .. scope.Upgradable.Select(key => new AnimeWantedEpisode(key, AnimeWantedReason.CutoffUnmet, now))
+    ];
 
     // The grab is recorded like the old pipeline did: the Jularr ownership of the job (so the importer may place its files) and one history entry per episode.
     public async Task RecordGrabAsync(AnimeAcquisitionTarget target, IReadOnlyList<AnimeEpisodeKey> episodes, ReleaseEvaluation<AnimeMatch> chosen, Guid operationId, DateTimeOffset now, CancellationToken cancellationToken)

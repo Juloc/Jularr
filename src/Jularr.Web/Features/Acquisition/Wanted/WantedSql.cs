@@ -1,3 +1,4 @@
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Monitoring;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
@@ -91,12 +92,15 @@ internal static class WantedSql
                               WHERE (asked."TargetKind" = 1 AND asked."TargetId" = episode."Id") OR (asked."TargetKind" = 0 AND asked."TargetId" = episode."WorkId")))
               AND (episode."AiredAt" IS NULL OR episode."AiredAt" <= @now)
         ),
-        -- The audio edition of a Book Work is wanted only while a request names it; Monitoring of the Book never asks for it.
+        -- The audio edition of a Book Work is its own target: wanted while its own decision monitors it or a request names it, never because the Book is monitored.
         intended_audiobooks AS (
-            SELECT work."Id" AS "WorkId", work."MediaType", 4::smallint AS "TargetKind", work."Id" AS "TargetId", {{AudiobookInstalled}} AS "Installed"
-            FROM "Works" work
-            WHERE (@workId::uuid IS NULL OR work."Id" = @workId)
-              AND EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 4 AND asked."TargetId" = work."Id")
+            SELECT edition."WorkId", work."MediaType", 4::smallint AS "TargetKind", edition."Id" AS "TargetId", {{AudiobookInstalled}} AS "Installed"
+            FROM "WorkEditions" edition
+            JOIN "Works" work ON work."Id" = edition."WorkId"
+            LEFT JOIN "WorkMonitoring" decision ON decision."TargetId" = edition."Id"
+            WHERE edition."Format" = '{{LegacyWorkBridge.AudiobookEditionFormat}}' AND (@workId::uuid IS NULL OR edition."WorkId" = @workId)
+              AND (COALESCE(decision."Monitored", FALSE)
+                   OR EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 4 AND asked."TargetId" = edition."Id"))
         ),
         intended AS (
             SELECT * FROM intended_works
@@ -230,7 +234,14 @@ internal static class WantedSql
     public const string RecordWork =
         """
         INSERT INTO "RequestTargets" ("RequestId", "WorkId", "TargetKind", "TargetId", "CreatedAt")
-        SELECT @requestId, work."Id", @targetKind, work."Id", @now FROM "Works" work WHERE work."Id" = @workId
+        SELECT @requestId, work."Id", 0, work."Id", @now FROM "Works" work WHERE work."Id" = @workId
+        ON CONFLICT DO NOTHING
+        """;
+
+    public const string RecordEdition =
+        """
+        INSERT INTO "RequestTargets" ("RequestId", "WorkId", "TargetKind", "TargetId", "CreatedAt")
+        SELECT @requestId, edition."WorkId", 4, edition."Id", @now FROM "WorkEditions" edition WHERE edition."Id" = @editionId
         ON CONFLICT DO NOTHING
         """;
 

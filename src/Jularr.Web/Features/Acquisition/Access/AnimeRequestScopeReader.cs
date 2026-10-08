@@ -2,19 +2,21 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
+using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Metadata;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Acquisition.Access;
 
-/// <summary>What an Anime request covers: the slots of its series, the requested ones that have aired, the ones still without a file, and whether nothing can be tracked for it.</summary>
-public sealed record AnimeRequestScope(AnimeEpisodeSlots Slots, IReadOnlyList<AnimeEpisodeSlot> Requested, IReadOnlyList<AnimeEpisodeKey> Missing, bool Untracked, string ResultUrl);
+/// <summary>What an Anime request covers: the slots of its series, the requested ones that have aired, the ones still without a file, the ones with a file the profile wants better, and whether nothing can be tracked for it.</summary>
+public sealed record AnimeRequestScope(AnimeEpisodeSlots Slots, IReadOnlyList<AnimeEpisodeSlot> Requested, IReadOnlyList<AnimeEpisodeKey> Missing, IReadOnlyList<AnimeEpisodeKey> Upgradable, bool Untracked, string ResultUrl);
 
 /// <summary>
 /// Reads what an Anime request covers against the monitoring, ownership and release calendar loaded once for the reader. A request covers the monitored episodes of
 /// its scope that the anime tracks and that have aired; it is Completed when all of them have a file and at least one does. Episodes that air later are picked up by
-/// the series' monitoring without the request staying open for them. Nothing here writes.
+/// the series' monitoring without the request staying open for them. An episode the Wanted queue holds as an upgrade keeps the request open; the queue of the anime is brought up to date first.
 /// </summary>
 public sealed class AnimeRequestScopeReader(
     AppDbContext db,
@@ -22,6 +24,7 @@ public sealed class AnimeRequestScopeReader(
     ReleaseCalendarCacheStore calendar,
     AnimeMonitoring animeMonitoring,
     AcquisitionOwnershipState ownership,
+    WantedReconciler wanted,
     IReadOnlyDictionary<string, ReleaseCacheSource> releaseSources,
     DateTime nowUtc)
 {
@@ -52,18 +55,25 @@ public sealed class AnimeRequestScopeReader(
         var inScope = slots.Slots.Where(slot => options.Includes(slot.Key.SeasonNumber, slot.Key.EpisodeNumber) && AnimeMonitoring.IsUnitMonitored(view, slot.Key)).ToArray();
         var requested = inScope.Where(slot => !IsKnownNotAired(slot, airedUpTo)).ToArray();
         var missing = requested.Where(slot => !slot.HasFile).Select(slot => slot.Key).ToArray();
+        if (await db.WorkSourceLinks.AsNoTracking().Where(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == slots.Anime.Id).Select(link => (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken) is { } workId)
+        {
+            await wanted.ReconcileAsync(workId, cancellationToken);
+        }
+
+        var queued = (await AnimeCanonicalEpisodes.WantedAsync(db, slots.Anime.Key, cancellationToken)).Where(item => item.Reason == AnimeWantedReason.CutoffUnmet).Select(item => (item.Key.SeasonNumber, item.Key.EpisodeNumber)).ToHashSet();
+        var upgradable = requested.Where(slot => slot.HasFile && queued.Contains((slot.Key.SeasonNumber, slot.Key.EpisodeNumber))).Select(slot => slot.Key).ToArray();
 
         // Nothing the anime tracks for this request can be searched, or episodes have aired that it does not track at all: the request is not
         // available however many files exist, and it says why instead of looking like a search that is running.
         var untracked = inScope.Length == 0 || (slots.ExpectedEpisodesUnknown && AiredBeyondTracked(slots, airedUpTo));
-        return new AnimeRequestScope(slots, requested, missing, untracked, resultUrl);
+        return new AnimeRequestScope(slots, requested, missing, upgradable, untracked, resultUrl);
     }
 
     /// <summary>Where the request stands against its scope: Completed when everything requested that has aired is in the library, held back when Sonarr owns the series, else waiting for a search.</summary>
     public AcquisitionExecution Decide(AnimeRequestScope scope)
     {
-        var (slots, requested, missing, untracked, resultUrl) = scope;
-        if (!untracked && missing.Count == 0 && requested.Any(slot => slot.HasFile))
+        var (slots, requested, missing, upgradable, untracked, resultUrl) = scope;
+        if (!untracked && missing.Count == 0 && upgradable.Count == 0 && requested.Any(slot => slot.HasFile))
         {
             return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "The requested episodes are in the library.", ResultUrl: resultUrl);
         }

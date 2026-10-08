@@ -17,7 +17,8 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         [MonitoringTargetKind.Episode] = ("WorkEpisodes", "WorkId"),
         [MonitoringTargetKind.Volume] = ("WorkVolumes", "WorkId"),
         [MonitoringTargetKind.Chapter] = ("WorkChapters", "WorkId"),
-        [MonitoringTargetKind.Track] = ("WorkTracks", "WorkId")
+        [MonitoringTargetKind.Track] = ("WorkTracks", "WorkId"),
+        [MonitoringTargetKind.Edition] = ("WorkEditions", "WorkId")
     };
 
     // The statements per node kind are built once from the fixed table list above; no caller input ever reaches an identifier.
@@ -36,7 +37,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
     // The decisions a container's own decision replaces: all of a Work, the episodes of a season, the chapters of a volume.
     private static readonly IReadOnlyDictionary<MonitoringTargetKind, string> DescendantsSql = new Dictionary<MonitoringTargetKind, string>
     {
-        [MonitoringTargetKind.Work] = """DELETE FROM "WorkMonitoring" WHERE "WorkId" = {0} AND "TargetId" <> {0}""",
+        [MonitoringTargetKind.Work] = """DELETE FROM "WorkMonitoring" WHERE "WorkId" = {0} AND "TargetId" <> {0} AND "Kind" <> 6""",
         [MonitoringTargetKind.Season] = """DELETE FROM "WorkMonitoring" WHERE "TargetId" IN (SELECT "Id" FROM "WorkEpisodes" WHERE "SeasonId" = {0})""",
         [MonitoringTargetKind.Volume] = """DELETE FROM "WorkMonitoring" WHERE "TargetId" IN (SELECT "Id" FROM "WorkChapters" WHERE "VolumeId" = {0})"""
     };
@@ -72,6 +73,20 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
             },
             cancellationToken);
         return workId;
+    }
+
+    /// <summary>
+    /// Switches the audiobook of a Book Work on or off (null returns it to not monitored), independent of the Book: the audio edition is made when it is first asked
+    /// for, and no decision on the Book touches this one. Returns the Work, or null when it is not a Book.
+    /// </summary>
+    public async Task<Guid?> SetAudiobookAsync(Guid workId, bool? monitored, CancellationToken cancellationToken)
+    {
+        if (!await db.Works.AnyAsync(work => work.Id == workId && work.MediaType == MediaCore.WorkMediaType.Book, cancellationToken))
+        {
+            return null;
+        }
+
+        return await SetAsync(MonitoringTargetKind.Edition, await MediaCore.AudiobookEditions.EnsureAsync(db, workId, cancellationToken), monitored, cancellationToken);
     }
 
     /// <summary>
@@ -169,7 +184,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         var now = clock.GetUtcNow();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "TargetId" <> {workId};
+            DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "TargetId" <> {workId} AND "Kind" <> 6;
             INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
             SELECT w."Id", 0, w."Id", TRUE, {now} FROM "Works" w WHERE w."Id" = {workId}
             ON CONFLICT ("TargetId") DO UPDATE SET "Monitored" = TRUE, "UpdatedAt" = EXCLUDED."UpdatedAt";
@@ -194,7 +209,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         var episodes = episodeIds.Distinct().ToArray();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "TargetId" <> {workId};
+            DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "TargetId" <> {workId} AND "Kind" <> 6;
             INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
             SELECT w."Id", 0, w."Id", {future}, {now} FROM "Works" w WHERE w."Id" = {workId}
             ON CONFLICT ("TargetId") DO UPDATE SET "Monitored" = EXCLUDED."Monitored", "UpdatedAt" = EXCLUDED."UpdatedAt";

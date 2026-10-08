@@ -54,6 +54,9 @@ public static class MonitoringEndpoints
                 ? Results.Ok(await follower.FollowAsync(workId, cancellationToken))
                 : Results.NotFound());
 
+        group.MapPut("/works/{workId:guid}/audiobook", async (Guid workId, SetTargetMonitoringRequest request, MonitoringCommands commands, CancellationToken cancellationToken) =>
+            await commands.SetAudiobookAsync(workId, request.Monitored, cancellationToken) is null ? Results.NotFound() : Results.NoContent());
+
         group.MapPost("/works/{workId:guid}/future", async (Guid workId, MonitoringCommands commands, MonitoringFollower follower, CancellationToken cancellationToken) =>
         {
             await commands.FutureAsync(workId, cancellationToken);

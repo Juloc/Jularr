@@ -16,6 +16,7 @@ pass must look at (any node switched on counts).
 
 ## Commands / store (`MonitoringCommands.cs`)
 - `SetAsync(kind, id, bool?)`: Monitored / Unmonitored / null = Inherit. A Work or season decision replaces the decisions below it.
+- `SetAudiobookAsync(workId, bool?)`: the audio edition of a Book Work (a `WorkEdition`, kind Edition) is decided on its own; no decision on the Book replaces it, and monitoring the Book never wants it.
 - `SetManyAsync`: bulk, one request, one transaction, set-based SQL.
 - `FutureAsync(workId)`: Work monitored, aired episodes and all known chapters/tracks explicit Unmonitored, later ones inherit.
 - `ApplySelectionAsync`, `SetEpisodesByNumberAsync`, `SetSeasonsByNumberAsync`: request dialog and anime (addressed by number).

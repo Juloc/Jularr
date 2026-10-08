@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Naming;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -41,6 +42,7 @@ public sealed class AnimeAcquisitionRequestExecutor(
     AnimeAcquisitionInventory inventory,
     AnimeMonitoring animeMonitoring,
     AnimeAcquisitionEngine engine,
+    WantedReconciler wanted,
     LegacyWorkBridge workBridge,
     ReleaseCalendarCacheStore calendar,
     TimeProvider clock) : IAcquisitionRequestExecutor
@@ -132,6 +134,7 @@ public sealed class AnimeAcquisitionRequestExecutor(
             calendar,
             animeMonitoring,
             await ownershipStore.LoadAsync(cancellationToken),
+            wanted,
             await calendar.GetSourcesAsync(AniListReleaseNormalizer.Provider, cancellationToken),
             clock.GetUtcNow().UtcDateTime);
         var scope = await reader.ReadScopeAsync(request, cancellationToken) ?? throw new InvalidOperationException("The series of the request does not exist after it was added.");
