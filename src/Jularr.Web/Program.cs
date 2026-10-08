@@ -553,6 +553,9 @@ builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Search.SearchEvide
 builder.Services.AddScoped<IndexerSearchCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestWorkBinder>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.LibraryWorkBackfill>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestProfileAssignment>();
+builder.Services.AddHostedService<Jularr.Web.Features.Acquisition.Access.LibraryWorkBackfillService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestScopeResolver>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestWorkResolver>();

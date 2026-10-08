@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
@@ -21,6 +22,7 @@ public sealed class IndexModel(
     AppDbContext db,
     WorkService works,
     WorkQueryService query,
+    LibraryWorkBackfill libraryWorks,
     CurrentAccountContext account) : PageModel
 {
     private const int ListLimit = 50;
@@ -30,6 +32,7 @@ public sealed class IndexModel(
     public IReadOnlyList<WorkDuplicateSuggestion> Suggestions { get; private set; } = [];
     public IReadOnlyList<WorkConflictView> Conflicts { get; private set; } = [];
     public IReadOnlyList<WorkIdentityChangeView> History { get; private set; } = [];
+    public IReadOnlyList<LibraryWorkReviewItem> LibraryReview { get; private set; } = [];
 
     // Selected-work context (only populated when WorkId is set and resolves).
     public WorkSummary? Selected { get; private set; }
@@ -67,6 +70,49 @@ public sealed class IndexModel(
         await works.MergeWorksAsync(keepWorkId, mergeWorkId, account.ProfileId, cancellationToken);
         TempData["Status"] = Ui["admin.mergeReview.status.merged"];
         return RedirectToPage(new { workId = keepWorkId });
+    }
+
+    public async Task<IActionResult> OnPostLinkEntryAsync(Guid entryId, string? targetWorkId, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (!account.Can(JularrPolicies.MappingEdit))
+        {
+            return Forbid();
+        }
+
+        if (!Guid.TryParse(targetWorkId?.Trim(), out var target) || target == Guid.Empty)
+        {
+            TempData["Status"] = Ui["admin.mergeReview.status.invalidTarget"];
+            return RedirectToPage();
+        }
+
+        TempData["Status"] = Ui[StatusKey(await libraryWorks.LinkToWorkAsync(entryId, target, cancellationToken))];
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostCreateEntryWorkAsync(Guid entryId, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (!account.Can(JularrPolicies.MappingEdit))
+        {
+            return Forbid();
+        }
+
+        TempData["Status"] = Ui[StatusKey((await libraryWorks.CreateWorkAsync(entryId, cancellationToken)).Resolution)];
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostRunBackfillAsync(CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (!account.Can(JularrPolicies.MappingEdit))
+        {
+            return Forbid();
+        }
+
+        var result = await libraryWorks.RunAsync(cancellationToken);
+        TempData["Status"] = Ui.Format("admin.mergeReview.library.status.backfilled", ("bound", result.Bound), ("created", result.Created), ("review", result.Review));
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostConfirmIdentityAsync(Guid identityId, Guid? workId, CancellationToken cancellationToken)
@@ -166,8 +212,20 @@ public sealed class IndexModel(
         return RedirectToPage(new { workId });
     }
 
+    private static string StatusKey(LibraryWorkResolution resolution) => resolution switch
+    {
+        LibraryWorkResolution.Linked => "admin.mergeReview.library.status.linked",
+        LibraryWorkResolution.Created => "admin.mergeReview.library.status.created",
+        LibraryWorkResolution.AlreadyBound => "admin.mergeReview.library.status.alreadyBound",
+        LibraryWorkResolution.WrongMediaType => "admin.mergeReview.library.status.wrongMediaType",
+        LibraryWorkResolution.IdentityHeldByAnotherWork => "admin.mergeReview.library.status.heldByAnotherWork",
+        LibraryWorkResolution.WorkRepresentsAnotherEntry => "admin.mergeReview.library.status.representsAnotherEntry",
+        _ => "admin.mergeReview.status.notFound"
+    };
+
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
+        LibraryReview = await libraryWorks.ListReviewAsync(ListLimit, cancellationToken);
         Suggestions = await query.FindDuplicateSuggestionsAsync(ListLimit, cancellationToken);
         Conflicts = await query.ListConflictIdentitiesAsync(ListLimit, cancellationToken);
 

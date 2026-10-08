@@ -26,6 +26,7 @@ public sealed class RequestsModel(
     AcquisitionRequestSettingsStore settings,
     QualityProfileStore qualityProfiles,
     VideoRequestWorkResolver videoWorks,
+    RequestProfileAssignment profileAssignment,
     RequestArtworkResolver artwork,
     ILogger<RequestsModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
@@ -260,12 +261,28 @@ public sealed class RequestsModel(
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostApproveAsync(Guid id, string? returnUrl, CancellationToken cancellationToken)
+    /// <summary>Whether the owner can pick the profile while approving: the request must still wait, and have a Work the profile can be assigned to.</summary>
+    public bool CanChooseProfile(AcquisitionRequest request) =>
+        request.Status == AcquisitionRequestStatus.Pending && (RequestWorkBinder.Applies(request.Kind) || VideoWorks.ContainsKey(request.Id));
+
+    public async Task<IActionResult> OnPostApproveAsync(Guid id, string? returnUrl, string? profileId, CancellationToken cancellationToken)
     {
         // Approve, retry and "search now" are one action; a Movie or TV request runs through the same executor as every other kind.
         if (!await IsManageableAsync(id, cancellationToken))
         {
             return NotFound();
+        }
+
+        // The profile is assigned before the approval starts the search, so the first search already resolves it.
+        if (!string.IsNullOrWhiteSpace(profileId))
+        {
+            var chosen = await profileAssignment.AssignAsync((await store.GetAsync(id, cancellationToken))!, profileId.Trim(), cancellationToken);
+            if (chosen != RequestProfileResult.Assigned)
+            {
+                Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+                TempData["Status"] = Ui[chosen == RequestProfileResult.UnknownProfile ? "admin.requests.profileUnknown" : "admin.requests.profileUnavailable"];
+                return Back(returnUrl);
+            }
         }
 
         var request = await requests.ApproveAsync(id, cancellationToken);

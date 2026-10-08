@@ -210,6 +210,23 @@ public sealed class MediaCoreMergeTests
     }
 
     [TestMethod]
+    public async Task TheConflictQueueListsOnlyIdentitiesFlaggedForReviewOrderedByWorkTitle()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var works = new WorkService(db);
+        var zeta = await works.CreateWorkAsync(WorkMediaType.Book, "Zeta", null, CancellationToken.None);
+        var alpha = await works.CreateWorkAsync(WorkMediaType.Book, "Alpha", null, CancellationToken.None);
+        var settled = await works.CreateWorkAsync(WorkMediaType.Book, "Settled", null, CancellationToken.None);
+        await works.LinkExternalIdentityAsync(zeta.Id, WorkMediaType.Book, "books-catalog", "z", 0.5, "test", true, false, MappingReviewState.NeedsReview, CancellationToken.None);
+        await works.LinkExternalIdentityAsync(alpha.Id, WorkMediaType.Book, "books-catalog", "a", 0.5, "test", true, false, MappingReviewState.NeedsReview, CancellationToken.None);
+        await works.LinkExternalIdentityAsync(settled.Id, WorkMediaType.Book, "books-catalog", "s", 1.0, "test", true, false, MappingReviewState.Confirmed, CancellationToken.None);
+
+        var conflicts = await new WorkQueryService(db).ListConflictIdentitiesAsync(50, CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { "Alpha", "Zeta" }, conflicts.Select(conflict => conflict.WorkTitle).ToArray());
+    }
+
+    [TestMethod]
     public void DuplicateDetectorSuppressesAlreadyRelatedWorks()
     {
         var keep = Guid.NewGuid();

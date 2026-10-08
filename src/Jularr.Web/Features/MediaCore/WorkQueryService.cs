@@ -242,14 +242,9 @@ public sealed class WorkQueryService(AppDbContext db)
         CancellationToken cancellationToken) =>
         await db.Set<WorkExternalIdentity>().AsNoTracking()
             .Where(x => x.ReviewState == MappingReviewState.NeedsReview)
-            .Join(
-                db.Set<Work>().AsNoTracking(),
-                identity => identity.WorkId,
-                work => work.Id,
-                (identity, work) => new WorkConflictView(
-                    identity.Id, identity.WorkId, work.CanonicalTitle, identity.MediaType,
-                    identity.Provider, identity.ExternalId, identity.Confidence, identity.ReviewState))
-            .OrderBy(x => x.WorkTitle)
+            .Join(db.Set<Work>().AsNoTracking(), identity => identity.WorkId, work => work.Id, (identity, work) => new { identity, work })
+            .OrderBy(x => x.work.CanonicalTitle)
+            .Select(x => new WorkConflictView(x.identity.Id, x.identity.WorkId, x.work.CanonicalTitle, x.identity.MediaType, x.identity.Provider, x.identity.ExternalId, x.identity.Confidence, x.identity.ReviewState))
             .Take(Math.Clamp(limit, 1, 500))
             .ToListAsync(cancellationToken);
 
