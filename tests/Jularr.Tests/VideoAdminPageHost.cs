@@ -8,6 +8,7 @@ using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
@@ -83,6 +84,9 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
                     services.AddScoped<AcquisitionRequestService>();
                     services.AddScoped<VideoRequestScopeResolver>();
                     services.AddScoped<VideoRequestWorkResolver>();
+                    services.AddMediaCore();
+                    services.AddScoped<RequestWorkBinder>();
+                    services.AddScoped<RequestProfileAssignment>();
                     services.AddScoped<RequestArtworkResolver>();
                     services.AddScoped<VideoMonitoringService>();
                     services.AddScoped<AdminVideoMediaService>();
