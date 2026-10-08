@@ -16,11 +16,11 @@ namespace Jularr.Web.Features.Acquisition.Pipeline;
 /// </summary>
 public sealed class AnimeAcquisitionScheduler(
     IServiceScopeFactory scopeFactory,
-    AnimeMonitoringStore monitoring,
     ILogger<AnimeAcquisitionScheduler> logger,
     WantedPassTrigger? wanted = null)
 {
     public static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(45);
+    public static readonly TimeSpan AniListAutoMonitorInterval = TimeSpan.FromMinutes(30);
     private const int MaxQueuedRequests = 50;
 
     private readonly SemaphoreSlim gate = new(1, 1);
@@ -170,18 +170,9 @@ public sealed class AnimeAcquisitionScheduler(
             return 0;
         }
 
-        var schedule = await LoadScheduleAsync(cancellationToken);
-        NextRunAtUtc = nowUtc + schedule.Interval;
-        if (!schedule.Enabled)
-        {
-            return 0;
-        }
-
-        // Searching is the requests' business (their own back-off); the periodic step keeps the monitored list in line with the owner's AniList lists and
-        // makes sure every monitored anime has its request.
+        // Searching is the requests' business (the shared Wanted pass, their own back-off); the periodic step keeps the monitored list in line with the owner's AniList lists.
+        NextRunAtUtc = nowUtc + AniListAutoMonitorInterval;
         await RunAniListAutoMonitorAsync(cancellationToken);
-        await using var scope = scopeFactory.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<AnimeRequestStarter>().StartAsync(null, cancellationToken, makeDue: false);
         return 1;
     }
 
@@ -314,19 +305,6 @@ public sealed class AnimeAcquisitionScheduler(
         var instance = await modules.GetAsync(cancellationToken);
         return instance.IsEnabled(InstanceModule.Anime)
             && instance.IsEnabled(InstanceModule.Acquisition);
-    }
-
-    private async Task<AnimeMonitoringSchedule> LoadScheduleAsync(CancellationToken stoppingToken)
-    {
-        try
-        {
-            return (await monitoring.LoadAsync(stoppingToken)).Schedule;
-        }
-        catch (Exception exception) when (exception is IOException or InvalidDataException)
-        {
-            logger.LogWarning(exception, "Monitoring state could not be read; using the default schedule.");
-            return AnimeMonitoringSchedule.Default;
-        }
     }
 }
 

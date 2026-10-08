@@ -617,6 +617,8 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddScoped<AnimeAcquisitionRequestExecutor>();
         collection.AddScoped<IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<AnimeAcquisitionRequestExecutor>());
         collection.AddScoped<AnimeAcquisitionEngine>();
+        collection.AddScoped<AnimeManualGrabService>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
         collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, AnimeWantedRequestHandler>();
         collection.AddSingleton(new Jularr.Web.Features.Acquisition.Release.MediaAcquisitionRegistry([new Jularr.Web.Features.Acquisition.Release.AnimeAcquisitionRegistration()]));
         collection.AddScoped<Jularr.Web.Features.Acquisition.Selection.InstalledVideoVersions>();

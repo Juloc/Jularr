@@ -171,7 +171,7 @@ public sealed class AnimeAcquisitionEngine(
     }
 
     // The grab is recorded like the old pipeline did: the Jularr ownership of the job (so the importer may place its files) and one history entry per episode.
-    private async Task RecordGrabAsync(AnimeAcquisitionTarget target, IReadOnlyList<AnimeEpisodeKey> episodes, ReleaseEvaluation<AnimeMatch> chosen, Guid operationId, DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task RecordGrabAsync(AnimeAcquisitionTarget target, IReadOnlyList<AnimeEpisodeKey> episodes, ReleaseEvaluation<AnimeMatch> chosen, Guid operationId, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var releaseKey = chosen.Candidate.ParsedRelease.ReleaseKey;
         var download = await new OperationStore(db).GetAsync(operationId, cancellationToken);

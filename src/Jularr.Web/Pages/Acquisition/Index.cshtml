@@ -61,14 +61,6 @@
         <strong>@overview.ImportsNeedingAttention.Count</strong>
         <small>@ui.Format("acquisition.importsCount", ("count", overview.ImportsNeedingAttention.Count))</small>
     </a>
-    <a href="#automation" class="acquisition-signal-card @(scheduler.IsRunning ? "is-running" : "")">
-        <span>@ui["acquisition.scheduleHeading"]</span>
-        <strong>@(scheduler.IsRunning ? ui["acquisition.schedule.runningNow"] : overview.Schedule.Enabled ? ui["acquisition.configured"] : ui["acquisition.schedule.off"])</strong>
-        @if (overview.Schedule.Enabled && scheduler.NextRunAtUtc is { } nextRun)
-        {
-            <small>@ui.Format("acquisition.schedule.nextRun", ("time", nextRun.ToLocalTime().ToString("t")))</small>
-        }
-    </a>
 </section>
 
 @if (!string.IsNullOrWhiteSpace(Model.Notice))
@@ -85,54 +77,6 @@
 }
 
 <div class="settings-grid acquisition-control-grid">
-    <section class="panel" id="automation">
-        <div class="panel-heading">
-            <h2>@ui["acquisition.scheduleHeading"]</h2>
-            <span>
-                @if (scheduler.IsRunning)
-                {
-                    <text>@ui["acquisition.schedule.runningNow"]</text>
-                }
-                else if (overview.Schedule.Enabled && scheduler.NextRunAtUtc is { } next)
-                {
-                    <text>@ui.Format("acquisition.schedule.nextRun", ("time", next.ToLocalTime().ToString("t")))</text>
-                }
-                else
-                {
-                    <text>@(overview.Schedule.Enabled ? ui["acquisition.schedule.waitingForStartup"] : ui["acquisition.schedule.off"])</text>
-                }
-            </span>
-        </div>
-        <form method="post" asp-page-handler="Schedule" class="acquisition-inline-form">
-            <label class="acquisition-check">
-                <input type="checkbox" name="enabled" value="true" checked="@overview.Schedule.Enabled" />
-                <span>@ui["acquisition.searchAutomaticallyCheckbox"]</span>
-            </label>
-            <label>
-                <span>@ui["acquisition.everyMinutesLabel"]</span>
-                <input type="number"
-                       name="intervalMinutes"
-                       min="@AnimeMonitoringSchedule.MinimumIntervalMinutes"
-                       max="@AnimeMonitoringSchedule.MaximumIntervalMinutes"
-                       value="@overview.Schedule.IntervalMinutes" />
-            </label>
-            <button class="button" type="submit">@ui["common.save"]</button>
-        </form>
-        @if (scheduler.LastRunAtUtc is { } lastRun)
-        {
-            <p class="muted">
-                @ui.Format("acquisition.lastFullRun", ("time", lastRun.ToLocalTime().ToString("g")))
-                @(scheduler.LastRunError is { } runError ? ui.Format("acquisition.lastRunFailed", ("error", runError)) : scheduler.LastRun?.ToString())
-            </p>
-        }
-        <p class="muted">
-            @ui.Format(
-                "acquisition.maxSearchesNote",
-                ("max", AnimeAcquisitionPipeline.MaxSearchesPerRun),
-                ("perAnime", AnimeAcquisitionPipeline.MaxSearchesPerAnimePerRun))
-        </p>
-    </section>
-
     <section class="panel">
         <div class="panel-heading"><h2>@ui["acquisition.connectionsHeading"]</h2></div>
         <div class="acquisition-connection-list">
@@ -329,8 +273,11 @@
             {
                 <a class="operation-row operation-row-detailed" asp-page="/Admin/Operation" asp-route-id="@download.Operation.Id">
                     <div class="operation-copy">
-                        <strong>@download.Acquisition.AnimeTitle · @Jularr.Web.Features.Acquisition.Sabnzbd.SabnzbdAcquisitionService.FormatEpisodes(download.Acquisition.Episodes)</strong>
-                        <span>@ui.Format("acquisition.attemptOf", ("title", download.Attempt.ReleaseTitle), ("number", download.Attempt.Number), ("max", download.Acquisition.MaxAttempts))</span>
+                        <strong>@download.Title</strong>
+                        @if (download.Attempt is { } attempt)
+                        {
+                            <span>@ui.Format("acquisition.attemptOf", ("title", attempt.ReleaseTitle), ("number", attempt.Number), ("max", download.MaxAttempts))</span>
+                        }
                         @if (!string.IsNullOrWhiteSpace(download.Operation.Message))
                         {
                             <small>@download.Operation.Message</small>

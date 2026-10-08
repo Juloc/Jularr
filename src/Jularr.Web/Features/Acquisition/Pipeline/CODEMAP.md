@@ -10,9 +10,10 @@ Canonical owners
 - Request: `AnimeAcquisitionRequestExecutor` (creates the series, applies the requested scope, then `AnimeAcquisitionEngine.SearchAndGrabAsync`), `AnimeRequestPayload` (episodes of the grab in flight, release, search back-off), `AnimeRequestDrafter` (requests for monitored anime), `AnimeRequestStarter` ("Search now": reconcile + request + make due), `AnimeWantedRequestHandler` (due search, failed download → blocklist unless the client's own storage failed, import done → next episode).
 - Judge: `AnimeReleaseJudge` (title and aliases, wanted-episode / season-pack / absolute coverage through the AniList mapping, Sonarr ownership blocks); ranking and selection through `AcquisitionCore`.
 - Sonarr coexistence stays policy: `AcquisitionOwnershipStore` + `SonarrParallelSafety` (read-only / parallel / Jularr-managed, job and path ownership; the ownership job id is the download Operation id).
-- `AnimeAcquisitionScheduler` has no loop: the Wanted pass calls `AdvanceAsync` (recovery, owner "search now" runs, periodic request creation).
+- `AnimeManualGrabService`: the owner's grab of an interactive search result, claimed on the anime's request through `ManualGrabCoordinator` (nothing is grabbed twice).
+- `AnimeAcquisitionScheduler` has no loop: the Wanted pass calls `AdvanceAsync` (startup recovery, owner "search now" runs, the AniList list auto-monitor every 30 minutes). Searching has no schedule setting: requests carry their own back-off.
 
 Still the old owners (to be removed once in-flight legacy downloads drain)
-- `AnimeAcquisitionPipeline` run/search/submit paths, `SabnzbdAcquisitionService`/`Store` relation and attempts, the observation read-back of open legacy acquisitions in `AnimeRequestObservation`, `AnimeMonitoringStore` attempts/wanted/history state (per-anime settings stay).
+- `AnimeAcquisitionPipeline` interactive search, panel and overview stay; its legacy reconcile of attempts, `SabnzbdAcquisitionService`/`Store` relation and attempts, the observation read-back of open legacy acquisitions in `AnimeRequestObservation`, `AnimeMonitoringStore` attempts/wanted/history state (per-anime settings stay).
 
 Tests: `AnimeCanonicalEpisodesTests`, `AnimeAcquisitionPipelineTests`, `AnimeSharedManagerTests`, `AnimeRequestLifecycleTests`, `AnimeRequestAiredScopeTests`, `AnimeAcquisitionRequestExecutorTests`.

@@ -22,7 +22,6 @@ global using AnimeQualityProfileStore = Jularr.Web.Features.Acquisition.Quality.
 
 global using AnimeEpisodeKey = Jularr.Web.Features.Acquisition.Monitoring.MonitoredUnitKey;
 global using AnimeMonitorSettings = Jularr.Web.Features.Acquisition.Monitoring.MonitorSettings;
-global using AnimeMonitoringSchedule = Jularr.Web.Features.Acquisition.Monitoring.MonitoringSchedule;
 global using AnimeEpisodeInventory = Jularr.Web.Features.Acquisition.Monitoring.MonitoredUnitInventory;
 global using AnimeWantedEpisode = Jularr.Web.Features.Acquisition.Monitoring.WantedUnit;
 global using AnimeWantedReason = Jularr.Web.Features.Acquisition.Monitoring.WantedReason;

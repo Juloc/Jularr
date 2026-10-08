@@ -578,6 +578,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRe
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
 builder.Services.AddScoped<AnimeAcquisitionEngine>();
+builder.Services.AddScoped<AnimeManualGrabService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, AnimeWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();

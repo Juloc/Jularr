@@ -46,39 +46,20 @@ public sealed class AnimeRequestStarter(
         var started = 0;
         foreach (var key in keys)
         {
-            await episodes.EnsureAsync(key, cancellationToken);
-            if (await episodes.WorkOfAsync(key, cancellationToken) is not { } workId)
+            if (await EnsureRequestAsync(key, cancellationToken) is not var (request, created))
             {
                 continue;
             }
 
-            await wanted.ReconcileAsync(workId, cancellationToken);
-            if (await drafter.DraftAsync(workId, cancellationToken) is not { } draft)
+            if (created)
             {
-                continue;
+                started++;
             }
-
-            if (await requests.FindOpenAsync(MediaAcquisitionKind.Anime, draft.Draft.Provider, draft.Draft.ExternalId, cancellationToken) is { } open)
+            else if (makeDue)
             {
-                if (!makeDue)
-                {
-                    continue;
-                }
-
                 // A request that waits for the next episode or a back-off looks again now.
-                await requests.PatchPayloadAsync(open.Id, stored => AnimeRequestPayload.Parse(stored) is { } current ? (current with { NextSearchUtc = null, Searches = 0 }).Serialize() : stored, cancellationToken);
+                await requests.PatchPayloadAsync(request.Id, stored => AnimeRequestPayload.Parse(stored) is { } current ? (current with { NextSearchUtc = null, Searches = 0 }).Serialize() : stored, cancellationToken);
                 started++;
-                continue;
-            }
-
-            try
-            {
-                await requests.CreateAsync(draft.Draft, draft.Requester, AcquisitionRequestStatus.Approved, draft.Requester, cancellationToken);
-                started++;
-            }
-            catch (OpenRequestExistsException)
-            {
-                // Somebody requested it in the same moment; that request is the one.
             }
         }
 
@@ -88,5 +69,36 @@ public sealed class AnimeRequestStarter(
         }
 
         return started;
+    }
+
+    /// <summary>The open request of the anime (made when there is none), after its canonical episodes and Wanted rows are up to date; null when the anime has no AniList match to request it by.</summary>
+    public async Task<(AcquisitionRequest Request, bool Created)?> EnsureRequestAsync(string animeKey, CancellationToken cancellationToken)
+    {
+        await episodes.EnsureAsync(animeKey, cancellationToken);
+        if (await episodes.WorkOfAsync(animeKey, cancellationToken) is not { } workId)
+        {
+            return null;
+        }
+
+        await wanted.ReconcileAsync(workId, cancellationToken);
+        if (await drafter.DraftAsync(workId, cancellationToken) is not { } draft)
+        {
+            return null;
+        }
+
+        if (await requests.FindOpenAsync(MediaAcquisitionKind.Anime, draft.Draft.Provider, draft.Draft.ExternalId, cancellationToken) is { } open)
+        {
+            return (open, false);
+        }
+
+        try
+        {
+            return (await requests.CreateAsync(draft.Draft, draft.Requester, AcquisitionRequestStatus.Approved, draft.Requester, cancellationToken), true);
+        }
+        catch (OpenRequestExistsException)
+        {
+            // Somebody requested it in the same moment; that request is the one.
+            return (await requests.FindOpenAsync(MediaAcquisitionKind.Anime, draft.Draft.Provider, draft.Draft.ExternalId, cancellationToken) ?? throw new InvalidOperationException("The open request of the anime disappeared."), false);
+        }
     }
 }

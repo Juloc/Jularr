@@ -44,7 +44,8 @@ public sealed record AnimeInteractiveSearch(
     ProwlarrAnimeSearchMode Mode,
     IReadOnlyList<AnimeSearchCandidate> Candidates,
     IReadOnlyList<IndexerSearchWarning> Warnings,
-    string? Error);
+    string? Error,
+    IReadOnlyList<ReleaseEvaluation<AnimeMatch>>? Evaluations = null);
 
 public sealed record AnimeGrabResult(bool Success, string Message, Guid? OperationId = null);
 
@@ -93,123 +94,9 @@ public sealed class AnimeAcquisitionPipeline(
     AcquisitionCore core)
 {
     public const string SearchOperationKind = "anime-search";
-    public const string GrabOperationKind = "anime-grab";
     public const string OperationCategory = "Acquisition";
     public const string LogModule = "Acquisition";
-    public const int MaxSearchesPerAnimePerRun = 6;
-    public const int MaxSearchesPerRun = 30;
     public const int MaxLoggedDecisions = 25;
-
-    public async Task<AnimeAcquisitionRunSummary> RunAsync(
-        AnimeSearchTrigger trigger,
-        string? animeKey,
-        CancellationToken cancellationToken)
-    {
-        var notes = new List<string>();
-        await ReconcileAttemptsAsync(cancellationToken);
-
-        var state = await monitoring.LoadAsync(cancellationToken);
-        var keys = animeKey is null ? [.. await animeMonitoring.MonitoredKeysAsync(cancellationToken)] : new[] { animeKey };
-        if (keys.Length == 0)
-        {
-            return new(0, 0, 0, ["No anime is monitored."]);
-        }
-
-        var hasIndexers = await indexers.HasEnabledIndexerAsync(cancellationToken);
-        if (!hasIndexers)
-        {
-            notes.Add("No indexer is configured; wanted episodes were refreshed but not searched.");
-        }
-
-        var snapshot = await observation.GetSnapshotAsync(forceRefresh: true, cancellationToken);
-        var now = DateTimeOffset.UtcNow;
-        var searches = 0;
-        var grabs = 0;
-
-        foreach (var key in keys)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var target = await inventory.LoadAsync(key, cancellationToken);
-            if (target is null)
-            {
-                notes.Add($"{key}: anime no longer exists.");
-                continue;
-            }
-
-            if (target.Diagnostic is not null)
-            {
-                notes.Add($"{target.Anime.Title}: {target.Diagnostic}");
-            }
-
-            var view = await animeMonitoring.LoadAsync(key, cancellationToken);
-            state = await monitoring.UpdateAsync(
-                current => AnimeMonitoringEngine.RefreshWantedForAnime(
-                    current,
-                    key,
-                    unit => AnimeMonitoring.IsUnitMonitored(view, unit),
-                    target.Episodes.Select(episode => AnimeAcquisitionInventory.ToInventory(episode, target.Profile)),
-                    target.Profile,
-                    now),
-                cancellationToken);
-
-            if (!hasIndexers)
-            {
-                continue;
-            }
-
-            if (SonarrParallelSafety.GetMode(snapshot.State, key) == AnimeManagementMode.ReadOnlyCoexistence)
-            {
-                notes.Add($"{target.Anime.Title}: read-only Sonarr coexistence; choose parallel acquisition or Jularr-managed under Sonarr migration to search.");
-                continue;
-            }
-
-            var wanted = state.Wanted.Values
-                .Where(item => item.Key.AnimeKey.Equals(key, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(item => item.Key.SeasonNumber)
-                .ThenBy(item => item.Key.EpisodeNumber)
-                .ToArray();
-            // An owner "Search now" ignores the failure backoff; pending/grabbed episodes are
-            // still skipped so a manual run never grabs twice.
-            var planAt = trigger == AnimeSearchTrigger.Manual ? DateTimeOffset.MaxValue : now;
-            var requests = AnimeMonitoringEngine
-                .PlanSearches(state, wanted, trigger, planAt)
-                .Take(Math.Min(MaxSearchesPerAnimePerRun, MaxSearchesPerRun - searches))
-                .ToArray();
-
-            foreach (var request in requests)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                searches++;
-                var slot = target.Find(request.Key.SeasonNumber, request.Key.EpisodeNumber);
-                if (slot is null)
-                {
-                    continue;
-                }
-
-                var wantedEpisode = wanted.First(item => item.Key == request.Key);
-                var grabbed = await SearchAndGrabAsync(
-                    target,
-                    slot,
-                    wantedEpisode,
-                    wanted,
-                    request,
-                    snapshot,
-                    cancellationToken);
-                if (grabbed)
-                {
-                    grabs++;
-                }
-            }
-
-            if (searches >= MaxSearchesPerRun)
-            {
-                notes.Add($"Search limit of {MaxSearchesPerRun} per run reached; remaining wanted episodes wait for the next run.");
-                break;
-            }
-        }
-
-        return new(keys.Length, searches, grabs, notes);
-    }
 
     public async Task<AnimeInteractiveSearch?> SearchInteractiveAsync(
         string animeKey,
@@ -267,7 +154,7 @@ public sealed class AnimeAcquisitionPipeline(
             var searchOptions = new SearchOptions { Purpose = SearchPurpose.Interactive, ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, animeKey) };
             var snapshot = await observation.GetSnapshotAsync(forceRefresh: false, cancellationToken);
             var search = await core.SearchAsync(AnimeReleaseJudge.Plan(target, scope, wanted, episode?.Key, searchTarget, state, snapshot, now), target.Profile, searchOptions, cancellationToken);
-            return new(target, episode?.Key, mode, AnimeReleaseJudge.ToCandidates(target, scope, search), search.Search.Warnings, null);
+            return new(target, episode?.Key, mode, AnimeReleaseJudge.ToCandidates(target, scope, search), search.Search.Warnings, null, search.Releases);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -277,109 +164,6 @@ public sealed class AnimeAcquisitionPipeline(
         {
             return new(target, episode?.Key, mode, [], [], $"Indexer search failed: {exception.Message}");
         }
-    }
-
-    /// <summary>
-    /// Owner grab of one search result. Ownership and duplicate protection always apply; a
-    /// profile rejection may be overridden because the owner chose the release explicitly.
-    /// </summary>
-    public async Task<AnimeGrabResult> GrabAsync(
-        string animeKey,
-        int? seasonNumber,
-        int? episodeNumber,
-        ProwlarrAnimeSearchMode mode,
-        string releaseIdentity,
-        CancellationToken cancellationToken)
-    {
-        var search = await SearchInteractiveAsync(animeKey, seasonNumber, episodeNumber, mode, cancellationToken);
-        if (search is null)
-        {
-            return new(false, "Anime not found.");
-        }
-
-        if (search.Error is not null)
-        {
-            return new(false, search.Error);
-        }
-
-        var candidate = search.Candidates.FirstOrDefault(item =>
-            item.Release.Identity.Equals(releaseIdentity, StringComparison.OrdinalIgnoreCase));
-        if (candidate is null)
-        {
-            return new(false, "The release is no longer offered by Prowlarr; search again.");
-        }
-
-        if (candidate.Release.InternalDownloadUri is null)
-        {
-            return new(false, "The release has no NZB link.");
-        }
-
-        var episodes = candidate.CoveredEpisodes.Count > 0
-            ? candidate.CoveredEpisodes
-            : search.Episode is { } key ? [key] : [];
-        if (episodes.Count == 0)
-        {
-            return new(false, "The release does not cover an episode of this anime.");
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var snapshot = await observation.GetSnapshotAsync(forceRefresh: true, cancellationToken);
-        var release = candidate.Release.ParsedRelease;
-        var ownership = SonarrParallelSafety.CanGrab(
-            snapshot,
-            new AcquisitionGrabRequest(
-                animeKey,
-                release.ReleaseKey,
-                release.SeasonNumber ?? episodes[0].SeasonNumber,
-                release.EpisodeStart ?? episodes[0].EpisodeNumber,
-                release.EpisodeEnd ?? episodes[^1].EpisodeNumber,
-                release.AbsoluteEpisodeStart ?? episodes[0].AbsoluteEpisodeNumber,
-                release.AbsoluteEpisodeEnd ?? episodes[^1].AbsoluteEpisodeNumber),
-            now);
-        if (!ownership.Allowed)
-        {
-            return new(false, $"Ownership: {ownership.Reason}");
-        }
-
-        var state = await monitoring.LoadAsync(cancellationToken);
-        if (state.Attempts.Values.Any(attempt =>
-                attempt.ReleaseKey is not null &&
-                attempt.ReleaseKey.Equals(release.ReleaseKey, StringComparison.OrdinalIgnoreCase) &&
-                attempt.Status is AnimeAcquisitionAttemptStatus.Pending or AnimeAcquisitionAttemptStatus.Grabbed))
-        {
-            return new(false, "This release is already pending or was already grabbed.");
-        }
-
-        if (await FindOpenAcquisitionAsync(animeKey, episodes, cancellationToken) is { } open)
-        {
-            return new(false, open);
-        }
-
-        var operations = new OperationStore(db);
-        var operationId = await operations.CreateAsync(
-            new OperationDescriptor(
-                GrabOperationKind,
-                OperationCategory,
-                "Anime grab",
-                $"{search.Target.Anime.Title} · {SabnzbdAcquisitionService.FormatEpisodes(episodes)} · {candidate.Release.Title}",
-                search.Target.Profile.Id,
-                OperationLane.Interactive,
-                Retryable: false),
-            cancellationToken);
-        await operations.MarkRunningAsync(operationId, cancellationToken);
-        await operations.AppendLogAsync(
-            operationId,
-            candidate.Decision.Grab ? OperationLogLevel.Information : OperationLogLevel.Warning,
-            LogModule,
-            candidate.Decision.Grab
-                ? $"Owner grab: {Describe(candidate)}"
-                : $"Owner override of a rejected release: {Describe(candidate)}",
-            cancellationToken);
-
-        var grabbed = await SubmitAsync(search.Target, episodes, [candidate], operationId, cancellationToken);
-        return grabbed is null
-            ? new(false, "SABnzbd did not accept the release; see the grab operation for details.", operationId)
-            : new(true, $"Sent to SABnzbd: {grabbed.Release.Title}", operationId);
     }
 
     /// <summary>
@@ -645,19 +429,6 @@ public sealed class AnimeAcquisitionPipeline(
         return new AnimeSettingsUpdate(animeKey, monitored && !wasMonitored);
     }
 
-    public Task UpdateScheduleAsync(
-        bool enabled,
-        int intervalMinutes,
-        CancellationToken cancellationToken) =>
-        monitoring.UpdateAsync(
-            current => current with
-            {
-                Schedule = new AnimeMonitoringSchedule(
-                    enabled,
-                    Math.Clamp(intervalMinutes, AnimeMonitoringSchedule.MinimumIntervalMinutes, AnimeMonitoringSchedule.MaximumIntervalMinutes))
-            },
-            cancellationToken);
-
     public async Task<AnimeAcquisitionPanel?> GetAnimePanelAsync(
         Guid animeId,
         CancellationToken cancellationToken)
@@ -785,8 +556,11 @@ public sealed class AnimeAcquisitionPipeline(
                 continue;
             }
 
-            downloads.Add(new AnimeDownloadRow(acquisition, acquisition.LatestAttempt, operation));
+            downloads.Add(new AnimeDownloadRow($"{acquisition.AnimeTitle} · {SabnzbdAcquisitionService.FormatEpisodes(acquisition.Episodes)}", acquisition.LatestAttempt, acquisition.MaxAttempts, operation));
         }
+
+        downloads.AddRange((await operations.ListAsync(new OperationListFilter(View: "active", Kind: AnimeAcquisitionEngine.OperationKind, Limit: 50), cancellationToken))
+            .Select(operation => new AnimeDownloadRow(operation.Subject ?? operation.Title, null, null, operation)));
 
         var attention = importState.Imports
             .Where(record => record.NeedsAttention)
@@ -806,208 +580,12 @@ public sealed class AnimeAcquisitionPipeline(
             .ToArray();
 
         return new AnimeAcquisitionOverview(
-            state.Schedule,
             monitored,
             wanted,
             downloads,
             attention,
             recentImports,
             decisions);
-    }
-
-    private async Task<bool> SearchAndGrabAsync(
-        AnimeAcquisitionTarget target,
-        AnimeAcquisitionEpisode episode,
-        AnimeWantedEpisode wanted,
-        IReadOnlyList<AnimeWantedEpisode> allWanted,
-        AnimeSearchRequest request,
-        AcquisitionOwnershipSnapshot snapshot,
-        CancellationToken cancellationToken)
-    {
-        var operations = new OperationStore(db);
-        var now = DateTimeOffset.UtcNow;
-        if (await FindOpenAcquisitionAsync(target.Anime.Key, [episode.Key], cancellationToken) is { } open)
-        {
-            // The monitoring attempt was lost (for example an older state file), but a download
-            // for the episode exists: record it as grabbed instead of searching again.
-            await monitoring.UpdateAsync(
-                current => AnimeMonitoringEngine.MarkGrabbed(current, episode.Key, "existing-acquisition", now),
-                cancellationToken);
-            logger.LogInformation("Skipped the search for {Episode}: {Reason}", episode.Key, open);
-            return false;
-        }
-
-        var operationId = await operations.CreateAsync(
-            new OperationDescriptor(
-                SearchOperationKind,
-                OperationCategory,
-                "Anime search",
-                $"{target.Anime.Title} · {Label(episode.Key)} · {wanted.Reason}",
-                target.Profile.Id,
-                OperationLane.Normal,
-                Retryable: false),
-            cancellationToken);
-        await operations.MarkRunningAsync(operationId, cancellationToken);
-
-        var state = await monitoring.UpdateAsync(
-            current => AnimeMonitoringEngine.MarkPending(current, request, now),
-            cancellationToken);
-
-        try
-        {
-            var episodeTarget = AnimeReleaseJudge.PlannedTargetFor(target, episode, allWanted);
-            var searchOptions = new SearchOptions { ProwlarrIndexerIds = ProwlarrIndexerIdsFor(state, target.Anime.Key) };
-            var search = await core.SearchAsync(AnimeReleaseJudge.Plan(target, [episode], allWanted, episode.Key, episodeTarget, state, snapshot, now), target.Profile, searchOptions, cancellationToken);
-            foreach (var warning in search.Search.Warnings)
-            {
-                await operations.AppendLogAsync(operationId, OperationLogLevel.Warning, LogModule, $"{warning.IndexerName}: {warning.Message}{(string.IsNullOrEmpty(warning.Query) ? "" : $" ({warning.Query})")}", cancellationToken);
-            }
-
-            var candidates = AnimeReleaseJudge.ToCandidates(target, [episode], search);
-            await LogDecisionsAsync(operations, operationId, candidates, cancellationToken);
-
-            var accepted = candidates.Where(candidate => candidate.Decision.Grab).ToArray();
-            if (accepted.Length == 0)
-            {
-                if (candidates.Count == 0 && search.Search.EveryIndexerFailed)
-                {
-                    // Nothing could be asked, so nothing was found: the outage is not a failed search and does not raise the back-off.
-                    const string outage = "No indexer could be searched; the search is repeated soon.";
-                    await monitoring.UpdateAsync(current => AnimeMonitoringEngine.MarkUnavailable(current, episode.Key, now, ReleaseRequestTracker.UnavailableRetry, outage), cancellationToken);
-                    await operations.MarkSucceededAsync(operationId, outage, CancellationToken.None);
-                    return false;
-                }
-
-                await monitoring.UpdateAsync(current => AnimeMonitoringEngine.MarkFailed(current, episode.Key, null, now), cancellationToken);
-                await operations.MarkSucceededAsync(
-                    operationId,
-                    $"No accepted release among {candidates.Count} result(s); retried after backoff.",
-                    CancellationToken.None);
-                return false;
-            }
-
-            var episodes = accepted[0].CoveredEpisodes.Count > 0 ? accepted[0].CoveredEpisodes : [episode.Key];
-            var grabbed = await SubmitAsync(target, episodes, accepted, operationId, cancellationToken);
-            return grabbed is not null;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is ProwlarrException or HttpRequestException or TaskCanceledException)
-        {
-            await monitoring.UpdateAsync(current => AnimeMonitoringEngine.MarkUnavailable(current, episode.Key, now, ReleaseRequestTracker.UnavailableRetry, "The indexers did not answer."), cancellationToken);
-            await operations.MarkFailedAsync(operationId, $"Indexer search failed: {exception.Message}", CancellationToken.None);
-            return false;
-        }
-    }
-
-    // Sends the accepted candidates (best first) to SABnzbd, records the grab on the monitoring
-    // state and registers the Jularr ownership job for the release that was actually submitted.
-    private async Task<AnimeSearchCandidate?> SubmitAsync(
-        AnimeAcquisitionTarget target,
-        IReadOnlyList<AnimeEpisodeKey> episodes,
-        IReadOnlyList<AnimeSearchCandidate> candidates,
-        Guid operationId,
-        CancellationToken cancellationToken)
-    {
-        var operations = new OperationStore(db);
-        var now = DateTimeOffset.UtcNow;
-        if (await FindOpenAcquisitionAsync(target.Anime.Key, episodes, cancellationToken) is { } open)
-        {
-            var skipped = $"Not sent to SABnzbd: {open}";
-            await operations.AppendLogAsync(operationId, OperationLogLevel.Warning, LogModule, skipped, cancellationToken);
-            await operations.MarkSucceededAsync(operationId, skipped, CancellationToken.None);
-            return null;
-        }
-
-        SabnzbdAcquisitionResult result;
-        try
-        {
-            result = await sabnzbd.StartAsync(
-                new SabnzbdAnimeAcquisitionRequest(
-                    target.Anime.Key,
-                    target.Anime.Title,
-                    episodes,
-                    target.Profile.Id,
-                    candidates
-                        .Where(candidate => candidate.Release.InternalDownloadUri is not null)
-                        .Select(candidate => new SabnzbdAnimeReleaseCandidate(
-                            candidate.Release.Identity,
-                            candidate.Release.Title,
-                            candidate.Release.InternalDownloadUri!,
-                            candidate.Release.Indexer,
-                            candidate.Release.ParsedRelease.ReleaseGroup))
-                        .ToArray()),
-                cancellationToken);
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException)
-        {
-            await monitoring.UpdateAsync(
-                current => episodes.Aggregate(current, (accumulated, key) => AnimeMonitoringEngine.MarkUnavailable(accumulated, key, now, ReleaseRequestTracker.UnavailableRetry, "The download client did not accept the release.")),
-                cancellationToken);
-            await operations.MarkFailedAsync(operationId, $"SABnzbd submission failed: {exception.Message}", CancellationToken.None);
-            return null;
-        }
-
-        var acquisition = await acquisitions.GetAsync(result.AcquisitionId, cancellationToken);
-        var identity = acquisition?.LatestAttempt?.ReleaseIdentity;
-        var chosen = candidates.FirstOrDefault(candidate =>
-            identity is not null && candidate.Release.Identity.Equals(identity, StringComparison.OrdinalIgnoreCase));
-
-        if (!result.Submitted || chosen is null)
-        {
-            await monitoring.UpdateAsync(
-                current => episodes.Aggregate(current, (accumulated, key) => AnimeMonitoringEngine.MarkFailed(accumulated, key, chosen?.Release.ParsedRelease.ReleaseKey, now)),
-                cancellationToken);
-            await operations.MarkFailedAsync(operationId, result.Message, CancellationToken.None);
-            return null;
-        }
-
-        var releaseKey = chosen.Release.ParsedRelease.ReleaseKey;
-        var download = result.OperationId is { } downloadId ? await operations.GetAsync(downloadId, cancellationToken) : null;
-        await ownershipStore.UpdateAsync(
-            current => SonarrParallelSafety.RegisterJob(
-                current,
-                new AcquisitionOwnership(
-                    result.AcquisitionId.ToString(),
-                    target.Anime.Key,
-                    AcquisitionOwner.Jularr,
-                    releaseKey,
-                    AcquisitionOwnershipStatus.Pending,
-                    now,
-                    download?.ExternalId)),
-            cancellationToken);
-        await monitoring.UpdateAsync(
-            current => episodes.Aggregate(current, (accumulated, key) => AnimeMonitoringEngine.MarkGrabbed(accumulated, key, releaseKey, now)),
-            cancellationToken);
-
-        foreach (var episodeKey in episodes)
-        {
-            await history.RecordAsync(
-                new AcquisitionHistoryEntry
-                {
-                    AnimeId = target.Anime.Id,
-                    SeasonNumber = episodeKey.SeasonNumber,
-                    EpisodeNumber = episodeKey.EpisodeNumber,
-                    AbsoluteEpisodeNumber = episodeKey.AbsoluteEpisodeNumber,
-                    EventKind = AcquisitionHistoryEventKind.Grabbed,
-                    ReleaseTitle = chosen.Release.Title,
-                    ReleaseKey = releaseKey,
-                    Score = chosen.Score.Score,
-                    QualityKey = chosen.Score.QualityKey,
-                    Indexer = chosen.Release.Indexer,
-                    Reason = chosen.Decision.Reason,
-                    OccurredAtUtc = now.UtcDateTime
-                },
-                cancellationToken);
-        }
-
-        var message = $"Sent to SABnzbd: {chosen.Release.Title} for {SabnzbdAcquisitionService.FormatEpisodes(episodes)}.";
-        await operations.AppendLogAsync(operationId, OperationLogLevel.Information, LogModule, message, cancellationToken);
-        await operations.MarkSucceededAsync(operationId, message, CancellationToken.None);
-        logger.LogInformation("Anime acquisition grabbed {Release} for {Anime} {Episodes}.", chosen.Release.Title, target.Anime.Key, SabnzbdAcquisitionService.FormatEpisodes(episodes));
-        return chosen;
     }
 
     internal static async Task LogDecisionsAsync(
@@ -1079,7 +657,8 @@ public sealed class AnimeAcquisitionPipeline(
         CancellationToken cancellationToken)
     {
         var operations = new OperationStore(db);
-        var active = 0;
+        var active = (await operations.ListAsync(new OperationListFilter(View: "active", Kind: AnimeAcquisitionEngine.OperationKind, Limit: 200), cancellationToken))
+            .Count(operation => DownloadOperationDetails.TryParse(operation.Details, out var details) && string.Equals(details?.TargetKey, animeKey, StringComparison.OrdinalIgnoreCase));
         foreach (var acquisition in relations.Acquisitions.Where(item =>
                      item.AnimeKey.Equals(animeKey, StringComparison.OrdinalIgnoreCase) && item.LatestAttempt is not null))
         {
@@ -1133,12 +712,12 @@ public sealed record AnimeWantedRow(
     DateTimeOffset SinceUtc);
 
 public sealed record AnimeDownloadRow(
-    SabnzbdAcquisition Acquisition,
-    SabnzbdAcquisitionAttempt Attempt,
+    string Title,
+    SabnzbdAcquisitionAttempt? Attempt,
+    int? MaxAttempts,
     OperationSnapshot Operation);
 
 public sealed record AnimeAcquisitionOverview(
-    AnimeMonitoringSchedule Schedule,
     IReadOnlyList<AnimeMonitoredRow> Monitored,
     IReadOnlyList<AnimeWantedRow> Wanted,
     IReadOnlyList<AnimeDownloadRow> ActiveDownloads,

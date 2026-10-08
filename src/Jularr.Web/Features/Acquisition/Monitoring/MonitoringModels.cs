@@ -89,20 +89,6 @@ public sealed record MonitorSettings(
     int[]? IndexerIds = null,
     Guid? TargetRootId = null);
 
-// The one scheduler setting for periodic monitoring runs.
-public sealed record MonitoringSchedule(
-    bool Enabled,
-    int IntervalMinutes)
-{
-    public const int MinimumIntervalMinutes = 5;
-    public const int MaximumIntervalMinutes = 24 * 60;
-
-    public static MonitoringSchedule Default { get; } = new(true, 30);
-
-    public TimeSpan Interval =>
-        TimeSpan.FromMinutes(Math.Clamp(IntervalMinutes, MinimumIntervalMinutes, MaximumIntervalMinutes));
-}
-
 public sealed record MonitoredUnitInventory(
     MonitoredUnitKey Key,
     DateTimeOffset? AirsAtUtc,
@@ -145,8 +131,6 @@ public sealed record MonitoringState(
     Dictionary<string, AcquisitionAttempt> Attempts,
     List<MonitoringHistoryEntry> History)
 {
-    public MonitoringSchedule Schedule { get; init; } = MonitoringSchedule.Default;
-
     public static MonitoringState Empty() =>
         new(
             1,
