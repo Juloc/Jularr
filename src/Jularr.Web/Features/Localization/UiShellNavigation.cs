@@ -318,7 +318,8 @@ public sealed record UiShellNavigation(
         bool learningVisible,
         Func<string, bool> can,
         IReadOnlyCollection<WorkMediaType>? visibleMediaTypes = null,
-        IReadOnlySet<InstanceModule>? enabledInstanceModules = null)
+        IReadOnlySet<InstanceModule>? enabledInstanceModules = null,
+        bool mediaManagerMode = false)
     {
         var media = visibleMediaTypes ?? WorkMediaTypes.All;
         var modules = enabledInstanceModules ?? AllInstanceModules;
@@ -330,7 +331,11 @@ public sealed record UiShellNavigation(
 
         var primary = UiNavigationCatalog.App
             .Where(entry => !entry.Unfinished && Visible(entry, learningVisible, can, media, modules))
-            .Select(entry => ToItem(entry, IsActive(entry, path), media))
+            .Where(entry => !mediaManagerMode || entry.Id != "library")
+            .Select(entry => ToItem(
+                mediaManagerMode && entry.Id == "home" ? entry with { LabelKey = "nav.discover", Icon = "search" } : entry,
+                IsActive(entry, path),
+                media))
             .ToArray();
         var secondary = UiNavigationCatalog.Secondary
             .Where(entry => Visible(entry, learningVisible, can, media, modules))
@@ -375,7 +380,8 @@ public sealed record UiShellNavigation(
         bool learningVisible,
         Func<string, bool> can,
         IReadOnlyCollection<WorkMediaType>? visibleMediaTypes = null,
-        IReadOnlySet<InstanceModule>? enabledInstanceModules = null)
+        IReadOnlySet<InstanceModule>? enabledInstanceModules = null,
+        bool mediaManagerMode = false)
     {
         var media = visibleMediaTypes ?? WorkMediaTypes.All;
         var modules = enabledInstanceModules ?? AllInstanceModules;
@@ -384,6 +390,7 @@ public sealed record UiShellNavigation(
             .Where(id => id != UiNavigationCatalog.ProfileDevices.Id || UiNavigationCatalog.DevicesPageAvailable)
             .Select(id => entries[id])
             .Where(entry => Visible(entry, learningVisible, can, media, modules))
+            .Where(entry => !mediaManagerMode || entry.Id != "library")
             .Select(entry => entry.Sections is null
                 ? ToItem(entry, false, media)
                 : ToItem(entry, false, media) with { Href = DrillInHref(entry.Id) })
@@ -397,6 +404,7 @@ public sealed record UiShellNavigation(
 
         var elsewhere = UiNavigationCatalog.App.Concat(UiNavigationCatalog.Secondary)
             .Where(entry => !entry.Unfinished && Visible(entry, learningVisible, can, media, modules))
+            .Where(entry => !mediaManagerMode || entry.Id != "library")
             .Where(entry => !UiNavigationCatalog.MobilePrimaryIds.Contains(entry.Id)
                 && !UiNavigationCatalog.ProfileLinkIds.Contains(entry.Id))
             .Select(entry => ToItem(entry, false, media))

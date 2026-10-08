@@ -2,6 +2,7 @@
 @using Jularr.Web.Features.Appearance
 @using Jularr.Web.Features.Auth
 @using Jularr.Web.Features.Localization
+@model string?
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
     var appVersion = ViewData["AppBuildVersion"] as string ?? AppBuildInfo.Version;
@@ -9,11 +10,10 @@
     var canUseAdmin = JularrPolicies.Allows(User, JularrPolicies.AdminMedia);
     var name = User.Identity?.Name ?? string.Empty;
     var initial = name.Length > 0 ? new StringInfo(name).SubstringByTextElements(0, 1).ToUpperInvariant() : string.Empty;
+    var placement = Model ?? "sidebar";
 }
-@* The Profile account card closes the sidebar. It opens an upward account menu: Profile, Activity, Settings, Admin when authorized,
-   the theme, the offline-download indicator and sign out. Entries for areas that are not built yet (Stats, Ratings, Friends) are not
-   listed. A native popover, so Escape, outside click and focus return need no script. *@
-<div class="sidebar-account">
+@* The account trigger stays in the shared shell, so every page has one profile menu with the same authorisation and sign-out actions. *@
+<div class="app-account app-account-@placement">
     <button class="account-card" type="button" popovertarget="app-user-menu" aria-label="@ui["nav.userMenu"]">
         <span class="app-avatar" aria-hidden="true">@initial</span>
         <span class="account-card-name">@name</span>
@@ -41,7 +41,6 @@
                 </a>
             }
         </nav>
-        <partial name="_AppThemeControl" model="@("labelled")" />
         @* Compact global offline-download indicator (#221): hidden until offline-library-ui.js reports a running download. *@
         <a class="user-menu-offline" href="/Settings/Offline" data-offline-download-indicator hidden></a>
         <partial name="_AppSignOut" model="@("user-menu-item")" />

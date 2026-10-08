@@ -57,7 +57,8 @@ public sealed class IndexModel(
             learningVisible,
             account.Can,
             media.VisibleMediaTypes,
-            enabledModules);
+            enabledModules,
+            InstanceModulePresets.Detect(instanceSettings) == InstancePreset.MediaManager);
 
         // The shell account footer (theme, sign out, version) is shown here on phones and
         // reads the same view data the layout sets for the sidebar.

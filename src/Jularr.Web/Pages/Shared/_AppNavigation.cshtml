@@ -17,6 +17,7 @@
         .Where(pair => pair.Value)
         .Select(pair => pair.Key)
         .ToHashSet();
+    var mediaManagerMode = InstanceModulePresets.Detect(instanceSettings) == InstancePreset.MediaManager;
     var learningVisible = false;
     if (instanceSettings.IsEnabled(InstanceModule.Learning)
         && !string.IsNullOrWhiteSpace(profileId))
@@ -32,7 +33,8 @@
         learningVisible,
         policy => Jularr.Web.Features.Auth.JularrPolicies.Allows(User, policy),
         media.VisibleMediaTypes,
-        enabledModules);
+        enabledModules,
+        mediaManagerMode);
 
     // The sidebar shows Admin as a permanent shortcut unless the profile turned it off; it always stays in the account menu, and the
     // section opens in the sidebar whenever an Admin page is open. Settings only opens as the section of the current page.
@@ -123,7 +125,6 @@
         </div>
     </div>
 
-    <partial name="_AppUserMenu" />
 </aside>
 
 <nav class="mobile-nav" aria-label="@ui["nav.primaryAria"]">

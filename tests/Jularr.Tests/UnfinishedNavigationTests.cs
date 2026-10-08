@@ -157,9 +157,9 @@ public sealed partial class UnfinishedNavigationTests
 
         StringAssert.Contains(header, "<partial name=\"_AppSearch\" />");
         StringAssert.Contains(header, "<partial name=\"_NotificationBell\" />");
+        StringAssert.Contains(header, "<partial name=\"_AppUserMenu\" model='\"header\"' />");
         StringAssert.Contains(sidebar, "sidebar-brand");
-        Assert.IsTrue(sidebar.TrimEnd().EndsWith("<partial name=\"_AppUserMenu\" />", StringComparison.Ordinal), "The account card is the last element of the sidebar.");
-        foreach (var utility in new[] { "_AppSearch", "_AppThemeControl", "_AppAccountFooter", "_NotificationBell", "_AppSignOut" })
+        foreach (var utility in new[] { "_AppSearch", "_AppThemeControl", "_AppAccountFooter", "_NotificationBell", "_AppUserMenu", "_AppSignOut" })
         {
             Assert.IsFalse(sidebar.Contains(utility, StringComparison.Ordinal), $"The sidebar is navigation only, not {utility}.");
         }
@@ -187,6 +187,19 @@ public sealed partial class UnfinishedNavigationTests
         StringAssert.Contains(search, "Context.Request.Query[\"q\"]");
         Assert.IsFalse(File.ReadAllText(Path.Combine(root, "Pages", "Index.cshtml")).Contains("class=\"dc-search\"", StringComparison.Ordinal), "The page has no search field of its own.");
         StringAssert.Contains(search, "data-dc-search");
+    }
+
+    [TestMethod]
+    public void MediaManagerShellLabelsHomeAsDiscoverAndHidesTheUserLibrary()
+    {
+        var navigation = UiShellNavigation.Build("/", learningVisible: true, Owner, mediaManagerMode: true);
+        var discover = navigation.Primary.Single(item => item.Id == "home");
+        var profile = UiShellNavigation.BuildProfile(learningVisible: true, Owner, mediaManagerMode: true);
+
+        Assert.AreEqual("nav.discover", discover.LabelKey);
+        Assert.AreEqual("search", discover.Icon);
+        Assert.IsFalse(navigation.Primary.Any(item => item.Id == "library"));
+        Assert.IsFalse(profile.Links.Concat(profile.Elsewhere).Any(item => item.Id == "library"));
     }
 
     [TestMethod]

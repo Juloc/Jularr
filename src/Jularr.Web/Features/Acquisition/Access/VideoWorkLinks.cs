@@ -130,6 +130,38 @@ public sealed class VideoRequestWorkResolver(AppDbContext db)
         return works;
     }
 
+    /// <summary>Season numbers selected by TV requests, resolved only against their own canonical Work.</summary>
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<int>>> ResolveSeasonNumbersAsync(IEnumerable<AcquisitionRequest> requests, CancellationToken cancellationToken)
+    {
+        var selected = requests
+            .Where(request => request.Kind == MediaAcquisitionKind.Tv)
+            .Select(request => (RequestId: request.Id, Payload: VideoRequestPayload.Parse(request.PayloadJson)))
+            .Where(item => item.Payload is { Scope: VideoRequestScope.Custom })
+            .Select(item => (item.RequestId, Payload: item.Payload!))
+            .ToArray();
+        if (selected.Length == 0)
+        {
+            return new Dictionary<Guid, IReadOnlyList<int>>();
+        }
+
+        var seasonIds = selected.SelectMany(item => item.Payload.SelectedSeasonIds ?? []).Distinct().ToArray();
+        var episodeIds = selected.SelectMany(item => item.Payload.SelectedEpisodeIds).Distinct().ToArray();
+        var seasons = seasonIds.Length == 0
+            ? []
+            : await db.WorkSeasons.AsNoTracking().Where(season => seasonIds.Contains(season.Id)).Select(season => new { season.Id, season.WorkId, season.SeasonNumber }).ToArrayAsync(cancellationToken);
+        var episodes = episodeIds.Length == 0
+            ? []
+            : await db.WorkEpisodes.AsNoTracking().Where(episode => episodeIds.Contains(episode.Id)).Select(episode => new { episode.Id, episode.WorkId, episode.SeasonNumber }).ToArrayAsync(cancellationToken);
+
+        return selected.ToDictionary(
+            item => item.RequestId,
+            item => (IReadOnlyList<int>)seasons.Where(season => season.WorkId == item.Payload.WorkId && (item.Payload.SelectedSeasonIds ?? []).Contains(season.Id)).Select(season => season.SeasonNumber)
+                .Concat(episodes.Where(episode => episode.WorkId == item.Payload.WorkId && item.Payload.SelectedEpisodeIds.Contains(episode.Id)).Select(episode => episode.SeasonNumber))
+                .Distinct()
+                .Order()
+                .ToArray());
+    }
+
     /// <summary>
     /// The Admin media address of the Movie or Series a Movie/TV download operation belongs to, by operation id. The
     /// video engine stores the target as <c>work:{id}</c> or <c>work-episode:{id}</c>; episodes resolve to their Series in one query.

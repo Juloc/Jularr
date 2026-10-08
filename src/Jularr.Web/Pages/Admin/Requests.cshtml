@@ -15,6 +15,7 @@
 }
 @section Scripts {
     <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+    <script src="~/js/local-time.js" asp-append-version="true" defer></script>
     <script src="~/js/admin-requests.js" asp-append-version="true" defer></script>
 }
 
@@ -30,77 +31,115 @@
         (AdminRequestTab.Open, ui["admin.requests.tab.open"]),
         (AdminRequestTab.Approved, ui["admin.requests.tab.approved"]),
         (AdminRequestTab.InProgress, ui["admin.requests.tab.progress"]),
-        (AdminRequestTab.Done, ui["admin.requests.tab.done"]),
-        (AdminRequestTab.Rejected, ui["admin.requests.tab.rejected"])
+        (AdminRequestTab.Rejected, ui["admin.requests.tab.rejected"]),
+        (AdminRequestTab.Done, ui["admin.requests.tab.done"])
     };
     static string Iso(DateTime value) => value.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
     static string Day(DateTime value) => value.ToString("yyyy-MM-dd");
-    static string Clock(DateTime value) => value.ToString("HH:mm") + " UTC";
+    static string Clock(DateTime value) => value.ToString("HH:mm");
 }
 
 <section class="admreq" aria-label="@ui["admin.requests.title"]">
     <div class="admreq-control-surface">
-    <nav class="library-type-tabs admreq-tabs" aria-label="@ui["admin.requests.tabsAria"]">
-        @foreach (var (tab, label) in tabs)
-        {
-            var active = tab == filter.Tab;
-            <a class="library-type-tab @(active ? "active" : "")"
-               href="@RequestsModel.Href(filter with { Tab = tab, Page = 1 })"
-               aria-current="@(active ? "page" : null)">@label <span class="admreq-count">@queue.TabCounts[tab]</span></a>
-        }
-    </nav>
-
-    <form method="get" action="/Admin/Requests" class="admreq-filters" data-admreq-filters>
-        @if (filter.Tab != AdminRequestTab.All)
-        {
-            <input type="hidden" name="tab" value="@AdminRequestQuery.TabName(filter.Tab)" />
-        }
-        <div class="admreq-search">
-            <input type="search" name="q" value="@filter.Search" maxlength="120"
-                   placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
-            <button class="admreq-search-submit" type="submit" aria-label="@ui["common.search"]" title="@ui["common.search"]"><partial name="_AdminIcon" model='"search"' /></button>
-        </div>
-        <div class="admreq-selects">
-            <select name="type" aria-label="@ui["admin.requests.filter.type"]">
-                <option value="">@ui["admin.requests.filter.type"]</option>
-                @foreach (var kind in Model.EnabledKinds)
-                {
-                    var kindName = AcquisitionAccessNames.Kind(kind);
-                    <option value="@kindName" selected="@(filter.Kind == kind)">@ui["admin.requests.kind." + kindName]</option>
-                }
-            </select>
-            <select name="lang" aria-label="@ui["admin.requests.filter.language"]">
-                <option value="">@ui["admin.requests.filter.language"]</option>
-                @foreach (var tag in queue.Languages)
-                {
-                    <option value="@tag" selected="@(filter.Language == tag)">@RequestLanguages.Name(tag)</option>
-                }
-            </select>
-            <select name="status" aria-label="@ui["admin.requests.filter.status"]">
-                <option value="">@ui["admin.requests.filter.status"]</option>
-                @foreach (var value in Enum.GetValues<AcquisitionRequestStatus>())
-                {
-                    var valueName = AcquisitionAccessNames.Status(value);
-                    <option value="@valueName" selected="@(filter.Status == value)">@ui["requests.status." + valueName]</option>
-                }
-            </select>
-            <select name="by" aria-label="@ui["admin.requests.filter.requester"]">
-                <option value="">@ui["admin.requests.filter.requester"]</option>
-                @foreach (var (requesterId, requesterName) in Model.Requesters)
-                {
-                    <option value="@requesterId" selected="@(filter.RequesterProfileId == requesterId)">@requesterName</option>
-                }
-            </select>
-            @if (filter.HasNarrowing)
+        <form method="get" action="/Admin/Requests" class="admreq-filters" data-admreq-filters>
+            @if (filter.Tab != AdminRequestTab.All)
             {
-                <a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a>
+                <input type="hidden" name="tab" value="@AdminRequestQuery.TabName(filter.Tab)" />
             }
-        </div>
-    </form>
-    @if (User.IsInRole(AccountRoles.Owner))
-    {
-        <a class="admreq-capabilities-link" href="/Admin/Capabilities">@ui["admin.capabilities.title"]</a>
-    }
+            <div class="admreq-filter-row">
+                <nav class="library-type-tabs admreq-tabs" aria-label="@ui["admin.requests.tabsAria"]">
+                    @foreach (var (tab, label) in tabs)
+                    {
+                        var active = tab == filter.Tab;
+                        <a class="library-type-tab @(active ? "active" : "")"
+                           href="@RequestsModel.Href(filter with { Tab = tab, Page = 1 })"
+                           aria-current="@(active ? "page" : null)">@label <span class="admreq-count">@queue.TabCounts[tab]</span></a>
+                    }
+                </nav>
+                <div class="admreq-selects">
+                <div class="admreq-select-control">
+                    <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"stack"' /></span>
+                    <select name="type" aria-label="@ui["admin.requests.filter.type"]" data-admreq-custom-select>
+                    <option value="">@ui["admin.requests.filter.type"]</option>
+                    @foreach (var kind in Model.EnabledKinds)
+                    {
+                        var kindName = AcquisitionAccessNames.Kind(kind);
+                        <option value="@kindName" selected="@(filter.Kind == kind)">@ui["admin.requests.kind." + kindName]</option>
+                    }
+                    </select>
+                </div>
+                <div class="admreq-select-control">
+                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"globe"' /></span>
+                <select name="lang" aria-label="@ui["admin.requests.filter.language"]" data-admreq-custom-select>
+                    <option value="">@ui["admin.requests.filter.language"]</option>
+                    @foreach (var tag in queue.Languages)
+                    {
+                        <option value="@tag" selected="@(filter.Language == tag)">@RequestLanguages.Name(tag)</option>
+                    }
+                </select>
+                </div>
+                <div class="admreq-select-control">
+                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"alert"' /></span>
+                <select name="status" aria-label="@ui["admin.requests.filter.status"]" data-admreq-custom-select>
+                    <option value="">@ui["admin.requests.filter.status"]</option>
+                    @foreach (var value in Enum.GetValues<AcquisitionRequestStatus>())
+                    {
+                        var valueName = AcquisitionAccessNames.Status(value);
+                        <option value="@valueName" selected="@(filter.Status == value)">@ui["requests.status." + valueName]</option>
+                    }
+                </select>
+                </div>
+                <div class="admreq-select-control">
+                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"sessions"' /></span>
+                <select name="by" aria-label="@ui["admin.requests.filter.requester"]" data-admreq-custom-select>
+                    <option value="">@ui["admin.requests.filter.requester"]</option>
+                    @foreach (var (requesterId, requesterName) in Model.Requesters)
+                    {
+                        <option value="@requesterId" selected="@(filter.RequesterProfileId == requesterId)">@requesterName</option>
+                    }
+                </select>
+                </div>
+                <div class="admreq-select-control admreq-season-control">
+                    <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"columns"' /></span>
+                    <select name="season" aria-label="@ui["admin.requests.filter.season"]" data-admreq-custom-select>
+                        <option value="">@ui["admin.requests.filter.season"]</option>
+                        @foreach (var season in queue.Seasons)
+                        {
+                            <option value="@season" selected="@(filter.Season == season)">@(season == 0 ? ui["admin.requests.filter.specials"] : $"S{season}")</option>
+                        }
+                    </select>
+                </div>
+                <div class="admreq-select-control admreq-sort-control">
+                    <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"arrow-down"' /></span>
+                    <select name="sort" aria-label="@ui["admin.requests.sort"]" data-admreq-custom-select>
+                        @foreach (var (value, labelKey) in new[]
+                        {
+                            ("newest", "admin.requests.sort.newest"),
+                            ("oldest", "admin.requests.sort.oldest"),
+                            ("modified", "admin.requests.sort.modified"),
+                            ("title", "admin.requests.sort.title"),
+                            ("requester", "admin.requests.sort.requester")
+                        })
+                        {
+                            <option value="@value" selected="@(filter.Sort == value)">@ui[labelKey]</option>
+                        }
+                    </select>
+                </div>
+                </div>
+            </div>
+            <div class="admreq-search-row">
+                <div class="admreq-search">
+                    <input type="search" name="q" value="@filter.Search" maxlength="120"
+                           placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
+                    <button class="admreq-search-submit" type="submit" aria-label="@ui["common.search"]" title="@ui["common.search"]"><partial name="_AdminIcon" model='"search"' /></button>
+                </div>
+                <span class="admreq-results-count">@ui.Format("admin.requests.matching", ("count", queue.Total))</span>
+                @if (filter.HasNarrowing)
+                {
+                    <a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a>
+                }
+            </div>
+        </form>
     </div>
 
     @if (Model.QueueFailed)
@@ -125,16 +164,15 @@
                         <th class="admreq-cell-selection" scope="col">
                             <input type="checkbox" aria-label="@ui["admin.requests.title"]" data-admreq-select-all />
                         </th>
-                        <th scope="col">@ui["admin.requests.col.title"]</th>
-                        <th scope="col" class="admreq-cell-type">@ui["admin.requests.filter.type"]</th>
-                        <th scope="col">@ui["admin.requests.col.requester"]</th>
-                        <th scope="col">@ui["admin.requests.col.language"]</th>
-                        <th scope="col">@ui["admin.requests.col.requested"]</th>
-                        <th scope="col" class="admreq-cell-modified">Modified</th>
-                        <th scope="col" class="admreq-cell-profile">Profile</th>
-                        <th scope="col">@ui["admin.requests.col.status"]</th>
-                        <th scope="col" class="admreq-cell-media">Media status</th>
-                        <th scope="col" class="admreq-cell-details">Details</th>
+                        <th class="admreq-cell-title" scope="col">@ui["admin.requests.col.title"]</th>
+                        <th class="admreq-cell-type" scope="col">@ui["admin.requests.col.type"]</th>
+                        <th class="admreq-cell-who" scope="col">@ui["admin.requests.col.requester"]</th>
+                        <th class="admreq-cell-requested" scope="col">@ui["admin.requests.col.requested"]</th>
+                        <th class="admreq-cell-modified" scope="col">@ui["admin.requests.col.modified"]</th>
+                        <th class="admreq-cell-profile" scope="col">@ui["admin.requests.col.profile"]</th>
+                        <th class="admreq-cell-approval" scope="col">@ui["admin.requests.col.status"]</th>
+                        <th class="admreq-cell-media" scope="col">@ui["admin.requests.col.mediaStatus"]</th>
+                        <th class="admreq-cell-coverage" scope="col">@ui["admin.requests.col.coverage"]</th>
                         <th scope="col">@ui["admin.requests.col.actions"]</th>
                     </tr>
                 </thead>
@@ -142,12 +180,44 @@
                     @foreach (var request in queue.Items)
                     {
                         var status = AcquisitionAccessNames.Status(request.Status);
-                        var options = Model.OptionsOf(request);
                         var language = AdminRequestQuery.LanguageOf(request);
                         var requester = Model.ProfileNames.GetValueOrDefault(request.RequestedByProfileId) ?? request.RequestedByProfileId;
+                        var kindName = AcquisitionAccessNames.Kind(request.Kind);
+                        var kindIcon = request.Kind switch
+                        {
+                            MediaAcquisitionKind.Anime => "screen-play",
+                            MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Book => "book",
+                            MediaAcquisitionKind.Movie => "film",
+                            MediaAcquisitionKind.Tv => "tv",
+                            MediaAcquisitionKind.Audiobook or MediaAcquisitionKind.Music => "headphones",
+                            _ => "stack"
+                        };
+                        var requesterInitial = string.IsNullOrWhiteSpace(requester) ? "?" : requester[..1].ToUpperInvariant();
                         var isBookLike = request.Kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel;
                         var isVideo = request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv;
                         var titleId = $"request-title-{request.Id:N}";
+                        var modifiedActor = request.WasAutoApproved
+                            ? ui["requests.autoApproved"]
+                            : Model.ProfileNames.GetValueOrDefault(request.DecidedByProfileId ?? string.Empty) ?? "—";
+                        var profileName = request.Options.QualityProfileId is { } profileId
+                            ? Model.QualityProfileNames.GetValueOrDefault(profileId) ?? profileId
+                            : "—";
+                        var coverage = Model.CoverageOf(request);
+                        var approvalStatus = request.Status switch
+                        {
+                            AcquisitionRequestStatus.Pending => "pending",
+                            AcquisitionRequestStatus.Rejected => "rejected",
+                            _ => "approved"
+                        };
+                        var mediaStatus = request.Status switch
+                        {
+                            AcquisitionRequestStatus.Searching => "searching",
+                            AcquisitionRequestStatus.Downloading => "downloading",
+                            AcquisitionRequestStatus.Importing => "importing",
+                            AcquisitionRequestStatus.Completed => "completed",
+                            AcquisitionRequestStatus.Failed => "failed",
+                            _ => null
+                        };
                         <tr class="admreq-row" data-admreq-row tabindex="0">
                             <td class="admreq-cell-selection">
                                 <input type="checkbox" aria-labelledby="@titleId" data-admreq-select />
@@ -163,94 +233,74 @@
                                 <span class="admreq-copy">
                                     @if (Model.ViewUrl(request) is { } resultUrl)
                                     {
-                                        <a class="admreq-title" id="@titleId" href="@resultUrl">@request.Title</a>
+                                        <a class="admreq-title" id="@titleId" href="@resultUrl" title="@request.Title">@request.Title</a>
                                     }
                                     else
                                     {
-                                        <strong class="admreq-title" id="@titleId">@request.Title</strong>
+                                        <strong class="admreq-title" id="@titleId" title="@request.Title">@request.Title</strong>
                                     }
-                                    @if (!string.IsNullOrWhiteSpace(request.Subtitle))
-                                    {
-                                        <small>@request.Subtitle</small>
-                                    }
-                                    @if (request.WasAutoApproved)
-                                    {
-                                        <small>@ui["requests.autoApproved"]</small>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(request.StatusMessage))
-                                    {
-                                        <small>@request.StatusMessage</small>
-                                    }
+                                    <span class="admreq-copy-meta">
+                                        @if (!string.IsNullOrWhiteSpace(request.Subtitle))
+                                        {
+                                            <small title="@request.Subtitle">@request.Subtitle</small>
+                                        }
+                                    </span>
                                 </span>
                               </div>
                             </td>
-                            <td class="admreq-cell-type">
-                                <span class="admin-tag admin-tag-text" data-kind="@AcquisitionAccessNames.Kind(request.Kind)">@ui["admin.requests.kind." + AcquisitionAccessNames.Kind(request.Kind)]</span>
+                            <td class="admreq-cell-type" data-label="@ui["admin.requests.col.type"]">
+                                <span class="admreq-badge admreq-type admreq-type-@kindName" title="@(ui["admin.requests.kind." + kindName])"><partial name="_AdminIcon" model="kindIcon" />@ui["admin.requests.kind." + kindName]</span>
                             </td>
-                            <td class="admreq-cell-who">@requester</td>
-                            <td class="admreq-cell-lang">
-                              <div class="admreq-stack">
-                                @if (language is not null)
-                                {
-                                    <span>@RequestLanguages.Name(language)</span>
-                                }
-                                else if (request.Kind == MediaAcquisitionKind.Anime)
-                                {
-                                    <span>@ui["requests.new.anyLanguage"]</span>
-                                }
-                                else
-                                {
-                                    <span class="admreq-none" aria-hidden="true">&mdash;</span>
-                                }
-                                @if (options.Count > 0)
-                                {
-                                    <small>@string.Join(" · ", options)</small>
-                                }
-                              </div>
+                            <td class="admreq-cell-who" data-label="@ui["admin.requests.col.requester"]">
+                                <span class="admreq-requester"><span class="admreq-requester-avatar" aria-hidden="true">@requesterInitial</span><span>@requester</span></span>
                             </td>
-                            <td class="admreq-cell-when">
-                                <time datetime="@Iso(request.CreatedAt)">
-                                    <span>@Day(request.CreatedAt)</span>
-                                    <small>@Clock(request.CreatedAt)</small>
+                            <td class="admreq-cell-when admreq-cell-requested" data-label="@ui["admin.requests.col.requested"]">
+                                <time datetime="@Iso(request.CreatedAt)" data-local-time="parts">
+                                    <span data-local-date>@Day(request.CreatedAt)</span>
+                                    <small data-local-clock>@Clock(request.CreatedAt)</small>
                                 </time>
                             </td>
-                            <td class="admreq-cell-modified">
-                                <span class="admreq-unavailable" title="Modified timestamps are not connected yet.">&mdash;</span>
+                            <td class="admreq-cell-modified" data-label="@ui["admin.requests.col.modified"]">
+                                <time datetime="@Iso(request.UpdatedAt)" data-local-time="date"><span data-local-date>@Day(request.UpdatedAt)</span><small>@modifiedActor</small></time>
                             </td>
-                            <td class="admreq-cell-profile">
-                                @if (options.Count > 0)
-                                {
-                                    <span>@options[0]</span>
-                                }
-                                else
-                                {
-                                    <span class="admreq-unavailable" title="The selected profile is not connected yet.">&mdash;</span>
-                                }
+                            <td class="admreq-cell-profile" data-label="@ui["admin.requests.col.profile"]">
+                                <div class="admreq-stack"><span>@profileName</span><small>@(language is not null ? RequestLanguages.Name(language) : ui["requests.new.anyLanguage"])</small></div>
                             </td>
-                            <td class="admreq-cell-state">
-                                <span class="admin-tag admin-tag-@AdminStatusTone.Of(request.Status)" data-status="@status">
-                                    <partial name="_RequestStatusIcon" model="status" />
-                                    @ui["requests.status." + status]
+                            <td class="admreq-cell-approval" data-label="@ui["admin.requests.col.status"]">
+                                <span class="admreq-badge admreq-approval admreq-approval-@approvalStatus" data-approval-status="@approvalStatus" title="@(request.WasAutoApproved ? ui["requests.autoApproved"] : null)">
+                                    <partial name="_RequestStatusIcon" model="@(request.Status == AcquisitionRequestStatus.Pending ? "pending" : request.Status == AcquisitionRequestStatus.Rejected ? "rejected" : "completed")" />
+                                    @(request.Status == AcquisitionRequestStatus.Pending ? ui["requests.status.pending"] : request.Status == AcquisitionRequestStatus.Rejected ? ui["requests.status.rejected"] : ui["requests.status.approved"])
                                 </span>
                             </td>
-                            <td class="admreq-cell-media">
-                                <span class="admreq-unavailable" title="Media availability is not connected yet.">&mdash;</span>
-                            </td>
-                            <td class="admreq-cell-details">
-                                @if (options.Count > 0)
+                            <td class="admreq-cell-media" data-label="@ui["admin.requests.col.mediaStatus"]">
+                                @if (mediaStatus is not null)
                                 {
-                                    <span>@string.Join(" · ", options)</span>
-                                }
-                                else if (!string.IsNullOrWhiteSpace(request.Subtitle))
-                                {
-                                    <span>@request.Subtitle</span>
+                                    <span class="admreq-badge admreq-media admreq-media-@mediaStatus" data-media-status="@status" title="@request.StatusMessage">
+                                        <partial name="_RequestStatusIcon" model='@(mediaStatus == "failed" ? "rejected" : mediaStatus == "completed" ? "completed" : "pending")' />
+                                        @ui["requests.status." + mediaStatus]
+                                    </span>
                                 }
                                 else
                                 {
-                                    <span class="admreq-unavailable">&mdash;</span>
+                                    <span class="admreq-none" data-media-status="none">&mdash;</span>
                                 }
                             </td>
-                            <td class="admreq-cell-actions">
+                            <td class="admreq-cell-coverage" data-label="@ui["admin.requests.col.coverage"]">
+                                @if (coverage.Count > 0)
+                                {
+                                    <span class="admreq-coverage-list">
+                                        @foreach (var item in coverage)
+                                        {
+                                            <span class="admreq-coverage" title="@item">@item</span>
+                                        }
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="admreq-none">&mdash;</span>
+                                }
+                            </td>
+                            <td class="admreq-cell-actions" data-label="@ui["admin.requests.col.actions"]">
                                 @{
                                     var waiting = request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed;
                                     var viewUrl = request.Status != AcquisitionRequestStatus.Pending ? Model.ViewUrl(request) : null;
@@ -266,50 +316,55 @@
                                         && (request.Kind == MediaAcquisitionKind.Anime || isVideo);
                                     var searchNow = request.Status == AcquisitionRequestStatus.Approved && (isBookLike || isVideo);
                                     var viewIsPrimary = viewUrl is not null && !waiting && request.Status != AcquisitionRequestStatus.Rejected;
-                                    var hasMenu = inWanted || manageUrl is not null || waiting || (viewUrl is not null && !viewIsPrimary);
+                                    var hasMenu = request.Status == AcquisitionRequestStatus.Pending || inWanted || manageUrl is not null || waiting || manualUrl is not null || (viewUrl is not null && !viewIsPrimary);
                                 }
                                 <div class="admreq-actions">
                                     @if (request.Status is AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Failed)
                                     {
                                         <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button button-primary" type="submit">@(request.Status == AcquisitionRequestStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.approve"])</button>
-                                        </form>
-                                    }
-                                    @if (request.Status == AcquisitionRequestStatus.Pending)
-                                    {
-                                        <form method="post" asp-page-handler="Reject" asp-route-id="@request.Id">
-                                            <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button button-danger" type="submit">@ui["admin.requests.reject"]</button>
+                                            <button class="button button-primary admreq-action" type="submit" data-admreq-action="@(request.Status == AcquisitionRequestStatus.Failed ? "retry" : "approve")"><span class="admreq-action-icon"><partial name="_AdminIcon" model='@(request.Status == AcquisitionRequestStatus.Failed ? "refresh" : "check")' /></span><span>@(request.Status == AcquisitionRequestStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.approve"])</span></button>
                                         </form>
                                     }
                                     @if (request.Status == AcquisitionRequestStatus.Rejected)
                                     {
                                         <form method="post" asp-page-handler="Reopen" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="button" type="submit">@ui["admin.requests.reopen"]</button>
+                                            <button class="button admreq-action" type="submit"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.reopen"]</span></button>
                                         </form>
                                     }
                                     @if (viewIsPrimary)
                                     {
-                                        <a class="admin-icon-button admin-icon-button-labelled" href="@viewUrl"><partial name="_AdminIcon" model='"eye"' /><span class="admin-icon-label">@ui["admin.requests.viewMedia"]</span></a>
+                                        <a class="button admreq-action" href="@viewUrl"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"eye"' /></span><span>@ui["admin.requests.viewMedia"]</span></a>
                                     }
+                                    <button class="button admin-icon-button admreq-details-button" type="button" data-admreq-details
+                                            data-title="@request.Title" data-requester="@requester" data-requested="@Iso(request.CreatedAt)"
+                                            data-approval="@(request.Status == AcquisitionRequestStatus.Pending ? ui["requests.status.pending"] : request.Status == AcquisitionRequestStatus.Rejected ? ui["requests.status.rejected"] : ui["requests.status.approved"])"
+                                            data-media="@(mediaStatus is null ? "—" : ui["requests.status." + mediaStatus])" data-message="@request.StatusMessage"
+                                            aria-label="@ui["admin.requests.details"]" title="@ui["admin.requests.details"]"><partial name="_AdminIcon" model='"search"' /></button>
                                     @if (searchNow)
                                     {
                                         <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            <button class="admin-icon-button" type="submit" title="@ui["admin.requests.searchNow"]"><partial name="_AdminIcon" model='"refresh"' /><span class="admin-icon-label">@ui["admin.requests.searchNow"]</span></button>
+                                            <button class="button admreq-action" type="submit" title="@ui["admin.requests.searchNow"]"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.searchNow"]</span></button>
                                         </form>
-                                    }
-                                    @if (manualUrl is not null)
-                                    {
-                                        <a class="admin-icon-button" href="@manualUrl" title="@ui["admin.wanted.manualSearch"]"><partial name="_AdminIcon" model='"search"' /><span class="admin-icon-label">@ui["admin.wanted.manualSearch"]</span></a>
                                     }
                                     @if (hasMenu)
                                     {
                                         <details class="admin-menu">
                                             <summary class="admin-icon-button" aria-label="@ui["admin.menu.more"]" title="@ui["admin.menu.more"]"><partial name="_AdminIcon" model='"more"' /></summary>
                                             <div class="admin-menu-list">
+                                                @if (request.Status == AcquisitionRequestStatus.Pending)
+                                                {
+                                                    <form method="post" asp-page-handler="Reject" asp-route-id="@request.Id">
+                                                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                                        <button class="admin-menu-item" type="submit">@ui["admin.requests.reject"]</button>
+                                                    </form>
+                                                }
+                                                @if (manualUrl is not null)
+                                                {
+                                                    <a class="admin-menu-item" href="@manualUrl">@ui["admin.wanted.manualSearch"]</a>
+                                                }
                                                 @if (viewUrl is not null && !viewIsPrimary)
                                                 {
                                                     <a class="admin-menu-item" href="@viewUrl">@ui["admin.requests.viewMedia"]</a>
@@ -341,28 +396,91 @@
         </div>
 
         <aside class="admreq-bulk" data-admreq-bulk hidden aria-live="polite">
-            <span class="admreq-bulk-count"><strong data-admreq-selected-count>0</strong> selected</span>
-            <span title="Batch actions need the queue API integration."><button class="button button-primary" type="button" disabled>Approve</button></span>
-            <span title="Batch actions need the queue API integration."><button class="button button-danger" type="button" disabled>Reject</button></span>
-            <span title="Batch actions need the queue API integration."><button class="button" type="button" disabled>Mark as added</button></span>
-            <span title="Batch actions need the queue API integration."><button class="button" type="button" disabled>Change profile</button></span>
-            <span title="Batch actions need the queue API integration."><button class="button" type="button" disabled>Remove media</button></span>
-            <span title="Batch actions need the queue API integration."><button class="button button-danger admreq-bulk-delete" type="button" disabled>Delete request</button></span>
+            <span class="admreq-bulk-count"><strong data-admreq-selected-count>0</strong> @ui["admin.requests.selected"]</span>
+            <button class="button admin-icon-button admreq-clear-selection" type="button" data-admreq-clear-selection aria-label="@ui["admin.requests.selectionClear"]" title="@ui["admin.requests.selectionClear"]"><partial name="_AdminIcon" model='"close"' /></button>
         </aside>
 
         <div class="admreq-footer">
-            <span>@ui.Format("admin.requests.showing", ("from", (queue.Page - 1) * AdminRequestQuery.PageSize + 1), ("to", (queue.Page - 1) * AdminRequestQuery.PageSize + queue.Items.Count), ("total", queue.Total))</span>
+            <div class="admreq-footer-start">
+                <form class="admreq-page-size" method="get" action="/Admin/Requests" data-admreq-page-size>
+                    @if (filter.Tab != AdminRequestTab.All)
+                    {
+                        <input type="hidden" name="tab" value="@AdminRequestQuery.TabName(filter.Tab)" />
+                    }
+                    @if (filter.Kind is { } selectedKind)
+                    {
+                        <input type="hidden" name="type" value="@AcquisitionAccessNames.Kind(selectedKind)" />
+                    }
+                    @if (filter.Status is { } selectedStatus)
+                    {
+                        <input type="hidden" name="status" value="@AcquisitionAccessNames.Status(selectedStatus)" />
+                    }
+                    @if (filter.Language is not null)
+                    {
+                        <input type="hidden" name="lang" value="@filter.Language" />
+                    }
+                    @if (filter.RequesterProfileId is not null)
+                    {
+                        <input type="hidden" name="by" value="@filter.RequesterProfileId" />
+                    }
+                    @if (filter.Season is { } selectedSeason)
+                    {
+                        <input type="hidden" name="season" value="@selectedSeason" />
+                    }
+                    @if (filter.Search is not null)
+                    {
+                        <input type="hidden" name="q" value="@filter.Search" />
+                    }
+                    @if (filter.Sort != "newest")
+                    {
+                        <input type="hidden" name="sort" value="@filter.Sort" />
+                    }
+                    <label for="admreq-page-size">@ui["admin.requests.pageSize"]</label>
+                        <select id="admreq-page-size" name="size" aria-label="@ui["admin.requests.pageSize"]" data-admreq-page-size-select data-admreq-custom-select>
+                        @foreach (var size in AdminRequestQuery.StandardPageSizes)
+                        {
+                            <option value="@size" selected="@(filter.PageSize == size)">@size</option>
+                        }
+                        <option value="0" selected="@(!AdminRequestQuery.StandardPageSizes.Contains(filter.PageSize))">@ui["admin.requests.pageSize.custom"]</option>
+                    </select>
+                    @if (AdminRequestQuery.StandardPageSizes.Contains(filter.PageSize))
+                    {
+                        <input type="number" name="customSize" value="@filter.PageSize" min="1" max="500" inputmode="numeric" aria-label="@ui["admin.requests.pageSize.customAria"]" data-admreq-custom-page-size disabled />
+                    }
+                    else
+                    {
+                        <input type="number" name="customSize" value="@filter.PageSize" min="1" max="500" inputmode="numeric" aria-label="@ui["admin.requests.pageSize.customAria"]" data-admreq-custom-page-size />
+                    }
+                </form>
+                <span>@ui.Format("admin.requests.showing", ("from", (queue.Page - 1) * queue.PageSize + 1), ("to", (queue.Page - 1) * queue.PageSize + queue.Items.Count), ("total", queue.Total))</span>
+                <form class="admreq-go-to" method="get" action="/Admin/Requests">
+                    @if (filter.Tab != AdminRequestTab.All) { <input type="hidden" name="tab" value="@AdminRequestQuery.TabName(filter.Tab)" /> }
+                    @if (filter.Kind is { } gotoKind) { <input type="hidden" name="type" value="@AcquisitionAccessNames.Kind(gotoKind)" /> }
+                    @if (filter.Status is { } gotoStatus) { <input type="hidden" name="status" value="@AcquisitionAccessNames.Status(gotoStatus)" /> }
+                    @if (filter.Language is not null) { <input type="hidden" name="lang" value="@filter.Language" /> }
+                    @if (filter.RequesterProfileId is not null) { <input type="hidden" name="by" value="@filter.RequesterProfileId" /> }
+                    @if (filter.Season is { } gotoSeason) { <input type="hidden" name="season" value="@gotoSeason" /> }
+                    @if (filter.Search is not null) { <input type="hidden" name="q" value="@filter.Search" /> }
+                    <input type="hidden" name="size" value="@filter.PageSize" />
+                    @if (filter.Sort != "newest") { <input type="hidden" name="sort" value="@filter.Sort" /> }
+                    <label for="admreq-go-page">@ui["admin.requests.goTo"]</label>
+                    <input id="admreq-go-page" type="number" name="p" min="1" max="@queue.PageCount" value="@queue.Page" inputmode="numeric" />
+                </form>
+            </div>
             @if (queue.PageCount > 1)
             {
                 <nav class="admreq-pager" aria-label="@ui["admin.requests.title"]">
                     @if (queue.HasPrevious)
                     {
-                        <a class="button" href="@RequestsModel.Href(filter with { Page = queue.Page - 1 })">@ui["requests.page.previous"]</a>
+                        <a class="button admreq-page-button" href="@RequestsModel.Href(filter with { Page = queue.Page - 1 })" aria-label="@ui["requests.page.previous"]"><span aria-hidden="true">&lsaquo;</span></a>
                     }
-                    <span>@ui.Format("requests.page.of", ("page", queue.Page), ("pages", queue.PageCount))</span>
+                    @foreach (var pageNumber in Enumerable.Range(Math.Max(1, queue.Page - 2), Math.Min(queue.PageCount, queue.Page + 2) - Math.Max(1, queue.Page - 2) + 1))
+                    {
+                        <a class="button admreq-page-button @(pageNumber == queue.Page ? "active" : "")" href="@RequestsModel.Href(filter with { Page = pageNumber })" aria-current="@(pageNumber == queue.Page ? "page" : null)">@pageNumber</a>
+                    }
                     @if (queue.HasNext)
                     {
-                        <a class="button" href="@RequestsModel.Href(filter with { Page = queue.Page + 1 })">@ui["requests.page.next"]</a>
+                        <a class="button admreq-page-button" href="@RequestsModel.Href(filter with { Page = queue.Page + 1 })" aria-label="@ui["requests.page.next"]"><span aria-hidden="true">&rsaquo;</span></a>
                     }
                 </nav>
             }
@@ -370,8 +488,26 @@
     }
 </section>
 
+<dialog class="admreq-dialog" data-admreq-dialog aria-labelledby="admreq-dialog-title">
+    <div class="admreq-dialog-head">
+        <h2 id="admreq-dialog-title" data-admreq-dialog-title></h2>
+        <button class="button admin-icon-button" type="button" data-admreq-dialog-close aria-label="@ui["common.close"]"><partial name="_AdminIcon" model='"close"' /></button>
+    </div>
+    <dl class="admreq-dialog-facts">
+        <div><dt>@ui["admin.requests.detailsRequester"]</dt><dd data-admreq-dialog-requester></dd></div>
+        <div><dt>@ui["admin.requests.detailsRequested"]</dt><dd data-admreq-dialog-requested></dd></div>
+        <div><dt>@ui["admin.requests.detailsStatus"]</dt><dd data-admreq-dialog-approval></dd></div>
+        <div><dt>@ui["admin.requests.detailsMediaStatus"]</dt><dd data-admreq-dialog-media></dd></div>
+        <div class="admreq-dialog-message"><dt>@ui["admin.requests.detailsMessage"]</dt><dd data-admreq-dialog-message></dd></div>
+    </dl>
+</dialog>
+
 <details class="admreq-settings" id="rules">
     <summary>@ui["admin.requests.settingsSummary"]</summary>
+    @if (User.IsInRole(AccountRoles.Owner))
+    {
+        <a class="admreq-capabilities-link" href="/Admin/Capabilities">@ui["admin.capabilities.title"]</a>
+    }
 
 <section class="panel access-policies">
     <div class="panel-heading">

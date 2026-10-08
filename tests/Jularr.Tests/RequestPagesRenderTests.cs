@@ -155,6 +155,7 @@ public sealed class RequestPagesRenderTests
         await store.CreateAsync(Anime("1", "Pending Show", german), RequestPagesHost.Profile, AcquisitionRequestStatus.Pending, null, CancellationToken.None);
         await store.CreateAsync(Anime("2", "Downloading Show"), RequestPagesHost.Profile, AcquisitionRequestStatus.Downloading, "owner", CancellationToken.None);
         await store.CreateAsync(Anime("3", "Rejected Show"), RequestPagesHost.Profile, AcquisitionRequestStatus.Rejected, "owner", CancellationToken.None);
+        await store.CreateAsync(Anime("4", "Failed Show"), RequestPagesHost.Profile, AcquisitionRequestStatus.Failed, "owner", CancellationToken.None);
 
         var all = await host.GetHtmlAsync("/Admin/Requests", asOwner: true);
 
@@ -165,15 +166,33 @@ public sealed class RequestPagesRenderTests
 
         StringAssert.Contains(all, "Pending Show");
         StringAssert.Contains(all, "Deutsch");
-        StringAssert.Contains(all, "data-status=\"pending\"");
-        StringAssert.Contains(all, "data-status=\"downloading\"");
+        StringAssert.Contains(all, "data-approval-status=\"pending\"");
+        StringAssert.Contains(all, "Failed Show");
+        StringAssert.Contains(all, "data-approval-status=\"approved\"");
+        StringAssert.Contains(all, "data-media-status=\"failed\"");
+        StringAssert.Contains(all, "data-admreq-action=\"retry\"");
+        StringAssert.Contains(all, "data-media-status=\"downloading\"");
         StringAssert.Contains(all, "data-admreq-select-all");
         StringAssert.Contains(all, "data-admreq-select");
         StringAssert.Contains(all, "data-admreq-bulk");
+        StringAssert.Contains(all, "class=\"admreq-control-surface\"");
+        StringAssert.Contains(all, "class=\"library-type-tabs admreq-tabs\"");
+        StringAssert.Contains(all, "admreq-cell-modified");
+        StringAssert.Contains(all, "admreq-cell-profile");
+        StringAssert.Contains(all, "admreq-cell-coverage");
+        StringAssert.Contains(all, "data-local-time=\"parts\"");
+        StringAssert.Contains(all, "data-local-clock");
+        StringAssert.Contains(all, "local-time.js");
+        Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(all, @"\d{2}:\d{2} UTC"), "Request times are localized in the browser and never labeled as UTC.");
+        StringAssert.Contains(all, "data-admreq-custom-select");
+        StringAssert.Contains(all, "data-admreq-dialog");
         StringAssert.Contains(all, "admin-requests.js");
-        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "button-primary\" type=\"submit\">\\s*Approve\\s*</button>").Count, "Only the pending request can be approved.");
-        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "type=\"submit\">Reject</button>").Count);
-        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "type=\"submit\">Reopen</button>").Count);
+        Assert.AreEqual(
+            1,
+            System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"button button-primary admreq-action\" type=\"submit\"[^>]*>[\\s\\S]*?<span>Approve</span></button>").Count,
+            "Only the pending request can be approved.");
+        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"admin-menu-item\" type=\"submit\">Reject</button>").Count, "Reject remains available through the row's More actions menu.");
+        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"button admreq-action\" type=\"submit\">[\\s\\S]*?<span>Reopen</span></button>").Count);
         StringAssert.Contains(all, "class=\"admin-menu-item\" href=\"/Admin/Wanted\"");
         Assert.IsFalse(all.Contains("/Acquisition#wanted", StringComparison.Ordinal));
 
@@ -181,12 +200,25 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(rejected, "Rejected Show");
         Assert.IsFalse(rejected.Contains("Pending Show", StringComparison.Ordinal));
 
+        var approved = await host.GetHtmlAsync("/Admin/Requests?tab=approved", asOwner: true);
+        StringAssert.Contains(approved, "Failed Show", "A failed acquisition remains an approved request awaiting retry.");
+        Assert.IsFalse(approved.Contains("Pending Show", StringComparison.Ordinal));
+
         var byLanguage = await host.GetHtmlAsync("/Admin/Requests?lang=de", asOwner: true);
         StringAssert.Contains(byLanguage, "Pending Show");
         Assert.IsFalse(byLanguage.Contains("Downloading Show", StringComparison.Ordinal));
 
         var none = await host.GetHtmlAsync("/Admin/Requests?q=zzz", asOwner: true);
         StringAssert.Contains(none, "No requests match these filters.");
+
+        var filtered = await host.GetHtmlAsync("/Admin/Requests?tab=open&type=anime&lang=de&status=pending&by=test-profile&q=Pending%20Show&size=20", asOwner: true);
+        var pageSizeForm = System.Text.RegularExpressions.Regex.Match(filtered, "<form class=\"admreq-page-size\"[\\s\\S]*?</form>").Value;
+        StringAssert.Contains(pageSizeForm, "name=\"tab\" value=\"open\"");
+        StringAssert.Contains(pageSizeForm, "name=\"type\" value=\"anime\"");
+        StringAssert.Contains(pageSizeForm, "name=\"lang\" value=\"de\"");
+        StringAssert.Contains(pageSizeForm, "name=\"status\" value=\"pending\"");
+        StringAssert.Contains(pageSizeForm, "name=\"by\" value=\"test-profile\"");
+        StringAssert.Contains(pageSizeForm, "name=\"q\" value=\"Pending Show\"");
     }
 
     [TestMethod]

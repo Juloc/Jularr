@@ -18,7 +18,9 @@ public sealed class AdminRequestQueryTests
         string requester = "alice",
         MediaAcquisitionKind kind = MediaAcquisitionKind.Anime,
         string? audio = null,
-        string? subtitle = null) =>
+        string? subtitle = null,
+        AcquisitionRequestOptions? options = null,
+        string? payloadJson = null) =>
         new(
             Guid.NewGuid(),
             kind,
@@ -27,7 +29,7 @@ public sealed class AdminRequestQueryTests
             title,
             subtitle,
             null,
-            audio is null ? null : new AcquisitionRequestOptions { AudioLanguage = audio }.ToPayloadJson(),
+            payloadJson ?? (audio is null ? options ?? AcquisitionRequestOptions.Default : (options ?? AcquisitionRequestOptions.Default) with { AudioLanguage = audio }).ToPayloadJson(),
             requester,
             status,
             null,
@@ -40,7 +42,7 @@ public sealed class AdminRequestQueryTests
 
     [TestMethod]
     [DataRow(AcquisitionRequestStatus.Pending, AdminRequestTab.Open)]
-    [DataRow(AcquisitionRequestStatus.Failed, AdminRequestTab.Open)]
+    [DataRow(AcquisitionRequestStatus.Failed, AdminRequestTab.Approved)]
     [DataRow(AcquisitionRequestStatus.Approved, AdminRequestTab.Approved)]
     [DataRow(AcquisitionRequestStatus.Searching, AdminRequestTab.InProgress)]
     [DataRow(AcquisitionRequestStatus.Downloading, AdminRequestTab.InProgress)]
@@ -63,16 +65,16 @@ public sealed class AdminRequestQueryTests
             Row("F", AcquisitionRequestStatus.Rejected)
         };
 
-        var open = AdminRequestQuery.Build(rows, new AdminRequestFilter(AdminRequestTab.Open), Names);
+        var open = AdminRequestQuery.Build(rows, new AdminRequestFilter(AdminRequestTab.Open, Sort: "title"), Names);
 
-        Assert.AreEqual(6, open.TabCounts[AdminRequestTab.All]);
-        Assert.AreEqual(2, open.TabCounts[AdminRequestTab.Open]);
-        Assert.AreEqual(1, open.TabCounts[AdminRequestTab.Approved]);
+        Assert.AreEqual(5, open.TabCounts[AdminRequestTab.All]);
+        Assert.AreEqual(1, open.TabCounts[AdminRequestTab.Open]);
+        Assert.AreEqual(2, open.TabCounts[AdminRequestTab.Approved]);
         Assert.AreEqual(1, open.TabCounts[AdminRequestTab.InProgress]);
         Assert.AreEqual(1, open.TabCounts[AdminRequestTab.Done]);
         Assert.AreEqual(1, open.TabCounts[AdminRequestTab.Rejected]);
-        CollectionAssert.AreEqual(new[] { "A", "B" }, open.Items.Select(item => item.Title).ToArray());
-        Assert.AreEqual(2, open.Total);
+        CollectionAssert.AreEqual(new[] { "A" }, open.Items.Select(item => item.Title).ToArray());
+        Assert.AreEqual(1, open.Total);
     }
 
     [TestMethod]
@@ -87,21 +89,21 @@ public sealed class AdminRequestQueryTests
         };
 
         var byKind = AdminRequestQuery.Build(rows, new AdminRequestFilter(Kind: MediaAcquisitionKind.Anime), Names);
-        Assert.AreEqual(2, byKind.Total);
-        Assert.AreEqual(2, byKind.TabCounts[AdminRequestTab.All]);
+        Assert.AreEqual(1, byKind.Total);
+        Assert.AreEqual(1, byKind.TabCounts[AdminRequestTab.All]);
 
-        var byLanguage = AdminRequestQuery.Build(rows, new AdminRequestFilter(Language: "de"), Names);
+        var byLanguage = AdminRequestQuery.Build(rows, new AdminRequestFilter(AdminRequestTab.Done, Language: "de"), Names);
         CollectionAssert.AreEqual(new[] { "Dungeon Meshi" }, byLanguage.Items.Select(item => item.Title).ToArray());
 
         var byRequester = AdminRequestQuery.Build(rows, new AdminRequestFilter(RequesterProfileId: "bob"), Names);
-        CollectionAssert.AreEquivalent(new[] { "Dune", "Berserk" }, byRequester.Items.Select(item => item.Title).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "Dune" }, byRequester.Items.Select(item => item.Title).ToArray());
         Assert.AreEqual(1, byRequester.TabCounts[AdminRequestTab.Open]);
         Assert.AreEqual(1, byRequester.TabCounts[AdminRequestTab.Done]);
 
         // Status narrows the list only: the tab numbers keep saying what each tab holds.
         var byStatus = AdminRequestQuery.Build(rows, new AdminRequestFilter(Status: AcquisitionRequestStatus.Completed), Names);
         Assert.AreEqual(2, byStatus.Total);
-        Assert.AreEqual(4, byStatus.TabCounts[AdminRequestTab.All]);
+        Assert.AreEqual(2, byStatus.TabCounts[AdminRequestTab.All]);
 
         var emptyIntersection = AdminRequestQuery.Build(
             rows,
@@ -127,6 +129,25 @@ public sealed class AdminRequestQueryTests
     }
 
     [TestMethod]
+    public void SeasonFilterUsesAnimeSelectionAndResolvedTvSeasons()
+    {
+        var anime = Row("Anime season two", AcquisitionRequestStatus.Pending, options: new AcquisitionRequestOptions { Scope = RequestScope.Seasons, Seasons = [2] });
+        var tvSeasonId = Guid.NewGuid();
+        var tvPayload = new VideoRequestPayload(Guid.NewGuid(), "TV season two", null, VideoRequestScope.Custom, [], false, SelectedSeasonIds: [tvSeasonId]).Serialize();
+        var tv = Row("TV season two", AcquisitionRequestStatus.Approved, kind: MediaAcquisitionKind.Tv, payloadJson: tvPayload);
+        var other = Row("Other season", AcquisitionRequestStatus.Rejected, options: new AcquisitionRequestOptions { Scope = RequestScope.Seasons, Seasons = [1] });
+        var rows = new[] { anime, tv, other };
+        IReadOnlyDictionary<Guid, IReadOnlyList<int>> videoSeasons = new Dictionary<Guid, IReadOnlyList<int>> { [tv.Id] = [2] };
+
+        var page = AdminRequestQuery.Build(rows, new AdminRequestFilter(Season: 2), Names, videoSeasons);
+
+        CollectionAssert.AreEquivalent(new[] { anime.Id, tv.Id }, page.Items.Select(item => item.Id).ToArray());
+        Assert.AreEqual(2, page.TabCounts[AdminRequestTab.All]);
+        CollectionAssert.AreEqual(new[] { 1, 2 }, page.Seasons.ToArray());
+        Assert.IsTrue(page.Filter.HasNarrowing);
+    }
+
+    [TestMethod]
     public void LanguageChoicesListTheRequestedLanguagesOnceInFormOrder()
     {
         var rows = new[]
@@ -143,20 +164,24 @@ public sealed class AdminRequestQueryTests
     }
 
     [TestMethod]
-    public void PagesHoldTwentyRowsAndAPagePastTheEndShowsTheLast()
+    public void PagesSupportTheRequestedSizeAndAPagePastTheEndShowsTheLast()
     {
         var rows = Enumerable.Range(1, 45).Select(index => Row($"T{index:00}", AcquisitionRequestStatus.Pending)).ToArray();
 
-        var second = AdminRequestQuery.Build(rows, new AdminRequestFilter(Page: 2), Names);
+        var second = AdminRequestQuery.Build(rows, new AdminRequestFilter(Page: 2, PageSize: 20, Sort: "title"), Names);
         Assert.AreEqual(3, second.PageCount);
         Assert.AreEqual(20, second.Items.Count);
         Assert.AreEqual("T21", second.Items[0].Title);
         Assert.IsTrue(second.HasPrevious && second.HasNext);
 
-        var beyond = AdminRequestQuery.Build(rows, new AdminRequestFilter(Page: 99), Names);
+        var beyond = AdminRequestQuery.Build(rows, new AdminRequestFilter(Page: 99, PageSize: 20, Sort: "title"), Names);
         Assert.AreEqual(3, beyond.Page);
         Assert.AreEqual(5, beyond.Items.Count);
         Assert.IsFalse(beyond.HasNext);
+
+        var custom = AdminRequestQuery.Build(rows, new AdminRequestFilter(PageSize: 37, Sort: "title"), Names);
+        Assert.AreEqual(37, custom.PageSize);
+        Assert.AreEqual(2, custom.PageCount);
 
         var none = AdminRequestQuery.Build([], new AdminRequestFilter(Page: 4), Names);
         Assert.AreEqual(1, none.Page);
@@ -172,6 +197,27 @@ public sealed class AdminRequestQueryTests
         Assert.AreEqual(MediaAcquisitionKind.LightNovel, AdminRequestQuery.TryParseKind("lightNovel"));
         Assert.IsNull(AdminRequestQuery.TryParseStatus("nope"));
         Assert.AreEqual(AcquisitionRequestStatus.Failed, AdminRequestQuery.TryParseStatus("failed"));
+        Assert.AreEqual("newest", AdminRequestQuery.NormalizeSort("unknown"));
+        Assert.AreEqual("oldest", AdminRequestQuery.NormalizeSort(" OLDEST "));
+        Assert.AreEqual(500, AdminRequestQuery.NormalizePageSize(500));
+        Assert.AreEqual(AdminRequestQuery.DefaultPageSize, AdminRequestQuery.NormalizePageSize(501));
+    }
+
+    [TestMethod]
+    public void SortOrdersTheFilteredRowsAndRemainsInTheNormalizedFilter()
+    {
+        var rows = new[]
+        {
+            Row("Zebra", AcquisitionRequestStatus.Pending),
+            Row("Alpha", AcquisitionRequestStatus.Pending),
+            Row("Middle", AcquisitionRequestStatus.Pending)
+        };
+
+        var page = AdminRequestQuery.Build(rows, new AdminRequestFilter(Sort: "title"), Names);
+
+        CollectionAssert.AreEqual(new[] { "Alpha", "Middle", "Zebra" }, page.Items.Select(item => item.Title).ToArray());
+        Assert.AreEqual("title", page.Filter.Sort);
+        Assert.IsTrue(page.Filter.HasNarrowing);
     }
 
     [TestMethod]
