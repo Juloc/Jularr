@@ -540,6 +540,18 @@ public sealed partial class BookCatalogService(
             targetLanguage);
     }
 
+    /// <summary>Whether <see cref="AcquireCatalogBookAsync"/> has an authorized EPUB to import: a Wikisource page, an edition the catalog links, or a Project Gutenberg match.</summary>
+    public async Task<bool> CanAcquireDirectlyAsync(string catalogId, CancellationToken cancellationToken)
+    {
+        if (TryParseWikisourceId(catalogId, out _))
+        {
+            return true;
+        }
+
+        var catalog = await GetAsync(catalogId, cancellationToken);
+        return catalog is not null && (catalog.CanAcquire || await FindGutenbergMatchAsync(catalog.Title, catalog.Author, cancellationToken) is not null);
+    }
+
     public async Task<Guid> AcquireCatalogBookAsync(
         string catalogId,
         CancellationToken cancellationToken)

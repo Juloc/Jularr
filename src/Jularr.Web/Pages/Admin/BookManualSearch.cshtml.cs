@@ -209,7 +209,7 @@ public sealed class BookManualSearchModel(
         RankedBookRelease candidate) =>
         candidate.RejectedBecause is not null
             ? "rejected"
-            : result.TriedReleaseTitles.Contains(candidate.Release.Title)
+            : result.TriedReleases.Contains(candidate.Release.Identity)
                 ? "tried"
                 : "eligible";
 

@@ -139,6 +139,68 @@ public sealed class BookPdfAcquisitionTests
         Assert.AreEqual(0, await environment.Db.BookFiles.CountAsync(file => file.Format == BookFileFormats.Pdf));
     }
 
+    // A direct source whose one candidate is the requested catalog edition; importing it records the call or fails like a dead mirror.
+    private sealed class FakeDirectSource(bool fails) : IDirectSource
+    {
+        public int Imports { get; private set; }
+
+        public string Name => "fake";
+
+        public MediaAcquisitionKind Kind => MediaAcquisitionKind.Book;
+
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(Jularr.Web.Features.Acquisition.Search.SearchIntent intent, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AcquisitionCandidate>>(
+            [
+                new AcquisitionCandidate("Atomic Habits [EPUB]", "Free edition", null, "direct", null, null, null, null, null, null, null, null, AnimeReleaseParser.Parse("Atomic Habits [EPUB]"), [], null, null)
+                {
+                    Type = AcquisitionType.DirectImport,
+                    Offer = new DirectOffer("fake", "edition", IdentityIsExact: true)
+                }
+            ]);
+
+        public Task<AcquisitionExecution> ImportAsync(AcquisitionRequest request, DirectOffer offer, CancellationToken cancellationToken)
+        {
+            Imports++;
+            return fails
+                ? throw new InvalidOperationException("The mirror is gone.")
+                : Task.FromResult(new AcquisitionExecution(AcquisitionRequestStatus.Completed, "Imported a direct/free edition."));
+        }
+    }
+
+    [TestMethod]
+    public async Task ADirectEditionAndAUsenetReleaseCompeteInOneSelectionAndTheWinnerIsRoutedByItsType()
+    {
+        var direct = new FakeDirectSource(fails: false);
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync(direct);
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "epub"));
+
+        var request = await environment.AddAsync();
+
+        var stored = await environment.RequestAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, stored.Status, stored.StatusMessage);
+        Assert.AreEqual(1, direct.Imports, "The free edition won the tie against an equal Usenet EPUB and was imported by its own source.");
+        Assert.IsEmpty(environment.Sabnzbd.Grabs, "Nothing went to the download client.");
+    }
+
+    [TestMethod]
+    public async Task ADirectEditionThatFailsIsTriedOnceAndTheNextCandidateIsTaken()
+    {
+        var direct = new FakeDirectSource(fails: true);
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync(direct);
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "epub"));
+
+        var first = await environment.AddAsync();
+        Assert.AreEqual(1, direct.Imports);
+        var waiting = await environment.RequestAsync(first.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, waiting.Status, waiting.StatusMessage);
+        StringAssert.Contains(waiting.StatusMessage, "The mirror is gone.");
+
+        await environment.Services.GetRequiredService<AcquisitionRequestService>().ContinueAsync(first.Id, CancellationToken.None);
+
+        Assert.AreEqual(1, direct.Imports, "The failed edition is never tried again.");
+        Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count, "The Usenet release is the next candidate.");
+    }
+
     [TestMethod]
     public async Task UnsupportedDownloadContinuesWithTheNextReleaseAndNeverResendsABadOne()
     {
@@ -159,9 +221,7 @@ public sealed class BookPdfAcquisitionTests
         StringAssert.Contains(next.StatusMessage, BookCompletedDownloadImportAdapter.NoBookFileReason);
         Assert.AreEqual(2, environment.Sabnzbd.Grabs.Count);
         StringAssert.Contains(environment.Sabnzbd.Grabs[1].NzbUrl.ToString(), "pdf");
-        CollectionAssert.AreEquivalent(
-            new[] { "James Clear - Atomic Habits EPUB", "James Clear - Atomic Habits PDF" },
-            BookAcquisitionExecutor.ReadPayload(next).TriedReleases!.ToArray());
+        Assert.HasCount(2, BookAcquisitionExecutor.ReadPayload(next).TriedReleases!, "Both releases are remembered as tried.");
 
         // The PDF release is unusable too: nothing is left to try, the request waits for new releases.
         Directory.Delete(folder, recursive: true);
@@ -644,7 +704,7 @@ public sealed class BookPdfAcquisitionTests
         public OperationStore Operations => new(Db);
         public string FilesPath => Books.FilesPath;
 
-        public static async Task<BookAcquisitionEnvironment> CreateAsync()
+        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null)
         {
             var root = Path.Combine(Path.GetTempPath(), $"jularr-books-{Guid.NewGuid():N}");
             var data = Directory.CreateDirectory(Path.Combine(root, "data"));
@@ -713,6 +773,12 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton(owner);
             collection.AddSingleton(TimeProvider.System);
             collection.AddSingleton<ReleaseRequestTracker>();
+            collection.AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>();
+            if (direct is not null)
+            {
+                collection.AddSingleton(direct);
+            }
+
             collection.AddSingleton<IAcquisitionRequestExecutor, BookAcquisitionExecutor>();
             collection.AddSingleton<Jularr.Web.Features.Events.IJularrEventPublisher, RecordingEventPublisher>();
             collection.AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(new MediaCapabilityStore(data.FullName)));
@@ -749,6 +815,8 @@ public sealed class BookPdfAcquisitionTests
             await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Book, Path.Combine(root, "library-books"), ImportMode.Copy);
             return new BookAcquisitionEnvironment(root, services, db);
         }
+
+        public IServiceProvider Services => services;
 
         public Task<AcquisitionRequest> AddAsync() =>
             services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(

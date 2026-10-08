@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -14,9 +17,8 @@ namespace Jularr.Web.Features.Books;
 /// candidate before its internal download URL can reach the shared download-client submission path.
 /// </summary>
 public sealed class BookManualSearchService(
-    BookSearchCoordinator search,
-    DownloadClientSubmissionService downloads,
-    ReleaseRequestTracker tracker,
+    AcquisitionCore core,
+    QualityProfileStore profiles,
     AcquisitionAccessStore requests,
     IJularrEventPublisher events,
     TimeProvider clock,
@@ -54,11 +56,7 @@ public sealed class BookManualSearchService(
                 cached.Search);
         }
 
-        var result = await search.SearchUsenetAsync(
-            target.Payload.Title,
-            target.Payload.Author,
-            cancellationToken,
-            target.Request.WorkId);
+        var result = await SearchBookAsync(target.Request, target.Payload, refresh, cancellationToken);
         SearchCache[requestId] = new SearchCacheEntry(
             now,
             target.Payload.Title,
@@ -82,11 +80,7 @@ public sealed class BookManualSearchService(
         EnsureSearchable(request);
 
         var payload = BookAcquisitionExecutor.ReadPayload(request);
-        var result = await search.SearchUsenetAsync(
-            payload.Title,
-            payload.Author,
-            cancellationToken,
-            request.WorkId);
+        var result = await SearchBookAsync(request, payload, refresh: true, cancellationToken);
         SearchCache.TryRemove(requestId, out _);
         var selected = SelectRelease(
             result,
@@ -99,20 +93,12 @@ public sealed class BookManualSearchService(
                 "The selected release is no longer an eligible Book release.");
         }
 
-        var release = new ReleaseRequestCandidate(
-            selected.Release.Title,
-            selected.Release.Title,
-            selected.Release.InternalDownloadUri!);
-        var execution = await tracker.ContinueAsync(
+        var execution = await core.GrabAsync(
             request,
             payload,
-            [release],
+            [selected.Evaluation!],
             result.FailureMessage,
-            candidate => SubmitAsync(
-                request,
-                payload,
-                candidate,
-                cancellationToken),
+            new GrabTarget(BookAcquisitionExecutor.OperationKind, "Download Book", payload.Title, MediaAcquisitionKind.Book, string.Empty),
             cancellationToken);
 
         await requests.UpdateStatusAsync(
@@ -167,34 +153,18 @@ public sealed class BookManualSearchService(
 
         return search.Ranked.FirstOrDefault(candidate =>
             candidate.Score > 0
-            && candidate.Release.InternalDownloadUri is not null
+            && candidate.Release.IsAcquirable
             && candidate.Release.Identity.Equals(
                 releaseIdentity,
                 StringComparison.Ordinal)
-            && !tried.Contains(candidate.Release.Title));
+            && !tried.Contains(candidate.Release.Identity));
     }
 
-    private async Task<ReleaseRequestSubmission> SubmitAsync(
-        AcquisitionRequest request,
-        BookRequestPayload payload,
-        ReleaseRequestCandidate release,
-        CancellationToken cancellationToken)
+    private async Task<BookUsenetSearchResult> SearchBookAsync(AcquisitionRequest request, BookRequestPayload payload, bool refresh, CancellationToken cancellationToken)
     {
-        var outcome = await downloads.SubmitAsync(
-            new DownloadSubmissionSpec(
-                BookAcquisitionExecutor.OperationKind,
-                "Download Book",
-                payload.Title,
-                request.RequestedByProfileId,
-                release.DownloadUri,
-                payload.Title,
-                MediaAcquisitionKind.Book),
-            cancellationToken);
-
-        return new ReleaseRequestSubmission(
-            outcome.Accepted,
-            outcome.OperationId,
-            outcome.Message);
+        var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Book, request.WorkId, cancellationToken);
+        var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = refresh };
+        return BookReleaseSelector.ToResult(await core.SearchAsync(BookReleaseSelector.Plan(payload.Title, payload.Author, payload.CatalogId), profile, options, cancellationToken));
     }
 
     private async Task<AcquisitionRequest> RequireRequestAsync(
@@ -238,13 +208,13 @@ public sealed record BookManualSearchResult(
     BookRequestPayload Payload,
     BookUsenetSearchResult Search)
 {
-    public IReadOnlySet<string> TriedReleaseTitles { get; } =
+    public IReadOnlySet<string> TriedReleases { get; } =
         new HashSet<string>(
             Payload.TriedReleases ?? [],
             StringComparer.OrdinalIgnoreCase);
 
     public bool CanGrab(RankedBookRelease candidate) =>
         candidate.Score > 0
-        && candidate.Release.InternalDownloadUri is not null
-        && !TriedReleaseTitles.Contains(candidate.Release.Title);
+        && candidate.Release.IsAcquirable
+        && !TriedReleases.Contains(candidate.Release.Identity);
 }

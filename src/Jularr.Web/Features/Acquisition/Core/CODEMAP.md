@@ -1,7 +1,7 @@
 # Acquisition core (search, selection, grab)
 
 Purpose: one search -> rank -> grab path for every media type; adapters only supply facts.
-Status: transitional Usenet-only path (Prowlarr indexers + SABnzbd). The final shared Candidate/Selection must compare Usenet, Anna's Archive and Direct sources before routing by acquisition type; Anna's Archive does not exist in Jularr yet.
+Sources: Usenet (Prowlarr/Newznab indexers, SABnzbd) and direct sources (`IDirectSource`, registered per media type; today Book: free catalog edition and OPDS). Both return `AcquisitionCandidate`s that one selection ranks together before the winner is routed by `AcquisitionType` (UsenetDownload: download client and the completed-download dispatcher; DirectImport: the source imports it). Anna's Archive does not exist in Jularr; the other media types have no direct source on the core yet (Light Novel web import and Manga reading sources still run their own path).
 
 Canonical owners
 - `AcquisitionCore`: `SearchAsync` (indexer search, identity judgement, `ReleaseSelectionEngine` ranking) and `GrabAsync` (`ReleaseRequestTracker` lifecycle, `DownloadClientSubmissionService`).
@@ -18,8 +18,10 @@ Media adapters on the core
 - Music: `MusicAcquisitionEngine` (`MusicReleaseJudge`).
 - Manga and Light Novel: `ReadingAcquisitionEngine` (`ReadingReleaseJudge.Plan/Judge`, `DisplayScore` for the pages).
 
-Not on the core yet (own orchestration still to be moved): Anime (`AnimeAcquisitionPipeline`), Book (`BookAcquisitionExecutor`, `BookUsenetSearch`), Audiobook.
+- Book: `BookAcquisitionExecutor` (`BookReleaseSelector.Plan` and `Judge`, `BookCatalogDirectSource`, `BookOpdsDirectSource`); the free edition wins a tie with an equal Usenet EPUB through the lowest source priority, a better quality wins before source preference.
 
-Manual Search reads the same `SearchEvaluation` through `VideoManualSearchService`, `MusicManualSearchService`, `ReadingManualSearchService`.
+Not on the core yet (own orchestration still to be moved): Anime (`AnimeAcquisitionPipeline`), Audiobook.
 
-Tests: `VideoAcquisitionRequestExecutorTests`, `MusicAcquisitionTests`, `VideoManualSearchTests`, `ReadingAcquisitionTests`, `ReleaseSelectionEngineTests`.
+Manual Search reads the same `SearchEvaluation` through `VideoManualSearchService`, `MusicManualSearchService`, `ReadingManualSearchService`, `BookManualSearchService`.
+
+Tests: `BookPdfAcquisitionTests` (incl. direct vs Usenet routing), `VideoAcquisitionRequestExecutorTests`, `MusicAcquisitionTests`, `VideoManualSearchTests`, `ReadingAcquisitionTests`, `ReleaseSelectionEngineTests`.

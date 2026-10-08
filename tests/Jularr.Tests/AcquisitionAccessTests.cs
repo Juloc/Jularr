@@ -346,7 +346,7 @@ public sealed class AcquisitionAccessTests
             BookManualSearchService.SelectRelease(
                 result,
                 accepted.Identity,
-                [accepted.Title]),
+                [accepted.Identity]),
             "An already tried release is not submitted again.");
     }
 

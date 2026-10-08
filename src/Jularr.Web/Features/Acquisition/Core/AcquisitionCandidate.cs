@@ -12,7 +12,7 @@ public enum AcquisitionType
 }
 
 // What a direct source needs to import one candidate later: the source that found it and its own key for the file.
-public sealed record DirectOffer(string Source, string Key);
+public sealed record DirectOffer(string Source, string Key, bool IdentityIsExact = false);
 
 // The one normalized candidate every source produces and the one selection compares, whatever the source is.
 public sealed record AcquisitionCandidate(

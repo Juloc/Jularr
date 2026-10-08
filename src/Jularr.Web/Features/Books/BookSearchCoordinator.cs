@@ -191,45 +191,6 @@ public sealed class BookSearchCoordinator(
             .ToArray();
     }
 
-    /// <summary>
-    /// Finds a directly-acquirable OPDS copy for a requested canonical work. Automatic
-    /// acquisition uses the same title/author identity rule as consumer search.
-    /// </summary>
-    public async Task<BookOpdsCatalogItem?> FindOpdsOfferAsync(
-        string title,
-        string? author,
-        CancellationToken cancellationToken)
-    {
-        var offers = await books.SearchOpdsAsync(
-            null,
-            BookWorkSearch.MainTitle(title),
-            cancellationToken);
-
-        return offers.FirstOrDefault(offer =>
-            BookWorkSearch.SameWork(
-                title,
-                author,
-                offer.Title,
-                offer.Author));
-    }
-
-    public Task<bool> HasEnabledIndexerAsync(CancellationToken cancellationToken) =>
-        indexers.HasEnabledIndexerAsync(cancellationToken);
-
-    /// <summary>Shared automatic/manual Books Usenet search path.</summary>
-    public async Task<BookUsenetSearchResult> SearchUsenetAsync(
-        string title,
-        string? author,
-        CancellationToken cancellationToken,
-        Guid? workId = null)
-    {
-        var profile = await qualityProfiles.ResolveAsync(
-            MediaAcquisitionKind.Book,
-            workId,
-            cancellationToken);
-        return await BookUsenetSearch.SearchAsync(indexers, title, author, profile, cancellationToken, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken));
-    }
-
     private async Task<SourceResult<UsenetPool>> CaptureUsenetPoolAsync(
         IReadOnlyList<string> queries,
         CancellationToken cancellationToken)

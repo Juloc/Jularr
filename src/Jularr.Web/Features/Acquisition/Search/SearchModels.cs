@@ -199,9 +199,13 @@ public sealed record AcquisitionSearchResult(
     /// </summary>
     public string? SourcePolicyBlock { get; init; }
 
+    /// <summary>The problems of the direct sources that did not answer; the others still did.</summary>
+    public IReadOnlyList<IndexerSearchWarning> SourceWarnings { get; init; } = [];
+
     /// <summary>The per-indexer problems in the shape the callers show: a skipped, failed or rate-limited indexer, with the query that failed.</summary>
     public IReadOnlyList<IndexerSearchWarning> Warnings =>
         [.. (SourcePolicyBlock is null ? Array.Empty<IndexerSearchWarning>() : new[] { new IndexerSearchWarning("Acquisition Profile", string.Empty, SourcePolicyBlock) }),
+            .. SourceWarnings,
             .. Outcomes.Where(outcome => outcome.State is not (IndexerSearchState.Searched or IndexerSearchState.NoResults) || outcome.Message is not null)
             .Select(outcome => new IndexerSearchWarning(outcome.IndexerName, string.Empty, outcome.Message ?? outcome.State.ToString()))];
 
