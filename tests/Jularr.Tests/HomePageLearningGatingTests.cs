@@ -29,7 +29,7 @@ public sealed class HomePageLearningGatingTests
 
         // Order (SPEC content hierarchy): hero → Continue; the discovery rows follow from the Body handler.
         var hero = view.IndexOf("data-home-hero", StringComparison.Ordinal);
-        var continueRow = view.IndexOf("data-home-continue", StringComparison.Ordinal);
+        var continueRow = view.IndexOf("_HomeContinueRow", StringComparison.Ordinal);
         Assert.IsTrue(hero > 0);
         Assert.IsTrue(hero < continueRow, "The hero leads Home.");
 

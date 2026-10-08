@@ -70,7 +70,6 @@ public sealed class AcquisitionApiService(
                 string.IsNullOrWhiteSpace(request.QualityProfileId) ? null : request.QualityProfileId.Trim(),
                 request.IndexerIds ?? [],
                 cancellationToken,
-                request.TagIds,
                 request.TargetRootId);
         }
         catch (Exception exception) when (

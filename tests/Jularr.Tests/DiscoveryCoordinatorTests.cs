@@ -64,6 +64,32 @@ public sealed class DiscoveryCoordinatorTests
     }
 
     [TestMethod]
+    public async Task AnAgedAnswerFillsTheFirstResponseAtOnceWhileItsRenewalIsPendingAndTheFollowUpSettlesIt()
+    {
+        var clock = new DiscoveryTestSupport.MovableClock(new DateTimeOffset(2026, 10, 8, 9, 0, 0, TimeSpan.Zero));
+        var calls = 0;
+        var (coordinator, db) = await CoordinatorAsync(_ =>
+        {
+            Interlocked.Increment(ref calls);
+            return Answer(Results("Movie", 2, movie: true));
+        }, clock);
+        await using var database = db;
+        await coordinator.LoadAsync([Request(DiscoveryCategory.Movie)], Audience(), new DiscoveryWait(TimeSpan.FromSeconds(10)), CancellationToken.None);
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        var first = await coordinator.LoadAsync([Request(DiscoveryCategory.Movie)], Audience(), DiscoveryWait.None, CancellationToken.None);
+        var settledBefore = first.Settled;
+        var next = await coordinator.LoadAsync([Request(DiscoveryCategory.Movie)], Audience(), new DiscoveryWait(TimeSpan.FromSeconds(10), settledBefore), CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { "Movie 1", "Movie 2" }, first.Batches[0].Items.Select(item => item.Title).ToArray(), "The first response has titles without waiting for the provider.");
+        Assert.AreEqual(DiscoverySourceState.Ready, first.Batches[0].Sources.Single().State, "A stale answer is a Ready answer, never a placeholder.");
+        Assert.AreEqual(1, first.Pending, "The renewal is still running, so the browser asks again.");
+        Assert.AreEqual(2, next.Batches[0].Items.Count);
+        Assert.AreEqual(0, next.Pending, "The renewal has finished.");
+        Assert.AreEqual(1, next.Settled);
+    }
+
+    [TestMethod]
     public async Task ARateLimitedSourceIsBusyAndNotAnOutage()
     {
         var (coordinator, db) = await CoordinatorAsync(_ =>
@@ -132,11 +158,13 @@ public sealed class DiscoveryCoordinatorTests
         var clock = new DiscoveryTestSupport.MovableClock(new DateTimeOffset(2026, 10, 6, 9, 0, 0, TimeSpan.Zero));
         var movies = new TaskCompletionSource<HttpResponseMessage>();
         var movieStarted = new TaskCompletionSource();
+        var seriesServed = new TaskCompletionSource();
         var (coordinator, db) = await CoordinatorAsync(
             request =>
             {
                 if (!request.RequestUri!.AbsolutePath.Contains("/movie", StringComparison.Ordinal))
                 {
+                    seriesServed.TrySetResult();
                     return Answer(Results("Series", 1, movie: false));
                 }
 
@@ -149,6 +177,10 @@ public sealed class DiscoveryCoordinatorTests
 
         var firstPaint = coordinator.LoadAsync(requests, Audience(), new DiscoveryWait(TimeSpan.FromMilliseconds(400)), CancellationToken.None);
         await movieStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await seriesServed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // The budget runs on the movable clock, so it must not be spent before the answered source has been read: give its response real time to settle.
+        await Task.Delay(300);
         while (!firstPaint.IsCompleted)
         {
             clock.Advance(TimeSpan.FromMilliseconds(500));

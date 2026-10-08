@@ -76,6 +76,35 @@ public sealed class AcquisitionHealthTests
     }
 
     [TestMethod]
+    public async Task ABookSearchWhereNoIndexerAnsweredSaysSoAndOneThatAnsweredWithNothingDoesNot()
+    {
+        var directory = SabnzbdTestSupport.CreateTemporaryDirectory();
+        try
+        {
+            var store = new IndexerStore(new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider(), directory);
+            await store.SaveAsync(NewEntry("Only indexer"));
+            var down = true;
+            var indexer = new FakeIndexer((_, _) => down ? throw new HttpRequestException("indexer down") : []);
+            var coordinator = new IndexerSearchCoordinator(
+                new Dictionary<IndexerType, IIndexer> { [IndexerType.Newznab] = indexer },
+                store,
+                new AcquisitionHealthStore(directory),
+                NullLogger<IndexerSearchCoordinator>.Instance);
+
+            var outage = await Jularr.Web.Features.Books.BookUsenetSearch.SearchAsync(coordinator, "Dune", "Frank Herbert", Jularr.Web.Features.Acquisition.Release.BookQualityProfiles.CreateDefaultBook(), CancellationToken.None);
+            down = false;
+            var empty = await Jularr.Web.Features.Books.BookUsenetSearch.SearchAsync(coordinator, "Dune", "Frank Herbert", Jularr.Web.Features.Acquisition.Release.BookQualityProfiles.CreateDefaultBook(), CancellationToken.None);
+
+            Assert.IsTrue(outage.EveryIndexerFailed, "No indexer could be asked, so the empty result says nothing about the book.");
+            Assert.IsFalse(empty.EveryIndexerFailed, "An answer of nothing is a real search that found nothing.");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [TestMethod]
     public async Task HealthCheckServiceRecordsResultsForIndexersAndDownloadClients()
     {
         var directory = SabnzbdTestSupport.CreateTemporaryDirectory();

@@ -76,7 +76,8 @@ public sealed record DownloadClientSettings
                 [MediaAcquisitionKind.Manga] = "manga",
                 [MediaAcquisitionKind.LightNovel] = "lightnovels",
                 [MediaAcquisitionKind.Book] = "books",
-                [MediaAcquisitionKind.Music] = "music"
+                [MediaAcquisitionKind.Music] = "music",
+                [MediaAcquisitionKind.Audiobook] = "audiobooks"
             });
 
     private static string? CleanCategory(string? value) =>
@@ -161,6 +162,7 @@ public sealed record DownloadImportDetails(
 /// has the highest priority. <see cref="Import"/> is filled once the
 /// completed download was handed to its media importer. <see cref="ReleaseSource"/> and <see cref="ReleaseGroup"/> say where the release came
 /// from, so the outcome of the download can later count for or against that indexer and release group (<c>ReleaseReliabilityService</c>).
+/// <see cref="FailureKind"/> is why a failed download failed (a <c>SabnzbdFailureKind</c> name), so only failures that are the release's fault count as evidence.
 /// </summary>
 public sealed record DownloadOperationDetails(
     Guid ClientEntryId,
@@ -169,7 +171,8 @@ public sealed record DownloadOperationDetails(
     DownloadImportDetails? Import = null,
     string? TargetKey = null,
     string? ReleaseSource = null,
-    string? ReleaseGroup = null)
+    string? ReleaseGroup = null,
+    string? FailureKind = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -184,7 +187,8 @@ public sealed record DownloadOperationDetails(
             Import,
             string.IsNullOrWhiteSpace(TargetKey) ? null : TargetKey.Trim(),
             string.IsNullOrWhiteSpace(ReleaseSource) ? null : ReleaseSource.Trim(),
-            string.IsNullOrWhiteSpace(ReleaseGroup) ? null : ReleaseGroup.Trim()),
+            string.IsNullOrWhiteSpace(ReleaseGroup) ? null : ReleaseGroup.Trim(),
+            string.IsNullOrWhiteSpace(FailureKind) ? null : FailureKind.Trim()),
         JsonOptions);
 
     public static bool TryParse(string? json, out DownloadOperationDetails? details)
@@ -210,7 +214,8 @@ public sealed record DownloadOperationDetails(
                 persisted.Import,
                 string.IsNullOrWhiteSpace(persisted.TargetKey) ? null : persisted.TargetKey.Trim(),
                 persisted.ReleaseSource,
-                persisted.ReleaseGroup);
+                persisted.ReleaseGroup,
+                persisted.FailureKind);
             return true;
         }
         catch (JsonException)
@@ -230,7 +235,8 @@ public sealed record DownloadOperationDetails(
         DownloadImportDetails? Import = null,
         string? TargetKey = null,
         string? ReleaseSource = null,
-        string? ReleaseGroup = null);
+        string? ReleaseGroup = null,
+        string? FailureKind = null);
 }
 
 public sealed record DownloadClientSubmitResult(

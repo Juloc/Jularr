@@ -100,6 +100,24 @@ public sealed class AcquisitionAccessTests
     }
 
     [TestMethod]
+    public async Task AnInfrastructureProblemKeepsTheRequestWantedWithAPlainSentenceAndOnlyARequestFailureEndsIt()
+    {
+        await using var fixture = await AcquisitionAccessFixture.CreateAsync();
+        var keysChanged = fixture.Service("owner", isOwner: true, new RecordingExecutor(MediaAcquisitionKind.Book, error: new System.Security.Cryptography.CryptographicException("The payload was invalid. For more information go to https://aka.ms/aspnet/dataprotectionwarning")));
+        var offline = fixture.Service("owner", isOwner: true, new RecordingExecutor(MediaAcquisitionKind.Book, error: new HttpRequestException("connection refused 10.0.0.5:9696")));
+
+        var first = await keysChanged.SubmitAsync(Draft("dune"), CancellationToken.None);
+        var second = await offline.SubmitAsync(Draft("emma"), CancellationToken.None);
+
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, first.Status, "A stored credential that cannot be read is not the request's fault.");
+        StringAssert.Contains(first.StatusMessage!, "Enter it again in Admin");
+        Assert.IsFalse(first.StatusMessage!.Contains("aka.ms", StringComparison.Ordinal), "No exception text reaches the owner's list.");
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, second.Status);
+        StringAssert.Contains(second.StatusMessage!, "A service did not answer.");
+        Assert.IsFalse(second.StatusMessage!.Contains("10.0.0.5", StringComparison.Ordinal), "No host or address of the failed call is shown.");
+    }
+
+    [TestMethod]
     public async Task UsersBelowRequestAreRefusedAndCannotDecide()
     {
         await using var fixture = await AcquisitionAccessFixture.CreateAsync();

@@ -356,6 +356,32 @@ public static class MonitoringEngine
             $"Retry after {retryDelay}.");
     }
 
+    /// <summary>
+    /// An indexer, provider or download client that could not answer is not a failed attempt: the failure count stays, so the outage never
+    /// raises the back-off, and the unit is searched again after <paramref name="retryAfter"/>.
+    /// </summary>
+    public static MonitoringState MarkUnavailable(
+        MonitoringState state,
+        MonitoredUnitKey key,
+        DateTimeOffset now,
+        TimeSpan retryAfter,
+        string reason)
+    {
+        var attempts = CloneAttempts(state);
+        var id = key.ToString();
+        var existing = attempts.TryGetValue(id, out var found)
+            ? found
+            : new AcquisitionAttempt(key, AcquisitionAttemptStatus.None, null, 0, null, null);
+        attempts[id] = existing with
+        {
+            Status = AcquisitionAttemptStatus.None,
+            LastAttemptAtUtc = now,
+            NextRetryAtUtc = now + retryAfter
+        };
+
+        return WithHistory(state, attempts, key, now, "unavailable", reason);
+    }
+
     public static MonitoringState ClearAttempt(
         MonitoringState state,
         MonitoredUnitKey key,

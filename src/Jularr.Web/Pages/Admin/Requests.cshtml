@@ -235,6 +235,16 @@
                                     {
                                         <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                            @if (Model.CanChooseProfile(request))
+                                            {
+                                                <select name="profileId" aria-label="@ui["admin.requests.approveProfile"]">
+                                                    <option value="">@ui["admin.requests.keepProfile"]</option>
+                                                    @foreach (var profile in Model.QualityProfiles)
+                                                    {
+                                                        <option value="@profile.Id">@profile.Name</option>
+                                                    }
+                                                </select>
+                                            }
                                             <button class="button button-primary" type="submit">@(request.Status == AcquisitionRequestStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.approve"])</button>
                                         </form>
                                     }

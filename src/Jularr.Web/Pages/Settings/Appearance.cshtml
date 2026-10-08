@@ -4,6 +4,7 @@
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["settings.appearance.title"];
+    ViewData["NeedsSakura"] = true;
     var mode = Model.Appearance.ThemeMode;
     var accent = Model.EffectiveAccent;
     var isCustom = Model.Presets.All(preset => preset.Seed != accent);

@@ -96,7 +96,6 @@ public sealed record AdminMediaAcquisition(
     string ProfileName,
     IReadOnlyList<(string Id, string Name)> Profiles,
     int[] IndexerIds,
-    string[] TagIds,
     Guid? TargetRootId,
     int WantedCount)
 {

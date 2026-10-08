@@ -2,6 +2,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
+using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Operations;
 
@@ -13,9 +14,9 @@ public sealed class ReleaseReliabilityTests
 {
     private static readonly QualityProfile s_profile = VideoQualityProfiles.CreateDefaultMovie1080p();
 
-    private static async Task RecordAsync(OperationStore operations, string source, string group, OperationStatus outcome, string? externalProvider = "sabnzbd")
+    private static async Task RecordAsync(OperationStore operations, string source, string group, OperationStatus outcome, string? externalProvider = "sabnzbd", string? failureKind = "Download")
     {
-        var details = new DownloadOperationDetails(Guid.NewGuid(), MediaAcquisitionKind.Movie, "movies", ReleaseSource: source, ReleaseGroup: group).Serialize();
+        var details = new DownloadOperationDetails(Guid.NewGuid(), MediaAcquisitionKind.Movie, "movies", ReleaseSource: source, ReleaseGroup: group, FailureKind: failureKind).Serialize();
         var id = await operations.CreateAsync(new OperationDescriptor("video-usenet-download", "Download", "Download Movie", IsDownload: true, ExternalProvider: externalProvider, ExternalId: externalProvider is null ? null : Guid.NewGuid().ToString("N"), Details: details));
         switch (outcome)
         {
@@ -61,6 +62,53 @@ public sealed class ReleaseReliabilityTests
         Assert.AreEqual(0, lookup.For("Indexer D", "NEW")?.Points ?? 0, "One failure is too few samples to hold against a group.");
         Assert.AreEqual(ReleaseReliability.MaximumPoints, lookup.For("Indexer A", "UNSEEN GROUP")!.Points, "An unknown group falls back to what its indexer has shown.");
         Assert.IsNull(lookup.For("Unknown indexer", "UNSEEN GROUP"));
+    }
+
+    [TestMethod]
+    public async Task OnlyAFailureThatWasTheReleasesFaultCountsAndAFullDiskALostJobOrAnUnclassifiedFailureNeverDoes()
+    {
+        await using var environment = await SabnzbdTestSupport.CreateEnvironmentAsync();
+        var operations = new OperationStore(environment.Db);
+        for (var index = 0; index < 6; index++)
+        {
+            await RecordAsync(operations, "Indexer A", "FAULTY", OperationStatus.Failed, failureKind: index % 2 == 0 ? "Download" : "Verification");
+            await RecordAsync(operations, "Indexer B", "UNLUCKY", OperationStatus.Failed, failureKind: new[] { "Storage", "Script", "Unknown", null }[index % 4]);
+            await RecordAsync(operations, "Indexer B", "UNLUCKY", OperationStatus.Succeeded);
+        }
+
+        var lookup = await new ReleaseReliabilityService(environment.Db, TimeProvider.System).LoadAsync(CancellationToken.None);
+
+        Assert.AreEqual(-ReleaseReliability.MaximumPoints, lookup.For("Indexer A", "FAULTY")!.Points, "Missing articles and a corrupt archive are the release's fault.");
+        Assert.AreEqual(ReleaseReliability.MaximumPoints, lookup.For("Indexer B", "UNLUCKY")!.Points, "A full disk, a script, an unknown failure and an unrecorded one are not held against the group.");
+    }
+
+    [TestMethod]
+    public async Task TheMonitorKeepsWhyTheClientFailedAJobAndTheRestOfItsDetails()
+    {
+        await using var environment = await SabnzbdTestSupport.CreateEnvironmentAsync();
+        var operations = new OperationStore(environment.Db);
+        var details = new DownloadOperationDetails(Guid.NewGuid(), MediaAcquisitionKind.Movie, "movies", ReleaseSource: "Indexer A", ReleaseGroup: "GRP");
+        var id = await operations.CreateAsync(new OperationDescriptor("video-usenet-download", "Download", "Download Movie", IsDownload: true, ExternalProvider: "sabnzbd", ExternalId: "SABnzbd_nzo_x", Details: details.Serialize()));
+        await operations.MarkFailedAsync(id, "SABnzbd: out of disk space.");
+
+        await SabnzbdOperationProjector.RecordFailureKindAsync(operations, (await operations.GetAsync(id))!, SabnzbdFailureKind.Storage, CancellationToken.None);
+
+        Assert.IsTrue(DownloadOperationDetails.TryParse((await operations.GetAsync(id))!.Details, out var stored));
+        Assert.AreEqual("Storage", stored!.FailureKind);
+        Assert.AreEqual("Indexer A", stored.ReleaseSource);
+        Assert.AreEqual(details.ClientEntryId, stored.ClientEntryId);
+    }
+
+    [TestMethod]
+    public void AClientsOwnStorageProblemIsNotMistakenForABadRelease()
+    {
+        Assert.AreEqual(SabnzbdFailureKind.Storage, SabnzbdClient.ClassifyFailure("Failed", "Out of disk space on /downloads"));
+        Assert.AreEqual(SabnzbdFailureKind.Storage, SabnzbdClient.ClassifyFailure("Failed", "Permission denied: cannot create folder"));
+        Assert.AreEqual(SabnzbdFailureKind.Download, SabnzbdClient.ClassifyFailure("Failed", "Aborted, cannot be completed - missing articles"));
+        Assert.IsFalse(SabnzbdFailureKinds.IsReleaseFault(SabnzbdFailureKind.Storage));
+        Assert.IsFalse(SabnzbdFailureKinds.IsReleaseFault(SabnzbdFailureKind.Unknown));
+        Assert.IsFalse(SabnzbdFailureKinds.IsReleaseFault((string?)null));
+        Assert.IsTrue(SabnzbdFailureKinds.IsReleaseFault("password"));
     }
 
     [TestMethod]

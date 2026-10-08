@@ -29,7 +29,7 @@ public sealed class VideoDetailPageTests
         return work;
     }
 
-    private static Task OpenRequestAsync(VideoDetailPageTestHost host, MediaAcquisitionKind kind, string tmdbId, string title, AcquisitionRequestStatus status, string? payload = null) =>
+    private static Task<AcquisitionRequest> OpenRequestAsync(VideoDetailPageTestHost host, MediaAcquisitionKind kind, string tmdbId, string title, AcquisitionRequestStatus status, string? payload = null) =>
         new AcquisitionAccessStore(host.Db).CreateAsync(new AcquisitionRequestDraft(kind, "tmdb", tmdbId, title, null, null, payload), "someone-else", status, "owner", CancellationToken.None);
 
     private static string Between(string text, string start, string end)
@@ -140,12 +140,12 @@ public sealed class VideoDetailPageTests
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", 2024, "603");
-        await OpenRequestAsync(host, MediaAcquisitionKind.Movie, "603", "Moon Empire", AcquisitionRequestStatus.Downloading);
+        var open = await OpenRequestAsync(host, MediaAcquisitionKind.Movie, "603", "Moon Empire", AcquisitionRequestStatus.Downloading);
 
         var html = await host.GetOkAsync($"/Library/Movie/{movie.Id}");
 
         var hero = Between(html, "<section class=\"ad-hero", "</section>");
-        StringAssert.Contains(hero, "href=\"/Requests\"");
+        StringAssert.Contains(hero, $"href=\"/Requests/{open.Id}\"");
         StringAssert.Contains(hero, "Getting movie");
         Assert.IsFalse(html.Contains("data-dc-card-request", StringComparison.Ordinal), "A title is requested once at a time.");
         Assert.IsFalse(html.Contains("data-dc-rq", StringComparison.Ordinal));
@@ -313,7 +313,7 @@ public sealed class VideoDetailPageTests
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var series = await SeedSeriesAsync(host);
         var scope = new VideoRequestPayload(series.Work.Id, "Dark Harbor", 2021, VideoRequestScope.Custom, [series.S1E3.Id], false);
-        await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "1399", "Dark Harbor", AcquisitionRequestStatus.Approved, scope.Serialize());
+        var open = await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "1399", "Dark Harbor", AcquisitionRequestStatus.Approved, scope.Serialize());
 
         var html = await host.GetOkAsync($"/Library/Series/{series.Work.Id}");
 
@@ -323,7 +323,7 @@ public sealed class VideoDetailPageTests
         Assert.IsFalse(episodes.Contains("data-dc-preselect", StringComparison.Ordinal), "An open request closes the request actions.");
         var otherSeason = Between(await host.GetOkAsync($"/Library/Series/{series.Work.Id}?season=2"), "S02 E01", "</article>");
         StringAssert.Contains(otherSeason, "ad-state-unavailable", "The request does not include season 2.");
-        StringAssert.Contains(Between(html, "<section class=\"ad-hero", "</section>"), "href=\"/Requests\"");
+        StringAssert.Contains(Between(html, "<section class=\"ad-hero", "</section>"), $"href=\"/Requests/{open.Id}\"");
     }
 
     [TestMethod]

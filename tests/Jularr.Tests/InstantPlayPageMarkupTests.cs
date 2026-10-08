@@ -133,6 +133,7 @@ public sealed partial class InstantPlayPageMarkupTests
         var actions = Regex.Matches(hero, "data-ip-action=\"([a-z]+)\"").Select(match => match.Groups[1].Value).ToArray();
         CollectionAssert.AreEquivalent(new[] { "retry", "view", "back" }, actions, "Retry, View details and Back: \"We'll keep looking\" is a hint, not a second button.");
         Assert.IsFalse(html.Contains("Keep looking", StringComparison.Ordinal));
+        StringAssert.Contains(hero, "data-ip-requests-href=\"/Requests\"", "The script points View details at the request this page made.");
     }
 
     [TestMethod]
@@ -243,6 +244,7 @@ public sealed partial class InstantPlayPageMarkupTests
             StringAssert.Contains(VisibleText(pill), item.Text, item.Status.ToString());
             Assert.AreEqual(item.Live, pill.Contains("data-instant-play-observe", StringComparison.Ordinal), item.Status.ToString());
             Assert.AreEqual(item.Live, pill.Contains($"data-ip-request-id=\"{request.Id}\"", StringComparison.Ordinal), item.Status.ToString());
+            StringAssert.Contains(pill, $"href=\"/Requests/{request.Id}\"", "The pill opens the request it speaks of, not the list of every request.");
             var text = VisibleText(html);
             foreach (var technical in new[] { "Downloading", "Importing", "Searching", "Cancel download" })
             {

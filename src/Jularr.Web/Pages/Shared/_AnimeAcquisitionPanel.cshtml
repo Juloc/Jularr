@@ -82,22 +82,6 @@
                     </select>
                 </label>
             }
-            @if (panel.Tags.Count > 0)
-            {
-                <fieldset class="acquisition-check">
-                    <legend>@ui["library.acquisitionPanel.tags"]</legend>
-                    @foreach (var tag in panel.Tags)
-                    {
-                        <label class="acquisition-check">
-                            <input type="checkbox"
-                                   name="tagIds"
-                                   value="@tag.Id"
-                                   checked="@(panel.Settings?.TagIds?.Contains(tag.Id, StringComparer.OrdinalIgnoreCase) == true)" />
-                            <span>@tag.Name</span>
-                        </label>
-                    }
-                </fieldset>
-            }
             <button class="button" type="submit">@ui["common.save"]</button>
         </form>
 

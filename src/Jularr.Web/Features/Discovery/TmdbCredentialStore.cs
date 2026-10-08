@@ -130,7 +130,11 @@ public sealed class TmdbCredentialStore
         return new TmdbConfiguration(stored.Enabled, source, credential, stored.ReadAccessToken is not null, stored.ApiKey is not null, stored.Unreadable, stored.UpdatedAtUtc);
     }
 
-    /// <summary>Stores the enabled switch and any secret that is given; a secret that is not given stays as it is.</summary>
+    /// <summary>
+    /// Stores the enabled switch and any secret that is given; a secret that is not given stays as it is, except that a credential of the other kind
+    /// is replaced: giving only an API key drops a stored Read Access Token and the reverse. The credential in effect is therefore always the one
+    /// entered last (a stored token would otherwise win over a newly entered key and the key would be silently ignored).
+    /// </summary>
     public async Task SaveAsync(TmdbSettingsUpdate update, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(update);
@@ -148,7 +152,9 @@ public sealed class TmdbCredentialStore
         try
         {
             var current = cached ??= await LoadAsync(cancellationToken);
-            await WriteAsync(current with { Enabled = update.Enabled, ReadAccessToken = update.ReadAccessToken ?? current.ReadAccessToken, ApiKey = update.ApiKey ?? current.ApiKey, Unreadable = false }, cancellationToken);
+            var token = update.ReadAccessToken ?? (update.ApiKey is null ? current.ReadAccessToken : null);
+            var key = update.ApiKey ?? (update.ReadAccessToken is null ? current.ApiKey : null);
+            await WriteAsync(current with { Enabled = update.Enabled, ReadAccessToken = token, ApiKey = key, Unreadable = false }, cancellationToken);
         }
         finally
         {

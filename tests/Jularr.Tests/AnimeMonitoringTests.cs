@@ -103,6 +103,26 @@ public sealed class AnimeMonitoringTests
     }
 
     [TestMethod]
+    public void AnOutageDelaysTheNextSearchWithoutCountingAsAFailureOrRaisingTheBackoff()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var key = new AnimeEpisodeKey("anime", 1, 1);
+        var wanted = new[] { new AnimeWantedEpisode(key, AnimeWantedReason.Missing, now) };
+        var state = AnimeMonitoringEngine.MarkFailed(AnimeMonitoringEngine.MarkFailed(State(DefaultSettings()), key, null, now), key, null, now);
+        var failures = state.Attempts[key.ToString()].FailureCount;
+
+        var outage = AnimeMonitoringEngine.MarkUnavailable(state, key, now, TimeSpan.FromMinutes(30), "No indexer could be searched.");
+
+        var attempt = outage.Attempts[key.ToString()];
+        Assert.AreEqual(failures, attempt.FailureCount, "The failure count, which drives the back-off, is untouched.");
+        Assert.AreNotEqual(AcquisitionAttemptStatus.Failed, attempt.Status);
+        Assert.AreEqual(now + TimeSpan.FromMinutes(30), attempt.NextRetryAtUtc);
+        Assert.AreEqual(0, AnimeMonitoringEngine.PlanSearches(outage, wanted, AnimeSearchTrigger.PeriodicMissing, now.AddMinutes(29)).Count, "No search before the retry delay.");
+        Assert.AreEqual(1, AnimeMonitoringEngine.PlanSearches(outage, wanted, AnimeSearchTrigger.PeriodicMissing, now.AddMinutes(31)).Count, "The episode is searched again once it has passed.");
+        Assert.AreEqual("unavailable", outage.History[^1].Event);
+    }
+
+    [TestMethod]
     public void CandidateForMissingEpisodeCanAutoGrab()
     {
         var key = new AnimeEpisodeKey("anime", 1, 1);

@@ -1,0 +1,12 @@
+@using Jularr.Web.Features.Localization
+@model UiTextBundle
+@* Offered once to a profile that has neither finished nor skipped the Home setup; it never blocks the page. *@
+<section class="home-offer" aria-label="@Model["home.offer.title"]">
+    <strong>@Model["home.offer.title"]</strong>
+    <div class="home-offer-actions">
+        <a class="button button-primary" href="@Url.Page("/Settings/Home", new { welcome = true })">@Model["home.offer.start"]</a>
+        <form method="post" asp-page="/Settings/Home" asp-page-handler="Skip">
+            <button class="button" type="submit">@Model["home.offer.skip"]</button>
+        </form>
+    </div>
+</section>

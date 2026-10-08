@@ -40,7 +40,6 @@ public sealed record AnimeMonitoringResponse(
     string QualityProfileId,
     IReadOnlyList<string> AvailableQualityProfileIds,
     int[] IndexerIds,
-    string[] TagIds,
     Guid? TargetRootId,
     int WantedEpisodes,
     int ActiveDownloads,
@@ -57,7 +56,6 @@ public sealed record AnimeMonitoringResponse(
             panel.ProfileId,
             panel.Profiles.Select(profile => profile.Id).ToArray(),
             panel.Settings?.IndexerIds ?? [],
-            panel.Settings?.TagIds ?? [],
             panel.Settings?.TargetRootId,
             panel.WantedCount,
             panel.ActiveDownloads,
@@ -73,7 +71,6 @@ public sealed record SetAnimeMonitoringRequest(
     bool SearchOnAdd,
     string? QualityProfileId,
     int[]? IndexerIds,
-    string[]? TagIds,
     Guid? TargetRootId);
 
 public sealed record WantedEpisodeResponse(

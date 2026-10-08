@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Performance;
 
 namespace Jularr.Web.Features.Acquisition.Import;
 
@@ -19,7 +20,8 @@ public sealed class CompletedDownloadImportService(
     CompletedDownloadDispatcher dispatcher,
     AppDbContext db,
     AcquisitionAccessStore requests,
-    ILogger<CompletedDownloadImportService> logger)
+    ILogger<CompletedDownloadImportService> logger,
+    BackgroundWorkGovernor? governor = null)
 {
     /// <summary>
     /// Operation kind of a download the owner sent by hand (an NZB URL or file), not for a
@@ -89,18 +91,12 @@ public sealed class CompletedDownloadImportService(
             nowUtc,
             cancellationToken);
 
-        var result = await dispatcher.DispatchAsync(
-            new CompletedDownloadImportRequest(
-                request,
-                operation,
-                location.SourcePath,
-                kind,
-                progress => RecordPhaseAsync(
-                    operation,
-                    location,
-                    progress,
-                    nowUtc,
-                    cancellationToken)),
+        var result = await governor.RunGovernedAsync(
+            BackgroundWorkClass.Import,
+            "Import.Execute",
+            token => dispatcher.DispatchAsync(
+                new CompletedDownloadImportRequest(request, operation, location.SourcePath, kind, progress => RecordPhaseAsync(operation, location, progress, nowUtc, token)),
+                token),
             cancellationToken);
         await RecordAsync(operation, location, result, nowUtc, cancellationToken);
         return result;

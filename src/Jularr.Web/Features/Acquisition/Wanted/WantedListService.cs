@@ -235,7 +235,7 @@ public sealed class WantedListService(
                 .ToArray();
         var profileId = isAnime
             ? options.QualityProfileId ?? profiles.DefaultProfileIdFor(MediaAcquisitionKind.Anime)
-            : null;
+            : RequestWorkBinder.Applies(request.Kind) ? profiles.ResolveProfileId(request.Kind, request.WorkId) : null;
 
         // A request that never searched has no last search; otherwise its last change is its last search.
         var searched = request.Status != AcquisitionRequestStatus.Approved || state.Searches > 0;

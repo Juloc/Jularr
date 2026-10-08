@@ -1,18 +1,42 @@
 @using Jularr.Web.Features.Appearance
+@using Jularr.Web.Features.Branding
 @{
     var themeId = ThemeCatalog.NormalizeOrOriginal(ViewData["AppThemeId"] as string);
     var theme = ThemeCatalog.All.Single(item => item.Id == themeId);
+    var brand = Context.RequestServices.GetService<InstanceBrandingStore>() is { } brandStore
+        ? await brandStore.GetAsync(Context.RequestAborted)
+        : InstanceBrandingSettings.Default;
 }
-@* Product logo and name. Each built-in theme may use its approved brand mark, while the app
-   shell, routes and navigation remain identical. *@
-@if (theme.UsesOriginalArtwork)
+@* Product logo and name, or the instance's own (#876) with a small "by Jularr" beside it. Each built-in theme may use its approved brand mark,
+   while the app shell, routes and navigation remain identical. The logo sits in the same square as the mark, so loading it moves nothing. *@
+@if (brand.LogoUrl is { } logoUrl)
+{
+    @* The uploaded logo, as it is. With recolouring on, the same file is also drawn as a mask over the brand colour (alpha, edges and shape kept);
+       the stylesheet shows that mark instead of the image wherever masks are supported, so the logo falls back to its own colours elsewhere. *@
+    <img class="brand-mark brand-logo@(brand.RecolourLogoActive ? " brand-logo-original" : "")" src="@logoUrl" alt="" width="36" height="36" />
+    @if (brand.RecolourLogoActive)
+    {
+        <span class="brand-mark brand-logo-tint" aria-hidden="true" style="--brand-logo: url('@logoUrl')"></span>
+    }
+}
+@if (!brand.HasLogo && theme.UsesOriginalArtwork)
 {
     <svg class="brand-mark" viewBox="48 16 864 864" width="36" height="36" aria-hidden="true" focusable="false">
         <use href="/brand/jularr-mark.svg#jularr-mark" x="48" y="16" width="864" height="864"></use>
     </svg>
 }
-@if (!theme.UsesOriginalArtwork)
+@if (!brand.HasLogo && !theme.UsesOriginalArtwork)
 {
     <img class="brand-mark brand-mark-theme" src="@theme.LogoPath" alt="" width="36" height="36" />
 }
-<span class="brand-name">Jularr</span>
+@if (brand.IsCustom)
+{
+    <span class="brand-text">
+        <span class="brand-name">@brand.DisplayName</span>
+        <span class="brand-by">@InstanceBrandingSettings.Attribution</span>
+    </span>
+}
+@if (!brand.IsCustom)
+{
+    <span class="brand-name">Jularr</span>
+}

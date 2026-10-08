@@ -70,9 +70,9 @@ public sealed class HomePageContinueReadingTests
     public void ContinueRowRendersOnlyWhenItemsExistWithoutLearningData()
     {
         var view = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Index.cshtml"));
+            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Shared", "_HomeContinueRow.cshtml"));
 
-        // Watching and reading share one Continue row (docs/mockups/home), rendered only with items.
+        // Watching and reading share one Continue row (docs/mockups/home), rendered only with items. Home shows it through one partial, before or after the media rows.
         var guard = view.IndexOf("@if (Model.ContinueTiles.Count > 0)", StringComparison.Ordinal);
         var row = view.IndexOf("data-home-continue", StringComparison.Ordinal);
         var next = view.IndexOf("</section>", row, StringComparison.Ordinal);

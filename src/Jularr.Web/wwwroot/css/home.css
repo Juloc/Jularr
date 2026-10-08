@@ -434,10 +434,57 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform .25s ease;
+    transition: transform .25s ease, filter .14s ease-out;
 }
 
-.home-continue-tile:hover .home-continue-cover { transform: scale(1.03); }
+/* On hover or focus the artwork only gets a little darker and the action grows in over it; the whole tile stays the link. */
+.home-continue-tile:hover .home-continue-cover,
+.home-continue-tile:focus-visible .home-continue-cover {
+    transform: scale(1.03);
+    filter: brightness(.82);
+}
+
+.home-continue-action {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: auto;
+    border: 1px solid color-mix(in srgb, var(--accent) 82%, #000);
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 8px 18px -4px rgb(0 0 0 / .55);
+    color: var(--on-accent);
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(.7);
+    transition: opacity .1s ease-out, transform .14s ease-out, background-color .12s ease-out, border-color .12s ease-out;
+}
+
+.home-continue-action .dc-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.home-continue-tile:hover .home-continue-action,
+.home-continue-tile:focus-visible .home-continue-action {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
+/* The circle is a primary button: always the accent colour, and under the pointer the standard primary hover (darker in Light, lighter in Dark). */
+.home-continue-tile:hover .home-continue-action:hover,
+.home-continue-tile:focus-visible .home-continue-action {
+    background: var(--accent-hover);
+}
+
+.home-continue-tile:hover .home-continue-action:hover {
+    transform: scale(1.08);
+}
 
 .home-continue-initial {
     font-size: 34px;
@@ -569,15 +616,32 @@
     }
 }
 
+/* Touch has no hover: a tap opens the tile, so neither the soft artwork nor the action is shown. */
+@media (hover: none), (pointer: coarse) {
+    .home-continue-action {
+        display: none;
+    }
+
+    .home-continue-tile:hover .home-continue-cover {
+        filter: none;
+    }
+
+    .home-continue-tile:hover .home-continue-action {
+        display: none;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .home-hero-track,
     .home-continue-cover,
+    .home-continue-action,
     .home-poster img {
         transition: none;
     }
 
     .home-continue-tile:hover .home-continue-cover,
-    .home-poster:hover img {
+    .home-poster:hover img,
+    .home-continue-tile:hover .home-continue-action {
         transform: none;
     }
 

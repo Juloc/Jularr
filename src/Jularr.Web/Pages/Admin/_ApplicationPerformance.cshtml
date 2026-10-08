@@ -1,0 +1,126 @@
+@model Jularr.Web.Features.Performance.ApplicationPerformanceView
+@using System.Globalization
+@using Jularr.Web.Features.Performance
+@using Jularr.Web.Features.Storage
+@{
+    var ui = Model.Ui;
+    var report = Model.Report;
+    var runtime = report.Runtime;
+    var rates = report.RuntimeRates;
+    var running = report.WorkClasses.Sum(state => state.Running);
+    var waiting = report.WorkClasses.Sum(state => state.Waiting);
+
+    string Duration(double milliseconds) => milliseconds >= 1000
+        ? ui.Format("admin.performance.seconds", ("value", (milliseconds / 1000).ToString("0.0", CultureInfo.InvariantCulture)))
+        : ui.Format("admin.performance.milliseconds", ("value", Math.Round(milliseconds).ToString("0", CultureInfo.InvariantCulture)));
+    string Number(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+    string ClassName(BackgroundWorkClass workClass) => ui["admin.performance.class." + workClass.ToString().ToLowerInvariant()];
+}
+
+<section class="panel perf-panel" aria-labelledby="perf-title" data-application-performance>
+    <div class="panel-heading">
+        <div>
+            <h2 id="perf-title">@ui["admin.performance.title"]</h2>
+            <p class="muted">@ui["admin.performance.scope"]</p>
+        </div>
+        <a class="text-link" asp-page="/Admin/Database">@ui["admin.performance.database"]</a>
+    </div>
+
+    <dl class="perf-tiles">
+        <div data-performance-tile="requests"><dt>@ui["admin.performance.requests"]</dt><dd>@report.ActiveRequests</dd><small>@ui.Format("admin.performance.peak", ("value", report.PeakRequests.ToString(CultureInfo.InvariantCulture)))</small></div>
+        <div data-performance-tile="background"><dt>@ui["admin.performance.background"]</dt><dd>@ui.Format("admin.performance.runningWaiting", ("running", running.ToString(CultureInfo.InvariantCulture)), ("waiting", waiting.ToString(CultureInfo.InvariantCulture)))</dd></div>
+        @if (runtime is not null)
+        {
+            <div data-performance-tile="gc"><dt>@ui["admin.performance.gcPause"]</dt><dd>@(rates is null ? "—" : ui.Format("admin.dashboard.percent", ("value", Number(rates.GcPausePercent))))</dd><small>@ui.Format("admin.performance.collections", ("gen0", runtime.Gen0Collections.ToString(CultureInfo.InvariantCulture)), ("gen2", runtime.Gen2Collections.ToString(CultureInfo.InvariantCulture)))</small></div>
+            <div data-performance-tile="allocation"><dt>@ui["admin.performance.allocation"]</dt><dd>@(rates is null ? "—" : StorageHealth.FormatBytes((long)rates.AllocatedBytesPerSecond) + "/s")</dd><small>@ui.Format("admin.performance.heap", ("value", StorageHealth.FormatBytes(runtime.ManagedHeapBytes)))</small></div>
+            <div data-performance-tile="threadpool"><dt>@ui["admin.performance.threadPool"]</dt><dd>@runtime.ThreadPoolQueueLength</dd><small>@ui.Format("admin.performance.threads", ("value", runtime.ThreadPoolThreads.ToString(CultureInfo.InvariantCulture)))</small></div>
+        }
+    </dl>
+
+    <div class="perf-tables">
+        @foreach (var (key, title, rows, showWait) in new (string Key, string Title, IReadOnlyList<PerformanceRow> Rows, bool ShowWait)[]
+        {
+            ("routes", ui["admin.performance.routes"], report.Routes, false),
+            ("background", ui["admin.performance.work"], report.Background, true),
+            ("providers", ui["admin.performance.providers"], report.Providers, false)
+        })
+        {
+            <article class="perf-table-block" data-performance-table="@key">
+                <h3>@title</h3>
+                @if (rows.Count == 0)
+                {
+                    <p class="muted">@ui["admin.performance.empty"]</p>
+                }
+                else
+                {
+                    <div class="perf-scroll">
+                        <table class="perf-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">@ui["admin.performance.operation"]</th>
+                                    <th scope="col" class="num">@ui["admin.performance.calls"]</th>
+                                    <th scope="col" class="num">@ui["admin.performance.failed"]</th>
+                                    <th scope="col" class="num">@ui["admin.performance.mean"]</th>
+                                    <th scope="col" class="num">@ui["admin.performance.p95"]</th>
+                                    <th scope="col" class="num">@ui["admin.performance.max"]</th>
+                                    @if (showWait) { <th scope="col" class="num">@ui["admin.performance.wait"]</th> }
+                                    <th scope="col" class="num">@ui["admin.performance.total"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in rows)
+                                {
+                                    <tr>
+                                        <th scope="row"><code>@row.Key</code></th>
+                                        <td class="num">@row.Count</td>
+                                        <td class="num">@(row.Failed + row.Cancelled == 0 ? "—" : row.Failed + row.Cancelled)</td>
+                                        <td class="num">@Duration(row.MeanMilliseconds)</td>
+                                        <td class="num">@Duration(row.P95Milliseconds)</td>
+                                        <td class="num">@Duration(row.MaxMilliseconds)</td>
+                                        @if (showWait) { <td class="num">@Duration(row.MeanQueueWaitMilliseconds)</td> }
+                                        <td class="num">@Duration(row.TotalMilliseconds)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </article>
+        }
+
+        <article class="perf-table-block" data-performance-table="budget">
+            <h3>@ui["admin.performance.budget"]</h3>
+            <div class="perf-scroll">
+                <table class="perf-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">@ui["admin.performance.workClass"]</th>
+                            <th scope="col" class="num">@ui["admin.performance.limit"]</th>
+                            <th scope="col" class="num">@ui["admin.performance.running"]</th>
+                            <th scope="col" class="num">@ui["admin.performance.waiting"]</th>
+                            <th scope="col" class="num">@ui["admin.performance.started"]</th>
+                            <th scope="col" class="num">@ui["admin.performance.deferred"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var state in report.WorkClasses)
+                        {
+                            <tr>
+                                <th scope="row">@ClassName(state.WorkClass)</th>
+                                <td class="num">@state.Limit</td>
+                                <td class="num">@state.Running</td>
+                                <td class="num">@state.Waiting</td>
+                                <td class="num">@state.Started</td>
+                                <td class="num">@(state.Deferred == 0 ? "—" : $"{state.Deferred} · {Duration(state.DeferredMilliseconds)}")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (report.RateLimited.Count > 0)
+            {
+                <p class="perf-limited" data-performance-rate-limited>@ui["admin.performance.rateLimited"] @string.Join(", ", report.RateLimited.OrderByDescending(pair => pair.Value).Select(pair => $"{pair.Key} ({pair.Value})"))</p>
+            }
+        </article>
+    </div>
+</section>

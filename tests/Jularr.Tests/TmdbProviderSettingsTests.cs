@@ -103,7 +103,7 @@ public sealed class TmdbProviderSettingsTests
         var feedback = await rig.Service.SaveAsync(true, Typed(ValidToken), CancellationToken.None);
         var view = await rig.Service.GetViewAsync(CancellationToken.None);
 
-        Assert.AreEqual(ProviderFeedback.Saved, feedback);
+        Assert.AreEqual(ProviderFeedback.SavedConnectionWorks, feedback);
         Assert.IsTrue(view.Fields.Single(field => field.Name == TmdbSettingsService.TokenField).HasSavedValue);
         Assert.IsFalse(view.Fields.Single(field => field.Name == TmdbSettingsService.ApiKeyField).HasSavedValue);
         Assert.IsNull(view.Blocking);
@@ -129,30 +129,61 @@ public sealed class TmdbProviderSettingsTests
     {
         await using var rig = await CreateAsync();
 
-        Assert.AreEqual(ProviderFeedback.TestSucceeded, await rig.Service.TestAsync(Typed(ValidToken), CancellationToken.None));
+        Assert.AreEqual(ProviderFeedback.TestSucceededUnsaved, await rig.Service.TestAsync(Typed(ValidToken), CancellationToken.None), "A typed credential that works still needs Save, and the answer says so.");
         Assert.AreEqual(ProviderFeedback.TestAuthenticationFailed, await rig.Service.TestAsync(Typed(WrongToken), CancellationToken.None));
-        Assert.AreEqual(ProviderFeedback.TestSucceeded, await rig.Service.TestAsync(Typed(apiKey: ValidToken), CancellationToken.None));
+        Assert.AreEqual(ProviderFeedback.TestSucceededUnsaved, await rig.Service.TestAsync(Typed(apiKey: ValidToken), CancellationToken.None));
+        Assert.AreEqual(ProviderConnectionState.NotConfigured, (await rig.Service.GetViewAsync(CancellationToken.None)).State, "Testing alone configures nothing.");
+        Assert.IsFalse(ProviderPageModel.IsFailure(ProviderFeedback.TestSucceededUnsaved));
+        Assert.AreEqual("admin.providers.test.succeededUnsaved", ProviderPageModel.MessageKey(ProviderFeedback.TestSucceededUnsaved));
 
         Assert.AreEqual(ProviderHealthStatus.Unknown, rig.Health.Get(ProviderKeys.Tmdb).Status, "A candidate that was never saved says nothing about the configured provider.");
+    }
+
+    [TestMethod]
+    public async Task SavingAWorkingCredentialMovesTheProviderAwayFromNotConfiguredAndTheSavedTestIsASavedAnswer()
+    {
+        await using var rig = await CreateAsync();
+        Assert.AreEqual(ProviderConnectionState.NotConfigured, (await rig.Service.GetViewAsync(CancellationToken.None)).State);
+
+        Assert.AreEqual(ProviderFeedback.SavedConnectionWorks, await rig.Service.SaveAsync(true, Typed(ValidToken), CancellationToken.None));
+
+        var saved = await rig.Service.GetViewAsync(CancellationToken.None);
+        Assert.AreEqual(ProviderConnectionState.Healthy, saved.State, "A save checks the connection at once, so the state is known without another click.");
+        Assert.IsTrue(saved.HasSavedValue);
+        Assert.IsNull(saved.Blocking, "A configured provider no longer blocks Setup.");
+        Assert.AreEqual(ProviderFeedback.TestSucceeded, await rig.Service.TestAsync(Typed(), CancellationToken.None), "Testing what is saved is a saved answer.");
+        Assert.AreEqual(ProviderConnectionState.Healthy, (await rig.Service.GetViewAsync(CancellationToken.None)).State);
     }
 
     [TestMethod]
     public async Task TestingTheSavedCredentialRecordsHealthAndARefusalIsAnAuthenticationFailure()
     {
         await using var rig = await CreateAsync();
-        await rig.Service.SaveAsync(true, Typed(WrongToken), CancellationToken.None);
+        Assert.AreEqual(ProviderFeedback.TestAuthenticationFailed, await rig.Service.SaveAsync(true, Typed(WrongToken), CancellationToken.None), "The save keeps the values and reports why the connection failed.");
 
         Assert.AreEqual(ProviderFeedback.TestAuthenticationFailed, await rig.Service.TestAsync(Typed(), CancellationToken.None));
         var refused = await rig.Service.GetViewAsync(CancellationToken.None);
+        Assert.IsTrue(refused.HasSavedValue);
         Assert.AreEqual(ProviderConnectionState.AuthenticationFailed, refused.State);
         Assert.IsNull(refused.LastSuccessUtc, "A refusal is not a successful call.");
         Assert.IsNotNull(refused.LastFailureUtc);
         Assert.IsNotNull(refused.Blocking, "A refused credential is no usable provider.");
 
-        await rig.Service.SaveAsync(true, Typed(ValidToken), CancellationToken.None);
-        Assert.AreEqual(ProviderConnectionState.Unknown, (await rig.Service.GetViewAsync(CancellationToken.None)).State, "Saving forgets what was observed with the old credential.");
-        Assert.AreEqual(ProviderFeedback.TestSucceeded, await rig.Service.TestAsync(Typed(), CancellationToken.None));
-        Assert.AreEqual(ProviderConnectionState.Healthy, (await rig.Service.GetViewAsync(CancellationToken.None)).State);
+        Assert.AreEqual(ProviderFeedback.SavedConnectionWorks, await rig.Service.SaveAsync(true, Typed(ValidToken), CancellationToken.None));
+        var healed = await rig.Service.GetViewAsync(CancellationToken.None);
+        Assert.AreEqual(ProviderConnectionState.Healthy, healed.State, "Saving forgets what was observed with the old credential and observes the new one at once.");
+        Assert.IsNull(healed.Blocking);
+    }
+
+    [TestMethod]
+    public async Task SavingWithoutAUsableCredentialOrWhileSwitchedOffOnlySavesAndNeverCallsTheProvider()
+    {
+        await using var rig = await CreateAsync();
+
+        Assert.AreEqual(ProviderFeedback.Saved, await rig.Service.SaveAsync(true, Typed(), CancellationToken.None), "Nothing to send yet.");
+        Assert.AreEqual(ProviderFeedback.Saved, await rig.Service.SaveAsync(false, Typed(ValidToken), CancellationToken.None), "A provider that is switched off is not asked.");
+
+        Assert.AreEqual(0, rig.Requests.Count);
     }
 
     [TestMethod]

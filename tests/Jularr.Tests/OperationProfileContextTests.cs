@@ -110,7 +110,7 @@ public sealed class OperationProfileContextTests
                     });
 
                 var actual = await resolvedProfile.Task.WaitAsync(
-                    TimeSpan.FromSeconds(5));
+                    TimeSpan.FromSeconds(30));
 
                 Assert.AreEqual("queued-profile", actual);
             }

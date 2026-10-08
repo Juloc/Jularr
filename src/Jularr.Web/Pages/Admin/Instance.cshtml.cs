@@ -1,5 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Home;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Localization;
 using Microsoft.AspNetCore.Authorization;
@@ -44,6 +45,9 @@ public sealed class InstanceModel(
     public InstanceModuleSettings Settings { get; private set; } =
         InstanceModuleSettings.Default;
 
+    /// <summary>The Home/Discover layout every profile starts from; a profile that arranged its own is not touched.</summary>
+    public HomeEditorModel HomeEditor { get; private set; } = null!;
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         await LoadAsync(cancellationToken);
@@ -69,6 +73,17 @@ public sealed class InstanceModel(
         return RedirectToPage();
     }
 
+    /// <summary>Stores the instance default of the Home/Discover layout. It is a default only: profiles with their own layout keep it, and the media types a module switch removed keep their place for when it returns.</summary>
+    public async Task<IActionResult> OnPostHomeAsync(string[]? order, string[]? shown, string? landing, bool prioritizeContinue, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        var store = new HomeLayoutStore(db);
+        var available = HomeLayoutStore.OrderableFor(await modules.GetAsync(cancellationToken));
+        await store.SaveInstanceDefaultAsync(HomeLayoutPolicy.FromEditor(await store.GetInstanceDefaultAsync(cancellationToken), order, shown, landing, prioritizeContinue, available), cancellationToken);
+        TempData["Status"] = Ui["admin.instance.home.saved"];
+        return RedirectToPage();
+    }
+
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -90,8 +105,12 @@ public sealed class InstanceModel(
     public static string FieldName(InstanceModule module) =>
         $"module_{module}";
 
-    public string Name(InstanceModule module) =>
-        Ui[$"admin.instance.module.{StorageName(module)}"];
+    public string Name(InstanceModule module) => Ui[NameKey(module)];
+
+    /// <summary>The catalog key of a module's name; Setup shows the same module list with the same words.</summary>
+    public static string NameKey(InstanceModule module) => $"admin.instance.module.{StorageName(module)}";
+
+    public static string DescriptionKey(InstanceModule module) => $"{NameKey(module)}.description";
 
     public static string Icon(InstanceModule module) =>
         module switch
@@ -117,13 +136,15 @@ public sealed class InstanceModel(
             _ => null
         };
 
-    public string Description(InstanceModule module) =>
-        Ui[$"admin.instance.module.{StorageName(module)}.description"];
+    public string Description(InstanceModule module) => Ui[DescriptionKey(module)];
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         Settings = await modules.GetAsync(cancellationToken);
+        var available = HomeLayoutStore.OrderableFor(Settings);
+        var layout = HomeLayoutPolicy.Resolve(await new HomeLayoutStore(db).GetInstanceDefaultAsync(cancellationToken), available, false);
+        HomeEditor = new HomeEditorModel(Ui, "instance-home", HomeEditorModel.ItemsOf(layout.Order, layout.Hidden), layout.Landing, layout.PrioritizeContinue, HomeEditorModel.PresetsFor(available));
     }
 
     private static string StorageName(InstanceModule module) =>

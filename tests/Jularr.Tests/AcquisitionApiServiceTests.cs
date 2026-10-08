@@ -69,17 +69,14 @@ public sealed class AcquisitionApiServiceTests
                 SearchOnAdd: false,
                 QualityProfileId: null,
                 IndexerIds: [],
-                TagIds: ["preferred"],
                 TargetRootId: environment.Root.Id),
             CancellationToken.None));
 
         Assert.AreEqual(AnimeQualityProfiles.DefaultAnime1080pId, response.QualityProfileId);
-        CollectionAssert.AreEqual(new[] { "preferred" }, response.TagIds);
         Assert.AreEqual(environment.Root.Id, response.TargetRootId);
 
         var persisted = await environment.MonitoringStateAsync();
         var settings = persisted.Anime[AnimeAcquisitionEnvironment.AnimeKey];
-        CollectionAssert.AreEqual(new[] { "preferred" }, settings.TagIds);
         Assert.AreEqual(environment.Root.Id, settings.TargetRootId);
     }
 
@@ -93,7 +90,7 @@ public sealed class AcquisitionApiServiceTests
         var exception = await Assert.ThrowsExactlyAsync<AcquisitionApiException>(() =>
             environment.WithAcquisitionApiAsync(api => api.SetAnimeMonitoringAsync(
                 environment.AnimeId,
-                new SetAnimeMonitoringRequest(true, false, null, [], [], null),
+                new SetAnimeMonitoringRequest(true, false, null, [], null),
                 CancellationToken.None)));
 
         Assert.AreEqual(409, exception.StatusCode);

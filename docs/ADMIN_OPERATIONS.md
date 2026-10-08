@@ -17,6 +17,8 @@ Owner-only administration:
 - `/Admin/Operations` — active work, queue, downloads and history
 - `/Admin/Scans` — library scan runs per media root with phase, counters and warnings
 - `/Admin/Logs` — structured operation logs
+- `/Admin/Resources` — stack CPU/RAM/disk, storage mounts and the application performance view (routes, background work, providers, budgets, runtime pressure)
+- `/Admin/Database` — read-only PostgreSQL evidence (connections, locks, statements, table and index size, vacuum state)
 - `/Admin/System` — media roots and server integrations
 - `/Admin/Subtitles`
 - `/Admin/Sonarr`
@@ -353,3 +355,19 @@ PostgreSQL is Jularr's canonical database. The connection string comes from `Con
 There is no built-in SQLite import or pre-Jularr upgrade path. The supported persistence boundary is the current epoch in `.agent/upgrade-policy.yaml`.
 
 Back up PostgreSQL with a logical dump such as `pg_dump -Fc` or a stopped-volume snapshot. Back up `/data` separately for non-database state.
+
+## Resource budgets and performance view
+
+Interactive requests win over background work (#857). Governed background work runs in four classes with bounded slots: Import (2 slots, never held back for requests), Provider refresh (2), Scan (1) and Maintenance (1). Every class below Import waits while three or more requests are in flight, for at most 10 s (provider refresh), 15 s (scan) or 30 s (maintenance); constant load therefore delays background work but never starves it. The Wanted pass, metadata refresh, calendar, franchise and AniList loops, the background job worker (library scans and the other queued operations) and the completed-download import run through this one governor; Admin → Resources shows each class's limit, running and waiting counts and how often work was deferred.
+
+The same page answers "what is making Jularr slow or busy" (#860) without an external collector: per route template, background operation and provider client name it shows calls, failures, mean, P95, maximum and total time over the last hour of the running process, plus requests in flight, GC pause share, allocation rate, heap, ThreadPool queue and refused rate-limited calls. Keys are fixed identities (route templates, operation names, registered client names), never URLs, ids or titles, and each category is capped at 200 keys.
+
+Idle cost: the stack resource sampler (cgroup reads of Jularr and PostgreSQL) samples every 5 s only while an Admin page has asked for it in the last two minutes and once a minute otherwise; instances with Playback off do not probe ffmpeg or sweep the HLS cache.
+
+Admin → Database (#859) reads PostgreSQL in a read-only transaction with a statement timeout; it never writes, explains or runs a statement, and shows query text without its literals. Table and index sizes are skipped while a table is exclusively locked. Statement statistics need `pg_stat_statements`: the bundled `compose.yaml` preloads it, then run `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` once as the database owner; without it the section says what is missing.
+
+## Instance setup and branding
+
+First-run Setup is three steps on the real settings, with no setup-only copy: the owner account (`/Account/Setup`), the instance step (`/Account/SetupInstance`, #877) and, while an enabled feature still needs an unusable provider, the provider step (`/Account/SetupProvider`). The instance step offers the starting points of Admin → Instance (Media Manager, Full Jularr, Custom) with the same module switches, so the resulting module state is visible before saving; a starting point sets the feature switches (Media Manager: Playback, Learning and Tracking off, Acquisition on) and the media types stay as chosen. It also takes the instance name and the owner's own theme mode and accent. Every value is saved through the stores behind Admin → Instance, Admin → Appearance and Settings → Appearance, and "Skip for now" changes nothing; the step can be opened again at any time.
+
+Branding (#876) has one owner, `InstanceBrandingStore` (table `InstanceBranding`, one row): an optional instance name (at most 40 characters), an optional logo (PNG, JPEG, WebP or an SVG that carries no script, event handler or external reference, at most 512 KB, validated by its bytes) "Use brand colour" switch with a colour chosen by a picker (stored as a hue 0–359; a button takes it from the logo in the browser) and an optional "Recolour logo with brand colour" switch. Setup and Admin → Appearance write it; the layout, the brand mark (sidebar, header, login, register, setup), the page title, the browser icon and the web app manifest name read it. While the instance has its own name or logo, a small "by Jularr" stays beside it; without any, plain Jularr is shown without it. While the brand colour is on it is the accent for every profile (buttons, highlights and links; success, warning and error colours and media artwork keep theirs). Recolouring is presentation only: the uploaded file is never changed, the logo is drawn through its own alpha as a mask over the accent (shape, transparency and antialiased edges kept, no mixed source colours), and it falls back to the original for a logo without real transparency (JPEG, an opaque PNG or WebP) or in a browser without CSS masks. The admin preview repaints the page with the real derived accent and shows the original or the recoloured logo as the switches say. The logo is served at `/branding/logo?v=<version>`: public (the login page shows it), sandboxed, without content sniffing and cached by version. Not yet covered: separate light and dark logos (the recolouring rule would apply to whichever is rendered), raster resizing, and a recoloured browser or installed-app icon.

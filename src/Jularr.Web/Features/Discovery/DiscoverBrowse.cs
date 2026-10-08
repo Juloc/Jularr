@@ -327,6 +327,22 @@ public static class DiscoverScopes
         (DiscoveryCategory.Manga, "reading.manga.title")
     ];
 
+    /// <summary>
+    /// The tabs a viewer gets: all media, then the types it shows in its own order. A type it hid has no tab, except while it is the one being browsed,
+    /// so the bar never loses the place the address names.
+    /// </summary>
+    public static IReadOnlyList<(DiscoveryCategory Category, string LabelKey)> TabsFor(IReadOnlyList<WorkMediaType> shown, DiscoveryCategory active)
+    {
+        var tabs = new List<(DiscoveryCategory Category, string LabelKey)> { Tabs[0] };
+        tabs.AddRange(shown.Select(type => Tabs.First(tab => tab.Category == DiscoverRecommendations.CategoryOf(type))));
+        if (active != DiscoveryCategory.All && tabs.All(tab => tab.Category != active))
+        {
+            tabs.Add(Tabs.First(tab => tab.Category == active));
+        }
+
+        return tabs;
+    }
+
     /// <summary>Whether a tab is the active one.</summary>
     public static bool IsActive(DiscoveryCategory tab, DiscoveryCategory current) => tab == current;
 

@@ -229,7 +229,7 @@ public sealed class MusicAcquisitionEngine(
         var evaluation = await SearchAsync(request.CreatedAt, payload, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
         if (installedQuality is null)
         {
-            return await GrabAsync(request, payload, evaluation.Grabbable, FailureMessage(evaluation), cancellationToken);
+            return await GrabAsync(request, payload, evaluation.Grabbable, FailureMessage(evaluation), cancellationToken, searchUnavailable: evaluation.Search.EveryIndexerFailed);
         }
 
         // The album is installed below its cutoff: only a release that is a meaningful upgrade is taken, and a complete album is judged again at import.
@@ -268,7 +268,8 @@ public sealed class MusicAcquisitionEngine(
         IReadOnlyList<MusicReleaseEvaluation> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
-        ManualGrabProgress? progress = null)
+        ManualGrabProgress? progress = null,
+        bool searchUnavailable = false)
     {
         var workId = payload.WorkId;
         var candidates = releases
@@ -297,7 +298,8 @@ public sealed class MusicAcquisitionEngine(
 
                 return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
             },
-            cancellationToken);
+            cancellationToken,
+            searchUnavailable);
         return execution with { ResultUrl = MusicLinks.AlbumPath(workId) };
     }
 
@@ -314,7 +316,7 @@ public sealed class MusicAcquisitionEngine(
         MusicJudgement Judge(ProwlarrReleaseCandidate release) => MusicReleaseJudge.Judge(parser, payload.Artist, payload.Album, payload.Year, release);
         var search = await indexers.SearchAsync(
             intent,
-            options with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong && Judge(release).SafetyRejection is null) },
+            options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong && Judge(release).SafetyRejection is null) },
             cancellationToken);
 
         var judged = search.Releases

@@ -5,7 +5,6 @@ using Jularr.Web.Features.Acquisition.AniListAutoMonitor;
 using Jularr.Web.Features.Acquisition.Backup;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Indexers;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
@@ -22,13 +21,12 @@ namespace Jularr.Web.Pages.Settings;
 
 /// <summary>
 /// The one settings page for the P1 import/policy backlog: import mode (global and per library
-/// root), post-import playback optimization, remote path mappings, tags, delay profiles, tag-scoped indexer restrictions, the current
+/// root), post-import playback optimization, remote path mappings, the current
 /// profile's AniList list auto-monitor rule, and acquisition settings backup/restore.
 /// </summary>
 [Authorize(Policy = JularrPolicies.AcquisitionSettings)]
 public sealed class AcquisitionModel(
     AnimeImportSettingsStore importSettings,
-    AcquisitionPolicyStore policyStore,
     AniListAutoMonitorSettingsStore aniListAutoMonitorStore,
     AcquisitionBackupService backupService,
     IndexerStore indexerStore,
@@ -44,7 +42,6 @@ public sealed class AcquisitionModel(
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public AnimeImportSettingsState ImportSettings { get; private set; } = AnimeImportSettingsState.Empty();
-    public AcquisitionPolicyState Policy { get; private set; } = AcquisitionPolicyState.Empty();
     public IReadOnlyList<LibraryRoot> Roots { get; private set; } = [];
 
     /// <summary>The Storage-owned default destination of each importer-routed media type; a missing entry means imports of that type wait.</summary>
@@ -320,144 +317,6 @@ public sealed class AcquisitionModel(
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostAddTagAsync(string name, CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.tagNameRequired"];
-            return RedirectToPage();
-        }
-
-        await policyStore.UpdateAsync(
-            state =>
-            {
-                var id = name.Trim().ToLowerInvariant().Replace(' ', '-');
-                if (state.Tags.Any(tag => tag.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return state;
-                }
-
-                var tags = state.Tags.Append(new AcquisitionTag(id, name.Trim())).ToList();
-                return state with { Tags = tags };
-            },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.tagAdded"];
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostRemoveTagAsync(string tagId, CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        await policyStore.UpdateAsync(
-            state => state with
-            {
-                Tags = state.Tags.Where(tag => !tag.Id.Equals(tagId, StringComparison.OrdinalIgnoreCase)).ToList(),
-                DelayProfiles = state.DelayProfiles
-                    .Select(profile => profile with { TagIds = profile.TagIds.Where(id => !id.Equals(tagId, StringComparison.OrdinalIgnoreCase)).ToArray() })
-                    .ToList(),
-                IndexerRestrictions = state.IndexerRestrictions
-                    .Select(restriction => restriction with { TagIds = restriction.TagIds.Where(id => !id.Equals(tagId, StringComparison.OrdinalIgnoreCase)).ToArray() })
-                    .ToList()
-            },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.tagRemoved"];
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostAddDelayProfileAsync(
-        string name,
-        int delayMinutes,
-        string? qualityProfileId,
-        string[]? tagIds,
-        bool isDefault,
-        CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        if (string.IsNullOrWhiteSpace(name) || delayMinutes < 0)
-        {
-            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.delayProfileRequired"];
-            return RedirectToPage();
-        }
-
-        await policyStore.UpdateAsync(
-            state =>
-            {
-                var profiles = state.DelayProfiles.Append(new AnimeDelayProfile(
-                    Guid.NewGuid().ToString("N"),
-                    name.Trim(),
-                    delayMinutes,
-                    string.IsNullOrWhiteSpace(qualityProfileId) ? null : qualityProfileId.Trim(),
-                    tagIds ?? [],
-                    isDefault)).ToList();
-                return state with { DelayProfiles = profiles };
-            },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.delayProfileAdded"];
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostRemoveDelayProfileAsync(string profileId, CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        await policyStore.UpdateAsync(
-            state => state with { DelayProfiles = state.DelayProfiles.Where(profile => profile.Id != profileId).ToList() },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.delayProfileRemoved"];
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostAddIndexerRestrictionAsync(
-        string name,
-        string[]? tagIds,
-        Guid[]? allowedIndexerEntryIds,
-        CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        if (string.IsNullOrWhiteSpace(name) || tagIds is not { Length: > 0 })
-        {
-            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.indexerRestrictionNameAndTag"];
-            return RedirectToPage();
-        }
-
-        var ids = (allowedIndexerEntryIds ?? [])
-            .Distinct()
-            .Order()
-            .ToArray();
-        if (ids.Length == 0)
-        {
-            TempData["AcquisitionSettingsError"] = Ui["settings.acquisition.validation.indexerRestrictionIndexer"];
-            return RedirectToPage();
-        }
-
-        await policyStore.UpdateAsync(
-            state =>
-            {
-                var restrictions = state.IndexerRestrictions.Append(
-                    new AnimeIndexerRestriction(Guid.NewGuid().ToString("N"), name.Trim(), tagIds, ids)).ToList();
-                return state with { IndexerRestrictions = restrictions };
-            },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.indexerRestrictionAdded"];
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostRemoveIndexerRestrictionAsync(string restrictionId, CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        await policyStore.UpdateAsync(
-            state => state with { IndexerRestrictions = state.IndexerRestrictions.Where(item => item.Id != restrictionId).ToList() },
-            cancellationToken);
-        TempData["Status"] = Ui["settings.acquisition.status.indexerRestrictionRemoved"];
-        return RedirectToPage();
-    }
-
     public async Task<IActionResult> OnPostAniListAutoMonitorAsync(bool enabled, CancellationToken cancellationToken)
     {
         await LoadInstanceModulesAsync(cancellationToken);
@@ -572,7 +431,6 @@ public sealed class AcquisitionModel(
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         await LoadInstanceModulesAsync(cancellationToken);
         ImportSettings = await importSettings.LoadAsync(cancellationToken);
-        Policy = await policyStore.LoadAsync(cancellationToken);
         Roots = await db.LibraryRoots.AsNoTracking().OrderBy(root => root.Name).ToArrayAsync(cancellationToken);
         var destinations = new Dictionary<MediaAcquisitionKind, LibraryRootRoute>();
         foreach (var kind in MediaInboxImportService.InboxKinds)

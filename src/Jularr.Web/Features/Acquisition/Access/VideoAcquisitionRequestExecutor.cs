@@ -359,7 +359,7 @@ public sealed partial class VideoAcquisitionEngine(
         var evaluation = await SearchAndEvaluateAsync(request, payload, unit, scope, target.ExternalIds ?? EmptyIds, profile, new SearchOptions { Purpose = SearchPurpose.Automatic }, cancellationToken);
 
         return installedQuality is null
-            ? await GrabAsync(request, payload, unit, evaluation.Grabbable, FailureMessage(evaluation, request.Kind), cancellationToken)
+            ? await GrabAsync(request, payload, unit, evaluation.Grabbable, FailureMessage(evaluation, request.Kind), cancellationToken, searchUnavailable: evaluation.Search.EveryIndexerFailed)
             : await UpgradeOrWaitAsync(request, payload, unit, evaluation, installedQuality, cancellationToken);
     }
 
@@ -423,7 +423,8 @@ public sealed partial class VideoAcquisitionEngine(
         IReadOnlyList<VideoReleaseEvaluation> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
-        ManualGrabProgress? progress = null)
+        ManualGrabProgress? progress = null,
+        bool searchUnavailable = false)
     {
         // Admin may have changed monitoring while the indexers were searched; look again before anything is stored or grabbed, so a grab that is
         // dropped never marks its release as tried. A Manual Search grab chose its episode itself, so only Off applies to it. An Off that lands
@@ -465,7 +466,8 @@ public sealed partial class VideoAcquisitionEngine(
 
                 return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
             },
-            cancellationToken);
+            cancellationToken,
+            searchUnavailable);
 
         return execution with { ResultUrl = VideoWorkLinks.DetailPath(request.Kind, payload.WorkId) };
     }
@@ -508,7 +510,7 @@ public sealed partial class VideoAcquisitionEngine(
         VideoJudgement Judge(ProwlarrReleaseCandidate release) => VideoReleaseJudge.Judge(parser, kind, payload.Title, payload.Year, unit, scope, release);
         var search = await indexers.SearchAsync(
             intent,
-            options with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong) },
+            options.WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => releases.Count(release => Judge(release).Evidence.Confidence is IdentityConfidence.Exact or IdentityConfidence.Strong) },
             cancellationToken);
 
         // One selection for the whole result: the same engine ranks what automatic acquisition grabs and what Manual Search lists.

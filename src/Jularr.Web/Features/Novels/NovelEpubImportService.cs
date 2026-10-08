@@ -233,7 +233,8 @@ public sealed partial class NovelEpubImportService(
     public async Task<NovelEpubDownloadImport> ImportDownloadAsync(
         string sourcePath,
         CancellationToken cancellationToken,
-        bool recordSourceStoragePath = false)
+        bool recordSourceStoragePath = false,
+        Guid? targetWorkId = null)
     {
         var source = Path.GetFullPath(sourcePath);
         string[] paths;
@@ -309,7 +310,7 @@ public sealed partial class NovelEpubImportService(
             outcomes.Add(await ImportFileAsync(
                 stream,
                 Path.GetFileName(path),
-                targetWorkId: null,
+                targetWorkId: targetWorkId,
                 seriesHint: null,
                 cancellationToken,
                 recordSourceStoragePath ? Path.GetFullPath(path) : null));

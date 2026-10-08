@@ -1,7 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.DownloadClients;
+using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Pipeline;
+using Jularr.Web.Features.Acquisition.Sabnzbd;
+using Jularr.Web.Features.Operations;
+using Microsoft.Extensions.DependencyInjection;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Storage;
 
@@ -51,6 +56,71 @@ public sealed class AnimeSharedManagerTests
         var imported = await environment.MediaFileAsync(1, 2);
         Assert.IsTrue(imported!.Path.StartsWith(environment.Root.Path, StringComparison.Ordinal), "The episode lands in the Anime LibraryRoot.");
         Assert.IsFalse(File.Exists(Path.Combine(download, $"{Best}.mkv")), "The root's placement policy (Move) moved the file.");
+    }
+
+    [TestMethod]
+    public async Task AnIndexerOutageIsNotAFailedSearchSoItNeverRaisesTheBackoffAndIsRetriedSoon()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync();
+        var start = new DateTime(2026, 10, 7, 8, 0, 0, DateTimeKind.Utc);
+        await environment.RunWantedPassAsync(start);
+        var searching = start.Add(AnimeAcquisitionScheduler.StartupDelay).AddSeconds(1);
+
+        environment.Prowlarr.Failure = new HttpRequestException("indexer down");
+        await environment.RunWantedPassAsync(searching);
+
+        var outage = (await environment.Monitoring.LoadAsync(CancellationToken.None)).Attempts.Values.ToArray();
+        Assert.IsTrue(outage.Length > 0, "The outage was recorded.");
+        Assert.IsTrue(outage.All(attempt => attempt.FailureCount == 0), "An outage is not a failed search: the failure count, and so the back-off, stays where it was.");
+        Assert.IsTrue(outage.All(attempt => attempt.Status != AcquisitionAttemptStatus.Failed));
+        Assert.IsTrue(outage.All(attempt => attempt.NextRetryAtUtc is { } retry && Math.Abs((retry - DateTimeOffset.UtcNow - ReleaseRequestTracker.UnavailableRetry).TotalMinutes) < 5), "It is retried within the shared outage delay (the pipeline stamps attempts with the real clock).");
+        var queriesDuringOutage = environment.Prowlarr.Queries.Count;
+
+        environment.Prowlarr.Failure = null;
+        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
+        await environment.RunWantedPassAsync(searching.AddMinutes(5));
+        Assert.AreEqual(queriesDuringOutage, environment.Prowlarr.Queries.Count, "Nothing searches again before the retry delay, however often the pass runs.");
+        Assert.AreEqual(0, environment.Sabnzbd.Grabs.Count);
+    }
+
+    [TestMethod]
+    public async Task ADownloadThatFailedOnTheClientsStorageIsNeitherBlocklistedNorCountedAndTheEpisodeIsSearchedAgainLater()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync();
+        environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
+        var start = new DateTime(2026, 10, 7, 8, 0, 0, DateTimeKind.Utc);
+        await environment.RunWantedPassAsync(start);
+        await environment.RunWantedPassAsync(start.Add(AnimeAcquisitionScheduler.StartupDelay).AddSeconds(1));
+        var operation = (await environment.Operations.GetAsync((await environment.Acquisitions.LoadAsync()).Acquisitions.Single().LatestAttempt!.OperationId))!;
+
+        environment.Sabnzbd.History = new SabnzbdHistorySnapshot([new SabnzbdHistoryJob(operation.ExternalId!, Best, "Failed", "anime", null, "Out of disk space on /downloads", SabnzbdFailureKind.Storage, DateTimeOffset.UtcNow)]);
+        var projected = await SabnzbdOperationProjector.ApplyAsync(environment.Operations, await environment.Operations.ListActiveExternalAsync(SabnzbdClient.ProviderId), new SabnzbdQueueSnapshot(false, null, null, []), environment.Sabnzbd.History, DateTime.UtcNow, CancellationToken.None);
+        var failure = projected.Failed.Single();
+        var next = await environment.WithScopeAsync(services => services.GetRequiredService<SabnzbdAcquisitionService>().HandleFailedAsync(failure.Operation.Id, failure.FailureKind, failure.Reason, CancellationToken.None));
+        await environment.RunWantedPassAsync(start.AddHours(2));
+
+        Assert.AreEqual(SabnzbdFailureKind.Storage, failure.FailureKind);
+        Assert.IsNull(next, "No other release is tried for a problem of the client's own storage.");
+        Assert.AreEqual(0, (await environment.Acquisitions.LoadAsync()).Blocklist.Count, "The release is not blocklisted.");
+        var attempts = (await environment.Monitoring.LoadAsync(CancellationToken.None)).Attempts.Values.ToArray();
+        Assert.IsTrue(attempts.All(attempt => attempt.FailureCount == 0 && attempt.Status != AcquisitionAttemptStatus.Failed), "The failure count, and so the back-off, is untouched.");
+        Assert.IsTrue(attempts.Any(attempt => attempt.Status == AcquisitionAttemptStatus.None && attempt.NextRetryAtUtc is not null), "The episode waits for the shared outage delay instead of staying grabbed.");
+    }
+
+    [TestMethod]
+    public async Task ASearchThatAnsweredWithNothingStillCountsAsAFailedSearch()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync();
+        var start = new DateTime(2026, 10, 7, 8, 0, 0, DateTimeKind.Utc);
+        await environment.RunWantedPassAsync(start);
+
+        await environment.RunWantedPassAsync(start.Add(AnimeAcquisitionScheduler.StartupDelay).AddSeconds(1));
+
+        var attempts = (await environment.Monitoring.LoadAsync(CancellationToken.None)).Attempts.Values.ToArray();
+        Assert.IsTrue(attempts.Any(attempt => attempt.FailureCount == 1), "No release found is the failed search the back-off is meant for.");
     }
 
     [TestMethod]

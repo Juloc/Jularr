@@ -52,6 +52,20 @@ public sealed class DiscoveryShelfTests
     }
 
     [TestMethod]
+    public async Task TheAllBoardFollowsTheViewersGroupOrderWhileASelectedTypeIsPlannedEvenWhenTheViewerHidIt()
+    {
+        var feed = new FakeFeed();
+        var service = new DiscoveryShelfService(feed, Shell(WorkMediaType.Anime, WorkMediaType.Manga, WorkMediaType.Book));
+        WorkMediaType[] shown = [WorkMediaType.Book, WorkMediaType.Anime];
+
+        var all = await service.GetBoardAsync(null, "order", isOwner: false, DiscoveryCategory.All, DiscoveryWait.None, CancellationToken.None, shown);
+        var manga = await service.GetBoardAsync(null, "order", isOwner: false, DiscoveryCategory.Manga, DiscoveryWait.None, CancellationToken.None, shown);
+
+        CollectionAssert.AreEqual(new[] { DiscoveryCategory.Book, DiscoveryCategory.Anime }, all.Rows.Select(row => row.Category).Distinct().ToArray(), "Book first, Anime second, and Manga (hidden) has no group.");
+        Assert.IsTrue(manga.Rows.Count > 0 && manga.Rows.All(row => row.Category == DiscoveryCategory.Manga), "Browsing a hidden type directly is unchanged.");
+    }
+
+    [TestMethod]
     public async Task ARowThatWaitsKeepsItsPlaceAndAFailedRowStaysVisibleWhileAnEmptyOneIsDropped()
     {
         var feed = new FakeFeed

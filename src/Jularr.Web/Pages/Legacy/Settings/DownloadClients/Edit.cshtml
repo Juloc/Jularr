@@ -79,6 +79,20 @@
             <input asp-for="LightNovelCategory" placeholder="lightnovels" />
         </label>
     }
+    @if (Model.ShowMusic)
+    {
+        <label>
+            <span>@ui["admin.usenet.musicCategory"]</span>
+            <input asp-for="MusicCategory" placeholder="music" />
+        </label>
+    }
+    @if (Model.ShowAudiobooks)
+    {
+        <label>
+            <span>@ui["admin.usenet.audiobookCategory"]</span>
+            <input asp-for="AudiobookCategory" placeholder="audiobooks" />
+        </label>
+    }
     <p class="muted is-wide">@ui["settings.downloadClients.categoriesHint"]</p>
     <label class="usenet-form-check">
         <input asp-for="Enabled" type="checkbox" />

@@ -97,6 +97,7 @@ public static class SabnzbdOperationProjector
                         : finished.FailureKind;
                     var reason = SabnzbdFailureDescriptions.Describe(kind, finished.FailureMessage);
                     await store.MarkFailedAsync(operation.Id, reason, cancellationToken);
+                    await RecordFailureKindAsync(store, operation, kind, cancellationToken);
                     failed.Add(new SabnzbdProjectedFailure(operation, kind, reason));
                     continue;
                 }
@@ -118,11 +119,21 @@ public static class SabnzbdOperationProjector
             {
                 const string missing = "SABnzbd job no longer appears in queue or history.";
                 await store.MarkFailedAsync(operation.Id, missing, cancellationToken);
-                failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Unknown, missing));
+                await RecordFailureKindAsync(store, operation, SabnzbdFailureKind.Lost, cancellationToken);
+                failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Lost, missing));
             }
         }
 
         return new SabnzbdProjectionResult(completed, failed);
+    }
+
+    /// <summary>Keeps why the client failed the job next to the job, so the reliability evidence can tell a bad release from a local problem.</summary>
+    public static async Task RecordFailureKindAsync(OperationStore store, OperationSnapshot operation, SabnzbdFailureKind kind, CancellationToken cancellationToken)
+    {
+        if (DownloadOperationDetails.TryParse(operation.Details, out var details) && details is not null)
+        {
+            await store.SetDetailsAsync(operation.Id, (details with { FailureKind = kind.ToString() }).Serialize(), cancellationToken);
+        }
     }
 
     private static async Task EnsureRunningAsync(
@@ -349,7 +360,8 @@ public sealed class SabnzbdOperationMonitorService(
         foreach (var operation in groupOperations)
         {
             await store.MarkFailedAsync(operation.Id, RemovedClientMessage, cancellationToken);
-            failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Unknown, RemovedClientMessage));
+            await SabnzbdOperationProjector.RecordFailureKindAsync(store, operation, SabnzbdFailureKind.Lost, cancellationToken);
+            failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Lost, RemovedClientMessage));
         }
 
         logger.LogWarning(

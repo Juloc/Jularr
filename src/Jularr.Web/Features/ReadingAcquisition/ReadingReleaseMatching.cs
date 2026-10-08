@@ -208,20 +208,22 @@ public static class ReadingReleaseSelector
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
         ReadingAcquisitionTarget target,
         QualityProfile? profile = null,
-        ReleaseReliabilityLookup? reliability = null) =>
-        Evaluate(releases, target, profile, reliability).Ranked;
+        ReleaseReliabilityLookup? reliability = null,
+        DateTimeOffset? wantedSince = null) =>
+        Evaluate(releases, target, profile, reliability, wantedSince).Ranked;
 
     public static ReadingRanking Evaluate(
         IReadOnlyList<ProwlarrReleaseCandidate> releases,
         ReadingAcquisitionTarget target,
         QualityProfile? profile = null,
-        ReleaseReliabilityLookup? reliability = null)
+        ReleaseReliabilityLookup? reliability = null,
+        DateTimeOffset? wantedSince = null)
     {
         var judged = releases
             .GroupBy(release => release.Identity, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => ToJudgement(group.First(), target), StringComparer.Ordinal);
         var now = DateTimeOffset.UtcNow;
-        var selection = ReleaseSelectionEngine.Select(profile ?? ReadingQualityProfiles.For(target.Kind), new SelectionContext(now, now), [.. judged.Values.Select(item => item.Candidate)], reliability);
+        var selection = ReleaseSelectionEngine.Select(profile ?? ReadingQualityProfiles.For(target.Kind), new SelectionContext(now, wantedSince ?? now), [.. judged.Values.Select(item => item.Candidate)], reliability);
         return new ReadingRanking([.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))], selection.WinnerReason);
     }
 
@@ -353,7 +355,7 @@ public static class ReadingReleaseSelector
             var because = evaluation.Reasons.FirstOrDefault(reason => reason.Kind == SelectionReasonKind.Safety)?.Detail
                           ?? (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict
                               ? evaluation.Candidate.Identity.Detail
-                              : string.Join("; ", evaluation.Score?.RejectionReasons ?? []));
+                              : evaluation.Reasons.FirstOrDefault(reason => reason.Code == "WaitingForFallbackTier")?.Detail ?? string.Join("; ", evaluation.Score?.RejectionReasons ?? []));
             return new RankedReadingRelease(judged.Release, judged.Parsed, 0, because) { Selection = evaluation };
         }
 
@@ -448,8 +450,10 @@ public static class ReadingUsenetSearch
         CancellationToken cancellationToken,
         SearchOptions? options = null,
         QualityProfile? profile = null,
-        ReleaseReliabilityLookup? reliability = null)
+        ReleaseReliabilityLookup? reliability = null,
+        DateTimeOffset? wantedSince = null)
     {
+        var effectiveProfile = profile ?? ReadingQualityProfiles.For(target.Kind);
         var intent = new SearchIntent(target.Kind, target.Title)
         {
             Aliases = target.Aliases ?? [],
@@ -459,9 +463,9 @@ public static class ReadingUsenetSearch
         };
         var result = await indexers.SearchAsync(
             intent,
-            (options ?? new SearchOptions()) with { UsableCount = releases => ReadingReleaseSelector.Rank(releases, target, profile, reliability).Count(ranked => ranked.Score > 0) },
+            (options ?? new SearchOptions()).WithSourcePolicy(effectiveProfile.SourcePolicy) with { UsableCount = releases => ReadingReleaseSelector.Rank(releases, target, profile, reliability, wantedSince).Count(ranked => ranked.Score > 0) },
             cancellationToken);
-        var ranking = ReadingReleaseSelector.Evaluate(result.Releases, target, profile, reliability);
+        var ranking = ReadingReleaseSelector.Evaluate(result.Releases, target, profile, reliability, wantedSince);
         return new ReadingUsenetSearchResult(
             [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
             ranking.Ranked,

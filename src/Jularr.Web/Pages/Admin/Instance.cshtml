@@ -4,6 +4,7 @@
 @section Head {
     <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/home-layout.css" asp-append-version="true" />
 }
 @{
     var ui = Model.Ui;
@@ -98,3 +99,22 @@
         <button class="button button-primary" type="submit">@ui["admin.instance.save"]</button>
     </div>
 </form>
+
+<form method="post" asp-page-handler="Home" class="admset-sections">
+    <section class="admset-section" aria-labelledby="instance-home">
+        <div class="admset-head">
+            <div>
+                <h2 id="instance-home">@ui["admin.instance.home.title"]</h2>
+                <p>@ui["admin.instance.home.description"]</p>
+            </div>
+        </div>
+        <partial name="_HomeLayoutEditor" model="Model.HomeEditor" />
+    </section>
+    <div class="admset-actions">
+        <button class="button button-primary" type="submit">@ui["admin.instance.home.save"]</button>
+    </div>
+</form>
+
+@section Scripts {
+    <script src="~/js/home-layout.js" asp-append-version="true" defer></script>
+}

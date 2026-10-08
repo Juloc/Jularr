@@ -1,5 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Performance;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.ChapterArtwork;
@@ -13,7 +14,8 @@ namespace Jularr.Web.Features.ChapterArtwork;
 /// </summary>
 public sealed class ChapterArtworkAutoGenerator(
     IServiceScopeFactory scopeFactory,
-    ILogger<ChapterArtworkAutoGenerator> logger) : BackgroundService
+    ILogger<ChapterArtworkAutoGenerator> logger,
+    BackgroundWorkGovernor? governor = null) : BackgroundService
 {
     private static readonly TimeSpan InitialDelay = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
@@ -35,7 +37,7 @@ public sealed class ChapterArtworkAutoGenerator(
             using var timer = new PeriodicTimer(Interval);
             do
             {
-                await SweepAsync(stoppingToken);
+                await governor.RunGovernedAsync(BackgroundWorkClass.Maintenance, "ChapterArtwork.Generate", SweepAsync, stoppingToken);
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));
         }

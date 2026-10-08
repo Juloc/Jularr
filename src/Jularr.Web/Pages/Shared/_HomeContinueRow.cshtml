@@ -1,0 +1,19 @@
+@using Jularr.Web.Pages
+@model IndexModel
+@if (Model.ContinueTiles.Count > 0)
+{
+    <section class="home-row" data-home-continue>
+        <div class="home-row-heading">
+            <h2><a href="@Model.ContinueDiscoverUrl">@Model.ContinueHeading</a></h2>
+        </div>
+        <div class="home-row-scroller" data-home-row>
+            <div class="home-row-track home-continue-track" data-home-row-track>
+                @foreach (var tile in Model.ContinueTiles)
+                {
+                    <partial name="_HomeContinueTile" model="tile" />
+                }
+            </div>
+            <partial name="_HomeRowArrows" model="Model.Ui" />
+        </div>
+    </section>
+}

@@ -79,7 +79,7 @@ public sealed class HomeVideoCanonicalTests
         Assert.AreEqual($"2023 · {home.Ui["calendar.media.movie"]} · ★ 7.9", slide.Meta);
         Assert.IsNull(slide.Subtitle, "A Movie has no episode line.");
         var tile = Assert.ContainsSingle(home.ContinueTiles);
-        Assert.IsTrue(tile.ImageIsBackdrop);
+        Assert.IsFalse(tile.ImageIsBackdrop, "The Continue tile is a poster card: the backdrop only stands in for a title without a poster.");
         Assert.AreEqual(40, tile.ProgressPercent);
     }
 

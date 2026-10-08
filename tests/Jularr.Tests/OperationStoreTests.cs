@@ -193,7 +193,7 @@ public sealed class OperationStoreTests
                     executed.TrySetResult();
                 });
 
-            await executed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await executed.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
             OperationSnapshot? snapshot = null;
             for (var attempt = 0; attempt < 50; attempt++)

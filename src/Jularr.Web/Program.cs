@@ -9,7 +9,6 @@ using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Pipeline;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
@@ -40,6 +39,8 @@ using Jularr.Web.Features.Pairing;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.PlaybackSessions;
 using Jularr.Web.Features.Progress;
+using Jularr.Web.Features.Branding;
+using Jularr.Web.Features.Performance;
 using Jularr.Web.Features.Providers;
 using Jularr.Web.Features.ReaderThemes;
 using Jularr.Web.Features.Shell;
@@ -121,6 +122,8 @@ builder.Services.AddScoped<AdminUserProgressService>();
 builder.Services.AddScoped<AdminOverviewService>();
 builder.Services.AddScoped<AdminSessionsService>();
 builder.Services.AddScoped<AdminDashboardService>();
+builder.Services.AddApplicationPerformance();
+builder.Services.AddSingleton<Jularr.Web.Features.Branding.InstanceBrandingStore>();
 builder.Services.AddSingleton<IStackResourceSource, CgroupStackResourceSource>();
 builder.Services.AddSingleton<StackResourceTelemetrySampler>();
 builder.Services.AddSingleton<IStackResourceTelemetry>(services => services.GetRequiredService<StackResourceTelemetrySampler>());
@@ -548,6 +551,10 @@ builder.Services.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(servic
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Search.SearchEvidenceCache>();
 builder.Services.AddScoped<IndexerSearchCoordinator>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestWorkBinder>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.LibraryWorkBackfill>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestProfileAssignment>();
+builder.Services.AddHostedService<Jularr.Web.Features.Acquisition.Access.LibraryWorkBackfillService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestScopeResolver>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestWorkResolver>();
@@ -659,7 +666,6 @@ builder.Services.AddSingleton(_ => new AnimeMonitoringStore("/data"));
 builder.Services.AddSingleton<AnimeImportStore>();
 builder.Services.AddSingleton(_ => new AnimeImportSettingsStore("/data"));
 builder.Services.AddSingleton<IHardLinkCreator, FileSystemHardLinkCreator>();
-builder.Services.AddSingleton(_ => new AcquisitionPolicyStore("/data"));
 builder.Services.AddSingleton(_ => new AniListAutoMonitorSettingsStore("/data"));
 builder.Services.AddScoped<AniListAutoMonitorService>();
 builder.Services.AddScoped<AcquisitionHistoryService>();
@@ -779,8 +785,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseForwardedHeaders();
+app.UseBrandedManifest();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseApplicationPerformance();
 // Authentication runs first so the per-account rate-limit policies ("wake", "playbackStart", "playbackIntent", ...) see the signed-in
 // account; behind it they would all fall back to the shared client IP. The anonymous policies partition by IP either way.
 app.UseAuthentication();
@@ -810,6 +818,7 @@ app.MapReaderThemeCatalog();
 app.MapLanguageInspector();
 app.MapAiActivity();
 app.MapFolderBrowse();
+app.MapBranding();
 app.MapRazorPages();
 
 try

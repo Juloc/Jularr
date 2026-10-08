@@ -1,0 +1,86 @@
+@page
+@using Jularr.Web.Features.Appearance
+@model Jularr.Web.Pages.Settings.HomeModel
+@{
+    var ui = Model.Ui;
+    var title = ui[Model.Welcome ? "home.welcome.title" : "settings.home.title"];
+    ViewData["Title"] = title;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/appearance-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/home-layout.css" asp-append-version="true" />
+}
+
+<header class="page-header">
+    <div>
+        @if (!Model.Welcome)
+        {
+            <a class="back-link" asp-page="/Settings/Index">← @ui["settings.title"]</a>
+        }
+        <h1>@title</h1>
+        <p>@ui[Model.Welcome ? "home.welcome.description" : "settings.home.description"]</p>
+    </div>
+</header>
+
+<form method="post" asp-page-handler="Save" class="home-layout-page">
+    <input type="hidden" name="welcome" value="@Model.Welcome.ToString().ToLowerInvariant()" />
+
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>@ui["home.layout.heading"]</h2>
+        </div>
+        <partial name="_HomeLayoutEditor" model="Model.Editor" />
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>@ui["settings.appearance.modeHeading"]</h2>
+        </div>
+        <div class="appearance-mode">
+            @foreach (var option in new[] { AppTheme.System, AppTheme.Light, AppTheme.Dark })
+            {
+                <label class="appearance-mode-option">
+                    <input type="radio" name="theme" value="@option" checked="@(option == Model.Appearance.ThemeMode)" />
+                    <span class="appearance-mode-swatch appearance-mode-swatch-@option" aria-hidden="true"><i></i><i></i></span>
+                    <span>@ui["theme." + option]</span>
+                </label>
+            }
+        </div>
+        @if (Model.InstanceAppearance.AllowProfileAccentOverride)
+        {
+            <div class="panel-heading">
+                <h2>@ui["settings.appearance.accentHeading"]</h2>
+            </div>
+            <div class="accent-swatches" role="radiogroup" aria-label="@ui["settings.appearance.accentHeading"]">
+                @foreach (var preset in Model.AccentPresets)
+                {
+                    <label class="accent-swatch" style="--swatch: @preset.Seed">
+                        <input type="radio" name="accent" value="@preset.Seed" checked="@(preset.Seed == Model.EffectiveAccent)" />
+                        <span class="accent-swatch-dot" aria-hidden="true"></span>
+                        <span class="accent-swatch-label">@ui["settings.appearance.preset." + preset.Key]</span>
+                    </label>
+                }
+            </div>
+        }
+    </section>
+
+    <div class="home-layout-actions">
+        <button class="button button-primary" type="submit">@ui[Model.Welcome ? "home.welcome.finish" : "home.layout.save"]</button>
+        @if (Model.Welcome)
+        {
+            <button class="button" type="submit" asp-page-handler="Skip" formnovalidate>@ui["home.offer.skip"]</button>
+        }
+    </div>
+</form>
+
+@if (!Model.Welcome && Model.IsCustomized)
+{
+    <form method="post" asp-page-handler="Reset" class="home-layout-page">
+        <p class="muted">@ui["home.layout.resetHelp"]</p>
+        <div class="home-layout-actions"><button class="button" type="submit">@ui["home.layout.reset"]</button></div>
+    </form>
+}
+
+@section Scripts {
+    <script src="~/js/home-layout.js" asp-append-version="true" defer></script>
+}

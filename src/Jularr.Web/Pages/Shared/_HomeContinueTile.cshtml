@@ -14,6 +14,8 @@
         {
             <span class="home-continue-initial" aria-hidden="true">@(Model.Title.Length > 0 ? Model.Title[..1].ToUpperInvariant() : "·")</span>
         }
+        @* The tile is one link: the round icon only shows what a click does (play or read), so the link name stays the title. *@
+        <span class="home-continue-action" aria-hidden="true"><partial name="_DiscoverIcon" model="Model.ActionIcon" /></span>
         @if (Model.ProgressPercent is int percent)
         {
             <span class="home-continue-progress" role="img" aria-label="@Model.ProgressAria"><span style="width:@percent%"></span></span>

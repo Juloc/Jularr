@@ -11,7 +11,6 @@ using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Auth;
@@ -188,8 +187,6 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                             Path.Combine(dataDirectory.FullName, "monitoring")));
                         services.AddSingleton(new AcquisitionOwnershipStore(
                             Path.Combine(dataDirectory.FullName, "ownership")));
-                        services.AddSingleton(new AcquisitionPolicyStore(
-                            Path.Combine(dataDirectory.FullName, "acquisition-policy")));
                         services.AddSingleton(new AnimeQualityProfileStore(
                             new DirectoryInfo(Path.Combine(dataDirectory.FullName, "quality-profiles"))));
                         services.AddSingleton(new AnimeImportStore(

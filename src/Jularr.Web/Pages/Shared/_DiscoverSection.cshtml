@@ -20,6 +20,13 @@
         }
     </text>;
 
+    Func<object?, Microsoft.AspNetCore.Html.IHtmlContent> cards = @<ul class="@layoutClass">
+        @foreach (var card in block.Cards)
+        {
+            <li class="@itemClass"><partial name="_DiscoverCard" model="(card, ui)" /></li>
+        }
+    </ul>;
+
     Func<object?, Microsoft.AspNetCore.Html.IHtmlContent> content = @<text>
         @if (pending)
         {
@@ -69,12 +76,23 @@
         }
         else if (block.Cards.Count > 0)
         {
-            <ul class="@layoutClass">
-                @foreach (var card in block.Cards)
-                {
-                    <li class="@itemClass"><partial name="_DiscoverCard" model="(card, ui)" /></li>
-                }
-            </ul>
+            @if (block.Layout == DiscoverSectionLayout.Grid)
+            {
+                @cards(null)
+            }
+            else
+            {
+                @* The native scrollbar of a shelf is hidden; the chevrons move it by one view (discover.js). *@
+                <div class="dc-shelf" data-dc-shelf>
+                    <button type="button" class="dc-shelf-nav dc-shelf-prev" data-dc-shelf-nav="-1" aria-label="@ui["discover.shelf.previous"]" hidden>
+                        <partial name="_DiscoverIcon" model='"chevron"' />
+                    </button>
+                    @cards(null)
+                    <button type="button" class="dc-shelf-nav dc-shelf-next" data-dc-shelf-nav="1" aria-label="@ui["discover.shelf.next"]" hidden>
+                        <partial name="_DiscoverIcon" model='"chevron"' />
+                    </button>
+                </div>
+            }
         }
     </text>;
 }

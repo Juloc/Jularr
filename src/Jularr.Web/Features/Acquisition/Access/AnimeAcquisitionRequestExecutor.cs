@@ -198,7 +198,6 @@ public sealed class AnimeAcquisitionRequestExecutor(
                 profileId: options.QualityProfileId,
                 indexerIds: existing?.IndexerIds ?? [],
                 cancellationToken,
-                tagIds: existing?.TagIds,
                 targetRootId: existing?.TargetRootId ?? targetRootId);
         }
 

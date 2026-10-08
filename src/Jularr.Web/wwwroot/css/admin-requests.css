@@ -19,7 +19,7 @@
     background: var(--field-bg); color: var(--text); font: inherit;
 }
 .admreq-selects { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.admreq-selects select {
+.admreq-selects select, .admreq-actions select {
     min-width: 0; max-width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
     background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px;
 }

@@ -62,23 +62,30 @@ public sealed class ReadingManualSearchService(
     ManualGrabCoordinator coordinator,
     QualityProfileStore profiles,
     TimeProvider clock,
-    ReleaseReliabilityService? reliability = null)
+    ReleaseReliabilityService? reliability = null,
+    RequestWorkBinder? binder = null)
 {
+    /// <summary>The request with its canonical Work: a request that predates the binding is bound now, so Manual Search resolves the same profile as the automatic search.</summary>
+    private async Task<AcquisitionRequest?> LoadRequestAsync(Guid requestId, CancellationToken cancellationToken) =>
+        await requests.GetAsync(requestId, cancellationToken) is { } request ? binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken) : null;
+
     public async Task<ReadingManualSearchTarget?> GetTargetAsync(Guid requestId, CancellationToken cancellationToken) =>
-        await requests.GetAsync(requestId, cancellationToken) is { } request && IsUsenetSearchable(request)
+        await LoadRequestAsync(requestId, cancellationToken) is { } request && IsUsenetSearchable(request)
             ? await TargetOfAsync(request, cancellationToken)
             : null;
 
     public async Task<ReadingManualSearchResult?> SearchAsync(Guid requestId, bool refresh, SearchDepth depth, CancellationToken cancellationToken)
     {
-        if (await requests.GetAsync(requestId, cancellationToken) is not { } request || !IsUsenetSearchable(request))
+        if (await LoadRequestAsync(requestId, cancellationToken) is not { } request || !IsUsenetSearchable(request))
         {
             return null;
         }
 
         var payload = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request));
-        var profile = await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, profile, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+        var profile = await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
+        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
+        var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh };
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, options, profile, lookup, SelectionContext.SinceCreated(request.CreatedAt));
         var target = await TargetOfAsync(request, cancellationToken);
         var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
         var candidates = search.Ranked.Select(ranked => ToCandidate(ranked, tried, target.CanSearch)).ToArray();
@@ -89,7 +96,7 @@ public sealed class ReadingManualSearchService(
     public async Task<ManualGrabOutcome> GrabAsync(Guid requestId, string releaseIdentity, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseIdentity);
-        if (await requests.GetAsync(requestId, cancellationToken) is not { } request || !IsUsenetSearchable(request))
+        if (await LoadRequestAsync(requestId, cancellationToken) is not { } request || !IsUsenetSearchable(request))
         {
             return new ManualGrabOutcome(ManualGrabStatus.NotFound, null, null);
         }
@@ -100,8 +107,10 @@ public sealed class ReadingManualSearchService(
             return new ManualGrabOutcome(ManualGrabStatus.AlreadySubmitted, null, null);
         }
 
-        var profile = await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true }, profile, reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+        var profile = await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
+        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
+        var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true };
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, ReadingAcquisitionEngine.ToTarget(request.Kind, payload), cancellationToken, options, profile, lookup, SelectionContext.SinceCreated(request.CreatedAt));
         var selected = search.Ranked.FirstOrDefault(ranked => ranked.Release.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
         if (selected is null || selected.Score <= 0 || selected.Release.InternalDownloadUri is null)
         {
@@ -130,7 +139,7 @@ public sealed class ReadingManualSearchService(
     private async Task<ReadingManualSearchTarget> TargetOfAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
         var payload = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request));
-        var profile = await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
+        var profile = await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
         return new ReadingManualSearchTarget(request.Id, request.Kind, payload.Title, payload.Author, payload.RequestedVolume, profile.Name, request.Status, request.StatusMessage, payload.Searches, payload.NextSearchUtc, payload.TriedReleases ?? []);
     }
 

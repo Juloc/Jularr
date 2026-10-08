@@ -19,7 +19,8 @@ public sealed class AcquisitionRequestService(
     AcquisitionRequestSettingsStore requestSettings,
     IJularrEventPublisher events,
     ILogger<AcquisitionRequestService> logger,
-    IInstanceModuleService? instanceModules = null)
+    IInstanceModuleService? instanceModules = null,
+    RequestWorkBinder? workBinder = null)
 {
     /// <summary>Where a profile finds the state of its requests; decision notifications open it.</summary>
     public const string HistoryPath = "/Requests";
@@ -71,6 +72,12 @@ public sealed class AcquisitionRequestService(
         if (await store.FindOpenAsync(draft.Kind, draft.Provider, draft.ExternalId, cancellationToken) is { } open)
         {
             return new AcquisitionSubmission(open, AlreadyRequested: true);
+        }
+
+        // A new request is the durable decision at which a Book, Light Novel or Manga gets its canonical Work; an unresolvable identity stays unbound.
+        if (workBinder is not null && draft.WorkId is null && RequestWorkBinder.Applies(draft.Kind))
+        {
+            draft = draft with { WorkId = await workBinder.ResolveAsync(draft.Kind, draft.Provider, draft.ExternalId, draft.Title, cancellationToken) };
         }
 
         var status = AcquisitionRequestStatus.Approved;
@@ -418,7 +425,9 @@ public sealed class AcquisitionRequestService(
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(exception, "Acquisition request {RequestId} ({Kind}) failed.", request.Id, request.Kind);
-            result = new AcquisitionExecution(AcquisitionRequestStatus.Failed, exception.Message);
+            result = TransientAcquisitionFailure.Describe(exception) is { } problem
+                ? new AcquisitionExecution(AcquisitionRequestStatus.Approved, $"{problem} Trying again soon.")
+                : new AcquisitionExecution(AcquisitionRequestStatus.Failed, exception.Message);
             threw = true;
         }
 

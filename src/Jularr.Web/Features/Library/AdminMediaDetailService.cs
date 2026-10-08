@@ -63,7 +63,6 @@ public sealed class AdminMediaDetailService(
             profileState.Profiles.FirstOrDefault(profile => profile.Id.Equals(profileId, StringComparison.OrdinalIgnoreCase))?.Name ?? profileId,
             [.. profileState.Profiles.Select(profile => (profile.Id, profile.Name))],
             settings?.IndexerIds ?? [],
-            settings?.TagIds ?? [],
             settings?.TargetRootId,
             state.Wanted.Values.Count(item => item.Key.AnimeKey.Equals(anime.Key, StringComparison.OrdinalIgnoreCase)));
 

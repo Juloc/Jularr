@@ -190,6 +190,24 @@ public sealed class SabnzbdAcquisitionTests
     }
 
     [TestMethod]
+    public async Task AFailureOfTheClientsOwnStorageNeitherBlocklistsTheReleaseNorMovesOnToAnotherOne()
+    {
+        await using var environment = await SabnzbdTestSupport.CreateEnvironmentAsync();
+        var store = environment.NewAcquisitionStore();
+        var service = environment.NewAcquisitionService(store);
+        var operations = new OperationStore(environment.Db);
+        await service.StartAsync(Request(2, "a", "b"), CancellationToken.None);
+
+        var failure = await FailInHistoryAsync(environment, operations, "Out of disk space on /downloads");
+        var next = await service.HandleFailedAsync(failure.Operation.Id, failure.FailureKind, failure.Reason, CancellationToken.None);
+
+        Assert.AreEqual(SabnzbdFailureKind.Storage, failure.FailureKind);
+        Assert.IsNull(next, "The release was fine, so no other release is tried.");
+        Assert.AreEqual(1, environment.Client.Grabs.Count);
+        Assert.AreEqual(0, (await store.LoadAsync()).Blocklist.Count, "The release stays usable for the next search.");
+    }
+
+    [TestMethod]
     public async Task RetryRequeuesLatestFailedAttemptAndUnblocksRelease()
     {
         await using var environment = await SabnzbdTestSupport.CreateEnvironmentAsync();

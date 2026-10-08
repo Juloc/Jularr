@@ -13,10 +13,13 @@ using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Admin;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Branding;
 using Jularr.Web.Features.Events;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Performance;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Providers;
 using Jularr.Web.Features.Shell;
@@ -200,6 +203,90 @@ public sealed class AdminDashboardPageRenderTests
     }
 
     [TestMethod]
+    public async Task TheInstanceBrandReachesTheTitleTheMarkAndTheAccentAndGoesAgainWhenReset()
+    {
+        await using var host = await DashboardHost.CreateAsync();
+        var store = host.Resolve<InstanceBrandingStore>();
+
+        var plain = await host.GetHtmlAsync("/Admin/Resources");
+        StringAssert.Contains(plain, "<title>Resources - Jularr</title>");
+        Assert.IsFalse(plain.Contains("by Jularr", StringComparison.Ordinal), "Plain Jularr is not \"Jularr by Jularr\".");
+
+        await store.SaveIdentityAsync("Casa Media", true, 160, false, CancellationToken.None);
+        await store.SetLogoAsync([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0], CancellationToken.None);
+        var branded = await host.GetHtmlAsync("/Admin/Resources");
+
+        StringAssert.Contains(branded, "<title>Resources - Casa Media</title>");
+        StringAssert.Contains(branded, "<meta name=\"application-name\" content=\"Casa Media\" />");
+        StringAssert.Contains(branded, "<span class=\"brand-name\">Casa Media</span>");
+        StringAssert.Contains(branded, "by Jularr", "The product stays named beside the instance's own brand.");
+        StringAssert.Contains(branded, "src=\"/branding/logo?v=1\"");
+        StringAssert.Contains(branded, "<link rel=\"icon\" href=\"/branding/logo?v=1\" />");
+        StringAssert.Contains(branded, $"data-accent=\"{BrandingColor.SeedOf(160)}\"", "Hue branding replaces the accent.");
+
+        Assert.IsFalse(branded.Contains("brand-logo-tint", StringComparison.Ordinal), "The logo keeps its own colours until recolouring is chosen.");
+        await store.SetLogoAsync([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0, 0, 0, 0], CancellationToken.None);
+        await store.SaveIdentityAsync("Casa Media", true, 160, true, CancellationToken.None);
+        var recoloured = await host.GetHtmlAsync("/Admin/Resources");
+        StringAssert.Contains(recoloured, "brand-logo-tint");
+        StringAssert.Contains(recoloured, "brand-logo brand-logo-original");
+        StringAssert.Contains(recoloured, "--brand-logo: url('/branding/logo?v=2')");
+        await store.SaveIdentityAsync("Casa Media", false, 160, true, CancellationToken.None);
+        Assert.IsFalse((await host.GetHtmlAsync("/Admin/Resources")).Contains("brand-logo-tint", StringComparison.Ordinal), "Without the brand colour the original logo is shown.");
+
+        await store.ResetAsync(CancellationToken.None);
+        var reset = await host.GetHtmlAsync("/Admin/Resources");
+        StringAssert.Contains(reset, "<title>Resources - Jularr</title>");
+        Assert.IsFalse(reset.Contains("/branding/logo", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task ResourcesPageShowsWhatTheApplicationIsBusyWithByStableOperationNames()
+    {
+        await using var host = await DashboardHost.CreateAsync();
+        var telemetry = host.Resolve<ApplicationPerformanceTelemetry>();
+        telemetry.Record(PerformanceCategory.Route, "GET Library/Index", TimeSpan.FromMilliseconds(120), PerformanceOutcome.Succeeded);
+        telemetry.Record(PerformanceCategory.Background, "Wanted.Pass", TimeSpan.FromSeconds(2), PerformanceOutcome.Succeeded, TimeSpan.FromMilliseconds(40));
+        telemetry.Record(PerformanceCategory.Provider, "TmdbDiscoveryProvider", TimeSpan.FromMilliseconds(300), PerformanceOutcome.Failed);
+
+        var html = await host.GetHtmlAsync("/Admin/Resources");
+
+        StringAssert.Contains(html, "data-application-performance");
+        StringAssert.Contains(html, "<code>GET Library/Index</code>");
+        StringAssert.Contains(html, "<code>Wanted.Pass</code>");
+        StringAssert.Contains(html, "<code>TmdbDiscoveryProvider</code>");
+        StringAssert.Contains(html, "data-performance-table=\"budget\"");
+        foreach (var workClass in new[] { "Import", "Provider refresh", "Scan", "Maintenance" })
+        {
+            StringAssert.Contains(html, workClass);
+        }
+
+        StringAssert.Contains(html, "href=\"/Admin/Database\"");
+    }
+
+    [TestMethod]
+    public async Task AModuleThatIsOffSendsNoScriptsOfItsOwnOnAnyPage()
+    {
+        await using var host = await DashboardHost.CreateAsync();
+        var modules = host.Resolve<IInstanceModuleService>();
+
+        var full = await host.GetHtmlAsync("/Admin/Resources");
+        await modules.SaveAsync(InstanceModulePresets.Apply(InstancePreset.MediaManager, InstanceModuleSettings.Default));
+        var manager = await host.GetHtmlAsync("/Admin/Resources");
+        await modules.SaveAsync(InstanceModuleSettings.Default
+            .With(InstanceModule.Playback, false).With(InstanceModule.Manga, false).With(InstanceModule.Novel, false).With(InstanceModule.Book, false));
+        var neither = await host.GetHtmlAsync("/Admin/Resources");
+
+        StringAssert.Contains(full, "/js/offline-media.js");
+        StringAssert.Contains(full, "/js/offline-library.js");
+        Assert.IsFalse(manager.Contains("/js/offline-media", StringComparison.Ordinal), "Playback is off: no offline media script.");
+        StringAssert.Contains(manager, "/js/offline-library.js", "Books and manga are still served, so their offline library stays.");
+        Assert.IsFalse(neither.Contains("/js/offline-", StringComparison.Ordinal), "Nothing that needs offline copies is on.");
+        Assert.IsFalse(neither.Contains("id=\"offline-library-text\"", StringComparison.Ordinal));
+        Assert.IsFalse(full.Contains("/js/sakura.js", StringComparison.Ordinal), "The effect is off by default, so its script is not sent.");
+    }
+
+    [TestMethod]
     public async Task ResourcesPageKeepsTheStackHistoryAndMountedStorageSeparateFromTheHost()
     {
         await using var host = await DashboardHost.CreateAsync();
@@ -356,6 +443,9 @@ public sealed class AdminDashboardPageRenderTests
                         services.AddSingleton(new AcquisitionHealthStore(acquisition));
                         services.AddProviderFramework();
                         services.AddSingleton<IStackResourceTelemetry>(telemetry);
+                        services.AddApplicationPerformance();
+                        services.AddSingleton<InstanceBrandingStore>();
+                        services.AddSingleton<IInstanceModuleService>(new InstanceModuleStore(data.FullName));
                         services.AddScoped<AdminDashboardService>();
                     })
                     .Configure(app =>
@@ -491,6 +581,8 @@ public sealed class AdminDashboardPageRenderTests
             }
 
         }
+
+        public T Resolve<T>() where T : notnull => host.Services.GetRequiredService<T>();
 
         public async Task<string> GetHtmlAsync(string path)
         {

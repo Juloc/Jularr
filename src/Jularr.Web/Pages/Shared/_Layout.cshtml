@@ -1,6 +1,9 @@
 @using Jularr.Web.Data
 @using Jularr.Web.Features.Auth
+@using Jularr.Web.Features.Instance
+@using Microsoft.Extensions.DependencyInjection
 @using Jularr.Web.Features.Appearance
+@using Jularr.Web.Features.Branding
 @using Jularr.Web.Features.Localization
 @using Jularr.Web.Frontend
 @inject AppDbContext LocalizationDb
@@ -24,9 +27,19 @@
         ? appearance.SakuraMode
         : AppSakura.Off;
     var themeIconType = activeTheme.UsesOriginalArtwork ? "image/svg+xml" : "image/png";
+    // The instance's own identity (#876): its name in the title and the install name, its logo as the icon, and, while hue branding is on, its hue as the accent for everyone.
+    var branding = Context.RequestServices.GetService<InstanceBrandingStore>() is { } brandingStore
+        ? await brandingStore.GetAsync(Context.RequestAborted)
+        : InstanceBrandingSettings.Default;
     var palette = AccentPalette.Build(
-        instanceAppearance.AllowProfileAccentOverride ? appearance.AccentColor : null);
+        branding.HueSeed ?? (instanceAppearance.AllowProfileAccentOverride ? appearance.AccentColor : null));
     var frontendApp = ViteAssets.Resolve("frontend/entries/app.ts");
+    // A module that is off costs the browser nothing: its scripts are not sent, parsed or initialised on any page.
+    var moduleSettings = isAuthenticated && Context.RequestServices.GetService<IInstanceModuleService>() is { } moduleService
+        ? await moduleService.GetAsync(Context.RequestAborted)
+        : InstanceModuleSettings.Default;
+    var servesPlayback = moduleSettings.IsEnabled(InstanceModule.Playback);
+    var servesReading = moduleSettings.IsEnabled(InstanceModule.Manga) || moduleSettings.IsEnabled(InstanceModule.Novel) || moduleSettings.IsEnabled(InstanceModule.Book);
 
     ViewData["UiTextBundle"] = ui;
     ViewData["AppThemeMode"] = appTheme;
@@ -40,18 +53,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="@palette.For(appTheme == AppTheme.Dark ? AppTheme.Dark : AppTheme.Light)["--browser-theme-color"]" data-app-theme-color />
-    <meta name="application-name" content="Jularr" />
+    <meta name="application-name" content="@branding.DisplayName" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Jularr" />
-    <title>@ViewData["Title"] - Jularr</title>
+    <meta name="apple-mobile-web-app-title" content="@branding.DisplayName" />
+    <title>@ViewData["Title"] - @branding.DisplayName</title>
     <link rel="manifest" href="~/manifest.webmanifest" />
-    <link rel="icon" href="@activeTheme.LogoPath" type="@themeIconType" />
+    @if (branding.LogoUrl is { } brandIcon)
+    {
+        <link rel="icon" href="@brandIcon" />
+    }
+    @if (branding.LogoUrl is null)
+    {
+        <link rel="icon" href="@activeTheme.LogoPath" type="@themeIconType" />
+    }
     <link rel="apple-touch-icon" sizes="180x180" href="~/icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/theme-catalog.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/sakura.css" asp-append-version="true" />
     @foreach (var stylesheet in frontendApp.Stylesheets)
     {
         <link rel="stylesheet" href="@stylesheet" />
@@ -63,7 +82,12 @@
     <style id="app-accent-palette">@Html.Raw(palette.ToStyleSheet())</style>
     <script type="application/json" id="app-shell-text">@Json.Serialize(ui.WithPrefix("pwa."))</script>
     <script src="~/js/app-theme.js" asp-append-version="true" defer></script>
-    <script src="~/js/sakura.js" asp-append-version="true" defer></script>
+    @if (effectiveSakura != AppSakura.Off || ViewData["NeedsSakura"] is true)
+    {
+        @* Settings/Appearance asks for the script as well, because switching the effect on there starts it on the running page. *@
+        <link rel="stylesheet" href="~/css/sakura.css" asp-append-version="true" />
+        <script src="~/js/sakura.js" asp-append-version="true" defer></script>
+    }
     <script src="~/js/pwa.js" asp-append-version="true" defer></script>
     @if (frontendApp.EntryScript is not null)
     {
@@ -75,17 +99,26 @@
            the "Save offline" action) because the compact global download indicator in
            _AppAccountFooter.cshtml needs the manager everywhere. Previously duplicated per-page;
            see _OfflineLibraryAction.cshtml and Settings/Offline.cshtml. *@
-        <script type="application/json" id="offline-library-text">@Json.Serialize(ui.WithPrefix("offlineLibrary."))</script>
-        <script src="~/js/offline-library.js" asp-append-version="true" defer></script>
-        <script src="~/js/offline-library-storage.js" asp-append-version="true" defer></script>
-        <script src="~/js/offline-library-manager.js" asp-append-version="true" defer></script>
-        <script src="~/js/offline-library-ui.js" asp-append-version="true" defer></script>
-        @* Media packages are separate from the chapter-only offline library. They keep binary media
-           profile-scoped in IndexedDB and expose it through the service worker, never CacheStorage. *@
-        <script src="~/js/offline-media.js" asp-append-version="true" defer></script>
-        <script src="~/js/offline-media-storage.js" asp-append-version="true" defer></script>
-        <script src="~/js/offline-media-manager.js" asp-append-version="true" defer></script>
-        <script src="~/js/offline-media-ui.js" asp-append-version="true" defer></script>
+        @if (servesReading || servesPlayback)
+        {
+            <script type="application/json" id="offline-library-text">@Json.Serialize(ui.WithPrefix("offlineLibrary."))</script>
+        }
+        @if (servesReading || servesPlayback)
+        {
+            <script src="~/js/offline-library.js" asp-append-version="true" defer></script>
+            <script src="~/js/offline-library-storage.js" asp-append-version="true" defer></script>
+            <script src="~/js/offline-library-manager.js" asp-append-version="true" defer></script>
+            <script src="~/js/offline-library-ui.js" asp-append-version="true" defer></script>
+        }
+        @if (servesPlayback)
+        {
+            @* Media packages are separate from the chapter-only offline library. They keep binary media
+               profile-scoped in IndexedDB and expose it through the service worker, never CacheStorage. *@
+            <script src="~/js/offline-media.js" asp-append-version="true" defer></script>
+            <script src="~/js/offline-media-storage.js" asp-append-version="true" defer></script>
+            <script src="~/js/offline-media-manager.js" asp-append-version="true" defer></script>
+            <script src="~/js/offline-media-ui.js" asp-append-version="true" defer></script>
+        }
         @* Owner-only "Manage" sheet (#519): loaded on every authenticated page, like the offline
            library scripts above, so any consumer detail page can open one. *@
         <link rel="stylesheet" href="~/css/manage-sheet.css" asp-append-version="true" />

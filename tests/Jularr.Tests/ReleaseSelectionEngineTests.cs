@@ -1,6 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Prowlarr;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Search;
@@ -179,9 +178,14 @@ public sealed class ReleaseSelectionEngineTests
     }
 
     [TestMethod]
-    public void ADelayProfileIsTheSharedEnginesTimedFallbackLadder()
+    public void AProfilesFallbackTierIsTheSharedEnginesTimedLadder()
     {
-        var ladder = AcquisitionDelayEngine.WithDelayAsFallbackTier(AnimeQualityProfiles.CreateDefaultAnime1080p(), new AnimeDelayProfile("delay-1", "Wait for BluRay", 60, null, [], false));
+        var profile = AnimeQualityProfiles.CreateDefaultAnime1080p();
+        var ladder = profile with
+        {
+            AllowedQualities = ["BLURAY-1080p"],
+            FallbackTiers = [new FallbackTier(60, [.. profile.AllowedQualities.Except(["BLURAY-1080p"], StringComparer.OrdinalIgnoreCase)])]
+        };
         var web = Candidate("web", "Show.S01E01.1080p.WEB-DL.H264-GRP");
         var bluRay = Candidate("bluray", "Show.S01E01.1080p.BluRay.H264-GRP");
 

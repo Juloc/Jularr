@@ -20,6 +20,11 @@ public sealed class IndexerSearchCoordinator(
     ILogger<IndexerSearchCoordinator> logger,
     SearchEvidenceCache? evidence = null)
 {
+    /// <summary>How far a profile's preferred source moves up the indexer order: far enough to beat any configured priority, never a reason to accept a release.</summary>
+    private const int PreferredSourceBoost = 10_000;
+
+    private const string SourcePolicyBlockMessage = "The profile's sources leave no enabled indexer to search for this kind of search; no other indexer was asked.";
+
     private readonly SearchEvidenceCache cache = evidence ?? new SearchEvidenceCache();
 
     public async Task<bool> HasEnabledIndexerAsync(CancellationToken cancellationToken) =>
@@ -60,12 +65,39 @@ public sealed class IndexerSearchCoordinator(
             .ToArray();
         if (entries.Length == 0)
         {
-            return AcquisitionSearchResult.Empty;
+            // A restriction that leaves nothing is reported, never widened: the caller must be able to tell it from "nothing found".
+            return options.AllowedEntryIds is null ? AcquisitionSearchResult.Empty : AcquisitionSearchResult.Empty with { SourcePolicyBlock = SourcePolicyBlockMessage };
         }
 
+        // A fallback-only entry is asked only when the primary entries returned no release at all, so a backup source costs nothing while they answer.
         var session = new SearchSession(options);
+        var fallbackOnly = options.FallbackOnlyEntryIds;
+        var primary = fallbackOnly is { Count: > 0 } ? entries.Where(entry => !fallbackOnly.Contains(entry.Id)).ToArray() : entries;
+        var runs = await RunEntriesAsync(primary, kind, planFor, options, budget, session, cancellationToken);
+        if (fallbackOnly is { Count: > 0 } && !runs.Any(run => run.Hits.Count > 0))
+        {
+            runs = [.. runs, .. await RunEntriesAsync([.. entries.Where(entry => fallbackOnly.Contains(entry.Id))], kind, planFor, options, budget, session, cancellationToken)];
+        }
+
+        var hits = runs.SelectMany(run => run.Hits).Select(hit => options.PreferredEntryIds?.Contains(hit.EntryId) == true ? hit with { Priority = hit.Priority - PreferredSourceBoost } : hit).ToArray();
+        return new AcquisitionSearchResult(
+            ReleaseDeduplicator.Merge(hits),
+            [.. runs.Select(run => run.Outcome)],
+            [.. runs.SelectMany(run => run.Trace)],
+            hits.Length);
+    }
+
+    private async Task<IndexerRun[]> RunEntriesAsync(
+        IReadOnlyList<IndexerEntry> entries,
+        MediaAcquisitionKind kind,
+        Func<IndexerCapabilities?, IReadOnlyList<PlannedQuery>> planFor,
+        SearchOptions options,
+        SearchBudget budget,
+        SearchSession session,
+        CancellationToken cancellationToken)
+    {
         using var gate = new SemaphoreSlim(budget.MaxConcurrentIndexers);
-        var runs = await Task.WhenAll(entries.Select(async entry =>
+        return await Task.WhenAll(entries.Select(async entry =>
         {
             await gate.WaitAsync(cancellationToken);
             try
@@ -77,13 +109,6 @@ public sealed class IndexerSearchCoordinator(
                 gate.Release();
             }
         }));
-
-        var hits = runs.SelectMany(run => run.Hits).ToArray();
-        return new AcquisitionSearchResult(
-            ReleaseDeduplicator.Merge(hits),
-            [.. runs.Select(run => run.Outcome)],
-            [.. runs.SelectMany(run => run.Trace)],
-            hits.Length);
     }
 
     private async Task<IndexerRun> RunIndexerAsync(
@@ -124,6 +149,18 @@ public sealed class IndexerSearchCoordinator(
             ? entry with { Settings = entry.Settings with { IndexerIds = [.. prowlarrIds] } }
             : entry;
         var categories = SearchPlanner.Categories(kind, entry).ToArray();
+
+        // An indexer that stopped offering the categories of a media type (its caps say so) is not asked for it: its answers would come from some other section.
+        if (capabilities is { Categories.Length: > 0 })
+        {
+            var offered = categories.Where(capabilities.Offers).ToArray();
+            if (offered.Length == 0)
+            {
+                return IndexerRun.Skipped(entry, $"Skipped: the indexer offers none of the categories searched for {kind} ({string.Join(", ", categories)}). Test it again after changing them.");
+            }
+
+            categories = offered;
+        }
 
         var hits = new List<SearchHit>();
         var trace = new List<SearchTraceLine>();

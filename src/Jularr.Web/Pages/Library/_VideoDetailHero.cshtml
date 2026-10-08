@@ -64,6 +64,8 @@
         { State: ConsumerAcquisitionState.GettingMedia, ProgressPercent: int percent } => ui.Format("acquisition.instant.progress", ("state", ui[ConsumerAcquisitionLabels.StateKey(requestState)]), ("percent", percent)),
         _ => ui[ConsumerAcquisitionLabels.StateKey(requestState)]
     };
+    // The request the pill speaks of, not the list of every request; a profile that is shown the pill may read that request.
+    var requestHref = detail.Request?.Open is { } openRequest ? AcquisitionRequestService.StatusPath(openRequest.Id) : AcquisitionRequestService.HistoryPath;
     string RequestStateIcon(AcquisitionRequestStatus status) =>
         AnimeDetailView.AvailabilityName(AnimeDetailView.Availability(AnimeEpisodeMediaFacts.None, status, null, null));
 }
@@ -161,7 +163,7 @@
                 @* A request that is still being worked on is followed live by instant-play.js; every other state is simply shown. *@
                 if (observes)
                 {
-                    <a class="ad-secondary ip-observe" href="@AcquisitionRequestService.HistoryPath" title="@ui["discover.request.viewStatus"]"
+                    <a class="ad-secondary ip-observe" href="@requestHref" title="@ui["discover.request.viewStatus"]"
                        data-instant-play-observe
                        data-ip-request-id="@detail.Request!.Open!.Id"
                        data-ip-work-id="@detail.WorkId"
@@ -175,7 +177,7 @@
                 }
                 else
                 {
-                    <a class="ad-secondary ip-observe" href="@AcquisitionRequestService.HistoryPath" title="@ui["discover.request.viewStatus"]">
+                    <a class="ad-secondary ip-observe" href="@requestHref" title="@ui["discover.request.viewStatus"]">
                         <partial name="_AnimeDetailIcon" model="RequestStateIcon(status)" />
                         <span>@requestPill</span>
                     </a>

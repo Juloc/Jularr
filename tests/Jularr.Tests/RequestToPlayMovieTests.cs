@@ -86,7 +86,7 @@ public sealed class RequestToPlayMovieTests
         Assert.AreEqual(work.Id, waiting.WorkId);
         Assert.AreEqual(LibraryAvailabilityState.Requested, LibraryBrowse.IndicatorOf(waiting));
         var pending = await world.Pages.GetOkAsync($"/Library/Movie/{work.Id}");
-        RequestToPlayAssert.Contains(pending, "href=\"/Requests\"");
+        RequestToPlayAssert.Contains(pending, $"href=\"/Requests/{request.Id}\"");
         Assert.IsFalse(pending.Contains($"/Library/Watch/{work.Id}", StringComparison.Ordinal), "Nothing is playable before the import.");
 
         // Wanted: once the search is due and a release exists, the pass searches and grabs exactly once.

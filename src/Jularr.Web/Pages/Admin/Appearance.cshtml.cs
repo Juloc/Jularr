@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Appearance;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Branding;
 using Jularr.Web.Features.Localization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,9 @@ namespace Jularr.Web.Pages.Admin;
 
 /// <summary>Controls the instance default and which personal appearance overrides are permitted.</summary>
 [Authorize(Policy = JularrPolicies.AdminSystem)]
-public sealed class AppearanceModel(AppDbContext db) : PageModel
+// The only upload on this page is the logo (at most BrandingValidation.MaxLogoBytes), so nothing larger is accepted or buffered.
+[RequestSizeLimit(1_048_576)]
+public sealed class AppearanceModel(AppDbContext db, InstanceBrandingStore branding) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
     public IReadOnlyList<AppThemeDefinition> Themes => ThemeCatalog.All;
@@ -24,9 +27,102 @@ public sealed class AppearanceModel(AppDbContext db) : PageModel
     [BindProperty]
     public bool AllowProfileAccentOverride { get; set; }
 
+    public InstanceBrandingSettings Branding { get; private set; } = InstanceBrandingSettings.Default;
+
+    [BindProperty]
+    public string? BrandName { get; set; }
+
+    [BindProperty]
+    public bool HueBranding { get; set; }
+
+    [BindProperty]
+    public int? Hue { get; set; }
+
+    [BindProperty]
+    public bool RecolourLogo { get; set; }
+
+    /// <summary>The violet of the Jularr accent, where the colour picker starts before a colour was ever chosen.</summary>
+    public const int DefaultBrandHue = 262;
+
+    /// <summary>The accent the stored hue stands for; the picker opens on it and the preview starts from it.</summary>
+    public string BrandColour => BrandingColor.SeedOf(Hue ?? DefaultBrandHue);
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         await LoadAsync(cancellationToken);
+    }
+
+    /// <summary>The instance name; the logo and the brand colour have their own forms.</summary>
+    public async Task<IActionResult> OnPostBrandingAsync(CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (!BrandingValidation.TryNormalizeName(BrandName, out var name))
+        {
+            TempData["Status"] = Ui["admin.branding.invalid"];
+            return RedirectToPage();
+        }
+
+        var current = await branding.GetAsync(cancellationToken);
+        await branding.SaveIdentityAsync(name, current.HueBranding, current.Hue, current.RecolourLogo, cancellationToken);
+        TempData["Status"] = Ui["admin.branding.saved"];
+        return RedirectToPage();
+    }
+
+    /// <summary>The brand colour switch and the colour. The colour is kept while the switch is off, so turning it on again needs no new choice.</summary>
+    public async Task<IActionResult> OnPostColourAsync(CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        var current = await branding.GetAsync(cancellationToken);
+        var hue = Hue ?? current.Hue;
+        if (hue is < 0 or > 359 || HueBranding && hue is null)
+        {
+            TempData["Status"] = Ui["admin.branding.colour.invalid"];
+            return RedirectToPage();
+        }
+
+        await branding.SaveIdentityAsync(current.Name, HueBranding, hue, RecolourLogo && current.LogoRecolourable, cancellationToken);
+        TempData["Status"] = Ui["admin.branding.saved"];
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostLogoAsync(IFormFile? logo, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (logo is null || logo.Length > BrandingValidation.MaxLogoBytes)
+        {
+            TempData["Status"] = Ui[logo is null ? "admin.branding.logo.empty" : "admin.branding.logo.tooLarge"];
+            return RedirectToPage();
+        }
+
+        await using var upload = logo.OpenReadStream();
+        using var buffer = new MemoryStream();
+        await upload.CopyToAsync(buffer, cancellationToken);
+        var problem = await branding.SetLogoAsync(buffer.ToArray(), cancellationToken);
+        TempData["Status"] = Ui[problem switch
+        {
+            BrandingLogoProblem.None => "admin.branding.logo.saved",
+            BrandingLogoProblem.Empty => "admin.branding.logo.empty",
+            BrandingLogoProblem.TooLarge => "admin.branding.logo.tooLarge",
+            BrandingLogoProblem.UnsafeVector => "admin.branding.logo.unsafe",
+            _ => "admin.branding.logo.unsupported"
+        }];
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostRemoveLogoAsync(CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        await branding.RemoveLogoAsync(cancellationToken);
+        TempData["Status"] = Ui["admin.branding.logo.removed"];
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostResetBrandingAsync(CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        await branding.ResetAsync(cancellationToken);
+        TempData["Status"] = Ui["admin.branding.reset.done"];
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
@@ -56,5 +152,10 @@ public sealed class AppearanceModel(AppDbContext db) : PageModel
         DefaultThemeId = settings.DefaultThemeId;
         AllowProfileThemeOverride = settings.AllowProfileThemeOverride;
         AllowProfileAccentOverride = settings.AllowProfileAccentOverride;
+        Branding = await branding.GetAsync(cancellationToken);
+        BrandName = Branding.Name;
+        HueBranding = Branding.HueBranding;
+        RecolourLogo = Branding.RecolourLogo;
+        Hue = Branding.Hue ?? DefaultBrandHue;
     }
 }

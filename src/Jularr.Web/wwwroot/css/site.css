@@ -890,6 +890,22 @@ main > :is(.panel, .settings-grid) + :is(.panel, .settings-grid) { margin-top: 1
     background: var(--panel-overlay);
     box-shadow: 0 24px 70px rgba(0,0,0,.28);
 }
+/* The instance's own brand (#876): the logo in the mark's square, the name with a small secondary "by Jularr" under it. */
+.brand-logo { width: 36px; height: 36px; object-fit: contain; }
+/* Recoloured logo: the uploaded file only supplies the silhouette (its alpha, antialiased edges and aspect); every pixel is the accent colour. */
+.brand-logo-tint { display: none; width: 36px; height: 36px; background-color: var(--accent); }
+@supports ((-webkit-mask-image: url("a.svg")) or (mask-image: url("a.svg"))) {
+    .brand-logo-tint {
+        display: inline-block;
+        -webkit-mask: var(--brand-logo) center / contain no-repeat;
+        mask: var(--brand-logo) center / contain no-repeat;
+        mask-mode: alpha;
+    }
+    .brand-logo-original { display: none; }
+}
+.brand-text { display: grid; min-width: 0; line-height: 1.15; }
+.brand-text .brand-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-by { color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
 .auth-brand {
     display: flex;
     align-items: center;
@@ -1426,6 +1442,7 @@ main > :is(.panel, .settings-grid) + :is(.panel, .settings-grid) { margin-top: 1
     .app-breadcrumb { display: none; }
     .app-search { min-height: 42px; padding: 0 16px; }
     /* The wordmark stays available to assistive technology; the phone header shows the mark only. */
+    .brand-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .brand-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 html { scroll-padding-top: var(--app-header-offset); }

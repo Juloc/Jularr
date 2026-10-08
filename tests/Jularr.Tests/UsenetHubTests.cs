@@ -33,7 +33,7 @@ public sealed class UsenetHubTests
                 [MediaAcquisitionKind.Book] = "books"
             }));
 
-        var check = UsenetModel.BuildCategoryCheck(UiTextBundle.English, [client]);
+        var check = UsenetModel.BuildCategoryCheck(UiTextBundle.English, [client], [MediaAcquisitionKind.Anime, MediaAcquisitionKind.Book, MediaAcquisitionKind.Manga, MediaAcquisitionKind.LightNovel]);
 
         Assert.AreEqual(UsenetCheckState.Warning, check.State);
         StringAssert.Contains(check.Detail, "Manga, Light novels");
@@ -59,9 +59,25 @@ public sealed class UsenetHubTests
                 [MediaAcquisitionKind.LightNovel] = "ln"
             }));
 
-        var check = UsenetModel.BuildCategoryCheck(UiTextBundle.English, [books, reading]);
+        var check = UsenetModel.BuildCategoryCheck(UiTextBundle.English, [books, reading], [MediaAcquisitionKind.Anime, MediaAcquisitionKind.Book, MediaAcquisitionKind.Manga, MediaAcquisitionKind.LightNovel]);
 
         Assert.AreEqual(UsenetCheckState.Ok, check.State);
+    }
+
+    [TestMethod]
+    public void EveryMediaTypeTheManagerServesIsAskedForACategoryIncludingMusicAndMovies()
+    {
+        var withoutMusic = Client(new DownloadClientSettings(
+            "http://sab:8080",
+            new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Movie] = "movies", [MediaAcquisitionKind.Tv] = "tv" }));
+
+        var all = UsenetModel.BuildCategoryCheck(UiTextBundle.English, [withoutMusic]);
+        var movieAndTvOnly = UsenetModel.BuildCategoryCheck(UiTextBundle.English, [withoutMusic], [MediaAcquisitionKind.Movie, MediaAcquisitionKind.Tv]);
+
+        Assert.AreEqual(UsenetCheckState.Warning, all.State);
+        StringAssert.Contains(all.Detail, "Music");
+        Assert.AreEqual(UsenetCheckState.Ok, movieAndTvOnly.State, "A type whose module is off is not asked for.");
+        Assert.AreEqual(UsenetCheckState.Ok, UsenetModel.BuildCategoryCheck(UiTextBundle.English, [Client(DownloadClientSettings.CreateDefault("http://sab:8080"))], [MediaAcquisitionKind.Music]).State);
     }
 
     [TestMethod]

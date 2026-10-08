@@ -31,7 +31,8 @@ public sealed class ReadingAcquisitionEngine(
     DownloadClientSubmissionService downloads,
     ReleaseRequestTracker tracker,
     QualityProfileStore? profiles = null,
-    ReleaseReliabilityService? reliability = null)
+    ReleaseReliabilityService? reliability = null,
+    RequestWorkBinder? binder = null)
 {
     public const string OperationKind = "reading-usenet-download";
 
@@ -47,6 +48,8 @@ public sealed class ReadingAcquisitionEngine(
                 "Reading acquisition only supports Manga and Light Novels.");
         }
 
+        // A request made before the Work binding, or one whose identity could not be resolved then, is bound now; the profile below is the Work's.
+        request = binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken);
         var payload = ReadPayload(request, initialTarget);
         var target = ToTarget(request.Kind, payload);
 
@@ -65,10 +68,11 @@ public sealed class ReadingAcquisitionEngine(
                 "SABnzbd is not configured.");
         }
 
-        var profile = profiles is null ? null : await profiles.ResolveAsync(request.Kind, workId: null, cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken));
+        var profile = profiles is null ? null : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
+        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
+        var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile, reliability: lookup, wantedSince: SelectionContext.SinceCreated(request.CreatedAt));
 
-        return await GrabAsync(request, payload, Candidates(search), search.FailureMessage, cancellationToken);
+        return await GrabAsync(request, payload, Candidates(search), search.FailureMessage, cancellationToken, searchUnavailable: search.Search?.EveryIndexerFailed == true);
     }
 
     /// <summary>
@@ -81,7 +85,8 @@ public sealed class ReadingAcquisitionEngine(
         IReadOnlyList<ReleaseRequestCandidate> candidates,
         string noReleaseReason,
         CancellationToken cancellationToken,
-        ManualGrabProgress? progress = null) =>
+        ManualGrabProgress? progress = null,
+        bool searchUnavailable = false) =>
         await tracker.ContinueAsync(
             request,
             payload,
@@ -115,7 +120,8 @@ public sealed class ReadingAcquisitionEngine(
                     outcome.OperationId,
                     outcome.Message);
             },
-            cancellationToken);
+            cancellationToken,
+            searchUnavailable);
 
     /// <summary>The releases the reading matcher accepted, best first; each is tried once by its identity.</summary>
     public static IReadOnlyList<ReleaseRequestCandidate> Candidates(

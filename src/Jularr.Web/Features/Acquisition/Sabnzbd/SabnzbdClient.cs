@@ -466,6 +466,11 @@ public sealed class SabnzbdClient(HttpClient httpClient) : ISabnzbdClient
             return SabnzbdFailureKind.Password;
         }
 
+        if (ContainsAny(text, "disk full", "out of disk", "no space", "not enough space", "insufficient space", "free space", "permission denied", "access denied", "read-only", "read only", "cannot create", "unable to create", "can't create", "unable to write", "cannot write", "i/o error", "no such file or directory"))
+        {
+            return SabnzbdFailureKind.Storage;
+        }
+
         if (ContainsAny(text, "unpack", "extract", "unrar", "rar ", "7zip", "7-zip"))
         {
             return SabnzbdFailureKind.Unpack;

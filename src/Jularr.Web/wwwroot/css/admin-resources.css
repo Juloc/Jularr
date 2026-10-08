@@ -86,3 +86,38 @@
     .resources-summary-metrics article:last-child { border-bottom: 0; }
     .resources-service dl { grid-template-columns: 1fr; }
 }
+
+/* Application performance (Admin → Resources) and the database diagnostics page share these tables. */
+.perf-panel { display: grid; gap: 18px; padding: 18px 20px 20px; }
+.perf-panel .panel-heading { align-items: end; }
+.perf-panel h2, .perf-panel h3, .perf-panel p { margin: 0; }
+.perf-panel h2, .perf-panel .panel-heading h2 { font-size: 18px; }
+.perf-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; border: 1px solid var(--border); border-radius: 12px; }
+.perf-tiles > div { display: grid; gap: 3px; min-width: 0; padding: 12px 16px; border-inline-end: 1px solid var(--border); }
+.perf-tiles > div:last-child { border-inline-end: 0; }
+.perf-tiles dt, .perf-tiles small { color: var(--muted); font-size: 12px; }
+.perf-tiles dt { font-weight: 700; }
+.perf-tiles dd { margin: 0; font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.perf-tables { display: grid; gap: 20px; }
+.perf-table-block { display: grid; gap: 10px; min-width: 0; }
+.perf-table-block h3 { font-size: 14px; }
+.perf-scroll { overflow-x: auto; }
+.perf-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.perf-table th, .perf-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: start; white-space: nowrap; }
+.perf-table thead th { color: var(--muted); font-size: 12px; font-weight: 700; }
+.perf-table tbody th { max-width: 340px; overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
+.perf-table .num { text-align: end; }
+.perf-table code { font-size: 12px; }
+.perf-table .perf-query { max-width: 520px; overflow: hidden; text-overflow: ellipsis; }
+.perf-limited { color: var(--muted); font-size: 13px; }
+.perf-warnings { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.perf-warnings li { padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--warning-text) 40%, var(--border)); border-radius: 10px; background: color-mix(in srgb, var(--warning-text) 8%, var(--surface)); font-size: 13px; }
+.perf-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.perf-tabs a { padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; font-weight: 700; text-decoration: none; }
+.perf-tabs a[aria-current="true"] { border-color: var(--accent-text); color: var(--text); }
+.perf-hint { color: var(--warning-text); font-size: 12px; font-weight: 700; }
+@media (max-width: 720px) {
+    .perf-panel { padding: 14px; }
+    .perf-tiles > div { border-inline-end: 0; border-bottom: 1px solid var(--border); }
+    .perf-tiles > div:last-child { border-bottom: 0; }
+}

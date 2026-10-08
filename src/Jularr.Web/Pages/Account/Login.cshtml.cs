@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Devices;
+using Jularr.Web.Features.Home;
 using Jularr.Web.Features.Localization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -110,7 +111,8 @@ public sealed class LoginModel(OwnerAuthService ownerAuth, SecurityEventLog secu
             owner.UserName,
             HttpContext.Connection.RemoteIpAddress?.ToString());
 
-        return LocalRedirect(ReturnUrl);
+        // Only a sign-in without a destination follows the landing preference; a link the viewer came from is always honoured.
+        return ReturnUrl == "/" && await new HomeLayoutStore(db).GetLandingAsync(owner.Id, cancellationToken) == HomeLanding.Library ? LocalRedirect("/Library") : LocalRedirect(ReturnUrl);
     }
 
     private string SafeReturnUrl() =>

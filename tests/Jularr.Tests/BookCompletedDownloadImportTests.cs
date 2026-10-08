@@ -6,6 +6,7 @@ using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Books;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Operations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -61,6 +62,45 @@ public sealed class BookCompletedDownloadImportTests
         Assert.AreEqual(2, operations.Count);
         Assert.IsTrue(operations.All(operation => operation.Status == OperationStatus.Succeeded && operation.ProfileId == "owner"));
         Assert.AreEqual(Path.GetFullPath(inbox), operations[0].Subject);
+    }
+
+    [TestMethod]
+    public async Task ABookRequestsDownloadBecomesTheLibraryEntryOfItsWorkAndAnImportRetryChangesNothing()
+    {
+        await using var host = await Host.CreateAsync();
+        var request = await RequestWorkTestSupport.CreateRequestAsync(host.Db, MediaAcquisitionKind.Book, bound: true, provider: "books-catalog", externalId: "OL1M", title: "Test Book");
+        var downloads = host.Folder("downloads");
+        await WriteEpubAsync(Path.Combine(downloads, "Test.Book.epub"));
+
+        var first = await host.Adapter.ImportAsync(new CompletedDownloadImportRequest(request, null, downloads), CancellationToken.None);
+        var retry = await host.Adapter.ImportAsync(new CompletedDownloadImportRequest(request, null, downloads), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, first.Disposition, first.Message);
+        Assert.AreEqual(CompletedDownloadImportDisposition.Completed, retry.Disposition, retry.Message);
+        var book = await host.Db.NovelWorks.SingleAsync();
+        Assert.AreEqual(request.WorkId, await RequestWorkTestSupport.WorkOfLegacyAsync(host.Db, WorkSourceKind.NovelWork, book.Id), "The imported book is the request's Work.");
+        Assert.AreEqual(1, await host.Db.Set<Work>().CountAsync(), "Request and import share one Work, and a retry creates neither another book nor another Work.");
+        StringAssert.EndsWith(first.ResultUrl, book.Id.ToString());
+    }
+
+    [TestMethod]
+    public async Task ABookImportIntoAnEntryOfAnotherWorkIsAReviewNotASilentSwitch()
+    {
+        await using var host = await Host.CreateAsync();
+        var downloads = host.Folder("downloads");
+        await WriteEpubAsync(Path.Combine(downloads, "Test.Book.epub"));
+        var unbound = await RequestWorkTestSupport.CreateRequestAsync(host.Db, MediaAcquisitionKind.Book, bound: false, provider: "other", externalId: "x", title: "Test Book");
+        await host.Adapter.ImportAsync(new CompletedDownloadImportRequest(unbound, null, downloads), CancellationToken.None);
+        var existing = await host.Db.NovelWorks.SingleAsync();
+        var works = new WorkService(host.Db);
+        var other = await works.CreateWorkAsync(WorkMediaType.Book, "Another", null, CancellationToken.None);
+        await works.LinkSourceAsync(other.Id, WorkSourceKind.NovelWork, existing.Id, CancellationToken.None);
+        var request = await RequestWorkTestSupport.CreateRequestAsync(host.Db, MediaAcquisitionKind.Book, bound: true, provider: "books-catalog", externalId: "OL1M", title: "Test Book");
+
+        var result = await host.Adapter.ImportAsync(new CompletedDownloadImportRequest(request, null, downloads), CancellationToken.None);
+
+        Assert.AreEqual(CompletedDownloadImportDisposition.NeedsReview, result.Disposition, result.Message);
+        Assert.AreEqual(other.Id, await RequestWorkTestSupport.WorkOfLegacyAsync(host.Db, WorkSourceKind.NovelWork, existing.Id));
     }
 
     [TestMethod]
@@ -323,6 +363,7 @@ public sealed class BookCompletedDownloadImportTests
                 .AddSingleton(new AnimeImportSettingsStore(root))
                 .AddSingleton<IHardLinkCreator, FileSystemHardLinkCreator>()
                 .AddSingleton(new AcquisitionAccessStore(db))
+                .AddSingleton(RequestWorkTestSupport.Binder(db))
                 .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
                 .AddSingleton<BookCompletedDownloadImportAdapter>()
                 .AddSingleton<IMediaInboxImportAdapter>(provider => provider.GetRequiredService<BookCompletedDownloadImportAdapter>())
@@ -378,7 +419,7 @@ public sealed class BookCompletedDownloadImportTests
             Task.FromResult(sourceText);
     }
 
-    private static MemoryStream BuildTestEpub()
+    internal static MemoryStream BuildTestEpub()
     {
         var stream = new MemoryStream();
         using (var archive = new ZipArchive(

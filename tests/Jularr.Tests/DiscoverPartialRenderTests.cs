@@ -132,7 +132,7 @@ public sealed class DiscoverPartialRenderTests
 
         StringAssert.Contains(visible, "<a class=\"dc-art\" href=\"/Library/Series/s1\" tabindex=\"-1\" aria-hidden=\"true\">");
         StringAssert.Contains(visible, "<a href=\"/Library/Series/s1\" title=\"Frieren\" data-dc-title-link>Frieren</a>");
-        StringAssert.Contains(html, "<a class=\"button\" href=\"/Library/Series/s1\">Details</a>");
+        Assert.IsTrue(Regex.IsMatch(html, @"<a class=""button"" href=""/Library/Series/s1"">\s*<svg[^>]*>.*?</svg>\s*<span>Details</span>\s*</a>", RegexOptions.Singleline), "Details is a pill with its own icon.");
         Assert.IsFalse(html.Contains("data-dc-activate=\"open\"", StringComparison.Ordinal));
     }
 
@@ -143,7 +143,7 @@ public sealed class DiscoverPartialRenderTests
         var visible = html[..html.IndexOf("<template", StringComparison.Ordinal)];
 
         StringAssert.Contains(visible, "data-dc-title-link data-dc-activate=\"open\">Frieren</button>");
-        StringAssert.Contains(html, "<button type=\"button\" class=\"button\" data-dc-activate=\"open\">Details</button>");
+        Assert.IsTrue(Regex.IsMatch(html, @"<button type=""button"" class=""button"" data-dc-activate=""open"">\s*<svg[^>]*>.*?</svg>\s*<span>Details</span>\s*</button>", RegexOptions.Singleline));
         Assert.IsFalse(html.Contains("href=\"http", StringComparison.Ordinal));
     }
 
@@ -169,7 +169,7 @@ public sealed class DiscoverPartialRenderTests
         var visible = html[..html.IndexOf("<template", StringComparison.Ordinal)];
 
         StringAssert.Contains(visible, "data-dc-card-request>");
-        Assert.IsTrue(Regex.IsMatch(visible, @">\s*Request\s*</button>"));
+        Assert.IsTrue(Regex.IsMatch(visible, @"data-dc-card-request>\s*<svg[^>]*>.*?</svg>\s*<span>\s*Request\s*</span>\s*</button>", RegexOptions.Singleline), "The action carries its own icon and its label.");
         StringAssert.Contains(visible, "data-dc-provider=\"anilist\"");
     }
 
@@ -193,9 +193,9 @@ public sealed class DiscoverPartialRenderTests
         var preview = html[html.IndexOf("<template", StringComparison.Ordinal)..];
         StringAssert.Contains(preview, "data-external-id=\"1\"");
         StringAssert.Contains(preview, "A mage looks back on her journey.");
-        StringAssert.Contains(preview, "<dt>Status</dt><dd>Finished</dd>");
+        Assert.IsTrue(Regex.IsMatch(preview, @"<dt>Status</dt>\s*<dd>\s*<span>Finished</span>\s*</dd>"), "A fact without an icon is its label and its value.");
         StringAssert.Contains(preview, "data-dc-request>");
-        Assert.IsTrue(Regex.IsMatch(preview, @">\s*Request\s*</button>"));
+        Assert.IsTrue(Regex.IsMatch(preview, @"<span>\s*Request\s*</span>\s*</button>"));
         StringAssert.Contains(preview, "data-dc-follow ");
         StringAssert.Contains(preview, "Follow franchise");
         Assert.IsFalse(preview.Contains("data-local", StringComparison.Ordinal));

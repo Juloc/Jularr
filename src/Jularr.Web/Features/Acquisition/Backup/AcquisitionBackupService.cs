@@ -27,7 +27,6 @@ public sealed class AcquisitionBackupService
         "ownership.json",
         "naming-profiles.json",
         "import-settings.json",
-        "acquisition-policy.json",
         "anilist-auto-monitor.json"
     ];
 

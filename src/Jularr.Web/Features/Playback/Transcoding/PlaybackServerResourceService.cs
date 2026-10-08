@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Playback.Decision;
 
 namespace Jularr.Web.Features.Playback.Transcoding;
@@ -15,7 +16,8 @@ public sealed class PlaybackServerResourceService(
     HlsPlaybackSessionManager hls,
     PlaybackStreamSessionStore sessions,
     TimeProvider time,
-    ILogger<PlaybackServerResourceService> logger) : BackgroundService
+    ILogger<PlaybackServerResourceService> logger,
+    IInstanceModuleService? modules = null) : BackgroundService
 {
     public static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(1);
 
@@ -38,17 +40,25 @@ public sealed class PlaybackServerResourceService(
     {
         // Yielding first hands control back to the host, so a slow ffmpeg cannot hold up startup.
         await Task.Yield();
-        // Detection runs beside the sweeper, never in front of it: the cache needs its cleanup whether or not ffmpeg answers.
-        var detection = hardware.DetectAsync(stoppingToken);
+        // Detection runs beside the sweeper, never in front of it: the cache needs its cleanup whether or not ffmpeg answers. An instance that
+        // does not play media (Playback off, the Media Manager preset) neither probes ffmpeg nor sweeps a cache that cannot exist; the first tick
+        // after Playback is switched on starts both.
+        var detection = Task.CompletedTask;
+        var detectionStarted = false;
         try
         {
             using var timer = new PeriodicTimer(SweepInterval, time);
             do
             {
-                SweepOnce();
-                if (detection.IsCompleted && hardware.IsRedetectionDue())
+                if (modules is null || await modules.IsEnabledAsync(InstanceModule.Playback, stoppingToken))
                 {
-                    detection = hardware.DetectAsync(stoppingToken);
+                    if (detection.IsCompleted && (!detectionStarted || hardware.IsRedetectionDue()))
+                    {
+                        detection = hardware.DetectAsync(stoppingToken);
+                        detectionStarted = true;
+                    }
+
+                    SweepOnce();
                 }
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));

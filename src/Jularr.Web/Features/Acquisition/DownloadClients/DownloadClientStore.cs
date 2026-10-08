@@ -169,9 +169,7 @@ public sealed class DownloadClientStore
         var result = new List<DownloadClientEntry>();
         foreach (var item in persisted)
         {
-            var secret = string.IsNullOrWhiteSpace(item.ProtectedSecret)
-                ? null
-                : protector.Unprotect(item.ProtectedSecret);
+            var secret = ProtectedSecrets.Read(protector, item.ProtectedSecret);
 
             result.Add(
                 new DownloadClientEntry(
