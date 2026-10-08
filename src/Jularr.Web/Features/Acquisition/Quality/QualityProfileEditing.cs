@@ -47,6 +47,9 @@ public sealed class QualityProfileForm
 
     public string RejectedRegex { get; set; } = "";
 
+    /// <summary>The wanted languages, one per line, best first.</summary>
+    public string LanguageOrder { get; set; } = "";
+
     public List<ScoreRuleRow> Rules { get; set; } = [];
 }
 
@@ -102,6 +105,7 @@ public static class QualityProfileEditing
             MustNotContain = string.Join('\n', profile.MustNotContain),
             RequiredRegex = string.Join('\n', profile.RequiredRegex),
             RejectedRegex = string.Join('\n', profile.RejectedRegex),
+            LanguageOrder = string.Join('\n', profile.LanguageOrder),
             Rules = [.. InPreferenceOrder(profile.ScoreRules).Select(ToRow)]
         };
 
@@ -177,6 +181,7 @@ public static class QualityProfileEditing
         {
             UpgradeMinimumQualitySteps = steps,
             AllowAmbiguousIdentity = form.AllowAmbiguousIdentity,
+            LanguageOrder = [.. Lines(form.LanguageOrder).Select(language => language.ToLowerInvariant()).Distinct()],
             SourcePolicy = SourcePolicyOf(form)
         };
         foreach (var problem in ReleaseScorer.ValidateProfile(profile))

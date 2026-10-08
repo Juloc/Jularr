@@ -25,7 +25,8 @@ public sealed class ReleaseRanker(ReleaseReliabilityService? reliability = null)
                 return new SelectionCandidate(pair.Key, judgement.Parsed, pair.Value.SizeBytes, pair.Value.Indexer, pair.Value.Sources.FirstOrDefault()?.Priority ?? 0, pair.Value.PublishedAt, judgement.Evidence, judgement.Coverage)
                 {
                     SafetyRejection = judgement.SafetyRejection,
-                    ContextScore = judgement.ContextScore
+                    ContextScore = judgement.ContextScore,
+                    Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? []
                 };
             })],
             lookup);

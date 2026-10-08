@@ -80,6 +80,9 @@ public sealed record SelectionCandidate(
     /// the profile's preference score. They only order eligible candidates and never repair identity or a gate.
     /// </summary>
     public int ContextScore { get; init; }
+
+    /// <summary>The languages the release carries (audio languages, the language of a book or chapter); empty when it states none.</summary>
+    public IReadOnlyList<string> Languages { get; init; } = [];
 }
 
 public enum SelectionDecision
@@ -151,6 +154,7 @@ public static class ReleaseSelectionEngine
             .Select(candidate => Evaluate(profile, candidate, reliability))
             .OrderBy(evaluation => evaluation.Decision switch { SelectionDecision.Eligible => 0, SelectionDecision.ManualReview => 1, _ => 2 })
             .ThenBy(evaluation => evaluation.QualityRank)
+            .ThenBy(evaluation => LanguageRank(profile, evaluation.Candidate))
             .ThenByDescending(evaluation => evaluation.PreferenceScore)
             .ThenBy(evaluation => evaluation.Candidate.Identity.Confidence)
             .ThenByDescending(evaluation => evaluation.Candidate.Coverage.Utility)
@@ -162,7 +166,24 @@ public static class ReleaseSelectionEngine
 
         var winner = ranked.FirstOrDefault(evaluation => evaluation.IsSelectable);
         var runnerUp = winner is null ? null : ranked.Skip(1).FirstOrDefault(evaluation => evaluation.IsSelectable);
-        return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(winner, runnerUp), OutcomeOf(ranked));
+        return new SelectionResult(ranked, winner, winner is null ? null : WinnerReason(profile, winner, runnerUp), OutcomeOf(ranked));
+    }
+
+    // The best position any language of the candidate has in the profile's language order; a candidate that states no language sits after the listed ones
+    // and one that only has other languages after that. Without a language order the layer decides nothing.
+    private static int LanguageRank(QualityProfile profile, SelectionCandidate candidate)
+    {
+        if (profile.LanguageOrder.Length == 0)
+        {
+            return 0;
+        }
+
+        var best = candidate.Languages
+            .Select(language => Array.FindIndex(profile.LanguageOrder, wanted => language.StartsWith(wanted, StringComparison.OrdinalIgnoreCase) || wanted.StartsWith(language, StringComparison.OrdinalIgnoreCase)))
+            .Where(index => index >= 0)
+            .DefaultIfEmpty(-1)
+            .Min();
+        return best >= 0 ? best : candidate.Languages.Count == 0 ? profile.LanguageOrder.Length : profile.LanguageOrder.Length + 1;
     }
 
     private static CandidateEvaluation Evaluate(QualityProfile profile, SelectionCandidate candidate, ReleaseReliabilityLookup? lookup)
@@ -227,7 +248,7 @@ public static class ReleaseSelectionEngine
     }
 
     /// <summary>Why the winner beat the next selectable candidate: the first step of the hierarchy that differs, in words.</summary>
-    private static string WinnerReason(CandidateEvaluation winner, CandidateEvaluation? runnerUp)
+    private static string WinnerReason(QualityProfile profile, CandidateEvaluation winner, CandidateEvaluation? runnerUp)
     {
         if (runnerUp is null)
         {
@@ -237,6 +258,11 @@ public static class ReleaseSelectionEngine
         if (winner.QualityRank != runnerUp.QualityRank)
         {
             return $"Higher quality: {winner.Score!.QualityKey} before {runnerUp.Score!.QualityKey}.";
+        }
+
+        if (LanguageRank(profile, winner.Candidate) != LanguageRank(profile, runnerUp.Candidate))
+        {
+            return "Earlier in the profile's language order.";
         }
 
         if (winner.PreferenceScore != runnerUp.PreferenceScore)

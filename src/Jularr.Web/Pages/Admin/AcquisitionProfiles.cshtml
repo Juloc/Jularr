@@ -243,6 +243,11 @@
                         </div>
                     </div>
                     <p class="admset-hint">@ui["admin.profiles.hint.terms"]</p>
+                    <div class="admset-field">
+                        <label for="admprofiles-languages">@ui["admin.profiles.field.languageOrder"]</label>
+                        <textarea id="admprofiles-languages" name="LanguageOrder" rows="2" spellcheck="false">@Model.Form.LanguageOrder</textarea>
+                    </div>
+                    <p class="admset-hint">@ui["admin.profiles.hint.languageOrder"]</p>
                 </section>
 
                 <section class="admset-section" aria-labelledby="admprofiles-sources">

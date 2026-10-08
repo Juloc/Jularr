@@ -47,6 +47,19 @@ public sealed class ReleaseSelectionEngineTests
     }
 
     [TestMethod]
+    public void TheLanguageOrderDecidesBetweenReleasesOfTheSameQualityAndNeverOverQuality()
+    {
+        var english = Candidate("english", "Show.S01E01.1080p.WEB-DL.H264-AAA") with { Languages = ["en"] };
+        var german = Candidate("german", "Show.S01E01.1080p.WEB-DL.H264-ZZZ") with { Languages = ["de"] };
+        var germanLow = Candidate("german-low", "Show.S01E01.720p.WEB-DL.H264-ZZZ") with { Languages = ["de"] };
+
+        Assert.AreEqual("german", Select(Profile() with { LanguageOrder = ["de", "en"] }, english, german).Winner!.Candidate.Id);
+        Assert.AreEqual("english", Select(Profile() with { LanguageOrder = ["en", "de"] }, german, english).Winner!.Candidate.Id);
+        Assert.AreEqual("english", Select(Profile() with { LanguageOrder = ["de", "en"] }, german with { Languages = [] }, english).Winner!.Candidate.Id, "A release without a stated language sits after the listed ones.");
+        Assert.AreEqual("english", Select(Profile() with { LanguageOrder = ["de"] }, germanLow, english with { Languages = ["de"] }).Winner!.Candidate.Id, "A better quality still beats a better language.");
+    }
+
+    [TestMethod]
     public void RequireRejectAndInfoRulesAreGatesAndNotScores()
     {
         var profile = Profile() with

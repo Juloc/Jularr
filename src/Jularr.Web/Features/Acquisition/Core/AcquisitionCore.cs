@@ -16,6 +16,9 @@ namespace Jularr.Web.Features.Acquisition.Core;
 public sealed record ReleaseJudgement<TMatch>(TMatch Match, ReleaseInfo? Parsed, ReleaseIdentityEvidence Evidence, SelectionCoverage Coverage, string? SafetyRejection)
 {
     public int ContextScore { get; init; }
+
+    /// <summary>The languages the release carries when its parsed audio languages are not the whole story (a book's or chapter's language).</summary>
+    public IReadOnlyList<string>? Languages { get; init; }
 }
 
 // One returned release as the shared selection engine ranked it.

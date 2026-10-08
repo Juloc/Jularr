@@ -97,6 +97,9 @@ public sealed record QualityProfile(
     /// <summary>Whether a candidate whose identity is only ambiguous may be taken automatically; by default it waits for manual review.</summary>
     public bool AllowAmbiguousIdentity { get; init; }
 
+    /// <summary>The languages the profile wants, best first; among releases of the same quality one in an earlier language wins. Empty means language never decides.</summary>
+    public string[] LanguageOrder { get; init; } = [];
+
     /// <summary>The indexers this profile may search and prefers; the same policy applies to Automatic and Manual Search of every media type the profile serves.</summary>
     public AcquisitionSourcePolicy SourcePolicy { get; init; } = AcquisitionSourcePolicy.Unrestricted;
 }

@@ -2287,6 +2287,8 @@ public static class UiTranslationResources
         M("admin.profiles.field.mustNotContain", "Must not contain", "Admin", "Label", "Label of the terms no release title may contain.", "short label", 20),
         M("admin.profiles.field.requiredRegex", "Must match (regular expression)", "Admin", "Label", "Label of the patterns every release title has to match.", "short label", 40),
         M("admin.profiles.field.rejectedRegex", "Must not match (regular expression)", "Admin", "Label", "Label of the patterns no release title may match.", "short label", 44),
+        M("admin.profiles.field.languageOrder", "Languages, best first", "Admin", "Label", "Label of the language order of an acquisition profile.", "short label", 30),
+        M("admin.profiles.hint.languageOrder", "One language per line, for example en or de. Among releases of the same quality, one in an earlier language wins.", "Admin", "Description", "Help under the language order of an acquisition profile.", "short sentence", 120),
         M("admin.profiles.hint.terms", "One term per line.", "Admin", "Description", "Help under the term lists.", "short sentence", 30),
         M("admin.profiles.error.number", "{field} must be a whole number.", "Admin", "Error", "A number field of the profile editor is not a whole number.", "compact error", 90, new Dictionary<string, string> { ["field"] = "Name of the field." }),
         M("admin.profiles.error.tier", "Waiting step {line} needs minutes and at least one quality.", "Admin", "Error", "A waiting step of the profile editor cannot be read.", "compact error", 120, new Dictionary<string, string> { ["line"] = "Line number." }),

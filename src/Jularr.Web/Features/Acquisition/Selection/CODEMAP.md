@@ -9,7 +9,7 @@ Canonical owners
 - Editor: `QualityProfileEditing` (form to profile and back) behind Admin `AcquisitionProfiles`.
 
 Order inside the engine
-safety -> identity -> Require / Reject / allowed quality / size gates -> quality order -> Prefer and Avoid rules (the row order is the priority;
+safety -> identity -> Require / Reject / allowed quality / size gates -> quality order -> language order (`QualityProfile.LanguageOrder`, the languages a candidate carries; a candidate that states none sits after the listed ones) -> Prefer and Avoid rules (the row order is the priority;
 saved as power-of-two weights) -> identity strength -> coverage -> bounded reliability -> indexer priority -> publish time -> id.
 Allowed qualities are taken at once; a better quality upgrades later up to the cutoff. There is no wait, minimum score or score threshold.
 
@@ -18,6 +18,6 @@ Media adapters supply `SelectionCandidate` facts (identity evidence, coverage, s
 
 Migration: profile files of version 2 fold their fallback-tier qualities into the allowed qualities on first read.
 
-Not done yet: a dedicated language priority layer; native import of Sonarr custom formats.
+Not done yet: native import of Sonarr custom formats.
 
 Tests: `ReleaseSelectionEngineTests`, `QualityProfileEditingTests`, `AcquisitionProfilePolicyTests`, `ProfileGrabAndSourcePolicyTests`.

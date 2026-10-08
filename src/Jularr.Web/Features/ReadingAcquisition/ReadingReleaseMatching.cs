@@ -301,7 +301,8 @@ public static class ReadingReleaseJudge
         };
         return new ReleaseJudgement<ReadingReleaseInfo>(parsed, ReadingReleaseEvidenceParser.Instance.Parse(release.Title), identity, SelectionCoverage.Single with { Cost = cost }, safety)
         {
-            ContextScore = context
+            ContextScore = context,
+            Languages = parsed.Language is { } statedLanguage ? [statedLanguage] : null
         };
     }
 
