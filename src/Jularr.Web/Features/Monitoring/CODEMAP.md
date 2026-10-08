@@ -20,6 +20,7 @@ pass must look at (any node switched on counts).
 - `FutureAsync(workId)`: Work monitored, aired episodes and all known chapters/tracks explicit Unmonitored, later ones inherit.
 - `ApplySelectionAsync`, `SetEpisodesByNumberAsync`, `SetSeasonsByNumberAsync`: request dialog and anime (addressed by number).
 - `SetRelationAsync(source, monitored, onlyFuture)`: add or remove a relation source.
+- Relation kinds map onto the existing four: an author is a Person source limited to the role Author, a book series or franchise is a Collection source, a music artist is Artist. A music label has no data in the Work metadata, so it is not a relation source until a label is stored.
 
 ## Wanted
 Monitoring only states intent. `Features/Acquisition/Wanted` (see its CODEMAP) reconciles it into `WantedItems` and the engines read that queue.
