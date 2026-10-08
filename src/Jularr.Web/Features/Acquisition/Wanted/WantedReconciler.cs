@@ -32,6 +32,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
     [
         (MediaAcquisitionKind.Movie, WorkMediaType.Movie),
         (MediaAcquisitionKind.Tv, WorkMediaType.Series),
+        (MediaAcquisitionKind.Anime, WorkMediaType.Anime),
         (MediaAcquisitionKind.Book, WorkMediaType.Book),
         (MediaAcquisitionKind.Audiobook, WorkMediaType.Book),
         (MediaAcquisitionKind.LightNovel, WorkMediaType.LightNovel),
@@ -84,7 +85,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
     private async Task SyncUpgradesAsync(Guid workId, CancellationToken cancellationToken)
     {
         var type = await db.Works.AsNoTracking().Where(work => work.Id == workId).Select(work => (WorkMediaType?)work.MediaType).FirstOrDefaultAsync(cancellationToken);
-        if (type is null || upgrades?.For(type.Value) is not { } assessor)
+        if (type is null || upgrades is null || !upgrades.Types.Contains(type.Value))
         {
             return;
         }
@@ -95,7 +96,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
             return;
         }
 
-        var upgradable = await assessor.UpgradableAsync(workId, held, cancellationToken);
+        var upgradable = await upgrades.UpgradableAsync(type.Value, workId, held, cancellationToken);
         await db.Database.ExecuteSqlRawAsync(
             WantedSql.SyncUpgrades,
             [
@@ -114,6 +115,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
         new NpgsqlParameter("types", Reconciled.Select(entry => (int)entry.Type).ToArray()),
         new NpgsqlParameter<int>("movie", (int)WorkMediaType.Movie),
         new NpgsqlParameter<int>("series", (int)WorkMediaType.Series),
+        new NpgsqlParameter<int>("anime", (int)WorkMediaType.Anime),
         new NpgsqlParameter<int>("book", (int)WorkMediaType.Book),
         new NpgsqlParameter<int>("lightNovel", (int)WorkMediaType.LightNovel),
         new NpgsqlParameter<int>("manga", (int)WorkMediaType.Manga),

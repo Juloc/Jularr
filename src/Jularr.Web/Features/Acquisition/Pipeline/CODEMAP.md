@@ -12,3 +12,5 @@ Still the old owners (to be replaced slice by slice)
 - `AnimeAcquisitionScheduler` / `AnimeAcquisitionPipeline` (search, judge, ranking, grab), `SabnzbdAcquisitionService` + `SabnzbdAcquisitionStore` (submission and attempts), `AnimeMonitoringStore` attempt state, `AcquisitionOwnershipStore` (Sonarr ownership modes: kept as policy).
 
 Tests: `AnimeCanonicalEpisodesTests`, `AnimeAcquisitionPipelineTests`, `AnimeSharedManagerTests`.
+
+Wanted (done): anime episodes are reconciled by `WantedReconciler` like TV episodes (`WorkMediaType.Anime`, aired gate, installed = video asset on the `WorkEpisode`); `AnimeUpgradeAssessor` queues installed episodes below the profile's cutoff (profile assigned by legacy anime id). Nothing consumes the rows yet.

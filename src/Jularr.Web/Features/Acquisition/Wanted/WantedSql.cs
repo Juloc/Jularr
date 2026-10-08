@@ -4,7 +4,7 @@ namespace Jularr.Web.Features.Acquisition.Wanted;
 
 // The SQL of the Wanted queue. Every value is a named parameter; nothing outside this fixed text is ever part of a statement.
 //
-// Shared parameters: @workId (one Work, or null for every Work), @now, @types (the media types that are reconciled) and @movie, @series, @book,
+// Shared parameters: @workId (one Work, or null for every Work), @now, @types (the media types that are reconciled) and @movie, @series, @anime, @book,
 // @lightNovel, @manga, @music (the media type numbers the installed-coverage rules distinguish).
 internal static class WantedSql
 {
@@ -70,7 +70,7 @@ internal static class WantedSql
             SELECT work."Id" AS "WorkId", work."MediaType", 0::smallint AS "TargetKind", work."Id" AS "TargetId", {{WorkInstalled}} AS "Installed"
             FROM "Works" work
             LEFT JOIN "WorkMonitoring" decision ON decision."TargetId" = work."Id"
-            WHERE work."MediaType" <> @series AND work."MediaType" = ANY(@types)
+            WHERE work."MediaType" NOT IN (@series, @anime) AND work."MediaType" = ANY(@types)
               AND (@workId::uuid IS NULL OR work."Id" = @workId)
               AND (COALESCE(decision."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = work."Id"))
                    OR EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 0 AND asked."TargetId" = work."Id"))
@@ -81,7 +81,7 @@ internal static class WantedSql
         intended_episodes AS (
             SELECT episode."WorkId", work."MediaType", 1::smallint AS "TargetKind", episode."Id" AS "TargetId", {{EpisodeInstalled}} AS "Installed"
             FROM "WorkEpisodes" episode
-            JOIN "Works" work ON work."Id" = episode."WorkId" AND work."MediaType" = @series
+            JOIN "Works" work ON work."Id" = episode."WorkId" AND work."MediaType" IN (@series, @anime)
             LEFT JOIN "WorkMonitoring" own ON own."TargetId" = episode."Id"
             LEFT JOIN "WorkMonitoring" season ON season."TargetId" = episode."SeasonId"
             LEFT JOIN "WorkMonitoring" whole ON whole."TargetId" = episode."WorkId"

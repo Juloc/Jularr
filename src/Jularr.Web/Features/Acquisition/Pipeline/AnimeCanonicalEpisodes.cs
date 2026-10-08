@@ -1,6 +1,8 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -104,5 +106,24 @@ public sealed class AnimeEpisodesWantedSource(AnimeCanonicalEpisodes episodes, A
         await episodes.EnsureMonitoredAsync(cancellationToken);
         state.Mark(nowUtc);
         return 0;
+    }
+}
+
+/// <summary>Anime episodes: the installed quality of each canonical episode against the profile of the anime (assigned by its legacy anime id, else the Anime default).</summary>
+public sealed class AnimeUpgradeAssessor(AppDbContext db, InstalledVideoVersions installed, QualityProfileStore profiles) : IUpgradeAssessor
+{
+    public MediaAcquisitionKind Kind => MediaAcquisitionKind.Anime;
+
+    public WantedTargetKind TargetKind => WantedTargetKind.Episode;
+
+    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
+    {
+        var animeId = await db.WorkSourceLinks.AsNoTracking()
+            .Where(link => link.SourceKind == WorkSourceKind.Anime && link.WorkId == workId)
+            .Select(link => (Guid?)link.SourceId)
+            .FirstOrDefaultAsync(cancellationToken);
+        var profile = await profiles.ResolveAsync(animeId, cancellationToken);
+        var qualities = await installed.BestQualityByEpisodeAsync(MediaAcquisitionKind.Anime, workId, profile, cancellationToken);
+        return [.. held.Where(target => qualities.TryGetValue(target.TargetId, out var quality) && UpgradePolicy.Assess(profile, quality).IsUpgradable)];
     }
 }

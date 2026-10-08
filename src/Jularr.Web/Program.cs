@@ -730,6 +730,7 @@ builder.Services.AddSingleton<AnimeAcquisitionScheduler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeWantedSource>();
 builder.Services.AddSingleton<AnimeCanonicalEpisodesState>();
 builder.Services.AddScoped<AnimeCanonicalEpisodes>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, AnimeUpgradeAssessor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, AnimeEpisodesWantedSource>();
 Jularr.Web.Features.Calendar.ReleaseCalendarRegistration.AddReleaseCalendar(builder.Services);
 

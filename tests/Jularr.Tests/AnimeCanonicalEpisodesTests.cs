@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Pipeline;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,5 +40,20 @@ public sealed class AnimeCanonicalEpisodesTests
         await environment.WithScopeAsync(async services => await services.GetRequiredService<AnimeCanonicalEpisodes>().EnsureAsync(AnimeAcquisitionEnvironment.AnimeKey, CancellationToken.None));
 
         CollectionAssert.AreEqual(new[] { (1, 1) }, (await EpisodesAsync(environment)).ToArray(), "Only the episode on disk exists; nothing is expected without an episode count.");
+    }
+
+    [TestMethod]
+    public async Task MonitoredAnimeEpisodesWithoutAFileAreWantedThroughTheSharedQueue()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync(episodeCount: 3);
+        await environment.WithScopeAsync(async services => await services.GetRequiredService<AnimeCanonicalEpisodes>().EnsureAsync(AnimeAcquisitionEnvironment.AnimeKey, CancellationToken.None));
+
+        await new WantedReconciler(environment.Db, TimeProvider.System).ReconcileAsync(null, CancellationToken.None);
+
+        var wanted = await environment.Db.WantedItems.AsNoTracking().ToListAsync();
+        var episodes = await environment.Db.WorkEpisodes.AsNoTracking().ToDictionaryAsync(episode => episode.Id);
+        CollectionAssert.AreEqual(new[] { 2, 3 }, wanted.Select(item => episodes[item.TargetId].EpisodeNumber).Order().ToArray(), "The episode on disk is covered; the other two are wanted.");
+        Assert.IsTrue(wanted.All(item => item.TargetKind == WantedTargetKind.Episode));
     }
 }
