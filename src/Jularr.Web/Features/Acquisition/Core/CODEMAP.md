@@ -22,7 +22,7 @@ Media adapters on the core
 
 - Audiobook: `AudiobookAcquisitionRequestExecutor` (`AudiobookReleaseJudge`, `AudiobookReleaseParser` quality M4B / MP3-320 / MP3); the import adapter binds the audiobook to the request's Book Work as its audio edition.
 
-Not on the core yet (own orchestration still to be moved): Anime (`AnimeAcquisitionPipeline`).
+Anime searches and grabs through the core too (`AnimeAcquisitionEngine`); its old pipeline run paths are being removed.
 
 Manual Search reads the same `SearchEvaluation` through `VideoManualSearchService`, `MusicManualSearchService`, `ReadingManualSearchService`, `BookManualSearchService`.
 

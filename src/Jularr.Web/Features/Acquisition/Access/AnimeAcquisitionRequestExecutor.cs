@@ -41,10 +41,10 @@ public sealed class AnimeAcquisitionRequestExecutor(
     AnimeAcquisitionPipeline pipeline,
     AnimeAcquisitionInventory inventory,
     AnimeMonitoring animeMonitoring,
-    AnimeAcquisitionScheduler scheduler,
+    AnimeAcquisitionEngine engine,
     LegacyWorkBridge workBridge,
     ReleaseCalendarCacheStore calendar,
-    TimeProvider clock) : IMonitoredAcquisitionExecutor
+    TimeProvider clock) : IAcquisitionRequestExecutor
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Anime;
 
@@ -128,7 +128,7 @@ public sealed class AnimeAcquisitionRequestExecutor(
     /// Loads the ownership, acquisition relations and release calendar once, so one pass can read where the monitoring
     /// pipeline stands for every open request without loading them again for each (<see cref="AnimeRequestObservation"/>).
     /// </summary>
-    public async Task<IRequestObservation> BeginObservationAsync(DateTime nowUtc, CancellationToken cancellationToken) =>
+    public async Task<AnimeRequestObservation> BeginObservationAsync(DateTime nowUtc, CancellationToken cancellationToken) =>
         new AnimeRequestObservation(
             db,
             inventory,
@@ -144,6 +144,17 @@ public sealed class AnimeAcquisitionRequestExecutor(
     private async Task<AcquisitionExecution> ObserveNowAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
         await (await BeginObservationAsync(clock.GetUtcNow().UtcDateTime, cancellationToken)).ObserveAsync(request, cancellationToken)
         ?? throw new InvalidOperationException("The series of the request does not exist after it was added.");
+
+    // What the request still needs: complete, held back by ownership or a download in flight, or the search for its next episode.
+    private async Task<AcquisitionExecution> ContinueAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    {
+        var observation = await BeginObservationAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
+        var scope = await observation.ReadScopeAsync(request, cancellationToken) ?? throw new InvalidOperationException("The series of the request does not exist after it was added.");
+        var observed = await observation.DecideAsync(request, scope, cancellationToken);
+        return observed.Status == AcquisitionRequestStatus.Approved && observed.OperationId is null && observed.Message != AnimeRequestObservation.ReadOnlyMessage
+            ? await engine.SearchAndGrabAsync(request, scope, observed.Message, cancellationToken)
+            : observed;
+    }
 
     private async Task<SeriesIdentity?> FindSeriesAsync(string aniListId, CancellationToken cancellationToken) =>
         await (
@@ -203,13 +214,7 @@ public sealed class AnimeAcquisitionRequestExecutor(
 
         // The scope is in place before any search runs, so a search only looks for what was requested.
         await ApplyScopeAsync(animeId, animeKey, options, startsMonitoring, cancellationToken);
-        var observed = await ObserveNowAsync(request, cancellationToken);
-        if (observed.Status != AcquisitionRequestStatus.Completed)
-        {
-            scheduler.RequestRun(animeKey, startsMonitoring ? AnimeSearchTrigger.SearchOnAdd : AnimeSearchTrigger.Manual);
-        }
-
-        return observed;
+        return await ContinueAsync(request, cancellationToken);
     }
 
     /// <summary>

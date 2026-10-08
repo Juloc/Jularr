@@ -108,7 +108,6 @@ public sealed record WantedRow(
     public int Failures { get; init; }
 
     /// <summary>The state of the last attempt of a monitored unit.</summary>
-    public AcquisitionAttemptStatus Attempt { get; init; }
 
     /// <summary>The last thing the acquisition said about this row.</summary>
     public string? Note { get; init; }
@@ -197,15 +196,6 @@ public static class AdminWantedQuery
         AcquisitionRequestStatus.Importing => WantedStatus.Importing,
         AcquisitionRequestStatus.Failed => WantedStatus.Failed,
         _ => null
-    };
-
-    /// <summary>The state of a monitored unit from its last acquisition attempt.</summary>
-    public static WantedStatus StatusOfAttempt(AcquisitionAttemptStatus? attempt) => attempt switch
-    {
-        AcquisitionAttemptStatus.Pending => WantedStatus.Searching,
-        AcquisitionAttemptStatus.Grabbed => WantedStatus.Downloading,
-        AcquisitionAttemptStatus.Failed => WantedStatus.Failed,
-        _ => WantedStatus.Missing
     };
 
     public static string StatusName(WantedStatus status) => status switch

@@ -28,10 +28,11 @@ public static class AnimeReleaseJudge
         ProwlarrAnimeSearchTarget searchTarget,
         AnimeMonitoringState state,
         AcquisitionOwnershipSnapshot snapshot,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        Func<string, bool>? isBlocked = null)
     {
         var aliases = scope.SelectMany(episode => new[] { episode.SearchTitle }.Concat(episode.SearchAliases)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        return new MediaSearchPlan<AnimeMatch>(ToSearchIntent(searchTarget), release => Judge(release, aliases, wanted, primary, state, snapshot, now));
+        return new MediaSearchPlan<AnimeMatch>(ToSearchIntent(searchTarget), release => Judge(release, aliases, wanted, primary, state, snapshot, now, isBlocked));
     }
 
     // The ranked releases as the grab decisions the pipeline and the interactive search show, with the reasons people already read.
@@ -53,7 +54,8 @@ public static class AnimeReleaseJudge
         AnimeEpisodeKey? primary,
         AnimeMonitoringState state,
         AcquisitionOwnershipSnapshot snapshot,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        Func<string, bool>? isBlocked)
     {
         var parsed = release.ParsedRelease;
         var covered = wanted.Where(item => Covers(parsed, item.Key)).Select(item => item.Key).ToArray();
@@ -82,6 +84,10 @@ public static class AnimeReleaseJudge
         if (release.InternalDownloadUri is null || !string.Equals(release.Protocol, "usenet", StringComparison.OrdinalIgnoreCase))
         {
             safety = "Not a usenet release with an NZB link; only SABnzbd downloads are supported.";
+        }
+        else if (isBlocked?.Invoke(release.Identity) == true)
+        {
+            safety = "The release was blocklisted after a failed download.";
         }
         else if (identity.Confidence != IdentityConfidence.Conflict)
         {

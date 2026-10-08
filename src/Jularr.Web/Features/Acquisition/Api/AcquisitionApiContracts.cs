@@ -81,8 +81,7 @@ public sealed record WantedEpisodeResponse(
     int EpisodeNumber,
     int? AbsoluteEpisodeNumber,
     string Reason,
-    DateTimeOffset BecameWantedAtUtc,
-    string? AttemptStatus)
+    DateTimeOffset BecameWantedAtUtc)
 {
     public static WantedEpisodeResponse From(AnimeWantedRow row) =>
         new(
@@ -93,8 +92,7 @@ public sealed record WantedEpisodeResponse(
             row.Key.EpisodeNumber,
             row.Key.AbsoluteEpisodeNumber,
             row.Reason.ToString(),
-            row.SinceUtc,
-            row.Attempt?.Status.ToString());
+            row.SinceUtc);
 }
 
 public sealed record SearchQueuedResponse(Guid OperationId, string Message);

@@ -373,14 +373,6 @@
                                 "acquisition.wantedSince",
                                 ("reason", row.Reason == AnimeWantedReason.Missing ? ui["acquisition.reason.missing"] : ui["acquisition.reason.upgradeWanted"]),
                                 ("time", row.SinceUtc.ToLocalTime().ToString("g")))
-                            @if (row.Attempt is { } attempt)
-                            {
-                                <text> · @attempt.Status</text>
-                                @if (attempt.Status == AnimeAcquisitionAttemptStatus.Failed && attempt.NextRetryAtUtc is { } retry)
-                                {
-                                    <text>, @ui.Format("acquisition.retryAfter", ("time", retry.ToLocalTime().ToString("g")))</text>
-                                }
-                            }
                         </span>
                     </div>
                     <div class="operation-row-meta">

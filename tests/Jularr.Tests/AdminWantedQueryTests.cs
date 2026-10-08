@@ -43,15 +43,6 @@ public sealed class AdminWantedQueryTests
         Assert.IsNull(AdminWantedQuery.StatusOfRequest(status, 0));
 
     [TestMethod]
-    [DataRow(null, WantedStatus.Missing)]
-    [DataRow(AcquisitionAttemptStatus.None, WantedStatus.Missing)]
-    [DataRow(AcquisitionAttemptStatus.Pending, WantedStatus.Searching)]
-    [DataRow(AcquisitionAttemptStatus.Grabbed, WantedStatus.Downloading)]
-    [DataRow(AcquisitionAttemptStatus.Failed, WantedStatus.Failed)]
-    public void AMonitoredUnitIsInTheStateOfItsLastAttempt(AcquisitionAttemptStatus? attempt, WantedStatus expected) =>
-        Assert.AreEqual(expected, AdminWantedQuery.StatusOfAttempt(attempt));
-
-    [TestMethod]
     public void EveryStateBelongsToOneTabAndHasAName()
     {
         foreach (var status in Enum.GetValues<WantedStatus>())
@@ -284,45 +275,27 @@ public sealed class AdminWantedQueryTests
     }
 
     [TestMethod]
-    public void AMonitoredEpisodeShowsItsAttemptAndOnlyRetriesWhileFailed()
+    public void AWantedEpisodeIsAMissingOrUpgradeRowOfItsAnime()
     {
         var key = new AnimeEpisodeKey("frieren", 2, 13);
         var wanted = new WantedUnit(key, WantedReason.CutoffUnmet, new DateTimeOffset(Now.AddDays(-2)));
-        var failed = new AcquisitionAttempt(
-            key,
-            AcquisitionAttemptStatus.Failed,
-            "release",
-            3,
-            new DateTimeOffset(Now.AddHours(-5)),
-            new DateTimeOffset(Now.AddHours(1)));
         var animeId = Guid.NewGuid();
 
-        var item = WantedListService.FromUnit(wanted, failed, "Frieren", animeId, "/cover.webp", "remux", "Remux");
+        var item = WantedListService.FromUnit(wanted, "Frieren", animeId, "/cover.webp", "remux", "Remux");
 
-        Assert.AreEqual(WantedStatus.Failed, item.Status);
+        Assert.AreEqual(WantedStatus.Missing, item.Status);
         Assert.AreEqual(WantedSource.Monitored, item.Source);
         Assert.AreEqual(2, item.Season);
         Assert.AreEqual(13, item.Episode);
         Assert.IsTrue(item.IsUpgrade);
-        Assert.AreEqual(3, item.Failures);
-        Assert.AreEqual(Now.AddHours(-5), item.LastSearchUtc);
-        Assert.AreEqual(Now.AddHours(1), item.NextSearchUtc);
         Assert.AreEqual(Now.AddDays(-2), item.SinceUtc);
         Assert.AreEqual($"/Library/Anime/{animeId:D}", item.DetailUrl);
         Assert.IsTrue(item.CanSearch);
 
-        var grabbed = WantedListService.FromUnit(
-            wanted with { Reason = WantedReason.Missing },
-            failed with { Status = AcquisitionAttemptStatus.Grabbed },
-            "Frieren",
-            animeId,
-            null,
-            null,
-            null);
-        Assert.AreEqual(WantedStatus.Downloading, grabbed.Status);
-        Assert.IsNull(grabbed.NextSearchUtc, "Only a failed attempt has a retry.");
+        var missing = WantedListService.FromUnit(wanted with { Reason = WantedReason.Missing }, "Frieren", animeId, null, null, null);
+        Assert.IsFalse(missing.IsUpgrade);
 
-        var orphan = WantedListService.FromUnit(wanted, null, null, null, null, null, null);
+        var orphan = WantedListService.FromUnit(wanted, null, null, null, null, null);
         Assert.AreEqual("frieren", orphan.Title, "An unknown anime shows its key.");
         Assert.AreEqual(WantedStatus.Missing, orphan.Status);
         Assert.IsFalse(orphan.CanSearch, "Without a library entry there is nothing to search for.");

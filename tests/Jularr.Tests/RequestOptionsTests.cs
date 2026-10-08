@@ -215,7 +215,7 @@ public sealed class RequestOptionsTests
         Assert.IsFalse(view.IsEpisodeMonitored(1, 1));
         Assert.IsFalse(view.IsSeasonMonitored(1), "The rest of the season is not monitored, so episodes that air later are not picked up unasked.");
         Assert.AreEqual("anime-720p", (await profiles.LoadAsync()).WorkAssignments[anime.Id.ToString("D")]);
-        Assert.AreEqual(1, environment.Scheduler.QueuedRequests);
+        Assert.IsTrue(environment.Prowlarr.Queries.Count > 0, "The requested episodes are searched at once.");
     }
 
     [TestMethod]

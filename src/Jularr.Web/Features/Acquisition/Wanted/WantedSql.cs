@@ -177,7 +177,9 @@ internal static class WantedSql
           AND (request."WorkId" = work."Id"::text
                OR identity."WorkId" IS NOT NULL
                OR EXISTS (SELECT 1 FROM "MusicAlbums" album
-                          WHERE album."WorkId" = work."Id" AND request."Provider" = @musicBrainz AND request."ExternalId" = album."MusicBrainzReleaseGroupId"))
+                          WHERE album."WorkId" = work."Id" AND request."Provider" = @musicBrainz AND request."ExternalId" = album."MusicBrainzReleaseGroupId")
+               OR EXISTS (SELECT 1 FROM "WorkSourceLinks" anime JOIN "AnimeMetadata" match ON match."AnimeId" = anime."SourceId"
+                          WHERE anime."WorkId" = work."Id" AND anime."SourceKind" = 0 AND request."Provider" = match."Provider" AND request."ExternalId" = match."ExternalId"))
         """;
 
     public const string WorksWithoutOpenRequest =
@@ -216,7 +218,9 @@ internal static class WantedSql
               AND (request."WorkId" = work."Id"::text
                    OR identity."WorkId" IS NOT NULL
                    OR EXISTS (SELECT 1 FROM "MusicAlbums" album
-                              WHERE album."WorkId" = work."Id" AND request."Provider" = @musicBrainz AND request."ExternalId" = album."MusicBrainzReleaseGroupId"))
+                              WHERE album."WorkId" = work."Id" AND request."Provider" = @musicBrainz AND request."ExternalId" = album."MusicBrainzReleaseGroupId")
+                   OR EXISTS (SELECT 1 FROM "WorkSourceLinks" anime JOIN "AnimeMetadata" match ON match."AnimeId" = anime."SourceId"
+                              WHERE anime."WorkId" = work."Id" AND anime."SourceKind" = 0 AND request."Provider" = match."Provider" AND request."ExternalId" = match."ExternalId"))
             ORDER BY request."CreatedAt" DESC
             LIMIT 1
         ) latest

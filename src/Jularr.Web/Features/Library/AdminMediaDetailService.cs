@@ -7,6 +7,7 @@ using Jularr.Web.Features.Acquisition.History;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Ownership;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Metadata;
@@ -32,7 +33,8 @@ public sealed class AdminMediaDetailService(
     AcquisitionOwnershipStore ownership,
     AnimeImportStore imports,
     AniListAccountStore aniList,
-    AcquisitionHistoryService history)
+    AcquisitionHistoryService history,
+    AcquisitionAccessStore requests)
 {
     public const int HistoryLimit = 12;
     public const int OperationLimit = 6;
@@ -52,7 +54,9 @@ public sealed class AdminMediaDetailService(
         var state = await monitoring.LoadAsync(cancellationToken);
         var settings = state.Anime.GetValueOrDefault(anime.Key);
         var view = await animeMonitoring.LoadAsync(anime.Key, cancellationToken);
-        var episodes = await LoadEpisodesAsync(anime, state, view, cancellationToken);
+        var wantedEpisodes = await AnimeCanonicalEpisodes.WantedAsync(db, anime.Key, cancellationToken);
+        var request = metadata is null ? null : await requests.FindOpenAsync(MediaAcquisitionKind.Anime, metadata.Provider, metadata.ExternalId, cancellationToken);
+        var episodes = await LoadEpisodesAsync(anime, wantedEpisodes, request is null ? null : AnimeRequestPayload.Of(request), view, cancellationToken);
 
         var profileState = await profiles.LoadAsync(cancellationToken);
         var profileId = profileState.ResolveProfileId(MediaAcquisitionKind.Anime, id)
@@ -67,7 +71,7 @@ public sealed class AdminMediaDetailService(
             [.. profileState.Profiles.Select(profile => (profile.Id, profile.Name))],
             settings?.IndexerIds ?? [],
             settings?.TargetRootId,
-            state.Wanted.Values.Count(item => item.Key.AnimeKey.Equals(anime.Key, StringComparison.OrdinalIgnoreCase)));
+            wantedEpisodes.Count);
 
         var (ranges, rangesFailed) = await LoadRangesAsync(id, cancellationToken);
         var mapping = new AdminMediaMapping(
@@ -114,11 +118,13 @@ public sealed class AdminMediaDetailService(
 
     private async Task<IReadOnlyList<AdminMediaEpisode>> LoadEpisodesAsync(
         Anime anime,
-        MonitoringState state,
+        IReadOnlyList<AnimeWantedEpisode> wantedEpisodes,
+        AnimeRequestPayload? payload,
         WorkMonitoringView view,
         CancellationToken cancellationToken)
     {
         var id = anime.Id;
+        var wanted = wantedEpisodes.ToDictionary(item => (item.Key.SeasonNumber, item.Key.EpisodeNumber));
         var episodeRows = await db.Episodes
             .AsNoTracking()
             .Where(item => item.AnimeId == id)
@@ -200,8 +206,12 @@ public sealed class AdminMediaDetailService(
                 : [];
 
             var unit = MonitoredUnitKey.ForEpisode(anime.Key, season, number);
-            state.Wanted.TryGetValue(unit.ToString(), out var wanted);
-            state.Attempts.TryGetValue(unit.ToString(), out var attempt);
+            wanted.TryGetValue((season, number), out var wantedEpisode);
+
+            // The request of the anime says what is on its way (the episodes of the grab in flight) and that a search for the wanted ones found nothing.
+            var grabbed = payload?.Episodes?.Any(item => item.SeasonNumber == season && item.EpisodeNumber == number) == true;
+            var searchedInVain = wantedEpisode is not null && payload is { Searches: > 0, NextSearchUtc: not null };
+            AcquisitionAttemptStatus? attempt = grabbed ? AcquisitionAttemptStatus.Grabbed : searchedInVain ? AcquisitionAttemptStatus.Failed : null;
 
             string? quality = null;
             foreach (var file in files)
@@ -215,9 +225,9 @@ public sealed class AdminMediaDetailService(
                 episodeId,
                 title,
                 AnimeMonitoring.IsUnitMonitored(view, unit),
-                AdminMediaDetailView.StateOf(files.Length > 0, attempt?.Status),
-                wanted?.Reason == WantedReason.CutoffUnmet,
-                attempt?.FailureCount ?? 0,
+                AdminMediaDetailView.StateOf(files.Length > 0, attempt),
+                wantedEpisode?.Reason == WantedReason.CutoffUnmet,
+                searchedInVain ? payload!.Searches : 0,
                 quality,
                 LanguageSet(files.SelectMany(file => file.Audio).Select(track => track.Language)),
                 LanguageSet(
@@ -233,13 +243,11 @@ public sealed class AdminMediaDetailService(
 
         // Episodes acquisition wants but the library has no row for yet still belong on the page.
         var known = rows.Select(row => (row.Season, row.Number)).ToHashSet();
-        foreach (var wanted in state.Wanted.Values)
+        foreach (var episode in wantedEpisodes)
         {
-            if (wanted.Key.AnimeKey.Equals(anime.Key, StringComparison.OrdinalIgnoreCase)
-                && wanted.Key.Granularity == MonitoringGranularity.Episode
-                && known.Add((wanted.Key.SeasonNumber, wanted.Key.EpisodeNumber)))
+            if (known.Add((episode.Key.SeasonNumber, episode.Key.EpisodeNumber)))
             {
-                rows.Add(Build(wanted.Key.SeasonNumber, wanted.Key.EpisodeNumber, null, ""));
+                rows.Add(Build(episode.Key.SeasonNumber, episode.Key.EpisodeNumber, null, ""));
             }
         }
 

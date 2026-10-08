@@ -24,8 +24,7 @@ public sealed class AcquisitionApiServiceTests
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
-        // Wanted episodes are only computed by a pipeline run, the same as the owner UI.
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         var monitored = await environment.WithAcquisitionApiAsync(api => api.GetMonitoredAsync(CancellationToken.None));
         var row = monitored.Single();
@@ -152,7 +151,7 @@ public sealed class AcquisitionApiServiceTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync(hardLinkCreator: null);
         await environment.SeedFrierenAsync(seasonFolders: false);
         environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         // A file where the season folder must be created makes the library folder unwritable for
         // the import, like a read-only mount — the same recipe AnimeAcquisitionPipelineTests uses.
@@ -200,7 +199,7 @@ public sealed class AcquisitionApiServiceTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         var destination = Path.Combine(environment.SeriesFolder, "Season 01", "Frieren - S01E02 - Episode 2.mkv");
         await File.WriteAllTextAsync(destination, "someone else's file");

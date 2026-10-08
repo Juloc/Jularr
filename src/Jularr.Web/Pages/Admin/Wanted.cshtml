@@ -168,7 +168,7 @@
                     {
                         var statusName = AdminWantedQuery.StatusName(item.Status);
                         var unit = Model.UnitLabel(item);
-                        var result = Model.ResultLabel(item);
+                        var result = item.Note;
                         var languages = item.Languages.Select(RequestLanguages.Name).ToArray();
                         <tr class="admwant-row">
                             <td class="admwant-cell-title">

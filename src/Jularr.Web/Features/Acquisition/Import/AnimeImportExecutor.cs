@@ -208,7 +208,7 @@ public sealed class AnimeImportExecutor(
             Guid.NewGuid(),
             download.Id,
             null,
-            acquisition is null || download.Kind != SabnzbdAcquisitionService.OperationKind ? null : acquisition.JobId,
+            acquisition?.JobId,
             acquisition?.AnimeKey ?? "",
             acquisition?.AnimeTitle ?? download.Subject ?? "Anime",
             storagePath ?? existing?.DownloadPath,

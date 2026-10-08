@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Monitoring;
@@ -25,19 +26,16 @@ public sealed class AnimeAcquisitionPipelineTests
         await environment.SeedFrierenAsync();
         AddStandardReleases(environment);
 
-        var first = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        var request = await environment.SearchNowAsync();
 
-        Assert.AreEqual(1, first.Grabs, first.ToString());
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request!.Status, request.StatusMessage);
         var grab = environment.Sabnzbd.Grabs.Single();
         Assert.AreEqual(Best, grab.NzbName);
         Assert.AreEqual("anime", grab.Category);
 
-        var acquisition = (await environment.Acquisitions.LoadAsync()).Acquisitions.Single();
-        Assert.AreEqual(new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 1, 2, 2), acquisition.Episodes.Single());
-        Assert.AreEqual(1, acquisition.PendingCandidates.Length, "The lower accepted release stays as the fallback candidate.");
-        var monitoring = await environment.MonitoringStateAsync();
-        Assert.AreEqual(AnimeAcquisitionAttemptStatus.Grabbed, monitoring.Attempts["frieren:S01E02"].Status);
-        var job = (await environment.Ownership.LoadAsync()).Jobs[acquisition.Id.ToString()];
+        var payload = AnimeRequestPayload.Of(request);
+        Assert.AreEqual(new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 1, 2, 2), payload.Episodes!.Single());
+        var job = (await environment.Ownership.LoadAsync()).Jobs[request.OperationId!.Value.ToString()];
         Assert.AreEqual(AcquisitionOwner.Jularr, job.Owner);
         Assert.AreEqual(AcquisitionOwnershipStatus.Pending, job.Status);
 
@@ -47,10 +45,8 @@ public sealed class AnimeAcquisitionPipelineTests
         Assert.IsTrue(decisions.Any(message => message.StartsWith($"Rejected: {OtherSeries}", StringComparison.Ordinal) && message.Contains("does not match this anime", StringComparison.Ordinal)));
         Assert.IsTrue(decisions.Any(message => message.StartsWith("Sent to SABnzbd", StringComparison.Ordinal)));
 
-        var second = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-        Assert.AreEqual(0, second.Grabs);
-        Assert.AreEqual(0, second.Searches, "A grabbed episode is not searched again.");
-        Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count);
+        await environment.SearchNowAsync();
+        Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count, "A grabbed episode is not searched again.");
     }
 
     [TestMethod]
@@ -61,10 +57,9 @@ public sealed class AnimeAcquisitionPipelineTests
         AddStandardReleases(environment);
 
         // Default mode: Sonarr keeps the anime (read-only coexistence).
-        var readOnly = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-        Assert.AreEqual(0, readOnly.Searches);
+        var readOnly = await environment.SearchNowAsync();
         Assert.AreEqual(0, environment.Prowlarr.Queries.Count, "No indexer search for an anime Sonarr manages.");
-        Assert.IsTrue(readOnly.Notes.Any(note => note.Contains("read-only Sonarr coexistence", StringComparison.Ordinal)));
+        StringAssert.Contains(readOnly!.StatusMessage, "Sonarr manages this series");
 
         // Parallel mode, but Sonarr owns both acceptable releases.
         var now = DateTimeOffset.UtcNow;
@@ -75,15 +70,13 @@ public sealed class AnimeAcquisitionPipelineTests
             return SonarrParallelSafety.RegisterJob(parallel, new AcquisitionOwnership("sonarr-2", AnimeAcquisitionEnvironment.AnimeKey, AcquisitionOwner.Sonarr, AnimeReleaseParser.Parse(Lower).ReleaseKey, AcquisitionOwnershipStatus.Pending, now));
         });
 
-        var parallelRun = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        var parallelRun = await environment.SearchNowAsync();
 
-        Assert.AreEqual(1, parallelRun.Searches);
-        Assert.AreEqual(0, parallelRun.Grabs);
+        Assert.AreEqual(1, environment.Prowlarr.Queries.Count > 0 ? 1 : 0, "The anime is searched in parallel mode.");
         Assert.AreEqual(0, environment.Sabnzbd.Grabs.Count);
         var decisions = (await environment.LogsAsync(AnimeAcquisitionPipeline.LogModule)).Select(entry => entry.Message).ToArray();
         Assert.IsTrue(decisions.Any(message => message.StartsWith($"Rejected: {Best}", StringComparison.Ordinal) && message.Contains("Ownership:", StringComparison.Ordinal)), string.Join(Environment.NewLine, decisions));
-        var attempt = (await environment.MonitoringStateAsync()).Attempts["frieren:S01E02"];
-        Assert.AreEqual(AnimeAcquisitionAttemptStatus.Failed, attempt.Status, "The episode backs off instead of being searched every run.");
+        Assert.IsNotNull(AnimeRequestPayload.Of(parallelRun!).NextSearchUtc, "The request backs off instead of being searched every pass.");
     }
 
     [TestMethod]
@@ -92,37 +85,18 @@ public sealed class AnimeAcquisitionPipelineTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         AddStandardReleases(environment);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-        var acquisition = (await environment.Acquisitions.LoadAsync()).Acquisitions.Single();
+        var request = await environment.SearchNowAsync();
+        Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count);
 
-        // The process stopped after SABnzbd accepted the release but before the grab was recorded.
-        await environment.Monitoring.UpdateAsync(state => state with
-        {
-            Attempts = new Dictionary<string, AnimeAcquisitionAttempt>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["frieren:S01E02"] = new(new AnimeEpisodeKey(AnimeAcquisitionEnvironment.AnimeKey, 1, 2, 2), AnimeAcquisitionAttemptStatus.Pending, null, 0, acquisition.CreatedAtUtc.AddSeconds(-1), null)
-            }
-        });
+        // The grab is the request's own state, so a restart finds it again and never downloads the episode twice.
         await environment.RestartAsync();
         await environment.Scheduler.RecoverAsync(CancellationToken.None);
+        var afterRestart = await environment.SearchNowAsync();
 
-        Assert.AreEqual(AnimeAcquisitionAttemptStatus.Grabbed, (await environment.MonitoringStateAsync()).Attempts["frieren:S01E02"].Status);
-        var afterRestart = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-        Assert.AreEqual(0, afterRestart.Grabs);
-
-        // Even a lost monitoring state cannot cause a second download: the relation store and the
-        // running Operation are the source of truth.
-        await environment.Monitoring.UpdateAsync(state => state with
-        {
-            Attempts = new Dictionary<string, AnimeAcquisitionAttempt>(StringComparer.OrdinalIgnoreCase)
-        });
-        await environment.RestartAsync();
-        var lostState = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.Manual, CancellationToken.None);
-
-        Assert.AreEqual(0, lostState.Grabs);
+        Assert.AreEqual(request!.OperationId, afterRestart!.OperationId);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, afterRestart.Status);
         Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count);
-        Assert.AreEqual(1, (await environment.Acquisitions.LoadAsync()).Acquisitions.Count);
-        Assert.AreEqual(AnimeAcquisitionAttemptStatus.Grabbed, (await environment.MonitoringStateAsync()).Attempts["frieren:S01E02"].Status);
+        Assert.AreEqual(1, (await environment.Operations.ListAsync(new OperationListFilter(Kind: AnimeAcquisitionEngine.OperationKind))).Count);
     }
 
     [TestMethod]
@@ -134,7 +108,7 @@ public sealed class AnimeAcquisitionPipelineTests
         await environment.SeedFrierenAsync();
         await environment.ImportSettings.UpdateAsync(state => state with { PlaybackOptimization = mode });
         AddStandardReleases(environment);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
         var completed = await environment.CompleteLatestDownloadAsync(download);
@@ -159,7 +133,7 @@ public sealed class AnimeAcquisitionPipelineTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         AddStandardReleases(environment);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
         var record = await environment.ImportCompletedAsync(await environment.CompleteLatestDownloadAsync(download), download);
         Assert.AreEqual(AnimeImportStatus.Imported, record!.Status, record.Message);
@@ -204,7 +178,7 @@ public sealed class AnimeAcquisitionPipelineTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         AddStandardReleases(environment);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
         var completed = await environment.CompleteLatestDownloadAsync(download);
@@ -231,19 +205,17 @@ public sealed class AnimeAcquisitionPipelineTests
             },
             downloadImportLog.Reverse().Select(entry => entry.Message).ToArray());
 
-        var acquisition = (await environment.Acquisitions.LoadAsync()).Acquisitions.Single();
-        Assert.AreEqual(AcquisitionOwnershipStatus.Completed, (await environment.Ownership.LoadAsync()).Jobs[acquisition.Id.ToString()].Status);
+        Assert.AreEqual(AcquisitionOwnershipStatus.Completed, (await environment.Ownership.LoadAsync()).Jobs[completed.Id.ToString()].Status);
         var importLog = (await environment.LogsAsync(AnimeImportExecutor.LogModule)).Select(entry => entry.Message).ToArray();
         Assert.IsTrue(importLog.Any(message => message.StartsWith($"Imported {Best}.mkv as S01E02", StringComparison.Ordinal)), string.Join(Environment.NewLine, importLog));
 
         // Running the import again changes nothing.
         Assert.AreEqual(record.Id, (await environment.ImportCompletedAsync(completed, download))!.Id);
 
-        var next = await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
-        Assert.AreEqual(0, next.Searches);
-        var monitoring = await environment.MonitoringStateAsync();
-        Assert.AreEqual(0, monitoring.Wanted.Count, "The imported episode is no longer wanted.");
-        Assert.IsFalse(monitoring.Attempts.ContainsKey("frieren:S01E02"));
+        var searches = environment.Prowlarr.Queries.Count;
+        var next = await environment.SearchNowAsync();
+        Assert.AreEqual(searches, environment.Prowlarr.Queries.Count, "The imported episode is not searched again.");
+        Assert.AreNotEqual(AcquisitionRequestStatus.Downloading, next!.Status);
     }
 
     [TestMethod]
@@ -271,7 +243,7 @@ public sealed class AnimeAcquisitionPipelineTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync(seasonFolders: false);
         AddStandardReleases(environment);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         // A file where the season folder must be created makes the library folder unwritable for
         // the import, like a read-only mount.
@@ -304,7 +276,7 @@ public sealed class AnimeAcquisitionPipelineTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         AddStandardReleases(environment);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         var destination = Path.Combine(environment.SeriesFolder, "Season 01", "Frieren - S01E02 - Episode 2.mkv");
         await File.WriteAllTextAsync(destination, "someone else's file");
@@ -336,7 +308,7 @@ public sealed class AnimeAcquisitionPipelineTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         AddStandardReleases(environment);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         // SABnzbd finished and the monitor recorded it, but Jularr stopped before importing.
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
@@ -358,7 +330,7 @@ public sealed class AnimeAcquisitionPipelineTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         AddStandardReleases(environment);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
         var scan = await environment.Operations.CreateAsync(new OperationDescriptor("library-scan", "Library", "Library scan"));
         await environment.Operations.MarkRunningAsync(scan);
 
@@ -370,7 +342,7 @@ public sealed class AnimeAcquisitionPipelineTests
         Assert.IsTrue(File.Exists(Path.Combine(download, $"{Best}.mkv")));
 
         await environment.Operations.MarkSucceededAsync(scan);
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
 
         Assert.AreEqual(AnimeImportStatus.Imported, (await environment.Imports.GetAsync(record.Id))!.Status);
         Assert.IsNotNull(await environment.MediaFileAsync(1, 2));

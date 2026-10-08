@@ -89,10 +89,12 @@ public sealed class AnimeAcquisitionScheduler(
         }
 
         return await RunExclusiveAsync(
-            async (pipeline, token) =>
+            async (_, token) =>
             {
                 await ResumeImportsAsync(token);
-                var summary = await pipeline.RunAsync(trigger, animeKey, token);
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var started = await scope.ServiceProvider.GetRequiredService<AnimeRequestStarter>().StartAsync(animeKey, token);
+                var summary = new AnimeAcquisitionRunSummary(started, 0, 0, [started == 0 ? "Nothing is monitored that can be requested." : "The requests of the monitored anime are searched by the Wanted pass."]);
                 if (animeKey is null)
                 {
                     LastRunAtUtc = DateTimeOffset.UtcNow;
@@ -175,7 +177,11 @@ public sealed class AnimeAcquisitionScheduler(
             return 0;
         }
 
-        await RunSafelyAsync(null, AnimeSearchTrigger.PeriodicMissing, cancellationToken);
+        // Searching is the requests' business (their own back-off); the periodic step keeps the monitored list in line with the owner's AniList lists and
+        // makes sure every monitored anime has its request.
+        await RunAniListAutoMonitorAsync(cancellationToken);
+        await using var scope = scopeFactory.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<AnimeRequestStarter>().StartAsync(null, cancellationToken, makeDue: false);
         return 1;
     }
 

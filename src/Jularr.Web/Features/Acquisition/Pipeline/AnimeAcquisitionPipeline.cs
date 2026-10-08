@@ -679,14 +679,14 @@ public sealed class AnimeAcquisitionPipeline(
         var prowlarrConfigured = await IsProwlarrConfiguredAsync(cancellationToken);
         var roots = await db.LibraryRoots.AsNoTracking().OrderBy(root => root.Name).ToArrayAsync(cancellationToken);
         var recentHistory = await history.ForAnimeAsync(animeId, 15, cancellationToken);
+        var wantedEpisodes = await AnimeCanonicalEpisodes.WantedAsync(db, animeKey, cancellationToken);
 
         state.Anime.TryGetValue(animeKey, out var settings);
         var monitored = (await animeMonitoring.LoadAsync(animeKey, cancellationToken)).IsWorkMonitored;
         var assigned = profileState.ResolveProfileId(MediaAcquisitionKind.Anime, animeId)
             ?? AnimeQualityProfiles.DefaultAnime1080pId;
         var active = await CountActiveDownloadsAsync(relations, animeKey, cancellationToken);
-        var lastEvent = state.History
-            .LastOrDefault(entry => entry.Key.AnimeKey.Equals(animeKey, StringComparison.OrdinalIgnoreCase));
+        var lastEvent = recentHistory.FirstOrDefault();
 
         return new AnimeAcquisitionPanel(
             animeId,
@@ -696,9 +696,9 @@ public sealed class AnimeAcquisitionPipeline(
             monitored,
             assigned,
             profileState.Profiles,
-            state.Wanted.Values.Count(item => item.Key.AnimeKey.Equals(animeKey, StringComparison.OrdinalIgnoreCase)),
+            wantedEpisodes.Count,
             active,
-            lastEvent is null ? null : $"{lastEvent.AtUtc:u} · {lastEvent.Key} · {lastEvent.Event}: {lastEvent.Reason}",
+            lastEvent is null ? null : $"{lastEvent.OccurredAtUtc:u} · S{lastEvent.SeasonNumber:00}E{lastEvent.EpisodeNumber:00} · {lastEvent.EventKind}: {lastEvent.Reason}",
             prowlarrConfigured,
             roots,
             recentHistory);
@@ -731,9 +731,10 @@ public sealed class AnimeAcquisitionPipeline(
         var operations = new OperationStore(db);
 
         var monitoredKeys = await animeMonitoring.MonitoredKeysAsync(cancellationToken);
+        var wantedEpisodes = await AnimeCanonicalEpisodes.WantedAsync(db, null, cancellationToken);
         var keys = state.Anime.Keys
             .Concat(monitoredKeys)
-            .Concat(state.Wanted.Values.Select(item => item.Key.AnimeKey))
+            .Concat(wantedEpisodes.Select(item => item.Key.AnimeKey))
             .Concat(relations.Acquisitions.Select(item => item.AnimeKey))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -757,24 +758,19 @@ public sealed class AnimeAcquisitionPipeline(
                     entry.Title,
                     SonarrParallelSafety.GetMode(ownership, entry.Key),
                     profile,
-                    state.Wanted.Values.Count(item => item.Key.AnimeKey.Equals(entry.Key, StringComparison.OrdinalIgnoreCase)),
+                    wantedEpisodes.Count(item => item.Key.AnimeKey.Equals(entry.Key, StringComparison.OrdinalIgnoreCase)),
                     settings?.IndexerIds ?? []);
             })
             .OrderBy(row => row.Title, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var wanted = state.Wanted.Values
-            .Select(item =>
-            {
-                state.Attempts.TryGetValue(item.Key.ToString(), out var attempt);
-                return new AnimeWantedRow(
-                    item.Key,
-                    anime.TryGetValue(item.Key.AnimeKey, out var entry) ? entry.Title : item.Key.AnimeKey,
-                    anime.TryGetValue(item.Key.AnimeKey, out var known) ? known.Id : null,
-                    item.Reason,
-                    item.BecameWantedAtUtc,
-                    attempt);
-            })
+        var wanted = wantedEpisodes
+            .Select(item => new AnimeWantedRow(
+                item.Key,
+                anime.TryGetValue(item.Key.AnimeKey, out var entry) ? entry.Title : item.Key.AnimeKey,
+                anime.TryGetValue(item.Key.AnimeKey, out var known) ? known.Id : null,
+                item.Reason,
+                item.BecameWantedAtUtc))
             .OrderBy(row => row.Title, StringComparer.OrdinalIgnoreCase)
             .ThenBy(row => row.Key.SeasonNumber)
             .ThenBy(row => row.Key.EpisodeNumber)
@@ -1014,7 +1010,7 @@ public sealed class AnimeAcquisitionPipeline(
         return chosen;
     }
 
-    private static async Task LogDecisionsAsync(
+    internal static async Task LogDecisionsAsync(
         OperationStore operations,
         Guid operationId,
         IReadOnlyList<AnimeSearchCandidate> candidates,
@@ -1134,8 +1130,7 @@ public sealed record AnimeWantedRow(
     string Title,
     Guid? AnimeId,
     AnimeWantedReason Reason,
-    DateTimeOffset SinceUtc,
-    AnimeAcquisitionAttempt? Attempt);
+    DateTimeOffset SinceUtc);
 
 public sealed record AnimeDownloadRow(
     SabnzbdAcquisition Acquisition,

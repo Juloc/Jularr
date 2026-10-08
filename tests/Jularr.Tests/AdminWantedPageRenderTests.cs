@@ -44,9 +44,9 @@ public sealed class AdminWantedPageRenderTests
 
         Assert.AreEqual(7, TabCount(html, "All"));
         Assert.AreEqual(2, TabCount(html, "Requested"));
-        Assert.AreEqual(2, TabCount(html, "Missing"));
+        Assert.AreEqual(3, TabCount(html, "Missing"));
         Assert.AreEqual(1, TabCount(html, "Searching"));
-        Assert.AreEqual(2, TabCount(html, "Failed"));
+        Assert.AreEqual(1, TabCount(html, "Failed"));
 
         foreach (var title in new[] { "Project Hail Mary", "Berserk", "Mushoku Tensei", "Dune Novel", "Dune: Part Two", "Frieren" })
         {
@@ -68,7 +68,6 @@ public sealed class AdminWantedPageRenderTests
         StringAssert.Contains(html, "Deutsch");
         StringAssert.Contains(html, "Anime 1080p");
         StringAssert.Contains(html, "Upgrade wanted");
-        StringAssert.Contains(html, "Failed attempts: 2");
         StringAssert.Contains(html, "No release yet.");
         StringAssert.Contains(html, "No search recorded");
 
@@ -99,7 +98,7 @@ public sealed class AdminWantedPageRenderTests
 
         var failed = await host.GetHtmlAsync("/Admin/Wanted?tab=failed");
         StringAssert.Contains(failed, "Dune Novel");
-        StringAssert.Contains(failed, "Frieren");
+        Assert.IsFalse(failed.Contains("Frieren", StringComparison.Ordinal));
         Assert.IsFalse(failed.Contains("Berserk", StringComparison.Ordinal));
         Assert.AreEqual(7, TabCount(failed, "All"));
 
@@ -163,8 +162,7 @@ public sealed class AdminWantedPageRenderTests
         }
 
         await using var broken = await WantedHost.CreateAsync();
-        Directory.CreateDirectory(Path.Combine(broken.DataRoot, "acquisition"));
-        await File.WriteAllTextAsync(Path.Combine(broken.DataRoot, "acquisition", "monitoring.json"), "{ not json");
+        await broken.Db.Database.ExecuteSqlRawAsync("ALTER TABLE \"WantedItems\" RENAME TO \"WantedItemsOld\"");
 
         var failed = await broken.GetHtmlAsync("/Admin/Wanted");
         StringAssert.Contains(failed, "role=\"alert\"");
@@ -346,28 +344,16 @@ public sealed class AdminWantedPageRenderTests
             await AddAsync(MediaAcquisitionKind.Book, "Completed Book", AcquisitionRequestStatus.Completed);
             await AddAsync(MediaAcquisitionKind.Book, "Rejected Book", AcquisitionRequestStatus.Rejected);
 
-            var anime = new Anime { Key = "frieren", Title = "Frieren" };
-            Db.Anime.Add(anime);
+            // Episode 28 is missing; episode 27 is installed and still wanted better.
+            var seeded = await new LibraryCanonicalSeed(Db).AddAnimeAsync("Frieren", [(1, 28, false), (1, 27, true)]);
+            seeded.Anime.Key = "frieren";
+            var now = DateTime.UtcNow;
+            Db.WantedItems.AddRange(
+                new WantedItem { WorkId = seeded.Work.Id, TargetKind = WantedTargetKind.Episode, TargetId = seeded.Episodes.Single(item => item.Canonical.EpisodeNumber == 28).Canonical.Id, CreatedAt = now.AddDays(-2) },
+                new WantedItem { WorkId = seeded.Work.Id, TargetKind = WantedTargetKind.Episode, TargetId = seeded.Episodes.Single(item => item.Canonical.EpisodeNumber == 27).Canonical.Id, CreatedAt = now.AddDays(-3) });
             await Db.SaveChangesAsync();
 
-            var now = DateTimeOffset.UtcNow;
-            var missing = new AnimeEpisodeKey("frieren", 1, 28);
-            var retrying = new AnimeEpisodeKey("frieren", 1, 27);
-            await Monitoring.UpdateAsync(state =>
-            {
-                state.Wanted[missing.ToString()] = new WantedUnit(missing, WantedReason.Missing, now.AddDays(-2));
-                state.Wanted[retrying.ToString()] = new WantedUnit(retrying, WantedReason.CutoffUnmet, now.AddDays(-3));
-                state.Attempts[retrying.ToString()] = new AcquisitionAttempt(
-                    retrying,
-                    AcquisitionAttemptStatus.Failed,
-                    "release",
-                    2,
-                    now.AddHours(-5),
-                    now.AddHours(3));
-                return state;
-            });
-
-            return anime.Id;
+            return seeded.Anime.Id;
         }
 
         public async Task<string> GetHtmlAsync(string path)

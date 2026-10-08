@@ -97,9 +97,8 @@ public sealed class RequestToPlayAnimeTests
             return new AniListAccountService(http, accounts, Environment.Db, metadata, segments, reviews, EpisodeFlowFixture.Account(Viewer), NullLogger<AniListAccountService>.Instance);
         }
 
-        /// <summary>The scheduler's search-on-add run for the requested anime, as the Wanted pass of this media type.</summary>
-        public Task<AnimeAcquisitionRunSummary> WantedPassAsync(Anime anime) =>
-            Environment.Scheduler.RunNowAsync(anime.Key, AnimeSearchTrigger.SearchOnAdd, CancellationToken.None);
+        /// <summary>The owner's "Search now" for the requested anime: its request is made due and one Wanted pass searches it.</summary>
+        public Task<AcquisitionRequest?> WantedPassAsync(Anime anime) => Environment.SearchNowAsync(anime.Key);
 
         /// <summary>One pass of the shared Wanted scheduler, which brings the request to the state of the Anime pipeline.</summary>
         public Task<int> RequestPassAsync() => Environment.RequestPassAsync();
@@ -111,11 +110,12 @@ public sealed class RequestToPlayAnimeTests
             return await RequestToPlayAssert.ConsumerStatusAsync(DiscoverPage(scope), requestId);
         }
 
-        /// <summary>SABnzbd finishes the latest grab into a real folder and the shared completed-download spine imports it.</summary>
+        /// <summary>SABnzbd finishes the latest grab into a real folder and the Wanted pass imports it through the shared completed-download spine.</summary>
         public async Task<AnimeImportRecord> DownloadAndImportAsync()
         {
-            var folder = Environment.AddCompletedDownload(Episode1, $"{Episode1}.mkv");
-            var record = await Environment.ImportCompletedAsync(await Environment.CompleteLatestDownloadAsync(folder), folder);
+            var download = await Environment.CompleteLatestDownloadAsync(Environment.AddCompletedDownload(Episode1, $"{Episode1}.mkv"));
+            await Environment.RequestPassAsync();
+            var record = await Environment.Imports.FindByDownloadAsync(download.Id, CancellationToken.None);
             Assert.AreEqual(AnimeImportStatus.Imported, record!.Status, record.Message);
             return record;
         }
@@ -155,24 +155,22 @@ public sealed class RequestToPlayAnimeTests
         await using var world = await AnimeWorld.CreateAsync();
         var environment = world.Environment;
 
-        // Discover -> Request: the Anime executor adds the series like Sonarr, creates its canonical Work and queues the search.
+        // Discover -> Request: the Anime executor adds the series like Sonarr, creates its canonical Work and grabs the first release.
         // Nothing is downloaded yet, so the request is in progress and never reads as available.
         var request = await world.RequestAsync();
-        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status, request.StatusMessage);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status, request.StatusMessage);
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
         Assert.AreEqual($"/Library/Anime/{anime.Id}", request.ResultUrl);
         RequestToPlayAssert.AdminQueueProjectsTheRequest(request);
         var requestedStatus = await world.ConsumerStatusAsync(request.Id);
-        Assert.AreEqual("approved", requestedStatus.GetProperty("status").GetString());
+        Assert.AreEqual("downloading", requestedStatus.GetProperty("status").GetString());
         Assert.IsFalse(requestedStatus.GetProperty("done").GetBoolean());
 
         var requested = Assert.ContainsSingle((await new LibraryMediaCardQuery(environment.Db).GetEntriesAsync(Viewer, s_videoTypes, CancellationToken.None)).Entries);
         Assert.AreEqual(request.ResultUrl, requested.Card.Href, "A requested anime is in the Library before it has a file.");
         Assert.AreEqual(0, requested.PlayableUnits);
 
-        // Wanted: the scheduler searches and grabs once; a second pass and a restart never submit the release again.
-        var run = await world.WantedPassAsync(anime);
-        Assert.AreEqual(1, run.Grabs, run.ToString());
+        // Wanted: the request grabbed once; another search, a pass and a restart never submit the release again.
         await world.WantedPassAsync(anime);
         await environment.RestartAsync();
         await world.WantedPassAsync(anime);

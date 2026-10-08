@@ -577,7 +577,8 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.RequestStatusQ
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Books.BookAcquisitionExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
-builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IMonitoredAcquisitionExecutor>(provider => provider.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AnimeAcquisitionRequestExecutor>());
+builder.Services.AddScoped<AnimeAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, AnimeWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
@@ -624,12 +625,16 @@ foreach (var wantedKind in new[]
 }
 
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestDrafter, Jularr.Web.Features.Music.MusicRequestDrafter>();
+builder.Services.AddScoped<AnimeRequestDrafter>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestDrafter>(services => services.GetRequiredService<AnimeRequestDrafter>());
+builder.Services.AddScoped<AnimeRequestStarter>();
 foreach (var sourceKind in new[]
 {
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book,
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.LightNovel,
     Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga,
-    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Music
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Music,
+    Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Anime
 })
 {
     builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.WantedRequestSource>(

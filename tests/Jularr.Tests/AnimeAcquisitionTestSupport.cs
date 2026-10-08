@@ -356,13 +356,30 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
     }
 
     /// <summary>
-    /// SABnzbd reports the job of the acquisition's latest attempt as completed; the monitor
+    /// What "Search now" and the Wanted pass do together: the monitored anime get their request, it is made due and one pass searches and grabs for it. Returns
+    /// the anime's request.
+    /// </summary>
+    public async Task<AcquisitionRequest?> SearchNowAsync(string? animeKey = null, DateTime? nowUtc = null)
+    {
+        await Scheduler.RunNowAsync(animeKey, AnimeSearchTrigger.Manual, CancellationToken.None);
+        await RunWantedPassAsync(nowUtc ?? DateTime.UtcNow);
+        Db.ChangeTracker.Clear();
+        return await AnimeRequestAsync();
+    }
+
+    public async Task<AcquisitionRequest?> AnimeRequestAsync() =>
+        (await new AcquisitionAccessStore(Db).ListAllAsync(50, CancellationToken.None)).FirstOrDefault(request => request.Kind == MediaAcquisitionKind.Anime);
+
+    /// <summary>
+    /// SABnzbd reports the job of the latest anime download as completed; the monitor
     /// projection runs and returns the completed operation (the import is not started).
     /// </summary>
     public async Task<OperationSnapshot> CompleteLatestDownloadAsync(string storagePath, SabnzbdAcquisition? acquisition = null)
     {
-        acquisition ??= (await Acquisitions.LoadAsync()).Acquisitions.Single();
-        var operation = (await Operations.GetAsync(acquisition.LatestAttempt!.OperationId))!;
+        var operation = acquisition is not null
+            ? (await Operations.GetAsync(acquisition.LatestAttempt!.OperationId))!
+            : (await Operations.ListAsync(new OperationListFilter(Kind: AnimeAcquisitionEngine.OperationKind))).OrderByDescending(item => item.CreatedAtUtc).FirstOrDefault()
+              ?? (await Operations.GetAsync((await Acquisitions.LoadAsync()).Acquisitions.Single().LatestAttempt!.OperationId))!;
         ReportCompletedPath(operation, storagePath);
         var result = await SabnzbdOperationProjector.ApplyAsync(
             Operations,
@@ -599,7 +616,17 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddScoped<AnimeMonitoring>();
         collection.AddScoped<AnimeAcquisitionRequestExecutor>();
         collection.AddScoped<IAcquisitionRequestExecutor>(provider => provider.GetRequiredService<AnimeAcquisitionRequestExecutor>());
-        collection.AddScoped<IMonitoredAcquisitionExecutor>(provider => provider.GetRequiredService<AnimeAcquisitionRequestExecutor>());
+        collection.AddScoped<AnimeAcquisitionEngine>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, AnimeWantedRequestHandler>();
+        collection.AddSingleton(new Jularr.Web.Features.Acquisition.Release.MediaAcquisitionRegistry([new Jularr.Web.Features.Acquisition.Release.AnimeAcquisitionRegistration()]));
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Selection.InstalledVideoVersions>();
+        collection.AddScoped<CanonicalMediaStorageService>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, AnimeUpgradeAssessor>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.UpgradeAssessors>();
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.WantedReconciler>();
+        collection.AddScoped<AnimeRequestDrafter>();
+        collection.AddScoped<AnimeRequestStarter>();
+        collection.AddSingleton<AnimeCanonicalEpisodesState>();
         collection.AddSingleton(TimeProvider.System);
         collection.AddScoped<ReleaseCalendarCacheStore>();
         collection.AddSingleton<RecordingEventPublisher>();
@@ -633,6 +660,8 @@ internal sealed class AnimeAcquisitionEnvironment : IAsyncDisposable
         collection.AddSingleton<AnimeAcquisitionScheduler>();
         collection.AddSingleton<AnimeWantedSwitch>();
         collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(provider => new SwitchedAnimeWantedSource(provider.GetRequiredService<AnimeWantedSwitch>(), new AnimeWantedSource(provider.GetRequiredService<AnimeAcquisitionScheduler>())));
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(provider => new SwitchedAnimeWantedSource(provider.GetRequiredService<AnimeWantedSwitch>(), new AnimeEpisodesWantedSource(provider.GetRequiredService<AnimeCanonicalEpisodes>(), provider.GetRequiredService<AnimeCanonicalEpisodesState>())));
+        collection.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(provider => new SwitchedAnimeWantedSource(provider.GetRequiredService<AnimeWantedSwitch>(), new Jularr.Web.Features.Acquisition.Wanted.WantedRequestSource(MediaAcquisitionKind.Anime, provider.GetRequiredService<Jularr.Web.Features.Acquisition.Wanted.WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<AnimeRequestDrafter>())));
         collection.AddScoped<AcquisitionApiKeyService>();
         collection.AddScoped<AcquisitionApiService>();
         collection.AddHttpClient();
@@ -744,7 +773,7 @@ public sealed class AnimeWantedSwitch
     public bool On { get; set; }
 }
 
-public sealed class SwitchedAnimeWantedSource(AnimeWantedSwitch gate, AnimeWantedSource inner) : Jularr.Web.Features.Acquisition.Wanted.IWantedSource
+public sealed class SwitchedAnimeWantedSource(AnimeWantedSwitch gate, Jularr.Web.Features.Acquisition.Wanted.IWantedSource inner) : Jularr.Web.Features.Acquisition.Wanted.IWantedSource
 {
     public MediaAcquisitionKind Kind => inner.Kind;
 

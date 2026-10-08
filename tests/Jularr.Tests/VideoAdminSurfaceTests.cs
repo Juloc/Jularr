@@ -1047,7 +1047,6 @@ public sealed class VideoAdminSurfaceTests
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(host.Environment.Db.Database.GetConnectionString()!).AddInterceptors(counter).Options);
         var service = new WantedListService(
             new AcquisitionAccessStore(db),
-            host.Get<AnimeMonitoringStore>(),
             host.Get<QualityProfileStore>(),
             db,
             new VideoRequestWorkResolver(db),

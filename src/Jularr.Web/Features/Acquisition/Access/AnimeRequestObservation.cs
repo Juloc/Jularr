@@ -15,7 +15,10 @@ namespace Jularr.Web.Features.Acquisition.Access;
 /// have a file and at least one does. Episodes that air later are picked up by the series' monitoring without the request staying open
 /// for them. Otherwise it reports the furthest stage of the download in flight. Nothing here writes.
 /// </summary>
-internal sealed class AnimeRequestObservation(
+/// <summary>What an Anime request covers: the slots of its series, the requested ones that have aired, the ones still without a file, and whether nothing can be tracked for it.</summary>
+public sealed record AnimeRequestScope(AnimeEpisodeSlots Slots, IReadOnlyList<AnimeEpisodeSlot> Requested, IReadOnlyList<AnimeEpisodeKey> Missing, bool Untracked, string ResultUrl);
+
+public sealed class AnimeRequestObservation(
     AppDbContext db,
     AnimeAcquisitionInventory inventory,
     AnimeAcquisitionPipeline pipeline,
@@ -27,12 +30,26 @@ internal sealed class AnimeRequestObservation(
     bool searchConfigured,
     DateTime nowUtc) : IRequestObservation
 {
+    public const string ReadOnlyMessage = "Sonarr manages this series — the owner decides in Sonarr migration.";
     private const string FinishedStatus = "FINISHED";
     private const string LookingMessage = "Looking for the requested episodes.";
     private const string NoEpisodeListMessage = "Not available yet. There is no episode list for this title, so nothing can be searched yet.";
     private const string SearchNotSetUpMessage = "Not available yet. Searching is not set up on this server.";
 
     public async Task<AcquisitionExecution?> ObserveAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    {
+        var scope = await ReadScopeAsync(request, cancellationToken);
+        return scope is null ? SeriesMissing(request) : await DecideAsync(request, scope, cancellationToken);
+    }
+
+    // An approved request whose series does not exist yet has not been executed: creating the series is the executor's job.
+    public static AcquisitionExecution? SeriesMissing(AcquisitionRequest request) =>
+        request.Status == AcquisitionRequestStatus.Approved
+            ? null
+            : new AcquisitionExecution(AcquisitionRequestStatus.Failed, "The series is no longer in the library.");
+
+    /// <summary>The episodes a request covers: its scope of the monitored slots, what has aired, and what of that is still missing. Null when the series does not exist.</summary>
+    public async Task<AnimeRequestScope?> ReadScopeAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
         var series = await (
                 from match in db.AnimeMetadata.AsNoTracking()
@@ -43,10 +60,7 @@ internal sealed class AnimeRequestObservation(
         var slots = series is null ? null : await inventory.LoadSlotsAsync(series, cancellationToken);
         if (slots is null)
         {
-            // An approved request whose series does not exist yet has not been executed: creating the series is the executor's job.
-            return request.Status == AcquisitionRequestStatus.Approved
-                ? null
-                : new AcquisitionExecution(AcquisitionRequestStatus.Failed, "The series is no longer in the library.");
+            return null;
         }
 
         var resultUrl = $"/Library/Anime/{slots.Anime.Id}";
@@ -60,14 +74,21 @@ internal sealed class AnimeRequestObservation(
         // Nothing the pipeline tracks for this request can be searched, or episodes have aired that it does not track at all: the request is not
         // available however many files exist, and it says why instead of looking like a search that is running.
         var untracked = inScope.Length == 0 || (slots.ExpectedEpisodesUnknown && AiredBeyondTracked(slots, airedUpTo));
-        if (!untracked && missing.Length == 0 && requested.Any(slot => slot.HasFile))
+        return new AnimeRequestScope(slots, requested, missing, untracked, resultUrl);
+    }
+
+    /// <summary>Where the request stands against its scope: Completed when everything requested that has aired is in the library, else what the pipeline in flight says.</summary>
+    public async Task<AcquisitionExecution> DecideAsync(AcquisitionRequest request, AnimeRequestScope scope, CancellationToken cancellationToken)
+    {
+        var (slots, requested, missing, untracked, resultUrl) = scope;
+        if (!untracked && missing.Count == 0 && requested.Any(slot => slot.HasFile))
         {
             return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "The requested episodes are in the library.", ResultUrl: resultUrl);
         }
 
         if (SonarrParallelSafety.GetMode(ownership, slots.Anime.Key) == AnimeManagementMode.ReadOnlyCoexistence)
         {
-            return new AcquisitionExecution(AcquisitionRequestStatus.Approved, "Sonarr manages this series — the owner decides in Sonarr migration.", ResultUrl: resultUrl);
+            return new AcquisitionExecution(AcquisitionRequestStatus.Approved, ReadOnlyMessage, ResultUrl: resultUrl);
         }
 
         var open = await pipeline.ListOpenAcquisitionsAsync(acquisitions, slots.Anime.Key, missing, nowUtc, cancellationToken);

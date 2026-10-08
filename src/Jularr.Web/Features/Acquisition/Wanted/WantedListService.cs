@@ -2,6 +2,7 @@ using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Library;
@@ -13,12 +14,11 @@ namespace Jularr.Web.Features.Acquisition.Wanted;
 /// <summary>
 /// Reads everything Jularr still needs into <see cref="WantedRow"/>s for Admin → Wanted: the
 /// approved requests of every media type (their state is the durable request row) and the monitored
-/// anime episodes the monitoring engine found missing. Read only; searching and retrying go
+/// anime episodes of the Wanted queue. Read only; searching and retrying go
 /// through <see cref="AcquisitionRequestService"/> and the anime acquisition scheduler.
 /// </summary>
 public sealed class WantedListService(
     AcquisitionAccessStore requests,
-    AnimeMonitoringStore monitoring,
     AnimeQualityProfileStore qualityProfiles,
     AppDbContext db,
     VideoRequestWorkResolver videoWorks,
@@ -167,13 +167,13 @@ public sealed class WantedListService(
         QualityProfileState profiles,
         CancellationToken cancellationToken)
     {
-        var state = await monitoring.LoadAsync(cancellationToken);
-        if (state.Wanted.Count == 0)
+        var episodes = await AnimeCanonicalEpisodes.WantedAsync(db, null, cancellationToken);
+        if (episodes.Count == 0)
         {
             return [];
         }
 
-        var keys = state.Wanted.Values
+        var keys = episodes
             .Select(wanted => wanted.Key.AnimeKey)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -191,16 +191,14 @@ public sealed class WantedListService(
                 .Select(metadata => new { metadata.AnimeId, metadata.CoverImageUrl })
                 .ToDictionaryAsync(metadata => metadata.AnimeId, metadata => metadata.CoverImageUrl, cancellationToken);
 
-        var items = new List<WantedRow>(state.Wanted.Count);
-        foreach (var wanted in state.Wanted.Values)
+        var items = new List<WantedRow>(episodes.Count);
+        foreach (var wanted in episodes)
         {
-            state.Attempts.TryGetValue(wanted.Key.ToString(), out var attempt);
             var known = anime.GetValueOrDefault(wanted.Key.AnimeKey);
             var profileId = profiles.ResolveProfileId(MediaAcquisitionKind.Anime, known?.Id)
                 ?? AnimeQualityProfiles.DefaultAnime1080pId;
             items.Add(FromUnit(
                 wanted,
-                attempt,
                 known?.Title,
                 known?.Id,
                 known is null ? null : AnimeArtworkStore.ResolvePosterUrl(known.Id, covers.GetValueOrDefault(known.Id)),
@@ -272,7 +270,6 @@ public sealed class WantedListService(
     /// <summary>A monitored unit the engine found missing (or below the cutoff) as a wanted row.</summary>
     public static WantedRow FromUnit(
         WantedUnit wanted,
-        AcquisitionAttempt? attempt,
         string? title,
         Guid? animeId,
         string? coverUrl,
@@ -282,13 +279,12 @@ public sealed class WantedListService(
         ArgumentNullException.ThrowIfNull(wanted);
 
         var key = wanted.Key;
-        var failed = attempt?.Status == AcquisitionAttemptStatus.Failed;
         return new WantedRow(
             $"m:{key}",
             WantedSource.Monitored,
             MediaAcquisitionKind.Anime,
             title ?? key.AnimeKey,
-            AdminWantedQuery.StatusOfAttempt(attempt?.Status),
+            WantedStatus.Missing,
             wanted.BecameWantedAtUtc.UtcDateTime)
         {
             AnimeKey = key.AnimeKey,
@@ -298,10 +294,6 @@ public sealed class WantedListService(
             IsUpgrade = wanted.Reason == WantedReason.CutoffUnmet,
             ProfileId = profileId,
             ProfileName = profileName,
-            LastSearchUtc = attempt?.LastAttemptAtUtc?.UtcDateTime,
-            NextSearchUtc = failed ? attempt?.NextRetryAtUtc?.UtcDateTime : null,
-            Failures = attempt?.FailureCount ?? 0,
-            Attempt = attempt?.Status ?? AcquisitionAttemptStatus.None,
             CoverUrl = coverUrl,
             DetailUrl = animeId is { } id ? $"/Library/Anime/{id:D}" : null,
             CanSearch = animeId is not null

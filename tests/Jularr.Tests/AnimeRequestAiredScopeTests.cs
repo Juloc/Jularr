@@ -43,7 +43,7 @@ public sealed class AnimeRequestAiredScopeTests
         AddEpisodeFile(environment, 2);
         AddEpisodeFile(environment, 3);
         await environment.ScanAsync();
-        await environment.RequestPassAsync();
+        await environment.SearchNowAsync();
 
         request = await environment.GetRequestAsync(request.Id);
         Assert.AreEqual(AcquisitionRequestStatus.Completed, request.Status, request.StatusMessage);
@@ -66,7 +66,7 @@ public sealed class AnimeRequestAiredScopeTests
         }
 
         await environment.ScanAsync();
-        await environment.RequestPassAsync();
+        await environment.SearchNowAsync();
         Assert.AreEqual(AcquisitionRequestStatus.Approved, (await environment.GetRequestAsync(request.Id)).Status, "Episodes 2 to 9 have aired too, they are only older than the calendar's window.");
 
         for (var episode = 2; episode <= 9; episode++)
@@ -75,7 +75,7 @@ public sealed class AnimeRequestAiredScopeTests
         }
 
         await environment.ScanAsync();
-        await environment.RequestPassAsync();
+        await environment.SearchNowAsync();
         Assert.AreEqual(AcquisitionRequestStatus.Completed, (await environment.GetRequestAsync(request.Id)).Status);
     }
 
@@ -91,13 +91,13 @@ public sealed class AnimeRequestAiredScopeTests
         var request = await environment.SubmitRequestAsync(FrierenId);
         AddEpisodeFile(environment, 2);
         await environment.ScanAsync();
-        await environment.RequestPassAsync();
+        await environment.SearchNowAsync();
         Assert.AreEqual(AcquisitionRequestStatus.Approved, (await environment.GetRequestAsync(request.Id)).Status, "Episodes 3 and 4 belong to a finished entry: they have aired.");
 
         AddEpisodeFile(environment, 3);
         AddEpisodeFile(environment, 4);
         await environment.ScanAsync();
-        await environment.RequestPassAsync();
+        await environment.SearchNowAsync();
         Assert.AreEqual(AcquisitionRequestStatus.Completed, (await environment.GetRequestAsync(request.Id)).Status);
     }
 
@@ -113,7 +113,7 @@ public sealed class AnimeRequestAiredScopeTests
         AddEpisodeFile(environment, 2);
         AddEpisodeFile(environment, 3);
         await environment.ScanAsync();
-        await environment.RequestPassAsync();
+        await environment.SearchNowAsync();
 
         Assert.AreEqual(AcquisitionRequestStatus.Completed, (await environment.GetRequestAsync(request.Id)).Status);
     }
@@ -193,12 +193,9 @@ public sealed class AnimeRequestAiredScopeTests
         environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Episode1, "e1"));
 
         var request = await environment.SubmitRequestAsync(FrierenId);
-        Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status, request.StatusMessage);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status, request.StatusMessage);
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
-        await environment.Scheduler.RunNowAsync(anime.Key, AnimeSearchTrigger.SearchOnAdd, CancellationToken.None);
-        var folder = environment.AddCompletedDownload(Episode1, $"{Episode1}.mkv");
-        var download = await environment.CompleteLatestDownloadAsync(folder);
-        Assert.AreEqual(AnimeImportStatus.Imported, (await environment.ImportCompletedAsync(download, folder))!.Status);
+        await environment.CompleteLatestDownloadAsync(environment.AddCompletedDownload(Episode1, $"{Episode1}.mkv"));
         await environment.RequestPassAsync();
 
         request = await environment.GetRequestAsync(request.Id);

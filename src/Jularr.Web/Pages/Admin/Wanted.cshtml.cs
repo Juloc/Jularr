@@ -132,30 +132,6 @@ public sealed class WantedModel(
         };
     }
 
-    /// <summary>What the last search of a row came to, in a few words; the acquisition's own message wins.</summary>
-    public string? ResultLabel(WantedRow item)
-    {
-        if (item.Note is { } note)
-        {
-            return note;
-        }
-
-        if (item.Source != WantedSource.Monitored)
-        {
-            return null;
-        }
-
-        return item.Attempt switch
-        {
-            AcquisitionAttemptStatus.Pending => Ui["admin.wanted.attempt.queued"],
-            AcquisitionAttemptStatus.Grabbed => Ui["admin.wanted.attempt.grabbed"],
-            AcquisitionAttemptStatus.Failed => Ui.Format(
-                "admin.wanted.attempt.failed",
-                ("count", item.Failures.ToString(CultureInfo.InvariantCulture))),
-            _ => null
-        };
-    }
-
     public static string Stamp(DateTime value) => value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC";
 
     public static string Iso(DateTime value) => value.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);

@@ -1,18 +1,18 @@
-# Anime acquisition (migrating onto the shared lifecycle)
+# Anime acquisition (shared request lifecycle)
 
-Purpose: acquire Anime episodes. Anime is `WorkMediaType.Anime`; its canonical targets are `WorkSeason` / `WorkEpisode`.
+Purpose: acquire Anime episodes. Anime is `WorkMediaType.Anime`; its canonical targets are `WorkSeason` / `WorkEpisode`. One request per anime (AniList entry) runs the same lifecycle as the other media: Wanted → search → `AcquisitionCore` → grab → Wanted pass follows the Operation → `CompletedDownloadImportService` → `AnimeImportExecutor` → coverage → next episode / upgrade.
 
-Canonical owners (done)
-- `AnimeCanonicalEpisodes` (+ `AnimeEpisodesWantedSource`, 10-minute gate `AnimeCanonicalEpisodesState`): creates a `WorkEpisode` for every slot the anime is expected to have (local episodes, AniList match, episode-range mappings read by `AnimeAcquisitionInventory`). It only creates; it fills a missing `SeasonId`; an anime without known slots gets nothing.
+Canonical owners
+- `AnimeCanonicalEpisodes` (+ `AnimeEpisodesWantedSource`, 10-minute gate `AnimeCanonicalEpisodesState`, `AnimeUpgradeAssessor`): a `WorkEpisode` for every slot the anime is expected to have (local episodes, AniList match, episode-range mappings read by `AnimeAcquisitionInventory`); creates only, fills a missing `SeasonId`; `WantedAsync` reads the Wanted queue of anime episodes (Admin Wanted, panel, media detail).
 - Mapping evidence (AniList entry and remote episode of a slot) stays in `AnimeMetadataService` mappings; a Jularr season is never an AniList entry.
-- Installed coverage: `CanonicalVideoStorageBackfillService` attaches legacy files to canonical Assets of the `WorkEpisode`.
+- Installed coverage: `CanonicalVideoStorageBackfillService` attaches legacy files to canonical Assets.
 - Monitoring: `AnimeMonitoring` (canonical decisions by season / episode number).
+- Request: `AnimeAcquisitionRequestExecutor` (creates the series, applies the requested scope, then `AnimeAcquisitionEngine.SearchAndGrabAsync`), `AnimeRequestPayload` (episodes of the grab in flight, release, search back-off), `AnimeRequestDrafter` (requests for monitored anime), `AnimeRequestStarter` ("Search now": reconcile + request + make due), `AnimeWantedRequestHandler` (due search, failed download → blocklist unless the client's own storage failed, import done → next episode).
+- Judge: `AnimeReleaseJudge` (title and aliases, wanted-episode / season-pack / absolute coverage through the AniList mapping, Sonarr ownership blocks); ranking and selection through `AcquisitionCore`.
+- Sonarr coexistence stays policy: `AcquisitionOwnershipStore` + `SonarrParallelSafety` (read-only / parallel / Jularr-managed, job and path ownership; the ownership job id is the download Operation id).
+- `AnimeAcquisitionScheduler` has no loop: the Wanted pass calls `AdvanceAsync` (recovery, owner "search now" runs, periodic request creation).
 
-Still the old owners (to be replaced slice by slice)
-- `AnimeAcquisitionScheduler` / `AnimeAcquisitionPipeline` (search, judge, ranking, grab), `SabnzbdAcquisitionService` + `SabnzbdAcquisitionStore` (submission and attempts), `AnimeMonitoringStore` attempt state, `AcquisitionOwnershipStore` (Sonarr ownership modes: kept as policy).
+Still the old owners (to be removed once in-flight legacy downloads drain)
+- `AnimeAcquisitionPipeline` run/search/submit paths, `SabnzbdAcquisitionService`/`Store` relation and attempts, the observation read-back of open legacy acquisitions in `AnimeRequestObservation`, `AnimeMonitoringStore` attempts/wanted/history state (per-anime settings stay).
 
-Tests: `AnimeCanonicalEpisodesTests`, `AnimeAcquisitionPipelineTests`, `AnimeSharedManagerTests`.
-
-Wanted (done): anime episodes are reconciled by `WantedReconciler` like TV episodes (`WorkMediaType.Anime`, aired gate, installed = video asset on the `WorkEpisode`); `AnimeUpgradeAssessor` queues installed episodes below the profile's cutoff (profile assigned by legacy anime id). Nothing consumes the rows yet.
-
-Search and selection (done): `AnimeReleaseJudge` is the narrow adapter (title and aliases, wanted-episode / season-pack / absolute-number coverage through the AniList mapping, attempt and Sonarr ownership blocks); the pipeline searches and ranks through `AcquisitionCore`. Grabbing and attempt state are still the old owners.
+Tests: `AnimeCanonicalEpisodesTests`, `AnimeAcquisitionPipelineTests`, `AnimeSharedManagerTests`, `AnimeRequestLifecycleTests`, `AnimeRequestAiredScopeTests`, `AnimeAcquisitionRequestExecutorTests`.

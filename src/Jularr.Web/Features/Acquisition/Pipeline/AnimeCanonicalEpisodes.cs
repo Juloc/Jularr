@@ -78,6 +78,47 @@ public sealed class AnimeCanonicalEpisodes(AppDbContext db, AnimeAcquisitionInve
         return missing.Length;
     }
 
+    /// <summary>The episodes of the Wanted queue (of one anime, or of all): missing ones, and installed ones the shared upgrade policy still wants better.</summary>
+    public static async Task<IReadOnlyList<AnimeWantedEpisode>> WantedAsync(AppDbContext db, string? animeKey, CancellationToken cancellationToken)
+    {
+        var rows = await (
+                from item in db.WantedItems.AsNoTracking()
+                where item.TargetKind == WantedTargetKind.Episode
+                join episode in db.WorkEpisodes.AsNoTracking() on item.TargetId equals episode.Id
+                join link in db.WorkSourceLinks.AsNoTracking() on item.WorkId equals link.WorkId
+                join anime in db.Anime.AsNoTracking() on link.SourceId equals anime.Id
+                where link.SourceKind == WorkSourceKind.Anime && (animeKey == null || anime.Key == animeKey)
+                select new
+                {
+                    anime.Key,
+                    episode.SeasonNumber,
+                    episode.EpisodeNumber,
+                    episode.AbsoluteNumber,
+                    item.CreatedAt,
+                    Installed = db.MediaAssets.Any(asset => asset.WorkEpisodeId == episode.Id && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
+                })
+            .ToListAsync(cancellationToken);
+        return
+        [
+            .. rows
+                .OrderBy(row => row.Key, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => row.SeasonNumber)
+                .ThenBy(row => row.EpisodeNumber)
+                .Select(row => new AnimeWantedEpisode(
+                    new AnimeEpisodeKey(row.Key, row.SeasonNumber, row.EpisodeNumber, row.AbsoluteNumber),
+                    row.Installed ? AnimeWantedReason.CutoffUnmet : AnimeWantedReason.Missing,
+                    new DateTimeOffset(DateTime.SpecifyKind(row.CreatedAt, DateTimeKind.Utc))))
+        ];
+    }
+
+    public async Task<Guid?> WorkOfAsync(string animeKey, CancellationToken cancellationToken) =>
+        await (
+                from link in db.WorkSourceLinks.AsNoTracking()
+                join anime in db.Anime.AsNoTracking() on link.SourceId equals anime.Id
+                where link.SourceKind == WorkSourceKind.Anime && anime.Key == animeKey
+                select (Guid?)link.WorkId)
+            .FirstOrDefaultAsync(cancellationToken);
+
     // The monitored anime, each completed once per interval.
     public async Task<int> EnsureMonitoredAsync(CancellationToken cancellationToken)
     {

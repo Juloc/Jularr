@@ -20,7 +20,7 @@ Upgrades
 - `IUpgradeAssessor` per acquisition kind, naming the target kind it judges (`VideoUpgradeAssessor` for Movie and each episode, `MusicUpgradeAssessor` for an album, `BookUpgradeAssessor` for the best file format of a Book) tells which held targets the profile (`UpgradePolicy`) still wants better versions of; `UpgradeAssessors` is the registry (Book and Audiobook share a Work type, so the key is kind plus target kind, never the Work type). Other types have none, so their installed targets leave the queue.
 - `WantedReconciler.ReconcileAsync(workId)` runs the SQL reconcile (held rows of assessed types are kept, missing ones queued) and then `SyncUpgrades` with the assessor's answer; the full run skips the assessment.
 - `UpgradeWantedSource` (Movie, Tv, Music, Book, bounded page, cursor in `UpgradeScanState`): reconciles the held Works of a page and continues the Completed request of a Work that has rows in one conditional write (search state and status together; tried releases stay remembered). The scan runs hourly, at the next pass while the library is unfinished, and starts over at once when the profile file changed. `WorksWithoutOpenRequest` lists Works that miss something and held Works that were never requested (opened by the Video/Request sources), so an upgrade never opens a second request.
-- Not defined yet: upgrades of Light Novel and Manga (no installed quality rule), Anime (its own AniList slot inventory, see the Core CODEMAP) and Audiobook (the edition has no Monitoring decision, so it is wanted only while a request names it).
+- Not defined yet: upgrades of Light Novel and Manga (no installed quality rule), and Audiobook (the edition has no Monitoring decision, so it is wanted only while a request names it).
 - Audiobook: an Audiobook request names the audio edition of its Book Work (target kind Edition, the Work's id as target id); it is installed once an audiobook is linked to the Work with files. `WorksWithoutOpenRequest` lists edition rows only for Audiobook and never for Book.
 
 Flow
@@ -31,7 +31,7 @@ monitoring decisions + relation sources -> `WantedReconciler.ReconcileAsync(work
 Installed coverage (SQL in `WantedReconciler`)
 - Movie, Episode: a video `MediaAsset` backed by a `StoredFile`. Music: an audio asset; an album is only wanted once released.
 - Book: a `BookFile` of a linked edition. Light Novel: a `NovelVolume`. Manga: a `MangaChapter` (through `WorkSourceLink`).
-- Not reconciled yet: Anime (`AnimeWantedSource`), Audiobook. Reading targets are whole Works until volume and chapter coverage is mapped.
+- Not reconciled yet: Audiobook monitoring as its own decision. Reading targets are whole Works until volume and chapter coverage is mapped.
 
 Media adapters: `MusicRequestDrafter` (release group + payload), `IdentityRequestDrafter` (primary provider identity).
 
