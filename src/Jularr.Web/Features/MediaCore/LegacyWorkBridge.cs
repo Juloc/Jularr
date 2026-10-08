@@ -124,16 +124,25 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// <see cref="WorkVersion"/> — editions and versions are modelled separately (#592). The Audible ASIN,
     /// when known, is mirrored as a correctable external identity (#440).
     /// </summary>
-    public async Task<Guid> EnsureWorkForAudiobookAsync(Audiobook audiobook, CancellationToken cancellationToken)
+    public async Task<Guid> EnsureWorkForAudiobookAsync(Audiobook audiobook, CancellationToken cancellationToken, Guid? requestedWorkId = null)
     {
+        // An audiobook requested for a Book Work is that Work's audio edition; it does not get a Work of its own or rewrite the Work's titles.
+        if (requestedWorkId is { } requested && !await db.Set<WorkSourceLink>().AnyAsync(x => x.SourceKind == WorkSourceKind.Audiobook && x.SourceId == audiobook.Id, cancellationToken))
+        {
+            await works.LinkSourceAsync(requested, WorkSourceKind.Audiobook, audiobook.Id, cancellationToken);
+        }
+
         var workId = await EnsureWorkAsync(
             WorkSourceKind.Audiobook, audiobook.Id, WorkMediaType.Book, audiobook.Title, audiobook.Year, cancellationToken);
 
-        await works.AddOrUpdateTitleAsync(
-            workId, WorkTitleType.Primary, "und", audiobook.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
-        await works.SetFieldProvenanceAsync(
-            workId, "title", MetadataFieldSources.Local, null, null,
-            isManualOverride: false, preferredProvider: null, cancellationToken);
+        if (requestedWorkId is null)
+        {
+            await works.AddOrUpdateTitleAsync(
+                workId, WorkTitleType.Primary, "und", audiobook.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
+            await works.SetFieldProvenanceAsync(
+                workId, "title", MetadataFieldSources.Local, null, null,
+                isManualOverride: false, preferredProvider: null, cancellationToken);
+        }
 
         var edition = await structure.AddOrUpdateEditionAsync(
             workId,

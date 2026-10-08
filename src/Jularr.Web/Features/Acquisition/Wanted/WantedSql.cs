@@ -54,6 +54,14 @@ internal static class WantedSql
             WHERE asset."WorkEpisodeId" = episode."Id" AND asset."Kind" = 0)
         """;
 
+    // Whether the library holds an audiobook of the Work (alias work): the audio edition is bridged to the Work as a source link with files.
+    private const string AudiobookInstalled =
+        """
+        EXISTS (
+            SELECT 1 FROM "WorkSourceLinks" link JOIN "AudiobookFiles" file ON file."AudiobookId" = link."SourceId"
+            WHERE link."WorkId" = work."Id" AND link."SourceKind" = 7)
+        """;
+
     // What Monitoring or an open request wants, with whether the library already holds it. A Work is intended while it is monitored or explicitly requested
     // (an album only once released), an episode once aired while it is monitored through its own decision, its season, its Work or a relation, or requested.
     private const string Intended =
@@ -83,10 +91,19 @@ internal static class WantedSql
                               WHERE (asked."TargetKind" = 1 AND asked."TargetId" = episode."Id") OR (asked."TargetKind" = 0 AND asked."TargetId" = episode."WorkId")))
               AND (episode."AiredAt" IS NULL OR episode."AiredAt" <= @now)
         ),
+        -- The audio edition of a Book Work is wanted only while a request names it; Monitoring of the Book never asks for it.
+        intended_audiobooks AS (
+            SELECT work."Id" AS "WorkId", work."MediaType", 4::smallint AS "TargetKind", work."Id" AS "TargetId", {{AudiobookInstalled}} AS "Installed"
+            FROM "Works" work
+            WHERE (@workId::uuid IS NULL OR work."Id" = @workId)
+              AND EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 4 AND asked."TargetId" = work."Id")
+        ),
         intended AS (
             SELECT * FROM intended_works
             UNION ALL
             SELECT * FROM intended_episodes
+            UNION ALL
+            SELECT * FROM intended_audiobooks
         )
         """;
 
@@ -147,7 +164,8 @@ internal static class WantedSql
           AND NOT EXISTS (SELECT 1 FROM upgradable still WHERE still."TargetKind" = item."TargetKind" AND still."TargetId" = item."TargetId")
         """;
 
-    // @mediaType: the Work type, @after: the last Work of the previous page, @kind: the request kind name, @musicBrainz: its provider key, @limit.
+    // @mediaType: the Work type, @after: the last Work of the previous page, @kind: the request kind name, @musicBrainz: its provider key, @limit,
+    // @editions: whether the audio editions (an Audiobook request) or the other targets are listed.
     // Works with something still missing are listed, and so are Works that hold something upgradable and were never requested (an installed library
     // item); one that has a request is continued through it (see UpgradeWantedSource), so an upgrade never opens a second request.
     private const string RequestOf =
@@ -169,8 +187,9 @@ internal static class WantedSql
         JOIN "Works" work ON work."Id" = item."WorkId" AND work."MediaType" = @mediaType
         LEFT JOIN "WorkEpisodes" episode ON item."TargetKind" = 1 AND episode."Id" = item."TargetId"
         WHERE work."Id" > @after
+          AND (item."TargetKind" = 4) = @editions
           AND NOT EXISTS ({{RequestOf}} AND request."Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing'))
-          AND (NOT (CASE WHEN item."TargetKind" = 1 THEN {{EpisodeInstalled}} ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
+          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
         ORDER BY 1
         LIMIT @limit
         """;
@@ -207,7 +226,7 @@ internal static class WantedSql
     public const string RecordWork =
         """
         INSERT INTO "RequestTargets" ("RequestId", "WorkId", "TargetKind", "TargetId", "CreatedAt")
-        SELECT @requestId, work."Id", 0, work."Id", @now FROM "Works" work WHERE work."Id" = @workId
+        SELECT @requestId, work."Id", @targetKind, work."Id", @now FROM "Works" work WHERE work."Id" = @workId
         ON CONFLICT DO NOTHING
         """;
 

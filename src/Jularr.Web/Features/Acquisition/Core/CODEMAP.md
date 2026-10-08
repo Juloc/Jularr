@@ -20,7 +20,9 @@ Media adapters on the core
 
 - Book: `BookAcquisitionExecutor` (`BookReleaseSelector.Plan` and `Judge`, `BookCatalogDirectSource`, `BookOpdsDirectSource`); the free edition wins a tie with an equal Usenet EPUB through the lowest source priority, a better quality wins before source preference.
 
-Not on the core yet (own orchestration still to be moved): Anime (`AnimeAcquisitionPipeline`), Audiobook.
+- Audiobook: `AudiobookAcquisitionRequestExecutor` (`AudiobookReleaseJudge`, `AudiobookReleaseParser` quality M4B / MP3-320 / MP3); the import adapter binds the audiobook to the request's Book Work as its audio edition.
+
+Not on the core yet (own orchestration still to be moved): Anime (`AnimeAcquisitionPipeline`).
 
 Manual Search reads the same `SearchEvaluation` through `VideoManualSearchService`, `MusicManualSearchService`, `ReadingManualSearchService`, `BookManualSearchService`.
 

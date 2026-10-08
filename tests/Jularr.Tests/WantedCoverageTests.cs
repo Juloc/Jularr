@@ -69,6 +69,35 @@ public sealed class WantedCoverageTests
     }
 
     [TestMethod]
+    public async Task Audiobook_TheAudioEditionIsWantedWhileARequestNamesItAndUntilTheLibraryHoldsOne()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var work = await new WorkService(db).CreateWorkAsync(WorkMediaType.Book, "Frieren", 2020, CancellationToken.None);
+        var request = await new Jularr.Web.Features.Acquisition.Access.AcquisitionAccessStore(db).CreateAsync(
+            new Jularr.Web.Features.Acquisition.Access.AcquisitionRequestDraft(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Audiobook, "catalog", "c1", "Frieren", null, null) { WorkId = work.Id },
+            "owner",
+            Jularr.Web.Features.Acquisition.Access.AcquisitionRequestStatus.Approved,
+            "owner",
+            CancellationToken.None);
+        await new RequestIntent(db, TimeProvider.System).RecordAsync(request, CancellationToken.None);
+        var reconciler = new WantedReconciler(db, TimeProvider.System);
+
+        await reconciler.ReconcileAsync(work.Id, CancellationToken.None);
+        var item = await db.WantedItems.AsNoTracking().SingleAsync(row => row.WorkId == work.Id);
+        Assert.AreEqual(WantedTargetKind.Edition, item.TargetKind, "The request names the audio edition, not the book.");
+        Assert.IsEmpty(await reconciler.WorksWithoutOpenRequestAsync(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book, Guid.Empty, 10, CancellationToken.None), "Book requests do not carry an audio edition.");
+
+        var audiobook = new Jularr.Web.Features.Audiobooks.Audiobook { Key = "frieren-2020", Title = "Frieren" };
+        db.Add(audiobook);
+        db.Add(new Jularr.Web.Features.Audiobooks.AudiobookFile { AudiobookId = audiobook.Id, FileKey = "a", FileName = "a.m4b", Format = "M4B" });
+        await db.SaveChangesAsync();
+        await LinkAsync(db, work, WorkSourceKind.Audiobook, audiobook.Id);
+        await reconciler.ReconcileAsync(work.Id, CancellationToken.None);
+
+        Assert.IsFalse(await db.WantedItems.AnyAsync(row => row.WorkId == work.Id), "An audiobook in the library fulfils the request.");
+    }
+
+    [TestMethod]
     public async Task Book_AnInstalledPdfIsQueuedAsAnUpgradeUntilTheProfileIsSatisfied()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();

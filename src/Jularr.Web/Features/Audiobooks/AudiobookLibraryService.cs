@@ -38,7 +38,8 @@ public sealed class AudiobookLibraryService(
         int? chapterCount,
         string? libraryPath,
         IReadOnlyList<AudiobookFileInput> files,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? requestedWorkId = null)
     {
         if (instanceModules is not null
             && !await instanceModules.IsEnabledAsync(
@@ -120,7 +121,7 @@ public sealed class AudiobookLibraryService(
             await db.SaveChangesAsync(cancellationToken);
         }
 
-        var workId = await bridge.EnsureWorkForAudiobookAsync(audiobook, cancellationToken);
+        var workId = await bridge.EnsureWorkForAudiobookAsync(audiobook, cancellationToken, requestedWorkId);
         return new AudiobookLibraryEntry(audiobook, workId);
     }
 

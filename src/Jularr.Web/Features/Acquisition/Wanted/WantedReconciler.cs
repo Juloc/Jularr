@@ -33,6 +33,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
         (MediaAcquisitionKind.Movie, WorkMediaType.Movie),
         (MediaAcquisitionKind.Tv, WorkMediaType.Series),
         (MediaAcquisitionKind.Book, WorkMediaType.Book),
+        (MediaAcquisitionKind.Audiobook, WorkMediaType.Book),
         (MediaAcquisitionKind.LightNovel, WorkMediaType.LightNovel),
         (MediaAcquisitionKind.Manga, WorkMediaType.Manga),
         (MediaAcquisitionKind.Music, WorkMediaType.Music)
@@ -134,7 +135,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
         await db.Database
             .SqlQueryRaw<Guid>(
                 WantedSql.WorksWithoutOpenRequest,
-                [.. CoverageParameters(null), .. RequestParameters(kind), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit)])
+                [.. CoverageParameters(null), .. RequestParameters(kind), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit), new NpgsqlParameter("editions", kind == MediaAcquisitionKind.Audiobook)])
             .ToListAsync(cancellationToken);
 
     // The request of the Work that ended Completed as its latest one, or null.

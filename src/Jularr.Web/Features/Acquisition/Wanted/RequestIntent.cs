@@ -50,7 +50,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
 
             if (choice.Scope is VideoRequestScope.WholeWork or VideoRequestScope.AllCurrentAndFuture)
             {
-                await InsertWorkAsync(id, workId, now, cancellationToken);
+                await InsertWorkAsync(id, workId, now, WantedTargetKind.Work, cancellationToken);
             }
             else if (choice.Scope == VideoRequestScope.Custom)
             {
@@ -71,7 +71,11 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
 
         if (request.Kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Manga or MediaAcquisitionKind.Music)
         {
-            await InsertWorkAsync(id, workId, now, cancellationToken);
+            await InsertWorkAsync(id, workId, now, WantedTargetKind.Work, cancellationToken);
+        }
+        else if (request.Kind == MediaAcquisitionKind.Audiobook)
+        {
+            await InsertWorkAsync(id, workId, now, WantedTargetKind.Edition, cancellationToken);
         }
     }
 
@@ -79,10 +83,11 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
     public async Task<bool> HasAsync(Guid requestId, CancellationToken cancellationToken) =>
         await db.Database.SqlQueryRaw<bool>(WantedSql.HasRequestTargets, new NpgsqlParameter("requestId", requestId.ToString())).SingleAsync(cancellationToken);
 
-    private async Task InsertWorkAsync(string requestId, Guid workId, DateTime now, CancellationToken cancellationToken) =>
+    // The Work row says the whole title; an audiobook request names the audio edition of the Work, which has no row of its own, so it is the Work's id as an edition target.
+    private async Task InsertWorkAsync(string requestId, Guid workId, DateTime now, WantedTargetKind kind, CancellationToken cancellationToken) =>
         await db.Database.ExecuteSqlRawAsync(
             WantedSql.RecordWork,
-            [new NpgsqlParameter("requestId", requestId), new NpgsqlParameter("workId", workId), new NpgsqlParameter("now", now)],
+            [new NpgsqlParameter("requestId", requestId), new NpgsqlParameter("workId", workId), new NpgsqlParameter("now", now), new NpgsqlParameter<short>("targetKind", (short)kind)],
             cancellationToken);
 
     // The canonical Work a request is about: the bound Work, else the one its payload names (video and music payloads carry it), else the one its

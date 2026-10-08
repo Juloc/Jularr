@@ -183,6 +183,21 @@ public sealed class BookPdfAcquisitionTests
     }
 
     [TestMethod]
+    public async Task AnAudiobookRequestGrabsTheBestAudioReleaseAndNeverAnEbook()
+    {
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync();
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "ebook"));
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits MP3 Unabridged", "mp3"));
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits M4B Unabridged", "m4b"));
+
+        var request = await environment.AddAudiobookAsync();
+
+        var stored = await environment.RequestAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, stored.Status, stored.StatusMessage);
+        StringAssert.Contains(environment.Sabnzbd.Grabs.Single().NzbUrl.ToString(), "m4b", "The audiobook container is the quality; the e-book is no candidate.");
+    }
+
+    [TestMethod]
     public async Task ADirectEditionThatFailsIsTriedOnceAndTheNextCandidateIsTaken()
     {
         var direct = new FakeDirectSource(fails: true);
@@ -762,6 +777,7 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton<IDownloadClient>(provider => new SabnzbdDownloadClient(provider.GetRequiredService<ISabnzbdClient>()));
             collection.AddSingleton<IndexerSearchCoordinator>();
             collection.AddSingleton<IMediaAcquisitionRegistration, BookAcquisitionRegistration>();
+            collection.AddSingleton<IMediaAcquisitionRegistration, AudiobookAcquisitionRegistration>();
             collection.AddSingleton<MediaAcquisitionRegistry>();
             collection.AddSingleton(provider => new QualityProfileStore(
                 new DirectoryInfo(Path.Combine(data.FullName, "quality-profiles")),
@@ -780,6 +796,7 @@ public sealed class BookPdfAcquisitionTests
             }
 
             collection.AddSingleton<IAcquisitionRequestExecutor, BookAcquisitionExecutor>();
+            collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.Audiobooks.AudiobookAcquisitionRequestExecutor>();
             collection.AddSingleton<Jularr.Web.Features.Events.IJularrEventPublisher, RecordingEventPublisher>();
             collection.AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(new MediaCapabilityStore(data.FullName)));
             collection.AddSingleton(new AcquisitionRequestSettingsStore(data.FullName));
@@ -806,7 +823,7 @@ public sealed class BookPdfAcquisitionTests
                 DownloadClientType.Sabnzbd,
                 Enabled: true,
                 Priority: 1,
-                new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Book] = "books", [MediaAcquisitionKind.Anime] = "anime" }),
+                new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Book] = "books", [MediaAcquisitionKind.Audiobook] = "audiobooks", [MediaAcquisitionKind.Anime] = "anime" }),
                 "secret-key"));
             await services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(
                 state => state.WithRemotePathMappings(MediaAcquisitionKind.Book, [new RemotePathMapping("/data/downloads/complete", Path.Combine(root, "mnt", "complete"))]),
@@ -830,6 +847,11 @@ public sealed class BookPdfAcquisitionTests
                     System.Text.Json.JsonSerializer.Serialize(
                         new BookRequestPayload(CatalogId, "Atomic Habits", "James Clear"),
                         System.Text.Json.JsonSerializerOptions.Web)),
+                CancellationToken.None);
+
+        public Task<AcquisitionRequest> AddAudiobookAsync() =>
+            services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(
+                new AcquisitionRequestDraft(MediaAcquisitionKind.Audiobook, BookCatalogService.CatalogRequestProvider, CatalogId, "Atomic Habits", "James Clear", null),
                 CancellationToken.None);
 
         public async Task<AcquisitionRequest> RequestAsync(Guid id) =>

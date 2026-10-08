@@ -28,6 +28,7 @@ public sealed class BookUpgradeAssessor(AppDbContext db, QualityProfileStore pro
     public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
     {
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Book, workId, cancellationToken);
-        return UpgradePolicy.Assess(profile, await BookInstalledQuality.BestAsync(db, profile, workId, cancellationToken)).IsUpgradable ? held : [];
+        var wholeBook = held.Where(target => target.TargetKind == (short)WantedTargetKind.Work).ToArray();
+        return wholeBook.Length > 0 && UpgradePolicy.Assess(profile, await BookInstalledQuality.BestAsync(db, profile, workId, cancellationToken)).IsUpgradable ? wholeBook : [];
     }
 }

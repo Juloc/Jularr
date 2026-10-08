@@ -607,6 +607,8 @@ foreach (var assessedKind in new[] { Jularr.Web.Features.Acquisition.Access.Medi
 }
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, Jularr.Web.Features.Music.MusicUpgradeAssessor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, Jularr.Web.Features.Books.BookUpgradeAssessor>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Audiobooks.AudiobookAcquisitionRequestExecutor>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Audiobooks.AudiobookWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Core.IDirectSource, Jularr.Web.Features.Books.BookCatalogDirectSource>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Core.IDirectSource, Jularr.Web.Features.Books.BookOpdsDirectSource>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Core.IDirectSource, Jularr.Web.Features.ReadingAcquisition.LightNovelWebDirectSource>();
