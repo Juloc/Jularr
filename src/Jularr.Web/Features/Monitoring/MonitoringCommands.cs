@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Monitoring;
 
 /// <summary>
-/// The convenience commands over the canonical Monitoring state. Each is one set-based statement batch (one round trip, one implicit transaction),
-/// whatever the number of children, and none stores a mode: "future" only writes ordinary decisions, so what is discovered later simply inherits.
+/// The convenience commands over the canonical Monitoring state. Each is set-based whatever the number of children, runs as one transaction, and none
+/// stores a mode: "future" only writes ordinary decisions, so what is discovered later simply inherits.
 /// </summary>
 public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
 {
@@ -61,12 +61,16 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         }
 
         var now = clock.GetUtcNow();
-        var written = await db.Database.ExecuteSqlRawAsync(UpsertManySql[kind], [new[] { targetId }, (short)kind, monitored.Value, now], cancellationToken);
-        if (written > 0 && replaceChildren && DescendantsSql.TryGetValue(kind, out var descendants))
-        {
-            await db.Database.ExecuteSqlRawAsync(descendants, [targetId], cancellationToken);
-        }
-
+        await InTransactionAsync(
+            async () =>
+            {
+                var written = await db.Database.ExecuteSqlRawAsync(UpsertManySql[kind], [new[] { targetId }, (short)kind, monitored.Value, now], cancellationToken);
+                if (written > 0 && replaceChildren && DescendantsSql.TryGetValue(kind, out var descendants))
+                {
+                    await db.Database.ExecuteSqlRawAsync(descendants, [targetId], cancellationToken);
+                }
+            },
+            cancellationToken);
         return workId;
     }
 
@@ -81,6 +85,11 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
             return;
         }
 
+        await InTransactionAsync(() => SetEpisodesByNumberCoreAsync(workId, numbers, monitored, cancellationToken), cancellationToken);
+    }
+
+    private async Task SetEpisodesByNumberCoreAsync(Guid workId, IReadOnlyCollection<(int Season, int Episode)> numbers, bool? monitored, CancellationToken cancellationToken)
+    {
         var wanted = numbers.Distinct().ToHashSet();
         var seasonNumbers = wanted.Select(pair => pair.Season).Distinct().ToArray();
         var existing = await db.WorkEpisodes.Where(x => x.WorkId == workId && seasonNumbers.Contains(x.SeasonNumber)).ToListAsync(cancellationToken);
@@ -116,12 +125,35 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         }
 
         var numbers = seasonNumbers.Distinct().ToArray();
-        var seasonIds = await EnsureSeasonsAsync(workId, numbers, cancellationToken);
-        await SetManyAsync(MonitoringTargetKind.Season, seasonIds.Values.ToArray(), monitored, cancellationToken);
-        // Episodes that carry only the season number (no season id) are covered by the season's decision too.
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""DELETE FROM "WorkMonitoring" WHERE "Kind" = 2 AND "TargetId" IN (SELECT "Id" FROM "WorkEpisodes" WHERE "WorkId" = {workId} AND "SeasonNumber" = ANY({numbers}))""",
+        await InTransactionAsync(
+            async () =>
+            {
+                var seasonIds = await EnsureSeasonsAsync(workId, numbers, cancellationToken);
+                await SetManyAsync(MonitoringTargetKind.Season, seasonIds.Values.ToArray(), monitored, cancellationToken);
+                // Episodes that carry only the season number (no season id) are covered by the season's decision too.
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"""DELETE FROM "WorkMonitoring" WHERE "Kind" = 2 AND "TargetId" IN (SELECT "Id" FROM "WorkEpisodes" WHERE "WorkId" = {workId} AND "SeasonNumber" = ANY({numbers}))""",
+                    cancellationToken);
+            },
             cancellationToken);
+    }
+
+    // Runs the statements as one unit, or inside the transaction the caller already holds.
+    private async Task InTransactionAsync(Func<Task> work, CancellationToken cancellationToken)
+    {
+        if (db.Database.CurrentTransaction is not null)
+        {
+            await work();
+            return;
+        }
+
+        await db.Database.CreateExecutionStrategy().ExecuteAsync(
+            async () =>
+            {
+                await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+                await work();
+                await transaction.CommitAsync(cancellationToken);
+            });
     }
 
     private async Task<Dictionary<int, Guid>> EnsureSeasonsAsync(Guid workId, int[] seasonNumbers, CancellationToken cancellationToken)
@@ -210,6 +242,11 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         var roles = source.Roles?.Select(role => role.Trim()).Where(role => role.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var normalized = roles is { Length: > 0 } ? roles : null;
         var now = clock.GetUtcNow();
+        await InTransactionAsync(() => AddRelationAsync(source, normalized, onlyFuture, now, cancellationToken), cancellationToken);
+    }
+
+    private async Task AddRelationAsync(MonitoringRelationSource source, string[]? normalized, bool onlyFuture, DateTimeOffset now, CancellationToken cancellationToken)
+    {
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO "WorkMonitoringSources" ("Kind", "SourceKey", "Label", "Roles", "AddedByProfileId", "UpdatedAt")

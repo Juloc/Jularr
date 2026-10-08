@@ -582,7 +582,9 @@ builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisi
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
+builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.WantedReconcileState>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.WantedReconciler>();
+builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.RequestIntent>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.VideoManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Acquisition.Access.MovieAcquisitionRequestExecutor>();

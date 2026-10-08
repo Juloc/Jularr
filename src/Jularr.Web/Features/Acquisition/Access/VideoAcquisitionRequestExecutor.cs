@@ -196,7 +196,8 @@ public sealed partial class VideoAcquisitionEngine(
         }
 
         var view = await monitoring.LoadAsync(target.WorkId, cancellationToken);
-        if (!view.IsAnyMonitored)
+        await wanted.ReconcileAsync(target.WorkId, cancellationToken);
+        if (!view.IsAnyMonitored && !payload.HasPlaybackIntent(clock.GetUtcNow().UtcDateTime) && !await wanted.AnyAsync(target.WorkId, cancellationToken))
         {
             return await MonitoringOffAsync(request.Kind, payload.WorkId, payload.MonitoringRevision, cancellationToken);
         }
@@ -326,8 +327,9 @@ public sealed partial class VideoAcquisitionEngine(
 
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Tv, payload.WorkId, cancellationToken);
         var now = clock.GetUtcNow().UtcDateTime;
+        var requested = await wanted.RequestedEpisodeIdsAsync(payload.WorkId, cancellationToken);
         return [.. episodes
-            .Where(episode => episode.HasFile && IsWanted(view, payload, now, episode) && UpgradePolicy.Assess(profile, episode.InstalledQuality).IsUpgradable)
+            .Where(episode => episode.HasFile && IsWanted(view, payload, now, episode, requested) && UpgradePolicy.Assess(profile, episode.InstalledQuality).IsUpgradable)
             .OrderBy(episode => episode.SeasonNumber)
             .ThenBy(episode => episode.EpisodeNumber)];
     }
@@ -438,12 +440,13 @@ public sealed partial class VideoAcquisitionEngine(
         var fresh = await requestStore.GetAsync(request.Id, cancellationToken) ?? request;
         var payload = VideoRequestPayload.Of(fresh, workId, request.Title, null);
         var view = await monitoring.LoadAsync(workId, cancellationToken);
-        if (!view.IsAnyMonitored)
+        await wanted.ReconcileAsync(workId, cancellationToken);
+        if (!view.IsAnyMonitored && !payload.HasPlaybackIntent(clock.GetUtcNow().UtcDateTime) && !await wanted.AnyAsync(workId, cancellationToken))
         {
             return await MonitoringOffAsync(request.Kind, workId, payload.MonitoringRevision, cancellationToken);
         }
 
-        return unit is not null && !IsWanted(view, payload, clock.GetUtcNow().UtcDateTime, unit)
+        return unit is not null && !IsWanted(view, payload, clock.GetUtcNow().UtcDateTime, unit, await wanted.RequestedEpisodeIdsAsync(workId, cancellationToken))
             ? new AcquisitionExecution(AcquisitionRequestStatus.Approved, "The monitored episodes changed; searching again.", ResultUrl: VideoWorkLinks.DetailPath(request.Kind, workId))
             : null;
     }
@@ -587,9 +590,10 @@ public sealed partial class VideoAcquisitionEngine(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
+        var requested = await wanted.RequestedEpisodeIdsAsync(payload.WorkId, cancellationToken);
         var missingIncluded = episodes
             .Where(x => !x.HasFile)
-            .Where(x => IsWanted(view, payload, now, x))
+            .Where(x => IsWanted(view, payload, now, x, requested))
             .ToArray();
         var hasMissingDue = missingIncluded.Any(x => x.AiredAt is null || x.AiredAt <= now);
 
@@ -694,7 +698,7 @@ public sealed partial class VideoAcquisitionEngine(
         var episodes = await LoadTvUnitsAsync(payload.WorkId, cancellationToken);
         var next = episodes
             .Where(x => !x.HasFile)
-            .Where(x => wantedIds.Contains(x.Id) || (view.IsAnyMonitored && payload.IsPlaybackUnit(x.Id, now)))
+            .Where(x => wantedIds.Contains(x.Id) || payload.IsPlaybackUnit(x.Id, now))
             .Where(x => x.AiredAt is null || x.AiredAt <= now)
             .OrderBy(x => payload.IsPlaybackUnit(x.Id, now) ? 0 : 1)
             .ThenBy(x => x.SeasonNumber)
@@ -703,9 +707,9 @@ public sealed partial class VideoAcquisitionEngine(
         return new VideoUnitScope(episodes, next);
     }
 
-    /// <summary>Whether an episode is wanted: its monitoring, or a playback intent for it while anything of the Work is monitored.</summary>
-    private static bool IsWanted(WorkMonitoringView view, VideoRequestPayload payload, DateTime now, VideoUnit episode) =>
-        view.IsMonitored(episode.Id, episode.SeasonId) || (view.IsAnyMonitored && payload.IsPlaybackUnit(episode.Id, now));
+    /// <summary>Whether an episode is wanted: its monitoring, an open request that names it, or a playback intent for it.</summary>
+    private static bool IsWanted(WorkMonitoringView view, VideoRequestPayload payload, DateTime now, VideoUnit episode, IReadOnlySet<Guid> requested) =>
+        view.IsMonitored(episode.Id, episode.SeasonId) || requested.Contains(episode.Id) || payload.IsPlaybackUnit(episode.Id, now);
 
     private sealed record TvContinuation(
         bool KeepOpen,

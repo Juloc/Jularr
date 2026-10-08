@@ -215,6 +215,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
             .AddSingleton<VideoManualSearchService>()
             .AddSingleton<WantedListService>()
             .AddSingleton<WantedReconciler>()
+            .AddSingleton<RequestIntent>()
             .AddSingleton<ICompletedDownloadImportAdapter>(importer)
             .AddSingleton<CompletedDownloadDispatcher>()
             .AddSingleton<CompletedDownloadImportService>()

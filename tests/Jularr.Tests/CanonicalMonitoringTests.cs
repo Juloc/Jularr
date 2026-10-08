@@ -91,6 +91,25 @@ public sealed class CanonicalMonitoringTests
     }
 
     [TestMethod]
+    public async Task AFailingStepRollsTheWholeCommandBack()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var series = await AddSeriesAsync(db, "Harbor", 2);
+        var commands = Commands(db);
+        await commands.SetManyAsync(MonitoringTargetKind.Episode, series.EpisodeIds[0], true, CancellationToken.None);
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE FUNCTION fail_monitoring_delete() RETURNS trigger LANGUAGE plpgsql AS $body$ BEGIN RAISE EXCEPTION 'blocked'; END $body$;
+            CREATE TRIGGER fail_monitoring_delete BEFORE DELETE ON "WorkMonitoring" FOR EACH ROW EXECUTE FUNCTION fail_monitoring_delete();
+            """);
+
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => commands.SetAsync(MonitoringTargetKind.Work, series.WorkId, true, CancellationToken.None));
+
+        var workDecisions = await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WorkMonitoring" WHERE "TargetId" = {series.WorkId}""").SingleAsync();
+        Assert.AreEqual(0, workDecisions, "The Work's own decision was written before the episode decisions could be replaced, so it must have been rolled back with them.");
+    }
+
+    [TestMethod]
     public async Task FutureMonitorsTheWorkSwitchesTodaysEpisodesOffAndLeavesTheSeasonsAloneSoLaterEpisodesInherit()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();

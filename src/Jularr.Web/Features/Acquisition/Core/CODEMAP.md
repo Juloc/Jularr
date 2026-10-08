@@ -1,6 +1,7 @@
 # Acquisition core (search, selection, grab)
 
 Purpose: one search -> rank -> grab path for every media type; adapters only supply facts.
+Status: transitional Usenet-only path (Prowlarr indexers + SABnzbd). The final shared Candidate/Selection must compare Usenet, Anna's Archive and Direct sources before routing by acquisition type; Anna's Archive does not exist in Jularr yet.
 
 Canonical owners
 - `AcquisitionCore`: `SearchAsync` (indexer search, identity judgement, `ReleaseSelectionEngine` ranking) and `GrabAsync` (`ReleaseRequestTracker` lifecycle, `DownloadClientSubmissionService`).

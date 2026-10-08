@@ -1,5 +1,6 @@
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Events;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Instance;
 
 namespace Jularr.Web.Features.Acquisition.Access;
@@ -20,7 +21,8 @@ public sealed class AcquisitionRequestService(
     IJularrEventPublisher events,
     ILogger<AcquisitionRequestService> logger,
     IInstanceModuleService? instanceModules = null,
-    RequestWorkBinder? workBinder = null)
+    RequestWorkBinder? workBinder = null,
+    RequestIntent? intent = null)
 {
     /// <summary>Where a profile finds the state of its requests; decision notifications open it.</summary>
     public const string HistoryPath = "/Requests";
@@ -393,6 +395,17 @@ public sealed class AcquisitionRequestService(
                     cancellationToken);
                 return await RequireAsync(request.Id, cancellationToken);
             }
+        }
+
+        if (intent is not null)
+        {
+            // What the approved request asks for counts next to Monitoring, so switching Monitoring off never cancels it.
+            if (workBinder is not null && RequestWorkBinder.Applies(request.Kind))
+            {
+                request = await workBinder.EnsureBoundAsync(request, cancellationToken);
+            }
+
+            await intent.RecordAsync(request, cancellationToken);
         }
 
         var executor = executors.FirstOrDefault(candidate => candidate.Kind == request.Kind);

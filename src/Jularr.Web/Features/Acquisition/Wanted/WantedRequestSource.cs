@@ -46,7 +46,7 @@ public sealed class WantedRequestSource(MediaAcquisitionKind kind, WantedReconci
 
     public async Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
-        await wanted.ReconcileAsync(null, cancellationToken);
+        await wanted.ReconcileAllIfDueAsync(cancellationToken);
         var created = 0;
         var after = Guid.Empty;
         while (created < WantedAcquisitionService.MaxRequestsPerKindPerPass)

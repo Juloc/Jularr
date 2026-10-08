@@ -193,22 +193,17 @@ public sealed class MusicAcquisitionTests
     }
 
     [TestMethod]
-    public async Task ALossyReleaseWaitsForItsFallbackTierAndThenIsTakenAsTemporary()
+    public async Task ALossyReleaseIsTakenAtOnceAndTheAlbumStaysWantedForAnUpgrade()
     {
         await using var host = await MusicHost.CreateAsync("Daft Punk - Homework (1997) MP3 256");
-        await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
+        var work = await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
 
         await host.ProcessAsync();
-        var first = (await host.Requests.ListAsync(MediaAcquisitionKind.Music, null, openOnly: false, 10, CancellationToken.None)).Single();
-        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
-        Assert.AreEqual(AcquisitionRequestStatus.Approved, first.Status);
 
-        host.Clock.Advance(TimeSpan.FromHours(7));
-        var payload = MusicRequestPayload.Of(first) with { NextSearchUtc = host.Clock.GetUtcNow().UtcDateTime.AddMinutes(-1) };
-        await host.Requests.UpdatePayloadAsync(first.Id, payload.Serialize(), CancellationToken.None);
-        await host.ProcessAsync();
-
-        Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "After its wait, the lower quality is acceptable.");
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "A lossy release the profile allows needs no waiting.");
+        var profile = MusicQualityProfiles.CreateDefaultMusic();
+        Assert.IsTrue(UpgradePolicy.Assess(profile, "MP3-256").IsUpgradable, "Lossless is still the goal, so the album is upgraded later.");
+        Assert.IsNotNull(work);
     }
 
     [TestMethod]

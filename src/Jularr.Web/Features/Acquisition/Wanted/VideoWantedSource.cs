@@ -12,7 +12,7 @@ public sealed class VideoWantedSource(MediaAcquisitionKind kind, WantedReconcile
 
     public async Task<int> PrepareAsync(DateTime nowUtc, CancellationToken cancellationToken)
     {
-        await wanted.ReconcileAsync(null, cancellationToken);
+        await wanted.ReconcileAllIfDueAsync(cancellationToken);
         var opened = 0;
         var after = Guid.Empty;
         while (opened < WantedAcquisitionService.MaxRequestsPerKindPerPass)
