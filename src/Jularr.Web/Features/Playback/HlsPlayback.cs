@@ -890,8 +890,9 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                     _previousOutputSeconds = produced;
                     // Without an accurate remaining duration a pause near EOF can prevent ffmpeg from
                     // finalising EXT-X-ENDLIST. Never pause during the last buffer window.
-                    if (!_paused && remainingDurationSeconds is > 0 and var remaining &&
-                        double.IsFinite(remaining) && produced < remaining - buffer.TargetAheadSeconds &&
+                    if (!_paused && remainingDurationSeconds is { } remaining &&
+                        double.IsFinite(remaining) && remaining > 0 &&
+                        produced < remaining - buffer.TargetAheadSeconds &&
                         produced - (_lastRequestedSegment + 1) * SegmentSeconds >= buffer.TargetAheadSeconds &&
                         pausable.TrySetPaused(true))
                     {
