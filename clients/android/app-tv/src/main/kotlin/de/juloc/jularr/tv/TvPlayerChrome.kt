@@ -102,8 +102,6 @@ internal fun PlayerControls(
     onPlayPause: () -> Unit,
     onScrubActive: (Boolean) -> Unit,
     onSeekTo: (Long) -> Unit,
-    onRepeatLine: () -> Unit,
-    onLearn: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -380,32 +378,13 @@ internal fun PlayerControls(
                         )
                     }
                 }
-                if (hasSpeedOptions) {
+                if (hasSpeedOptions || canLearn) {
                     Button(
                         onClick = onOpenSettingsPanel,
                         modifier = Modifier.focusRequester(settingsFocus),
                     ) {
                         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.tv_player_settings))
                         Text(" " + stringResource(R.string.tv_player_more))
-                    }
-                }
-            }
-            if (canLearn) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Button(onClick = onRepeatLine) {
-                        Icon(
-                            imageVector = Icons.Filled.Replay,
-                            contentDescription = "Repeat line",
-                            modifier = Modifier.size(22.dp),
-                        )
-                        Text("  Repeat line")
-                    }
-                    Button(onClick = onLearn) {
-                        Text("Learn this line")
                     }
                 }
             }
@@ -502,7 +481,11 @@ internal fun tvSeekSceneIndices(availableCount: Int): List<Int> {
 internal fun TvSettingsPanel(
     focusRequester: FocusRequester,
     playbackSpeed: Float,
+    hasSpeedOptions: Boolean,
+    canLearn: Boolean,
     onOpenSpeed: () -> Unit,
+    onRepeatLine: () -> Unit,
+    onLearn: () -> Unit,
     onBack: () -> Unit,
 ) {
     Box(
@@ -521,11 +504,28 @@ internal fun TvSettingsPanel(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(stringResource(R.string.tv_player_settings), style = MaterialTheme.typography.headlineSmall)
-            Button(
-                onClick = onOpenSpeed,
-                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-            ) {
-                Text(stringResource(R.string.tv_player_speed_value, playbackSpeed.toString()))
+            if (hasSpeedOptions) {
+                Button(
+                    onClick = onOpenSpeed,
+                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                ) {
+                    Text(stringResource(R.string.tv_player_speed_value, playbackSpeed.toString()))
+                }
+            }
+            if (canLearn) {
+                Button(
+                    onClick = onRepeatLine,
+                    modifier = Modifier.fillMaxWidth()
+                        .then(if (!hasSpeedOptions) Modifier.focusRequester(focusRequester) else Modifier),
+                ) {
+                    Text(stringResource(R.string.tv_player_repeat_line))
+                }
+                Button(
+                    onClick = onLearn,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.tv_player_learn_line))
+                }
             }
             Button(onClick = onBack) { Text(stringResource(R.string.tv_player_close)) }
         }
