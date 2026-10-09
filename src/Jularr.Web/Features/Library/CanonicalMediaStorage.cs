@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
@@ -73,8 +74,8 @@ public sealed record CanonicalPlayableFile(
     string Path,
     long SizeBytes,
     DateTime LastWriteTimeUtc,
-    string? VersionSource = null,
-    string? VersionNotes = null);
+    [property: JsonIgnore] string? VersionSource = null,
+    [property: JsonIgnore] string? VersionNotes = null);
 
 /// <summary>
 /// Single application owner for canonical video Asset/StoredFile identity. Batch attachment is used by
