@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 fun rememberTvFocusColor(): Color {
     val context = LocalContext.current
     return remember(context) {
-        Color(0xFF7B61FF)
+        TvPlayerDesignLoader.load(context).focus
     }
 }
 
