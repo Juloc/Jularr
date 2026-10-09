@@ -240,9 +240,10 @@ class TvAppController(
                 episodePage = null,
                 episode = null,
                 storageDecision = null,
-                error = if (route == TvRoute.Settings) withContent.error else null,
+                error = null,
             )
         }
+    }
 
     suspend fun changePlaybackPreferences(update: ClientPlaybackPreferencesUpdate): TvAppSnapshot =
         runBusy {
@@ -251,7 +252,6 @@ class TvAppController(
                 error = null,
             )
         }
-    }
 
     fun openProfileSelect(): TvAppSnapshot {
         snapshot = snapshot.copy(
@@ -313,7 +313,7 @@ class TvAppController(
                 episodePage = null,
                 episode = null,
                 storageDecision = null,
-                error = null,
+                error = if (route == TvRoute.Settings) withContent.error else null,
             )
         }
 
