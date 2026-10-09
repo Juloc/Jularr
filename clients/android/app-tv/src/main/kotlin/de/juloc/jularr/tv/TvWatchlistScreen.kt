@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -131,7 +132,8 @@ fun TvWatchlistScreen(
         return
     }
 
-    val design = TvPlayerDesignLoader.load(androidx.compose.ui.platform.LocalContext.current)
+    val context = LocalContext.current
+    val design = remember(context) { TvPlayerDesignLoader.load(context) }
     val focusColor = rememberTvFocusColor()
     var category by remember {
         mutableStateOf(
@@ -152,13 +154,14 @@ fun TvWatchlistScreen(
     var infoEntry by remember { mutableStateOf<WatchlistItem?>(null) }
     val sortFocus = remember { FocusRequester() }
     val optionFocus = remember { FocusRequester() }
+    val infoFocus = remember { FocusRequester() }
     val restoreId = remember { focusMemory.recall("watchlist") }
     val gridState = rememberLazyGridState()
     val visible = remember(entries, category, sort) {
         watchlistVisibleItems(entries, category, sort)
     }
     val progressByAnime = remember(continueWatching) {
-        continueWatching.associateBy { it.animeId }
+        continueWatching.distinctBy { it.animeId }.associateBy { it.animeId }
     }
     val restoreIndex = visible.indexOfFirst { "item:${it.id}" == restoreId }
 
@@ -173,6 +176,9 @@ fun TvWatchlistScreen(
         } else if (sortPreviouslyOpened) {
             runCatching { sortFocus.requestFocus() }
         }
+    }
+    LaunchedEffect(infoEntry?.id) {
+        if (infoEntry != null) runCatching { infoFocus.requestFocus() }
     }
     BackHandler(enabled = sortOpen || infoEntry != null) {
         if (infoEntry != null) infoEntry = null else sortOpen = false
@@ -345,7 +351,10 @@ fun TvWatchlistScreen(
                             ),
                             style = MaterialTheme.typography.bodyLarge,
                         )
-                        Button(onClick = { infoEntry = null }) {
+                        Button(
+                            onClick = { infoEntry = null },
+                            modifier = Modifier.focusRequester(infoFocus),
+                        ) {
                             Text(stringResource(R.string.tv_action_back))
                         }
                     }
