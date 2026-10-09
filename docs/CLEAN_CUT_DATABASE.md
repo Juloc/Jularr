@@ -274,3 +274,9 @@ Every hot-path query must have a documented expected cardinality, query inputs, 
 ### 8.7 SQL text and parameters — mandatory authoring rule
 
 The owner-approved SQL formatting, fully qualified multi-table column references and **absolute prohibition of SQL string interpolation** are documented with `SqlQueryRaw`, `ExecuteSqlRaw`, named `NpgsqlParameter` examples in [DATABASE_CONVENTIONS.md](DATABASE_CONVENTIONS.md), section "Mandatory SQL statement style". All clean-cut queries, data migrations, APIs, background services and future new features must comply. Never derive SQL syntax or identifier names from request input.
+
+### 8.8 All outward lists are paginated
+
+**Mandatory owner rule:** Every query exposing a collection to a client, Razor page or outward API is paginated **in PostgreSQL**. No generic unbounded list exceptions. Use default `limit=25`, hard maximum `100`, safe server validation, keyset/cursor pagination by fully unique sort keys, `LIMIT @FetchLimit` (normally page size + 1 to determine `HasMore`), scoped filters **before** pagination, bounded child arrays and explicit fixed SQL variants. The common `PageRequest`/`PageResult<T>` contract belongs to the small shared data/API conventions, not separate media-type pagination frameworks. `TotalCount` is optional and only computed when UI actually uses it. Deep `OFFSET` requires measured justification. Single-entity reads do not need paging; unbounded child collections must have their own list endpoint. See [DATABASE_CONVENTIONS.md](DATABASE_CONVENTIONS.md) section "Mandatory outward-facing pagination and bounded reads" for the complete binding contract, SQL example and Microsoft-aligned practices.
+
+Implementers must verify that Watchlist, Works, Library, requests, activity/history, users, acquisitions/releases, Manga/Book chapters, TV episodes, Games and job/operation lists are paged. Internal scanners/importers/export jobs process bounded batches, not an unlimited HTTP result.
