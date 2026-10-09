@@ -104,6 +104,7 @@ fun TvPlayerScreen(
     val playerFocus = remember { FocusRequester() }
     val primaryControlFocus = remember { FocusRequester() }
     val learningOverlayFocus = remember { FocusRequester() }
+    val nextEpisodeFocus = remember { FocusRequester() }
     var isPlaying by remember { mutableStateOf(player.player.isPlaying) }
     var playbackEnded by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(player.player.currentPosition.coerceAtLeast(0)) }
@@ -203,6 +204,12 @@ fun TvPlayerScreen(
         ) {
             delay(design.controlsAutoHideMs)
             apply(TvPlayerInteraction.autoHide(uiState, isPlaying, companionVisible))
+        }
+    }
+
+    LaunchedEffect(playbackEnded, nextEpisodeTitle, uiState.controlsVisible) {
+        if (playbackEnded && nextEpisodeTitle != null && uiState.controlsVisible) {
+            runCatching { nextEpisodeFocus.requestFocus() }
         }
     }
 
@@ -406,6 +413,7 @@ fun TvPlayerScreen(
                     playbackEnded = playbackEnded,
                     nextEpisodeTitle = nextEpisodeTitle,
                     onNextEpisode = onNextEpisode,
+                    nextEpisodeFocus = nextEpisodeFocus,
                     canLearn = currentCue != null,
                     positionMs = positionMs,
                     durationMs = durationMs,
@@ -549,6 +557,7 @@ private fun PlayerControls(
     playbackEnded: Boolean,
     nextEpisodeTitle: String?,
     onNextEpisode: () -> Unit,
+    nextEpisodeFocus: FocusRequester,
     canLearn: Boolean,
     positionMs: Long,
     durationMs: Long,
@@ -782,7 +791,10 @@ private fun PlayerControls(
                 }
 
                 if (playbackEnded && nextEpisodeTitle != null) {
-                    Button(onClick = onNextEpisode) {
+                    Button(
+                        onClick = onNextEpisode,
+                        modifier = Modifier.focusRequester(nextEpisodeFocus).widthIn(max = 280.dp),
+                    ) {
                         Text("Next: $nextEpisodeTitle", maxLines = 1)
                     }
                 }
