@@ -449,7 +449,13 @@ fun TvPlayerScreen(
                         text = cue.text,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = if (uiState.controlsVisible) 340.dp else 48.dp)
+                            .padding(
+                                bottom = when {
+                                    uiState.controlsVisible -> 340.dp
+                                    skipSegment != null -> 112.dp
+                                    else -> 48.dp
+                                },
+                            )
                             .background(design.subtitleBackground)
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         color = design.subtitleText,
