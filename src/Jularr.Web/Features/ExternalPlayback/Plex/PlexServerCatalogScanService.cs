@@ -59,9 +59,11 @@ public sealed class PlexServerCatalogScanService(
         var mapped = await matcher.ResolvePageAsync(
             result.Items, cancellationToken);
 
-        var next = result.Items.Count > 0 &&
-            result.TotalSize > start + result.Items.Count
-                ? checked(start + result.Items.Count)
+        // The source cursor advances by returned Plex entries, including items
+        // rejected by our mapper; otherwise malformed entries cause repeated scans.
+        var next = result.ReturnedSize > 0 &&
+            result.TotalSize > start + result.ReturnedSize
+                ? checked(start + result.ReturnedSize)
                 : (int?)null;
 
         return new PlexCatalogScanPage(
