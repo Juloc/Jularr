@@ -30,10 +30,12 @@ public sealed record PlaybackTranscodingSettings(
     string HlsCachePath,
     long CacheBudgetBytes,
     long FreeSpaceFloorBytes,
-    PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal)
+    PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal,
+    int WanUploadBudgetKbps = 0)
 {
     public const string DefaultHlsCachePath = "/data/playback-cache/hls";
     public const int MaxSessionsPerClass = 64;
+    public const int MaxWanUploadBudgetKbps = 1_000_000;
     public const long BytesPerGiB = 1L << 30;
     // The Admin form offers whole GiB (so at least 1); the stored rule only refuses a budget too small to hold a single segment.
     public const long MinCacheBudgetGiB = 1;
@@ -75,7 +77,8 @@ public enum PlaybackSettingsIssueCode
     LimitRange,
     BudgetRange,
     FloorRange,
-    BufferPresetInvalid
+    BufferPresetInvalid,
+    WanUploadBudgetInvalid
 }
 
 /// <summary>One rejected setting: the field name and why.</summary>
@@ -111,6 +114,11 @@ public static class PlaybackTranscodingSettingsRules
         if (floor < 0 || floor > PlaybackTranscodingSettings.MaxFreeSpaceFloorGiB * PlaybackTranscodingSettings.BytesPerGiB)
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes), PlaybackSettingsIssueCode.FloorRange));
+        }
+
+        if (settings.WanUploadBudgetKbps < 0 || settings.WanUploadBudgetKbps > PlaybackTranscodingSettings.MaxWanUploadBudgetKbps)
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps), PlaybackSettingsIssueCode.WanUploadBudgetInvalid));
         }
 
         if (!Enum.IsDefined(settings.BufferPreset))
@@ -391,7 +399,8 @@ public sealed class PlaybackTranscodingSettingsStore
         long? CacheBudgetBytes,
         long? FreeSpaceFloorBytes,
         string[]? RetiredCachePaths,
-        PlaybackBufferPreset? BufferPreset = null)
+        PlaybackBufferPreset? BufferPreset = null,
+        int? WanUploadBudgetKbps = null)
     {
         public static Persisted From(Stored stored) =>
             new(
@@ -404,7 +413,8 @@ public sealed class PlaybackTranscodingSettingsStore
                 stored.Settings.CacheBudgetBytes,
                 stored.Settings.FreeSpaceFloorBytes,
                 stored.RetiredRoots,
-                stored.Settings.BufferPreset);
+                stored.Settings.BufferPreset,
+                stored.Settings.WanUploadBudgetKbps);
 
         public PlaybackTranscodingSettings ToSettings()
         {
@@ -418,7 +428,8 @@ public sealed class PlaybackTranscodingSettingsStore
                 HlsCachePath ?? defaults.HlsCachePath,
                 CacheBudgetBytes ?? defaults.CacheBudgetBytes,
                 FreeSpaceFloorBytes ?? defaults.FreeSpaceFloorBytes,
-                BufferPreset ?? defaults.BufferPreset);
+                BufferPreset ?? defaults.BufferPreset,
+                WanUploadBudgetKbps ?? defaults.WanUploadBudgetKbps);
         }
     }
 }
