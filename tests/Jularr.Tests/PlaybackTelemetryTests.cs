@@ -284,6 +284,69 @@ public sealed class PlaybackTelemetryTests
     }
 
     [TestMethod]
+    public void UnattributedBufferingIsNeverBlamedOnTheClientsInternet()
+    {
+        var clock = new ManualTimeProvider(s_start);
+        var store = new PlaybackStreamSessionStore(clock);
+        var session = NewSession(store);
+
+        Assert.AreEqual(PlaybackBottleneckCause.Unknown, store.Advise(session.Id, Reader)!.Bottleneck);
+        Assert.IsTrue(store.ReportTelemetry(session.Id, Reader,
+            Report(Update(buffer: 1, throughput: 1_500, stalls: 2, stallMs: 3500), clock.GetUtcNow())));
+
+        Assert.AreEqual(PlaybackBottleneckCause.ConnectionUncertain,
+            store.Advise(session.Id, Reader)!.Bottleneck,
+            "Throughput and stalls do not reveal whether the saturated link is at the client, proxy, ISP or server.");
+    }
+
+    [TestMethod]
+    public async Task AnAdminWanPolicyIsDistinguishedFromAnUnmeasuredIspLimit()
+    {
+        var clock = new ManualTimeProvider(s_start);
+        var kit = PlaybackServerTestKit.Create(clock);
+        try
+        {
+            Assert.IsTrue((await kit.Settings.SaveAsync(
+                PlaybackTranscodingSettings.Default with
+                {
+                    HlsCachePath = Path.Combine(kit.DataRoot, "hls"),
+                    WanUploadBudgetKbps = 10_000
+                })).Succeeded);
+            var store = new PlaybackStreamSessionStore(clock, kit.Settings);
+            var plan = Transcode(Video()) with
+            {
+                Quality = new PlaybackQualityResolution(
+                    PlaybackQualityPreset.Auto,
+                    PlaybackNetworkClass.Remote,
+                    4_250,
+                    PlaybackLimitSource.ServerEgress,
+                    12_000,
+                    4_000)
+            };
+            var session = store.Create(
+                Reader, Guid.NewGuid(), Guid.NewGuid(), "/media/movie.mkv", 1400, plan,
+                new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto,
+                    PlaybackModePreference.Auto, ClientKinds.Web));
+
+            Assert.AreEqual(PlaybackBottleneckCause.ServerUploadPolicy,
+                store.Advise(session.Id, Reader)!.Bottleneck,
+                "An explicit Jularr-wide upload policy is known, but actual WAN throughput has not been measured.");
+
+            Assert.IsTrue((await kit.Settings.SaveAsync(
+                kit.Settings.Current with { WanUploadBudgetKbps = 0 })).Succeeded);
+            Assert.AreEqual(PlaybackBottleneckCause.Unknown,
+                store.Advise(session.Id, Reader)!.Bottleneck);
+        }
+        finally
+        {
+            if (Directory.Exists(kit.DataRoot))
+            {
+                Directory.Delete(kit.DataRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
     public void AFloodOfReportsStillGivesTheRightEvidence()
     {
         var telemetry = new PlaybackSessionTelemetry();
