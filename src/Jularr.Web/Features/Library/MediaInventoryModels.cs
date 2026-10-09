@@ -120,7 +120,10 @@ public sealed record MediaInventoryEntry(
     int ProbeVersion,
     DateTime AnalyzedAt,
     string? Diagnostic,
-    MediaTechnicalInfo? Technical)
+    MediaTechnicalInfo? Technical,
+    string? SourceFingerprint = null,
+    long? SourceSizeBytes = null,
+    DateTime? SourceLastWriteTimeUtc = null)
 {
     public Guid StoredFileId => MediaFileId;
 }
