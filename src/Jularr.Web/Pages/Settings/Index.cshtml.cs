@@ -9,7 +9,7 @@ namespace Jularr.Web.Pages.Settings;
 public sealed class IndexModel(AppDbContext db, Jularr.Web.Features.Plex.PlexIdentitySettingsStore plexSettings) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
-    public bool PlexConnectionVisible { get; private set; };
+    public bool PlexConnectionVisible { get; private set; }
     public bool PlexLoginLinked { get; private set; }
 
     public async Task OnGetAsync()
