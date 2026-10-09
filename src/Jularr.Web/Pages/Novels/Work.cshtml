@@ -306,6 +306,10 @@
                     Func<dynamic?, IHtmlContent> filesGroup = @<div>
                         <a class="button" href="/Library/PresentationGroups/@work.Id?media=novel">@ui["library.presentation.manageLink"]</a>
                         <a class="button" href="/Books/ChapterArt/@work.Id">@ui["chapterArt.title"]</a>
+                        @if (Model.ManageWorkId is { } manageWorkId)
+                        {
+                            <a class="button" href="/Admin/Novels/Work/@manageWorkId">@ui["admin.manga.manage"]</a>
+                        }
                         @if (detail.IsEpubSeries)
                         {
                             <form method="post"

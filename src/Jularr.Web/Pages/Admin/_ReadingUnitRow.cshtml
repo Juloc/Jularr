@@ -1,0 +1,17 @@
+@model Jularr.Web.Pages.Admin.ReadingUnitRow
+@{
+    var ui = Model.Ui;
+    var chapter = Model.Chapter;
+    var number = chapter.Number.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    var name = string.IsNullOrWhiteSpace(chapter.Title) ? ui.Format("admin.manga.unit.chapter", ("number", number)) : chapter.Title;
+}
+<div class="admmd-ep-row">
+    <span class="admmd-ep-number"><span>@number</span></span>
+    <span class="admmd-ep-title"><strong>@name</strong></span>
+    <span class="admmd-ep-status">
+        <partial name="_ReadingUnitTags" model="@(new Jularr.Web.Pages.Admin.ReadingUnitTags(chapter.Installed ? ui["admin.manga.state.installed"] : chapter.Wanted ? ui["admin.manga.state.wanted"] : ui["admin.manga.state.missing"], chapter.Installed ? "success" : "text", chapter.Monitored, chapter.InstalledQuality, chapter.UpgradeWanted, Model.Transfer, ui))" />
+    </span>
+    <span class="admmd-ep-monitor">
+        <partial name="_ReadingUnitControls" model="@(new Jularr.Web.Pages.Admin.ReadingUnitControls(Model.WorkId, "chapter", chapter.Id, chapter.Number, chapter.Monitored, chapter.Decision, name, Model.CanSearch, ui))" />
+    </span>
+</div>

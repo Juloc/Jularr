@@ -611,7 +611,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequest
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingStructureService>();
-builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.MangaWorkAdminQuery>();
+builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingWorkAdminQuery>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
