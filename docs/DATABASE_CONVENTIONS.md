@@ -22,6 +22,100 @@ Jularr-specific non-negotiable defaults:
 - Measure important PostgreSQL queries with `EXPLAIN (ANALYZE, BUFFERS)`.
 - Do not introduce a blind SQL Server-style periodic rebuild/reorganize service; use autovacuum/analyze and evidence-driven reindexing.
 
+
+## Mandatory SQL statement style (owner decision)
+
+**This applies to every new or intentionally modified hand-authored SQL statement, including reads and writes, EF Core `SqlQueryRaw`/`FromSqlRaw`, `ExecuteSqlRaw`, ADO.NET/Npgsql and SQL inside feature stores.**
+
+1. **Never interpolate values into SQL.** No C# `$"..."`, `$"""..."""`, `string.Format`, concatenation or computed fragments for SQL text. Do not substitute EF Core interpolated-string query APIs for this rule. Define **static, inspectable SQL text** (`const string` / non-interpolated `"""..."""`) and supply values using **explicit named, typed parameters** (`@AccountId`, `@ProfileId`, etc.).
+2. Format SQL as multiline statements, with uppercase SQL keywords. **One selected column per line**; use clear newlines for `SELECT`, `FROM`, `JOIN`, `WHERE`, `GROUP BY`, `ORDER BY`, `UPDATE`, `SET`, `INSERT INTO`, `VALUES`, etc. Align indentation and keep each predicate/update assignment readable. Avoid `SELECT *`; select only needed columns.
+3. With **more than one table** in the query, **qualify every column** with its real table name (or a clear explicitly declared alias if unavoidable): in `SELECT`, `ON`, `WHERE`, `SET` expressions, `GROUP BY`, `ORDER BY` and `RETURNING`. Prefer the actual table name for unambiguous review; a multi-table query must never have naked `Id`, `Status` or `WorkId` columns.
+4. PostgreSQL owns the dialect: use `"Accounts"`, `"Id"`, not SQL Server three-part names such as `Main.dbo.Accounts`. PascalCase identifiers require PostgreSQL double-quoting. Parameters use `@Name`, **never** quoted SQL literals derived from input.
+5. Static SQL query variants may be separate named constants for genuinely different shapes. Do not build table names, column names, schema names, `ORDER BY` fragments, joins, or `WHERE` clauses by arbitrary string concatenation/interpolation; choose a reviewed static variant instead. Pagination sizes/filters/sort values are bound parameters; choosing from a fixed set of static SQL variants is acceptable.
+6. SQL may live **directly in its owning feature service** when that service owns the data access; do not add a Store/Repository merely to pass calls through. The Razor Page calls the same backend method as HTTP endpoints through DI, without an HTTP round trip. Public user/admin operations own different READ projections and authorizations; shared internal mutation code handles common invariants and SQL UPDATE. A generic unrestricted `UpdateUser(Data)` exposed to API callers is forbidden.
+7. Include focused tests for parameter values containing quotes/metacharacters, SQL correctness, authorization, query cardinality and all affected write invariants. The real database constraint remains the last line of defense against concurrent writes.
+
+**Example: one-table READ** (`UserAccountService.ReadUserV1`):
+
+```csharp
+private const string ReadAccountSql = """
+    SELECT
+        "Id",
+        "Email",
+        "DisplayName",
+        "AccountRoleTypeId",
+        "IsEnabled"
+    FROM
+        "Accounts"
+    WHERE
+        "Id" = @AccountId
+    """;
+
+var account = await db.Database.SqlQueryRaw<UserAccountV1>(
+        ReadAccountSql,
+        new NpgsqlParameter("AccountId", NpgsqlDbType.Bigint)
+        {
+            Value = accountId
+        })
+    .SingleOrDefaultAsync(cancellationToken);
+```
+
+**Example: multi-table READ** (every selected/joined/filtered/sorted column qualified):
+
+```sql
+SELECT
+    "Accounts"."Id" AS "AccountId",
+    "Accounts"."DisplayName" AS "AccountDisplayName",
+    "Profiles"."Id" AS "ProfileId",
+    "Profiles"."DisplayName" AS "ProfileDisplayName"
+FROM
+    "Accounts"
+INNER JOIN
+    "AccountProfiles"
+        ON "AccountProfiles"."AccountId" = "Accounts"."Id"
+INNER JOIN
+    "Profiles"
+        ON "Profiles"."Id" = "AccountProfiles"."ProfileId"
+WHERE
+    "Accounts"."Id" = @AccountId
+ORDER BY
+    "Profiles"."Id"
+```
+
+**Example: shared internal UPDATE** (validated/authorized callers only):
+
+```csharp
+private const string UpdateDisplayNameSql = """
+    UPDATE
+        "Accounts"
+    SET
+        "DisplayName" = @DisplayName,
+        "UpdatedAt" = @UpdatedAt
+    WHERE
+        "Id" = @AccountId
+    """;
+
+await db.Database.ExecuteSqlRawAsync(
+    UpdateDisplayNameSql,
+    [
+        new NpgsqlParameter("DisplayName", NpgsqlDbType.Text)
+        {
+            Value = displayName
+        },
+        new NpgsqlParameter("UpdatedAt", NpgsqlDbType.TimestampTz)
+        {
+            Value = updatedAt
+        },
+        new NpgsqlParameter("AccountId", NpgsqlDbType.Bigint)
+        {
+            Value = accountId
+        }
+    ],
+    cancellationToken);
+```
+
+This example presumes the owner-approved `Accounts` target schema; do not copy it against current `OwnerAccounts` runtime without the separately authorized clean cut. Higher-level services must still enforce effective actor/target permission, DTO field allowlists, domain invariants, and transactional session effects. Static parameterized SQL is a **necessary**, not sufficient, protection.
+
 The canonical Agent Control document is the source of truth when this summary and the central rules differ.
 
 Canonical Work identity (owner decision, mandatory):
