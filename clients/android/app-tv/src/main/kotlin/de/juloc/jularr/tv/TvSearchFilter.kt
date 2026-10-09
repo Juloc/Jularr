@@ -13,14 +13,16 @@ object TvSearchFilter {
     fun matches(
         library: List<AnimeSummary>,
         query: String,
+        filter: TvContentFilter = TvContentFilter.ALL,
     ): List<AnimeSummary> {
         val needle = query.trim()
-        if (needle.isEmpty()) return library
-
         return library.filter { anime ->
-            anime.title.contains(needle, ignoreCase = true) ||
-                anime.localTitle.contains(needle, ignoreCase = true) ||
-                anime.nativeTitle?.contains(needle, ignoreCase = true) == true
+            filter.includes(anime.format) && (
+                needle.isEmpty() ||
+                    anime.title.contains(needle, ignoreCase = true) ||
+                    anime.localTitle.contains(needle, ignoreCase = true) ||
+                    anime.nativeTitle?.contains(needle, ignoreCase = true) == true
+                )
         }
     }
 }
