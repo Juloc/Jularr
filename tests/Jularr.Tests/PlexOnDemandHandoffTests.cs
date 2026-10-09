@@ -30,6 +30,7 @@ public sealed class PlexOnDemandHandoffTests
 
             var calls = new List<(string Path, string Token, string Query)>();
             var failingUserPath = string.Empty;
+            var failWithTimeout = false;
             using var http = new HttpClient(new Handler(request =>
             {
                 var uri = request.RequestUri!;
@@ -37,6 +38,11 @@ public sealed class PlexOnDemandHandoffTests
                 calls.Add((uri.AbsolutePath, token, uri.Query));
                 if (token == "user-token" && uri.AbsolutePath == failingUserPath)
                 {
+                    if (failWithTimeout)
+                    {
+                        throw new TaskCanceledException("Plex server timed out.");
+                    }
+
                     return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                 }
 
@@ -127,6 +133,12 @@ public sealed class PlexOnDemandHandoffTests
                     Principal(AccountRole.User, "viewer"),
                     movie.Id, "Dune", "instance-id"));
             }
+
+            failingUserPath = "/library/sections";
+            failWithTimeout = true;
+            Assert.IsNull(await lookup.ResolveAsync(
+                Principal(AccountRole.User, "viewer"),
+                movie.Id, "Dune", "instance-id"));
         }
         finally
         {
