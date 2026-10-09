@@ -28,7 +28,8 @@ public sealed record ReadingManualCandidate(
     string? RejectedBecause,
     bool IsTried,
     bool CanGrab,
-    IReadOnlyList<QueryProvenance> Provenance);
+    IReadOnlyList<QueryProvenance> Provenance,
+    int? Rank = null);
 
 /// <summary>The request a Manual Search is for, with what the page needs to say whether searching is possible.</summary>
 public sealed record ReadingManualSearchTarget(
@@ -87,7 +88,9 @@ public sealed class ReadingManualSearchService(
         var search = await core.SearchAsync(ReadingReleaseJudge.Plan(await engine.TargetAsync(request, payload, refreshStructure: false, cancellationToken)), profile, options, cancellationToken);
         var target = await TargetOfAsync(request, cancellationToken);
         var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
-        var candidates = search.Releases.Select(evaluation => ToCandidate(evaluation, tried, target.CanSearch)).ToArray();
+        // The releases come in the order of the selection engine, the order automatic acquisition grabs by, so Rank 1 is the release it takes first.
+        var rank = 0;
+        var candidates = search.Releases.Select(evaluation => ToCandidate(evaluation, tried, target.CanSearch, evaluation.IsGrabbable && !tried.Contains(evaluation.Candidate.Identity) ? ++rank : null)).ToArray();
         var summary = new ManualSearchSummary(depth, search.Search.RawResultCount, search.Search.Releases.Count, search.Search.Outcomes, search.Search.Trace);
         return new ReadingManualSearchResult(target, candidates, summary, search.Selection.WinnerReason);
     }
@@ -140,7 +143,7 @@ public sealed class ReadingManualSearchService(
         return new ReadingManualSearchTarget(request.Id, request.Kind, payload.Title, payload.Author, payload.RequestedVolume, profile.Name, request.Status, request.StatusMessage, payload.Searches, payload.NextSearchUtc, payload.TriedReleases ?? []);
     }
 
-    private ReadingManualCandidate ToCandidate(ReleaseEvaluation<ReadingReleaseInfo> evaluation, HashSet<string> tried, bool requestIsOpen)
+    private ReadingManualCandidate ToCandidate(ReleaseEvaluation<ReadingReleaseInfo> evaluation, HashSet<string> tried, bool requestIsOpen, int? rank)
     {
         var release = evaluation.Candidate;
         var selection = evaluation.Selection;
@@ -171,6 +174,7 @@ public sealed class ReadingManualSearchService(
             ReadingReleaseJudge.RejectedBecause(evaluation),
             isTried,
             isSelectable && !isTried && requestIsOpen,
-            release.Provenance);
+            release.Provenance,
+            rank);
     }
 }

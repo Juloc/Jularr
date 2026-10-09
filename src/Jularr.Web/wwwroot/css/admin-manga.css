@@ -1,0 +1,27 @@
+/* Admin Manga page: the volume and chapter rows reuse the Admin media detail rows with a narrower column set. */
+.admman-units {
+    --admmd-template: 64px minmax(160px, 1.6fr) minmax(150px, 1fr) 150px;
+}
+
+.admman-reset {
+    min-height: 32px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+}
+
+.admman-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.admman-units .admmd-ep-monitor form,
+.admman-units .admmd-group-monitor form {
+    margin: 0;
+}

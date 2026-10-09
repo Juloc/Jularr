@@ -884,6 +884,7 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingStructureService>();
             collection.AddSingleton<IMediaAcquisitionRegistration, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRegistration>();
             collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
+            collection.AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
             collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
             collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
             collection.AddSingleton<IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.MangaWantedRequestHandler>();

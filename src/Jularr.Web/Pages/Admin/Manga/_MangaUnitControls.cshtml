@@ -1,0 +1,32 @@
+@model Jularr.Web.Pages.Admin.Manga.MangaUnitControls
+@{
+    var ui = Model.Ui;
+    var number = Model.Number.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+}
+@if (Model.CanSearch)
+{
+    <form method="post" asp-page-handler="Search" asp-route-workId="@Model.WorkId">
+        <input type="hidden" name="@Model.Scope" value="@number" />
+        <button class="admin-icon-button" type="submit" aria-label="@ui.Format("admin.manga.searchItem", ("name", Model.Name))">
+            <partial name="_AdminIcon" model='"search"' /><span class="admin-icon-label">@ui["admin.media.action.automatic"]</span>
+        </button>
+    </form>
+}
+@if (Model.Decision is not null)
+{
+    <form method="post" asp-page-handler="Monitor" asp-route-workId="@Model.WorkId">
+        <input type="hidden" name="scope" value="@Model.Scope" />
+        <input type="hidden" name="targetId" value="@Model.Id" />
+        <input type="hidden" name="state" value="inherit" />
+        <button class="admmd-lang admmd-lang-quiet admman-reset" type="submit" title="@ui["admin.manga.unit.resetHint"]">@ui["admin.manga.unit.reset"]</button>
+    </form>
+}
+<form method="post" asp-page-handler="Monitor" asp-route-workId="@Model.WorkId">
+    <input type="hidden" name="scope" value="@Model.Scope" />
+    <input type="hidden" name="targetId" value="@Model.Id" />
+    <input type="hidden" name="state" value="@(Model.Monitored ? "false" : "true")" />
+    <button class="admmd-toggle admmd-toggle-icon @(Model.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(Model.Monitored ? "true" : "false")"
+            aria-label="@ui.Format("admin.media.monitorItem", ("name", Model.Name))">
+        <span class="admin-switch" aria-hidden="true"></span>
+    </button>
+</form>

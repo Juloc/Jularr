@@ -126,7 +126,7 @@ public sealed class ReadingManualSearchModel(AppDbContext db, ReadingManualSearc
 
         var facts = new[] { candidate.Format, candidate.Language ?? "", Coverage(candidate) }.Where(fact => fact.Length > 0 && fact != "—" && !fact.StartsWith("UNKNOWN", StringComparison.Ordinal)).ToArray();
         var meta = ManualReleaseRows.Meta(Ui, candidate.Sources, candidate.Provenance, candidate.SizeBytes, candidate.AgeDays);
-        return new ManualReleaseRow(candidate.Score, candidate.Title, meta, facts, reasons, candidate.Verdict, candidate.IsTried, candidate.Identity, candidate.CanGrab);
+        return new ManualReleaseRow(candidate.Score, candidate.Title, meta, facts, reasons, candidate.Verdict, candidate.IsTried, candidate.Identity, candidate.CanGrab, candidate.Rank);
     }
 
     public string ConfidenceLabel(IdentityConfidence confidence) => Ui[$"admin.reading.confidence.{confidence.ToString().ToLowerInvariant()}"];

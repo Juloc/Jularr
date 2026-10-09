@@ -5,9 +5,10 @@ using Jularr.Web.Features.Localization;
 namespace Jularr.Web.Pages.Admin;
 
 /// <summary>One release of a Manual Search as the shared release table shows it, whatever media type found it.</summary>
+/// <param name="Rank">The place among the releases automatic selection would take, 1 being the first; null for a release it would never take. Shown instead of the score when set.</param>
 /// <param name="Facts">What the release is, in short: format, quality, language, volumes.</param>
 /// <param name="Reasons">Why the release is or is not taken, one sentence each, the identity finding first.</param>
-public sealed record ManualReleaseRow(int? Score, string Title, string Meta, IReadOnlyList<string> Facts, IReadOnlyList<string> Reasons, ManualSearchVerdict Verdict, bool IsTried, string Identity, bool CanGrab);
+public sealed record ManualReleaseRow(int? Score, string Title, string Meta, IReadOnlyList<string> Facts, IReadOnlyList<string> Reasons, ManualSearchVerdict Verdict, bool IsTried, string Identity, bool CanGrab, int? Rank = null);
 
 /// <param name="GrabRoute">The route values of the page's Grab handler, for example the request or the album.</param>
 public sealed record ManualReleaseTableView(IReadOnlyList<ManualReleaseRow> Rows, IDictionary<string, string> GrabRoute, UiTextBundle Ui);

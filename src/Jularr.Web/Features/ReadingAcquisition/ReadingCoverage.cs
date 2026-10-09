@@ -12,9 +12,10 @@ public enum ReadingCoverageState
 }
 
 /// <param name="Wanted">Whether Monitoring or a request for the whole title wants it now, which is what the Wanted queue lists.</param>
-public sealed record ReadingChapterUnit(Guid Id, double Number, string? Title, bool IsSpecial, Guid? VolumeId, bool Monitored, bool Installed, bool Wanted);
+/// <param name="Decision">The owner's own decision on the unit; null while it follows its volume or the Work.</param>
+public sealed record ReadingChapterUnit(Guid Id, double Number, string? Title, bool IsSpecial, Guid? VolumeId, bool Monitored, bool Installed, bool Wanted, bool? Decision = null);
 
-public sealed record ReadingVolumeUnit(Guid Id, int Number, string? Title, bool Monitored, ReadingCoverageState State, bool Wanted, IReadOnlyList<ReadingChapterUnit> Chapters)
+public sealed record ReadingVolumeUnit(Guid Id, int Number, string? Title, bool Monitored, ReadingCoverageState State, bool Wanted, IReadOnlyList<ReadingChapterUnit> Chapters, bool? Decision = null)
 {
     public int InstalledChapters => Chapters.Count(chapter => chapter.Installed);
 }
@@ -86,7 +87,7 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
             var wanted = !installed
                 && ((monitored && !(chapter.VolumeId is { } parent && monitoredVolumes.Contains(parent)))
                     || (wholeTitleAsked && !inVolume && decisions.DecisionOf(chapter.Id) != false));
-            return new ReadingChapterUnit(chapter.Id, chapter.Number, chapter.Title, chapter.IsSpecial, chapter.VolumeId, monitored, installed, wanted);
+            return new ReadingChapterUnit(chapter.Id, chapter.Number, chapter.Title, chapter.IsSpecial, chapter.VolumeId, monitored, installed, wanted, decisions.DecisionOf(chapter.Id));
         }).ToArray();
 
         var volumeUnits = volumes
@@ -98,7 +99,7 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
                     : parts.Any(chapter => chapter.Installed) ? ReadingCoverageState.Partial : ReadingCoverageState.Missing;
                 var monitored = decisions.IsMonitored(volume.Id);
                 var wanted = state != ReadingCoverageState.Installed && (monitored || (wholeTitleAsked && decisions.DecisionOf(volume.Id) != false));
-                return new ReadingVolumeUnit(volume.Id, volume.Number, volume.Title, monitored, state, wanted, parts);
+                return new ReadingVolumeUnit(volume.Id, volume.Number, volume.Title, monitored, state, wanted, parts, decisions.DecisionOf(volume.Id));
             })
             .ToArray();
         var loose = chapterUnits.Where(chapter => chapter.VolumeId is not { } owner || !identifiedVolumes.Contains(owner)).OrderBy(chapter => chapter.Number).ToArray();
