@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.api.JularrClientApi
+import java.util.UUID
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.EpisodeSummary
 import de.juloc.jularr.core.model.ClientAccount
@@ -88,7 +89,7 @@ class TvAppController(
 
             sessionStore?.saveSession(
                 TvSavedSession(
-                    id = "${signedIn.account.userName.orEmpty()}@$origin",
+                    id = UUID.randomUUID().toString(),
                     serverOrigin = origin,
                     userName = signedIn.account.userName ?: userName,
                     cookies = cookiesStore?.getRawCookies() ?: emptyMap(),
@@ -140,7 +141,7 @@ class TvAppController(
 
             sessionStore?.saveSession(
                 TvSavedSession(
-                    id = "${signedIn.account.userName.orEmpty()}@$origin",
+                    id = UUID.randomUUID().toString(),
                     serverOrigin = origin,
                     userName = signedIn.account.userName ?: "TV User",
                     cookies = cookiesStore?.getRawCookies() ?: emptyMap(),
