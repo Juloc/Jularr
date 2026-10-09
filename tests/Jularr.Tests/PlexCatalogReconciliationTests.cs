@@ -181,6 +181,52 @@ public sealed class PlexCatalogReconciliationTests
         }
     }
 
+    [TestMethod]
+    public async Task UpdatedServerGrantRestartsScanAndRetiresPreviousSnapshots()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(), $"jularr-plex-reconcile-reset-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new PlexCatalogCheckpointStore(TimeProvider.System, root);
+            var firstGrant = DateTimeOffset.Parse("2026-10-09T10:00:00Z");
+            var started = await store.BeginAsync(
+                "plex-machine-1234", "1", firstGrant, 100, false);
+            var item = new PlexLibraryItem(
+                "44", "movie", "Dune", 2021, []);
+            var page = new PlexCatalogScanPage(
+                "plex-machine-1234", "1", 0, 1, null,
+                [new PlexWorkMatch(item, 123)]);
+            var complete = await store.CommitAsync(started, page);
+
+            Assert.IsTrue(complete.Complete);
+            Assert.AreEqual(123L,
+                (await store.ReadPageAsync(complete, 0)).Single().WorkId);
+            var unchanged = await store.BeginAsync(
+                "plex-machine-1234", "1", firstGrant, 100, false);
+            Assert.AreEqual(complete.Generation, unchanged.Generation);
+
+            var newer = await store.BeginAsync(
+                "plex-machine-1234", "1",
+                firstGrant.AddMinutes(10), 100, false);
+            Assert.AreNotEqual(complete.Generation, newer.Generation);
+            Assert.AreEqual(0, newer.NextStart);
+            Assert.IsFalse(newer.Complete);
+            Assert.AreEqual(0, (await store.ReadPageAsync(
+                complete, 0)).Count);
+            Assert.IsFalse(Directory.Exists(
+                Path.Combine(root, "plex-machine-1234", "1",
+                    complete.Generation.ToString("N"))));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static ClaimsPrincipal Principal(AccountRole role) =>
         OwnerAuthService.CreatePrincipal(new OwnerAccount
         {
