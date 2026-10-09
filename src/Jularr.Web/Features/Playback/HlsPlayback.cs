@@ -429,6 +429,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             "-v", "error",
             "-nostdin",
             "-y",
+            "-progress", "pipe:2", "-nostats",
             "-fflags", "+genpts"
         };
 
