@@ -323,6 +323,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
         var since = time.GetUtcNow() - TimeSpan.FromSeconds(30);
         return sessions.Values.Count(session =>
             session.Id != replacingSessionId &&
+            session.Replacing is null &&
             session.LastSeenUtc >= since &&
             session.Plan.Quality.Network is PlaybackNetworkClass.Remote or PlaybackNetworkClass.Metered or PlaybackNetworkClass.Unknown &&
             session.Telemetry.Latest?.State != PlaybackClientState.Paused);
