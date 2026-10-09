@@ -225,6 +225,8 @@ private fun TvSettingOptions(
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
+    val context = LocalContext.current
+    val playbackSpeeds = remember(context) { TvPlayerDesignLoader.load(context).playbackSpeeds }
     val options: List<Pair<String, ClientPlaybackPreferencesUpdate>> = when (selected) {
         TvSettingPanel.AUTOPLAY -> listOf(
             stringResource(R.string.tv_settings_on) to ClientPlaybackPreferencesUpdate(autoplayNext = true),
@@ -236,9 +238,7 @@ private fun TvSettingOptions(
         TvSettingPanel.SUBTITLE -> tvLanguageOptions(includeOff = true).map { (language, label) ->
             label to ClientPlaybackPreferencesUpdate(preferredSubtitleLanguage = language)
         }
-        TvSettingPanel.SPEED -> remember(LocalContext.current) {
-            TvPlayerDesignLoader.load(LocalContext.current).playbackSpeeds
-        }.map {
+        TvSettingPanel.SPEED -> playbackSpeeds.map {
             "${it}x" to ClientPlaybackPreferencesUpdate(defaultPlaybackSpeed = it)
         }
     }
