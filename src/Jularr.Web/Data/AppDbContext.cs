@@ -179,7 +179,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<AccountLoginIdentity>(entity =>
         {
-            entity.HasKey(x => x.Id);
+            entity.HasKey(x => new { x.Provider, x.ExternalAccountId });
             entity.Property(x => x.AccountId).HasMaxLength(32);
             entity.Property(x => x.Provider).HasMaxLength(40);
             entity.Property(x => x.ExternalAccountId).HasMaxLength(160);
@@ -187,7 +187,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 .WithMany()
                 .HasForeignKey(x => x.AccountId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasIndex(x => new { x.Provider, x.ExternalAccountId }).IsUnique();
             entity.HasIndex(x => new { x.AccountId, x.Provider }).IsUnique();
         });
 
