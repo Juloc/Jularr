@@ -4,6 +4,7 @@ using System.Globalization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Microsoft.EntityFrameworkCore;
+using NpgsqlTypes;
 
 namespace Jularr.Web.Features.Watchlist;
 
@@ -244,7 +245,8 @@ public sealed class WatchlistStore(AppDbContext db)
         FROM
             "Effective"
         WHERE
-            NOT EXISTS (
+            "Effective"."MediaType" = ANY(@VisibleMediaTypes)
+            AND NOT EXISTS (
                 SELECT
                     1
                 FROM
@@ -296,7 +298,8 @@ public sealed class WatchlistStore(AppDbContext db)
         FROM
             "Candidates"
         WHERE
-            NOT EXISTS (
+            "Candidates"."MediaType" = ANY(@VisibleMediaTypes)
+            AND NOT EXISTS (
                 SELECT
                     1
                 FROM
@@ -313,13 +316,16 @@ public sealed class WatchlistStore(AppDbContext db)
     public async Task<PageResult<WatchlistItem>> GetEffectivePageAsync(
         CurrentAccountContext account,
         PageRequest paging,
+        IReadOnlyCollection<WatchlistMediaType> visibleTypes,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(account);
         ArgumentNullException.ThrowIfNull(paging);
+        ArgumentNullException.ThrowIfNull(visibleTypes);
 
         var profileId = account.ProfileId;
         ValidateProfile(profileId);
+        var mediaTypes = visibleTypes.Select(WatchlistMediaTypeNames.ToStorage).Distinct().ToArray();
 
         return await WithConnectionAsync(async connection =>
         {
@@ -331,6 +337,7 @@ public sealed class WatchlistStore(AppDbContext db)
                 command.CommandText = ReadEffectivePageSql;
                 foreach (var parameter in SqlParams.Create()
                     .Add("ProfileId", profileId)
+                    .Add("VisibleMediaTypes", mediaTypes, NpgsqlDbType.Array | NpgsqlDbType.Text)
                     .ToArray())
                 {
                     command.Parameters.Add(parameter);
@@ -355,6 +362,7 @@ public sealed class WatchlistStore(AppDbContext db)
                 command.CommandText = CountEffectiveSql;
                 foreach (var parameter in SqlParams.Create()
                     .Add("ProfileId", profileId)
+                    .Add("VisibleMediaTypes", mediaTypes, NpgsqlDbType.Array | NpgsqlDbType.Text)
                     .ToArray())
                 {
                     command.Parameters.Add(parameter);
