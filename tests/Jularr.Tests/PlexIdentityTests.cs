@@ -86,9 +86,13 @@ public sealed class PlexIdentityTests
             var local = await service.CreateUserAsync(
                 "local-user", "a sufficiently long password");
             await service.LinkExternalIdentityAsync(local.Id, "plex", "abc");
+            var session = await service.GetEnabledAccountAsync(local.Id);
+            Assert.IsNotNull(session);
 
             await service.UnlinkExternalIdentityAsync(local.Id, "plex");
 
+            Assert.IsNull(await service.GetEnabledAccountAsync(
+                local.Id, session.SessionVersion));
             Assert.IsNull(await service.GetByExternalIdentityAsync("plex", "abc"));
             Assert.IsNotNull(await service.ValidateCredentialsAsync(
                 "local-user", "a sufficiently long password"));
