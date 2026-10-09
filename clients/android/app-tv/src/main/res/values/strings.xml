@@ -121,6 +121,7 @@
     <string name="tv_profile_switch_profile">Switch profile</string>
     <string name="tv_profile_select_unavailable">This Jularr server does not yet provide an authorized profile list and profile switching. You can change accounts or return to your current profile.</string>
     <string name="tv_account_select_title">Select account</string>
+    <string name="tv_account_select_loading">Connecting to account…</string>
     <string name="tv_account_select_description">Choose a saved account and server.</string>
     <string name="tv_account_select_current">Current account</string>
     <string name="tv_account_select_other_account">Add account</string>
