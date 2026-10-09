@@ -581,28 +581,55 @@ fun TvAppHost(
 
         TvRoute.ProfileSelect -> {
             val sessions = sessionStore?.getSessions().orEmpty()
-            TvProfileSelectScreen(
-                sessions = sessions,
-                onSelectSession = { session ->
-                    launchSnapshot {
-                        controller.selectSavedSession(session)
-                    }
-                },
-                onAddAccount = {
-                    cookies.clear()
-                    snapshot = controller.changeServer()
-                },
-            )
+            Row(Modifier.fillMaxSize()) {
+                if (snapshot.account != null) {
+                    TvSidebar(
+                        selected = TvRoute.ProfileSelect,
+                        focusMemory = focusMemory,
+                        onSelect = { selected ->
+                            when (selected) {
+                                TvRoute.ProfileSelect -> Unit
+                                else -> launchSnapshot { controller.selectSidebarRoute(selected) }
+                            }
+                        },
+                    )
+                }
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    TvProfileSelectScreen(
+                        sessions = sessions,
+                        activeSessionId = sessionStore?.getActiveSession()?.id,
+                        error = snapshot.error,
+                        onSelectSession = { session ->
+                            launchSnapshot { controller.selectSavedSession(session) }
+                        },
+                        onAddAccount = {
+                            cookies.clear()
+                            snapshot = controller.changeServer()
+                        },
+                        onSignOut = {
+                            launchSnapshot {
+                                val next = controller.signOut()
+                                cookies.clear()
+                                next
+                            }
+                        },
+                    )
+                }
+            }
         }
 
-        TvRoute.Home, TvRoute.Watchlist, TvRoute.Activity, TvRoute.Profile -> Box(modifier = Modifier.fillMaxSize()) {
+        TvRoute.Home, TvRoute.Watchlist, TvRoute.Settings -> Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
                 TvSidebar(
                     selected = route,
                     focusMemory = focusMemory,
                     onSelect = { selected ->
                         if (selected != route) {
-                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                            if (selected == TvRoute.ProfileSelect) {
+                                snapshot = controller.openProfileSelect()
+                            } else {
+                                launchSnapshot { controller.selectSidebarRoute(selected) }
+                            }
                         }
                     },
                 )
@@ -648,6 +675,7 @@ fun TvAppHost(
                         TvRoute.Watchlist -> TvWatchlistScreen(
                             entries = snapshot.watchlist,
                             supported = snapshot.capabilities?.features?.watchlist == true,
+                            continueWatching = snapshot.continueWatching,
                             serverOrigin = settings.origin.orEmpty(),
                             requestHeaders = cookies.requestHeaders(),
                             focusMemory = focusMemory,
@@ -656,21 +684,7 @@ fun TvAppHost(
                             },
                         )
 
-                        TvRoute.Activity -> TvActivityScreen(
-                            history = snapshot.activity,
-                            continueWatchingFallback = snapshot.continueWatching,
-                            usesContinueWatchingFallback = snapshot.activityUsesContinueWatchingFallback,
-                            serverOrigin = settings.origin.orEmpty(),
-                            requestHeaders = cookies.requestHeaders(),
-                            focusMemory = focusMemory,
-                            onOpenEpisode = { episodeId, animeId ->
-                                launchSnapshot {
-                                    controller.openEpisode(episodeId = episodeId, animeId = animeId)
-                                }
-                            },
-                        )
-
-                        TvRoute.Profile -> {
+                        TvRoute.Settings -> {
                             val account = snapshot.account
                             if (account == null) {
                                 TvMessageScreen(
@@ -686,6 +700,12 @@ fun TvAppHost(
                             } else {
                                 TvProfileScreen(
                                     account = account,
+                                    playbackPreferences = snapshot.playbackPreferences,
+                                    busy = snapshot.busy,
+                                    error = snapshot.error,
+                                    onUpdatePlaybackPreferences = { update ->
+                                        launchSnapshot { controller.changePlaybackPreferences(update) }
+                                    },
                                     serverOrigin = settings.origin.orEmpty(),
                                     currentVersionName = BuildConfig.VERSION_NAME,
                                     updateState = updateState,
@@ -727,7 +747,7 @@ fun TvAppHost(
                     onUpdateNow = {
                         updatePromptInfo = null
                         startUpdateDownload(info)
-                        launchSnapshot { controller.selectSidebarRoute(TvRoute.Profile) }
+                        launchSnapshot { controller.selectSidebarRoute(TvRoute.Settings) }
                     },
                     onLater = {
                         updatePreferences.dismissedVersion = info.version
@@ -743,18 +763,30 @@ fun TvAppHost(
             if (library == null) {
                 controller.back()?.let { snapshot = it }
             } else {
-                TvSearchScreen(
-                    library = library,
-                    serverOrigin = settings.origin.orEmpty(),
-                    requestHeaders = cookies.requestHeaders(),
-                    focusMemory = focusMemory,
-                    onAnime = { anime ->
-                        launchSnapshot { controller.openAnime(anime.id) }
-                    },
-                    onBack = {
-                        controller.back()?.let { snapshot = it }
-                    },
-                )
+                Row(modifier = Modifier.fillMaxSize()) {
+                    TvSidebar(
+                        selected = TvRoute.Home,
+                        focusMemory = focusMemory,
+                        onSelect = { selected ->
+                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                        },
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        TvSearchScreen(
+                            library = library,
+                            query = snapshot.searchQuery,
+                            selectedFilter = snapshot.searchCategory,
+                            serverOrigin = settings.origin.orEmpty(),
+                            requestHeaders = cookies.requestHeaders(),
+                            focusMemory = focusMemory,
+                            onQueryChange = { snapshot = controller.updateSearchQuery(it) },
+                            onFilterChange = { snapshot = controller.updateSearchCategory(it) },
+                            onAnime = { anime ->
+                                launchSnapshot { controller.openAnime(anime.id) }
+                            },
+                        )
+                    }
+                }
             }
         }
 
@@ -771,22 +803,38 @@ fun TvAppHost(
                     },
                 )
             } else {
-                TvAnimeScreen(
-                    anime = anime,
-                    serverOrigin = settings.origin.orEmpty(),
-                    requestHeaders = cookies.requestHeaders(),
-                    onEpisode = { episode ->
-                        launchSnapshot {
-                            controller.openEpisode(
-                                episodeId = episode.id,
-                                animeId = anime.id,
-                            )
-                        }
-                    },
-                    onBack = {
-                        controller.back()?.let { snapshot = it }
-                    },
-                )
+                Row(modifier = Modifier.fillMaxSize()) {
+                    TvSidebar(
+                        selected = TvRoute.Home,
+                        focusMemory = focusMemory,
+                        onSelect = { selected ->
+                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                        },
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        TvAnimeScreen(
+                            anime = anime,
+                            continueWatching = snapshot.continueWatching,
+                            focusMemory = focusMemory,
+                            serverOrigin = settings.origin.orEmpty(),
+                            requestHeaders = cookies.requestHeaders(),
+                            onEpisode = { episode ->
+                                launchSnapshot {
+                                    controller.openEpisode(
+                                        episodeId = episode.id,
+                                        animeId = anime.id,
+                                    )
+                                }
+                            },
+                            onPlayEpisode = { episode ->
+                                launchSnapshot { controller.playEpisode(episode.id, anime.id) }
+                            },
+                            onBack = {
+                                controller.back()?.let { snapshot = it }
+                            },
+                        )
+                    }
+                }
             }
         }
 
