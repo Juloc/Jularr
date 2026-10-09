@@ -90,6 +90,7 @@ public sealed class PlayerDesignTests
         StringAssert.Contains(scripts, "~/js/player-learning-design.js");
         StringAssert.Contains(watch, "model=\"@(stage.ShowPlayerTools || stage.Controls?.HasLearningCues == true)\"");
         StringAssert.Contains(episode, "model=\"@(stage.ShowPlayerTools || stage.Controls?.HasLearningCues == true)\"");
+        StringAssert.Contains(episode, "@if (stage.ShowPlayerTools)");
         StringAssert.Contains(stage, "@if (Model.ShowPlayerTools || Model.Controls?.HasLearningCues == true)");
         StringAssert.Contains(stage, "@if (Model.Controls is { HasLearningCues: true })");
         StringAssert.Contains(player, "data?.textContent || \"[]\"");
