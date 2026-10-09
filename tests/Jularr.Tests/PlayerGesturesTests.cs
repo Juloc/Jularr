@@ -3,11 +3,6 @@ using Jint;
 
 namespace Jularr.Tests;
 
-/// <summary>
-/// The video-surface tap rules of the web player (player-gestures.js): a single tap toggles the
-/// controls only after the double-tap window, double taps on the sides seek and add up, and the
-/// page wires taps (not clicks) to that decision.
-/// </summary>
 [TestClass]
 public sealed class PlayerGesturesTests
 {
@@ -92,7 +87,7 @@ public sealed class PlayerGesturesTests
     {
         var chrome = Read("src", "Jularr.Web", "wwwroot", "js", "player-chrome.js");
         Assert.IsFalse(Regex.IsMatch(chrome, @"video\.addEventListener\(\s*""(click|dblclick)"""),
-            "A click on the video must not toggle playback.");
+            "Video input must use one stage interaction owner.");
         StringAssert.Contains(chrome, "JularrPlayerGestures?.createTapDecider");
         StringAssert.Contains(chrome, "stage.addEventListener(\"pointerup\"");
         StringAssert.Contains(chrome, "start.pointerType !== event.pointerType");
