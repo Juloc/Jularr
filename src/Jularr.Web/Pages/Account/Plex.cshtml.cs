@@ -50,8 +50,10 @@ public sealed class PlexModel(
     private bool LoginEnabled =>
         configuration.GetValue<bool>("Plex:LoginEnabled");
 
-    private bool LinkEnabled =>
+    public bool PlexLinkEnabled =>
         configuration.GetValue<bool>("Plex:LinkEnabled");
+
+    private bool LinkEnabled => PlexLinkEnabled;
 
     public async Task<IActionResult> OnGetAsync(
         CancellationToken cancellationToken)
@@ -61,7 +63,9 @@ public sealed class PlexModel(
             return RedirectToPage("/Account/Setup");
         }
 
-        if (!CanUsePlex)
+        var isLinkedAccount = OwnerAuthService.GetAccountId(User) is not null;
+        if (!CanUsePlex || isLinkedAccount && !LinkEnabled
+            || !isLinkedAccount && !LoginEnabled)
         {
             return NotFound();
         }
