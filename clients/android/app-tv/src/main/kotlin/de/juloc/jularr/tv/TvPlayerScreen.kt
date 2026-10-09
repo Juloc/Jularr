@@ -98,6 +98,8 @@ fun TvPlayerScreen(
     onPreviousEpisode: () -> Unit = {},
     onNextEpisode: () -> Unit = {},
     onPlaybackFailure: (positionMs: Long) -> Unit = {},
+    playbackError: String? = null,
+    onRetryPlayback: () -> Unit = {},
     canOpenOnPhone: Boolean = false,
     remoteCommand: PlaybackCommand? = null,
     companionVisible: Boolean = false,
@@ -121,6 +123,7 @@ fun TvPlayerScreen(
     val subtitleTrackFocus = remember { FocusRequester() }
     val speedControlFocus = remember { FocusRequester() }
     val trackPanelFocus = remember { FocusRequester() }
+    val retryFocus = remember { FocusRequester() }
     var trackPanel by remember { mutableStateOf<TvPlayerPanel?>(null) }
     var returnToTrackPanel by remember { mutableStateOf<TvPlayerPanel?>(null) }
     var trackSelectionError by remember { mutableStateOf(false) }
@@ -205,9 +208,10 @@ fun TvPlayerScreen(
         )
     }
 
-    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, uiState.focusedWordIndex, companionVisible, trackPanel) {
+    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, uiState.focusedWordIndex, companionVisible, trackPanel, playbackError) {
         if (companionVisible) return@LaunchedEffect
         val target = when {
+            playbackError != null -> retryFocus
             trackPanel != null -> trackPanelFocus
             uiState.learningLayer != TvLearningLayer.CLOSED -> learningOverlayFocus
             uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.AUDIO -> audioTrackFocus
@@ -226,11 +230,13 @@ fun TvPlayerScreen(
         companionVisible,
         controlsInteractionRevision,
         trackPanel,
+        playbackError,
     ) {
         if (uiState.controlsVisible &&
             uiState.learningLayer == TvLearningLayer.CLOSED &&
             !companionVisible &&
             trackPanel == null &&
+            playbackError == null &&
             isPlaying
         ) {
             delay(design.controlsAutoHideMs)
@@ -332,6 +338,8 @@ fun TvPlayerScreen(
     BackHandler {
         if (companionVisible) {
             onCloseCompanion()
+        } else if (playbackError != null) {
+            onExit()
         } else if (trackPanel != null) {
             trackPanel = null
         } else {
@@ -343,7 +351,7 @@ fun TvPlayerScreen(
         modifier = modifier
             .fillMaxSize()
             .onPreviewKeyEvent { event ->
-                if (companionVisible) {
+                if (companionVisible || playbackError != null) {
                     return@onPreviewKeyEvent false
                 }
                 if (event.type != KeyEventType.KeyDown) {
@@ -445,7 +453,8 @@ fun TvPlayerScreen(
 
             if (uiState.controlsVisible &&
                 uiState.learningLayer == TvLearningLayer.CLOSED &&
-                trackPanel == null
+                trackPanel == null &&
+                playbackError == null
             ) {
                 PlayerControls(
                     episodeTitle = episodeTitle,
@@ -622,6 +631,37 @@ fun TvPlayerScreen(
                     wordFocusRequester = learningOverlayFocus,
                     modifier = Modifier.align(Alignment.Center),
                 )
+            }
+
+            if (playbackError != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.86f))
+                        .padding(72.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = "Playback failed",
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        text = playbackError,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        Button(
+                            onClick = onRetryPlayback,
+                            modifier = Modifier.focusRequester(retryFocus),
+                        ) { Text("Retry") }
+                        Button(onClick = onExit) { Text("Back") }
+                    }
+                }
             }
 
             companionOverlay?.let { overlay ->
