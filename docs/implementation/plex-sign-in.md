@@ -1,6 +1,6 @@
 # Plex sign-in foundation
 
-Status: **draft implementation** in #912; feature flags default off. Not ready for general deployment until CI, live Plex validation and Admin/User connection UI are complete.
+Status: **draft implementation** in #912; feature flags default off. Not ready for general deployment until CI, live Plex validation and provider settings end-to-end QA are complete.
 
 ## Current slice
 
@@ -12,7 +12,7 @@ Status: **draft implementation** in #912; feature flags default off. Not ready f
 - Existing password login and the canonical Jularr authentication cookie remain unchanged.
 - PIN attempts are short-lived, persisted, browser-nonce-bound and consumed once. Plex tokens are used transiently to verify the account ID, never stored as login identifiers or returned to the browser.
 
-## Configuration (environment variables)
+## Configuration (Admin → Providers → Plex)
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -22,16 +22,20 @@ Status: **draft implementation** in #912; feature flags default off. Not ready f
 | `Plex__AutoProvisionEnabled` | `false` | Allow verified Plex IDs to create internal Jularr accounts |
 | `Plex__RequireApproval` | `true` | Keep newly provisioned users disabled pending approval |
 
+The existing shared Admin → Providers UI contains a Plex Identity provider with separate checkboxes for login, linking, auto-provision and approval. All are disabled by default, except Require Approval, which is enabled by default. The client identifier is generated and persisted under `/data/integrations/plex-identity.json` on the first Admin save. No Plex server or personal token is stored here.
+
+For declarative deployments, the existing environment keys below take precedence over the UI. When one is present, Admin marks this provider as externally managed instead of providing a second conflicting settings path. Existing accounts/linked identities survive a provider toggle.
+
 The default-off feature flags must remain disabled in production until sign-in, migrations, callback routing and tests are verified. Auto-provisioning is an explicit owner decision, not implied by enabling Plex Login.
 
 Plex auth callbacks need an externally valid HTTPS URL with correct forwarded protocol/host. Local loopback HTTP is allowed for development only. A stable client identifier must persist across application restarts and replicas.
 
-## Deferred after this slice
+## Remaining work before release
 
-- Admin → Providers UI for Plex login/connection/auto-provisioning flags, consent and integration diagnostics.
-- User Settings → Connections UI and Profile-scoped Plex sync grants.
+- Verify Admin → Providers → Plex switches, authorization and persistence through a real browser session, then complete per-provider diagnostics. The current Test checks PIN endpoint availability, not an end-to-end user sign-in.
+- The Settings index now links to personal Plex sign-in management when linking is enabled or already configured. Full Profile-scoped Plex Connections, server grants, and sync remain deferred.
 - Plex media-server and library integration, item matching, scoped user access and `In Plex öffnen` (#886).
 - Full live-device Plex API compatibility validation; current PIN flow is the documented legacy PIN variant and should be checked against Plex's newer signed-JWT device authentication.
-- Polished localization and cross-device sign-in/browser-return UX.
+- User-facing Plex pages now use canonical localizable UI resources; verify the supported locales and mobile/browser-return UX visually.
 
 No one should claim Plex library sync, external playback or complete #911 based on this foundational PR alone.
