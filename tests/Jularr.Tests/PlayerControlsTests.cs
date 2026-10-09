@@ -111,19 +111,31 @@ public sealed class PlayerControlsTests
         Assert.AreEqual(1.0, defaults.DefaultPlaybackSpeed);
         Assert.IsNull(defaults.PreferredAudioLanguage);
         Assert.IsNull(defaults.PreferredSubtitleLanguage);
+        Assert.IsNull(defaults.PreferredSecondarySubtitleLanguage);
+        Assert.AreEqual(100, defaults.SubtitleSizePercent);
+        Assert.AreEqual(0, defaults.SubtitleOffsetMs);
 
         var updated = await reader.UpdatePreferencesAsync(
             new PlaybackPreferencesUpdate(
                 PreferredAudioLanguage: "JPN",
                 PreferredSubtitleLanguage: "Off",
+                PreferredSecondarySubtitleLanguage: "ENG",
+                SubtitleSizePercent: 130,
+                SubtitleOffsetMs: -750,
                 DefaultPlaybackSpeed: 1.5));
         Assert.AreEqual("ja", updated.PreferredAudioLanguage);
         Assert.AreEqual("off", updated.PreferredSubtitleLanguage);
         Assert.AreEqual(1.5, updated.DefaultPlaybackSpeed);
+        Assert.AreEqual("en", updated.PreferredSecondarySubtitleLanguage);
+        Assert.AreEqual(130, updated.SubtitleSizePercent);
+        Assert.AreEqual(-750, updated.SubtitleOffsetMs);
 
         var autoplayOnly = await reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(AutoplayNext: true));
         Assert.AreEqual("ja", autoplayOnly.PreferredAudioLanguage, "Omitted fields keep their stored value.");
         Assert.AreEqual(1.5, autoplayOnly.DefaultPlaybackSpeed);
+        Assert.AreEqual("en", autoplayOnly.PreferredSecondarySubtitleLanguage);
+        Assert.AreEqual(130, autoplayOnly.SubtitleSizePercent);
+        Assert.AreEqual(-750, autoplayOnly.SubtitleOffsetMs);
 
         var cleared = await reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(PreferredAudioLanguage: ""));
         Assert.IsNull(cleared.PreferredAudioLanguage, "An empty language clears back to the file default.");
@@ -134,16 +146,44 @@ public sealed class PlayerControlsTests
             reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(PreferredAudioLanguage: "off")));
         await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
             reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(PreferredSubtitleLanguage: "english")));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(PreferredSecondarySubtitleLanguage: "english")));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(SubtitleSizePercent: 201)));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(SubtitleOffsetMs: -10001)));
 
         var stored = await reader.GetPreferencesAsync();
         Assert.AreEqual(1.5, stored.DefaultPlaybackSpeed, "Rejected updates store nothing.");
         Assert.AreEqual("off", stored.PreferredSubtitleLanguage);
+        Assert.AreEqual("en", stored.PreferredSecondarySubtitleLanguage);
+        Assert.AreEqual(130, stored.SubtitleSizePercent);
+        Assert.AreEqual(-750, stored.SubtitleOffsetMs);
 
         Assert.AreEqual(PlaybackPreferencesSnapshot.Default, await other.GetPreferencesAsync());
         Assert.AreEqual(1, await fixture.Db.ProfilePlaybackPreferences.CountAsync());
     }
 
     // ---- Track selection across fallback restarts --------------------------------
+
+    [TestMethod]
+    public void SecondSubtitlePreferenceSelectsAvailableTextWithoutLearning()
+    {
+        var preferences = new PlaybackPreferencesSnapshot(
+            false, PreferredSubtitleLanguage: "ja",
+            PreferredSecondarySubtitleLanguage: "en",
+            SubtitleSizePercent: 125, SubtitleOffsetMs: 500);
+        var controls = PlayerControls.Build(Tracks, 1080, false, null, preferences);
+
+        Assert.AreEqual("stream:5", controls.InitialSubtitle);
+        Assert.AreEqual("stream:4", controls.InitialSecondarySubtitle);
+        Assert.IsFalse(controls.HasLearningCues);
+        Assert.AreEqual(125, controls.Preferences.SubtitleSizePercent);
+
+        var noTextMatch = PlayerControls.Build(Tracks, 1080, false, null,
+            preferences with { PreferredSecondarySubtitleLanguage = "de" });
+        Assert.AreEqual("off", noTextMatch.InitialSecondarySubtitle);
+    }
 
     [TestMethod]
     public void SelectedAudioTrackSurvivesDeviceToServerFallbackRestart()
@@ -294,6 +334,9 @@ public sealed class PlayerControlsTests
         Assert.AreEqual("ja", root.GetProperty("preferredAudioLanguage").GetString());
         Assert.AreEqual("off", root.GetProperty("preferredSubtitleLanguage").GetString());
         Assert.AreEqual(1.25, root.GetProperty("defaultPlaybackSpeed").GetDouble());
+        Assert.AreEqual(100, root.GetProperty("subtitleSizePercent").GetInt32());
+        Assert.AreEqual(0, root.GetProperty("subtitleOffsetMs").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("preferredSecondarySubtitleLanguage").ValueKind);
 
         var features = ClientApiContract.Capabilities().Features;
         Assert.IsTrue(features.PlaybackPreferences);
@@ -406,7 +449,7 @@ public sealed class PlayerControlsTests
             let subtitleChoice = "stream:2";
             let secondarySubtitleChoice = "stream:3";
             const video = { videoWidth: 640, videoHeight: 360 };
-            const stage = { clientWidth: 640, clientHeight: 360 };
+            const stage = { clientWidth: 640, clientHeight: 360, dataset: { chromeState: "visible" } };
             const subtitleCanvas = { style: {} };
             const primaryPositionedSubtitles = fake();
             const secondaryPositionedSubtitles = fake();
@@ -553,6 +596,53 @@ public sealed class PlayerControlsTests
         Assert.AreEqual(
             "subtitles=off,subtitles=stream:2|secondarySubtitles=off,secondarySubtitles=stream:3",
             RunNode(script, chrome));
+    }
+
+    [TestMethod]
+    public void SubtitleAppearanceSlidersUpdateBothLanguagesWithoutReloadingPlayback()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const applySubtitleAppearance = () => {");
+            const end = source.indexOf("    const resolveSecondarySelection = () => {", start);
+            if (start < 0 || end < 0) throw new Error("subtitle appearance settings missing");
+
+            const properties = new Map();
+            const handlers = {};
+            const root = { style: { setProperty: (key, value) => properties.set(key, value) } };
+            const subtitleSizeInput = {
+                value: "100", addEventListener: (event, handler) => handlers["size:" + event] = handler
+            };
+            const subtitleOffsetInput = {
+                value: "0", addEventListener: (event, handler) => handlers["offset:" + event] = handler
+            };
+            const subtitleSizeOutput = { textContent: "" };
+            const subtitleOffsetOutput = { textContent: "" };
+            let subtitleSizePercent = 100;
+            let subtitleOffsetMs = 0;
+            let playbackCueKey = "cached";
+            let secondaryCueKey = "cached";
+            let frames = 0;
+            const sync = () => frames++;
+            eval(source.slice(start, end) + "applySubtitleAppearance()");
+            subtitleSizeInput.value = "150";
+            handlers["size:input"]();
+            subtitleOffsetInput.value = "-2500";
+            handlers["offset:input"]();
+            console.log([
+                properties.get("--player-playback-subtitle-size"),
+                properties.get("--player-secondary-subtitle-size"),
+                subtitleSizeOutput.textContent,
+                subtitleOffsetOutput.textContent,
+                frames,
+                playbackCueKey === null && secondaryCueKey === null
+            ].join("|"));
+            """;
+
+        Assert.AreEqual("33.0px|30.0px|150%|-2500 ms|3|true", RunNode(script, player));
     }
 
     [TestMethod]

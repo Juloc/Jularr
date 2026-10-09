@@ -295,12 +295,32 @@
                     <label class="player-setting" data-setting-row="secondarySubtitles">
                         <span><partial name="_PlayerIcon" model="@("subtitles")" /> @ui["library.episode.subtitles"] · 2</span>
                         <select data-secondary-subtitle-track>
-                            <option value="@PlayerControls.SubtitleOff" selected>@ui["library.episode.subtitlesOff"]</option>
+                            <option value="@PlayerControls.SubtitleOff" selected="@(controls.InitialSecondarySubtitle == PlayerControls.SubtitleOff)">@ui["library.episode.subtitlesOff"]</option>
                             @foreach (var track in controls.SubtitleTracks.Where(track => track.IsSelectable && !track.IsImage))
                             {
-                                <option value="@track.Id" data-language="@(track.Language ?? "")">@track.Label</option>
+                                <option value="@track.Id" data-language="@(track.Language ?? "")"
+                                        selected="@(track.Id == controls.InitialSecondarySubtitle)">@track.Label</option>
                             }
                         </select>
+                    </label>
+
+                    <label class="player-setting" data-setting-row="subtitleAppearance">
+                        <span>@ui["reader.settings.fontSize"]</span>
+                        <span class="player-setting-slider">
+                            <input type="range" min="75" max="200" step="5"
+                                   value="@controls.Preferences.SubtitleSizePercent"
+                                   data-subtitle-size-percent aria-label="@ui["reader.settings.fontSize"]" />
+                            <output data-subtitle-size-output>@controls.Preferences.SubtitleSizePercent%</output>
+                        </span>
+                    </label>
+                    <label class="player-setting" data-setting-row="subtitleAppearance">
+                        <span>@ui["library.episode.subtitles"] · ms</span>
+                        <span class="player-setting-slider">
+                            <input type="range" min="-10000" max="10000" step="250"
+                                   value="@controls.Preferences.SubtitleOffsetMs"
+                                   data-subtitle-offset-ms aria-label="@ui["library.episode.subtitles"] (ms)" />
+                            <output data-subtitle-offset-output>@controls.Preferences.SubtitleOffsetMs ms</output>
+                        </span>
                     </label>
 
                     @if (controls.AudioTracks.Count > 1)

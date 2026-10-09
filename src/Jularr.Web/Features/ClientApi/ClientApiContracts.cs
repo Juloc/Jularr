@@ -408,7 +408,10 @@ public sealed record ClientPlaybackPreferences(
     bool AutoplayNext,
     string? PreferredAudioLanguage,
     string? PreferredSubtitleLanguage,
-    double DefaultPlaybackSpeed);
+    double DefaultPlaybackSpeed,
+    string? PreferredSecondarySubtitleLanguage = null,
+    int SubtitleSizePercent = 100,
+    int SubtitleOffsetMs = 0);
 
 /// <summary>
 /// Partial update: omitted/null fields keep their stored value; an empty
@@ -418,7 +421,10 @@ public sealed record ClientPlaybackPreferencesUpdate(
     bool? AutoplayNext = null,
     string? PreferredAudioLanguage = null,
     string? PreferredSubtitleLanguage = null,
-    double? DefaultPlaybackSpeed = null);
+    double? DefaultPlaybackSpeed = null,
+    string? PreferredSecondarySubtitleLanguage = null,
+    int? SubtitleSizePercent = null,
+    int? SubtitleOffsetMs = null);
 
 public sealed record ClientPlaybackHistoryResponse(
     int Limit,
@@ -770,7 +776,10 @@ public static class ClientApiMappings
             preferences.AutoplayNext,
             preferences.PreferredAudioLanguage,
             preferences.PreferredSubtitleLanguage,
-            preferences.DefaultPlaybackSpeed);
+            preferences.DefaultPlaybackSpeed,
+            preferences.PreferredSecondarySubtitleLanguage,
+            preferences.SubtitleSizePercent,
+            preferences.SubtitleOffsetMs);
 
     public static ClientTtsPreferences ToClientTtsPreferences(
         TtsPreferencesSnapshot preferences) =>

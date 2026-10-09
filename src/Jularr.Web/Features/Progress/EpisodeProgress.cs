@@ -57,6 +57,9 @@ public sealed class ProfilePlaybackPreferences
     public string? PreferredSubtitleLanguage { get; set; }
 
     public double DefaultPlaybackSpeed { get; set; } = PlaybackPreferenceRules.DefaultSpeed;
+    public string? PreferredSecondarySubtitleLanguage { get; set; }
+    public int SubtitleSizePercent { get; set; } = 100;
+    public int SubtitleOffsetMs { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -64,6 +67,19 @@ public sealed class ProfilePlaybackPreferences
 public static class PlaybackPreferenceRules
 {
     public const double DefaultSpeed = 1.0;
+    public const int MinimumSubtitleSizePercent = 75;
+    public const int MaximumSubtitleSizePercent = 200;
+    public const int MaximumSubtitleOffsetMs = 10000;
+
+    public static int NormalizeSubtitleSize(int percent) =>
+        percent is >= MinimumSubtitleSizePercent and <= MaximumSubtitleSizePercent
+            ? percent
+            : throw new ArgumentOutOfRangeException("subtitleSizePercent");
+
+    public static int NormalizeSubtitleOffset(int milliseconds) =>
+        milliseconds is >= -MaximumSubtitleOffsetMs and <= MaximumSubtitleOffsetMs
+            ? milliseconds
+            : throw new ArgumentOutOfRangeException("subtitleOffsetMs");
 
     /// <summary>Practical playback speeds (0.5x–2.0x) owned by design/player/player-tokens.json.</summary>
     public static IReadOnlyList<double> Speeds => PlayerDesign.PlaybackSpeeds;
@@ -201,7 +217,10 @@ public sealed record PlaybackPreferencesSnapshot(
     bool AutoplayNext,
     string? PreferredAudioLanguage = null,
     string? PreferredSubtitleLanguage = null,
-    double DefaultPlaybackSpeed = PlaybackPreferenceRules.DefaultSpeed)
+    double DefaultPlaybackSpeed = PlaybackPreferenceRules.DefaultSpeed,
+    string? PreferredSecondarySubtitleLanguage = null,
+    int SubtitleSizePercent = 100,
+    int SubtitleOffsetMs = 0)
 {
     public static PlaybackPreferencesSnapshot Default { get; } = new(false);
 }
@@ -214,7 +233,10 @@ public sealed record PlaybackPreferencesUpdate(
     bool? AutoplayNext = null,
     string? PreferredAudioLanguage = null,
     string? PreferredSubtitleLanguage = null,
-    double? DefaultPlaybackSpeed = null);
+    double? DefaultPlaybackSpeed = null,
+    string? PreferredSecondarySubtitleLanguage = null,
+    int? SubtitleSizePercent = null,
+    int? SubtitleOffsetMs = null);
 
 /// <summary>
 /// Legacy-identity adapter for pages and clients that still route by <c>Episode.Id</c>. It owns no progress state:
@@ -495,6 +517,15 @@ public sealed class EpisodeProgressService(
         var subtitleLanguage = update.PreferredSubtitleLanguage is { } requestedSubtitle
             ? PlaybackPreferenceRules.NormalizeSubtitleLanguage(requestedSubtitle)
             : null;
+        var secondarySubtitleLanguage = update.PreferredSecondarySubtitleLanguage is { } requestedSecondary
+            ? PlaybackPreferenceRules.NormalizeSubtitleLanguage(requestedSecondary)
+            : null;
+        var subtitleSize = update.SubtitleSizePercent is { } requestedSize
+            ? PlaybackPreferenceRules.NormalizeSubtitleSize(requestedSize)
+            : (int?)null;
+        var subtitleOffset = update.SubtitleOffsetMs is { } requestedOffset
+            ? PlaybackPreferenceRules.NormalizeSubtitleOffset(requestedOffset)
+            : (int?)null;
 
         var preferences = await db.ProfilePlaybackPreferences
             .SingleOrDefaultAsync(
@@ -530,6 +561,21 @@ public sealed class EpisodeProgressService(
             preferences.DefaultPlaybackSpeed = normalizedSpeed;
         }
 
+        if (update.PreferredSecondarySubtitleLanguage is not null)
+        {
+            preferences.PreferredSecondarySubtitleLanguage = secondarySubtitleLanguage;
+        }
+
+        if (subtitleSize is { } normalizedSize)
+        {
+            preferences.SubtitleSizePercent = normalizedSize;
+        }
+
+        if (subtitleOffset is { } normalizedOffset)
+        {
+            preferences.SubtitleOffsetMs = normalizedOffset;
+        }
+
         preferences.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
 
@@ -541,7 +587,10 @@ public sealed class EpisodeProgressService(
             preferences.AutoplayNext,
             preferences.PreferredAudioLanguage,
             preferences.PreferredSubtitleLanguage,
-            preferences.DefaultPlaybackSpeed);
+            preferences.DefaultPlaybackSpeed,
+            preferences.PreferredSecondarySubtitleLanguage,
+            preferences.SubtitleSizePercent,
+            preferences.SubtitleOffsetMs);
 
     private async Task<IReadOnlyDictionary<Guid, EpisodeDetail>> LoadEpisodeDetailsAsync(
         IReadOnlyCollection<Guid> episodeIds,

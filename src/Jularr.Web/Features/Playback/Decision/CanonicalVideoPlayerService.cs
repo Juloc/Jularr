@@ -159,7 +159,10 @@ public sealed class CanonicalVideoPlayerService(
                 preferenceRow.AutoplayNext,
                 preferenceRow.PreferredAudioLanguage,
                 preferenceRow.PreferredSubtitleLanguage,
-                preferenceRow.DefaultPlaybackSpeed);
+                preferenceRow.DefaultPlaybackSpeed,
+                preferenceRow.PreferredSecondarySubtitleLanguage,
+                preferenceRow.SubtitleSizePercent,
+                preferenceRow.SubtitleOffsetMs);
 
         var navigation = episode is null
             ? CanonicalVideoNavigation.None

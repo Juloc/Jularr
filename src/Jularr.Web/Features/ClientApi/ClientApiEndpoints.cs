@@ -262,7 +262,10 @@ public static class ClientApiEndpoints
                         update.AutoplayNext,
                         update.PreferredAudioLanguage,
                         update.PreferredSubtitleLanguage,
-                        update.DefaultPlaybackSpeed),
+                        update.DefaultPlaybackSpeed,
+                        update.PreferredSecondarySubtitleLanguage,
+                        update.SubtitleSizePercent,
+                        update.SubtitleOffsetMs),
                     cancellationToken);
                 return Results.Ok(ClientApiMappings.ToClientPreferences(preferences));
             }
@@ -276,6 +279,12 @@ public static class ClientApiEndpoints
                     "audioLanguage" => BadRequest(
                         "invalid_audio_language",
                         "preferredAudioLanguage must be an ISO 639 language tag or empty."),
+                    "subtitleSizePercent" => BadRequest(
+                        "invalid_subtitle_size",
+                        "subtitleSizePercent must be between 75 and 200."),
+                    "subtitleOffsetMs" => BadRequest(
+                        "invalid_subtitle_offset",
+                        "subtitleOffsetMs must be between -10000 and 10000."),
                     _ => BadRequest(
                         "invalid_subtitle_language",
                         "preferredSubtitleLanguage must be an ISO 639 language tag, off, or empty.")
