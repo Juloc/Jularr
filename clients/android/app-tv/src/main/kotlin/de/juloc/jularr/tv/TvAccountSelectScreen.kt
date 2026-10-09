@@ -46,6 +46,7 @@ fun TvAccountSelectScreen(
     sessions: List<TvSavedSession>,
     activeSessionId: String?,
     error: String?,
+    busy: Boolean = false,
     onSelectSession: (TvSavedSession) -> Unit,
     onAddAccount: () -> Unit,
     onSignOut: () -> Unit,
@@ -75,7 +76,9 @@ fun TvAccountSelectScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.titleMedium,
                 )
-                if (error != null) {
+                if (busy) {
+                    Text(stringResource(R.string.tv_account_select_loading))
+                } else if (error != null) {
                     Text(error, color = MaterialTheme.colorScheme.error)
                 }
                 LazyVerticalGrid(
@@ -97,7 +100,7 @@ fun TvAccountSelectScreen(
                                     if (focused) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.27f),
                                     shape,
                                 )
-                                .clickable { onSelectSession(session) }
+                                .clickable(enabled = !busy) { onSelectSession(session) }
                                 .reportFocus { focused = it }
                                 .padding(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -126,6 +129,13 @@ fun TvAccountSelectScreen(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.titleMedium,
                             )
+                            Text(
+                                session.serverOrigin,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
                             if (current) {
                                 Text(
                                     stringResource(R.string.tv_account_select_current),
@@ -143,13 +153,13 @@ fun TvAccountSelectScreen(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Button(onClick = onAddAccount) {
+                    Button(onClick = onAddAccount, enabled = !busy) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                         Text(" " + stringResource(R.string.tv_account_select_other_account))
                     }
                     Spacer(Modifier.size(18.dp))
                     if (activeSessionId != null) {
-                        Button(onClick = onSignOut) {
+                        Button(onClick = onSignOut, enabled = !busy) {
                             Icon(Icons.Filled.Logout, contentDescription = null)
                             Text(" " + stringResource(R.string.tv_account_select_sign_out))
                         }
