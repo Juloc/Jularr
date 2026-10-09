@@ -568,7 +568,7 @@ fun TvAppHost(
                 }
             },
             onChangeServer = {
-                snapshot = controller.changeServer()
+                launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
             },
             pairingEnabled = snapshot.capabilities?.features?.devicePairing == true,
             onStartPairing = { controller.startDevicePairing() },
@@ -638,7 +638,7 @@ fun TvAppHost(
                                     action = stringResource(R.string.tv_action_sign_in),
                                     onAction = {
                                         resetPlaybackRuntime()
-                                        snapshot = controller.changeServer()
+                                        launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
                                     },
                                 )
                             } else {
@@ -687,7 +687,7 @@ fun TvAppHost(
                                     action = stringResource(R.string.tv_action_sign_in),
                                     onAction = {
                                         resetPlaybackRuntime()
-                                        snapshot = controller.changeServer()
+                                        launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
                                     },
                                 )
                             } else {
@@ -721,12 +721,12 @@ fun TvAppHost(
                                     },
                                     onSignOut = {
                                         launchSnapshot {
-                                            controller.signOut()
+                                            progressWriteMutex.withLock { controller.signOut() }
                                         }
                                     },
                                     onChangeServer = {
                                         resetPlaybackRuntime()
-                                        snapshot = controller.changeServer()
+                                        launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
                                     },
                                 )
                             }
