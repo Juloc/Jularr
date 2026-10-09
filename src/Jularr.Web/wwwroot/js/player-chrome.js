@@ -50,6 +50,12 @@
     // Controls stay up while paused and hide a few seconds into playback without interaction.
     const settingsOpen = () => settings && !settings.hidden;
     const chromeHidden = () => stage.dataset.chromeState === "hidden";
+    const focusedOnControls = () =>
+        stage.contains(document.activeElement) &&
+        document.activeElement?.matches?.(":focus-visible") === true &&
+        Boolean(document.activeElement?.closest?.(".player-top, .player-center, .player-bottom, .player-settings"));
+    const hoveredControls = () =>
+        Boolean(stage.querySelector(".player-top:hover, .player-center:hover, .player-bottom:hover, .player-settings:hover"));
     const hide = () => {
         window.clearTimeout(hideTimer);
         if (!settingsOpen()) stage.dataset.chromeState = "hidden";
@@ -59,7 +65,7 @@
         window.clearTimeout(hideTimer);
         if (!video.paused && !settingsOpen()) {
             hideTimer = window.setTimeout(() => {
-                if (!video.paused && !settingsOpen() && !stage.contains(document.activeElement?.closest?.(".player-settings"))) {
+                if (!video.paused && !settingsOpen() && !focusedOnControls() && !hoveredControls()) {
                     hide();
                 }
             }, hideDelayMs);
@@ -70,7 +76,7 @@
         if (event.pointerType === "mouse") show();
     });
     stage.addEventListener("pointerleave", event => {
-        if (event.pointerType === "mouse" && !video.paused && !settingsOpen()) hide();
+        if (event.pointerType === "mouse" && !video.paused && !settingsOpen() && !focusedOnControls()) hide();
     });
     // Keyboard focus shows the controls; the focus a click gives the stage does not.
     stage.addEventListener("focusin", event => {
@@ -193,6 +199,7 @@
         timeline?.style.setProperty("--progress", max > 0 ? `${(value / max) * 100}%` : "0%");
     };
     timeline?.addEventListener("input", renderTimelineFill);
+    timeline?.addEventListener("change", renderTimelineFill);
     video.addEventListener("timeupdate", renderTimelineFill);
     video.addEventListener("seeked", renderTimelineFill);
     video.addEventListener("loadedmetadata", renderTimelineFill);
