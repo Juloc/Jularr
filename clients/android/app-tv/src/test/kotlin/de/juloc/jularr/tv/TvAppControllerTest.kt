@@ -171,6 +171,7 @@ class TvAppControllerTest {
     @Test
     fun nextEpisodeUsesServerSeasonOrderAndDoesNotSkipMissingMedia() {
         val controller = TvAppController(FakeOriginStore("https://jularr.example")) { FakeApi() }
+        runSuspend { controller.restoreConnection() }
 
         assertEquals("next", runSuspend { controller.nextEpisode("episode", "anime") }?.id)
         assertNull(runSuspend { controller.nextEpisode("next", "anime") })
