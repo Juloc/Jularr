@@ -30,7 +30,7 @@ Status: *read-only adapter / work matching only*. This **does not** enable the `
 ## Credential lifecycle and failure behavior
 
 - Plex server grants already use the common `ProviderCredentials.ProtectorFor`/ASP.NET Data Protection contract and atomic `/data/integrations` writes; no second token persistence service is introduced.
-- If a restore or key-ring rotation makes a stored grant undecryptable, the grant is treated as disconnected instead of causing an unhandled cryptographic failure during scans. The administrator must reconnect.
+- If a restore or key-ring rotation makes a stored grant undecryptable, the grant is treated as disconnected instead of causing an unhandled cryptographic failure during scans. The administrator must reconnect. The token-free `IsUsableAsync` API supports connection status without exposing credentials.
 - Server revocation goes through `PlexServerSelectionService.RevokeAsync` with the existing `AdminSystem` authorization policy; it removes the encrypted grant and prevents subsequent scans.
 - Tests cover key loss, the continued visibility of nonsecret connection metadata, admin-only revocation and denial after revocation.
 
