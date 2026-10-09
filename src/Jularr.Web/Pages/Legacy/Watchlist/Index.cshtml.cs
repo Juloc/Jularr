@@ -68,13 +68,18 @@ public sealed class IndexModel(
                 .ToHashSet();
 
         WatchlistIdentity? target = null;
-        if (IsTargetView && !WatchlistDraftInput.TryIdentity(
+        if (IsTargetView)
+        {
+            if (!WatchlistDraftInput.TryIdentity(
                 TargetMediaType,
                 TargetProvider,
                 TargetExternalId,
-                out target!))
-        {
-            return BadRequest();
+                out var resolvedTarget))
+            {
+                return BadRequest();
+            }
+
+            target = resolvedTarget;
         }
 
         try
