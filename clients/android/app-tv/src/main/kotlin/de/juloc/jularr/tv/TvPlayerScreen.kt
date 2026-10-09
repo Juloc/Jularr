@@ -1221,15 +1221,18 @@ private fun TvTrackSelectionPanel(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.24f))
+            .padding(end = 38.dp),
+        contentAlignment = Alignment.CenterEnd,
     ) {
         Column(
             modifier = modifier
-                .widthIn(min = 420.dp, max = 700.dp)
+                .widthIn(min = 380.dp, max = 440.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(MaterialTheme.colorScheme.surface)
-                .padding(28.dp),
+                .padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(title, style = MaterialTheme.typography.headlineMedium)
