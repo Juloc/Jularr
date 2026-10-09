@@ -51,7 +51,7 @@ public sealed class PlexServerCatalogScanTests
                 [new PlexServerConnection(new Uri("https://server.plex.direct:32400/"),
                     true, false)]);
             await new PlexServerSelectionService(client, grants).ApproveAsync(
-                server, server.Connections[0].Url,
+                Principal(AccountRole.Owner), server, server.Connections[0].Url,
                 ["1"], "instance-id", CancellationToken.None);
 
             var scan = new PlexServerCatalogScanService(
