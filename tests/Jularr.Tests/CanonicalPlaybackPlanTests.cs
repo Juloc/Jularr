@@ -189,7 +189,11 @@ public sealed class CanonicalPlaybackPlanTests
 
         var requestedOriginal = (await planner.PlanAsync(
             PlaybackVideoTarget.Movie(movie.Id), "reader",
-            input with { Quality = PlaybackQualityPreset.Original }, CancellationToken.None))!;
+            input with
+            {
+                Quality = PlaybackQualityPreset.Original,
+                ReplacesSessionId = verified.Session.Id
+            }, CancellationToken.None))!;
         Assert.AreEqual(original.StoredFileId, requestedOriginal.MediaFileId,
             "Explicit Original never silently switches to a lossy prepared file.");
 
@@ -210,6 +214,12 @@ public sealed class CanonicalPlaybackPlanTests
         var stale = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
         Assert.AreEqual(original.StoredFileId, stale.MediaFileId,
             "A changed source fingerprint invalidates an otherwise compatible prepared file.");
+        var staleSeek = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { ReplacesSessionId = verified.Session.Id },
+            CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, staleSeek.MediaFileId,
+            "A now revoked derivative cannot survive simply because an older session used it.");
     }
 
     [DataTestMethod]
