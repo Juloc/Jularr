@@ -90,9 +90,15 @@ public sealed record PlayerControls(
 
         var initialSecondary = preferences.PreferredSecondarySubtitleLanguage is { Length: > 0 } language &&
             language != SubtitleOff
-            ? subtitles.FirstOrDefault(track =>
-                track.IsSelectable && !track.IsImage &&
-                track.Id != initialSubtitle && track.Language == language)?.Id ?? SubtitleOff
+            ? tracks.Where(track =>
+                    track.Kind == PlaybackTrackKind.Subtitle &&
+                    track.IsText &&
+                    PlaybackTrackIds.Format(track.StreamIndex) != initialSubtitle &&
+                    PlaybackLanguages.Normalize(track.Language) == language)
+                .OrderBy(track => track.IsForced)
+                .ThenBy(track => track.StreamIndex)
+                .Select(track => PlaybackTrackIds.Format(track.StreamIndex))
+                .FirstOrDefault() ?? SubtitleOff
             : SubtitleOff;
 
         return new PlayerControls(
