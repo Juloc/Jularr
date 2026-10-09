@@ -482,6 +482,7 @@ fun TvPlayerScreen(
                     selectedAudioTrackId = selectedAudioTrackId,
                     selectedSubtitleTrackId = selectedSubtitleTrackId,
                     playbackSpeed = playbackSpeed,
+                    hasSpeedOptions = playbackSpeeds.size > 1,
                     design = design,
                     primaryControlFocus = primaryControlFocus,
                     audioTrackFocus = audioTrackFocus,
