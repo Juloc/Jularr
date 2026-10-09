@@ -108,6 +108,55 @@ public sealed class WatchlistTests
     }
 
     [TestMethod]
+    public async Task CalendarReadsReleaseFromSecondBoundedWatchlistPage()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var watchlist = new WatchlistStore(fixture.Db);
+        var cache = new ReleaseCalendarCacheStore(fixture.Db);
+        const string profile = "profile-a";
+
+        for (var i = 0; i <= PageRequest.MaximumPageSize; i++)
+        {
+            await watchlist.FollowAsync(
+                profile,
+                Draft((200000 + i).ToString(), $"Item {i:D3}"),
+                CancellationToken.None);
+        }
+
+        const string lastExternalId = "200100";
+        var airing = ReleaseDate.FromInstant(
+            new DateTimeOffset(2026, 10, 5, 15, 0, 0, TimeSpan.Zero));
+        await cache.SaveAsync(
+            "anilist",
+            [
+                new ReleaseSourceSnapshot(
+                    lastExternalId,
+                    "RELEASING",
+                    [new CachedRelease("anilist", lastExternalId, ReleaseKind.Episode, 5, airing)])
+            ],
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+            new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc),
+            CancellationToken.None);
+
+        var source = new WatchlistReleaseEventSource(
+            cache,
+            watchlist,
+            new WatchlistLibraryResolver(fixture.Db));
+        var events = await source.GetEventsAsync(
+            new ReleaseEventQuery(
+                new DateOnly(2026, 10, 1),
+                new DateOnly(2026, 10, 31),
+                TimeZoneInfo.Utc,
+                new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero),
+                ProfileId: profile),
+            CancellationToken.None);
+
+        var release = Assert.ContainsSingle(events);
+        Assert.AreEqual(lastExternalId, release.ExternalId);
+        Assert.AreEqual(5, release.Unit?.Number);
+    }
+
+    [TestMethod]
     public void WatchlistInputRejectsUnsafeImageUrls()
     {
         Assert.IsTrue(WatchlistDraftInput.TryCreate(
