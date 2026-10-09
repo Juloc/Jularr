@@ -23,6 +23,15 @@ class TvNavigationTest {
     }
 
     @Test
+    fun multipleSavedAccountsStartAtAccountSelectionNotProfileSelection() {
+        assertEquals(
+            TvRoute.AccountSelect,
+            TvNavigation.initial(hasServerOrigin = true, hasMultipleSessions = true).route,
+        )
+        assertEquals(TvRoute.ProfileSelect, TvNavigation.openProfileSelect(TvNavigationState(TvRoute.Home)).route)
+    }
+
+    @Test
     fun signingInLandsOnHomeNotLibrary() {
         val state = TvNavigation.signedIn(TvNavigationState(TvRoute.Login))
         assertEquals(TvRoute.Home, state.route)
@@ -126,10 +135,16 @@ class TvNavigationTest {
 
     @Test
     fun switchingAccountsDropsTheOldSettingsBackStack() {
-        val selecting = TvNavigation.openProfileSelect(TvNavigationState(TvRoute.Settings))
+        val selecting = TvNavigation.openAccountSelect(TvNavigationState(TvRoute.Settings))
         val signedIn = TvNavigation.signedIn(selecting)
         assertEquals(TvRoute.Home, signedIn.route)
         assertEquals(emptyList<TvRoute>(), signedIn.previous)
+    }
+
+    @Test
+    fun accountAndProfileSelectionHaveDistinctScreenKeys() {
+        assertEquals("account_select", TvNavigation.screenKey(TvRoute.AccountSelect))
+        assertEquals("profile_select", TvNavigation.screenKey(TvRoute.ProfileSelect))
     }
 
     @Test
