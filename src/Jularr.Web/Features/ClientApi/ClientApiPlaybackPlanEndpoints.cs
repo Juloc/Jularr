@@ -453,7 +453,8 @@ public static class ClientApiPlaybackPlanEndpoints
                             admitted.Lease,
                             token,
                             session.BeginTranscodeRun(admitted.Encoder.Backend),
-                            remainingDurationSeconds: session.DurationSeconds is { } duration ? duration - start : null)).SessionId,
+                            remainingDurationSeconds: session.DurationSeconds is { } duration ? duration - start : null,
+                            costClass: admitted.CostClass)).SessionId,
                         session),
                     previous => manager.Stop(previous, session.ProfileId),
                     cancellationToken);
