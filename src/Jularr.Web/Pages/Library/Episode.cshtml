@@ -57,7 +57,7 @@ else if (Model.Playback.Media is { } media)
         NextUrl: Model.NextEpisodeUrl,
         PreviousUrl: Model.PreviousEpisodeUrl,
         PreviousLabel: Model.Flow?.Previous is { } previous
-            ? ui.Format("library.episode.previousEpisodeAria", ("season", previous.SeasonNumber.ToString("00")), ("episode", previous.EpisodeNumber.ToString("00")))
+            ? ui.Format("library.episode.previousEpisodeAria", ("season", previous.SeasonNumber.ToString("00")), ("episode", previous.Number.ToString("00")))
             : null,
         AutoplayNext: Model.Flow?.AutoplayNext == true,
         OffersAutoplay: true,
