@@ -149,7 +149,7 @@ fun TvProfileScreen(
                 item {
                     TvSettingSectionTitle(stringResource(R.string.tv_settings_section_account))
                 }
-                item { TvSettingRow(stringResource(R.string.tv_profile_server_label), serverOrigin, onChangeServer) }
+                item { TvSettingRow(stringResource(R.string.tv_profile_server_label), serverOrigin, onClick = onChangeServer) }
                 item {
                     TvSettingRow(
                         stringResource(R.string.tv_profile_switch_account),
@@ -158,7 +158,7 @@ fun TvProfileScreen(
                         onSwitchAccount?.invoke()
                     }
                 }
-                item { TvSettingRow(stringResource(R.string.tv_profile_sign_out), null, onSignOut) }
+                item { TvSettingRow(stringResource(R.string.tv_profile_sign_out), null, onClick = onSignOut) }
                 item {
                     TvSettingSectionTitle(stringResource(R.string.tv_settings_section_info))
                 }
