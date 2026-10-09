@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
 using Microsoft.EntityFrameworkCore;
 
@@ -152,6 +153,44 @@ public sealed class VideoProgressTests
         var episodeCount = counts.Single(item => item.WorkId == series.Id);
         Assert.AreEqual(episode.Id, episodeCount.WorkEpisodeId);
         Assert.AreEqual(2L, episodeCount.ResumeProfiles);
+
+        var evaluator = new PlaybackPreparationDemandService(progress);
+        var cost = new PlaybackPreparationCost(
+            Measured: true,
+            PreparationMinutes: 10,
+            SavedLiveEncodingMinutesPerView: 20,
+            OutputBytes: 200_000_000);
+        var capacity = new PlaybackPreparationCapacity(
+            AdminEnabled: true,
+            InIdleWindow: true,
+            InteractiveLoad: false,
+            SourceAvailableWithoutWake: true,
+            AlreadyHasCompatibleRendition: false,
+            NeedsVideoConversion: true,
+            CacheBytesAvailable: 2_000_000_000,
+            DiskBytesAboveReserve: 2_000_000_000);
+        var assessments = await evaluator.AssessAsync(
+            [
+                new PlaybackPreparationCandidate(movie.Id, null, cost, capacity),
+                new PlaybackPreparationCandidate(series.Id, episode.Id, cost, capacity),
+                new PlaybackPreparationCandidate(movie.Id + 999, null, cost, capacity),
+            ],
+            DateTime.UtcNow.AddDays(-14));
+        Assert.AreEqual(3, assessments.Count);
+        Assert.AreEqual(
+            PlaybackPreparationVerdict.Eligible,
+            assessments.Single(value => value.WorkId == movie.Id).Assessment.Verdict);
+        Assert.AreEqual(
+            PlaybackPreparationVerdict.Eligible,
+            assessments.Single(value => value.WorkId == series.Id).Assessment.Verdict);
+        Assert.AreEqual(
+            PlaybackPreparationVerdict.DemandTooWeak,
+            assessments.Single(value => value.WorkId == movie.Id + 999).Assessment.Verdict);
+
+        var disabled = await evaluator.AssessAsync(
+            [new PlaybackPreparationCandidate(movie.Id, null, cost, capacity with { AdminEnabled = false })],
+            DateTime.UtcNow.AddDays(-14));
+        Assert.AreEqual(PlaybackPreparationVerdict.Disabled, disabled.Single().Assessment.Verdict);
     }
 
     [TestMethod]
