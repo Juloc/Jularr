@@ -24,6 +24,13 @@ public sealed record HlsPlaybackAsset(
     string ContentType,
     bool EnableRangeProcessing);
 
+/// <summary>Per-session producer evidence; null ahead means ffmpeg has not reported a reliable output position.</summary>
+public sealed record HlsPacingSnapshot(
+    bool IsPaused,
+    double? ProducedAheadSeconds,
+    double TargetAheadSeconds,
+    double LowWaterSeconds);
+
 /// <summary>What one cache sweep removed.</summary>
 public sealed record HlsSweepResult(int ExpiredSessions, int PrunedForPolicy, int OrphanDirectories, int CrashedSessions = 0);
 
@@ -103,6 +110,13 @@ public sealed class HlsPlaybackSessionManager : IDisposable
     }
 
     public int ActiveSessions => _sessions.Count;
+
+    public HlsPacingSnapshot? GetPacingSnapshot(Guid sessionId, string profileId) =>
+        _sessions.TryGetValue(sessionId, out var entry) &&
+        string.Equals(entry.ProfileId, profileId, StringComparison.Ordinal) &&
+        !HasCrashed(entry)
+            ? entry.GetPacingSnapshot()
+            : null;
 
     public async Task<HlsPlaybackSession> StartAsync(
         Guid episodeId,
@@ -912,6 +926,20 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         }
 
         public void Touch(DateTimeOffset now) => Interlocked.Exchange(ref _lastAccessTicks, now.UtcTicks);
+
+        public HlsPacingSnapshot GetPacingSnapshot()
+        {
+            lock (_pacingGate)
+            {
+                return new HlsPacingSnapshot(
+                    _paused,
+                    _producedSeconds is { } produced
+                        ? Math.Max(0, produced - (_lastRequestedSegment + 1) * SegmentSeconds)
+                        : null,
+                    buffer.TargetAheadSeconds,
+                    buffer.LowWaterSeconds);
+            }
+        }
 
         public void RecordProgress(PlaybackTranscodeSample sample)
         {
