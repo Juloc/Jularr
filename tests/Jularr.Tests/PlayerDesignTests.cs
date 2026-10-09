@@ -224,7 +224,7 @@ public sealed class PlayerDesignTests
             var video = {
                 paused: false, ended: false, pauses: 0, plays: 0,
                 pause() { this.paused = true; this.pauses++; },
-                play() { this.paused = false; this.plays++; return Promise.resolve(); }
+                play() { this.paused = false; this.plays++; return { catch() {} }; }
             };
             var handlers = {};
             window.JularrLanguageInspector = {
