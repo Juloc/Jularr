@@ -147,10 +147,17 @@ public sealed class PlexLibraryClient(HttpClient client)
             return null;
         }
 
+        // PMS can report librarySectionID on the MediaContainer itself,
+        // not on every Metadata entry. Accept either documented location.
+        var containerSection = GetNumericId(container, "librarySectionID");
         // A conflicting duplicate rating key must not produce a playback target.
         var matches = entries.EnumerateArray()
             .Select(ToItem)
             .Where(item => item?.RatingKey == ratingKey)
+            .Select(item => item! with
+            {
+                LibrarySectionId = item!.LibrarySectionId ?? containerSection
+            })
             .Take(2)
             .ToArray();
         return matches.Length == 1 ? matches[0] : null;
