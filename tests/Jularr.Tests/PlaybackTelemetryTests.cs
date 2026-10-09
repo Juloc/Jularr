@@ -1,6 +1,7 @@
 using System.Net;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
 using static Jularr.Tests.PlaybackTestPlans;
 
 namespace Jularr.Tests;
@@ -233,7 +234,7 @@ public sealed class PlaybackTelemetryTests
             var local = (await planner.PlanAsync(
                 media.EpisodeId.Value,
                 "viewer-local",
-                remote with { RemoteAddress = IPAddress.Loopback },
+                remote with { RemoteAddress = IPAddress.Loopback, Network = null },
                 CancellationToken.None))!;
             Assert.IsNull(local.Plan.Quality.LimitKbps);
             Assert.AreEqual(PlaybackNetworkClass.Local, local.Plan.Quality.Network);
