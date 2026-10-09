@@ -122,6 +122,7 @@ public sealed class PlayerGesturesTests
         engine.Execute("""
             var trace = [];
             var now = 0;
+            var stageWidth = 1000;
             var pendingTimers = [];
             var handlers = {};
             var performance = { now: () => now };
@@ -131,7 +132,7 @@ public sealed class PlayerGesturesTests
             var stage = {
                 addEventListener(name, callback) { handlers[name] = callback; },
                 querySelector() { return null; },
-                getBoundingClientRect() { return { left: 0, width: 1000 }; }
+                getBoundingClientRect() { return { left: 0, width: stageWidth }; }
             };
             var root = { dataset: { seekBackSeconds: "10", seekForwardSeconds: "30" } };
             var video = { hidden: false };
@@ -191,12 +192,29 @@ public sealed class PlayerGesturesTests
                 advance(4500);
                 pointer("touch", 500, 5000);
                 advance(5400);
-                return trace.join("|");
+                stageWidth = 320;
+                pointer("touch", 20, 6000);
+                pointer("touch", 24, 6150);
+                advance(6500);
+                pointer("touch", 305, 7000);
+                pointer("touch", 300, 7150);
+                advance(7500);
+                const beforeCancel = trace.length;
+                now = 8000;
+                const interrupted = {
+                    pointerId: 2, pointerType: "touch", button: 0, isPrimary: true,
+                    clientX: 80, clientY: 100, target: surface
+                };
+                handlers.pointerdown(interrupted);
+                handlers.pointercancel();
+                handlers.pointerup(interrupted);
+                advance(8400);
+                return [...trace, trace.length === beforeCancel ? "cancelOK" : "cancelFailed"].join("|");
             })()
             """).AsString();
 
         Assert.AreEqual(
-            "playPause|fullscreen|seekBack10|seekForward10|fullscreen|hide",
+            "playPause|fullscreen|seekBack10|seekForward10|fullscreen|hide|seekBack10|seekForward10|cancelOK",
             result);
     }
 
