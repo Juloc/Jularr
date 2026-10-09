@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Devices;
 using Jularr.Web.Features.Plex;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -20,6 +21,7 @@ public sealed class PlexModel(
     OwnerAuthService accountAuth,
     MediaCapabilityStore capabilities,
     PlexAuthClient plex,
+    SecurityEventLog securityEvents,
     IConfiguration configuration) : PageModel
 {
     private const string NonceCookie = "Jularr.Plex.Flow";
@@ -495,14 +497,22 @@ public sealed class PlexModel(
         return true;
     }
 
-    private Task SignInAsync(OwnerAccount account) =>
-        HttpContext.SignInAsync(
+    private async Task SignInAsync(OwnerAccount account)
+    {
+        await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             OwnerAuthService.CreatePrincipal(account),
             new AuthenticationProperties
             {
                 AllowRefresh = true
             });
+
+        securityEvents.Record(
+            SecurityEventKind.LoginSucceeded,
+            account.Id,
+            account.UserName,
+            HttpContext.Connection.RemoteIpAddress?.ToString());
+    }
 
     private string SafeReturnUrl(string? returnUrl) =>
         Url.IsLocalUrl(returnUrl) ? returnUrl! : "/";
