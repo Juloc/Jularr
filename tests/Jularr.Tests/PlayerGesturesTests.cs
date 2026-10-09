@@ -108,6 +108,98 @@ public sealed class PlayerGesturesTests
         StringAssert.Contains(css, "touch-action: manipulation", "Double taps must not zoom the page.");
     }
 
+    [TestMethod]
+    public void ActualStagePointerEvents_KeepMouseFullscreenSeparateFromTouchSeeking()
+    {
+        var chrome = Read("src", "Jularr.Web", "wwwroot", "js", "player-chrome.js");
+        var start = chrome.IndexOf("    const seekSeconds = design.seekSeconds(root);", StringComparison.Ordinal);
+        var end = chrome.IndexOf("    // --- timeline fill", start, StringComparison.Ordinal);
+        Assert.IsTrue(start >= 0 && end > start);
+
+        var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(10)));
+        engine.Execute("var window = globalThis;");
+        engine.Execute(Read("src", "Jularr.Web", "wwwroot", "js", "player-gestures.js"));
+        engine.Execute("""
+            var trace = [];
+            var now = 0;
+            var pendingTimers = [];
+            var handlers = {};
+            var performance = { now: () => now };
+            var Element = function Element() {};
+            var surface = new Element();
+            surface.closest = () => null;
+            var stage = {
+                addEventListener(name, callback) { handlers[name] = callback; },
+                querySelector() { return null; },
+                getBoundingClientRect() { return { left: 0, width: 1000 }; }
+            };
+            var root = { dataset: { seekBackSeconds: "10", seekForwardSeconds: "30" } };
+            var video = { hidden: false };
+            var design = {
+                seekSeconds() { return { back: 10, forward: 30 }; },
+                dispatch(_root, action) { trace.push(action); }
+            };
+            var text = {};
+            var presentation = { toggleFullscreen() { trace.push("fullscreen"); } };
+            var togglePlay = () => trace.push("playPause");
+            var chromeHidden = () => false;
+            var show = () => trace.push("show");
+            var hide = () => trace.push("hide");
+            var settingsOpen = () => false;
+            var setSettings = () => {};
+            window.setTimeout = (fn, delay) => {
+                pendingTimers.push({ fn, at: now + delay });
+                return pendingTimers.length;
+            };
+            window.clearTimeout = () => {};
+
+            function pointer(kind, x, at) {
+                now = at;
+                const event = {
+                    pointerId: 1, pointerType: kind, button: 0, isPrimary: true,
+                    clientX: x, clientY: 100, target: surface
+                };
+                handlers.pointerdown(event);
+                now += 1;
+                handlers.pointerup(event);
+            }
+
+            function advance(at) {
+                now = at;
+                const ready = pendingTimers.filter(timer => timer.at <= at);
+                pendingTimers = pendingTimers.filter(timer => timer.at > at);
+                for (const timer of ready) timer.fn();
+            }
+            """);
+        engine.Execute(chrome[start..end]);
+
+        var result = engine.Evaluate("""
+            (() => {
+                pointer("mouse", 500, 0);
+                advance(400);
+                pointer("mouse", 500, 1000);
+                pointer("mouse", 505, 1150);
+                advance(1600);
+                pointer("touch", 100, 2000);
+                pointer("touch", 100, 2150);
+                advance(2500);
+                pointer("touch", 900, 3000);
+                pointer("touch", 900, 3150);
+                advance(3500);
+                pointer("touch", 500, 4000);
+                pointer("touch", 500, 4150);
+                advance(4500);
+                pointer("touch", 500, 5000);
+                advance(5400);
+                return trace.join("|");
+            })()
+            """).AsString();
+
+        Assert.AreEqual(
+            "playPause|fullscreen|seekBack10|seekForward10|fullscreen|hide",
+            result);
+    }
+
     private static string Run(string script)
     {
         var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(10)));
