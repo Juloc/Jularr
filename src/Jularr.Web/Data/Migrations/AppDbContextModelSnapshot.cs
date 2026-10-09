@@ -376,10 +376,6 @@ namespace Jularr.Web.Data.Migrations
 
             modelBuilder.Entity("Jularr.Web.Features.Auth.AccountLoginIdentity", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
                     b.Property<string>("AccountId")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -398,12 +394,9 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
-                    b.HasKey("Id");
+                    b.HasKey("Provider", "ExternalAccountId");
 
                     b.HasIndex("AccountId", "Provider")
-                        .IsUnique();
-
-                    b.HasIndex("Provider", "ExternalAccountId")
                         .IsUnique();
 
                     b.ToTable("AccountLoginIdentities");
