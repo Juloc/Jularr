@@ -324,6 +324,64 @@ public sealed class WatchlistTests
         Assert.AreEqual(0L, otherProfile.TotalCount);
     }
 
+    [TestMethod]
+    public async Task DiscoverFollowLookup_FiltersRequestedKeysAndCurrentProfile()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var store = new WatchlistStore(fixture.Db);
+        var franchises = new FranchiseStore(fixture.Db);
+        var inherited = Draft("800", "Inherited");
+        var hidden = Draft("801", "Hidden");
+        var explicitOnly = Draft("802", "Explicit");
+        var foreign = Draft("803", "Other account");
+        var franchiseId = await franchises.GetOrCreateBySeedAsync(
+            inherited.Identity, CancellationToken.None);
+        await franchises.UpsertMemberAsync(
+            franchiseId, inherited, null, true, CancellationToken.None);
+        await franchises.UpsertMemberAsync(
+            franchiseId, hidden, "SEQUEL", false, CancellationToken.None);
+        await franchises.FollowAsync("profile-a", franchiseId, CancellationToken.None);
+        await store.FollowAsync("profile-a", inherited, CancellationToken.None);
+        await store.FollowAsync("profile-a", explicitOnly, CancellationToken.None);
+        await store.UnfollowAsync("profile-a", hidden.Identity, CancellationToken.None);
+        await store.FollowAsync("profile-b", foreign, CancellationToken.None);
+
+        var selected = new[]
+        {
+            inherited.Identity,
+            hidden.Identity,
+            explicitOnly.Identity,
+            foreign.Identity,
+            Draft("missing", "Not followed").Identity,
+            inherited.Identity
+        };
+        var result = await store.GetFollowedFranchiseIdsForKeysAsync(
+            CurrentAccountContext.ForProfile("profile-a"),
+            selected,
+            CancellationToken.None);
+
+        Assert.AreEqual(2, result.Count);
+        Assert.AreEqual(franchiseId, result[inherited.Identity.Key]);
+        Assert.IsTrue(result.ContainsKey(explicitOnly.Identity.Key));
+        Assert.IsNull(result[explicitOnly.Identity.Key]);
+        Assert.IsFalse(result.ContainsKey(hidden.Identity.Key));
+        Assert.IsFalse(result.ContainsKey(foreign.Identity.Key));
+
+        var other = await store.GetFollowedFranchiseIdsForKeysAsync(
+            CurrentAccountContext.ForProfile("profile-b"),
+            selected,
+            CancellationToken.None);
+        Assert.AreEqual(1, other.Count);
+        Assert.IsTrue(other.ContainsKey(foreign.Identity.Key));
+        Assert.IsNull(other[foreign.Identity.Key]);
+
+        var empty = await store.GetFollowedFranchiseIdsForKeysAsync(
+            CurrentAccountContext.ForProfile("profile-a"),
+            [],
+            CancellationToken.None);
+        Assert.IsEmpty(empty);
+    }
+
     private static WatchlistDraft Draft(string externalId, string title) =>
         new(
             new WatchlistIdentity(WatchlistMediaType.Anime, "anilist", externalId),
