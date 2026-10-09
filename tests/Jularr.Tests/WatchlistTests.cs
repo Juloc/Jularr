@@ -177,6 +177,9 @@ public sealed class WatchlistTests
         Assert.AreEqual("https://cdn.example/cover.jpg", item.ArtworkUrl);
         Assert.AreEqual("external", item.Availability, "Not matched to a library entry yet.");
         Assert.AreEqual("https://anilist.co/anime/154587", item.DetailsUrl);
+        Assert.IsNull(item.LocalMediaId);
+        Assert.AreEqual("RELEASING", item.Status);
+        Assert.AreEqual("TV", item.Format);
         Assert.IsNotNull(item.AddedAtUtc);
         Assert.AreEqual(DateTimeKind.Utc, item.AddedAtUtc!.Value.Kind);
 
@@ -197,6 +200,9 @@ public sealed class WatchlistTests
             .Select(ClientApiMappings.ToClientWatchlistItem)
             .Single();
         Assert.AreEqual("in_library", afterLibraryMatch.Availability);
+        Assert.AreEqual(anime.Id, afterLibraryMatch.LocalMediaId);
+        Assert.AreEqual("RELEASING", afterLibraryMatch.Status);
+        Assert.AreEqual("TV", afterLibraryMatch.Format);
         Assert.AreEqual($"/Library/Anime/{anime.Id}", afterLibraryMatch.DetailsUrl);
     }
 
