@@ -15,9 +15,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +35,7 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -68,6 +72,8 @@ import de.juloc.jularr.core.player.JularrMedia3Player
 import de.juloc.jularr.core.session.PlaybackCommand
 import kotlinx.coroutines.delay
 
+private enum class TvTrackPanel { AUDIO, SUBTITLES }
+
 @OptIn(UnstableApi::class)
 @Composable
 fun TvPlayerScreen(
@@ -78,8 +84,8 @@ fun TvPlayerScreen(
     subtitleTracks: List<MediaTrack> = emptyList(),
     selectedAudioTrackId: String? = null,
     selectedSubtitleTrackId: String? = null,
-    onSelectAudioTrack: (String) -> Unit = {},
-    onSelectSubtitleTrack: (String?) -> Unit = {},
+    onSelectAudioTrack: (String) -> Boolean = { false },
+    onSelectSubtitleTrack: (String?) -> Boolean = { false },
     onPositionChanged: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onSeeked: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onPlaybackEnded: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
@@ -105,6 +111,12 @@ fun TvPlayerScreen(
     val primaryControlFocus = remember { FocusRequester() }
     val learningOverlayFocus = remember { FocusRequester() }
     val nextEpisodeFocus = remember { FocusRequester() }
+    val audioTrackFocus = remember { FocusRequester() }
+    val subtitleTrackFocus = remember { FocusRequester() }
+    val trackPanelFocus = remember { FocusRequester() }
+    var trackPanel by remember { mutableStateOf<TvTrackPanel?>(null) }
+    var returnToTrackPanel by remember { mutableStateOf<TvTrackPanel?>(null) }
+    var trackSelectionError by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(player.player.isPlaying) }
     var playbackEnded by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(player.player.currentPosition.coerceAtLeast(0)) }
@@ -180,10 +192,13 @@ fun TvPlayerScreen(
         )
     }
 
-    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, companionVisible) {
+    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, companionVisible, trackPanel) {
         if (companionVisible) return@LaunchedEffect
         val target = when {
+            trackPanel != null -> trackPanelFocus
             uiState.learningLayer != TvLearningLayer.CLOSED -> learningOverlayFocus
+            uiState.controlsVisible && returnToTrackPanel == TvTrackPanel.AUDIO -> audioTrackFocus
+            uiState.controlsVisible && returnToTrackPanel == TvTrackPanel.SUBTITLES -> subtitleTrackFocus
             uiState.controlsVisible -> primaryControlFocus
             else -> playerFocus
         }
@@ -196,10 +211,12 @@ fun TvPlayerScreen(
         isPlaying,
         companionVisible,
         controlsInteractionRevision,
+        trackPanel,
     ) {
         if (uiState.controlsVisible &&
             uiState.learningLayer == TvLearningLayer.CLOSED &&
             !companionVisible &&
+            trackPanel == null &&
             isPlaying
         ) {
             delay(design.controlsAutoHideMs)
@@ -301,6 +318,8 @@ fun TvPlayerScreen(
     BackHandler {
         if (companionVisible) {
             onCloseCompanion()
+        } else if (trackPanel != null) {
+            trackPanel = null
         } else {
             apply(TvPlayerInteraction.back(uiState))
         }
@@ -314,6 +333,12 @@ fun TvPlayerScreen(
                     return@onPreviewKeyEvent false
                 }
                 if (event.type != KeyEventType.KeyDown) {
+                    return@onPreviewKeyEvent false
+                }
+
+                if (trackPanel != null && event.key != Key.MediaPlayPause &&
+                    event.key != Key.MediaPlay && event.key != Key.MediaPause
+                ) {
                     return@onPreviewKeyEvent false
                 }
 
@@ -405,7 +430,8 @@ fun TvPlayerScreen(
             }
 
             if (uiState.controlsVisible &&
-                uiState.learningLayer == TvLearningLayer.CLOSED
+                uiState.learningLayer == TvLearningLayer.CLOSED &&
+                trackPanel == null
             ) {
                 PlayerControls(
                     episodeTitle = episodeTitle,
@@ -424,8 +450,18 @@ fun TvPlayerScreen(
                     selectedSubtitleTrackId = selectedSubtitleTrackId,
                     design = design,
                     primaryControlFocus = primaryControlFocus,
-                    onSelectAudioTrack = onSelectAudioTrack,
-                    onSelectSubtitleTrack = onSelectSubtitleTrack,
+                    audioTrackFocus = audioTrackFocus,
+                    subtitleTrackFocus = subtitleTrackFocus,
+                    onOpenAudioTracks = {
+                        returnToTrackPanel = TvTrackPanel.AUDIO
+                        trackSelectionError = false
+                        trackPanel = TvTrackPanel.AUDIO
+                    },
+                    onOpenSubtitleTracks = {
+                        returnToTrackPanel = TvTrackPanel.SUBTITLES
+                        trackSelectionError = false
+                        trackPanel = TvTrackPanel.SUBTITLES
+                    },
                     onBackTen = {
                         player.player.seekTo(
                             (player.player.currentPosition - design.seek.backMs).coerceAtLeast(0),
@@ -469,6 +505,36 @@ fun TvPlayerScreen(
                     },
                     onExit = onExit,
                     modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            if (trackPanel != null) {
+                TvTrackSelectionPanel(
+                    title = if (trackPanel == TvTrackPanel.AUDIO) "Audio" else "Subtitles",
+                    tracks = if (trackPanel == TvTrackPanel.AUDIO) audioTracks else subtitleTracks,
+                    selectedId = if (trackPanel == TvTrackPanel.AUDIO) {
+                        selectedAudioTrackId
+                    } else {
+                        selectedSubtitleTrackId
+                    },
+                    allowOff = trackPanel == TvTrackPanel.SUBTITLES,
+                    selectionFailed = trackSelectionError,
+                    focusRequester = trackPanelFocus,
+                    onSelect = { id ->
+                        val selected = if (trackPanel == TvTrackPanel.AUDIO) {
+                            id != null && onSelectAudioTrack(id)
+                        } else {
+                            onSelectSubtitleTrack(id)
+                        }
+                        if (selected) {
+                            trackPanel = null
+                            trackSelectionError = false
+                        } else {
+                            trackSelectionError = true
+                        }
+                    },
+                    onBack = { trackPanel = null },
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
 
@@ -568,8 +634,10 @@ private fun PlayerControls(
     selectedSubtitleTrackId: String?,
     design: TvPlayerDesign,
     primaryControlFocus: FocusRequester,
-    onSelectAudioTrack: (String) -> Unit,
-    onSelectSubtitleTrack: (String?) -> Unit,
+    audioTrackFocus: FocusRequester,
+    subtitleTrackFocus: FocusRequester,
+    onOpenAudioTracks: () -> Unit,
+    onOpenSubtitleTracks: () -> Unit,
     onBackTen: () -> Unit,
     onPlayPause: () -> Unit,
     onForwardTen: () -> Unit,
@@ -803,11 +871,8 @@ private fun PlayerControls(
 
                 if (audioTracks.isNotEmpty()) {
                     Button(
-                        onClick = {
-                            nextTrackId(audioTracks, selectedAudioTrackId)
-                                ?.let(onSelectAudioTrack)
-                        },
-                        modifier = Modifier.widthIn(max = 320.dp),
+                        onClick = onOpenAudioTracks,
+                        modifier = Modifier.focusRequester(audioTrackFocus).widthIn(max = 320.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Filled.VolumeUp,
@@ -823,15 +888,8 @@ private fun PlayerControls(
 
                 if (subtitleTracks.isNotEmpty()) {
                     Button(
-                        onClick = {
-                            onSelectSubtitleTrack(
-                                nextSubtitleTrackId(
-                                    subtitleTracks,
-                                    selectedSubtitleTrackId,
-                                ),
-                            )
-                        },
-                        modifier = Modifier.widthIn(max = 360.dp),
+                        onClick = onOpenSubtitleTracks,
+                        modifier = Modifier.focusRequester(subtitleTrackFocus).widthIn(max = 360.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Subtitles,
@@ -845,6 +903,75 @@ private fun PlayerControls(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TvTrackSelectionPanel(
+    title: String,
+    tracks: List<MediaTrack>,
+    selectedId: String?,
+    allowOff: Boolean,
+    selectionFailed: Boolean,
+    focusRequester: FocusRequester,
+    onSelect: (String?) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = modifier
+                .widthIn(min = 420.dp, max = 700.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineMedium)
+            if (selectionFailed) {
+                Text("Track unavailable on this device", color = MaterialTheme.colorScheme.error)
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 440.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val matched = selectedId == null || tracks.any { it.id == selectedId }
+                if (allowOff) {
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (selectedId == null) Modifier.focusRequester(focusRequester) else Modifier),
+                        onClick = { onSelect(null) },
+                    ) {
+                        if (selectedId == null) Icon(Icons.Filled.Check, contentDescription = null)
+                        Text("Off")
+                    }
+                }
+                tracks.forEachIndexed { index, track ->
+                    val selected = track.id == selectedId
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (selected || (!matched && index == 0) ||
+                                    (!allowOff && selectedId == null && index == 0)
+                                ) Modifier.focusRequester(focusRequester) else Modifier,
+                            ),
+                        onClick = { onSelect(track.id) },
+                    ) {
+                        if (selected) Icon(Icons.Filled.Check, contentDescription = null)
+                        Text(track.title ?: track.language ?: track.id, maxLines = 2)
+                    }
+                }
+            }
+            Button(onClick = onBack) { Text("Back") }
         }
     }
 }
@@ -961,27 +1088,6 @@ private fun applyEffects(
             }
         }
     }
-}
-
-private fun nextTrackId(
-    tracks: List<MediaTrack>,
-    selectedId: String?,
-): String? {
-    if (tracks.isEmpty()) return null
-    val currentIndex = tracks.indexOfFirst { it.id == selectedId }
-    val nextIndex = if (currentIndex < 0) 0 else (currentIndex + 1) % tracks.size
-    return tracks[nextIndex].id
-}
-
-private fun nextSubtitleTrackId(
-    tracks: List<MediaTrack>,
-    selectedId: String?,
-): String? {
-    if (tracks.isEmpty()) return null
-    if (selectedId == null) return tracks.first().id
-    val currentIndex = tracks.indexOfFirst { it.id == selectedId }
-    if (currentIndex < 0 || currentIndex == tracks.lastIndex) return null
-    return tracks[currentIndex + 1].id
 }
 
 private fun trackLabel(
