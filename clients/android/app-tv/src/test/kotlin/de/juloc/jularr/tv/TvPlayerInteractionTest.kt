@@ -129,11 +129,17 @@ class TvPlayerInteractionTest {
             isPlaying = true,
             companionVisible = true,
         )
+        val scrubbing = TvPlayerInteraction.autoHide(
+            TvPlayerUiState(controlsVisible = true),
+            isPlaying = true,
+            scrubActive = true,
+        )
 
         assertEquals(false, playing.state.controlsVisible)
         assertTrue(paused.state.controlsVisible)
         assertTrue(learning.state.controlsVisible)
         assertTrue(companion.state.controlsVisible)
+        assertTrue(scrubbing.state.controlsVisible)
     }
 
     @Test
