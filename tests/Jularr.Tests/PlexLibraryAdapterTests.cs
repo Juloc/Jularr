@@ -64,6 +64,7 @@ public sealed class PlexLibraryAdapterTests
             "1", 0, 100, CancellationToken.None);
 
         Assert.AreEqual(1, page.TotalSize);
+        Assert.AreEqual(1, page.ReturnedSize);
         Assert.AreEqual(1, page.Items.Count);
         Assert.AreEqual("734", page.Items[0].RatingKey);
         Assert.AreEqual("Dune", page.Items[0].Title);
