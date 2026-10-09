@@ -80,7 +80,7 @@ class TvAppControllerTest {
     }
 
     @Test
-    fun failedProfileRestoreCannotExposePreviousAccountData() {
+    fun failedAccountRestoreCannotExposePreviousAccountData() {
         val api = FakeApi(failRestore = true)
         val controller = TvAppController(FakeOriginStore("https://jularr.example")) { api }
 
@@ -97,6 +97,7 @@ class TvAppControllerTest {
                 ),
             )
         }
+        assertEquals(TvRoute.AccountSelect, failed.navigation.route)
         assertNull(failed.account)
         assertNull(failed.library)
         assertTrue(failed.continueWatching.isEmpty())
