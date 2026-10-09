@@ -1,3 +1,4 @@
+using Jint;
 using System.Text.Json;
 
 namespace Jularr.Tests;
@@ -95,6 +96,80 @@ public sealed class PlayerDesignTests
         StringAssert.Contains(stage, "@if (Model.Controls is { HasLearningCues: true })");
         StringAssert.Contains(player, "data?.textContent || \"[]\"");
         StringAssert.Contains(player, "if (!overlay || !window.JularrPlayerLearning) return;");
+    }
+
+    [TestMethod]
+    public void BaseDesignWithoutLearning_PreservesPlaybackActionsAndOverlappingCues()
+    {
+        var root = FindRepositoryRoot();
+        var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(5)));
+        engine.Execute("var window = globalThis;");
+        engine.Execute(File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-design.js")));
+
+        Assert.AreEqual("undefined", engine.Evaluate("typeof window.JularrPlayerLearning").ToString());
+        Assert.AreEqual("undefined", engine.Evaluate("typeof window.JularrPlayerDesign.renderCue").ToString());
+        Assert.AreEqual("playPause", engine.Evaluate("window.JularrPlayerDesign.actions.playPause").ToString());
+        Assert.AreEqual("2", engine.Evaluate("""
+            window.JularrPlayerDesign.activeCuesAt([
+                {startMs: 1000, endMs: 3000, text: "Sign"},
+                {startMs: 1500, endMs: 2500, text: "Dialogue"}
+            ], 2000).length
+            """).ToString());
+        Assert.AreEqual("1000", engine.Evaluate("""
+            window.JularrPlayerDesign.cueIndexAt([
+                {startMs: 1000, endMs: 3000},
+                {startMs: 5000, endMs: 7000}
+            ], 2000) === 0 ? "1000" : "invalid"
+            """).ToString());
+        Assert.AreEqual("10,30", engine.Evaluate("""
+            (() => {
+                const seek = window.JularrPlayerDesign.seekSeconds({
+                    dataset: {seekBackSeconds: "10", seekForwardSeconds: "30"}
+                });
+                return [seek.back, seek.forward].join(",");
+            })()
+            """).ToString());
+    }
+
+    [TestMethod]
+    public void LearningAddonEnabled_RendersTokensWithoutChangingPlaybackDesign()
+    {
+        var root = FindRepositoryRoot();
+        var scripts = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js");
+        var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(5)));
+        engine.Execute("var window = globalThis;");
+        engine.Execute(File.ReadAllText(Path.Combine(scripts, "player-design.js")));
+        engine.Execute(File.ReadAllText(Path.Combine(scripts, "player-learning-design.js")));
+        engine.Execute("""
+            var element = () => ({
+                dataset: {}, attributes: {}, children: [], hidden: true,
+                setAttribute(name, value) { this.attributes[name] = value; },
+                removeAttribute(name) { delete this.attributes[name]; },
+                addEventListener() {},
+                append(...items) { this.children.push(...items); },
+                replaceChildren(...items) { this.children = items; }
+            });
+            var document = { createElement: () => element() };
+            var root = element(), overlay = element();
+            window.JularrPlayerLearning.renderCue(root, overlay, {
+                startMs: 1000,
+                tokens: [{ surface: "行く", isInteractive: true }, { surface: "!", isInteractive: false }]
+            });
+            """);
+
+        Assert.AreEqual("false", engine.Evaluate("String(overlay.hidden)").ToString());
+        Assert.AreEqual("3", engine.Evaluate("String(overlay.children[0].children.length)").ToString());
+        Assert.AreEqual("openWord", engine.Evaluate("overlay.children[0].children[0].dataset.playerAction").ToString());
+        Assert.AreEqual("learnCurrentCue", engine.Evaluate("overlay.children[0].children[2].dataset.playerAction").ToString());
+        Assert.AreEqual("2", engine.Evaluate("""
+            String(window.JularrPlayerDesign.activeCuesAt([
+                {startMs: 1000, endMs: 3000}, {startMs: 1500, endMs: 2500}
+            ], 2000).length)
+            """).ToString());
+
+        engine.Execute("window.JularrPlayerLearning.renderCue(root, overlay, null);");
+        Assert.AreEqual("true", engine.Evaluate("String(overlay.hidden)").ToString());
+        Assert.AreEqual("0", engine.Evaluate("String(overlay.children.length)").ToString());
     }
 
     [TestMethod]
