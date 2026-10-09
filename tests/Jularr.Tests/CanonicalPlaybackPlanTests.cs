@@ -175,6 +175,9 @@ public sealed class CanonicalPlaybackPlanTests
             recipeVersion = 1,
             verifiedOutput = true
         });
+        var sourceVersion = await fixture.Db.WorkVersions.FindAsync(original.WorkVersionId);
+        Assert.IsNotNull(sourceVersion);
+        sourceVersion.Source = null;
         await fixture.Db.SaveChangesAsync();
 
         var installed = await storage.ListVideoFilesAsync(movie.Id, CancellationToken.None);

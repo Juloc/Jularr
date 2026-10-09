@@ -397,7 +397,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
             join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
             join version in db.WorkVersions.AsNoTracking() on asset.WorkVersionId equals version.Id
             where asset.Kind == MediaAssetKind.Video && asset.WorkId == workId &&
-                  version.Source != PreparedVideoVersionSource
+                  (version.Source == null || version.Source != PreparedVideoVersionSource)
             orderby file.Path
             select new InstalledVideoFile(file.Id, asset.WorkEpisodeId, file.Path, version.Quality))
         .ToListAsync(cancellationToken);
