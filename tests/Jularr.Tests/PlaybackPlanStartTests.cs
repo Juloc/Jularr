@@ -159,6 +159,64 @@ public sealed partial class PlaybackPlanStartTests
     }
 
     [TestMethod]
+    public async Task RegisteredSessionAdviceUsesConfiguredSharedWanBudget()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-09T12:00:00Z"));
+        var kit = PlaybackServerTestKit.Create(clock);
+        try
+        {
+            Assert.IsTrue((await kit.Settings.SaveAsync(
+                PlaybackTranscodingSettings.Default with
+                {
+                    HlsCachePath = Path.Combine(kit.DataRoot, "hls"),
+                    WanUploadBudgetKbps = 10_000
+                })).Succeeded);
+
+            var services = new ServiceCollection()
+                .AddLogging()
+                .AddSingleton<TimeProvider>(clock)
+                .AddSingleton<IMediaProcessRunner>(new FakeMediaProcessRunner(_ => null))
+                .AddPlaybackDecision();
+            services.AddSingleton(kit.Settings);
+            using var provider = services.BuildServiceProvider();
+
+            var store = provider.GetRequiredService<PlaybackStreamSessionStore>();
+            var plan = PlaybackTestPlans.Transcode(PlaybackTestPlans.Video()) with
+            {
+                Quality = new PlaybackQualityResolution(
+                    PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote,
+                    8_500, PlaybackLimitSource.ServerEgress, 12_000, 8_000)
+            };
+            var selections = new PlaybackStreamSelections(
+                null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, ClientKinds.Web);
+            var first = store.Create(
+                "viewer-a",
+                new PlaybackVideoTarget(Guid.NewGuid(), Guid.NewGuid()),
+                Guid.NewGuid(), "/media/a.mkv", 1400, plan, selections);
+            store.Create(
+                "viewer-b",
+                new PlaybackVideoTarget(Guid.NewGuid(), Guid.NewGuid()),
+                Guid.NewGuid(), "/media/b.mkv", 1400, plan, selections);
+
+            clock.Advance(TimeSpan.FromSeconds(21));
+            var update = new PlaybackTelemetryUpdate(1, PlaybackClientState.Playing, 16, 30_000, 0, 0, 21);
+            Assert.IsTrue(PlaybackTelemetryRules.TryValidate(update, clock.GetUtcNow(), out var telemetry));
+            Assert.IsTrue(store.ReportTelemetry(first.Id, "viewer-a", telemetry));
+
+            var advice = store.Advise(first.Id, "viewer-a")!;
+            Assert.AreEqual(PlaybackAdaptationAdvice.StepDown, advice.Decision.Advice);
+            Assert.AreEqual(PlaybackAdaptationReason.ServerEgress, advice.Decision.Reason);
+        }
+        finally
+        {
+            if (Directory.Exists(kit.DataRoot))
+            {
+                Directory.Delete(kit.DataRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
     public void DiagnosticsPanelOnlyUsesExistingUiTexts()
     {
         var root = PlayerControlsTests.RepositoryRoot();
