@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Api;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -11,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Monitoring;
 
 public sealed record SetTargetMonitoringRequest(bool? Monitored);
+
+public sealed record MapReadingUnitRequest(Guid UnitId);
 
 public sealed record SetRelationMonitoringRequest(string Label, IReadOnlyList<string>? Roles, bool Monitored, bool OnlyFuture);
 
@@ -56,6 +59,25 @@ public static class MonitoringEndpoints
 
         group.MapPut("/works/{workId:guid}/audiobook", async (Guid workId, SetTargetMonitoringRequest request, MonitoringCommands commands, CancellationToken cancellationToken) =>
             await commands.SetAudiobookAsync(workId, request.Monitored, cancellationToken) is null ? Results.NotFound() : Results.NoContent());
+
+        // The owner's mapping of a local light-novel volume or manga chapter to a canonical unit of the same Work; the Work is wanted again at once.
+        group.MapPut("/works/{workId:guid}/reading-units/{localKind}/{localId}", async (Guid workId, WorkUnitLocalKind localKind, string localId, MapReadingUnitRequest request, ReadingUnits units, WantedReconciler wanted, CancellationToken cancellationToken) =>
+        {
+            if (!await units.BindAsync(workId, localKind, localId, request.UnitId, isOwnerMapping: true, cancellationToken))
+            {
+                return Results.NotFound();
+            }
+
+            await wanted.ReconcileAsync(workId, cancellationToken);
+            return Results.NoContent();
+        });
+
+        group.MapDelete("/works/{workId:guid}/reading-units/{localKind}/{localId}", async (Guid workId, WorkUnitLocalKind localKind, string localId, ReadingUnits units, WantedReconciler wanted, CancellationToken cancellationToken) =>
+        {
+            await units.UnbindAsync(workId, localKind, localId, cancellationToken);
+            await wanted.ReconcileAsync(workId, cancellationToken);
+            return Results.NoContent();
+        });
 
         group.MapPost("/works/{workId:guid}/future", async (Guid workId, MonitoringCommands commands, MonitoringFollower follower, CancellationToken cancellationToken) =>
         {

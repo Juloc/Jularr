@@ -31,7 +31,7 @@ monitoring decisions + relation sources -> `WantedReconciler.ReconcileAsync(work
 Installed coverage (SQL in `WantedReconciler`)
 - Movie, Episode: a video `MediaAsset` backed by a `StoredFile`. Music: an audio asset; an album is only wanted once released.
 - Book: a `BookFile` of a linked edition. Light Novel: a `NovelVolume`. Manga: a `MangaChapter` (through `WorkSourceLink`).
-- Reading targets are whole Works until volume and chapter coverage is mapped.
+- Reading targets are whole Works until the Work has provider-identified canonical units (`WorkVolume` for Light Novel, `WorkChapter` for Manga, created only by `ReadingUnits.EnrichVolumesAsync/EnrichChaptersAsync` from a provider id) and every local volume/chapter it holds is tied to one (`WorkUnitBindings`: owner mapping via `PUT /api/monitoring/v1/works/{id}/reading-units/...`); then the units are the targets (Volume, Chapter) and a tied local unit installs its own. Local numbers and titles never tie anything. No provider feeds enrichment yet.
 
 Media adapters: `MusicRequestDrafter` (release group + payload), `IdentityRequestDrafter` (primary provider identity).
 

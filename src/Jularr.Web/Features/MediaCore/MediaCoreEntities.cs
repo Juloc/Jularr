@@ -165,6 +165,11 @@ public sealed class WorkVolume
 
     public string? Title { get; set; }
 
+    /// <summary>The provider that identifies this volume and its id there; both null for a volume nothing external vouches for. Number and title never identify it.</summary>
+    public string? Provider { get; set; }
+
+    public string? ExternalId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -205,6 +210,39 @@ public sealed class WorkChapter
     public string? Title { get; set; }
 
     public bool IsSpecial { get; set; }
+
+    /// <summary>The provider that identifies this chapter and its id there; both null for a chapter nothing external vouches for. Number and title never identify it.</summary>
+    public string? Provider { get; set; }
+
+    public string? ExternalId { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public enum WorkUnitLocalKind : short
+{
+    NovelVolume = 0,
+    MangaChapter = 1
+}
+
+/// <summary>
+/// Says that a local reading unit (an imported light-novel volume or manga chapter) is a canonical <see cref="WorkVolume"/> or <see cref="WorkChapter"/> (exactly one of the two ids is set).
+/// Only an owner mapping or the import of an acquisition for that unit writes it; a number or title never does.
+/// </summary>
+public sealed class WorkUnitBinding
+{
+    public long Id { get; set; }
+    public Guid WorkId { get; set; }
+    public WorkUnitLocalKind LocalKind { get; set; }
+
+    /// <summary>The id of the local unit (a NovelVolume or MangaChapter id).</summary>
+    public string LocalId { get; set; } = "";
+
+    public Guid? WorkVolumeId { get; set; }
+    public Guid? WorkChapterId { get; set; }
+
+    /// <summary>Whether the owner mapped it or an import of an acquisition made for the unit; the owner's mapping is never replaced by an import.</summary>
+    public bool IsOwnerMapping { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

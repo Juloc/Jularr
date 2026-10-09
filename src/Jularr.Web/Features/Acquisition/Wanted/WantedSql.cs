@@ -63,16 +63,43 @@ internal static class WantedSql
             WHERE link."WorkId" = work."Id" AND link."SourceKind" = 7)
         """;
 
+    // A Light Novel or Manga Work is wanted unit by unit only when provider-identified volumes (Light Novel) or chapters (Manga) exist and every local unit it holds
+    // is tied to a canonical one; until then (units unknown, or local content nothing ties to a unit) it is wanted as a whole, so owned content is never fetched again.
+    private const string UnitWorks =
+        """
+        unit_works AS (
+            SELECT work."Id" AS "WorkId", work."MediaType"
+            FROM "Works" work
+            WHERE work."MediaType" IN (@lightNovel, @manga) AND (@workId::uuid IS NULL OR work."Id" = @workId)
+              AND CASE work."MediaType"
+                    WHEN @lightNovel THEN
+                        EXISTS (SELECT 1 FROM "WorkVolumes" unit WHERE unit."WorkId" = work."Id" AND unit."ExternalId" IS NOT NULL)
+                        AND NOT EXISTS (
+                            SELECT 1 FROM "WorkSourceLinks" link JOIN "NovelVolumes" onhand ON onhand."WorkId" = link."SourceId"
+                            WHERE link."WorkId" = work."Id" AND link."SourceKind" = 1
+                              AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound WHERE bound."LocalKind" = 0 AND bound."LocalId" = onhand."Id"::text))
+                    ELSE
+                        EXISTS (SELECT 1 FROM "WorkChapters" unit WHERE unit."WorkId" = work."Id" AND unit."ExternalId" IS NOT NULL)
+                        AND NOT EXISTS (
+                            SELECT 1 FROM "WorkSourceLinks" link JOIN "MangaChapters" onhand ON onhand."SeriesId" = link."SourceId"::text
+                            WHERE link."WorkId" = work."Id" AND link."SourceKind" = 3
+                              AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound WHERE bound."LocalKind" = 1 AND bound."LocalId" = onhand."Id"))
+                  END
+        )
+        """;
+
     // What Monitoring or an open request wants, with whether the library already holds it. A Work is intended while it is monitored or explicitly requested
     // (an album only once released), an episode once aired while it is monitored through its own decision, its season, its Work or a relation, or requested.
     private const string Intended =
         $$"""
+        {{UnitWorks}},
         intended_works AS (
             SELECT work."Id" AS "WorkId", work."MediaType", 0::smallint AS "TargetKind", work."Id" AS "TargetId", {{WorkInstalled}} AS "Installed"
             FROM "Works" work
             LEFT JOIN "WorkMonitoring" decision ON decision."TargetId" = work."Id"
             WHERE work."MediaType" NOT IN (@series, @anime) AND work."MediaType" = ANY(@types)
               AND (@workId::uuid IS NULL OR work."Id" = @workId)
+              AND NOT EXISTS (SELECT 1 FROM unit_works unit WHERE unit."WorkId" = work."Id")
               AND (COALESCE(decision."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = work."Id"))
                    OR EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 0 AND asked."TargetId" = work."Id"))
               AND (work."MediaType" <> @music OR EXISTS (
@@ -102,12 +129,43 @@ internal static class WantedSql
               AND (COALESCE(decision."Monitored", FALSE)
                    OR EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 4 AND asked."TargetId" = edition."Id"))
         ),
+        -- The identified volumes (Light Novel) and chapters (Manga) of a unit-addressed Work: a volume decision covers its chapters, then the Work's decision, a relation or a request.
+        intended_units AS (
+            SELECT unit."WorkId", work."MediaType", 2::smallint AS "TargetKind", unit."Id" AS "TargetId",
+                   EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "NovelVolumes" onhand ON onhand."Id"::text = bound."LocalId"
+                           WHERE bound."LocalKind" = 0 AND bound."WorkVolumeId" = unit."Id") AS "Installed"
+            FROM "WorkVolumes" unit
+            JOIN unit_works ON unit_works."WorkId" = unit."WorkId" AND unit_works."MediaType" = @lightNovel
+            JOIN "Works" work ON work."Id" = unit."WorkId"
+            LEFT JOIN "WorkMonitoring" own ON own."TargetId" = unit."Id"
+            LEFT JOIN "WorkMonitoring" whole ON whole."TargetId" = unit."WorkId"
+            WHERE unit."ExternalId" IS NOT NULL
+              AND (COALESCE(own."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = unit."WorkId"))
+                   OR EXISTS (SELECT 1 FROM open_request_targets asked
+                              WHERE (asked."TargetKind" = 2 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."TargetId" = unit."WorkId")))
+            UNION ALL
+            SELECT unit."WorkId", work."MediaType", 3::smallint, unit."Id",
+                   EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
+                           WHERE bound."LocalKind" = 1 AND bound."WorkChapterId" = unit."Id")
+            FROM "WorkChapters" unit
+            JOIN unit_works ON unit_works."WorkId" = unit."WorkId" AND unit_works."MediaType" = @manga
+            JOIN "Works" work ON work."Id" = unit."WorkId"
+            LEFT JOIN "WorkMonitoring" own ON own."TargetId" = unit."Id"
+            LEFT JOIN "WorkMonitoring" volume ON volume."TargetId" = unit."VolumeId"
+            LEFT JOIN "WorkMonitoring" whole ON whole."TargetId" = unit."WorkId"
+            WHERE unit."ExternalId" IS NOT NULL
+              AND (COALESCE(own."Monitored", volume."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = unit."WorkId"))
+                   OR EXISTS (SELECT 1 FROM open_request_targets asked
+                              WHERE (asked."TargetKind" = 3 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."TargetId" = unit."WorkId")))
+        ),
         intended AS (
             SELECT * FROM intended_works
             UNION ALL
             SELECT * FROM intended_episodes
             UNION ALL
             SELECT * FROM intended_audiobooks
+            UNION ALL
+            SELECT * FROM intended_units
         )
         """;
 
@@ -195,7 +253,7 @@ internal static class WantedSql
         WHERE work."Id" > @after
           AND (item."TargetKind" = 4) = @editions
           AND NOT EXISTS ({{RequestOf}} AND request."Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing'))
-          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
+          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} WHEN 2 THEN FALSE WHEN 3 THEN FALSE ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
         ORDER BY 1
         LIMIT @limit
         """;

@@ -146,6 +146,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<MusicAlbum> MusicAlbums => Set<MusicAlbum>();
     public DbSet<WorkVolume> WorkVolumes => Set<WorkVolume>();
     public DbSet<WorkChapter> WorkChapters => Set<WorkChapter>();
+    public DbSet<WorkUnitBinding> WorkUnitBindings => Set<WorkUnitBinding>();
     public DbSet<WorkEdition> WorkEditions => Set<WorkEdition>();
     public DbSet<WorkVersion> WorkVersions => Set<WorkVersion>();
     public DbSet<WorkFieldProvenance> WorkFieldProvenance => Set<WorkFieldProvenance>();
@@ -820,17 +821,40 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Title).HasMaxLength(500);
+            entity.Property(x => x.Provider).HasMaxLength(64);
+            entity.Property(x => x.ExternalId).HasMaxLength(200);
+            entity.ToTable("WorkVolumes", table => table.HasCheckConstraint("CK_WorkVolumes_Identity", "(\"Provider\" IS NULL) = (\"ExternalId\" IS NULL)"));
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.WorkId, x.Number }).IsUnique();
+            entity.HasIndex(x => new { x.WorkId, x.Provider, x.ExternalId }).IsUnique().HasFilter("\"ExternalId\" IS NOT NULL");
         });
 
         modelBuilder.Entity<WorkChapter>(entity =>
         {
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Title).HasMaxLength(500);
+            entity.Property(x => x.Provider).HasMaxLength(64);
+            entity.Property(x => x.ExternalId).HasMaxLength(200);
+            entity.ToTable("WorkChapters", table => table.HasCheckConstraint("CK_WorkChapters_Identity", "(\"Provider\" IS NULL) = (\"ExternalId\" IS NULL)"));
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<WorkVolume>().WithMany().HasForeignKey(x => x.VolumeId).OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(x => new { x.WorkId, x.Number }).IsUnique();
+            entity.HasIndex(x => new { x.WorkId, x.Provider, x.ExternalId }).IsUnique().HasFilter("\"ExternalId\" IS NOT NULL");
+        });
+
+        modelBuilder.Entity<WorkUnitBinding>(entity =>
+        {
+            entity.ToTable("WorkUnitBindings", table => table.HasCheckConstraint("CK_WorkUnitBindings_OneUnit", "(\"WorkVolumeId\" IS NULL) <> (\"WorkChapterId\" IS NULL)"));
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.LocalKind).HasConversion<short>();
+            entity.Property(x => x.LocalId).HasMaxLength(64);
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<WorkVolume>().WithMany().HasForeignKey(x => x.WorkVolumeId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<WorkChapter>().WithMany().HasForeignKey(x => x.WorkChapterId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.LocalKind, x.LocalId }).IsUnique();
+            entity.HasIndex(x => x.WorkVolumeId);
+            entity.HasIndex(x => x.WorkChapterId);
+            entity.HasIndex(x => x.WorkId);
         });
 
         modelBuilder.Entity<WorkEdition>(entity =>
