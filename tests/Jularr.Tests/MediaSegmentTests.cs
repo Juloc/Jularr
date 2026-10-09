@@ -261,7 +261,8 @@ public sealed class MediaSegmentTests
             includeLearningCues: true);
 
         Assert.IsNotNull(disabled.Media);
-        Assert.AreEqual(disabled.Media.MediaFileId, enabled.Media?.MediaFileId);
+        Assert.IsNotNull(enabled.Media);
+        Assert.AreEqual(disabled.Media.MediaFileId, enabled.Media.MediaFileId);
         Assert.AreEqual(0, disabled.Cues.Count);
         Assert.AreEqual(1, enabled.Cues.Count);
     }
