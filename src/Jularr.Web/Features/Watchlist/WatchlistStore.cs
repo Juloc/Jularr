@@ -25,8 +25,12 @@ public sealed class WatchlistStore(AppDbContext db)
         ValidateProfile(profileId);
         if (await IsIncludedByFollowedFranchiseAsync(profileId, identity, cancellationToken))
         {
-            var existing = (await GetEffectiveAsync(profileId, cancellationToken))
-                .FirstOrDefault(item => item.Identity.Key == identity.Key);
+            var existing = (await GetEffectivePageAsync(
+                CurrentAccountContext.ForProfile(profileId),
+                new PageRequest(),
+                [identity.MediaType],
+                cancellationToken,
+                identity)).Items.FirstOrDefault();
             var draft = existing is null
                 ? new WatchlistDraft(identity, identity.ExternalKey)
                 : new WatchlistDraft(
