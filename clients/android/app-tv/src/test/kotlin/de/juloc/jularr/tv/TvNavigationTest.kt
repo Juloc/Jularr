@@ -112,6 +112,14 @@ class TvNavigationTest {
     }
 
     @Test
+    fun switchingAccountsDropsTheOldSettingsBackStack() {
+        val selecting = TvNavigation.openProfileSelect(TvNavigationState(TvRoute.Settings))
+        val signedIn = TvNavigation.signedIn(selecting)
+        assertEquals(TvRoute.Home, signedIn.route)
+        assertEquals(emptyList<TvRoute>(), signedIn.previous)
+    }
+
+    @Test
     fun signOutDropsProtectedBackStack() {
         var state = TvNavigationState(TvRoute.Home)
         state = TvNavigation.openAnime(state, "anime")
