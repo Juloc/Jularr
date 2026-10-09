@@ -105,6 +105,12 @@ builder.Services.AddScoped<INotificationSink, InAppNotificationSink>();
 builder.Services.AddScoped<NotificationDispatcher>();
 builder.Services.AddScoped<IJularrEventPublisher, JularrEventPublisher>();
 builder.Services.AddScoped<OwnerAuthService>();
+builder.Services.AddHttpClient<Jularr.Web.Features.Plex.PlexAuthClient>(client =>
+{
+    client.BaseAddress = new Uri("https://plex.tv/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+
 // Per-media-type capability policy (#436): canonical JSON settings store under /data plus the
 // resolution/guard service consumed by the request experience (#597), permission-derived shell
 // (#598) and provider-driven discovery (#595).
