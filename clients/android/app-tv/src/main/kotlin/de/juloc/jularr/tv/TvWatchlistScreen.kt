@@ -61,13 +61,15 @@ internal enum class TvWatchlistCategory(val labelRes: Int) {
     MOVIES(R.string.tv_home_filter_movies),
     BOOKS(R.string.tv_watchlist_filter_books);
 
-    fun includes(mediaType: String): Boolean = when (this) {
+    fun includes(item: WatchlistItem): Boolean = when (this) {
         ALL -> true
-        ANIME -> mediaType.equals("anime", ignoreCase = true)
-        SERIES -> mediaType.equals("tv", ignoreCase = true)
-        MOVIES -> mediaType.equals("movie", ignoreCase = true)
-        BOOKS -> mediaType.equals("book", ignoreCase = true) ||
-            mediaType.equals("light-novel", ignoreCase = true)
+        ANIME -> item.mediaType.equals("anime", ignoreCase = true)
+        SERIES -> item.mediaType.equals("tv", ignoreCase = true)
+        MOVIES -> item.mediaType.equals("movie", ignoreCase = true) ||
+            (item.mediaType.equals("anime", ignoreCase = true) &&
+                item.format.equals("MOVIE", ignoreCase = true))
+        BOOKS -> item.mediaType.equals("book", ignoreCase = true) ||
+            item.mediaType.equals("light-novel", ignoreCase = true)
     }
 }
 
@@ -83,7 +85,7 @@ internal fun watchlistVisibleItems(
     category: TvWatchlistCategory,
     sort: TvWatchlistSort,
 ): List<WatchlistItem> {
-    val filtered = entries.filter { category.includes(it.mediaType) }
+    val filtered = entries.filter(category::includes)
     return when (sort) {
         TvWatchlistSort.NEWEST -> filtered.sortedWith(
             compareByDescending<WatchlistItem> { it.addedAtUtc }
