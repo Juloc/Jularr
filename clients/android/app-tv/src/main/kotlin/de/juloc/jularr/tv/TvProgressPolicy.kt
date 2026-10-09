@@ -30,7 +30,7 @@ class TvProgressPolicy(
     private var lastPersistedAtMs: Long? = null
     private var lastHeartbeatPositionMs: Long? = null
     private var crossedByPlayback = false
-    private var completedInSession = false
+    private var endedInSession = false
 
     init {
         require(heartbeatIntervalMs > 0)
@@ -66,14 +66,14 @@ class TvProgressPolicy(
         }
 
         lastPersistedAtMs = nowMs
-        if (event == TvProgressEvent.ENDED || crossedByPlayback) {
-            completedInSession = true
+        if (event == TvProgressEvent.ENDED) {
+            endedInSession = true
         }
 
         return TvProgressWrite(
             positionMs = normalizedPosition,
             durationMs = normalizedDuration,
-            completed = completedInSession,
+            completed = endedInSession || crossedByPlayback,
         )
     }
 
