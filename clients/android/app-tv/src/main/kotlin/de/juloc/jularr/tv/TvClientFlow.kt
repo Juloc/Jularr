@@ -22,6 +22,8 @@ import de.juloc.jularr.core.model.PlayerBootstrap
 import de.juloc.jularr.core.model.RootAvailability
 import de.juloc.jularr.core.model.TermStateResult
 import de.juloc.jularr.core.model.WatchlistItem
+import de.juloc.jularr.core.model.TvPlaybackPreferences
+import de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate
 
 class TvClientFlow(
     private val apiFactory: (String) -> JularrClientApi,
@@ -129,6 +131,12 @@ class TvClientFlow(
 
     suspend fun loadWatchlist(): List<WatchlistItem> =
         requireApi().getWatchlist()
+
+    suspend fun loadPlaybackPreferences(): TvPlaybackPreferences =
+        requireApi().getPlaybackPreferences()
+
+    suspend fun updatePlaybackPreferences(update: TvPlaybackPreferencesUpdate): TvPlaybackPreferences =
+        requireApi().updatePlaybackPreferences(update)
 
     suspend fun loadAnime(animeId: String): AnimeDetail =
         requireApi().getAnime(animeId)
