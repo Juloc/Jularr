@@ -47,7 +47,7 @@ public sealed class PlexWorkMatcher(AppDbContext db)
             };
 
             var pairs = item.ExternalIds.Count > 64
-                ? []
+                ? Array.Empty<(string Provider, string ExternalId)>()
                 : item.ExternalIds
                     .Where(x => x.Provider is "tmdb" or "imdb" or "tvdb" &&
                         !string.IsNullOrWhiteSpace(x.Id) && x.Id.Length <= 160)
