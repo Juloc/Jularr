@@ -152,6 +152,7 @@ fun TvWatchlistScreen(
     var sortOpen by remember { mutableStateOf(false) }
     var sortPreviouslyOpened by remember { mutableStateOf(false) }
     var infoEntry by remember { mutableStateOf<WatchlistItem?>(null) }
+    var focusRevision by remember { mutableStateOf(0) }
     val sortFocus = remember { FocusRequester() }
     val optionFocus = remember { FocusRequester() }
     val infoFocus = remember { FocusRequester() }
@@ -181,7 +182,12 @@ fun TvWatchlistScreen(
         if (infoEntry != null) runCatching { infoFocus.requestFocus() }
     }
     BackHandler(enabled = sortOpen || infoEntry != null) {
-        if (infoEntry != null) infoEntry = null else sortOpen = false
+        if (infoEntry != null) {
+            infoEntry = null
+            focusRevision += 1
+        } else {
+            sortOpen = false
+        }
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -266,8 +272,8 @@ fun TvWatchlistScreen(
                     ) {
                         gridItems(visible, key = { it.id }) { entry ->
                             val requester = remember(entry.id) { FocusRequester() }
-                            LaunchedEffect(entry.id, restoreId, category, sort) {
-                                if ("item:${entry.id}" == restoreId) {
+                            LaunchedEffect(entry.id, restoreId, category, sort, focusRevision) {
+                                if ("item:${entry.id}" == (if (focusRevision > 0) focusMemory.recall("watchlist") else restoreId)) {
                                     runCatching { requester.requestFocus() }
                                 }
                             }
@@ -352,7 +358,10 @@ fun TvWatchlistScreen(
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Button(
-                            onClick = { infoEntry = null },
+                            onClick = {
+                                infoEntry = null
+                                focusRevision += 1
+                            },
                             modifier = Modifier.focusRequester(infoFocus),
                         ) {
                             Text(stringResource(R.string.tv_action_back))
