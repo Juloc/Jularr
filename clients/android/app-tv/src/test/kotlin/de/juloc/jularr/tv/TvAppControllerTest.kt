@@ -93,7 +93,7 @@ class TvAppControllerTest {
 
         val changed = runSuspend {
             controller.changePlaybackPreferences(
-                de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate(defaultPlaybackSpeed = 1.5),
+                de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate(defaultPlaybackSpeed = 1.5),
             )
         }
         assertEquals(1.5, changed.playbackPreferences?.defaultPlaybackSpeed)
@@ -289,7 +289,7 @@ class TvAppControllerTest {
             ),
         )
 
-        private var preference = de.juloc.jularr.core.model.TvPlaybackPreferences(
+        private var preference = de.juloc.jularr.core.model.ClientPlaybackPreferences(
             autoplayNext = true,
             preferredAudioLanguage = "ja",
             preferredSubtitleLanguage = "de",
@@ -299,8 +299,8 @@ class TvAppControllerTest {
         override suspend fun getPlaybackPreferences() = preference
 
         override suspend fun updatePlaybackPreferences(
-            update: de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate,
-        ): de.juloc.jularr.core.model.TvPlaybackPreferences {
+            update: de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate,
+        ): de.juloc.jularr.core.model.ClientPlaybackPreferences {
             preference = preference.copy(
                 autoplayNext = update.autoplayNext ?: preference.autoplayNext,
                 preferredAudioLanguage = update.preferredAudioLanguage ?: preference.preferredAudioLanguage,
