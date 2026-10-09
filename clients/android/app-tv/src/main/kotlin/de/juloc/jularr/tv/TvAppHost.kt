@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -867,200 +868,202 @@ fun TvAppHost(
                     currentPositionMs,
                 )
 
-                TvPlayerScreen(
-                    player = player,
-                    episodeTitle = bundle.bootstrap.episode.title,
-                    currentCue = cue,
-                    audioTracks = bundle.bootstrap.audioTracks,
-                    subtitleTracks = bundle.bootstrap.subtitleTracks,
-                    selectedAudioTrackId = selectedAudioTrackId,
-                    selectedSubtitleTrackId = selectedSubtitleTrackId,
-                    onSelectAudioTrack = { id ->
-                        val track = bundle.bootstrap.audioTracks.firstOrNull { it.id == id }
-                        val selected = track != null && TvMediaTrackSelector.selectAudio(player.player, track)
-                        if (selected) {
-                            selectedAudioTrackId = id
-                            pushCompanionState(force = true)
-                        }
-                        selected
-                    },
-                    onSelectSubtitleTrack = { id ->
-                        val track = id?.let { selected ->
-                            bundle.bootstrap.subtitleTracks
-                                .firstOrNull { it.id == selected }
-                        }
-                        val selected = TvMediaTrackSelector.selectSubtitle(player.player, track)
-                        if (selected) {
-                            selectedSubtitleTrackId = id
-                            pushCompanionState(force = true)
-                        }
-                        selected
-                    },
-                    onPositionChanged = { position, duration, isPlaying ->
-                        currentPositionMs = position
-                        currentDurationMs = duration
-                        resumePositionMs = position
-                        resumeShouldPlay = isPlaying
-                        persist(
-                            event = if (isPlaying) {
-                                TvProgressEvent.HEARTBEAT
-                            } else {
-                                TvProgressEvent.PAUSE
-                            },
-                            positionMs = position,
-                            durationMs = duration,
-                        )
-                        refreshCueWindowIfNeeded(position)
-                        pushCompanionState()
-                    },
-                    onPlaybackEnded = { position, duration ->
-                        persist(TvProgressEvent.ENDED, position, duration)
-                    },
-                    previousEpisodeTitle = episodeNeighbors.previous?.title,
-                    nextEpisodeTitle = episodeNeighbors.next?.title,
-                    onPreviousEpisode = {
-                        episodeNeighbors.previous?.let(::switchEpisode)
-                    },
-                    onNextEpisode = {
-                        episodeNeighbors.next?.let(::switchEpisode)
-                    },
-                    onSeeked = { position, duration, isPlaying ->
-                        currentPositionMs = position
-                        currentDurationMs = duration
-                        resumePositionMs = position
-                        resumeShouldPlay = isPlaying
-                        persist(
-                            TvProgressEvent.SEEK,
-                            position,
-                            duration,
-                        )
-                        refreshCueWindowIfNeeded(position)
-                        pushCompanionState(force = true)
-                    },
-                    onPlaybackFailure = { position ->
-                        resumePositionMs = position
-                        resumeShouldPlay = true
-                        player.player.stop()
-                        openedEpisodeId = null
-
-                        scope.launch {
-                            val storage = controller.refreshEpisodeStorage(0)
-                            snapshot = storage
-                            if (storage.storageDecision != null) {
-                                return@launch
+                key(route.episodeId) {
+                    TvPlayerScreen(
+                        player = player,
+                        episodeTitle = bundle.bootstrap.episode.title,
+                        currentCue = cue,
+                        audioTracks = bundle.bootstrap.audioTracks,
+                        subtitleTracks = bundle.bootstrap.subtitleTracks,
+                        selectedAudioTrackId = selectedAudioTrackId,
+                        selectedSubtitleTrackId = selectedSubtitleTrackId,
+                        onSelectAudioTrack = { id ->
+                            val track = bundle.bootstrap.audioTracks.firstOrNull { it.id == id }
+                            val selected = track != null && TvMediaTrackSelector.selectAudio(player.player, track)
+                            if (selected) {
+                                selectedAudioTrackId = id
+                                pushCompanionState(force = true)
                             }
-
-                            if (currentTransport == PlaybackTransport.DIRECT) {
-                                forceFallback = true
-                                playbackGeneration += 1
-                            } else {
-                                snapshot = controller.reportError(
-                                    IllegalStateException(
-                                        "Server compatibility playback failed.",
-                                    ),
+                            selected
+                        },
+                        onSelectSubtitleTrack = { id ->
+                            val track = id?.let { selected ->
+                                bundle.bootstrap.subtitleTracks
+                                    .firstOrNull { it.id == selected }
+                            }
+                            val selected = TvMediaTrackSelector.selectSubtitle(player.player, track)
+                            if (selected) {
+                                selectedSubtitleTrackId = id
+                                pushCompanionState(force = true)
+                            }
+                            selected
+                        },
+                        onPositionChanged = { position, duration, isPlaying ->
+                            currentPositionMs = position
+                            currentDurationMs = duration
+                            resumePositionMs = position
+                            resumeShouldPlay = isPlaying
+                            persist(
+                                event = if (isPlaying) {
+                                    TvProgressEvent.HEARTBEAT
+                                } else {
+                                    TvProgressEvent.PAUSE
+                                },
+                                positionMs = position,
+                                durationMs = duration,
+                            )
+                            refreshCueWindowIfNeeded(position)
+                            pushCompanionState()
+                        },
+                        onPlaybackEnded = { position, duration ->
+                            persist(TvProgressEvent.ENDED, position, duration)
+                        },
+                        previousEpisodeTitle = episodeNeighbors.previous?.title,
+                        nextEpisodeTitle = episodeNeighbors.next?.title,
+                        onPreviousEpisode = {
+                            episodeNeighbors.previous?.let(::switchEpisode)
+                        },
+                        onNextEpisode = {
+                            episodeNeighbors.next?.let(::switchEpisode)
+                        },
+                        onSeeked = { position, duration, isPlaying ->
+                            currentPositionMs = position
+                            currentDurationMs = duration
+                            resumePositionMs = position
+                            resumeShouldPlay = isPlaying
+                            persist(
+                                TvProgressEvent.SEEK,
+                                position,
+                                duration,
+                            )
+                            refreshCueWindowIfNeeded(position)
+                            pushCompanionState(force = true)
+                        },
+                        onPlaybackFailure = { position ->
+                            resumePositionMs = position
+                            resumeShouldPlay = true
+                            player.player.stop()
+                            openedEpisodeId = null
+    
+                            scope.launch {
+                                val storage = controller.refreshEpisodeStorage(0)
+                                snapshot = storage
+                                if (storage.storageDecision != null) {
+                                    return@launch
+                                }
+    
+                                if (currentTransport == PlaybackTransport.DIRECT) {
+                                    forceFallback = true
+                                    playbackGeneration += 1
+                                } else {
+                                    snapshot = controller.reportError(
+                                        IllegalStateException(
+                                            "Server compatibility playback failed.",
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        canOpenOnPhone =
+                            companionRuntime != null &&
+                                snapshot.capabilities?.features?.companionControl == true &&
+                                snapshot.capabilities?.features?.playbackSessions == true,
+                        remoteCommand = remoteCommand,
+                        companionVisible = companionPairing != null,
+                        onCloseCompanion = {
+                            companionPairing = null
+                        },
+                        companionOverlay = companionPairing?.let { pairing ->
+                            {
+                                val origin = settings.origin.orEmpty()
+                                val base = URI(origin.trimEnd('/') + "/")
+                                val companionUrl = base
+                                    .resolve(pairing.companionUrl.removePrefix("/"))
+                                    .toString()
+    
+                                TvCompanionPairingOverlay(
+                                    pairing = pairing,
+                                    companionUrl = companionUrl,
+                                    busy = companionBusy,
+                                    onNewCode = {
+                                        val runtime = companionRuntime
+                                        if (runtime != null) {
+                                            scope.launch {
+                                                companionBusy = true
+                                                companionPairing = runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        runtime.createPairing()
+                                                    }
+                                                }.getOrNull()
+                                                companionBusy = false
+                                            }
+                                        }
+                                    },
+                                    onRevoke = {
+                                        val runtime = companionRuntime
+                                        if (runtime != null) {
+                                            scope.launch {
+                                                companionBusy = true
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        runtime.revoke()
+                                                    }
+                                                }
+                                                companionPairing = null
+                                                companionBusy = false
+                                            }
+                                        }
+                                    },
+                                    onClose = {
+                                        companionPairing = null
+                                    },
                                 )
                             }
-                        }
-                    },
-                    canOpenOnPhone =
-                        companionRuntime != null &&
-                            snapshot.capabilities?.features?.companionControl == true &&
-                            snapshot.capabilities?.features?.playbackSessions == true,
-                    remoteCommand = remoteCommand,
-                    companionVisible = companionPairing != null,
-                    onCloseCompanion = {
-                        companionPairing = null
-                    },
-                    companionOverlay = companionPairing?.let { pairing ->
-                        {
-                            val origin = settings.origin.orEmpty()
-                            val base = URI(origin.trimEnd('/') + "/")
-                            val companionUrl = base
-                                .resolve(pairing.companionUrl.removePrefix("/"))
-                                .toString()
-
-                            TvCompanionPairingOverlay(
-                                pairing = pairing,
-                                companionUrl = companionUrl,
-                                busy = companionBusy,
-                                onNewCode = {
-                                    val runtime = companionRuntime
-                                    if (runtime != null) {
-                                        scope.launch {
-                                            companionBusy = true
-                                            companionPairing = runCatching {
-                                                withContext(Dispatchers.IO) {
-                                                    runtime.createPairing()
-                                                }
-                                            }.getOrNull()
-                                            companionBusy = false
-                                        }
-                                    }
-                                },
-                                onRevoke = {
-                                    val runtime = companionRuntime
-                                    if (runtime != null) {
-                                        scope.launch {
-                                            companionBusy = true
-                                            runCatching {
-                                                withContext(Dispatchers.IO) {
-                                                    runtime.revoke()
-                                                }
-                                            }
-                                            companionPairing = null
-                                            companionBusy = false
-                                        }
-                                    }
-                                },
-                                onClose = {
-                                    companionPairing = null
-                                },
-                            )
-                        }
-                    },
-                    onSetTermState = { termId, state ->
-                        scope.launch {
-                            snapshot = controller.setTermState(termId, state)
-                            pushCompanionState(force = true)
-                        }
-                    },
-                    onSelectedTermChanged = { termId ->
-                        companionSelectedTermId = termId
-                        pushCompanionState(force = true)
-                    },
-                    onOpenOnPhone = { _, termId ->
-                        companionSelectedTermId = termId
-                        pushCompanionState(force = true)
-                        val runtime = companionRuntime
-                        if (runtime != null) {
+                        },
+                        onSetTermState = { termId, state ->
                             scope.launch {
-                                companionBusy = true
-                                companionPairing = runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        runtime.createPairing()
-                                    }
-                                }.getOrNull()
-                                companionBusy = false
+                                snapshot = controller.setTermState(termId, state)
+                                pushCompanionState(force = true)
                             }
-                        }
-                    },
-                    onExit = {
-                        val write = progressPolicy.evaluate(
-                            event = TvProgressEvent.CLOSE,
-                            nowMs = SystemClock.elapsedRealtime(),
-                            positionMs = currentPositionMs,
-                            durationMs = currentDurationMs.takeIf { it > 0 },
-                        )
-
-                        scope.launch {
-                            if (write != null) {
-                                progressWriteMutex.withLock { controller.saveProgress(write, route.episodeId) }
+                        },
+                        onSelectedTermChanged = { termId ->
+                            companionSelectedTermId = termId
+                            pushCompanionState(force = true)
+                        },
+                        onOpenOnPhone = { _, termId ->
+                            companionSelectedTermId = termId
+                            pushCompanionState(force = true)
+                            val runtime = companionRuntime
+                            if (runtime != null) {
+                                scope.launch {
+                                    companionBusy = true
+                                    companionPairing = runCatching {
+                                        withContext(Dispatchers.IO) {
+                                            runtime.createPairing()
+                                        }
+                                    }.getOrNull()
+                                    companionBusy = false
+                                }
                             }
-                            resetPlaybackRuntime()
-                            controller.back()?.let { snapshot = it }
-                        }
-                    },
-                )
+                        },
+                        onExit = {
+                            val write = progressPolicy.evaluate(
+                                event = TvProgressEvent.CLOSE,
+                                nowMs = SystemClock.elapsedRealtime(),
+                                positionMs = currentPositionMs,
+                                durationMs = currentDurationMs.takeIf { it > 0 },
+                            )
+    
+                            scope.launch {
+                                if (write != null) {
+                                    progressWriteMutex.withLock { controller.saveProgress(write, route.episodeId) }
+                                }
+                                resetPlaybackRuntime()
+                                controller.back()?.let { snapshot = it }
+                            }
+                        },
+                    )
+                }
             }
         }
     }
