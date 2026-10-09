@@ -90,7 +90,7 @@ fun TvProfileSelectScreen(
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .border(
                                     if (focused) 2.dp else 1.dp,
-                                    if (focused) accent else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                                    if (focused) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.27f),
                                     shape,
                                 )
                                 .clickable { onSelectSession(session) }
