@@ -325,7 +325,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
             session.Id != replacingSessionId &&
             session.LastSeenUtc >= since &&
             session.Plan.Quality.Network is PlaybackNetworkClass.Remote or PlaybackNetworkClass.Metered or PlaybackNetworkClass.Unknown &&
-            session.Telemetry.Latest?.State is not PlaybackClientState.Paused and not PlaybackClientState.Ended);
+            session.Telemetry.Latest?.State != PlaybackClientState.Paused);
     }
 
     /// <summary>Legacy Anime/test compatibility overload. New playback orchestration supplies a canonical target.</summary>
