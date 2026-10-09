@@ -215,7 +215,7 @@ public sealed class PlaybackPlanService(
                 ? await ResolveCanonicalVideoAsync(target, cancellationToken)
                 : null;
 
-        if (candidates.Count > 1)
+        if (candidates.Count > 1 && input.AudioStreamIndex is null && input.SubtitleStreamIndex is null)
         {
             var capabilities = input.Capabilities?.Normalize() ??
                                ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
@@ -229,7 +229,8 @@ public sealed class PlaybackPlanService(
             var server = serverCapabilities.Current();
             var analyses = await mediaInventory.GetManyAsync(
                 candidates.Select(candidate => candidate.StoredFileId).ToArray(), cancellationToken);
-            var bestMode = int.MaxValue;
+            var bestCost = int.MaxValue;
+            var bestHeight = -1;
             var bestBitrate = -1;
 
             foreach (var candidate in candidates)
@@ -253,18 +254,23 @@ public sealed class PlaybackPlanService(
                     input.ModePreference,
                     input.FailedModes));
 
-                var mode = plan.Mode switch
+                var cost = plan.Mode switch
                 {
-                    PlaybackDeliveryMode.DirectPlay => 0,
-                    PlaybackDeliveryMode.DirectStream => 1,
-                    PlaybackDeliveryMode.Transcode => 2,
-                    _ => 3
+                    PlaybackDeliveryMode.DirectPlay or PlaybackDeliveryMode.DirectStream => 0,
+                    PlaybackDeliveryMode.Transcode => 1,
+                    _ => 2
                 };
+                var height = plan.Video?.MaxOutputHeight ?? technical.Video?.Height ?? 0;
                 var bitrate = plan.Quality.DeliveredBitrateKbps ?? 0;
-                if (mode < bestMode || mode == bestMode && bitrate > bestBitrate)
+                if (cost < bestCost ||
+                    (cost == bestCost && height > bestHeight) ||
+                    (cost == bestCost && height == bestHeight && bitrate > bestBitrate) ||
+                    (cost == bestCost && height == bestHeight && bitrate == bestBitrate &&
+                     plan.Mode == PlaybackDeliveryMode.DirectPlay))
                 {
                     playable = candidate;
-                    bestMode = mode;
+                    bestCost = cost;
+                    bestHeight = height;
                     bestBitrate = bitrate;
                 }
             }
