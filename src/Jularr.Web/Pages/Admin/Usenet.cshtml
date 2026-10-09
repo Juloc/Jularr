@@ -1,6 +1,7 @@
 @page
 @model Jularr.Web.Pages.Admin.UsenetModel
 @using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Acquisition.Indexers
 @using Jularr.Web.Features.Acquisition.Search
 @using Jularr.Web.Pages.Admin
 @{
@@ -96,34 +97,78 @@
             {
                 var healthClass = card.Health is null ? "status-warn" : card.Health.IsHealthy ? "status-ok" : "status-error";
                 var healthLabel = card.Health is null ? ui["settings.connectionTable.notChecked"] : card.Health.IsHealthy ? ui["settings.connectionTable.healthy"] : ui["settings.connectionTable.unhealthy"];
+                var readinessClass = card.Readiness switch { IndexerReadinessLevel.Ready => "status-ok", IndexerReadinessLevel.NeedsAttention => "status-error", _ => "status-warn" };
+                var verification = card.Entry.Settings.Verification;
+                var capabilities = card.Entry.Settings.Capabilities;
+                var isNewznab = card.Entry.Type == IndexerType.Newznab;
                 <li class="usenet-card @(card.Entry.Enabled ? "" : "is-disabled")">
                     <div class="usenet-card-head">
                         <div>
                             <strong>@card.Entry.Name</strong>
                             <span class="muted">@card.Entry.Type · @ui.Format("admin.usenet.priority", ("priority", card.Entry.Priority))</span>
                         </div>
-                        <span class="status-pill @healthClass">@healthLabel</span>
+                        <div class="usenet-card-pills">
+                            @if (isNewznab)
+                            {
+                                <span class="status-pill @readinessClass">@ui[$"admin.usenet.indexer.readiness.{IndexerSetupMessages.Key(card.Readiness)}"]</span>
+                            }
+                            <span class="status-pill @healthClass">@healthLabel</span>
+                        </div>
                     </div>
                     <dl class="usenet-facts">
-                        <div><dt>@ui["admin.usenet.animeCategories"]</dt><dd>@string.Join(", ", SearchPlanner.Categories(MediaAcquisitionKind.Anime, card.Entry))</dd></div>
-                        <div><dt>@ui["admin.usenet.bookCategories"]</dt><dd>@string.Join(", ", SearchPlanner.Categories(MediaAcquisitionKind.Book, card.Entry))</dd></div>
-                        <div><dt>@ui["admin.usenet.mangaCategories"]</dt><dd>@string.Join(", ", SearchPlanner.Categories(MediaAcquisitionKind.Manga, card.Entry))</dd></div>
-                        <div><dt>@ui["admin.usenet.lightNovelCategories"]</dt><dd>@string.Join(", ", SearchPlanner.Categories(MediaAcquisitionKind.LightNovel, card.Entry))</dd></div>
-                        <div><dt>@ui["admin.usenet.capabilities"]</dt><dd>@(card.Entry.Settings.Capabilities?.Describe() ?? ui["admin.usenet.capabilitiesUnknown"])</dd></div>
-                        <div><dt>@ui["admin.usenet.participation"]</dt><dd>@string.Join(" · ", new[] { card.Entry.Settings.AutomaticSearch ? ui["admin.usenet.participationAutomatic"] : null, card.Entry.Settings.InteractiveSearch ? ui["admin.usenet.participationManual"] : null }.OfType<string>())</dd></div>
+                        <div><dt>@ui["admin.usenet.capabilities"]</dt><dd>@(capabilities?.Describe() ?? ui["admin.usenet.capabilitiesUnknown"])</dd></div>
+                        @if (capabilities is not null)
+                        {
+                            <div><dt>@ui["admin.usenet.indexer.capabilitiesRead"]</dt><dd>@capabilities.RefreshedAt.ToLocalTime().ToString("g")</dd></div>
+                        }
+                        @if (verification is { Searches.Count: > 0 })
+                        {
+                            <div><dt>@ui["admin.usenet.indexer.functions"]</dt><dd>@string.Join(" · ", verification.Searches.Where(pair => pair.Key != IndexerSearchMode.Search).Select(pair => $"{ui["admin.usenet.indexer.function." + IndexerSetupMessages.Key(pair.Key)]}: {ui["admin.usenet.indexer.functionState." + IndexerSetupMessages.Key(pair.Value.State)]}").DefaultIfEmpty(ui["admin.usenet.indexer.functionsNone"]))</dd></div>
+                        }
+                        <div><dt>@ui["admin.usenet.participation"]</dt><dd>@string.Join(" · ", new[] { card.Entry.Settings.AutomaticSearch ? ui["admin.usenet.participationAutomatic"] : null, card.Entry.Settings.InteractiveSearch ? ui["admin.usenet.participationManual"] : null }.OfType<string>().DefaultIfEmpty(ui["admin.usenet.participationNone"]))</dd></div>
                         @if (card.Health is not null)
                         {
                             <div><dt>@ui["admin.usenet.lastChecked"]</dt><dd>@card.Health.LastCheckedUtc.ToLocalTime().ToString("g")</dd></div>
                         }
                     </dl>
-                    @if (card.Health is { IsHealthy: false, LastError: not null })
+                    @if (isNewznab && card.Kinds.Count > 0)
+                    {
+                        <ul class="usenet-kinds-list" aria-label="@ui["admin.usenet.indexer.mediaKinds"]">
+                            @foreach (var item in card.Kinds)
+                            {
+                                var stateKey = IndexerSetupMessages.Key(item.State);
+                                <li class="usenet-kind-chip is-@stateKey" title="@(item.Categories.IsAvailable ? string.Join(", ", item.Categories.Categories) : item.Message)">
+                                    <span>@ui[$"admin.requests.kind.{AcquisitionAccessNames.Kind(item.Kind)}"]</span>
+                                    <small>@ui[$"admin.usenet.indexer.kind.{stateKey}"]</small>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    @if (verification?.RefreshError is { } refreshError)
+                    {
+                        <p class="usenet-card-error">@ui.Format("admin.usenet.indexer.refreshFailed", ("error", refreshError))</p>
+                    }
+                    else if (card.Health is { IsHealthy: false, LastError: not null })
                     {
                         <p class="usenet-card-error">@card.Health.LastError</p>
+                    }
+                    @if (verification?.Searches.GetValueOrDefault(IndexerSearchMode.Search) is { State: not (IndexerCheckState.Valid or IndexerCheckState.NoResults or IndexerCheckState.NotChecked) } failedSearch)
+                    {
+                        <p class="usenet-card-error">@ui[$"settings.indexers.check.{IndexerSetupMessages.Key(failedSearch.State)}"]@(string.IsNullOrWhiteSpace(failedSearch.Message) ? "" : $": {failedSearch.Message}")</p>
                     }
                     <div class="usenet-card-actions">
                         <form method="post" asp-page-handler="TestIndexer" asp-route-id="@card.Entry.Id">
                             <button class="button button-small" type="submit">@ui["settings.connectionTable.test"]</button>
                         </form>
+                        @if (isNewznab)
+                        {
+                            <form method="post" asp-page-handler="TestIndexerSearch" asp-route-id="@card.Entry.Id">
+                                <button class="button button-small" type="submit">@ui["admin.usenet.indexer.testSearch"]</button>
+                            </form>
+                            <form method="post" asp-page-handler="RefreshIndexer" asp-route-id="@card.Entry.Id">
+                                <button class="button button-small" type="submit">@ui["admin.usenet.indexer.refresh"]</button>
+                            </form>
+                        }
                         <a class="button button-small button-quiet" asp-page="/Legacy/Settings/Indexers/Edit" asp-route-id="@card.Entry.Id">@ui["settings.connectionTable.edit"]</a>
                         <form method="post" asp-page-handler="ToggleIndexer" asp-route-id="@card.Entry.Id">
                             <button class="button button-small button-quiet" type="submit">@(card.Entry.Enabled ? ui["admin.usenet.disable"] : ui["admin.usenet.enable"])</button>

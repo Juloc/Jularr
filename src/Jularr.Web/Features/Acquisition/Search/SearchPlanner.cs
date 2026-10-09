@@ -95,22 +95,11 @@ public static class SearchPlanner
         string.IsNullOrWhiteSpace(author) ? MainTitle(title) : $"{author.Trim()} {MainTitle(title)}";
 
     /// <summary>
-    /// The Newznab categories a media type is searched in on one indexer: the categories the owner chose for that media type, else its default. A media
-    /// type never borrows another one's categories except where the default says so (Light Novel and Manga also search the book categories).
+    /// The Newznab categories a media type is searched in on one indexer: the owner's choice, else what the indexer's own caps allow for that type
+    /// (<see cref="IndexerCategoryMapper"/>), else the standard default of an indexer that was never tested. A media type never borrows another
+    /// type's categories; one the indexer has no category for is empty.
     /// </summary>
-    public static IReadOnlyList<int> Categories(MediaAcquisitionKind kind, IndexerEntry entry) =>
-        entry.Settings.CategoriesFor(kind) is { } chosen ? chosen : kind switch
-        {
-            MediaAcquisitionKind.Anime => entry.Settings.Categories,
-            MediaAcquisitionKind.Movie => [2000],
-            MediaAcquisitionKind.Tv => [5000],
-            MediaAcquisitionKind.Book => entry.Settings.EffectiveBookCategories,
-            MediaAcquisitionKind.LightNovel => [.. entry.Settings.EffectiveBookCategories.Concat([7020, 7000]).Distinct()],
-            MediaAcquisitionKind.Manga => [.. entry.Settings.EffectiveBookCategories.Concat([7030, 7000]).Distinct()],
-            MediaAcquisitionKind.Audiobook => [3030, 3000],
-            MediaAcquisitionKind.Music => [3000, 3010, 3040],
-            _ => []
-        };
+    public static IReadOnlyList<int> Categories(MediaAcquisitionKind kind, IndexerEntry entry) => IndexerCategoryMapper.Resolve(kind, entry).Categories;
 
     private static void PlanMovie(List<PlannedQuery> rungs, SearchIntent intent, IReadOnlyList<string> titles, IndexerCapabilities caps)
     {

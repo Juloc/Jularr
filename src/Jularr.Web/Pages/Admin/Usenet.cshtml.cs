@@ -31,7 +31,7 @@ public enum UsenetCheckState
 /// <summary>One step of the Usenet setup checklist.</summary>
 public sealed record UsenetCheck(string Key, UsenetCheckState State, string Detail, string? LinkPage);
 
-public sealed record UsenetIndexerCard(IndexerEntry Entry, AcquisitionHealthStatus? Health);
+public sealed record UsenetIndexerCard(IndexerEntry Entry, AcquisitionHealthStatus? Health, IndexerReadinessLevel Readiness, IReadOnlyList<IndexerKindReadiness> Kinds);
 
 public sealed record UsenetClientCard(DownloadClientEntry Entry, AcquisitionHealthStatus? Health);
 
@@ -73,6 +73,7 @@ public sealed class UsenetModel(
     IndexerStore indexerStore,
     IReadOnlyDictionary<IndexerType, IIndexer> indexers,
     IndexerSearchCoordinator searchCoordinator,
+    IndexerSetupService indexerSetup,
     Jularr.Web.Features.Acquisition.Core.AcquisitionCore core,
     QualityProfileStore qualityProfiles,
     DownloadClientStore clientStore,
@@ -138,7 +139,7 @@ public sealed class UsenetModel(
         var indexerCards = new List<UsenetIndexerCard>();
         foreach (var entry in indexerEntries)
         {
-            indexerCards.Add(new UsenetIndexerCard(entry, await health.GetAsync(AcquisitionHealthKind.Indexer, entry.Id, cancellationToken)));
+            indexerCards.Add(new UsenetIndexerCard(entry, await health.GetAsync(AcquisitionHealthKind.Indexer, entry.Id, cancellationToken), IndexerReadiness.Level(entry), [.. ActiveKinds.Select(kind => IndexerReadiness.ForKind(entry, kind))]));
         }
 
         Indexers = indexerCards;
@@ -240,6 +241,21 @@ public sealed class UsenetModel(
                 ? ui.Format("settings.indexers.connected", ("name", entry.Name))
                 : ui.Format("settings.indexers.connectedWithVersion", ("name", entry.Name), ("version", result.Version)))
             : result.Error ?? ui["settings.indexers.connectionFailed"];
+        return RedirectToPage();
+    }
+
+    /// <summary>Reads the indexer's capabilities again and checks its searches; its settings and a working configuration stay when it cannot be reached now.</summary>
+    public async Task<IActionResult> OnPostRefreshIndexerAsync(Guid id, CancellationToken cancellationToken) =>
+        await ReportAsync(await indexerSetup.RefreshAsync(id, cancellationToken));
+
+    /// <summary>Runs the bounded validation searches again, also once per distinct category set the media types use.</summary>
+    public async Task<IActionResult> OnPostTestIndexerSearchAsync(Guid id, CancellationToken cancellationToken) =>
+        await ReportAsync(await indexerSetup.TestSearchAsync(id, cancellationToken));
+
+    private async Task<IActionResult> ReportAsync(IndexerSetupResult result)
+    {
+        var (text, isError) = IndexerSetupMessages.Describe(await UiRequestLocalization.GetBundleAsync(HttpContext, db), result);
+        TempData[isError ? "UsenetError" : "UsenetNotice"] = text;
         return RedirectToPage();
     }
 
@@ -467,12 +483,12 @@ public sealed class UsenetModel(
                     "/Settings/Acquisition"));
 
         checks.Add(BookPolicy is null
-            ? new UsenetCheck("access", UsenetCheckState.Unknown, string.Empty, "/Admin/Requests")
+            ? new UsenetCheck("access", UsenetCheckState.Unknown, string.Empty, "/Admin/Capabilities/Manual")
             : new UsenetCheck(
                 "access",
                 UsenetCheckState.Ok,
                 Ui[$"admin.requests.manual.{AcquisitionAccessNames.Manual(BookPolicy.Manual)}"],
-                "/Admin/Requests"));
+                "/Admin/Capabilities/Manual"));
 
         return checks;
     }

@@ -158,7 +158,10 @@ public enum IndexerSearchState
     AuthenticationFailed,
     RateLimited,
     TimedOut,
-    Skipped
+    Skipped,
+
+    /// <summary>The indexer refused the request shape even as plain text search, so there was nothing left to fall back to.</summary>
+    ParametersRejected
 }
 
 public sealed record IndexerSearchOutcome(
@@ -212,5 +215,5 @@ public sealed record AcquisitionSearchResult(
     /// <summary>True when no indexer could answer at all, so an empty result says nothing about the media.</summary>
     public bool EveryIndexerFailed =>
         SourcePolicyBlock is not null
-        || Outcomes.Count > 0 && Outcomes.All(outcome => outcome.State is IndexerSearchState.Unavailable or IndexerSearchState.AuthenticationFailed or IndexerSearchState.RateLimited or IndexerSearchState.TimedOut);
+        || Outcomes.Count > 0 && Outcomes.All(outcome => outcome.State is IndexerSearchState.Unavailable or IndexerSearchState.AuthenticationFailed or IndexerSearchState.RateLimited or IndexerSearchState.TimedOut or IndexerSearchState.ParametersRejected);
 }

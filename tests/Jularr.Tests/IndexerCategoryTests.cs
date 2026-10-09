@@ -100,7 +100,7 @@ public sealed class IndexerCategoryTests
 
             CollectionAssert.AreEqual(new[] { "Both" }, asked.Select(call => call.Name).Distinct().ToArray(), "The TV-only indexer is not asked about movies.");
             CollectionAssert.AreEqual(new[] { 2040 }, asked[0].Categories, "Only the chosen categories the indexer offers are sent.");
-            Assert.IsTrue(result.Outcomes.Any(outcome => outcome.IndexerName == "TV only" && outcome.State == IndexerSearchState.Skipped && outcome.Message!.Contains("offers none", StringComparison.Ordinal)));
+            Assert.IsTrue(result.Outcomes.Any(outcome => outcome.IndexerName == "TV only" && outcome.State == IndexerSearchState.Skipped && outcome.Message!.Contains("no category that belongs", StringComparison.Ordinal)));
         }
         finally
         {
