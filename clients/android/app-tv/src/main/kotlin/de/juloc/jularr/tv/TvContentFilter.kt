@@ -7,6 +7,15 @@ enum class TvContentFilter(val labelRes: Int) {
     MOVIES(R.string.tv_home_filter_movies),
     ;
 
+    fun includes(animeFormat: String?): Boolean {
+        val movie = animeFormat?.equals("MOVIE", ignoreCase = true) == true
+        return when (this) {
+            ALL, ANIME -> true
+            SERIES -> !movie
+            MOVIES -> movie
+        }
+    }
+
     companion object {
         val visible: List<TvContentFilter> = listOf(
             ALL,
