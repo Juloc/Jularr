@@ -87,9 +87,9 @@
         }
     }
 
-    @if (!string.IsNullOrWhiteSpace(Model.Message))
+    @if (!string.IsNullOrWhiteSpace(Model.MessageKey))
     {
-        <div role="status" class="validation">@Model.Message</div>
+        <div role="status" class="validation">@ui[Model.MessageKey!]</div>
     }
 
     @if (linking)
