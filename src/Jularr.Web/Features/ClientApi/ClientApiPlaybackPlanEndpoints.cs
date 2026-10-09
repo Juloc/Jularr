@@ -79,7 +79,12 @@ public enum StreamSessionState
 /// <c>step_up</c>) and <see cref="Reason"/> why; the player re-plans with the same selections when it follows it. The transcode values are
 /// what the server measured while converting the video and are null when it does not convert or has no measurement yet.
 /// </summary>
-public sealed record ClientTelemetryAnswer(PlaybackAdaptationAdvice Advice, PlaybackAdaptationReason? Reason, double? TranscodeSpeed, double? TranscodeFps);
+public sealed record ClientTelemetryAnswer(
+    PlaybackAdaptationAdvice Advice,
+    PlaybackAdaptationReason? Reason,
+    double? TranscodeSpeed,
+    double? TranscodeFps,
+    PlaybackBottleneckCause Bottleneck = PlaybackBottleneckCause.Unknown);
 
 public sealed record ClientVideoProgressUpdate(
     ClientVideoTarget? Target,
@@ -590,7 +595,8 @@ public static class ClientApiPlaybackPlanEndpoints
                 advice.Decision.Advice,
                 advice.Decision.Reason,
                 advice.Transcode.Speed is { } speed ? Math.Round(speed, 2) : null,
-                advice.Transcode.Fps is { } fps ? Math.Round(fps, 1) : null));
+                advice.Transcode.Fps is { } fps ? Math.Round(fps, 1) : null,
+                advice.Bottleneck));
         })
         .RequireRateLimiting(PlaybackDecisionRegistration.TelemetryRateLimitPolicy);
 
