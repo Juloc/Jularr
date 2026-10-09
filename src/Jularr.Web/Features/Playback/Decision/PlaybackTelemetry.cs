@@ -44,7 +44,7 @@ public enum PlaybackTelemetryOutcome
 }
 
 /// <summary>The runtime evidence a replaced session leaves for the next plan: the buffer it last reported and the stalls of the last minute.</summary>
-public sealed record PlaybackTelemetryEvidence(double? BufferSeconds, int RecentStalls);
+public sealed record PlaybackTelemetryEvidence(double? BufferSeconds, int RecentStalls, int? ThroughputKbps = null);
 
 public static class PlaybackTelemetryRules
 {
@@ -279,7 +279,13 @@ public sealed class PlaybackSessionTelemetry
                 atCutoff = count;
             }
 
-            return new PlaybackTelemetryEvidence(now - latest.ReportedAtUtc <= FreshFor ? latest.BufferAheadSeconds : null, Math.Max(0, latest.StallCount - atCutoff));
+            var fresh = now - latest.ReportedAtUtc <= FreshFor;
+            return new PlaybackTelemetryEvidence(
+                fresh ? latest.BufferAheadSeconds : null,
+                Math.Max(0, latest.StallCount - atCutoff),
+                fresh && latest.State == PlaybackClientState.Playing && latest.ThroughputKbps is > 0
+                    ? latest.ThroughputKbps
+                    : null);
         }
     }
 }
