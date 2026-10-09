@@ -103,12 +103,80 @@ public sealed class PlaybackTelemetryTests
         var soon = telemetry.Evidence(s_start.AddSeconds(25))!;
         Assert.AreEqual(2, soon.RecentStalls);
         Assert.AreEqual(1, soon.BufferSeconds);
+        Assert.AreEqual(24_000, soon.ThroughputKbps);
 
         var later = telemetry.Evidence(s_start.AddSeconds(75))!;
         Assert.AreEqual(1, later.RecentStalls, "The first stall is older than a minute; the second is not.");
         Assert.IsNull(later.BufferSeconds, "A buffer reported 55 seconds ago no longer describes the player.");
+        Assert.IsNull(later.ThroughputKbps);
 
         Assert.AreEqual(0, telemetry.Evidence(s_start.AddSeconds(100))!.RecentStalls);
+    }
+
+    [TestMethod]
+    public void OnlyFreshPlayingReportsSupplyReceiveRateEvidence()
+    {
+        var telemetry = new PlaybackSessionTelemetry();
+        telemetry.Apply(Report(Update(sequence: 1, throughput: 6_000), s_start));
+        Assert.AreEqual(6_000, telemetry.Evidence(s_start.AddSeconds(5))!.ThroughputKbps);
+
+        telemetry.Apply(Report(Update(sequence: 2, state: PlaybackClientState.Paused, throughput: 6_000), s_start.AddSeconds(10)));
+        Assert.IsNull(telemetry.Evidence(s_start.AddSeconds(11))!.ThroughputKbps);
+
+        telemetry.Apply(Report(Update(sequence: 3, throughput: null), s_start.AddSeconds(15)));
+        Assert.IsNull(telemetry.Evidence(s_start.AddSeconds(16))!.ThroughputKbps);
+    }
+
+    [TestMethod]
+    public async Task Replan_UsesFreshSameTitleReceiveRateInsteadOfPreviousNetworkHint()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var media = await fixture.AddMediaAsync("episode.mkv", new byte[4096]);
+        fixture.Runner.Returns(media.Path, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
+        var clock = new ManualTimeProvider(s_start);
+        var store = new PlaybackStreamSessionStore(clock);
+        var service = new PlaybackPlanService(fixture.Db, fixture.Inventory, store, PlaybackServerTestKit.Create().Capabilities);
+        var remote = new PlaybackPlanInput(
+            null,
+            "web",
+            "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36",
+            IPAddress.Parse("203.0.113.9"),
+            Network: new PlaybackNetworkReport(ThroughputKbps: 16_000));
+
+        var initial = (await service.PlanAsync(media.EpisodeId!.Value, Reader, remote, CancellationToken.None))!;
+        Assert.AreEqual(11_200, initial.Plan.Quality.LimitKbps);
+
+        store.ReportTelemetry(initial.Session!.Id, Reader, Report(Update(sequence: 1, throughput: 6_000), clock.GetUtcNow()));
+        var replanned = (await service.PlanAsync(
+            media.EpisodeId.Value,
+            Reader,
+            remote with { ReplacesSessionId = initial.Session.Id },
+            CancellationToken.None))!;
+        Assert.AreEqual(4_200, replanned.Plan.Quality.LimitKbps);
+
+        var otherTitle = store.Create(
+            Reader,
+            new PlaybackVideoTarget(Guid.NewGuid(), null),
+            Guid.NewGuid(),
+            media.Path,
+            1400,
+            initial.Plan,
+            initial.Session.Selections);
+        store.ReportTelemetry(otherTitle.Id, Reader, Report(Update(sequence: 1, throughput: 6_000), clock.GetUtcNow()));
+        var foreign = (await service.PlanAsync(
+            media.EpisodeId.Value,
+            Reader,
+            remote with { ReplacesSessionId = otherTitle.Id },
+            CancellationToken.None))!;
+        Assert.AreEqual(11_200, foreign.Plan.Quality.LimitKbps);
+
+        clock.Advance(PlaybackSessionTelemetry.FreshFor + TimeSpan.FromSeconds(1));
+        var stale = (await service.PlanAsync(
+            media.EpisodeId.Value,
+            Reader,
+            remote with { ReplacesSessionId = replanned.Session!.Id },
+            CancellationToken.None))!;
+        Assert.AreEqual(11_200, stale.Plan.Quality.LimitKbps);
     }
 
     [TestMethod]
