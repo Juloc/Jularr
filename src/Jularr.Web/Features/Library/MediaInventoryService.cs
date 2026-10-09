@@ -580,7 +580,10 @@ public sealed class MediaInventoryService(
             analysis.ProbeVersion,
             analysis.AnalyzedAt,
             analysis.Diagnostic,
-            technical);
+            technical,
+            analysis.SourceSizeBytes,
+            analysis.SourceLastWriteTimeUtc,
+            analysis.SourceFingerprint);
 
     private static Freshness Evaluate(MediaTechnicalAnalysis? analysis, SourceIdentity observed)
     {
