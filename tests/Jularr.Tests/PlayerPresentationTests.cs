@@ -416,6 +416,7 @@ public sealed class PlayerPresentationTests
         StringAssert.Contains(css, "background-size: 100% 5px;");
         StringAssert.Contains(css, ".player-timeline:hover, .player-timeline:focus-visible { background-size: 100% 7px; }");
         StringAssert.Contains(chrome, "!focusedOnControls() && !hoveredControls()");
+        StringAssert.Contains(chrome, "document.activeElement?.matches?.(\":focus-visible\") === true");
         StringAssert.Contains(chrome, "timeline?.addEventListener(\"change\", renderTimelineFill);");
         StringAssert.Contains(stage, "data-playback-timeline");
         StringAssert.Contains(stage, "data-chrome-play");
