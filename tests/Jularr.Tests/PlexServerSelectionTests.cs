@@ -160,7 +160,7 @@ public sealed class PlexServerSelectionTests
                 TimeProvider.System, root);
 
             Assert.AreEqual(1, (await restored.ListAsync()).Count);
-            Assert.IsNull(await restored.GetGrantAsync("machine-123456"));
+            Assert.IsFalse(await restored.IsUsableAsync("machine-123456"));
         }
         finally
         {
@@ -196,7 +196,7 @@ public sealed class PlexServerSelectionTests
             await picker.RevokeAsync(
                 Admin(), "machine-123456", CancellationToken.None);
             Assert.AreEqual(0, (await store.ListAsync()).Count);
-            Assert.IsNull(await store.GetGrantAsync("machine-123456"));
+            Assert.IsFalse(await store.IsUsableAsync("machine-123456"));
         }
         finally
         {
