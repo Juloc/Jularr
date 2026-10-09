@@ -204,9 +204,10 @@ class TvAppController(
 
             cookiesStore?.loadCookies(emptyMap())
             copy(
-                navigation = TvNavigation.connected(navigation),
+                navigation = if (sessions.isEmpty()) TvNavigation.connected(navigation)
+                    else TvNavigation.accountSelect(),
                 capabilities = capabilities,
-                error = null,
+                error = if (sessions.isEmpty()) null else "Saved account session expired. Select or add an account.",
             )
         }
 
