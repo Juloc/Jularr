@@ -699,18 +699,30 @@ fun TvAppHost(
             if (library == null) {
                 controller.back()?.let { snapshot = it }
             } else {
-                TvSearchScreen(
-                    library = library,
-                    serverOrigin = settings.origin.orEmpty(),
-                    requestHeaders = cookies.requestHeaders(),
-                    focusMemory = focusMemory,
-                    onAnime = { anime ->
-                        launchSnapshot { controller.openAnime(anime.id) }
-                    },
-                    onBack = {
-                        controller.back()?.let { snapshot = it }
-                    },
-                )
+                Row(modifier = Modifier.fillMaxSize()) {
+                    TvSidebar(
+                        selected = TvRoute.Home,
+                        focusMemory = focusMemory,
+                        onSelect = { selected ->
+                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                        },
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        TvSearchScreen(
+                            library = library,
+                            query = snapshot.searchQuery,
+                            selectedFilter = snapshot.searchCategory,
+                            serverOrigin = settings.origin.orEmpty(),
+                            requestHeaders = cookies.requestHeaders(),
+                            focusMemory = focusMemory,
+                            onQueryChange = { snapshot = controller.updateSearchQuery(it) },
+                            onFilterChange = { snapshot = controller.updateSearchCategory(it) },
+                            onAnime = { anime ->
+                                launchSnapshot { controller.openAnime(anime.id) }
+                            },
+                        )
+                    }
+                }
             }
         }
 
