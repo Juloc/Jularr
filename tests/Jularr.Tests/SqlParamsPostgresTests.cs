@@ -26,7 +26,8 @@ public sealed class SqlParamsPostgresTests
                 @State AS "State",
                 @JsonValue ->> 'name' AS "JsonName",
                 CARDINALITY(@Languages) AS "LanguageCount",
-                @Offset AS "Offset"
+                @Offset AS "Offset",
+                @PageSize AS "PageSize"
             """;
 
         var data = new
@@ -57,6 +58,7 @@ public sealed class SqlParamsPostgresTests
         Assert.AreEqual("Jularr", reader.GetString(3));
         Assert.AreEqual(2, reader.GetInt32(4));
         Assert.AreEqual(50L, reader.GetInt64(5));
+        Assert.AreEqual(25, reader.GetInt32(6));
         Assert.IsFalse(await reader.ReadAsync());
     }
 
