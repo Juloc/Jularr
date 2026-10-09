@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 using Jularr.Web.Features.Playback.Transcoding;
 
 namespace Jularr.Web.Features.Playback.Decision;
@@ -292,8 +293,24 @@ public sealed class PlaybackStreamSession(
     private readonly SemaphoreSlim hlsStartGate = new(1, 1);
 }
 
-/// <summary>The answer to a telemetry report: the quality advice and the measured transcode speed, both ephemeral session state.</summary>
-public sealed record PlaybackSessionAdvice(PlaybackAdaptationDecision Decision, PlaybackTranscodeReading Transcode);
+/// <summary>
+ /// The most specific evidence-backed cause known to the playback server. Unknown never
+ /// implies the viewer or their ISP is at fault; an uplink budget is a policy, not an ISP speed test.
+ /// </summary>
+[JsonConverter(typeof(SnakeCaseEnumConverter<PlaybackBottleneckCause>))]
+public enum PlaybackBottleneckCause
+{
+    Unknown,
+    ServerUploadPolicy,
+    ServerProcessingLikely,
+    ConnectionUncertain
+}
+
+/// <summary>The answer to a telemetry report: quality advice, real processing measurements and cause, all ephemeral.</summary>
+public sealed record PlaybackSessionAdvice(
+    PlaybackAdaptationDecision Decision,
+    PlaybackTranscodeReading Transcode,
+    PlaybackBottleneckCause Bottleneck = PlaybackBottleneckCause.Unknown);
 
 /// <summary>The session's selections, kept so a re-plan (fallback, quality change) starts from them.</summary>
 public sealed record PlaybackStreamSelections(
@@ -471,7 +488,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
         }
 
         var reading = session.Transcode.Read();
-        return new PlaybackSessionAdvice(Decide(session, reading), reading);
+        return new PlaybackSessionAdvice(Decide(session, reading), reading, Diagnose(session, reading));
     }
 
     /// <summary>
@@ -546,6 +563,33 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
         }
 
         return released;
+    }
+
+    private PlaybackBottleneckCause Diagnose(PlaybackStreamSession session, PlaybackTranscodeReading reading)
+    {
+        // Only a sustained observed deficit permits a processing attribution.
+        // FFmpeg stream-copy and a progressive response blocked by the receiver never count.
+        if (reading.State == PlaybackTranscodeSpeedState.TooSlow)
+        {
+            return PlaybackBottleneckCause.ServerProcessingLikely;
+        }
+
+        if (settings?.Current.WanUploadBudgetKbps is > 0 &&
+            session.Plan.Quality.LimitSource == PlaybackLimitSource.ServerEgress &&
+            session.Plan.Quality.Network != PlaybackNetworkClass.Local)
+        {
+            return PlaybackBottleneckCause.ServerUploadPolicy;
+        }
+
+        var evidence = session.Telemetry.Evidence(time.GetUtcNow());
+        if (evidence?.RecentStalls > 0 || evidence?.BufferSeconds is >= 0 and < 2)
+        {
+            // Low delivery throughput cannot distinguish a weak device link, overloaded
+            // server WAN, reverse proxy, or storage. Do not guess the wrong end.
+            return PlaybackBottleneckCause.ConnectionUncertain;
+        }
+
+        return PlaybackBottleneckCause.Unknown;
     }
 
     private PlaybackAdaptationDecision Decide(PlaybackStreamSession session, PlaybackTranscodeReading reading)
