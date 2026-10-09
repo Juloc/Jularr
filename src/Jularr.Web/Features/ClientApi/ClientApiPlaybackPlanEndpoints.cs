@@ -65,7 +65,11 @@ public sealed record ClientPlaybackPlanResponse(
 /// Whether the server still runs the session's stream. <see cref="Reason"/> says why an ended one ended when the server knows;
 /// <see cref="Recoverable"/> is the server's verdict that planning the same mode again is sensible (an encoder crash is not).
 /// </summary>
-public sealed record ClientStreamSessionStatus(StreamSessionState State, HlsSessionEndReason? Reason, bool Recoverable);
+public sealed record ClientStreamSessionStatus(
+    StreamSessionState State,
+    HlsSessionEndReason? Reason,
+    bool Recoverable,
+    HlsPacingSnapshot? Pacing = null);
 
 [JsonConverter(typeof(SnakeCaseEnumConverter<StreamSessionState>))]
 public enum StreamSessionState
@@ -547,9 +551,16 @@ public static class ClientApiPlaybackPlanEndpoints
             }
 
             httpContext.Response.Headers.CacheControl = "no-store";
-            if (session.HlsSessionId is not { } hlsSessionId || manager.IsActive(hlsSessionId, currentAccount.ProfileId))
+            if (session.HlsSessionId is not { } hlsSessionId)
             {
                 return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Active, null, Recoverable: false));
+            }
+
+            if (manager.IsActive(hlsSessionId, currentAccount.ProfileId))
+            {
+                return Results.Ok(new ClientStreamSessionStatus(
+                    StreamSessionState.Active, null, Recoverable: false,
+                    manager.GetPacingSnapshot(hlsSessionId, currentAccount.ProfileId)));
             }
 
             // Only an ending the server chose for capacity reasons says nothing against the mode; an unknown reason or a crash does not.
