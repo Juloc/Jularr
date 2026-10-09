@@ -94,6 +94,22 @@ public sealed class TranscodingPageTests
     }
 
     [TestMethod]
+    public async Task SavingTranscodingSettingsPreservesExistingWanBudget()
+    {
+        await using var host = await TranscodingPageHost.CreateAsync();
+        var saved = await host.Kit.Settings.SaveAsync(
+            PlaybackTranscodingSettings.Default with
+            {
+                HlsCachePath = host.CachePath,
+                WanUploadBudgetKbps = 10_000
+            });
+        Assert.IsTrue(saved.Succeeded);
+
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(host.ValidForm()));
+        Assert.AreEqual(10_000, host.Kit.Settings.Current.WanUploadBudgetKbps);
+    }
+
+    [TestMethod]
     public async Task TheBufferPresetIsSavedShownAndOnlyOneOfTheOfferedPresetsIsAccepted()
     {
         await using var host = await TranscodingPageHost.CreateAsync();
