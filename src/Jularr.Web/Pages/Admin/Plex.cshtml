@@ -1,0 +1,105 @@
+@page
+@model Jularr.Web.Pages.Admin.PlexModel
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.plex.title"];
+}
+
+<div class="admin-content">
+    <header class="page-header">
+        <h1>@ui["admin.plex.title"]</h1>
+        <p>@ui["admin.plex.description"]</p>
+    </header>
+
+    <p>
+        <a asp-page="/Admin/Providers">@ui["admin.plex.backProviders"]</a>
+    </p>
+
+    <section class="panel">
+        <h2>@ui["admin.plex.connected"]</h2>
+        @if (Model.Connected.Count == 0)
+        {
+            <p class="muted">@ui["admin.plex.noServers"]</p>
+        }
+        else
+        {
+            @foreach (var server in Model.Connected)
+            {
+                <div class="admset-field">
+                    <h3>@server.Name</h3>
+                    <p>@server.Endpoint.Host</p>
+                    <p>@ui["admin.plex.selectedLibraries"]: @string.Join(", ", server.LibrarySectionIds)</p>
+                    <form method="post" asp-page-handler="Remove">
+                        <input type="hidden" name="MachineIdentifier" value="@server.MachineIdentifier" />
+                        <button class="button button-secondary" type="submit">
+                            @ui["admin.plex.disconnect"]
+                        </button>
+                    </form>
+                    @foreach (var sectionId in server.LibrarySectionIds)
+                    {
+                        <form method="post" asp-page-handler="Scan">
+                            <input type="hidden" name="MachineIdentifier" value="@server.MachineIdentifier" />
+                            <input type="hidden" name="SectionId" value="@sectionId" />
+                            <button class="button" type="submit">
+                                @ui["admin.plex.scanNow"] (@sectionId)
+                            </button>
+                        </form>
+                    }
+                </div>
+            }
+        }
+    </section>
+
+    <section class="panel">
+        <h2>@ui["admin.plex.addServer"]</h2>
+        @if (!Model.MediaConnectionEnabled)
+        {
+            <p>@ui["admin.plex.enableMedia"]</p>
+            <a class="button" asp-page="/Admin/Providers">
+                @ui["admin.plex.backProviders"]
+            </a>
+        }
+        else if (!Model.HasPersonalConnection)
+        {
+            <p>@ui["admin.plex.connectAccount"]</p>
+            <a class="button" asp-page="/Account/Plex">
+                @ui["account.plex.mediaConnect"]
+            </a>
+        }
+        else if (Model.DiscoveryFailed)
+        {
+            <p role="status">@ui["admin.plex.discoveryFailed"]</p>
+        }
+        else if (Model.Available.Count == 0)
+        {
+            <p>@ui["admin.plex.noAvailable"]</p>
+        }
+        else
+        {
+            @foreach (var candidate in Model.Available)
+            {
+                <form class="form-stack" method="post" asp-page-handler="Connect">
+                    <h3>@candidate.Name</h3>
+                    <p>@candidate.Endpoint.Host</p>
+                    <input type="hidden" name="MachineIdentifier" value="@candidate.MachineIdentifier" />
+                    <input type="hidden" name="Endpoint" value="@candidate.Endpoint.AbsoluteUri" />
+
+                    <fieldset>
+                        <legend>@ui["admin.plex.chooseLibraries"]</legend>
+                        @foreach (var section in candidate.Libraries)
+                        {
+                            <label>
+                                <input type="checkbox" name="LibrarySectionIds" value="@section.Id" />
+                                @section.Title
+                            </label>
+                        }
+                    </fieldset>
+
+                    <button class="button button-primary" type="submit">
+                        @ui["admin.plex.authorize"]
+                    </button>
+                </form>
+            }
+        }
+    </section>
+</div>
