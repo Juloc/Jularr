@@ -2,6 +2,7 @@ package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.api.JularrClientApi
 import de.juloc.jularr.core.model.AnimeDetail
+import de.juloc.jularr.core.model.EpisodeSummary
 import de.juloc.jularr.core.model.ClientAccount
 import de.juloc.jularr.core.model.ClientCapabilities
 import de.juloc.jularr.core.model.ClientLibrary
@@ -315,12 +316,19 @@ class TvAppController(
                 TvStorageRecoveryPolicy.decide(it, elapsedMs = 0)
             }
 
+            val advancing = navigation.route is TvRoute.Player
+            val fromEpisode = navigation.previous.lastOrNull() is TvRoute.Episode
             copy(
-                navigation = TvNavigation.openPlayer(
-                    navigation,
-                    episodeId,
-                    animeId,
-                ),
+                navigation = if (advancing) {
+                    TvNavigation.nextPlayer(navigation, episodeId, animeId)
+                } else {
+                    TvNavigation.openPlayer(navigation, episodeId, animeId)
+                },
+                episodePage = if (advancing && fromEpisode) {
+                    flow.loadEpisodePage(episodeId)
+                } else {
+                    episodePage
+                },
                 episode = bundle,
                 storageDecision = decision?.takeUnless {
                     it.primaryAction == TvStorageAction.PLAY
@@ -328,6 +336,16 @@ class TvAppController(
                 error = null,
             )
         }
+
+    suspend fun nextEpisode(episodeId: String, animeId: String): EpisodeSummary? {
+        val details = snapshot.anime?.takeIf { it.id == animeId } ?: flow.loadAnime(animeId)
+        val ordered = details.seasons
+            .flatMap { it.episodes }
+            .sortedWith(compareBy<EpisodeSummary> { it.seasonNumber }.thenBy { it.number })
+        val currentIndex = ordered.indexOfFirst { it.id == episodeId }
+        if (currentIndex < 0) return null
+        return ordered.getOrNull(currentIndex + 1)?.takeIf { it.hasMedia }
+    }
 
     suspend fun refreshEpisodeStorage(
         elapsedMs: Long,
