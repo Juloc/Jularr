@@ -587,7 +587,8 @@ fun TvPlayerScreen(
                 )
             } else if (trackPanel != null) {
                 TvTrackSelectionPanel(
-                    title = if (trackPanel == TvPlayerPanel.AUDIO) "Audio" else "Subtitles",
+                    title = if (trackPanel == TvPlayerPanel.AUDIO) stringResource(R.string.tv_player_audio)
+                        else stringResource(R.string.tv_player_subtitles),
                     tracks = if (trackPanel == TvPlayerPanel.AUDIO) audioTracks else subtitleTracks,
                     selectedId = if (trackPanel == TvPlayerPanel.AUDIO) {
                         selectedAudioTrackId
