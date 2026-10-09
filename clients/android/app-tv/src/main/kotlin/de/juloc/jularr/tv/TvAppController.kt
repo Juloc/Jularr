@@ -411,16 +411,16 @@ class TvAppController(
 
     suspend fun saveProgress(
         write: TvProgressWrite,
+        episodeId: String,
     ) {
-        val bundle = snapshot.episode ?: return
         val progress = flow.saveProgress(
-            episodeId = bundle.bootstrap.episode.id,
+            episodeId = episodeId,
             positionMs = write.positionMs,
             durationMs = write.durationMs,
             completed = write.completed,
         )
         val page = snapshot.episodePage
-        if (page?.detail?.id == bundle.bootstrap.episode.id) {
+        if (page?.detail?.id == episodeId) {
             snapshot = snapshot.copy(
                 episodePage = page.copy(progress = progress),
             )
