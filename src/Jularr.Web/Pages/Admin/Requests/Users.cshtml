@@ -1,0 +1,47 @@
+@page
+@model Jularr.Web.Pages.Admin.Requests.UsersModel
+@using Jularr.Web.Features.Auth
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.nav.users"];
+    ViewData["AdminSectionRoot"] = "/Admin/Requests";
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-requests.css" asp-append-version="true" />
+}
+
+<partial name="_AdminSectionLinks" />
+
+<section class="panel admin-users-directory" aria-label="@ui["admin.users.accounts"]">
+    <p class="muted">@ui["admin.users.accounts"] · @Model.Users.Count</p>
+    @if (Model.Users.Count == 0)
+    {
+        <div class="empty-state admin-users-empty">
+            <strong>@ui["admin.users.noAccounts"]</strong>
+        </div>
+    }
+    else
+    {
+        <ul class="user-directory-list admreq-users">
+            @foreach (var account in Model.Users)
+            {
+                <li class="user-directory-row">
+                    <div class="user-directory-main">
+                        <div class="user-directory-heading">
+                            <strong>@account.UserName</strong>
+                            <div class="user-directory-badges">
+                                <span class="status-pill">@ui[AccountRoles.LabelKey(account.Role)]</span>
+                                <span class="status-pill @(account.IsEnabled ? "status-ok" : "status-warn")">
+                                    @(account.IsEnabled ? ui["admin.user.enabledLabel"] : ui["admin.user.disabledPendingLabel"])
+                                </span>
+                            </div>
+                        </div>
+                        <div class="user-directory-meta">
+                            <span>@ui.Format("admin.users.createdAt", ("time", account.CreatedAt.ToString("yyyy-MM-dd")))</span>
+                        </div>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</section>

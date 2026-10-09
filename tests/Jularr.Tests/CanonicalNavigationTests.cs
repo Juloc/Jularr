@@ -11,6 +11,26 @@ public sealed partial class CanonicalNavigationTests
     private static readonly Func<string, bool> Owner = RoleNavigationTests.As(AccountRole.Owner);
 
     [TestMethod]
+    [DataRow("/Admin/Requests", "admin-requests")]
+    [DataRow("/Admin/Requests/Settings", "admin-request-settings")]
+    [DataRow("/Admin/Requests/Users", "admin-request-users")]
+    public void RequestSection_UsesOrderedPermissionScopedTabsAndBreadcrumbs(string path, string activeId)
+    {
+        var modules = Enum.GetValues<InstanceModule>().ToHashSet();
+        var links = UiShellNavigation.BuildContextualLinks("/Admin/Requests", Owner, modules);
+        CollectionAssert.AreEqual(new[] { "admin-requests", "admin-request-settings", "admin-request-users" }, links.Select(link => link.Id).ToArray());
+        var breadcrumb = UiShellNavigation.Build(path, false, Owner).Breadcrumb!;
+        Assert.AreEqual(activeId, breadcrumb.Current!.Id);
+        Assert.AreEqual(path == "/Admin/Requests" ? "admin" : "admin-requests", breadcrumb.Parent.Id);
+
+        var managerLinks = UiShellNavigation.BuildContextualLinks("/Admin/Requests", RoleNavigationTests.As(AccountRole.MediaManager), modules);
+        CollectionAssert.AreEqual(new[] { "admin-requests", "admin-request-settings" }, managerLinks.Select(link => link.Id).ToArray());
+        Assert.AreEqual(0, UiShellNavigation.BuildContextualLinks("/Admin/Requests", RoleNavigationTests.As(AccountRole.User), modules).Count);
+        modules.Remove(InstanceModule.Acquisition);
+        Assert.AreEqual(0, UiShellNavigation.BuildContextualLinks("/Admin/Requests", Owner, modules).Count);
+    }
+
+    [TestMethod]
     public void WorkingSpecializedPagesRemainReachableThroughTheirCanonicalParent()
     {
         var modules = Enum.GetValues<InstanceModule>().ToHashSet();

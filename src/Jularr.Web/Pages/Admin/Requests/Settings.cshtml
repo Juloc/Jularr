@@ -3,19 +3,16 @@
 @using Jularr.Web.Features.Acquisition.Access
 @{
     var ui = Model.Ui;
-    ViewData["Title"] = ui["admin.requests.settingsSummary"];
+    ViewData["Title"] = ui["admin.requests.section.rules"];
+    ViewData["AdminSectionRoot"] = "/Admin/Requests";
 }
 @section Head {
     <link rel="stylesheet" href="~/css/requests.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-requests.css" asp-append-version="true" />
 }
-<header class="page-header">
-    <h1>@ui["admin.requests.settingsSummary"]</h1>
-    <a class="button" href="/Admin/Requests">@ui["admin.requests.title"]</a>
-</header>
+<partial name="_AdminSectionLinks" />
 @{ var settings = Model.RequestSettings; }
-<a class="button" href="/Admin/Capabilities/Manual">@ui["admin.requests.policiesHeading"]</a>
-
-<section class="panel auto-approval" id="auto-approval">
+<section class="panel auto-approval admreq-rules" id="auto-approval">
     <div class="panel-heading">
         <h2>@ui["admin.requests.autoHeading"]</h2>
     </div>
@@ -128,4 +125,5 @@
             }
         </form>
     }
+    <p class="admreq-rule-links"><a href="/Admin/Capabilities/Manual">@ui["admin.requests.policiesHeading"]</a></p>
 </section>

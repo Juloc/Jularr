@@ -10,6 +10,7 @@ Status: planning baseline. This document defines information architecture, navig
 - When an Original Jularr screen intentionally uses the Jularr mascot/anime character, it uses the canonical reference at `docs/assets/original-j/jularr-mascot-reference.png`. The mascot is optional; screens do not invent replacement characters. Pose/expression/props may vary while identity stays canonical.
 - Clean does not use the Original J mascot by default. Mascot presence never changes information architecture, feature availability or behavior.
 - No unnecessary explanatory text, duplicated headings or nested pages when a direct interaction works.
+- Page identity belongs in the shared header breadcrumbs, not a repeated page heading. Related views use section tabs instead of top-right switching buttons; useful headings within content sections remain.
 - Media is the visual focus; administration is information-dense but structured.
 - User UI and Admin UI are distinct modes.
 - Responsive behavior is intentional for Desktop, Tablet, Mobile and TV.

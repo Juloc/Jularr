@@ -17,6 +17,8 @@ Approving a request can create/update the corresponding canonical Wanted/acquisi
 
 ## Tabs
 
+Section navigation uses `Requests | Rules | Users`, in that order, through the shared navigation catalog and section component. The queue is the first tab. Rules retains the existing settings route and forms. Users initially lists real accounts read-only under the existing user-directory authorization; account management remains separate. The shared header breadcrumbs identify the current view without duplicate page titles or top-right view-switching buttons.
+
 Primary tabs:
 - All
 - Open

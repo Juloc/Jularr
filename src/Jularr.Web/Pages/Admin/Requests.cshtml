@@ -5,6 +5,7 @@
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["admin.requests.title"];
+    ViewData["AdminSectionRoot"] = "/Admin/Requests";
 }
 @section Head {
     <link rel="stylesheet" href="~/css/acquisition.css" asp-append-version="true" />
@@ -18,13 +19,7 @@
     <script src="~/js/admin-requests.js" asp-append-version="true" defer></script>
 }
 
-<header class="page-header admreq-heading">
-    <h1>@ui["admin.requests.title"]</h1>
-    @if (Model.CanEditSettings)
-    {
-        <a class="button" href="/Admin/Requests/Settings">@ui["nav.settings"]</a>
-    }
-</header>
+<partial name="_AdminSectionLinks" />
 
 @{
     var queue = Model.Queue;

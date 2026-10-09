@@ -34,6 +34,45 @@ namespace Jularr.Tests;
 public sealed class RequestPagesRenderTests
 {
     [TestMethod]
+    public async Task RequestSection_RendersTabsWithoutPageHeadingsAndListsAllAccountsReadOnly()
+    {
+        await using var host = await RequestPagesHost.CreateAsync();
+        var empty = await host.GetHtmlAsync("/Admin/Requests/Users", asOwner: true);
+        StringAssert.Contains(empty, "No accounts yet");
+        host.Db.OwnerAccounts.AddRange(
+            new OwnerAccount { Id = "directory-owner", UserName = "Directory Owner", NormalizedUserName = "DIRECTORY OWNER", PasswordHash = "test-only", Role = AccountRole.Owner },
+            new OwnerAccount { Id = "directory-user", UserName = "Directory User", NormalizedUserName = "DIRECTORY USER", PasswordHash = "test-only", Role = AccountRole.User },
+            new OwnerAccount { Id = "directory-pending", UserName = "Directory Pending", NormalizedUserName = "DIRECTORY PENDING", PasswordHash = "test-only", Role = AccountRole.User, IsEnabled = false });
+        await host.Db.SaveChangesAsync();
+        foreach (var path in new[] { "/Admin/Requests", "/Admin/Requests/Settings", "/Admin/Requests/Users" })
+        {
+            var html = await host.GetHtmlAsync(path, asOwner: true);
+            var sectionTabs = System.Text.RegularExpressions.Regex.Match(html, "<nav class=\"admin-section-links library-type-tabs admreq-section-tabs\"[^>]*>(.*?)</nav>", System.Text.RegularExpressions.RegexOptions.Singleline).Value;
+            Assert.IsTrue(sectionTabs.Length > 0, path);
+            StringAssert.Contains(sectionTabs, "href=\"/Admin/Requests\"");
+            StringAssert.Contains(sectionTabs, "href=\"/Admin/Requests/Settings\"");
+            StringAssert.Contains(sectionTabs, "href=\"/Admin/Requests/Users\"");
+            StringAssert.Contains(sectionTabs, "Rules");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(sectionTabs, "aria-current=\"page\"").Count);
+            Assert.IsFalse(html.Contains("<h1", StringComparison.Ordinal), path);
+            Assert.IsFalse(html.Contains("class=\"page-header", StringComparison.Ordinal), path);
+        }
+
+        var users = await host.GetHtmlAsync("/Admin/Requests/Users", asOwner: true);
+        foreach (var name in new[] { "Directory Owner", "Directory User", "Directory Pending" })
+        {
+            StringAssert.Contains(users, name);
+        }
+
+        StringAssert.Contains(users, "Disabled / pending");
+        Assert.IsFalse(users.Contains("PasswordHash", StringComparison.Ordinal));
+        Assert.IsFalse(users.Contains("test-only", StringComparison.Ordinal));
+        Assert.IsFalse(users.Contains("handler=Create", StringComparison.Ordinal));
+        Assert.IsFalse(users.Contains("handler=Disable", StringComparison.Ordinal));
+        Assert.AreEqual(HttpStatusCode.Forbidden, await host.GetStatusAsync("/Admin/Requests/Users", asOwner: false));
+    }
+
+    [TestMethod]
     public async Task HeaderPreviewsAreBoundedProfileScopedAndDoNotMarkNotificationsReadOnOpen()
     {
         await using var host = await RequestPagesHost.CreateAsync();

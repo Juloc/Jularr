@@ -4330,6 +4330,7 @@ public static class UiTranslationResources
         M("admin.requests.reopen", "Reopen", "Requests", "Button", "Puts a rejected request back to waiting for a decision.", "short action", 12),
         M("admin.requests.reopenBlocked", "Another request for this title is open already.", "Requests", "Status", "Shown when a rejected request cannot be reopened because the same title has an open request.", "compact status", 52),
         M("admin.requests.settingsSummary", "Rules and settings", "Requests", "Label", "Toggle that shows or hides the manual add rules, auto-approval rules and request quality profiles.", "short label", 24),
+        M("admin.requests.section.rules", "Rules", "Requests", "Navigation", "Requests section tab and breadcrumb for approval rules and requester quality profiles.", "short navigation label", 16),
         M("admin.requests.keepProfile", "Current profile", "Requests", "Option", "Option of the profile choice next to the Approve button that leaves the request's work on the profile it already resolves.", "short option", 24),
         M("admin.requests.approveProfile", "Acquisition profile", "Requests", "Accessibility", "Accessible name of the profile choice next to the Approve button; the chosen profile is assigned to the request's work.", "concise accessible name", 30),
         M("admin.requests.profileUnknown", "That profile no longer exists. Nothing was approved.", "Requests", "Status", "Shown when the profile chosen while approving a request is gone.", "neutral diagnostic", 60),

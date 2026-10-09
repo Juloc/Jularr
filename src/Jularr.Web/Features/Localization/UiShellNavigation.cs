@@ -118,10 +118,11 @@ public static class UiNavigationCatalog
             ]),
             new("admin-requests", "admin.nav.requests", "/Admin/Requests", "requests", Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition, Links:
             [
-                new("admin-request-settings", "admin.requests.settingsSummary", "/Admin/Requests/Settings", "settings", Policy: JularrPolicies.AcquisitionSettings, Module: InstanceModule.Acquisition, Links:
+                new("admin-request-settings", "admin.requests.section.rules", "/Admin/Requests/Settings", "settings", Policy: JularrPolicies.AcquisitionSettings, Module: InstanceModule.Acquisition, Links:
                 [
                     new("admin-manual-add", "admin.requests.policiesHeading", "/Admin/Capabilities/Manual", "download", Policy: JularrPolicies.AcquisitionSettings, Module: InstanceModule.Acquisition)
-                ])
+                ]),
+                new("admin-request-users", "admin.nav.users", "/Admin/Requests/Users", "users", Policy: JularrPolicies.AdminSystem, Module: InstanceModule.Acquisition)
             ]),
             new("admin-wanted", "admin.nav.missingUpgrades", "/Admin/Wanted", "download", Policy: JularrPolicies.AdminMedia, Module: InstanceModule.Acquisition),
             new("admin-operations", "admin.nav.operations", "/Admin/Operations", "activity", ["/Admin/Operations", "/Admin/Operation", "/Admin/History", "/Admin/Sessions", "/Admin/Scans"], Policy: JularrPolicies.AdminMedia, Links:
@@ -349,6 +350,16 @@ public sealed record UiShellNavigation(
                     : null;
         var contextParent = ContextualParent(path, can, modules);
         var contextChild = contextParent?.Links?.Where(entry => Allowed(entry, true, can, modules) && IsActive(entry, path)).OrderByDescending(entry => MatchLength(entry, path)).FirstOrDefault();
+        if (contextParent is not null && contextChild is null)
+        {
+            var ancestor = UiNavigationCatalog.All.FirstOrDefault(entry => Allowed(entry, true, can, modules) && (entry.Links?.Any(child => child.Id == contextParent.Id) ?? false));
+            if (ancestor is not null)
+            {
+                contextChild = contextParent;
+                contextParent = ancestor;
+            }
+        }
+
         if (contextParent is not null && contextChild is not null)
         {
             breadcrumb = new UiBreadcrumb(ToItem(contextParent, false), ToItem(contextChild, true));
