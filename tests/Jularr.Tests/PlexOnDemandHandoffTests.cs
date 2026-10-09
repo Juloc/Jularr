@@ -29,11 +29,17 @@ public sealed class PlexOnDemandHandoffTests
                 MappingReviewState.Confirmed, CancellationToken.None);
 
             var calls = new List<(string Path, string Token, string Query)>();
+            var failingUserPath = string.Empty;
             using var http = new HttpClient(new Handler(request =>
             {
                 var uri = request.RequestUri!;
                 var token = request.Headers.GetValues("X-Plex-Token").Single();
                 calls.Add((uri.AbsolutePath, token, uri.Query));
+                if (token == "user-token" && uri.AbsolutePath == failingUserPath)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+                }
+
                 if (uri.AbsolutePath == "/identity")
                 {
                     return Json(
@@ -108,6 +114,19 @@ public sealed class PlexOnDemandHandoffTests
             Assert.IsNull(await lookup.ResolveAsync(
                 Principal(AccountRole.User, "different-profile"),
                 movie.Id, "Dune", "instance-id"));
+
+            foreach (var path in new[]
+            {
+                "/library/sections",
+                "/library/sections/1/all",
+                "/library/metadata/44"
+            })
+            {
+                failingUserPath = path;
+                Assert.IsNull(await lookup.ResolveAsync(
+                    Principal(AccountRole.User, "viewer"),
+                    movie.Id, "Dune", "instance-id"));
+            }
         }
         finally
         {
