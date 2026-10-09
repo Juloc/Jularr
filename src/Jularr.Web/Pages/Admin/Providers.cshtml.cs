@@ -79,7 +79,22 @@ public sealed class ProvidersModel(AppDbContext db, IEnumerable<IProviderSetting
     private IProviderSettings? Find() => providers.FirstOrDefault(settings => settings.Key == Provider);
 
     /// <summary>The values the form carries for the fields of the provider's schema, and nothing else.</summary>
-    private Dictionary<string, string?> SecretsOf(ProviderView view) => view.Fields.ToDictionary(field => field.Name, field => (string?)Request.Form[field.Name].ToString());
+    private Dictionary<string, string?> SecretsOf(ProviderView view)
+    {
+        var fields = view.Fields.ToDictionary(
+            field => field.Name,
+            field => (string?)Request.Form[field.Name].ToString());
+
+        foreach (var option in view.Options)
+        {
+            fields[option.Name] = Request.Form[option.Name].Any(
+                value => string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+                ? "true"
+                : "false";
+        }
+
+        return fields;
+    }
 
     /// <summary>Back to the surface that posted: only a local address is followed, anything else lands on this page.</summary>
     private IActionResult Back(string? returnUrl) => Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl) : RedirectToPage();
