@@ -633,20 +633,23 @@ public sealed class PlaybackService
 
     public async Task<EpisodePlaybackSnapshot> GetSnapshotAsync(
         Guid episodeId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool includeLearningCues = true)
     {
         var media = await GetMediaAsync(episodeId, cancellationToken);
-        var cueSet = await GetCueSetAsync(
-            episodeId,
-            trackId: null,
-            fromMs: null,
-            toMs: null,
-            cancellationToken);
+        var cues = includeLearningCues
+            ? (await GetCueSetAsync(
+                episodeId,
+                trackId: null,
+                fromMs: null,
+                toMs: null,
+                cancellationToken)).Cues
+            : [];
         var navigation = segments is null
             ? null
             : await segments.GetPlayerNavigationAsync(episodeId, media, cancellationToken);
 
-        return new EpisodePlaybackSnapshot(media, cueSet.Cues, navigation);
+        return new EpisodePlaybackSnapshot(media, cues, navigation);
     }
 
     public async Task<PlaybackCueSet> GetCueSetAsync(
