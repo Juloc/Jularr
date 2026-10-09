@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Jularr.Web.Features.Library;
 
@@ -121,9 +122,9 @@ public sealed record MediaInventoryEntry(
     DateTime AnalyzedAt,
     string? Diagnostic,
     MediaTechnicalInfo? Technical,
-    string? SourceFingerprint = null,
-    long? SourceSizeBytes = null,
-    DateTime? SourceLastWriteTimeUtc = null)
+    [property: JsonIgnore] string? SourceFingerprint = null,
+    [property: JsonIgnore] long? SourceSizeBytes = null,
+    [property: JsonIgnore] DateTime? SourceLastWriteTimeUtc = null)
 {
     public Guid StoredFileId => MediaFileId;
 }
