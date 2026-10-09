@@ -202,18 +202,6 @@ fun TvAnimeScreen(
                                     ),
                                 )
                             }
-                            if (resume != null) {
-                                Text(
-                                    stringResource(
-                                        R.string.tv_anime_resume_info,
-                                        resume.seasonNumber,
-                                        resume.episodeNumber,
-                                        resume.percent,
-                                    ),
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
                         }
                         Button(
                             onClick = onBack,
@@ -221,6 +209,51 @@ fun TvAnimeScreen(
                                 Modifier.focusRequester(heroFocus) else Modifier,
                         ) {
                             Text(stringResource(R.string.tv_action_back))
+                        }
+                    }
+                }
+                if (resume != null) {
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                            .padding(18.dp)
+                            .width(215.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xE5111420))
+                            .border(
+                                1.dp,
+                                Color.White.copy(alpha = 0.28f),
+                                RoundedCornerShape(14.dp),
+                            )
+                            .padding(13.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            resume.episodeTitle,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            stringResource(
+                                R.string.tv_anime_resume_info,
+                                resume.seasonNumber,
+                                resume.episodeNumber,
+                                resume.percent,
+                            ),
+                            color = Color.White.copy(alpha = 0.84f),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Box(
+                            Modifier.fillMaxWidth().height(4.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color.White.copy(alpha = 0.2f)),
+                        ) {
+                            Box(
+                                Modifier.fillMaxWidth(resume.percent.coerceIn(0, 100) / 100f)
+                                    .height(4.dp)
+                                    .background(accent),
+                            )
                         }
                     }
                 }
