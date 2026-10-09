@@ -73,7 +73,8 @@ public sealed class PlayerDesignTests
         StringAssert.Contains(learningScript, "actions.learnCurrentCue");
         StringAssert.Contains(episodeScript, "window.JularrPlayerLearning.renderCue");
         StringAssert.Contains(episodeScript, "design.actions.repeatCurrentCue");
-        StringAssert.Contains(episodeScript, "learningResumeOnClose");
+        StringAssert.Contains(learningScript, "learningResumeOnClose");
+        StringAssert.Contains(episodeScript, "JularrPlayerLearning?.attachInspector");
     }
 
     [TestMethod]
@@ -190,11 +191,74 @@ public sealed class PlayerDesignTests
         var episodeScript = File.ReadAllText(
             Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
 
-        StringAssert.Contains(episodeScript, "window.JularrLanguageInspector");
-        StringAssert.Contains(episodeScript, "sharedInspector.open(");
-        StringAssert.Contains(episodeScript, "sharedInspector.addEventListener(\"open\"");
-        StringAssert.Contains(episodeScript, "sharedInspector.addEventListener(\"close\"");
-        StringAssert.Contains(episodeScript, "sharedInspector.addEventListener(\"statechange\"");
+        var learningScript = File.ReadAllText(
+            Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-learning-design.js"));
+
+        Assert.IsFalse(episodeScript.Contains("window.JularrLanguageInspector", StringComparison.Ordinal));
+        StringAssert.Contains(learningScript, "window.JularrLanguageInspector");
+        StringAssert.Contains(learningScript, "sharedInspector.open(");
+        StringAssert.Contains(learningScript, "sharedInspector.addEventListener(\"open\"");
+        StringAssert.Contains(learningScript, "sharedInspector.addEventListener(\"close\"");
+        StringAssert.Contains(learningScript, "sharedInspector.addEventListener(\"statechange\"");
+    }
+
+    [TestMethod]
+    public void LearningInspectorEvents_DoNotChangeBaseTransportOrPlayback()
+    {
+        var root = FindRepositoryRoot();
+        var scripts = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js");
+        var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(5)));
+        engine.Execute("var window = globalThis;");
+        engine.Execute(File.ReadAllText(Path.Combine(scripts, "player-design.js")));
+        engine.Execute(File.ReadAllText(Path.Combine(scripts, "player-learning-design.js")));
+        engine.Execute("""
+            var HTMLElement = function HTMLElement() {};
+            var makeElement = () => ({
+                hidden: true, textContent: "", listeners: {},
+                querySelectorAll() { return []; },
+                addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); },
+                emit(type, event) { (this.listeners[type] || []).forEach(listener => listener(event)); },
+                focus() {}
+            });
+            var root = makeElement(), overlay = makeElement(), inspector = makeElement();
+            var video = {
+                paused: false, ended: false, pauses: 0, plays: 0,
+                pause() { this.paused = true; this.pauses++; },
+                play() { this.paused = false; this.plays++; return Promise.resolve(); }
+            };
+            var handlers = {};
+            window.JularrLanguageInspector = {
+                available: true,
+                addEventListener(type, handler) { handlers[type] = handler; },
+                open(text, context) { this.last = { text, context }; }
+            };
+            var cue = { startMs: 1500, tokens: [{ surface: "駅", canonical: "駅", state: "New" }] };
+            var redraws = 0;
+            var learning = window.JularrPlayerLearning.attachInspector({
+                root, overlay, inspector, video, design: window.JularrPlayerDesign,
+                learningKicker: makeElement(), word: makeElement(), reading: makeElement(),
+                meaning: makeElement(), state: makeElement(), replay: makeElement(),
+                closeLearning: makeElement(),
+                getCues: () => [cue],
+                getActiveIndex: () => 0,
+                renderActiveCue: () => redraws++
+            });
+            root.emit(window.JularrPlayerDesign.actionEvent, {
+                detail: { action: "openWord", cue, token: cue.tokens[0] }
+            });
+            handlers.open();
+            handlers.statechange({ detail: { text: "駅", state: "Known" } });
+            handlers.close();
+            """);
+
+        Assert.AreEqual("駅", engine.Evaluate("window.JularrLanguageInspector.last.text").ToString());
+        Assert.AreEqual("1500", engine.Evaluate("String(window.JularrLanguageInspector.last.context.cueStartMs)").ToString());
+        Assert.AreEqual("Known", engine.Evaluate("cue.tokens[0].state").ToString());
+        Assert.AreEqual("1", engine.Evaluate("String(redraws)").ToString());
+        Assert.AreEqual("1,1", engine.Evaluate("[video.pauses, video.plays].join(',')").ToString());
+        Assert.AreEqual("false", engine.Evaluate("String(learning.isSheetOpen())").ToString());
+        Assert.AreEqual("1500", engine.Evaluate("String(learning.selectedCueStartMs())").ToString());
+        Assert.AreEqual("playPause", engine.Evaluate("window.JularrPlayerDesign.actions.playPause").ToString());
     }
 
     [TestMethod]
