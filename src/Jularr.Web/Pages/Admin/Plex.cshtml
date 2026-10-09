@@ -86,11 +86,11 @@
 
                     <fieldset>
                         <legend>@ui["admin.plex.chooseLibraries"]</legend>
-                        @foreach (var section in candidate.Libraries)
+                        @foreach (var plexLibrary in candidate.Libraries)
                         {
                             <label>
-                                <input type="checkbox" name="LibrarySectionIds" value="@section.Id" />
-                                @section.Title
+                                <input type="checkbox" name="LibrarySectionIds" value="@plexLibrary.Id" />
+                                @plexLibrary.Title
                             </label>
                         }
                     </fieldset>
