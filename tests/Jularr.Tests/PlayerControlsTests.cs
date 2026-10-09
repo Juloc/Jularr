@@ -449,7 +449,7 @@ public sealed class PlayerControlsTests
             let subtitleChoice = "stream:2";
             let secondarySubtitleChoice = "stream:3";
             const video = { videoWidth: 640, videoHeight: 360 };
-            const stage = { clientWidth: 640, clientHeight: 360 };
+            const stage = { clientWidth: 640, clientHeight: 360, dataset: { chromeState: "visible" } };
             const subtitleCanvas = { style: {} };
             const primaryPositionedSubtitles = fake();
             const secondaryPositionedSubtitles = fake();
