@@ -69,9 +69,8 @@ fun TvAnimeScreen(
     onPlayEpisode: (EpisodeSummary) -> Unit,
     onBack: () -> Unit,
 ) {
-    val accent = remember(LocalContext.current) {
-        TvPlayerDesignLoader.load(LocalContext.current).accent
-    }
+    val context = LocalContext.current
+    val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
     val focusColor = rememberTvFocusColor()
     val chapters = anime.seasons.sortedBy { it.number }
     var selectedSeason by remember(anime.id) {
