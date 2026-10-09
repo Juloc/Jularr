@@ -49,7 +49,7 @@ private val mainNavigation = listOf(
 )
 private val footerNavigation = listOf(
     TvSidebarItem(TvRoute.Settings, R.string.tv_sidebar_settings, Icons.Filled.Settings),
-    TvSidebarItem(TvRoute.ProfileSelect, R.string.tv_profile_switch_account, Icons.Filled.AccountCircle),
+    TvSidebarItem(TvRoute.ProfileSelect, R.string.tv_profile_switch_profile, Icons.Filled.AccountCircle),
 )
 
 @Composable
