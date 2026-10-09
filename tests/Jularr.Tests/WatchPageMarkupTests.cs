@@ -104,12 +104,48 @@ public sealed class WatchPageMarkupTests
         foreach (var hook in new[]
                  {
                      "data-playback-speed", "data-subtitle-track", "data-audio-track", "data-quality-cap",
-                     "data-playback-mode", "data-autoplay-toggle", "data-restart", "data-save-playback-defaults",
+                     "data-autoplay-toggle", "data-save-playback-defaults",
                      "data-chrome-fullscreen", "data-chrome-pip", "data-chrome-volume"
                  })
         {
             StringAssert.Contains(stage, hook, $"{hook} must be part of the player.");
         }
+    }
+
+    [TestMethod]
+    public void DesktopMore_UsesDirectSettingsAndAutomaticPlayback()
+    {
+        var stage = Page[Page.IndexOf("id=\"player-settings\"", StringComparison.Ordinal)..];
+        StringAssert.Contains(stage, "data-playback-summary");
+        StringAssert.Contains(stage, "data-playback-diagnostics");
+        StringAssert.Contains(stage, "data-autoplay-toggle");
+        StringAssert.Contains(stage, "data-save-playback-defaults");
+        Assert.IsFalse(stage.Contains("data-playback-mode", StringComparison.Ordinal));
+        Assert.IsFalse(stage.Contains("data-restart", StringComparison.Ordinal));
+        var player = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
+        StringAssert.Contains(player, "mode: \"auto\"");
+        Assert.IsFalse(player.Contains("preferenceKey", StringComparison.Ordinal));
+        var chrome = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "player-chrome.js"));
+        StringAssert.Contains(chrome, "directSettings.has(parent)");
+    }
+
+    [TestMethod]
+    public void LegacyEpisode_ProvidesPreviousAndNextNavigation()
+    {
+        var episode = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
+        StringAssert.Contains(episode, "PreviousUrl: Model.PreviousEpisodeUrl");
+        StringAssert.Contains(episode, "PreviousLabel: Model.Flow?.Previous");
+        StringAssert.Contains(Page, "player-round-seek");
+        StringAssert.Contains(Page, "player-seek-count");
+    }
+
+    [TestMethod]
+    public void VolumeFocus_DrawsOnSliderThumb()
+    {
+        var css = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "Jularr.Web", "wwwroot", "css", "player.css"));
+        StringAssert.Contains(css, ".player-panel .player-volume-slider:focus-visible { outline: none; }");
+        StringAssert.Contains(css, ".player-volume-slider:focus-visible::-webkit-slider-thumb");
+        StringAssert.Contains(css, ".player-volume-slider:focus-visible::-moz-range-thumb");
     }
 
     // Owner-only mapping/source management (subtitle sources, AniList mapping) moved into the
