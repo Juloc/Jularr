@@ -1,8 +1,4 @@
-// The player's own controls. episode-player.js owns sources, the (absolute) timeline, subtitles
-// and progress; this file only drives what the native <video controls> used to: play/pause,
-// volume, full screen, picture-in-picture, the settings menu, auto-hiding the chrome and taps on
-// the video (show/hide, double-tap seek). Every control exists once; there is deliberately no
-// second timeline and no native control bar.
+// The shared player chrome owns mouse, touch, keyboard and presentation controls; episode-player.js owns media and progress.
 (() => {
     const root = document.querySelector("[data-episode-player]");
     const stage = root?.querySelector("[data-player-chrome]");
