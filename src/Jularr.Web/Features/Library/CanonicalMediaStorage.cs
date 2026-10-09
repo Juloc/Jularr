@@ -68,7 +68,7 @@ public sealed record CanonicalAudioFile(Guid MediaAssetId, Guid StoredFileId, Gu
 public sealed record CanonicalPlayableFile(
     Guid MediaAssetId,
     Guid StoredFileId,
-    Guid WorkId,
+    long WorkId,
     Guid? WorkEpisodeId,
     Guid WorkVersionId,
     string Path,
@@ -444,13 +444,13 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
     }
 
     public async Task<CanonicalPlayableFile?> ResolveVideoAsync(
-        Guid workId,
+        long workId,
         Guid? workEpisodeId,
         CancellationToken cancellationToken) =>
         (await ResolveVideoCandidatesAsync(workId, workEpisodeId, cancellationToken)).FirstOrDefault();
 
     public async Task<IReadOnlyList<CanonicalPlayableFile>> ResolveVideoCandidatesAsync(
-        Guid workId,
+        long workId,
         Guid? workEpisodeId,
         CancellationToken cancellationToken) =>
         await (
