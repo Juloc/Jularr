@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Franchises;
@@ -220,6 +221,61 @@ public sealed class WatchlistTests
         await watchlist.FollowAsync(profile, seed, CancellationToken.None);
         var explicitItem = Assert.ContainsSingle(await watchlist.GetEffectiveAsync(profile, CancellationToken.None));
         Assert.IsNotNull(explicitItem.AddedAtUtc, "Explicitly following a franchise work now records when it was added.");
+    }
+
+
+    [TestMethod]
+    public async Task PagedEffectiveRead_MergesFranchisesOverridesAndIgnoresBeforePaging()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var watchlist = new WatchlistStore(fixture.Db);
+        var franchises = new FranchiseStore(fixture.Db);
+        const string profile = "profile-a";
+
+        var inherited = Draft("100", "Original");
+        var ignored = Draft("101", "Hidden");
+        var franchiseId = await franchises.GetOrCreateBySeedAsync(
+            inherited.Identity,
+            CancellationToken.None);
+        await franchises.UpsertMemberAsync(franchiseId, inherited, null, true, CancellationToken.None);
+        await franchises.UpsertMemberAsync(franchiseId, ignored, "SEQUEL", false, CancellationToken.None);
+        await franchises.FollowAsync(profile, franchiseId, CancellationToken.None);
+
+        await watchlist.FollowAsync(profile, Draft("100", "Override"), CancellationToken.None);
+        await watchlist.UnfollowAsync(profile, ignored.Identity, CancellationToken.None);
+        await watchlist.FollowAsync(profile, Draft("200", "Alpha"), CancellationToken.None);
+        await watchlist.FollowAsync(profile, Draft("201", "Beta"), CancellationToken.None);
+        await watchlist.FollowAsync(profile, Draft("202", "Gamma"), CancellationToken.None);
+        await watchlist.FollowAsync(
+            profile,
+            new WatchlistDraft(new WatchlistIdentity(WatchlistMediaType.Manga, "anilist", "300"), "Manga"),
+            CancellationToken.None);
+        await watchlist.FollowAsync("profile-b", Draft("400", "Secret"), CancellationToken.None);
+
+        var account = CurrentAccountContext.ForProfile(profile);
+        var visible = new[] { WatchlistMediaType.Anime };
+        var first = await watchlist.GetEffectivePageAsync(account, new PageRequest(1, 2), visible, CancellationToken.None);
+        var second = await watchlist.GetEffectivePageAsync(account, new PageRequest(2, 2), visible, CancellationToken.None);
+        var beyond = await watchlist.GetEffectivePageAsync(account, new PageRequest(3, 2), visible, CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { "Alpha", "Beta" }, first.Items.Select(item => item.Title).ToArray());
+        CollectionAssert.AreEqual(new[] { "Gamma", "Override" }, second.Items.Select(item => item.Title).ToArray());
+        Assert.AreEqual(4L, first.TotalCount);
+        Assert.AreEqual(true, first.HasMore);
+        Assert.AreEqual(false, second.HasMore);
+        Assert.IsEmpty(beyond.Items);
+        Assert.AreEqual(4L, beyond.TotalCount);
+        var overridden = second.Items.Single(item => item.Title == "Override");
+        Assert.AreEqual(franchiseId, overridden.FranchiseId);
+        Assert.IsTrue(overridden.IsExplicit);
+
+        var other = await watchlist.GetEffectivePageAsync(
+            CurrentAccountContext.ForProfile("profile-b"),
+            new PageRequest(),
+            visible,
+            CancellationToken.None);
+        Assert.AreEqual("Secret", Assert.ContainsSingle(other.Items).Title);
+        Assert.AreEqual(1L, other.TotalCount);
     }
 
     private static WatchlistDraft Draft(string externalId, string title) =>
