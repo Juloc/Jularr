@@ -167,6 +167,12 @@ public sealed class PlexModel(
             return BadRequest();
         }
 
+        if (attempt.StartedAccountId is null && !LoginEnabled ||
+            attempt.StartedAccountId is not null && !LinkEnabled)
+        {
+            return Forbid();
+        }
+
         var currentAccountId = OwnerAuthService.GetAccountId(User);
         if (attempt.StartedAccountId is not null &&
             attempt.StartedAccountId != currentAccountId)
