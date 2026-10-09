@@ -1,10 +1,10 @@
 # Jularr canonical domain model
 
-Status: planning baseline. This document defines the target domain before further feature implementation. Existing legacy tables are not automatically part of the target model.
+Status: legacy planning context. **The binding owner-approved clean-cut target is [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md).** When the older statements below differ (especially Games outside Works, media-type enums, legacy bridges, migrations and profile/progress identities), follow that new target contract. Current runtime remains unchanged until cutover.
 
 ## 1. Principles
 
-- One canonical media model for Anime, TV, Movie, Manga, Light Novel, Book, Audiobook and Music.
+- One canonical Work identity for Movies, Series (including anime classification), Books/Audiobooks by edition, Manga, Light Novels, Music and **Games**.
 - Media-type-specific data exists only where the concept is genuinely different.
 - Provider metadata never defines identity by itself.
 - Physical files are separate from logical works, editions and releases.
@@ -38,7 +38,7 @@ Not every Work uses every level. A Movie can have no structural children. A TV/A
 
 Core fields:
 - `Id`
-- `MediaType`: Anime, TvSeries, Movie, Manga, LightNovel, Book, Audiobook, Music (an album)
+- `MediaTypeId` FK `MediaTypes.Id`: Movie, Series, Book, Manga, LightNovel, Music, Game; anime is a classification and audiobook an audio edition/asset where Work identity is shared
 - `CanonicalTitle`
 - lifecycle/status fields only when universally meaningful
 - timestamps
@@ -243,7 +243,7 @@ Metadata conflicts must be correctable. Provider evidence never replaces canonic
 Acquisition is media-independent.
 
 Core concepts:
-- `WantedItem`: desired canonical acquisition target/language/quality; for normal media this is Work/unit/Edition. Games remains a separate Games-owned identity and enters shared Acquisition through a typed target/application adapter rather than being modeled as a Work.
+- `WantedItem`: desired canonical acquisition target/language/quality; for normal media this is Work/unit/Edition. Games uses the shared Work identity; game-specific release/platform details are an extension of WorkVersion.
 - `ReleaseCandidate`: transient/indexer result
 - `DownloadJob`: accepted candidate handed to a download client
 - `ImportJob`: downloaded material awaiting identification/import
@@ -436,7 +436,7 @@ Cross-media is a normal Collection capability, not a separate kind. Franchise/ad
 
 A `CollectionEntry` references a local Work ID. It never stores provider IDs as canonical media identity or duplicates canonical title/progress/rating metadata as a source of truth.
 
-Games does not enter this Work-based Collection model in V1. Games owns `Game` identity outside MediaCore; future cross-domain Collections require an explicit typed target contract rather than coercing Game into Work.
+Games enters Work-based Collections through the same `WorkId` as other media; game release/platform details remain in Games extensions.
 
 Linked Collection sync follows:
 
@@ -454,7 +454,7 @@ Ambiguous provider identity is retained as provider evidence/mapping work; Jular
 
 Discovery results for normal media are provider candidates until resolved to/associated with a Work. A user can discover media not yet locally available without creating a second library model.
 
-Games is an explicit domain exception: Games discovery resolves to the Games module's canonical Game identity, not Work. Shared Search/Request presentation may carry a typed canonical target so this does not create a second acquisition/search stack.
+Games discovery resolves to the canonical Work identity (`MediaTypeId = Game`), while Games-owned release/platform adapters remain specialized; shared Search/Request APIs do not invent a second identity.
 
 Recommendations should return canonical/resolvable target references owned by the relevant domain.
 
