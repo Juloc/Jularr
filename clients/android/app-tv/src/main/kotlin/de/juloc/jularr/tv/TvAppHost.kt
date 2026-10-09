@@ -295,8 +295,9 @@ fun TvAppHost(
             durationMs = durationMs.takeIf { it > 0 },
         ) ?: return
 
+        val targetEpisodeId = episodeId ?: return
         scope.launch {
-            controller.saveProgress(write)
+            controller.saveProgress(write, targetEpisodeId)
         }
     }
 
@@ -835,32 +836,25 @@ fun TvAppHost(
                     selectedAudioTrackId = selectedAudioTrackId,
                     selectedSubtitleTrackId = selectedSubtitleTrackId,
                     onSelectAudioTrack = { id ->
-                        bundle.bootstrap.audioTracks
-                            .firstOrNull { it.id == id }
-                            ?.let { track ->
-                                if (TvMediaTrackSelector.selectAudio(
-                                        player.player,
-                                        track,
-                                    )
-                                ) {
-                                    selectedAudioTrackId = id
-                                    pushCompanionState(force = true)
-                                }
-                            }
+                        val track = bundle.bootstrap.audioTracks.firstOrNull { it.id == id }
+                        val selected = track != null && TvMediaTrackSelector.selectAudio(player.player, track)
+                        if (selected) {
+                            selectedAudioTrackId = id
+                            pushCompanionState(force = true)
+                        }
+                        selected
                     },
                     onSelectSubtitleTrack = { id ->
                         val track = id?.let { selected ->
                             bundle.bootstrap.subtitleTracks
                                 .firstOrNull { it.id == selected }
                         }
-                        if (TvMediaTrackSelector.selectSubtitle(
-                                player.player,
-                                track,
-                            )
-                        ) {
+                        val selected = TvMediaTrackSelector.selectSubtitle(player.player, track)
+                        if (selected) {
                             selectedSubtitleTrackId = id
                             pushCompanionState(force = true)
                         }
+                        selected
                     },
                     onPositionChanged = { position, duration, isPlaying ->
                         currentPositionMs = position
@@ -1027,7 +1021,7 @@ fun TvAppHost(
 
                         scope.launch {
                             if (write != null) {
-                                controller.saveProgress(write)
+                                controller.saveProgress(write, route.episodeId)
                             }
                             resetPlaybackRuntime()
                             controller.back()?.let { snapshot = it }
