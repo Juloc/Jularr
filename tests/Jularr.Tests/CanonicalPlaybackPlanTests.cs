@@ -146,7 +146,9 @@ public sealed class CanonicalPlaybackPlanTests
             new PlaybackStreamSessionStore(TimeProvider.System),
             PlaybackServerTestKit.Create().Capabilities,
             canonicalStorage: storage);
-        var input = new PlaybackPlanInput(null, ClientKinds.Web, ChromeAgent, IPAddress.Loopback);
+        var input = new PlaybackPlanInput(
+            null, ClientKinds.Web, ChromeAgent, IPAddress.Parse("203.0.113.9"),
+            Network: new PlaybackNetworkReport(ThroughputKbps: 24_000));
 
         var unproven = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
         Assert.AreEqual(original.StoredFileId, unproven.MediaFileId,
@@ -172,6 +174,12 @@ public sealed class CanonicalPlaybackPlanTests
         Assert.AreEqual(PlaybackDeliveryMode.DirectPlay, verified.Plan.Mode,
             "A verified identical-timeline rendition avoids video re-encoding.");
         Assert.AreEqual(candidate.StoredFileId, verified.Session!.MediaFileId);
+
+        var local = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { RemoteAddress = IPAddress.Loopback, Network = null }, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, local.MediaFileId,
+            "LAN Auto means Original, so it must not prefer a smaller pre-encoded version.");
 
         var selectedAudio = (await planner.PlanAsync(
             PlaybackVideoTarget.Movie(movie.Id), "reader",
