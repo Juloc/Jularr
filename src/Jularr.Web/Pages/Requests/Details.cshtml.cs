@@ -3,6 +3,8 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.ExternalPlayback.Plex;
+using Jularr.Web.Features.Shell;
+using Microsoft.EntityFrameworkCore;
 using Jularr.Web.Features.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -32,6 +34,7 @@ public sealed class DetailsModel(
     AcquisitionRequestService requests,
     VideoRequestScopeResolver scopes,
     PlexExternalPlaybackAction plexExternal,
+    IAppShellService appShell,
     TimeProvider clock) : PageModel
 {
     private static readonly IReadOnlySet<string> s_noticeKeys = new HashSet<string>(StringComparer.Ordinal) { "changed", "failed", "plexUnavailable" };
@@ -85,6 +88,18 @@ public sealed class DetailsModel(
         if (request?.WorkId is not long workId || workId <= 0 ||
             request.Kind is not (MediaAcquisitionKind.Movie or
                 MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime))
+        {
+            return NotFound();
+        }
+
+        var work = await db.Works.AsNoTracking()
+            .Where(x => x.Id == workId)
+            .Select(x => new { x.MediaType, x.IsAnime })
+            .SingleOrDefaultAsync(cancellationToken);
+        var mediaAccess = await appShell.GetMediaAccessAsync(
+            User, cancellationToken);
+        if (work is null ||
+            !mediaAccess.IsWorkVisible(work.MediaType, work.IsAnime))
         {
             return NotFound();
         }
@@ -195,8 +210,8 @@ public sealed class DetailsModel(
         var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         ViewData["Title"] = view.Request.Title;
         var showPlex = view.Request.WorkId is > 0 &&
-            view.Request.Kind is MediaAcquisitionKind.Movie or
-                MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime &&
+            (view.Request.Kind is MediaAcquisitionKind.Movie or
+                MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime) &&
             await plexExternal.IsOfferVisibleAsync(User, cancellationToken);
         Panel = new RequestStatusPanel(
             ui, view, clock.GetUtcNow().UtcDateTime,
