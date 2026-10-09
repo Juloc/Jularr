@@ -45,7 +45,7 @@ public sealed class PlexModel(
     public bool CanUsePlex =>
         !string.IsNullOrWhiteSpace(ClientIdentifier)
         && (LoginEnabled || LinkEnabled);
-    public string? Message { get; private set; }
+    public string? MessageKey { get; private set; }
 
     private string ClientIdentifier =>
         configuration["Plex:ClientIdentifier"]?.Trim() ?? string.Empty;
@@ -111,7 +111,7 @@ public sealed class PlexModel(
                 cancellationToken);
             if (account?.Id != currentAccountId)
             {
-                Message = "Confirm your Jularr password before linking Plex.";
+                MessageKey = "account.plex.confirmLink";
                 return Page();
             }
         }
@@ -121,7 +121,7 @@ public sealed class PlexModel(
             (HttpContext.Connection.RemoteIpAddress is not { } ip ||
                 !System.Net.IPAddress.IsLoopback(ip)))
         {
-            Message = "Plex account linking requires HTTPS.";
+            MessageKey = "account.plex.requireHttps";
             return Page();
         }
 
@@ -217,13 +217,13 @@ public sealed class PlexModel(
             }
             catch (HttpRequestException)
             {
-                Message = "Plex is unavailable. Try again.";
+                MessageKey = "account.plex.unavailable";
                 return Page();
             }
 
             if (plexAccountId is null)
             {
-                Message = "Plex authentication is not complete. Return here after signing in.";
+                MessageKey = "account.plex.pending";
                 return Page();
             }
 
@@ -240,14 +240,14 @@ public sealed class PlexModel(
             if (currentAccountId is not null &&
                 currentAccountId != linkedAccount.Id)
             {
-                Message = "This Plex account belongs to a different Jularr account.";
+                MessageKey = "account.plex.alreadyLinked";
                 return Page();
             }
 
             if (attempt.StartedAccountId is not null &&
                 attempt.StartedAccountId != linkedAccount.Id)
             {
-                Message = "This Plex account is linked to another Jularr account.";
+                MessageKey = "account.plex.alreadyLinked";
                 return Page();
             }
 
@@ -269,7 +269,7 @@ public sealed class PlexModel(
             cancellationToken);
         if (identityExists)
         {
-            Message = "This Plex account cannot be used for sign-in.";
+            MessageKey = "account.plex.cannotSignIn";
             return Page();
         }
 
@@ -296,7 +296,7 @@ public sealed class PlexModel(
         if (string.IsNullOrWhiteSpace(UserName) || UserName.Trim().Length > 80)
         {
             HasVerifiedIdentity = true;
-            Message = "Choose a user name with 1–80 characters.";
+            MessageKey = "account.plex.invalidName";
             return Page();
         }
 
@@ -328,13 +328,13 @@ public sealed class PlexModel(
         }
         catch (InvalidOperationException)
         {
-            Message = "Unable to create a Jularr account with these details.";
+            MessageKey = "account.plex.cannotCreate";
             return Page();
         }
 
         if (!account.IsEnabled)
         {
-            Message = "Your Jularr account is awaiting administrator approval.";
+            MessageKey = "account.plex.awaiting";
             return Page();
         }
 
@@ -391,7 +391,7 @@ public sealed class PlexModel(
         if (account?.Id != accountId)
         {
             HasVerifiedIdentity = true;
-            Message = "Confirm your Jularr password to link Plex.";
+            MessageKey = "account.plex.confirmExisting";
             return Page();
         }
 
@@ -410,7 +410,7 @@ public sealed class PlexModel(
         }
         catch (InvalidOperationException)
         {
-            Message = "This Plex identity cannot be linked to this Jularr account.";
+            MessageKey = "account.plex.cannotLink";
             return Page();
         }
 
@@ -433,7 +433,7 @@ public sealed class PlexModel(
         if (account?.Id != accountId)
         {
             PlexLinked = true;
-            Message = "Confirm your Jularr password to remove Plex login.";
+            MessageKey = "account.plex.confirmRemove";
             return Page();
         }
 
@@ -447,7 +447,7 @@ public sealed class PlexModel(
         catch (InvalidOperationException)
         {
             PlexLinked = true;
-            Message = "Add a working local sign-in method before removing Plex.";
+            MessageKey = "account.plex.cannotRemove";
             return Page();
         }
 
