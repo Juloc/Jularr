@@ -430,7 +430,10 @@ private fun TvSeekScenes(
     val rows = descriptor.rows?.takeIf { it > 0 } ?: return
     val intervalMs = descriptor.intervalMs?.takeIf { it > 0 } ?: return
     val count = descriptor.thumbnailCount?.takeIf { it > 0 } ?: return
-    val available = minOf(count, descriptor.spriteUrls.size * columns * rows)
+    val available = minOf(
+        count.toLong(),
+        descriptor.spriteUrls.size.toLong() * columns * rows,
+    ).toInt()
     val samples = remember(available) { tvSeekSceneIndices(available) }
     if (samples.isEmpty()) return
     var selectedSample by remember { mutableStateOf<Int?>(null) }
