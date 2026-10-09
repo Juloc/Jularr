@@ -33,6 +33,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.TvServerDiscoveryClient
 import de.juloc.jularr.core.model.DiscoveredJularrServer
+import de.juloc.jularr.core.model.EpisodeSummary
 import de.juloc.jularr.core.player.JularrMedia3Player
 import de.juloc.jularr.core.player.PlaybackTransport
 import de.juloc.jularr.core.player.toPlaybackMetadata
@@ -178,6 +179,7 @@ fun TvAppHost(
     val episodeBundle = snapshot.episode
     val episodeId = playerRoute?.episodeId
     val progressPolicy = remember(episodeId) { TvProgressPolicy() }
+    var nextEpisode by remember(episodeId) { mutableStateOf<EpisodeSummary?>(null) }
 
     fun launchSnapshot(block: suspend () -> TvAppSnapshot) {
         snapshot = snapshot.copy(busy = true, error = null)
@@ -878,11 +880,22 @@ fun TvAppHost(
                         pushCompanionState()
                     },
                     onPlaybackEnded = { position, duration ->
-                        persist(
-                            TvProgressEvent.ENDED,
-                            position,
-                            duration,
-                        )
+                        persist(TvProgressEvent.ENDED, position, duration)
+                        scope.launch {
+                            nextEpisode = runCatching {
+                                controller.nextEpisode(route.episodeId, route.animeId)
+                            }.getOrNull()
+                        }
+                    },
+                    nextEpisodeTitle = nextEpisode?.title,
+                    onNextEpisode = {
+                        val next = nextEpisode
+                        if (next != null) {
+                            scope.launch {
+                                resetPlaybackRuntime()
+                                snapshot = controller.playEpisode(next.id, route.animeId)
+                            }
+                        }
                     },
                     onSeeked = { position, duration, isPlaying ->
                         currentPositionMs = position
