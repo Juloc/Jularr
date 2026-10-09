@@ -56,6 +56,24 @@ class TvNavigationTest {
     }
 
     @Test
+    fun nextEpisodeReplacesCurrentPlayerWithoutStackingOldEpisodes() {
+        var state = TvNavigationState(TvRoute.Home)
+        state = TvNavigation.openAnime(state, "anime")
+        state = TvNavigation.openEpisode(state, "first", "anime")
+        state = TvNavigation.openPlayer(state, "first", "anime")
+        state = TvNavigation.nextPlayer(state, "second", "anime")
+        state = TvNavigation.nextPlayer(state, "third", "anime")
+
+        assertEquals(TvRoute.Player("third", "anime"), state.route)
+        assertEquals(TvRoute.Episode("third", "anime"), TvNavigation.back(state)?.route)
+        assertEquals(3, state.previous.size)
+
+        var fromHome = TvNavigation.openPlayer(TvNavigationState(TvRoute.Home), "first", "anime")
+        fromHome = TvNavigation.nextPlayer(fromHome, "second", "anime")
+        assertEquals(TvRoute.Home, TvNavigation.back(fromHome)?.route)
+    }
+
+    @Test
     fun searchOpensFromHomeAndBackReturnsToHome() {
         var state = TvNavigationState(TvRoute.Home)
         state = TvNavigation.openSearch(state)
