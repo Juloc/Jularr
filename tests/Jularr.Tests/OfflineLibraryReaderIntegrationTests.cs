@@ -84,10 +84,12 @@ public sealed class OfflineLibraryReaderIntegrationTests
     }
 
     [TestMethod]
-    public void AccountFooterRendersTheGlobalDownloadIndicator()
+    public void HeaderRendersThePersonalOfflineDownloadPreview()
     {
-        var view = ReadPage("Shared", "_AppAccountFooter.cshtml");
-        StringAssert.Contains(view, "data-offline-download-indicator");
+        var view = ReadPage("Shared", "_AppHeader.cshtml");
+        StringAssert.Contains(view, "data-offline-download-preview");
+        StringAssert.Contains(view, "/Settings/Offline");
+        Assert.IsFalse(view.Contains("/Admin/Usenet", StringComparison.Ordinal));
     }
 
     [TestMethod]

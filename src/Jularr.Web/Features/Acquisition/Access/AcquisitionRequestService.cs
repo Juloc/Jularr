@@ -12,7 +12,7 @@ namespace Jularr.Web.Features.Acquisition.Access;
 /// below cannot request. A request waits for the owner unless an auto-approval rule approves it; an
 /// approved request goes to the media type's executor.
 /// </summary>
-public sealed class AcquisitionRequestService(
+public sealed partial class AcquisitionRequestService(
     AcquisitionAccessStore store,
     IEnumerable<IAcquisitionRequestExecutor> executors,
     CurrentAccountContext account,
@@ -22,7 +22,8 @@ public sealed class AcquisitionRequestService(
     ILogger<AcquisitionRequestService> logger,
     IInstanceModuleService? instanceModules = null,
     RequestWorkBinder? workBinder = null,
-    RequestIntent? intent = null)
+    RequestIntent? intent = null,
+    RequestProfileAssignment? profileAssignment = null)
 {
     /// <summary>Where a profile finds the state of its requests; decision notifications open it.</summary>
     public const string HistoryPath = "/Requests";
@@ -167,6 +168,11 @@ public sealed class AcquisitionRequestService(
     public async Task RejectAsync(Guid id, string? note, CancellationToken cancellationToken)
     {
         RequireRequestManager();
+        if (note?.Length > 2000)
+        {
+            throw new ArgumentException("A rejection reason must not exceed 2000 characters.", nameof(note));
+        }
+
         var request = await RequireAsync(id, cancellationToken);
         if (request.Status != AcquisitionRequestStatus.Pending)
         {
@@ -196,7 +202,7 @@ public sealed class AcquisitionRequestService(
             return request;
         }
 
-        await store.UpdateStatusAsync(id, AcquisitionRequestStatus.Pending, null, null, null, null, cancellationToken);
+        await store.TryTransitionStatusAsync(id, [AcquisitionRequestStatus.Rejected], AcquisitionRequestStatus.Pending, null, null, null, clearOperation: false, cancellationToken);
         return await RequireAsync(id, cancellationToken);
     }
 
@@ -205,12 +211,37 @@ public sealed class AcquisitionRequestService(
     {
         RequireRequestManager();
         var request = await RequireAsync(id, cancellationToken);
-        if (!request.IsOpen)
+        if (request.Status is not (AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed))
         {
             return;
         }
 
-        await store.UpdateStatusAsync(id, AcquisitionRequestStatus.Completed, null, null, null, account.ProfileId, cancellationToken);
+        await store.TryTransitionStatusAsync(id, [request.Status], AcquisitionRequestStatus.Completed, null, null, null, false, account.ProfileId, cancellationToken);
+    }
+
+    public async Task<RequestDeleteOutcome> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        RequireRequestManager();
+        var request = await store.GetAsync(id, cancellationToken);
+        if (request is null)
+        {
+            return RequestDeleteOutcome.AlreadyDeleted;
+        }
+
+        if (instanceModules is not null && (!await instanceModules.IsEnabledAsync(InstanceModule.Acquisition, cancellationToken)
+            || !await instanceModules.IsEnabledAsync(AcquisitionInstanceModules.For(request.Kind), cancellationToken)))
+        {
+            return RequestDeleteOutcome.StateChangedOrActiveDownload;
+        }
+
+        if (intent is null)
+        {
+            throw new InvalidOperationException("Request intent persistence must be configured for deletion.");
+        }
+
+        return await intent.RemoveAsync(id, () => store.TryDeleteAsync(request, cancellationToken), cancellationToken)
+            ? RequestDeleteOutcome.Deleted
+            : RequestDeleteOutcome.StateChangedOrActiveDownload;
     }
 
     /// <summary>

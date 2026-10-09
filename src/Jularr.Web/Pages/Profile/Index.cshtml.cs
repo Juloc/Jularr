@@ -10,13 +10,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Jularr.Web.Pages.Profile;
 
-/// <summary>
-/// Profile: the signed-in user's account, activity, settings and (for the owner) admin, plus the
-/// destinations the phone bottom bar has no room for. <c>/Profile/settings</c>, <c>/Profile/admin</c>
-/// and <c>/Profile/unfinished</c> are the drill-in lists of those sections; Unfinished (#870) is
-/// how a phone reaches destinations whose feature is still incomplete. All lists come from
-/// <see cref="UiNavigationCatalog"/>.
-/// </summary>
+/// <summary>The account hub and permission-scoped Admin/Settings drill-in lists, derived from the shared navigation catalog.</summary>
 public sealed class IndexModel(
     AppDbContext db,
     CurrentAccountContext account,
@@ -46,6 +40,11 @@ public sealed class IndexModel(
                 .HasAnyLearningEnabledAsync(account.ProfileId, cancellationToken);
         var media = await appShell.GetMediaAccessAsync(User, cancellationToken);
 
+        if (string.Equals(section, "unfinished", StringComparison.OrdinalIgnoreCase))
+        {
+            return RedirectToPage("/Profile/Index");
+        }
+
         if (section is not null)
         {
             // Admin needs admin.media; for everyone else the drill-in does not exist.
@@ -60,8 +59,6 @@ public sealed class IndexModel(
             enabledModules,
             InstanceModulePresets.Detect(instanceSettings) == InstancePreset.MediaManager);
 
-        // The shell account footer (theme, sign out, version) is shown here on phones and
-        // reads the same view data the layout sets for the sidebar.
         var appearance = await new ProfileAppearanceStore(db).GetAsync(account.ProfileId, cancellationToken);
         ViewData["UiTextBundle"] = Ui;
         ViewData["AppThemeMode"] = appearance.ThemeMode;

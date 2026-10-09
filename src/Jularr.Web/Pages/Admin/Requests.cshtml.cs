@@ -14,31 +14,25 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Pages.Admin;
 
 /// <summary>
-/// Owner page: the request queue from all users, who may use the manual add tools, the auto-approval
-/// rules and the quality profiles requesters may pick. Who may request or add at once is not set here;
-/// that is the capability matrix (Admin → Media capabilities).
+/// The permission-scoped operational request queue. Request configuration and manual-add policies have dedicated destinations.
 /// </summary>
 [Authorize(Policy = JularrPolicies.AdminMedia)]
 public sealed class RequestsModel(
     AppDbContext db,
     AcquisitionAccessStore store,
     AcquisitionRequestService requests,
-    AcquisitionRequestSettingsStore settings,
     QualityProfileStore qualityProfiles,
     VideoRequestWorkResolver videoWorks,
-    RequestProfileAssignment profileAssignment,
     RequestArtworkResolver artwork,
     ILogger<RequestsModel> logger,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
     private const string PagePath = "/Admin/Requests";
-    private const int QueueLimit = 2000;
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
-    public IReadOnlyList<AcquisitionAccessPolicy> Policies { get; private set; } = [];
-    public AdminRequestPage Queue { get; private set; } = AdminRequestQuery.Build([], new AdminRequestFilter(), new Dictionary<string, string>());
+    public AdminRequestPage Queue { get; private set; } = AdminRequestQuery.Empty(new AdminRequestFilter());
 
-    /// <summary>Whether the queue could not be read; the rules below it still work.</summary>
+    /// <summary>Whether the queue could not be read.</summary>
     public bool QueueFailed { get; private set; }
 
     /// <summary>Whether the server has any request at all, whatever the filters say.</summary>
@@ -47,11 +41,11 @@ public sealed class RequestsModel(
     /// <summary>The profiles that made requests, for the requester filter, by name.</summary>
     public IReadOnlyList<(string Id, string Name)> Requesters { get; private set; } = [];
     public IReadOnlyDictionary<string, string> ProfileNames { get; private set; } = new Dictionary<string, string>();
-    public AcquisitionRequestSettings RequestSettings { get; private set; } = AcquisitionRequestSettings.Default;
     public IReadOnlyList<QualityProfile> QualityProfiles { get; private set; } = [];
     public IReadOnlyList<MediaAcquisitionKind> EnabledKinds { get; private set; } =
         Enum.GetValues<MediaAcquisitionKind>();
     public IReadOnlyDictionary<string, string> QualityProfileNames { get; private set; } = new Dictionary<string, string>();
+    public IReadOnlyDictionary<Guid, string> EffectiveProfileNames { get; private set; } = new Dictionary<Guid, string>();
 
     /// <summary>Whether the signed-in account may change rules and settings (the queue itself needs only the page policy).</summary>
     public bool CanEditSettings => JularrPolicies.Allows(User, JularrPolicies.AcquisitionSettings);
@@ -90,7 +84,7 @@ public sealed class RequestsModel(
 
         if (request.Kind == MediaAcquisitionKind.Tv && VideoSeasonNumbers.TryGetValue(request.Id, out var seasons))
         {
-            return seasons.Select(season => season == 0 ? "Specials" : $"S{season}").ToArray();
+            return seasons.Select(season => season == 0 ? Ui["admin.requests.filter.specials"] : $"S{season}").ToArray();
         }
 
         return OptionsOf(request);
@@ -137,14 +131,11 @@ public sealed class RequestsModel(
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         await LoadEnabledKindsAsync(cancellationToken);
-        Policies = (await store.GetPoliciesAsync(cancellationToken))
-            .Where(policy => EnabledKinds.Contains(policy.Kind))
-            .ToArray();
         ProfileNames = await db.OwnerAccounts
             .AsNoTracking()
             .ToDictionaryAsync(account => account.Id, account => account.UserName, cancellationToken);
-        RequestSettings = await settings.LoadAsync(cancellationToken);
-        QualityProfiles = (await qualityProfiles.LoadAsync(cancellationToken)).Profiles;
+        var qualityState = await qualityProfiles.LoadAsync(cancellationToken);
+        QualityProfiles = qualityState.Profiles;
         QualityProfileNames = QualityProfiles.ToDictionary(profile => profile.Id, profile => profile.Name, StringComparer.Ordinal);
 
         var filter = new AdminRequestFilter(
@@ -160,138 +151,29 @@ public sealed class RequestsModel(
             season);
         try
         {
-            var rows = (await store.ListAllAsync(QueueLimit, cancellationToken))
-                .Where(row => EnabledKinds.Contains(row.Kind))
-                .ToArray();
-            AnyRequests = rows.Length > 0;
-            Requesters = rows
-                .Select(row => row.RequestedByProfileId)
-                .Distinct(StringComparer.Ordinal)
-                .Select(id => (Id: id, Name: ProfileNames.GetValueOrDefault(id) ?? id))
-                .OrderBy(requester => requester.Name, StringComparer.CurrentCultureIgnoreCase)
-                .ToArray();
-            VideoSeasonNumbers = await videoWorks.ResolveSeasonNumbersAsync(rows, cancellationToken);
-            Queue = AdminRequestQuery.Build(rows, filter, ProfileNames, VideoSeasonNumbers);
+            var result = await store.ReadQueueAsync(filter, EnabledKinds, ProfileNames, cancellationToken);
+            Queue = result.Page;
+            AnyRequests = result.AnyRequests;
+            Requesters = result.RequesterIds.Select(id => (Id: id, Name: ProfileNames.GetValueOrDefault(id) ?? id)).OrderBy(requester => requester.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+            VideoSeasonNumbers = await videoWorks.ResolveSeasonNumbersAsync(Queue.Items, cancellationToken);
             VideoWorks = await videoWorks.ResolveAsync(Queue.Items, cancellationToken);
+            var effectiveProfiles = new Dictionary<Guid, string>();
+            foreach (var request in Queue.Items)
+            {
+                var workId = request.WorkId ?? (VideoWorks.TryGetValue(request.Id, out var videoWork) ? videoWork.WorkId : (Guid?)null);
+                var effective = request.Options.QualityProfileId ?? qualityState.ResolveProfileId(request.Kind, workId);
+                effectiveProfiles[request.Id] = effective is not null ? QualityProfileNames.GetValueOrDefault(effective) ?? effective : "—";
+            }
+
+            EffectiveProfileNames = effectiveProfiles;
             Posters = await artwork.ResolvePostersAsync(Queue.Items, User.FindFirstValue(ClaimTypes.NameIdentifier)!, cancellationToken);
         }
         catch (Exception exception) when (exception is DbException or InvalidOperationException or FormatException)
         {
             logger.LogError(exception, "The request queue could not be read.");
             QueueFailed = true;
-            Queue = AdminRequestQuery.Build([], filter, ProfileNames);
+            Queue = AdminRequestQuery.Empty(filter);
         }
-    }
-
-    public async Task<IActionResult> OnPostPoliciesAsync(CancellationToken cancellationToken)
-    {
-        await LoadEnabledKindsAsync(cancellationToken);
-        if (!CanEditSettings)
-        {
-            return Forbid();
-        }
-
-        foreach (var kind in EnabledKinds)
-        {
-            var manual = Request.Form[$"manual.{AcquisitionAccessNames.Kind(kind)}"].ToString();
-            if (manual.Length == 0)
-            {
-                continue;
-            }
-
-            await store.SavePolicyAsync(
-                new AcquisitionAccessPolicy(kind, AcquisitionAccessNames.ParseManual(manual)),
-                cancellationToken);
-        }
-
-        var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        TempData["Status"] = ui["admin.requests.policiesSaved"];
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostAddRuleAsync(
-        string? name,
-        string[]? kinds,
-        string? profileId,
-        int? maxRequests,
-        int? periodDays,
-        CancellationToken cancellationToken)
-    {
-        await LoadEnabledKindsAsync(cancellationToken);
-        if (!CanEditSettings)
-        {
-            return Forbid();
-        }
-
-        var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        try
-        {
-            // The limit needs both numbers or neither; a half-filled limit is a mistake, not "no limit".
-            var quota = maxRequests is null && periodDays is null
-                ? null
-                : new AutoApprovalQuota(maxRequests ?? 0, periodDays ?? 0);
-            var parsedKinds = (kinds ?? [])
-                .Select(AcquisitionAccessNames.ParseKind)
-                .ToArray();
-            if (parsedKinds.Any(kind => !EnabledKinds.Contains(kind)))
-            {
-                throw new ArgumentException("A disabled media module cannot be added to an auto-approval rule.");
-            }
-
-            var rule = AutoApprovalRule.Create(
-                name,
-                parsedKinds,
-                string.IsNullOrWhiteSpace(profileId) ? [] : [profileId],
-                quota);
-            await settings.AddRuleAsync(rule, cancellationToken);
-            TempData["Status"] = ui["admin.requests.autoSaved"];
-        }
-        catch (ArgumentException)
-        {
-            TempData["Status"] = ui["admin.requests.autoInvalid"];
-        }
-
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostRuleEnabledAsync(string id, bool enabled, CancellationToken cancellationToken)
-    {
-        if (!CanEditSettings)
-        {
-            return Forbid();
-        }
-
-        await settings.SetRuleEnabledAsync(id, enabled, cancellationToken);
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostRemoveRuleAsync(string id, CancellationToken cancellationToken)
-    {
-        if (!CanEditSettings)
-        {
-            return Forbid();
-        }
-
-        await settings.RemoveRuleAsync(id, cancellationToken);
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostProfilesAsync(string[]? profiles, CancellationToken cancellationToken)
-    {
-        if (!CanEditSettings)
-        {
-            return Forbid();
-        }
-
-        // Only profiles that exist can be opened to requests.
-        var known = (await qualityProfiles.LoadAsync(cancellationToken)).Profiles
-            .Select(profile => profile.Id)
-            .ToHashSet(StringComparer.Ordinal);
-        await settings.SetRequesterQualityProfilesAsync((profiles ?? []).Where(known.Contains), cancellationToken);
-
-        var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        TempData["Status"] = ui["admin.requests.profilesSaved"];
-        return RedirectToPage();
     }
 
     /// <summary>Whether the owner can pick the profile while approving: the request must still wait, and have a Work the profile can be assigned to.</summary>
@@ -309,7 +191,7 @@ public sealed class RequestsModel(
         // The profile is assigned before the approval starts the search, so the first search already resolves it.
         if (!string.IsNullOrWhiteSpace(profileId))
         {
-            var chosen = await profileAssignment.AssignAsync((await store.GetAsync(id, cancellationToken))!, profileId.Trim(), cancellationToken);
+            var chosen = await requests.ChangeProfileAsync(id, profileId.Trim(), cancellationToken);
             if (chosen != RequestProfileResult.Assigned)
             {
                 Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -325,6 +207,11 @@ public sealed class RequestsModel(
 
     public async Task<IActionResult> OnPostRejectAsync(Guid id, string? note, string? returnUrl, CancellationToken cancellationToken)
     {
+        if (note?.Length > 2000)
+        {
+            return BadRequest();
+        }
+
         if (!await IsManageableAsync(id, cancellationToken))
         {
             return NotFound();
@@ -359,6 +246,18 @@ public sealed class RequestsModel(
             TempData["Status"] = ui["admin.requests.reopenBlocked"];
         }
 
+        return Back(returnUrl);
+    }
+
+    public async Task<IActionResult> OnPostBulkAsync(Guid[] ids, RequestBulkAction action, string? note, string? profileId, string? returnUrl, bool confirmed, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid || ids is null || ids.Length is < 1 or > AcquisitionRequestService.MaxBulkRequests || !Enum.IsDefined(action) || note?.Length > 2000 || action == RequestBulkAction.Delete && !confirmed)
+        {
+            return BadRequest();
+        }
+
+        var results = await requests.BulkAsync(ids, action, note, profileId, cancellationToken);
+        TempData["RequestActionResults"] = System.Text.Json.JsonSerializer.Serialize(results);
         return Back(returnUrl);
     }
 

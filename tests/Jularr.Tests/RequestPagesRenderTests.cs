@@ -11,6 +11,7 @@ using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Shell;
+using Jularr.Web.Features.Notifications;
 using Jularr.Web.Frontend;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -27,11 +28,35 @@ namespace Jularr.Tests;
 /// <summary>
 /// The request pages (#597) rendered end to end through a real HTTP request: the per-user history at
 /// <c>/Requests</c>, the request-with-options form at <c>/Requests/New</c> and the owner's
-/// <c>/Admin/Requests</c> with its auto-approval rules.
+/// <c>/Admin/Requests</c> and its separate settings boundary.
 /// </summary>
 [TestClass]
 public sealed class RequestPagesRenderTests
 {
+    [TestMethod]
+    public async Task HeaderPreviewsAreBoundedProfileScopedAndDoNotMarkNotificationsReadOnOpen()
+    {
+        await using var host = await RequestPagesHost.CreateAsync();
+        var notifications = new NotificationStore(host.Db);
+        for (var index = 0; index < 8; index++)
+        {
+            await notifications.CreateAsync(new NotificationDraft(RequestPagesHost.Profile, Guid.NewGuid(), JularrEventCategory.DownloadGrabbed, JularrEventSeverity.Info,
+                null, null, new Dictionary<string, string> { ["title"] = "Personal " + index }, index == 7 ? "//external.invalid" : "/Activity", null));
+        }
+
+        await notifications.CreateAsync(new NotificationDraft("another-profile", Guid.NewGuid(), JularrEventCategory.DownloadGrabbed, JularrEventSeverity.Info,
+            null, null, new Dictionary<string, string> { ["title"] = "Private other profile" }, "/Activity", null));
+        var preview = await host.GetHtmlAsync("/Notifications?handler=Preview", asOwner: false);
+        Assert.AreEqual(6, System.Text.RegularExpressions.Regex.Matches(preview, "<article").Count);
+        Assert.IsFalse(preview.Contains("Private other profile", StringComparison.Ordinal));
+        Assert.IsFalse(preview.Contains("external.invalid", StringComparison.Ordinal));
+        Assert.AreEqual(8, await notifications.CountUnreadAsync(RequestPagesHost.Profile));
+        await notifications.MarkAllReadAsync(RequestPagesHost.Profile);
+        Assert.AreEqual(0, await notifications.CountUnreadAsync(RequestPagesHost.Profile));
+        Assert.AreEqual(1, await notifications.CountUnreadAsync("another-profile"));
+
+    }
+
     [TestMethod]
     public async Task HistoryShowsTheSignedInProfilesRequestsWithTheirStateAndOptionsAndOpensTheirStatus()
     {
@@ -133,18 +158,24 @@ public sealed class RequestPagesRenderTests
 
         var html = await host.GetHtmlAsync("/Admin/Requests", asOwner: true);
 
-        StringAssert.Contains(html, "Auto-approval");
-        StringAssert.Contains(html, "Trusted friends");
-        StringAssert.Contains(html, "3 per 7 days");
-        StringAssert.Contains(html, "Off for now");
-        StringAssert.Contains(html, "Switch on");
-        StringAssert.Contains(html, "Add rule");
         StringAssert.Contains(html, "Episodes S01E03");
         StringAssert.Contains(html, "Approved automatically");
-        StringAssert.Contains(html, "Manual adding");
-        StringAssert.Contains(html, "Quality profiles for requests");
+        StringAssert.Contains(html, "/Admin/Requests/Settings");
+        Assert.IsFalse(html.Contains("Add rule", StringComparison.Ordinal), "The queue contains operations, not configuration.");
+        var settings = await host.GetHtmlAsync("/Admin/Requests/Settings", asOwner: true);
+        StringAssert.Contains(settings, "Auto-approval");
+        StringAssert.Contains(settings, "Trusted friends");
+        StringAssert.Contains(settings, "3 per 7 days");
+        StringAssert.Contains(settings, "Off for now");
+        StringAssert.Contains(settings, "Switch on");
+        StringAssert.Contains(settings, "Add rule");
+        StringAssert.Contains(settings, "Quality profiles for requests");
+        StringAssert.Contains(settings, "/Admin/Capabilities/Manual");
+        var manual = await host.GetHtmlAsync("/Admin/Capabilities/Manual", asOwner: true);
+        StringAssert.Contains(manual, "Manual adding");
+        Assert.AreEqual(HttpStatusCode.Forbidden, await host.GetStatusAsync("/Admin/Requests/Settings", asOwner: false));
+        Assert.AreEqual(HttpStatusCode.Forbidden, await host.GetStatusAsync("/Admin/Capabilities/Manual", asOwner: false));
         Assert.IsFalse(html.Contains("Adding from search", StringComparison.Ordinal), "The request-versus-instant rule now lives in the capability matrix.");
-        StringAssert.Contains(html, "/Admin/Capabilities");
     }
 
     [TestMethod]
@@ -192,7 +223,7 @@ public sealed class RequestPagesRenderTests
             1,
             System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"button button-primary admreq-action\" type=\"submit\"[^>]*>[\\s\\S]*?<span>Approve</span></button>").Count,
             "Only the pending request can be approved.");
-        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"admin-menu-item\" type=\"submit\">Reject</button>").Count, "Reject remains available through the row's More actions menu.");
+        StringAssert.Contains(all, "<button class=\"admin-menu-item\" type=\"submit\" data-admreq-command=\"Reject\">Reject</button>", "Reject remains available through the row's More actions menu.");
         Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"button admreq-action\" type=\"submit\">[\\s\\S]*?<span>Reopen</span></button>").Count);
         StringAssert.Contains(all, "class=\"admin-menu-item\" href=\"/Admin/Wanted\"");
         Assert.IsFalse(all.Contains("/Acquisition#wanted", StringComparison.Ordinal));
@@ -202,7 +233,9 @@ public sealed class RequestPagesRenderTests
         Assert.IsFalse(rejected.Contains("Pending Show", StringComparison.Ordinal));
 
         var approved = await host.GetHtmlAsync("/Admin/Requests?tab=approved", asOwner: true);
-        StringAssert.Contains(approved, "Failed Show", "A failed acquisition remains an approved request awaiting retry.");
+        Assert.IsFalse(approved.Contains("Failed Show", StringComparison.Ordinal), "Failed acquisition has its own attention tab.");
+        var failed = await host.GetHtmlAsync("/Admin/Requests?tab=failed", asOwner: true);
+        StringAssert.Contains(failed, "Failed Show");
         Assert.IsFalse(approved.Contains("Pending Show", StringComparison.Ordinal));
 
         var byLanguage = await host.GetHtmlAsync("/Admin/Requests?lang=de", asOwner: true);
@@ -369,6 +402,8 @@ public sealed class RequestPagesRenderTests
                         services.AddLogging();
                         services.AddSingleton<ViteAssetManifest>();
                         services.AddScoped<CurrentAccountContext>();
+                        services.AddScoped<OwnerAuthService>();
+                        services.AddSingleton<Microsoft.AspNetCore.Identity.IPasswordHasher<OwnerAccount>, Microsoft.AspNetCore.Identity.PasswordHasher<OwnerAccount>>();
                         services.AddSingleton(capabilities);
                         services.AddSingleton<Jularr.Web.Features.Instance.IInstanceModuleService>(new Jularr.Web.Features.Instance.InstanceModuleStore(data.FullName));
                         services.AddScoped<IMediaCapabilityService, MediaCapabilityService>();
@@ -376,6 +411,7 @@ public sealed class RequestPagesRenderTests
                         services.AddSingleton(settings);
                         services.AddSingleton(new QualityProfileStore(new DirectoryInfo(Path.Combine(data.FullName, "quality"))));
                         services.AddScoped<AcquisitionAccessStore>();
+                        services.AddScoped<NotificationStore>();
                         services.AddScoped<VideoRequestWorkResolver>();
                         services.AddMediaCore();
                         services.AddScoped<RequestWorkBinder>();

@@ -5,7 +5,6 @@
 @{
     var ui = Model.Ui;
     ViewData["Title"] = ui["admin.requests.title"];
-    var settings = Model.RequestSettings;
 }
 @section Head {
     <link rel="stylesheet" href="~/css/acquisition.css" asp-append-version="true" />
@@ -19,7 +18,13 @@
     <script src="~/js/admin-requests.js" asp-append-version="true" defer></script>
 }
 
-<partial name="_AdminNavigation" model="Model.Ui" />
+<header class="page-header admreq-heading">
+    <h1>@ui["admin.requests.title"]</h1>
+    @if (Model.CanEditSettings)
+    {
+        <a class="button" href="/Admin/Requests/Settings">@ui["nav.settings"]</a>
+    }
+</header>
 
 @{
     var queue = Model.Queue;
@@ -31,12 +36,31 @@
         (AdminRequestTab.Open, ui["admin.requests.tab.open"]),
         (AdminRequestTab.Approved, ui["admin.requests.tab.approved"]),
         (AdminRequestTab.InProgress, ui["admin.requests.tab.progress"]),
+        (AdminRequestTab.Failed, ui["admin.requests.tab.failed"]),
         (AdminRequestTab.Rejected, ui["admin.requests.tab.rejected"]),
         (AdminRequestTab.Done, ui["admin.requests.tab.done"])
     };
     static string Iso(DateTime value) => value.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
     static string Day(DateTime value) => value.ToString("yyyy-MM-dd");
     static string Clock(DateTime value) => value.ToString("HH:mm");
+}
+
+@if (TempData["RequestActionResults"] is string resultJson)
+{
+    var results = System.Text.Json.JsonSerializer.Deserialize<RequestActionResult[]>(resultJson) ?? [];
+    <section class="panel admreq-results" role="status">
+        <h2>@ui["admin.requests.results"]</h2>
+        @foreach (var group in results.GroupBy(result => result.Disposition))
+        {
+            <p>@ui["admin.requests.result." + group.Key.ToString().ToLowerInvariant()]: @group.Count()</p>
+        }
+        <details><summary>@ui["admin.requests.details"]</summary><ul>
+        @foreach (var result in results)
+        {
+            <li>@result.Id · @ui["admin.requests.result." + result.Disposition.ToString().ToLowerInvariant()] · @ui["admin.requests.reason." + result.Reason]</li>
+        }
+        </ul></details>
+    </section>
 }
 
 <section class="admreq" aria-label="@ui["admin.requests.title"]">
@@ -94,7 +118,7 @@
                 </select>
                 </div>
                 <div class="admreq-select-control">
-                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"sessions"' /></span>
+                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AppIcon" model='"users"' /></span>
                 <select name="by" aria-label="@ui["admin.requests.filter.requester"]" data-admreq-custom-select>
                     <option value="">@ui["admin.requests.filter.requester"]</option>
                     @foreach (var (requesterId, requesterName) in Model.Requesters)
@@ -225,9 +249,7 @@
                         var modifiedActor = request.WasAutoApproved
                             ? ui["requests.autoApproved"]
                             : Model.ProfileNames.GetValueOrDefault(request.DecidedByProfileId ?? string.Empty) ?? "—";
-                        var profileName = request.Options.QualityProfileId is { } profileId
-                            ? Model.QualityProfileNames.GetValueOrDefault(profileId) ?? profileId
-                            : "—";
+                        var profileName = Model.EffectiveProfileNames.GetValueOrDefault(request.Id) ?? "—";
                         var coverage = Model.CoverageOf(request);
                         var approvalStatus = request.Status switch
                         {
@@ -244,9 +266,9 @@
                             AcquisitionRequestStatus.Failed => "failed",
                             _ => null
                         };
-                        <tr class="admreq-row" data-admreq-row tabindex="0">
+                        <tr class="admreq-row" data-admreq-row data-request-id="@request.Id" data-request-status="@AcquisitionAccessNames.Status(request.Status)" data-request-operation="@request.OperationId" tabindex="0">
                             <td class="admreq-cell-selection">
-                                <input type="checkbox" aria-labelledby="@titleId" data-admreq-select />
+                                <input type="checkbox" value="@request.Id" aria-labelledby="@titleId" data-admreq-select />
                             </td>
                             <td class="admreq-cell-title">
                               <div class="admreq-title-wrap">
@@ -345,23 +367,14 @@
                                         && (request.Kind == MediaAcquisitionKind.Anime || isVideo);
                                     var searchNow = request.Status == AcquisitionRequestStatus.Approved && (isBookLike || isVideo);
                                     var viewIsPrimary = viewUrl is not null && !waiting && request.Status != AcquisitionRequestStatus.Rejected;
-                                    var hasMenu = request.Status == AcquisitionRequestStatus.Pending || inWanted || manageUrl is not null || waiting || manualUrl is not null || (viewUrl is not null && !viewIsPrimary);
+                                    var canChangeProfile = request.OperationId is null && request.Status is AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed;
+                                    var canDelete = request.Status is not (AcquisitionRequestStatus.Searching or AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing);
                                 }
                                 <div class="admreq-actions">
                                     @if (request.Status is AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Failed)
                                     {
                                         <form method="post" asp-page-handler="Approve" asp-route-id="@request.Id">
                                             <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                            @if (Model.CanChooseProfile(request))
-                                            {
-                                                <select name="profileId" aria-label="@ui["admin.requests.approveProfile"]">
-                                                    <option value="">@ui["admin.requests.keepProfile"]</option>
-                                                    @foreach (var profile in Model.QualityProfiles)
-                                                    {
-                                                        <option value="@profile.Id">@profile.Name</option>
-                                                    }
-                                                </select>
-                                            }
                                             <button class="button button-primary admreq-action" type="submit" data-admreq-action="@(request.Status == AcquisitionRequestStatus.Failed ? "retry" : "approve")"><span class="admreq-action-icon"><partial name="_AdminIcon" model='@(request.Status == AcquisitionRequestStatus.Failed ? "refresh" : "check")' /></span><span>@(request.Status == AcquisitionRequestStatus.Failed ? ui["admin.requests.retry"] : ui["admin.requests.approve"])</span></button>
                                         </form>
                                     }
@@ -388,16 +401,31 @@
                                             <button class="button admreq-action" type="submit" title="@ui["admin.requests.searchNow"]"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.searchNow"]</span></button>
                                         </form>
                                     }
-                                    @if (hasMenu)
-                                    {
-                                        <details class="admin-menu">
+                                    <details class="admin-menu">
                                             <summary class="admin-icon-button" aria-label="@ui["admin.menu.more"]" title="@ui["admin.menu.more"]"><partial name="_AdminIcon" model='"more"' /></summary>
                                             <div class="admin-menu-list">
+                                                <a class="admin-menu-item" href="@AcquisitionRequestService.StatusPath(request.Id)">@ui["admin.requests.details"]</a>
+                                                @if (canChangeProfile)
+                                                {
+                                                    <button class="admin-menu-item" type="button" data-admreq-command="Profile">@ui["admin.requests.changeProfile"]</button>
+                                                }
+                                                @if (request.CanBeCancelled)
+                                                {
+                                                    <button class="admin-menu-item" type="button" data-admreq-command="Cancel">@ui["requests.cancel.confirm"]</button>
+                                                }
+                                                @if (canDelete)
+                                                {
+                                                    <button class="admin-menu-item admreq-bulk-delete" type="button" data-admreq-command="Delete">@ui["admin.requests.delete"]</button>
+                                                }
+                                                @if (request.OperationId is { } operationId)
+                                                {
+                                                    <a class="admin-menu-item" href="/Admin/Operation/@operationId">@ui["admin.nav.operations"]</a>
+                                                }
                                                 @if (request.Status == AcquisitionRequestStatus.Pending)
                                                 {
                                                     <form method="post" asp-page-handler="Reject" asp-route-id="@request.Id">
                                                         <input type="hidden" name="returnUrl" value="@returnUrl" />
-                                                        <button class="admin-menu-item" type="submit">@ui["admin.requests.reject"]</button>
+                                                        <button class="admin-menu-item" type="submit" data-admreq-command="Reject">@ui["admin.requests.reject"]</button>
                                                     </form>
                                                 }
                                                 @if (manualUrl is not null)
@@ -425,7 +453,6 @@
                                                 }
                                             </div>
                                         </details>
-                                    }
                                 </div>
                             </td>
                         </tr>
@@ -434,9 +461,18 @@
             </table>
         </div>
 
-        <aside class="admreq-bulk" data-admreq-bulk hidden aria-live="polite">
+        <aside class="admreq-bulk" data-admreq-bulk hidden aria-label="@ui["admin.requests.bulkActions"]">
             <span class="admreq-bulk-count"><strong data-admreq-selected-count>0</strong> @ui["admin.requests.selected"]</span>
             <button class="button admin-icon-button admreq-clear-selection" type="button" data-admreq-clear-selection aria-label="@ui["admin.requests.selectionClear"]" title="@ui["admin.requests.selectionClear"]"><partial name="_AdminIcon" model='"close"' /></button>
+<div class="admreq-bulk-actions">
+                <button class="button admreq-action button-primary" type="button" data-admreq-command="Approve"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span>@ui["admin.requests.approve"]</span></button>
+                <button class="button admreq-action" type="button" data-admreq-command="Reject"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"close"' /></span><span>@ui["admin.requests.reject"]</span></button>
+                <button class="button admreq-action" type="button" data-admreq-command="Retry"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"refresh"' /></span><span>@ui["admin.requests.retry"]</span></button>
+                <button class="button admreq-action" type="button" data-admreq-command="Cancel"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"close"' /></span><span>@ui["admin.requests.cancel"]</span></button>
+                <button class="button admreq-action" type="button" data-admreq-command="Complete"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span>@ui["admin.requests.markDone"]</span></button>
+                <button class="button admreq-action" type="button" data-admreq-command="Profile"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"columns"' /></span><span>@ui["admin.requests.changeProfile"]</span></button>
+                <button class="button admreq-action admreq-bulk-delete" type="button" data-admreq-command="Delete"><span class="admreq-action-icon"><partial name="_AdminIcon" model='"trash"' /></span><span>@ui["admin.requests.delete"]</span></button>
+            </div>
         </aside>
 
         <div class="admreq-footer">
@@ -522,163 +558,39 @@
         <div class="admreq-dialog-message"><dt>@ui["admin.requests.detailsMessage"]</dt><dd data-admreq-dialog-message></dd></div>
     </dl>
 </dialog>
-
-<details class="admreq-settings" id="rules">
-    <summary>@ui["admin.requests.settingsSummary"]</summary>
-    @if (User.IsInRole(AccountRoles.Owner))
-    {
-        <a class="admreq-capabilities-link" href="/Admin/Capabilities">@ui["admin.capabilities.title"]</a>
-    }
-
-<section class="panel access-policies">
-    <div class="panel-heading">
-        <h2>@ui["admin.requests.policiesHeading"]</h2>
-    </div>
-    <p class="muted">@ui["admin.requests.policiesHelp"]</p>
-    <form method="post" asp-page-handler="Policies">
-        <table class="access-policy-table">
-            <thead>
-                <tr>
-                    <th scope="col">@ui["admin.requests.column.media"]</th>
-                    <th scope="col">@ui["admin.requests.column.manual"]</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var policy in Model.Policies)
-                {
-                    var name = AcquisitionAccessNames.Kind(policy.Kind);
-                    <tr>
-                        <th scope="row">@ui["admin.requests.kind." + name]</th>
-                        <td>
-                            <select name="manual.@name" aria-label="@ui["admin.requests.column.manual"]">
-                                @foreach (var mode in Enum.GetValues<ManualAddMode>())
-                                {
-                                    var value = AcquisitionAccessNames.Manual(mode);
-                                    <option value="@value" selected="@(mode == policy.Manual)">@ui["admin.requests.manual." + value]</option>
-                                }
-                            </select>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        <button class="button button-primary" type="submit">@ui["common.save"]</button>
-    </form>
-</section>
-
-<section class="panel auto-approval" id="auto-approval">
-    <div class="panel-heading">
-        <h2>@ui["admin.requests.autoHeading"]</h2>
-    </div>
-    <p class="muted">@ui["admin.requests.autoHelp"]</p>
-
-    @if (settings.AutoApprovalRules.Count == 0)
-    {
-        <p class="muted">@ui["admin.requests.autoEmpty"]</p>
-    }
-    else
-    {
-        <ul class="auto-rule-list">
-            @foreach (var rule in settings.AutoApprovalRules)
-            {
-                var media = rule.Kinds.Count == 0
-                    ? ui["admin.requests.autoAllMedia"]
-                    : string.Join(", ", rule.Kinds.Select(kind => ui["admin.requests.kind." + AcquisitionAccessNames.Kind(kind)]));
-                var requester = rule.ProfileIds.Count == 0
-                    ? ui["admin.requests.autoEveryone"]
-                    : string.Join(", ", rule.ProfileIds.Select(id => Model.ProfileNames.GetValueOrDefault(id) ?? id));
-                var limit = rule.Quota is { } quota
-                    ? ui.Format("admin.requests.autoQuotaText", ("count", quota.MaxRequests), ("days", quota.PeriodDays))
-                    : ui["admin.requests.autoNoLimit"];
-                <li class="auto-rule-row@(rule.Enabled ? "" : " is-off")">
-                    <div class="auto-rule-copy">
-                        <strong>@rule.Name</strong>
-                        <span>@media · @requester · @limit</span>
-                    </div>
-                    @if (!rule.Enabled)
+<dialog class="admreq-dialog admreq-command-dialog" data-admreq-command-dialog aria-labelledby="admreq-command-title">
+    <form method="post" asp-page-handler="Bulk" data-admreq-command-form>
+        <input type="hidden" name="returnUrl" value="@returnUrl" />
+        <input type="hidden" name="confirmed" value="true" />
+        <input type="hidden" name="action" data-admreq-command-action />
+        <div data-admreq-command-ids></div>
+        <div class="admreq-dialog-head">
+            <h2 id="admreq-command-title" data-admreq-command-title></h2>
+            <button class="button admin-icon-button" type="button" data-admreq-command-close aria-label="@ui["common.close"]"><partial name="_AdminIcon" model='"close"' /></button>
+        </div>
+        <p>@ui["admin.requests.selected"] <strong data-admreq-command-count></strong></p>
+        <p data-admreq-delete-warning hidden>@ui["admin.requests.deleteWarning"]</p>
+        <label data-admreq-command-note hidden>
+            <span>@ui["admin.requests.rejectReason"]</span>
+            <textarea name="note" maxlength="2000" rows="3"></textarea>
+        </label>
+        <label data-admreq-command-profile hidden>
+            <span>@ui["admin.requests.approveProfile"]</span>
+            <span class="admreq-select-control">
+                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AppIcon" model='"settings"' /></span>
+                <select name="profileId" aria-label="@ui["admin.requests.approveProfile"]" data-admreq-custom-select>
+                    <option value="">@ui["admin.requests.keepProfile"]</option>
+                    @foreach (var profile in Model.QualityProfiles)
                     {
-                        <span class="status-pill">@ui["admin.requests.autoOff"]</span>
-                    }
-                    @if (Model.CanEditSettings)
-                    {
-                        <div class="request-actions">
-                            <form method="post" asp-page-handler="RuleEnabled">
-                                <input type="hidden" name="id" value="@rule.Id" />
-                                <input type="hidden" name="enabled" value="@(rule.Enabled ? "false" : "true")" />
-                                <button class="button" type="submit">@(rule.Enabled ? ui["admin.requests.autoDisable"] : ui["admin.requests.autoEnable"])</button>
-                            </form>
-                            <form method="post" asp-page-handler="RemoveRule">
-                                <input type="hidden" name="id" value="@rule.Id" />
-                                <button class="button" type="submit">@ui["admin.requests.autoRemove"]</button>
-                            </form>
-                        </div>
-                    }
-                </li>
-            }
-        </ul>
-    }
-
-    @if (Model.CanEditSettings)
-    {
-        <form method="post" asp-page-handler="AddRule" class="auto-rule-form">
-            <label class="auto-rule-field">
-                <span>@ui["admin.requests.autoName"]</span>
-                <input type="text" name="name" maxlength="@AutoApprovalRule.MaxNameLength" required />
-            </label>
-            <fieldset class="auto-rule-field">
-                <legend>@ui["admin.requests.column.media"]</legend>
-                <div class="auto-rule-checks">
-                    @foreach (var kind in Model.EnabledKinds)
-                    {
-                        var kindName = AcquisitionAccessNames.Kind(kind);
-                        <label><input type="checkbox" name="kinds" value="@kindName" /> @ui["admin.requests.kind." + kindName]</label>
-                    }
-                </div>
-            </fieldset>
-            <label class="auto-rule-field">
-                <span>@ui["admin.requests.autoRequester"]</span>
-                <select name="profileId">
-                    <option value="">@ui["admin.requests.autoEveryone"]</option>
-                    @foreach (var (id, userName) in Model.ProfileNames.OrderBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase))
-                    {
-                        <option value="@id">@userName</option>
+                        <option value="@profile.Id">@profile.Name</option>
                     }
                 </select>
-            </label>
-            <label class="auto-rule-field">
-                <span>@ui["admin.requests.autoMax"]</span>
-                <input type="number" name="maxRequests" min="1" max="@AutoApprovalQuota.MaxRequestsLimit" />
-            </label>
-            <label class="auto-rule-field">
-                <span>@ui["admin.requests.autoDays"]</span>
-                <input type="number" name="periodDays" min="1" max="@AutoApprovalQuota.PeriodDaysLimit" />
-            </label>
-            <button class="button button-primary" type="submit">@ui["admin.requests.autoAdd"]</button>
-        </form>
-    }
-
-    @if (Model.QualityProfiles.Count > 0)
-    {
-        <h3 class="auto-approval-subheading">@ui["admin.requests.profilesHeading"]</h3>
-        <p class="muted">@ui["admin.requests.profilesHelp"]</p>
-        <form method="post" asp-page-handler="Profiles">
-            <div class="auto-rule-checks">
-                @foreach (var profile in Model.QualityProfiles)
-                {
-                    <label>
-                        <input type="checkbox" name="profiles" value="@profile.Id"
-                               checked="@settings.RequesterQualityProfileIds.Contains(profile.Id, StringComparer.Ordinal)"
-                               disabled="@(!Model.CanEditSettings)" />
-                        @profile.Name
-                    </label>
-                }
-            </div>
-            @if (Model.CanEditSettings)
-            {
-                <button class="button button-primary" type="submit">@ui["common.save"]</button>
-            }
-        </form>
-    }
-</section>
-
-</details>
+            </span>
+        </label>
+        <p class="muted">@ui["admin.requests.bulkLimit"]</p>
+        <div class="admreq-command-footer">
+            <button class="button" type="button" data-admreq-command-close>@ui["common.cancel"]</button>
+            <button class="button button-primary admreq-action" type="submit" data-admreq-command-submit><span class="admreq-action-icon"><partial name="_AdminIcon" model='"check"' /></span><span data-admreq-command-label></span></button>
+        </div>
+    </form>
+</dialog>

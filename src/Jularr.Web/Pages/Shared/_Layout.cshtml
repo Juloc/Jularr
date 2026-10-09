@@ -40,6 +40,7 @@
         : InstanceModuleSettings.Default;
     var servesPlayback = moduleSettings.IsEnabled(InstanceModule.Playback);
     var servesReading = moduleSettings.IsEnabled(InstanceModule.Manga) || moduleSettings.IsEnabled(InstanceModule.Novel) || moduleSettings.IsEnabled(InstanceModule.Book);
+    ViewData["OfflineDownloadsEnabled"] = servesPlayback || servesReading;
 
     ViewData["UiTextBundle"] = ui;
     ViewData["AppThemeMode"] = appTheme;
@@ -82,6 +83,7 @@
     <style id="app-accent-palette">@Html.Raw(palette.ToStyleSheet())</style>
     <script type="application/json" id="app-shell-text">@Json.Serialize(ui.WithPrefix("pwa."))</script>
     <script src="~/js/app-theme.js" asp-append-version="true" defer></script>
+    <script src="~/js/shell-popovers.js" asp-append-version="true" defer></script>
     @if (effectiveSakura != AppSakura.Off || ViewData["NeedsSakura"] is true)
     {
         @* Settings/Appearance asks for the script as well, because switching the effect on there starts it on the running page. *@
@@ -97,7 +99,7 @@
     {
         @* Offline library (#221): loaded on every authenticated page (not just Settings/Offline and
            the "Save offline" action) because the compact global download indicator in
-           _AppAccountFooter.cshtml needs the manager everywhere. Previously duplicated per-page;
+           The personal offline preview uses the same profile-local manager as the readers;
            see _OfflineLibraryAction.cshtml and Settings/Offline.cshtml. *@
         @if (servesReading || servesPlayback)
         {

@@ -242,6 +242,13 @@ public enum RequestEditOutcome
     NotEditable
 }
 
+public enum RequestDeleteOutcome
+{
+    Deleted,
+    AlreadyDeleted,
+    StateChangedOrActiveDownload
+}
+
 public enum RequestRetryOutcome
 {
     Retried,

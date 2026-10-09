@@ -9,6 +9,16 @@ namespace Jularr.Web.Features.Acquisition.Wanted;
 // @lightNovel, @manga, @music (the media type numbers the installed-coverage rules distinguish).
 internal static class WantedSql
 {
+    public const string LockRequestForDeletion = """
+        SELECT "Id" FROM "AcquisitionRequests" WHERE "Id" = @requestId FOR UPDATE;
+        SELECT o."Id" FROM "Operations" o JOIN "AcquisitionRequests" r ON r."OperationId" = o."Id"
+        WHERE r."Id" = @requestId FOR UPDATE OF o;
+        """;
+
+    public const string RemoveRequestTargets = """
+        DELETE FROM "RequestTargets" WHERE "RequestId" = @requestId RETURNING "WorkId" AS "Value";
+        """;
+
     private const string Prerequisites =
         $$"""
         monitored_relation AS (

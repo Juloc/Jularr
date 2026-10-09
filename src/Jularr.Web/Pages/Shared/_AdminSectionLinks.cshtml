@@ -1,0 +1,23 @@
+@using Jularr.Web.Features.Auth
+@using Jularr.Web.Features.Instance
+@using Jularr.Web.Features.Localization
+@using Microsoft.Extensions.DependencyInjection
+@{
+    var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
+    var service = Context.RequestServices.GetService<IInstanceModuleService>();
+    var settings = service is null ? InstanceModuleSettings.Default : await service.GetAsync(Context.RequestAborted);
+    var modules = settings.Modules.Where(pair => pair.Value).Select(pair => pair.Key).ToHashSet();
+    var links = UiShellNavigation.BuildContextualLinks(Context.Request.Path, policy => JularrPolicies.Allows(User, policy), modules);
+}
+@if (links.Count > 1)
+{
+    <nav class="admin-section-links" aria-label="@ui[links[0].LabelKey]">
+        @foreach (var link in links)
+        {
+            <a class="button button-secondary @(link.IsActive ? "active" : "")" href="@link.Href" aria-current="@(link.IsActive ? "page" : null)">
+                <partial name="_AppIcon" model="link.Icon" />
+                <span>@ui[link.LabelKey]</span>
+            </a>
+        }
+    </nav>
+}

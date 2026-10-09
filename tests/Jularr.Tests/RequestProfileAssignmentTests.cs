@@ -35,7 +35,7 @@ public sealed class RequestProfileAssignmentTests
             var profiles = new QualityProfileStore(directory, registry);
             await profiles.UpsertAsync(registry.DefaultProfileFor(kind) with { Id = "strict", Name = "Strict" });
             var old = await RequestWorkTestSupport.CreateRequestAsync(db, kind, bound: false);
-            var assignment = new RequestProfileAssignment(profiles, RequestWorkTestSupport.Binder(db), new VideoRequestWorkResolver(db));
+            var assignment = new RequestProfileAssignment(profiles, RequestWorkTestSupport.Binder(db), new VideoRequestWorkResolver(db), new AcquisitionAccessStore(db));
 
             var result = await assignment.AssignAsync(old, "STRICT", CancellationToken.None);
             var bound = (await new AcquisitionAccessStore(db).GetAsync(old.Id, CancellationToken.None))!;
@@ -66,12 +66,13 @@ public sealed class RequestProfileAssignmentTests
             var request = await PendingAsync(db, MediaAcquisitionKind.Movie, "tmdb", "603", "The Matrix");
             var anime = await PendingAsync(db, MediaAcquisitionKind.Anime, "anilist", "1", "Cowboy Bebop");
             var withoutWork = await PendingAsync(db, MediaAcquisitionKind.Movie, "tmdb", "999", "Not materialized");
-            var assignment = new RequestProfileAssignment(profiles, RequestWorkTestSupport.Binder(db), new VideoRequestWorkResolver(db));
+            var assignment = new RequestProfileAssignment(profiles, RequestWorkTestSupport.Binder(db), new VideoRequestWorkResolver(db), new AcquisitionAccessStore(db));
 
             Assert.AreEqual(RequestProfileResult.UnknownProfile, await assignment.AssignAsync(request, "gone", CancellationToken.None));
             Assert.AreEqual(RequestProfileResult.Assigned, await assignment.AssignAsync(request, "strict", CancellationToken.None));
             Assert.AreEqual("strict", (await profiles.LoadAsync()).WorkAssignments[movie.Id.ToString("D")]);
-            Assert.AreEqual(RequestProfileResult.NoWork, await assignment.AssignAsync(anime, "strict", CancellationToken.None), "Anime keeps its profile in the request options and its monitoring.");
+            Assert.AreEqual(RequestProfileResult.Assigned, await assignment.AssignAsync(anime, "strict", CancellationToken.None));
+            Assert.AreEqual("strict", (await new AcquisitionAccessStore(db).GetAsync(anime.Id, CancellationToken.None))!.Options.QualityProfileId, "Anime keeps its profile in request options.");
             Assert.AreEqual(RequestProfileResult.NoWork, await assignment.AssignAsync(withoutWork, "strict", CancellationToken.None), "A title without a Work has nothing to assign to.");
             Assert.AreEqual(1, (await profiles.LoadAsync()).WorkAssignments.Count);
         }

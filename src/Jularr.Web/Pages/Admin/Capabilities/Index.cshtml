@@ -13,10 +13,13 @@
         <h1>@ui["admin.capabilities.title"]</h1>
         <p>@ui["admin.capabilities.subtitle"]</p>
     </div>
-    <a class="button" asp-page="/Admin/Users">@ui["admin.user.backToUsers"]</a>
+    <div class="request-actions">
+        <a class="button" href="/Admin/Capabilities/Manual">@ui["admin.requests.policiesHeading"]</a>
+        <a class="button" asp-page="/Admin/Users">@ui["admin.user.backToUsers"]</a>
+    </div>
 </header>
 
-<partial name="_AdminNavigation" model="Model.Ui" />
+<partial name="_AdminSectionLinks" />
 
 <p class="muted">@ui["admin.capabilities.ownerNote"]</p>
 

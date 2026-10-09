@@ -65,9 +65,9 @@
                         </span>
                     </div>
                     <div class="notification-row-actions">
-                        @if (!string.IsNullOrWhiteSpace(item.DeepLink))
+                        @if (Jularr.Web.Features.Notifications.NotificationLinks.LocalPath(item.DeepLink) is { } deepLink)
                         {
-                            <a class="button" href="@item.DeepLink">@ui["notifications.inbox.viewLink"]</a>
+                            <a class="button" href="@deepLink">@ui["notifications.inbox.viewLink"]</a>
                         }
                         @if (!item.IsRead)
                         {

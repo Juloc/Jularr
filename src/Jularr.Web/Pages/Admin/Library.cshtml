@@ -1,0 +1,50 @@
+@page
+@model Jularr.Web.Pages.Admin.LibraryModel
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.nav.library"];
+}
+<header class="page-header"><h1>@ui["admin.nav.library"]</h1></header>
+<partial name="_AdminSectionLinks" />
+<form method="get" class="search-form">
+    <input type="search" name="q" value="@Model.Search" aria-label="@ui["common.search"]" placeholder="@ui["common.search"]" />
+    <button class="button button-secondary" type="submit">@ui["common.search"]</button>
+</form>
+@if (Model.Works.Count == 0)
+{
+    <p class="empty-state">@ui["admin.library.empty"]</p>
+}
+else
+{
+    <ul class="admin-library-list">
+        @foreach (var work in Model.Works)
+        {
+            var href = Jularr.Web.Pages.Admin.LibraryModel.ManagementPath(work);
+            <li>
+                @if (href is not null)
+                {
+                    <a href="@href">@work.CanonicalTitle</a>
+                }
+                else
+                {
+                    <span>@work.CanonicalTitle</span>
+                }
+                <span class="muted">@work.Year</span>
+            </li>
+        }
+    </ul>
+}
+@if (Model.PageCount > 1)
+{
+    <nav class="admin-section-links" aria-label="@ui["admin.nav.library"]">
+        @if (Model.PageNumber > 1)
+        {
+            <a class="button button-secondary" asp-page="/Admin/Library" asp-route-q="@Model.Search" asp-route-pageNumber="@(Model.PageNumber - 1)">@ui["search.pager.previous"]</a>
+        }
+        <span>@Model.PageNumber / @Model.PageCount</span>
+        @if (Model.PageNumber < Model.PageCount)
+        {
+            <a class="button button-secondary" asp-page="/Admin/Library" asp-route-q="@Model.Search" asp-route-pageNumber="@(Model.PageNumber + 1)">@ui["search.pager.next"]</a>
+        }
+    </nav>
+}

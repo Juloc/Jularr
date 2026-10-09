@@ -1,0 +1,131 @@
+@page
+@model Jularr.Web.Pages.Admin.Requests.SettingsModel
+@using Jularr.Web.Features.Acquisition.Access
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.requests.settingsSummary"];
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/requests.css" asp-append-version="true" />
+}
+<header class="page-header">
+    <h1>@ui["admin.requests.settingsSummary"]</h1>
+    <a class="button" href="/Admin/Requests">@ui["admin.requests.title"]</a>
+</header>
+@{ var settings = Model.RequestSettings; }
+<a class="button" href="/Admin/Capabilities/Manual">@ui["admin.requests.policiesHeading"]</a>
+
+<section class="panel auto-approval" id="auto-approval">
+    <div class="panel-heading">
+        <h2>@ui["admin.requests.autoHeading"]</h2>
+    </div>
+    <p class="muted">@ui["admin.requests.autoHelp"]</p>
+
+    @if (settings.AutoApprovalRules.Count == 0)
+    {
+        <p class="muted">@ui["admin.requests.autoEmpty"]</p>
+    }
+    else
+    {
+        <ul class="auto-rule-list">
+            @foreach (var rule in settings.AutoApprovalRules)
+            {
+                var media = rule.Kinds.Count == 0
+                    ? ui["admin.requests.autoAllMedia"]
+                    : string.Join(", ", rule.Kinds.Select(kind => ui["admin.requests.kind." + AcquisitionAccessNames.Kind(kind)]));
+                var requester = rule.ProfileIds.Count == 0
+                    ? ui["admin.requests.autoEveryone"]
+                    : string.Join(", ", rule.ProfileIds.Select(id => Model.ProfileNames.GetValueOrDefault(id) ?? id));
+                var limit = rule.Quota is { } quota
+                    ? ui.Format("admin.requests.autoQuotaText", ("count", quota.MaxRequests), ("days", quota.PeriodDays))
+                    : ui["admin.requests.autoNoLimit"];
+                <li class="auto-rule-row@(rule.Enabled ? "" : " is-off")">
+                    <div class="auto-rule-copy">
+                        <strong>@rule.Name</strong>
+                        <span>@media · @requester · @limit</span>
+                    </div>
+                    @if (!rule.Enabled)
+                    {
+                        <span class="status-pill">@ui["admin.requests.autoOff"]</span>
+                    }
+                    @if (Model.CanEditSettings)
+                    {
+                        <div class="request-actions">
+                            <form method="post" asp-page-handler="RuleEnabled">
+                                <input type="hidden" name="id" value="@rule.Id" />
+                                <input type="hidden" name="enabled" value="@(rule.Enabled ? "false" : "true")" />
+                                <button class="button" type="submit">@(rule.Enabled ? ui["admin.requests.autoDisable"] : ui["admin.requests.autoEnable"])</button>
+                            </form>
+                            <form method="post" asp-page-handler="RemoveRule">
+                                <input type="hidden" name="id" value="@rule.Id" />
+                                <button class="button" type="submit">@ui["admin.requests.autoRemove"]</button>
+                            </form>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    @if (Model.CanEditSettings)
+    {
+        <form method="post" asp-page-handler="AddRule" class="auto-rule-form">
+            <label class="auto-rule-field">
+                <span>@ui["admin.requests.autoName"]</span>
+                <input type="text" name="name" maxlength="@AutoApprovalRule.MaxNameLength" required />
+            </label>
+            <fieldset class="auto-rule-field">
+                <legend>@ui["admin.requests.column.media"]</legend>
+                <div class="auto-rule-checks">
+                    @foreach (var kind in Model.EnabledKinds)
+                    {
+                        var kindName = AcquisitionAccessNames.Kind(kind);
+                        <label><input type="checkbox" name="kinds" value="@kindName" /> @ui["admin.requests.kind." + kindName]</label>
+                    }
+                </div>
+            </fieldset>
+            <label class="auto-rule-field">
+                <span>@ui["admin.requests.autoRequester"]</span>
+                <select name="profileId">
+                    <option value="">@ui["admin.requests.autoEveryone"]</option>
+                    @foreach (var (id, userName) in Model.ProfileNames.OrderBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase))
+                    {
+                        <option value="@id">@userName</option>
+                    }
+                </select>
+            </label>
+            <label class="auto-rule-field">
+                <span>@ui["admin.requests.autoMax"]</span>
+                <input type="number" name="maxRequests" min="1" max="@AutoApprovalQuota.MaxRequestsLimit" />
+            </label>
+            <label class="auto-rule-field">
+                <span>@ui["admin.requests.autoDays"]</span>
+                <input type="number" name="periodDays" min="1" max="@AutoApprovalQuota.PeriodDaysLimit" />
+            </label>
+            <button class="button button-primary" type="submit">@ui["admin.requests.autoAdd"]</button>
+        </form>
+    }
+
+    @if (Model.QualityProfiles.Count > 0)
+    {
+        <h3 class="auto-approval-subheading">@ui["admin.requests.profilesHeading"]</h3>
+        <p class="muted">@ui["admin.requests.profilesHelp"]</p>
+        <form method="post" asp-page-handler="Profiles">
+            <div class="auto-rule-checks">
+                @foreach (var profile in Model.QualityProfiles)
+                {
+                    <label>
+                        <input type="checkbox" name="profiles" value="@profile.Id"
+                               checked="@settings.RequesterQualityProfileIds.Contains(profile.Id, StringComparer.Ordinal)"
+                               disabled="@(!Model.CanEditSettings)" />
+                        @profile.Name
+                    </label>
+                }
+            </div>
+            @if (Model.CanEditSettings)
+            {
+                <button class="button button-primary" type="submit">@ui["common.save"]</button>
+            }
+        </form>
+    }
+</section>

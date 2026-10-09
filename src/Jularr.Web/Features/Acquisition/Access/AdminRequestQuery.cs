@@ -8,8 +8,9 @@ public enum AdminRequestTab
     /// <summary>Waiting for the owner's decision.</summary>
     Open,
 
-    /// <summary>Approved, including requests whose acquisition needs retry after a failure.</summary>
+    /// <summary>Approved requests awaiting acquisition.</summary>
     Approved,
+    Failed,
 
     /// <summary>Searching, downloading or importing.</summary>
     InProgress,
@@ -55,11 +56,7 @@ public sealed record AdminRequestPage(
     public bool HasNext => Page < PageCount;
 }
 
-/// <summary>
-/// The owner's request queue (Admin → Requests): tabs by lifecycle, filters for media type, language, status
-/// and requester, a search over title and requester, and paging. The queue of one server is small, so the
-/// rows are read once and narrowed here; that keeps tab counts and filters consistent with each other.
-/// </summary>
+/// <summary>Shared queue address normalization and lifecycle tab mapping.</summary>
 public static class AdminRequestQuery
 {
     public const int DefaultPageSize = 50;
@@ -79,7 +76,8 @@ public static class AdminRequestQuery
     public static AdminRequestTab TabOf(AcquisitionRequestStatus status) => status switch
     {
         AcquisitionRequestStatus.Pending => AdminRequestTab.Open,
-        AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed => AdminRequestTab.Approved,
+        AcquisitionRequestStatus.Approved => AdminRequestTab.Approved,
+        AcquisitionRequestStatus.Failed => AdminRequestTab.Failed,
         AcquisitionRequestStatus.Searching or AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing
             => AdminRequestTab.InProgress,
         AcquisitionRequestStatus.Completed => AdminRequestTab.Done,
@@ -95,6 +93,7 @@ public static class AdminRequestQuery
         AdminRequestTab.Open => "open",
         AdminRequestTab.Approved => "approved",
         AdminRequestTab.InProgress => "progress",
+        AdminRequestTab.Failed => "failed",
         AdminRequestTab.Done => "done",
         AdminRequestTab.Rejected => "rejected",
         _ => "all"
@@ -105,6 +104,7 @@ public static class AdminRequestQuery
         "open" => AdminRequestTab.Open,
         "approved" => AdminRequestTab.Approved,
         "progress" => AdminRequestTab.InProgress,
+        "failed" => AdminRequestTab.Failed,
         "done" => AdminRequestTab.Done,
         "rejected" => AdminRequestTab.Rejected,
         _ => AdminRequestTab.All
@@ -138,107 +138,5 @@ public static class AdminRequestQuery
         return null;
     }
 
-    /// <param name="rows">Every request, in the order the list shows them.</param>
-    /// <param name="requesterNames">User names by profile id; the search also matches the requester's name.</param>
-    public static AdminRequestPage Build(
-        IReadOnlyList<AcquisitionRequest> rows,
-        AdminRequestFilter filter,
-        IReadOnlyDictionary<string, string> requesterNames,
-        IReadOnlyDictionary<Guid, IReadOnlyList<int>>? videoSeasons = null)
-    {
-        ArgumentNullException.ThrowIfNull(rows);
-        ArgumentNullException.ThrowIfNull(filter);
-        ArgumentNullException.ThrowIfNull(requesterNames);
-
-        var search = filter.Search?.Trim();
-        var language = string.IsNullOrWhiteSpace(filter.Language) ? null : filter.Language;
-        var requester = string.IsNullOrWhiteSpace(filter.RequesterProfileId) ? null : filter.RequesterProfileId;
-        var season = filter.Season is >= 0 and <= AcquisitionRequestOptions.MaxSeasonNumber ? filter.Season : null;
-
-        // Everything but the tab and the status narrows the counts too, so a tab's number is what it would list.
-        var narrowed = rows
-            .Where(row => filter.Kind is not { } kind || row.Kind == kind)
-            .Where(row => language is null || string.Equals(LanguageOf(row), language, StringComparison.Ordinal))
-            .Where(row => requester is null || row.RequestedByProfileId == requester)
-            .Where(row => season is null || SeasonNumbersOf(row, videoSeasons).Contains(season.Value))
-            .Where(row => string.IsNullOrEmpty(search) || Matches(row, search, requesterNames))
-            .ToArray();
-
-        var counts = new Dictionary<AdminRequestTab, int>
-        {
-            [AdminRequestTab.All] = narrowed.Count(row => row.Status != AcquisitionRequestStatus.Completed)
-        };
-        foreach (var tab in Enum.GetValues<AdminRequestTab>().Where(tab => tab != AdminRequestTab.All))
-        {
-            counts[tab] = narrowed.Count(row => TabOf(row.Status) == tab);
-        }
-
-        var matching = narrowed
-            .Where(row => filter.Tab != AdminRequestTab.All ? TabOf(row.Status) == filter.Tab : filter.Status is not null || row.Status != AcquisitionRequestStatus.Completed)
-            .Where(row => filter.Status is not { } status || row.Status == status)
-            .ToArray();
-
-        var languages = rows
-            .Select(LanguageOf)
-            .OfType<string>()
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(tag => LanguageRank(tag))
-            .ThenBy(tag => tag, StringComparer.Ordinal)
-            .ToArray();
-        var seasons = rows.SelectMany(row => SeasonNumbersOf(row, videoSeasons)).Distinct().Order().ToArray();
-
-        // A page past the end (a filter with fewer rows, requests that changed state) shows the last one.
-        var pageSize = NormalizePageSize(filter.PageSize);
-        var pageCount = Math.Max(1, (matching.Length + pageSize - 1) / pageSize);
-        var page = Math.Clamp(filter.Page, 1, pageCount);
-        var sorted = NormalizeSort(filter.Sort) switch
-        {
-            "oldest" => matching.OrderBy(row => row.CreatedAt).ThenBy(row => row.Id),
-            "modified" => matching.OrderByDescending(row => row.UpdatedAt).ThenByDescending(row => row.CreatedAt).ThenBy(row => row.Id),
-            "title" => matching.OrderBy(row => row.Title, StringComparer.CurrentCultureIgnoreCase).ThenBy(row => row.Id),
-            "requester" => matching
-                .OrderBy(row => requesterNames.GetValueOrDefault(row.RequestedByProfileId) ?? row.RequestedByProfileId, StringComparer.CurrentCultureIgnoreCase)
-                .ThenByDescending(row => row.CreatedAt)
-                .ThenBy(row => row.Id),
-            _ => matching.OrderByDescending(row => row.CreatedAt).ThenBy(row => row.Id)
-        };
-        var items = sorted.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
-        return new AdminRequestPage(items, filter with { Page = page, PageSize = pageSize, Sort = NormalizeSort(filter.Sort), Season = season }, counts, languages, seasons, matching.Length, pageCount);
-    }
-
-    public static IReadOnlyList<int> SeasonNumbersOf(AcquisitionRequest request, IReadOnlyDictionary<Guid, IReadOnlyList<int>>? videoSeasons = null)
-    {
-        if (request.Kind == MediaAcquisitionKind.Anime)
-        {
-            return request.Options.Scope switch
-            {
-                RequestScope.Seasons => request.Options.Seasons.Distinct().Order().ToArray(),
-                RequestScope.Episodes => request.Options.Episodes.Select(episode => episode.Season).Distinct().Order().ToArray(),
-                _ => []
-            };
-        }
-
-        return request.Kind == MediaAcquisitionKind.Tv && videoSeasons?.TryGetValue(request.Id, out var seasons) == true
-            ? seasons
-            : [];
-    }
-
-    private static bool Matches(AcquisitionRequest row, string search, IReadOnlyDictionary<string, string> requesterNames) =>
-        row.Title.Contains(search, StringComparison.CurrentCultureIgnoreCase)
-        || (row.Subtitle?.Contains(search, StringComparison.CurrentCultureIgnoreCase) ?? false)
-        || (requesterNames.TryGetValue(row.RequestedByProfileId, out var name)
-            && name.Contains(search, StringComparison.CurrentCultureIgnoreCase));
-
-    private static int LanguageRank(string tag)
-    {
-        for (var index = 0; index < RequestLanguages.Choices.Count; index++)
-        {
-            if (RequestLanguages.Choices[index].Tag == tag)
-            {
-                return index;
-            }
-        }
-
-        return RequestLanguages.Choices.Count;
-    }
+    public static AdminRequestPage Empty(AdminRequestFilter filter) => new([], filter, Enum.GetValues<AdminRequestTab>().ToDictionary(tab => tab, _ => 0), [], [], 0, 1);
 }

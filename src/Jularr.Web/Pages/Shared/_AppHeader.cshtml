@@ -45,12 +45,21 @@
         {
             <partial name="_DiscoverFilter" model="filter" />
         }
-        @if (User.Identity?.IsAuthenticated == true)
+        @if (User.Identity?.IsAuthenticated == true && ViewData["OfflineDownloadsEnabled"] is true)
         {
-            <a class="app-header-button" href="@(JularrPolicies.Allows(User, JularrPolicies.AdminMedia) ? "/Admin#admdash-downloads" : "/Settings/Offline")"
-               aria-label="@ui["admin.dashboard.downloads.title"]" title="@ui["admin.dashboard.downloads.title"]">
+            <button class="app-header-button" type="button" popovertarget="download-preview" aria-expanded="false" aria-controls="download-preview"
+               aria-label="@ui["shell.downloads.offline"]" title="@ui["shell.downloads.offline"]">
                 <partial name="_AppIcon" model="@("download")" />
-            </a>
+                <span class="notification-bell-badge" data-offline-download-count aria-hidden="true" hidden></span>
+            </button>
+            <section class="header-preview" id="download-preview" popover data-offline-download-preview aria-label="@ui["shell.downloads.offline"]">
+                <div class="header-preview-title"><h2>@ui["shell.downloads.offline"]</h2></div>
+                <div class="header-preview-list" data-offline-preview-list aria-live="polite"></div>
+                <p data-offline-preview-loading>@ui["shell.preview.loading"]</p>
+                <p data-offline-preview-error role="alert" hidden>@ui["shell.preview.error"]</p>
+                <template data-offline-preview-icon><span class="header-preview-icon"><partial name="_AppIcon" model="@("download")" /></span></template>
+                <div class="header-preview-footer"><a class="button button-secondary" href="/Settings/Offline">@ui["shell.downloads.viewAll"]</a></div>
+            </section>
         }
         <partial name="_NotificationBell" />
         <partial name="_AppUserMenu" model='"header"' />

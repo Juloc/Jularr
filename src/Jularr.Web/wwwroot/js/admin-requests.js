@@ -1,18 +1,4 @@
 (() => {
-    const adminNav = document.querySelector('.admin-nav');
-    if (adminNav && window.matchMedia('(max-width: 820px)').matches) {
-        const activeNavItem = adminNav.querySelector('.admin-nav-item.active');
-        if (activeNavItem) {
-            window.requestAnimationFrame(() => {
-                const navBounds = adminNav.getBoundingClientRect();
-                const itemBounds = activeNavItem.getBoundingClientRect();
-                if (itemBounds.left < navBounds.left + 6 || itemBounds.right > navBounds.right - 6) {
-                    adminNav.scrollLeft += itemBounds.left - navBounds.left - 6;
-                }
-            });
-        }
-    }
-
     const submitForm = form => {
         if (typeof form?.requestSubmit === 'function') {
             form.requestSubmit();
@@ -200,13 +186,16 @@
             panel.showPopover();
             trigger.setAttribute('aria-expanded', 'true');
             const triggerBounds = trigger.getBoundingClientRect();
-            const panelWidth = Math.max(panel.offsetWidth, triggerBounds.width);
+            const viewportWidth = document.documentElement.clientWidth;
+            const viewportHeight = document.documentElement.clientHeight;
+            panel.style.minWidth = `${Math.min(triggerBounds.width, viewportWidth - 16)}px`;
+            panel.style.maxWidth = `${viewportWidth - 16}px`;
+            const panelWidth = panel.offsetWidth;
             const panelHeight = panel.offsetHeight;
-            const left = Math.max(8, Math.min(triggerBounds.left, window.innerWidth - panelWidth - 8));
-            const top = triggerBounds.bottom + panelHeight <= window.innerHeight - 8
+            const left = Math.max(8, Math.min(triggerBounds.left, viewportWidth - panelWidth - 8));
+            const top = triggerBounds.bottom + panelHeight <= viewportHeight - 8
                 ? triggerBounds.bottom + 6
                 : Math.max(8, triggerBounds.top - panelHeight - 6);
-            panel.style.minWidth = `${triggerBounds.width}px`;
             panel.style.left = `${left}px`;
             panel.style.top = `${top}px`;
             const selectedIndex = options.findIndex(option => option.value === select.value);
@@ -220,6 +209,7 @@
         });
         panel.addEventListener('toggle', () => trigger.setAttribute('aria-expanded', String(panel.matches(':popover-open'))));
         select.addEventListener('change', syncSelect);
+        select.form?.addEventListener('reset', () => queueMicrotask(syncSelect));
         select.tabIndex = -1;
         select.setAttribute('aria-hidden', 'true');
         control.dataset.admreqEnhanced = '';
@@ -252,7 +242,11 @@
         }
     });
     pageSizeInput?.addEventListener('keydown', event => {
-        if (event.key === 'ArrowDown' && pageSizePanel && !pageSizePanel.matches(':popover-open')) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            if (pageSizeInput.value && pageSizeInput.checkValidity()) submitForm(pageSizeForm);
+        }
+        else if (event.key === 'ArrowDown' && pageSizePanel && !pageSizePanel.matches(':popover-open')) {
             event.preventDefault();
             pageSizeTrigger?.click();
         }
@@ -317,6 +311,66 @@
     const bulk = document.querySelector('[data-admreq-bulk]');
     const selectedCount = document.querySelector('[data-admreq-selected-count]');
     const clearSelection = document.querySelector('[data-admreq-clear-selection]');
+    const commandDialog = document.querySelector('[data-admreq-command-dialog]');
+    const commandForm = commandDialog?.querySelector('[data-admreq-command-form]');
+    let commandTrigger;
+    const openCommand = (button, action, ids) => {
+        if (!commandDialog || !ids.length || ids.length > 100) return;
+        document.querySelectorAll('.admin-menu[open]').forEach(menu => { menu.open = false; });
+        commandTrigger = button;
+        commandForm.reset();
+        commandForm.querySelector('[data-admreq-command-action]').value = action;
+        const targets = commandForm.querySelector('[data-admreq-command-ids]');
+        targets.replaceChildren(...ids.map(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'ids';
+            input.value = id;
+            return input;
+        }));
+        const label = button.textContent.trim();
+        commandForm.querySelector('[data-admreq-command-title]').textContent = label;
+        commandForm.querySelector('[data-admreq-command-label]').textContent = label;
+        commandForm.querySelector('[data-admreq-command-count]').textContent = String(ids.length);
+        commandForm.querySelector('[data-admreq-delete-warning]').hidden = action !== 'Delete';
+        commandForm.querySelector('[data-admreq-command-note]').hidden = action !== 'Reject';
+        const profile = commandForm.querySelector('[data-admreq-command-profile]');
+        profile.hidden = action !== 'Profile' && action !== 'Approve';
+        profile.querySelector('select').disabled = profile.hidden;
+        profile.querySelector('select').required = action === 'Profile';
+        commandForm.querySelector('[data-admreq-command-submit]').disabled = action === 'Profile' && !profile.querySelector('select').value;
+        commandDialog.showModal();
+    };
+    document.addEventListener('click', event => {
+        const button = event.target.closest('button[data-admreq-command]');
+        if (!button) return;
+        event.preventDefault();
+        const row = button.closest('[data-admreq-row]');
+        openCommand(button, button.dataset.admreqCommand, row ? [row.dataset.requestId] : selection.filter(input => input.checked).map(input => input.value));
+    });
+    table.addEventListener('submit', event => {
+        const button = event.submitter;
+        if (!button?.matches('[data-admreq-action]')) return;
+        event.preventDefault();
+        const row = button.closest('[data-admreq-row]');
+        openCommand(button, button.dataset.admreqAction === 'retry' ? 'Retry' : 'Approve', [row.dataset.requestId]);
+    });
+    commandDialog?.querySelectorAll('[data-admreq-command-close]').forEach(button => {
+        button.addEventListener('click', () => commandDialog.close());
+    });
+    commandDialog?.addEventListener('click', event => {
+        if (event.target === commandDialog) commandDialog.close();
+    });
+    commandDialog?.addEventListener('close', () => commandTrigger?.focus());
+    commandForm?.addEventListener('submit', () => {
+        commandForm.querySelector('[data-admreq-command-submit]').disabled = true;
+        commandForm.setAttribute('aria-busy', 'true');
+    });
+    commandForm?.querySelector('select[name="profileId"]')?.addEventListener('change', event => {
+        if (commandForm.querySelector('[data-admreq-command-action]').value === 'Profile') {
+            commandForm.querySelector('[data-admreq-command-submit]').disabled = !event.target.value;
+        }
+    });
     let lastSelectedIndex = -1;
     let extendsSelection = false;
 
@@ -339,6 +393,18 @@
 
         if (bulk) {
             bulk.hidden = selected.length === 0;
+            bulk.querySelectorAll('[data-admreq-command]').forEach(button => {
+                const action = button.dataset.admreqCommand;
+                const eligible = selected.some(input => {
+                    const row = input.closest('[data-admreq-row]');
+                    const status = row.dataset.requestStatus;
+                    if (['Approve', 'Reject', 'Cancel'].includes(action)) return status === 'pending';
+                    if (action === 'Retry') return ['approved', 'failed'].includes(status);
+                    if (action === 'Complete' || action === 'Profile') return ['pending', 'approved', 'failed'].includes(status) && (action !== 'Profile' || !row.dataset.requestOperation);
+                    return !['searching', 'downloading', 'importing'].includes(status);
+                });
+                button.disabled = selected.length > 100 || !eligible;
+            });
             document.body.classList.toggle('has-admreq-selection', selected.length > 0);
         }
     };
@@ -395,6 +461,7 @@
         }
 
         input.checked = !input.checked;
+        extendsSelection = event.shiftKey;
         input.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
@@ -411,6 +478,7 @@
 
         event.preventDefault();
         input.checked = !input.checked;
+        extendsSelection = event.shiftKey;
         input.dispatchEvent(new Event('change', { bubbles: true }));
     });
 

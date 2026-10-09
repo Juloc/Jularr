@@ -14,7 +14,7 @@ public sealed class PayloadConflictException() : InvalidOperationException("The 
 public sealed class OpenRequestExistsException(Exception inner) : Exception("The title already has an open request.", inner);
 
 /// <summary>Persistence of the access policies and acquisition requests (tables from migration 20260927120000).</summary>
-public sealed class AcquisitionAccessStore(AppDbContext db)
+public sealed partial class AcquisitionAccessStore(AppDbContext db)
 {
     private const string OpenTitleIndex = "IX_AcquisitionRequests_OpenTitle";
     private const string OpenStatuses = "'pending', 'approved', 'searching', 'downloading', 'importing'";
@@ -105,6 +105,41 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             $"""SELECT {Columns} FROM "AcquisitionRequests" WHERE "Id" = @id LIMIT 1;""",
             command => Add(command, "@id", id.ToString()),
             cancellationToken);
+
+    public async Task<RequestProfileResult> ChangeProfileAsync(Guid id, Func<AcquisitionRequest, Task<RequestProfileResult>> assign, CancellationToken cancellationToken)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var request = await QuerySingleAsync($"SELECT {Columns} FROM \"AcquisitionRequests\" WHERE \"Id\" = @id FOR UPDATE;", command => Add(command, "@id", id.ToString()), cancellationToken);
+        if (request is null || request.OperationId is not null || request.Status is not (AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed))
+        {
+            return RequestProfileResult.StateChanged;
+        }
+
+        var result = await assign(request);
+        if (result == RequestProfileResult.Assigned)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return result;
+    }
+
+    public Task<bool> TryDeleteAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
+        WithConnectionAsync(async connection =>
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                DELETE FROM "AcquisitionRequests" r
+                WHERE r."Id" = @id AND r."UpdatedAt" = @updated AND r."Status" = @status
+                    AND r."Status" NOT IN ('searching', 'downloading', 'importing')
+                    AND NOT EXISTS (
+                        SELECT 1 FROM "Operations" o WHERE o."Id" = r."OperationId" AND o."Status" IN (1, 2, 4, 6))
+                """;
+            Add(command, "@id", request.Id.ToString());
+            Add(command, "@updated", request.UpdatedAt);
+            Add(command, "@status", AcquisitionAccessNames.Status(request.Status));
+            return await command.ExecuteNonQueryAsync(cancellationToken) == 1;
+        }, cancellationToken);
 
     /// <summary>The request whose current download is this operation, if any.</summary>
     public Task<AcquisitionRequest?> FindByOperationAsync(Guid operationId, CancellationToken cancellationToken) =>

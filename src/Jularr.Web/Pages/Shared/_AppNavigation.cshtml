@@ -77,23 +77,6 @@
         }
 
         <div class="nav-bottom">
-            @* The one Unfinished section (#870): above the Admin shortcut, collapsed unless the current page is inside it. *@
-            @if (nav.Unfinished.Count > 0)
-            {
-                <details class="nav-unfinished" open="@nav.Unfinished.Any(item => item.IsActive)">
-                    <summary class="nav-unfinished-summary">
-                        <span class="nav-label">@ui["nav.unfinished"]</span>
-                        <partial name="_AppIcon" model="@("chevronDown")" />
-                    </summary>
-                    <nav class="nav-list nav-list-secondary" aria-label="@ui["nav.unfinished"]">
-                        @foreach (var item in nav.Unfinished)
-                        {
-                            <partial name="_AppNavLink" model="item" />
-                        }
-                    </nav>
-                </details>
-            }
-
             @if (sidebarSecondary.Length > 0)
             {
                 <nav class="nav-list nav-list-secondary @(nav.Expanded is not null ? "nav-list-expanded" : "")" aria-label="@ui["nav.secondaryAria"]">
@@ -125,6 +108,10 @@
         </div>
     </div>
 
+    @if (Jularr.Web.Features.Auth.JularrPolicies.Allows(User, Jularr.Web.Features.Auth.JularrPolicies.AdminMedia))
+    {
+        <div class="sidebar-version">Jularr <span>@ViewData["AppBuildVersion"]</span></div>
+    }
 </aside>
 
 <nav class="mobile-nav" aria-label="@ui["nav.primaryAria"]">
