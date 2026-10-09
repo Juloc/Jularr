@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jularr.Web.Features.Acquisition.Core;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Xml.Linq;
@@ -10,7 +11,7 @@ namespace Jularr.Web.Features.Acquisition.Indexers;
 /// <summary>
 /// Direct Newznab (usenet) indexer client using the caps/search XML API.
 /// Every result carries the usenet protocol per
-/// <see cref="ProwlarrReleaseCandidate.Protocol"/>. Its HTTP calls run through the
+/// <see cref="AcquisitionCandidate.Protocol"/>. Its HTTP calls run through the
 /// shared <see cref="ProviderExecutor"/> (#438) for timeouts and bounded retries;
 /// per-entry health stays in <c>AcquisitionHealthStore</c>, so framework health
 /// tracking is left off here (see <see cref="ExecutionPolicy"/>).
@@ -85,7 +86,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         }
     }
 
-    public async Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+    public async Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
         IndexerEntry entry,
         IndexerSearchQuery query,
         CancellationToken cancellationToken)
@@ -148,7 +149,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         }
     }
 
-    public static IReadOnlyList<ProwlarrReleaseCandidate> ParseSearchResponse(
+    public static IReadOnlyList<AcquisitionCandidate> ParseSearchResponse(
         IndexerEntry entry,
         string query,
         string xml)
@@ -156,7 +157,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         var document = XDocument.Parse(xml);
         ThrowWhenError(entry, document);
         var items = document.Descendants().Where(element => element.Name.LocalName == "item");
-        var releases = new List<ProwlarrReleaseCandidate>();
+        var releases = new List<AcquisitionCandidate>();
         const string protocol = "usenet";
         var now = DateTimeOffset.UtcNow;
 
@@ -199,7 +200,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
             }
 
             releases.Add(
-                new ProwlarrReleaseCandidate(
+                new AcquisitionCandidate(
                     title,
                     entry.Name,
                     null,

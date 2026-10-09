@@ -427,6 +427,7 @@ public sealed class AdminDashboardPageRenderTests
                         services.AddScoped<Jularr.Web.Features.Acquisition.Access.VideoRequestWorkResolver>();
                         services.AddScoped<IAcquisitionRequestExecutor>(_ => new StubExecutor(MediaAcquisitionKind.Book));
                         services.AddScoped<WantedListService>();
+                        services.AddMonitoringForTests();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
 
                         services.AddSingleton(sessions);

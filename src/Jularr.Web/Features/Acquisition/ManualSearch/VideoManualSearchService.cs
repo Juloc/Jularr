@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Core;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
@@ -68,11 +69,12 @@ public sealed partial class VideoManualSearchService(
         var evaluation = await engine.SearchManualAsync(request, target, cancellationToken, depth, refresh);
         var tried = new HashSet<string>(shown.TriedReleases, StringComparer.OrdinalIgnoreCase);
         var bestResolution = HighestAllowedResolution(evaluation.Profile);
+        // The evaluations come in the order of the selection engine, the order automatic acquisition grabs by; Rank numbers the releases that can still be taken in it.
+        var rank = 0;
         var candidates = evaluation.Releases
             .Select(release => ToCandidate(request.Kind, release, tried, bestResolution))
             .OrderBy(candidate => candidate.Verdict == ManualSearchVerdict.Rejected)
-            .ThenByDescending(candidate => candidate.Score ?? int.MinValue)
-            .ThenBy(candidate => candidate.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(candidate => candidate.Verdict == ManualSearchVerdict.Rejected ? candidate : candidate with { Rank = ++rank })
             .ToArray();
         var warnings = evaluation.Search.Warnings.Select(warning => new ManualSearchIndexerWarning(warning.IndexerName, Redact(warning.Message))).ToArray();
         return new ManualSearchResult(shown, candidates, warnings, VideoAcquisitionSetupProblem.None, Searched: true)
@@ -194,12 +196,12 @@ public sealed partial class VideoManualSearchService(
     private static int? ResolutionOf(string qualityKey) =>
         int.TryParse(qualityKey[(qualityKey.LastIndexOf('-') + 1)..].TrimEnd('p'), out var resolution) ? resolution : null;
 
-    private static ManualSearchCandidate ToCandidate(MediaAcquisitionKind kind, VideoReleaseEvaluation evaluation, HashSet<string> tried, int? bestResolution)
+    private static ManualSearchCandidate ToCandidate(MediaAcquisitionKind kind, ReleaseEvaluation<VideoIdentityMatch> evaluation, HashSet<string> tried, int? bestResolution)
     {
         var candidate = evaluation.Candidate;
         var parsed = evaluation.Parsed;
         var isTried = tried.Contains(candidate.Identity);
-        var reasons = new List<ManualSearchReason> { new(IdentityReason(evaluation.Identity)) };
+        var reasons = new List<ManualSearchReason> { new(IdentityReason(evaluation.Match)) };
         if (evaluation.Score is { } score)
         {
             reasons.AddRange(score.RejectionReasons.Select(reason => new ManualSearchReason(ManualSearchReasonCode.ProfileRejected, reason)));
@@ -211,11 +213,6 @@ public sealed partial class VideoManualSearchService(
             reasons.Add(new ManualSearchReason(ManualSearchReasonCode.LowerQuality, evaluation.Score!.QualityKey));
         }
 
-        // The engine's own findings beyond identity and the profile rules (a fallback tier that is active or still waiting) are shown as they are.
-        reasons.AddRange(evaluation.Selection.Reasons
-            .Where(reason => reason.Kind == SelectionReasonKind.Fallback)
-            .Select(reason => new ManualSearchReason(reason.Code == "FallbackTier" ? ManualSearchReasonCode.FallbackTier : ManualSearchReasonCode.WaitingForFallbackTier, reason.Detail)));
-
         if (isTried)
         {
             reasons.Add(new ManualSearchReason(ManualSearchReasonCode.AlreadyTried));
@@ -223,7 +220,7 @@ public sealed partial class VideoManualSearchService(
 
         var verdict = !evaluation.IsManuallyGrabbable
             ? ManualSearchVerdict.Rejected
-            : lowerQuality || evaluation.Selection.Decision is SelectionDecision.Temporary or SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
+            : lowerQuality || evaluation.Selection.Decision == SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
         return new ManualSearchCandidate(
             candidate.Identity,
             candidate.Title,

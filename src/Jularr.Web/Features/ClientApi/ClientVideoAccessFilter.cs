@@ -18,8 +18,8 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
     {
         var http = context.HttpContext;
         var cancellationToken = http.RequestAborted;
-        var (named, mediaType) = await ResolveAsync(context, cancellationToken);
-        if (named && (mediaType is not { } type || !(await appShell.GetMediaAccessAsync(http.User, cancellationToken)).IsVisible(type)))
+        var (named, technical, isAnime) = await ResolveAsync(context, cancellationToken);
+        if (named && (technical is not { } type || !(await appShell.GetMediaAccessAsync(http.User, cancellationToken)).IsWorkVisible(type, isAnime)))
         {
             return Results.NotFound(new ClientErrorResponse("video_target_not_found", "The requested video does not exist."));
         }
@@ -27,7 +27,7 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
         return await next(context);
     }
 
-    private async Task<(bool Named, WorkMediaType? MediaType)> ResolveAsync(EndpointFilterInvocationContext context, CancellationToken cancellationToken)
+    private async Task<(bool Named, WorkMediaType? MediaType, bool IsAnime)> ResolveAsync(EndpointFilterInvocationContext context, CancellationToken cancellationToken)
     {
         var http = context.HttpContext;
         var bodyTarget = context.Arguments
@@ -45,21 +45,22 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
         {
             if (bodyTarget is { IsValid: false } || queryWorkId == Guid.Empty)
             {
-                return (false, null);
+                return (false, null, false);
             }
 
             var workId = bodyTarget?.WorkId ?? queryWorkId!.Value;
-            return (true, await db.Works.AsNoTracking().Where(x => x.Id == workId).Select(x => (WorkMediaType?)x.MediaType).SingleOrDefaultAsync(cancellationToken));
+            var target = await db.Works.AsNoTracking().Where(x => x.Id == workId).Select(x => new { x.MediaType, x.IsAnime }).SingleOrDefaultAsync(cancellationToken);
+            return (true, target?.MediaType, target?.IsAnime ?? false);
         }
 
         if (http.GetRouteValue("episodeId") is not null || http.GetRouteValue("animeId") is not null)
         {
-            return (true, WorkMediaType.Anime);
+            return (true, WorkMediaType.Anime, false);
         }
 
         if (!Guid.TryParse(http.GetRouteValue("mediaFileId")?.ToString(), out var mediaFileId))
         {
-            return (false, null);
+            return (false, null, false);
         }
 
         var file = await (
@@ -69,8 +70,8 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
             from asset in assets.DefaultIfEmpty()
             join work in db.Works.AsNoTracking() on (Guid?)asset.WorkId equals (Guid?)work.Id into works
             from work in works.DefaultIfEmpty()
-            select new { MediaType = (WorkMediaType?)work.MediaType, IsLegacy = stored.EpisodeId != null })
+            select new { MediaType = (WorkMediaType?)work.MediaType, IsAnime = work.IsAnime, IsLegacy = stored.EpisodeId != null })
             .SingleOrDefaultAsync(cancellationToken);
-        return (true, file is null ? null : file.MediaType ?? (file.IsLegacy ? WorkMediaType.Anime : null));
+        return (true, file is null ? null : file.MediaType ?? (file.IsLegacy ? WorkMediaType.Anime : null), file?.IsAnime ?? false);
     }
 }

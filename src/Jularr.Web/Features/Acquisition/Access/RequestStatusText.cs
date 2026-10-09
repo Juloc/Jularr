@@ -134,9 +134,9 @@ public static class RequestStatusText
     public static IReadOnlyList<(string Label, string Value)> Intent(UiTextBundle ui, AcquisitionRequest request)
     {
         List<(string, string)> rows = [];
-        if (request.Kind == MediaAcquisitionKind.Tv && VideoRequestPayload.Parse(request.PayloadJson) is { } payload)
+        if (request.Kind == MediaAcquisitionKind.Tv && VideoRequestPayload.Parse(request.PayloadJson) is { Requested: { } requested })
         {
-            rows.Add((ui["requests.detail.scope"], DiscoverRequestSummary.Scope(payload, ui)));
+            rows.Add((ui["requests.detail.scope"], DiscoverRequestSummary.Scope(requested, ui)));
         }
         else if (request.Kind == MediaAcquisitionKind.Anime)
         {

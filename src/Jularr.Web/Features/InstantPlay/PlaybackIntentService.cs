@@ -177,14 +177,14 @@ public sealed class PlaybackIntentService(
             return await ReportAsync(request, action, policy, cancellationToken);
         }
 
-        if (VideoRequestPayload.Parse(request.PayloadJson) is { Monitored: false })
+        if (state.Facts.OpenRequest is { Monitored: false })
         {
             return new PlaybackIntentResult(PlaybackIntentOutcome.NotAvailable, action, null, null);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
         var newlyCovered = state.Facts.OpenRequest is not { } facts || !facts.Covers(action.WorkEpisodeId);
-        var fallback = VideoRequestPayload.Default(request.Kind, action.WorkId, state.Title, state.Year);
+        var fallback = new VideoRequestPayload(action.WorkId, state.Title, state.Year);
         var attached = Attachment.Unchanged;
         if (!await requestStore.PatchPayloadAsync(request.Id, stored => WithAttachedUnit(VideoRequestPayload.Parse(stored) ?? fallback, action.WorkEpisodeId, newlyCovered, now, out attached).Serialize(), cancellationToken))
         {
@@ -221,13 +221,13 @@ public sealed class PlaybackIntentService(
         Full
     }
 
-    /// <summary>The scope of a request created by an intent: a Movie as a whole, or exactly the target episode and nothing of the rest of the Series.</summary>
+    /// <summary>What a request created by an intent monitors: a Movie as a whole, or exactly the target episode and nothing of the rest of the Series.</summary>
     private VideoRequestPayload SmallestPayload(VideoPlaybackState state, PrimaryAction action)
     {
         var marker = new PlaybackMarker(action.WorkEpisodeId, account.ProfileId, clock.GetUtcNow().UtcDateTime);
         var scope = action.WorkEpisodeId is { } episodeId
-            ? new VideoRequestPayload(action.WorkId, state.Title, state.Year, VideoRequestScope.Custom, [episodeId], MonitorFuture: false, SelectedSeasonIds: [])
-            : VideoRequestPayload.Default(MediaAcquisitionKind.Movie, action.WorkId, state.Title, state.Year);
+            ? new VideoRequestPayload(action.WorkId, state.Title, state.Year) { Requested = new VideoRequestScopeChoice(VideoRequestScope.Custom, [], [episodeId], MonitorFuture: false) }
+            : VideoRequestPayload.Default(action.WorkId, state.Title, state.Year);
         return scope with { PlaybackMarkers = [marker] };
     }
 
@@ -246,7 +246,7 @@ public sealed class PlaybackIntentService(
             return payload;
         }
 
-        var marked = payload with { PlaybackMarkers = [.. live, new PlaybackMarker(workEpisodeId, account.ProfileId, now)], ScopeRevision = payload.ScopeRevision + 1 };
+        var marked = payload with { PlaybackMarkers = [.. live, new PlaybackMarker(workEpisodeId, account.ProfileId, now)], MonitoringRevision = payload.MonitoringRevision + 1 };
         var reset = newlyCovered && (payload.PlaybackResetUtc is not { } last || now - last >= ResetInterval);
         result = reset ? Attachment.Reset : Attachment.Marked;
         return reset ? marked with { Searches = 0, NextSearchUtc = null, PlaybackResetUtc = now } : marked;

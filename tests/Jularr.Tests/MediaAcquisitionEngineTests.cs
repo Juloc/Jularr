@@ -22,7 +22,6 @@ public sealed class MediaAcquisitionEngineTests
             ["WEB-1080p", "BLURAY-1080p", "WEB-720p"],
             UpgradeAllowed: true,
             UpgradeCutoffQuality: "WEB-1080p",
-            MinimumScore: 0,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,
             MustContain: [],

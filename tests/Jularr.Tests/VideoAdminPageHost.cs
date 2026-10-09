@@ -8,6 +8,7 @@ using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Library;
@@ -81,8 +82,11 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
                     services.AddSingleton<AnimeAcquisitionScheduler>();
                     services.AddScoped<AcquisitionAccessStore>();
                     services.AddScoped<AcquisitionRequestService>();
-                    services.AddScoped<VideoRequestScopeResolver>();
+                    services.AddMonitoringForTests();
                     services.AddScoped<VideoRequestWorkResolver>();
+                    services.AddMediaCore();
+                    services.AddScoped<RequestWorkBinder>();
+                    services.AddScoped<RequestProfileAssignment>();
                     services.AddScoped<RequestArtworkResolver>();
                     services.AddScoped<VideoMonitoringService>();
                     services.AddScoped<AdminVideoMediaService>();
@@ -103,6 +107,7 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.DownloadClientStore>());
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.DownloadClientSubmissionService>());
                     services.AddSingleton(video.Get<ReleaseRequestTracker>());
+                    services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>());
                     services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
                     services.AddScoped<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
                     services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();

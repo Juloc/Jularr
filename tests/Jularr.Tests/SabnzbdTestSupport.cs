@@ -91,7 +91,7 @@ internal sealed class SabnzbdTestEnvironment(
 
     /// <summary>A fresh store instance reads the persisted file, as after a restart.</summary>
     public SabnzbdAcquisitionStore NewAcquisitionStore() =>
-        new(Protection, Directory);
+        new(Directory);
 
     /// <summary>A fresh store instance reads the persisted file, as after a restart.</summary>
     public DownloadClientStore NewDownloadClientStore() =>
@@ -106,9 +106,6 @@ internal sealed class SabnzbdTestEnvironment(
 
     public SabnzbdDownloadService NewDownloadService(SabnzbdAcquisitionStore store) =>
         new(NewSubmissionService(), NewDownloadClientStore(), Client, store, Db);
-
-    public SabnzbdAcquisitionService NewAcquisitionService(SabnzbdAcquisitionStore store) =>
-        new(NewDownloadService(store), store, Db);
 
     public async ValueTask DisposeAsync()
     {

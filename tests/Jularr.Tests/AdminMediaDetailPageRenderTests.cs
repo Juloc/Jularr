@@ -1,3 +1,7 @@
+using Jularr.Web.Features.Acquisition.Pipeline;
+using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Monitoring;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -60,7 +64,7 @@ public sealed class AdminMediaDetailPageRenderTests
         StringAssert.Contains(html, "admmd-monitoring-partial");
         StringAssert.Contains(html, "aria-checked=\"mixed\"");
 
-        // Episode states merge the file, the last attempt and the monitoring.
+        // Episode states merge the file, the request's search state and the monitoring.
         StringAssert.Contains(html, "admmd-state-available");
         StringAssert.Contains(html, "admmd-state-downloading");
         StringAssert.Contains(html, "admmd-state-failed");
@@ -134,7 +138,7 @@ public sealed class AdminMediaDetailPageRenderTests
     }
 
     [TestMethod]
-    public async Task SeasonAndEpisodeSwitchesWriteOnlyOverridesThatDifferFromWhatIsInherited()
+    public async Task SeasonAndEpisodeSwitchesWriteOnlyDecisionsThatDifferFromWhatIsInherited()
     {
         await using var host = await MediaHost.CreateAsync();
         var animeId = await host.SeedAsync();
@@ -146,11 +150,10 @@ public sealed class AdminMediaDetailPageRenderTests
         Assert.AreEqual(HttpStatusCode.Redirect, season.StatusCode);
         Assert.AreEqual($"/Admin/Media/{animeId}?open=s1", season.Headers.Location?.OriginalString);
 
-        var state = await host.Monitoring.LoadAsync();
-        var settings = state.Anime["starfall"];
-        Assert.IsFalse(settings.SeasonOverrides.ContainsKey(1), "Season 1 now matches the medium, so nothing is stored.");
-        Assert.AreEqual(0, settings.EpisodeOverrides.Count, "The single-episode override inside the season is gone.");
-        Assert.IsTrue(settings.Monitored);
+        var view = await host.AnimeMonitoringAsync("starfall");
+        Assert.IsTrue(view.IsSeasonMonitored(1));
+        Assert.IsTrue(view.IsEpisodeMonitored(1, 5), "The single-episode decision inside the season is gone.");
+        Assert.IsTrue(view.IsWorkMonitored);
 
         var episode = await host.PostAsync(
             $"/Admin/Media/{animeId}",
@@ -158,7 +161,7 @@ public sealed class AdminMediaDetailPageRenderTests
             new Dictionary<string, string> { ["season"] = "1", ["episode"] = "3", ["monitored"] = "false", ["open"] = "s1" });
         Assert.AreEqual(HttpStatusCode.Redirect, episode.StatusCode);
         Assert.AreEqual($"/Admin/Media/{animeId}?open=s1&ep=1x3", episode.Headers.Location?.OriginalString);
-        Assert.IsFalse((await host.Monitoring.LoadAsync()).Anime["starfall"].EpisodeOverrides["S01E03"]);
+        Assert.IsFalse((await host.AnimeMonitoringAsync("starfall")).IsEpisodeMonitored(1, 3));
 
         var html = await host.GetHtmlAsync($"/Admin/Media/{animeId}?open=s1");
         StringAssert.Contains(html, "admmd-monitoring-partial");
@@ -309,6 +312,8 @@ public sealed class AdminMediaDetailPageRenderTests
 
         public AnimeMonitoringStore Monitoring { get; }
 
+        public async Task<WorkMonitoringView> AnimeMonitoringAsync(string animeKey) => await MonitoringTestSupport.Anime(Db).LoadAsync(animeKey, CancellationToken.None);
+
         public AnimeImportStore Imports { get; }
 
         public AniListAccountStore AniList { get; }
@@ -356,7 +361,9 @@ public sealed class AdminMediaDetailPageRenderTests
                         services.AddSingleton(ownership);
                         services.AddScoped<AcquisitionAccessStore>();
                         services.AddScoped<AcquisitionHistoryService>();
+                        services.AddMonitoringForTests();
                         services.AddScoped<AdminMediaDetailService>();
+                        services.AddScoped<AnimeEpisodeStates>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                         services.AddSingleton<IMediaProbeRunner, FakeMediaProbeRunner>();
                         services.AddSingleton<MediaInventoryService>();
@@ -482,25 +489,37 @@ public sealed class AdminMediaDetailPageRenderTests
                 state.Anime["starfall"] = new AnimeManagementAssignment("starfall", AnimeManagementMode.JularrManaged, now);
                 return state with { };
             });
+            var animeMonitoring = MonitoringTestSupport.Anime(Db);
+            await animeMonitoring.SetMonitoredAsync(anime.Id, monitored, CancellationToken.None);
+            if (monitored)
+            {
+                await animeMonitoring.SetUnitsAsync(anime.Id, [], [(1, 5)], false, CancellationToken.None);
+            }
+
             await Monitoring.UpdateAsync(state =>
             {
-                var settings = new AnimeMonitorSettings(
-                    "starfall",
-                    monitored,
-                    true,
-                    [],
-                    new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { ["S01E05"] = false });
-                state.Anime["starfall"] = settings;
-                var upgrade = new AnimeEpisodeKey("starfall", 1, 1);
-                var downloading = new AnimeEpisodeKey("starfall", 1, 4);
-                var failed = new AnimeEpisodeKey("starfall", 1, 5);
-                state.Wanted[upgrade.ToString()] = new WantedUnit(upgrade, WantedReason.CutoffUnmet, now.AddDays(-1));
-                state.Wanted[downloading.ToString()] = new WantedUnit(downloading, WantedReason.Missing, now.AddDays(-2));
-                state.Wanted[failed.ToString()] = new WantedUnit(failed, WantedReason.Missing, now.AddDays(-3));
-                state.Attempts[downloading.ToString()] = new AcquisitionAttempt(downloading, AcquisitionAttemptStatus.Grabbed, "release", 0, now.AddHours(-2), null);
-                state.Attempts[failed.ToString()] = new AcquisitionAttempt(failed, AcquisitionAttemptStatus.Failed, "release", 2, now.AddHours(-5), now.AddHours(3));
+                state.Anime["starfall"] = new AnimeMonitorSettings("starfall", true);
                 return state;
             });
+
+            // The canonical side: episode 1 has a file and is wanted better, episodes 4 and 5 are wanted. The request says episode 4 is on its way and that
+            // the search for the rest found nothing twice.
+            var workId = (await Db.WorkSourceLinks.SingleAsync(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == anime.Id)).WorkId;
+            var existing = await Db.WorkEpisodes.Where(episode => episode.WorkId == workId && episode.SeasonNumber == 1).ToDictionaryAsync(episode => episode.EpisodeNumber);
+            var canonical = new[] { 1, 4, 5 }.ToDictionary(number => number, number => existing.GetValueOrDefault(number) ?? Db.WorkEpisodes.Add(new WorkEpisode { WorkId = workId, SeasonNumber = 1, EpisodeNumber = number }).Entity);
+            var version = new WorkVersion { WorkId = workId, VersionKey = "video-file:starfall-e1", UnitKey = "S01E01", Source = "local" };
+            var asset = new MediaAsset { WorkId = workId, WorkEpisodeId = canonical[1].Id, WorkVersionId = version.Id, Kind = MediaAssetKind.Video };
+            Db.AddRange(version, asset);
+            f1.MediaAssetId = asset.Id;
+            Db.WantedItems.AddRange(canonical.Select(pair => new WantedItem { WorkId = workId, TargetKind = WantedTargetKind.Episode, TargetId = pair.Value.Id, CreatedAt = DateTime.UtcNow.AddDays(-pair.Key) }));
+            await Db.SaveChangesAsync();
+            var payload = new AnimeRequestPayload("starfall", [new AnimeEpisodeKey("starfall", 1, 4)]) { Searches = 2, NextSearchUtc = DateTime.UtcNow.AddHours(3) };
+            await new AcquisitionAccessStore(Db).CreateAsync(
+                new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", "9001", "Starfall Chronicle", null, null, payload.Serialize()),
+                Profile,
+                AcquisitionRequestStatus.Downloading,
+                "owner",
+                CancellationToken.None);
 
             await AniList.TryAddEpisodeMappingAsync(
                 new AnimeEpisodeMetadataMapping(Guid.NewGuid(), anime.Id, 1, 4, 5, 1, "anilist", "9002", "Starfall Chronicle Part Two", 2, now),

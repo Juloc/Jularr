@@ -133,7 +133,7 @@ public sealed class AdminRequestQueryTests
     {
         var anime = Row("Anime season two", AcquisitionRequestStatus.Pending, options: new AcquisitionRequestOptions { Scope = RequestScope.Seasons, Seasons = [2] });
         var tvSeasonId = Guid.NewGuid();
-        var tvPayload = new VideoRequestPayload(Guid.NewGuid(), "TV season two", null, VideoRequestScope.Custom, [], false, SelectedSeasonIds: [tvSeasonId]).Serialize();
+        var tvPayload = (new VideoRequestPayload(Guid.NewGuid(), "TV season two", null) { Requested = new VideoRequestScopeChoice(VideoRequestScope.Custom, [tvSeasonId], [], false) }).Serialize();
         var tv = Row("TV season two", AcquisitionRequestStatus.Approved, kind: MediaAcquisitionKind.Tv, payloadJson: tvPayload);
         var other = Row("Other season", AcquisitionRequestStatus.Rejected, options: new AcquisitionRequestOptions { Scope = RequestScope.Seasons, Seasons = [1] });
         var rows = new[] { anime, tv, other };

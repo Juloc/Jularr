@@ -136,7 +136,7 @@ public sealed class VideoRequestWorkResolver(AppDbContext db)
         var selected = requests
             .Where(request => request.Kind == MediaAcquisitionKind.Tv)
             .Select(request => (RequestId: request.Id, Payload: VideoRequestPayload.Parse(request.PayloadJson)))
-            .Where(item => item.Payload is { Scope: VideoRequestScope.Custom })
+            .Where(item => item.Payload?.Requested is { Scope: VideoRequestScope.Custom })
             .Select(item => (item.RequestId, Payload: item.Payload!))
             .ToArray();
         if (selected.Length == 0)
@@ -144,8 +144,8 @@ public sealed class VideoRequestWorkResolver(AppDbContext db)
             return new Dictionary<Guid, IReadOnlyList<int>>();
         }
 
-        var seasonIds = selected.SelectMany(item => item.Payload.SelectedSeasonIds ?? []).Distinct().ToArray();
-        var episodeIds = selected.SelectMany(item => item.Payload.SelectedEpisodeIds).Distinct().ToArray();
+        var seasonIds = selected.SelectMany(item => item.Payload.Requested!.SeasonIds).Distinct().ToArray();
+        var episodeIds = selected.SelectMany(item => item.Payload.Requested!.EpisodeIds).Distinct().ToArray();
         var seasons = seasonIds.Length == 0
             ? []
             : await db.WorkSeasons.AsNoTracking().Where(season => seasonIds.Contains(season.Id)).Select(season => new { season.Id, season.WorkId, season.SeasonNumber }).ToArrayAsync(cancellationToken);
@@ -155,8 +155,8 @@ public sealed class VideoRequestWorkResolver(AppDbContext db)
 
         return selected.ToDictionary(
             item => item.RequestId,
-            item => (IReadOnlyList<int>)seasons.Where(season => season.WorkId == item.Payload.WorkId && (item.Payload.SelectedSeasonIds ?? []).Contains(season.Id)).Select(season => season.SeasonNumber)
-                .Concat(episodes.Where(episode => episode.WorkId == item.Payload.WorkId && item.Payload.SelectedEpisodeIds.Contains(episode.Id)).Select(episode => episode.SeasonNumber))
+            item => (IReadOnlyList<int>)seasons.Where(season => season.WorkId == item.Payload.WorkId && item.Payload.Requested!.SeasonIds.Contains(season.Id)).Select(season => season.SeasonNumber)
+                .Concat(episodes.Where(episode => episode.WorkId == item.Payload.WorkId && item.Payload.Requested!.EpisodeIds.Contains(episode.Id)).Select(episode => episode.SeasonNumber))
                 .Distinct()
                 .Order()
                 .ToArray());

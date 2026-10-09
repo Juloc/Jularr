@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;

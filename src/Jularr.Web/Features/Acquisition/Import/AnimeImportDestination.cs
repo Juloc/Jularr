@@ -3,6 +3,7 @@ using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.Acquisition.Naming;
 using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Naming;
 
 namespace Jularr.Web.Features.Acquisition.Import;
 
@@ -120,7 +121,7 @@ public static class AnimeImportDestination
             .Where(name => name is not null)
             .Select(name => name!)
             .ToArray();
-        if (names.Any(name => string.IsNullOrWhiteSpace(name) || name is "." or ".." || AnimeNamingFormatter.ExceedsNameLimit(name)))
+        if (names.Any(name => string.IsNullOrWhiteSpace(name) || name is "." or ".." || NamingTemplateEngine.ExceedsNameLimit(name)))
         {
             return "The naming profile produces an empty or too long name for this file.";
         }

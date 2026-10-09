@@ -21,8 +21,18 @@ public enum IndexerSearchMode
 public sealed record IndexerCapabilities(
     DateTimeOffset RefreshedAt,
     IReadOnlyDictionary<IndexerSearchMode, string[]> Modes,
-    int? MaximumLimit = null)
+    int? MaximumLimit = null,
+    int[]? Categories = null)
 {
+    /// <summary>
+    /// Whether the indexer offers a category, itself or through its parent or a sub category of the same parent (Newznab numbers a parent as a multiple
+    /// of 1000). True when its categories were never read, so an entry that was tested before they were stored keeps searching.
+    /// </summary>
+    public bool Offers(int category) =>
+        Categories is not { Length: > 0 }
+        || Categories.Contains(category)
+        || (category % 1000 == 0 ? Categories.Any(offered => offered / 1000 == category / 1000) : category < 100000 && Categories.Contains(category / 1000 * 1000));
+
     /// <summary>The text search every Newznab indexer answers; used for indexers whose caps were never read.</summary>
     public static IndexerCapabilities TextOnly(DateTimeOffset refreshedAt) =>
         new(refreshedAt, new Dictionary<IndexerSearchMode, string[]> { [IndexerSearchMode.Search] = ["q"] });
@@ -111,6 +121,13 @@ public static class NewznabCapsParser
 
         var limits = document.Root?.Elements().FirstOrDefault(element => element.Name.LocalName == "limits");
         int? maximum = int.TryParse(limits?.Attribute("max")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : null;
-        return new IndexerCapabilities(now, modes, maximum);
+        var categories = document.Root?.Elements().FirstOrDefault(element => element.Name.LocalName == "categories")?.Descendants()
+            .Where(element => element.Name.LocalName is "category" or "subcat")
+            .Select(element => int.TryParse(element.Attribute("id")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .Order()
+            .ToArray();
+        return new IndexerCapabilities(now, modes, maximum, categories is { Length: > 0 } ? categories : null);
     }
 }

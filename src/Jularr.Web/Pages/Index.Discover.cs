@@ -558,10 +558,10 @@ public sealed partial class IndexModel
                     return BadRequest();
                 }
 
-                var payload = await scopes.BuildTvPayloadAsync(work, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
+                var choice = await scopes.ValidateTvAsync(work.Id, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
                 var languages = new AcquisitionRequestOptions { AudioLanguage = form.Audio, SubtitleLanguage = form.Subtitles }.Validate();
-                draft = draft with { PayloadJson = (payload with { AudioLanguage = languages.AudioLanguage, SubtitleLanguage = languages.SubtitleLanguage }).Serialize() };
-                summary.Add(DiscoverRequestSummary.Scope(payload, Ui));
+                draft = draft with { PayloadJson = (new VideoRequestPayload(work.Id, work.CanonicalTitle, work.Year) { Requested = choice, AudioLanguage = languages.AudioLanguage, SubtitleLanguage = languages.SubtitleLanguage }).Serialize() };
+                summary.Add(DiscoverRequestSummary.Scope(choice, Ui));
                 summary.AddRange(RequestOptionsSummary.Describe(languages, Ui));
             }
             else if (target.Kind == MediaAcquisitionKind.Anime)

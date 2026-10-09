@@ -64,7 +64,7 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
             return [];
         }
 
-        var titles = await LoadTitlesAsync(profileId, [.. items.Select(item => item.WorkId)], includeDescriptions: true, cancellationToken);
+        var titles = await LoadTitlesAsync(profileId, [.. items.Select(item => item.WorkId)], includeDescriptions: true, mediaTypes.Contains(WorkMediaType.Anime), cancellationToken);
         var identities = await videoProgress.GetLegacyEpisodeIdentitiesAsync([.. items.Where(item => item.WorkEpisodeId.HasValue).Select(item => item.WorkEpisodeId!.Value)], cancellationToken);
 
         var result = new List<HomeContinueVideo>(items.Count);
@@ -77,13 +77,9 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
 
             var playHref = VideoDetailView.WatchHref(item.WorkId, item.WorkEpisodeId);
             var posterUrl = title.PosterUrl;
-            if (item.MediaType == WorkMediaType.Anime)
+            // A classified title without a legacy Anime record plays through the canonical route like any Series or Movie.
+            if (item.MediaType == WorkMediaType.Anime && item.WorkEpisodeId is { } workEpisodeId && identities.TryGetValue(workEpisodeId, out var identity))
             {
-                if (item.WorkEpisodeId is not { } workEpisodeId || !identities.TryGetValue(workEpisodeId, out var identity))
-                {
-                    continue;
-                }
-
                 playHref = $"/Library/Episode/{identity.EpisodeId}";
                 posterUrl = AnimeArtworkStore.ResolveSeasonPosterUrl(identity.AnimeId, item.SeasonNumber ?? 0, title.PosterUrl);
             }
@@ -107,6 +103,7 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
         }
 
         var types = mediaTypes.Select(type => (int)type).ToArray();
+        var animeVisible = mediaTypes.Contains(WorkMediaType.Anime);
         var rows = await db.Database.SqlQuery<RecentDbRow>(
                 $"""
                 SELECT latest."WorkId", latest."WorkEpisodeId", latest."AddedAt", latest."SeasonNumber", latest."EpisodeNumber"
@@ -117,7 +114,8 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
                     INNER JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                     INNER JOIN "Works" AS work ON work."Id" = asset."WorkId"
                     LEFT JOIN "WorkEpisodes" AS episode ON episode."Id" = asset."WorkEpisodeId"
-                    WHERE asset."Kind" = {(int)MediaAssetKind.Video} AND work."MediaType" = ANY({types})
+                    WHERE asset."Kind" = {(int)MediaAssetKind.Video}
+                      AND (CASE WHEN work."IsAnime" AND work."MediaType" IN (0, 1) AND {animeVisible} THEN 2 ELSE work."MediaType" END) = ANY({types})
                     ORDER BY asset."WorkId", file."DiscoveredAt" DESC, episode."SeasonNumber" DESC NULLS LAST, episode."EpisodeNumber" DESC NULLS LAST
                 ) AS latest
                 ORDER BY latest."AddedAt" DESC, latest."WorkId"
@@ -129,7 +127,7 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
             return [];
         }
 
-        var titles = await LoadTitlesAsync(profileId, [.. rows.Select(row => row.WorkId)], includeDescriptions: false, cancellationToken);
+        var titles = await LoadTitlesAsync(profileId, [.. rows.Select(row => row.WorkId)], includeDescriptions: false, animeVisible, cancellationToken);
         var identities = await videoProgress.GetLegacyEpisodeIdentitiesAsync([.. rows.Where(row => row.WorkEpisodeId.HasValue).Select(row => row.WorkEpisodeId!.Value)], cancellationToken);
 
         return
@@ -148,13 +146,13 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
     /// <summary>The profile's recent playback sessions of the given media types, newest first; at most <see cref="VideoProgressService.HistoryLimit"/>.</summary>
     public async Task<IReadOnlyList<HomePlaybackEntry>> GetHistoryAsync(string profileId, IReadOnlyCollection<WorkMediaType> mediaTypes, CancellationToken cancellationToken)
     {
-        var entries = (await videoProgress.GetHistoryAsync(profileId, cancellationToken)).Where(entry => mediaTypes.Contains(entry.MediaType)).ToArray();
+        var entries = (await videoProgress.GetHistoryAsync(profileId, mediaTypes, cancellationToken)).Where(entry => mediaTypes.Contains(entry.MediaType)).ToArray();
         if (entries.Length == 0)
         {
             return [];
         }
 
-        var titles = await LoadTitlesAsync(profileId, [.. entries.Select(entry => entry.WorkId).Distinct()], includeDescriptions: false, cancellationToken);
+        var titles = await LoadTitlesAsync(profileId, [.. entries.Select(entry => entry.WorkId).Distinct()], includeDescriptions: false, mediaTypes.Contains(WorkMediaType.Anime), cancellationToken);
         var identities = await videoProgress.GetLegacyEpisodeIdentitiesAsync([.. entries.Where(entry => entry.WorkEpisodeId.HasValue).Select(entry => entry.WorkEpisodeId!.Value)], cancellationToken);
 
         var result = new List<HomePlaybackEntry>(entries.Length);
@@ -166,13 +164,8 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
             }
 
             var playHref = VideoDetailView.WatchHref(entry.WorkId, entry.WorkEpisodeId);
-            if (entry.MediaType == WorkMediaType.Anime)
+            if (entry.MediaType == WorkMediaType.Anime && entry.WorkEpisodeId is { } workEpisodeId && identities.TryGetValue(workEpisodeId, out var identity))
             {
-                if (entry.WorkEpisodeId is not { } workEpisodeId || !identities.TryGetValue(workEpisodeId, out var identity))
-                {
-                    continue;
-                }
-
                 playHref = $"/Library/Episode/{identity.EpisodeId}";
             }
 
@@ -186,10 +179,10 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
     /// The display facts of the given Works. Movie and Series come from the persisted Work metadata, Anime from its legacy record and
     /// provider metadata; a Work without a displayable identity (an Anime without legacy record, which has no page to open) is absent.
     /// </summary>
-    private async Task<IReadOnlyDictionary<Guid, HomeVideoTitle>> LoadTitlesAsync(string profileId, Guid[] workIds, bool includeDescriptions, CancellationToken cancellationToken)
+    private async Task<IReadOnlyDictionary<Guid, HomeVideoTitle>> LoadTitlesAsync(string profileId, Guid[] workIds, bool includeDescriptions, bool animeVisible, CancellationToken cancellationToken)
     {
-        var works = await db.Database.SqlQuery<WorkDbRow>($"""SELECT "Id", "MediaType", "CanonicalTitle", "Year" FROM "Works" WHERE "Id" = ANY({workIds})""").ToListAsync(cancellationToken);
-        var animeWorkIds = works.Where(work => work.MediaType == (int)WorkMediaType.Anime).Select(work => work.Id).ToArray();
+        var works = await db.Database.SqlQuery<WorkDbRow>($"""SELECT "Id", "MediaType", "IsAnime", "CanonicalTitle", "Year" FROM "Works" WHERE "Id" = ANY({workIds})""").ToListAsync(cancellationToken);
+        var animeWorkIds = works.Where(work => work.IsAnime && animeVisible).Select(work => work.Id).ToArray();
         var animeRows = animeWorkIds.Length == 0
             ? new Dictionary<Guid, AnimeDbRow>()
             : (await db.Database.SqlQuery<AnimeDbRow>(
@@ -238,10 +231,11 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
         {
             var mediaType = (WorkMediaType)work.MediaType;
             var seasons = seasonCounts.GetValueOrDefault(work.Id);
-            if (mediaType == WorkMediaType.Anime)
+            if (work.IsAnime && animeVisible)
             {
                 if (animeRows.TryGetValue(work.Id, out var anime))
                 {
+                    mediaType = WorkMediaType.Anime;
                     var backdrop = AnimeArtworkStore.ResolveFanartUrl(anime.AnimeId, anime.BannerImageUrl);
                     titles[work.Id] = new HomeVideoTitle(
                         mediaType,
@@ -254,9 +248,8 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
                         anime.SeasonYear ?? work.Year,
                         anime.AverageScore,
                         seasons);
+                    continue;
                 }
-
-                continue;
             }
 
             cardMetadata.TryGetValue(work.Id, out var metadata);
@@ -278,7 +271,7 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
 
     private sealed record RecentDbRow(Guid WorkId, Guid? WorkEpisodeId, DateTime AddedAt, int? SeasonNumber, int? EpisodeNumber);
 
-    private sealed record WorkDbRow(Guid Id, int MediaType, string CanonicalTitle, int? Year);
+    private sealed record WorkDbRow(Guid Id, int MediaType, bool IsAnime, string CanonicalTitle, int? Year);
 
     private sealed record AnimeDbRow(Guid WorkId, Guid AnimeId, string Title, string? CoverImageUrl, string? BannerImageUrl, string? Description, int? SeasonYear, int? AverageScore);
 

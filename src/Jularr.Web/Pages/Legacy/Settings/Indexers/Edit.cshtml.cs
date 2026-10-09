@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Localization;
@@ -34,6 +35,10 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
 
     [BindProperty]
     public string? BookCategories { get; set; }
+
+    /// <summary>One line per media type, <c>movie: 2000, 2040</c>; a type without a line uses its default categories.</summary>
+    [BindProperty]
+    public string? KindCategories { get; set; }
 
     [BindProperty]
     public string? IndexerIds { get; set; }
@@ -79,6 +84,7 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
         BaseUrl = entry.Settings.BaseUrl;
         Categories = string.Join(", ", entry.Settings.Categories);
         BookCategories = string.Join(", ", entry.Settings.EffectiveBookCategories);
+        KindCategories = string.Join('\n', (entry.Settings.CategoriesByKind ?? []).OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}: {string.Join(", ", pair.Value)}"));
         IndexerIds = string.Join(", ", entry.Settings.IndexerIds);
         SearchLimit = entry.Settings.SearchLimit;
         Priority = entry.Priority;
@@ -97,6 +103,12 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
                 || !TryParseIds(BookCategories, out var bookCategories))
             {
                 Error = Ui["settings.indexers.invalidIds"];
+                return Page();
+            }
+
+            if (!TryParseKindCategories(KindCategories, out var kindCategories))
+            {
+                Error = Ui["settings.indexers.invalidKindCategories"];
                 return Page();
             }
 
@@ -123,6 +135,7 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
                         IndexerIds = indexerIds,
                         SearchLimit = SearchLimit,
                         BookCategories = bookCategories.Length == 0 ? null : bookCategories,
+                        CategoriesByKind = kindCategories,
                         AutomaticSearch = AutomaticSearch,
                         InteractiveSearch = InteractiveSearch
                     },
@@ -139,6 +152,28 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
             Error = Ui["settings.indexers.saveFailed"];
             return Page();
         }
+    }
+
+    /// <summary>Reads one line per media type (<c>movie: 2000, 2040</c>); a name that is not a media type or an id that is not a number refuses the whole text.</summary>
+    private static bool TryParseKindCategories(string? text, out Dictionary<string, int[]>? categories)
+    {
+        categories = null;
+        var parsed = new Dictionary<string, int[]>(StringComparer.Ordinal);
+        var kinds = Enum.GetValues<MediaAcquisitionKind>().Select(AcquisitionAccessNames.Kind).ToHashSet(StringComparer.Ordinal);
+        foreach (var line in (text ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = line.IndexOf(':');
+            var name = separator < 0 ? "" : line[..separator].Trim().ToLowerInvariant();
+            if (!kinds.Contains(name) || !TryParseIds(line[(separator + 1)..], out var ids) || ids.Length == 0)
+            {
+                return false;
+            }
+
+            parsed[name] = ids;
+        }
+
+        categories = parsed.Count == 0 ? null : parsed;
+        return true;
     }
 
     private static bool TryParseIds(string? value, out int[] ids)

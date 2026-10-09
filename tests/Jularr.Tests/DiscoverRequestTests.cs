@@ -202,9 +202,9 @@ public sealed class DiscoverRequestTests
         var result = ResultOf(await host.Page(Alice).OnPostRequestAsync(Form("tv", BreakingBad, scope: scope), CancellationToken.None));
 
         var payload = VideoRequestPayload.Parse(result.Request.PayloadJson)!;
-        Assert.AreEqual(expected, payload.Scope);
-        Assert.IsTrue(payload.MonitorFuture, "Future monitoring is part of the Scope, never a second toggle.");
-        Assert.AreEqual(0, payload.SelectedEpisodeIds.Length);
+        Assert.AreEqual(expected, payload.Requested!.Scope);
+        Assert.IsTrue(payload.Requested.MonitorFuture, "Future monitoring is part of the Scope, never a second toggle.");
+        Assert.AreEqual(0, payload.Requested.EpisodeIds.Count);
         Assert.AreEqual(summary, result.Summary.Single());
     }
 
@@ -222,10 +222,10 @@ public sealed class DiscoverRequestTests
         var result = ResultOf(await page.OnPostRequestAsync(form, CancellationToken.None));
 
         var payload = VideoRequestPayload.Parse(result.Request.PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.Custom, payload.Scope);
-        CollectionAssert.AreEqual(form.SeasonIds, payload.SelectedSeasonIds);
-        CollectionAssert.AreEqual(form.EpisodeIds, payload.SelectedEpisodeIds);
-        Assert.IsTrue(payload.MonitorFuture);
+        Assert.AreEqual(VideoRequestScope.Custom, payload.Requested!.Scope);
+        CollectionAssert.AreEqual(form.SeasonIds, payload.Requested.SeasonIds.ToArray());
+        CollectionAssert.AreEqual(form.EpisodeIds, payload.Requested.EpisodeIds.ToArray());
+        Assert.IsTrue(payload.Requested.MonitorFuture);
         Assert.AreEqual("Custom · Seasons: 1 · Episodes: 1 · Future releases", result.Summary.Single());
     }
 
@@ -301,7 +301,7 @@ public sealed class DiscoverRequestTests
 
         Assert.IsInstanceOfType<BadRequestResult>(invalid);
         var payload = VideoRequestPayload.Parse(result.Request.PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.FutureOnly, payload.Scope);
+        Assert.AreEqual(VideoRequestScope.FutureOnly, payload.Requested!.Scope);
         Assert.AreEqual("ja", payload.AudioLanguage);
         Assert.AreEqual("de", payload.SubtitleLanguage);
         CollectionAssert.AreEqual(new[] { "Future only", "Audio: 日本語", "Subtitles: Deutsch" }, result.Summary.ToArray());
@@ -607,7 +607,7 @@ public sealed class DiscoverRequestTests
                 null!,
                 Fixture.Service(profileId, AccountRole.User, executors),
                 Fixture.Store,
-                new VideoRequestScopeResolver(Fixture.Db),
+                MonitoringTestSupport.Scopes(Fixture.Db),
                 null!,
                 null!,
                 null!,

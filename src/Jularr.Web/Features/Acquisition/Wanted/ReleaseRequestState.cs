@@ -37,7 +37,7 @@ public abstract record ReleaseRequestPayload
 public sealed record ReleaseRequestCandidate(
     string Identity,
     string Title,
-    Uri DownloadUri,
+    Uri? DownloadUri,
     string? Source = null,
     string? ReleaseGroup = null);
 
@@ -45,7 +45,11 @@ public sealed record ReleaseRequestCandidate(
 public sealed record ReleaseRequestSubmission(
     bool Accepted,
     Guid? OperationId,
-    string Message);
+    string Message)
+{
+    /// <summary>Set when a direct source imported the candidate on the spot: the request ends there instead of waiting for a download.</summary>
+    public AcquisitionExecution? Completed { get; init; }
+}
 
 /// <summary>
 /// The one release-request lifecycle shared by every media type that searches Usenet for a
@@ -181,6 +185,11 @@ public sealed class ReleaseRequestTracker(
             cancellationToken);
 
         var outcome = await submit(next);
+        if (outcome.Accepted && outcome.Completed is not null)
+        {
+            return outcome.Completed;
+        }
+
         if (outcome.Accepted)
         {
             return new AcquisitionExecution(

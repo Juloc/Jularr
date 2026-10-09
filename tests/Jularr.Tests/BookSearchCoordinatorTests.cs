@@ -1,4 +1,5 @@
 using System.Net;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Acquisition.Health;
@@ -321,15 +322,15 @@ public sealed class BookSearchCoordinatorTests
             Task.FromResult(
                 new IndexerConnectionTestResult(true));
 
-        public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
             IndexerEntry entry,
             IndexerSearchQuery query,
             CancellationToken cancellationToken)
         {
             Searches++;
-            IReadOnlyList<ProwlarrReleaseCandidate> releases =
+            IReadOnlyList<AcquisitionCandidate> releases =
             [
-                new ProwlarrReleaseCandidate(
+                new AcquisitionCandidate(
                     "Treasure Island EPUB",
                     entry.Name,
                     1,

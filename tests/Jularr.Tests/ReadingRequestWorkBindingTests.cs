@@ -174,7 +174,7 @@ public sealed class ReadingRequestWorkBindingTests
             var old = await RequestWorkTestSupport.CreateRequestAsync(fixture.Db, MediaAcquisitionKind.Manga, bound: false);
             var workId = (await binder.EnsureBoundAsync(old, CancellationToken.None)).WorkId!.Value;
             await profiles.AssignWorkAsync(workId, "volumes");
-            var manual = new ReadingManualSearchService(new AcquisitionAccessStore(fixture.Db), null!, null!, null!, profiles, TimeProvider.System, null, binder);
+            var manual = new ReadingManualSearchService(new AcquisitionAccessStore(fixture.Db), null!, null!, null!, profiles, TimeProvider.System, binder);
             var unboundOld = await RequestWorkTestSupport.CreateRequestAsync(fixture.Db, MediaAcquisitionKind.LightNovel, bound: false);
 
             var target = await manual.GetTargetAsync(old.Id, CancellationToken.None);

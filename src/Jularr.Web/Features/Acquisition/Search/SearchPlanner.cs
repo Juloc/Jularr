@@ -94,9 +94,12 @@ public static class SearchPlanner
     public static string BookQuery(string title, string? author) =>
         string.IsNullOrWhiteSpace(author) ? MainTitle(title) : $"{author.Trim()} {MainTitle(title)}";
 
-    /// <summary>The Newznab categories a media type is searched in on one indexer; the owner's configured categories win where they exist.</summary>
+    /// <summary>
+    /// The Newznab categories a media type is searched in on one indexer: the categories the owner chose for that media type, else its default. A media
+    /// type never borrows another one's categories except where the default says so (Light Novel and Manga also search the book categories).
+    /// </summary>
     public static IReadOnlyList<int> Categories(MediaAcquisitionKind kind, IndexerEntry entry) =>
-        kind switch
+        entry.Settings.CategoriesFor(kind) is { } chosen ? chosen : kind switch
         {
             MediaAcquisitionKind.Anime => entry.Settings.Categories,
             MediaAcquisitionKind.Movie => [2000],

@@ -65,24 +65,11 @@ public sealed class MusicLibraryTests
     }
 
     [TestMethod]
-    public void MonitorModesChooseStudioAlbumsAndFutureOnesOnlyAfterTheAnchor()
-    {
-        var anchor = Now;
-        Assert.IsTrue(MusicLibraryService.ShouldMonitor(MusicMonitorMode.All, anchor, MusicAlbumType.Album, new DateTime(1997, 1, 1)));
-        Assert.IsTrue(MusicLibraryService.ShouldMonitor(MusicMonitorMode.All, anchor, MusicAlbumType.Ep, null));
-        Assert.IsFalse(MusicLibraryService.ShouldMonitor(MusicMonitorMode.All, anchor, MusicAlbumType.Live, new DateTime(2007, 1, 1)), "Live albums, compilations and soundtracks are listed but not wanted.");
-        Assert.IsFalse(MusicLibraryService.ShouldMonitor(MusicMonitorMode.Future, anchor, MusicAlbumType.Album, new DateTime(2013, 1, 1)));
-        Assert.IsTrue(MusicLibraryService.ShouldMonitor(MusicMonitorMode.Future, anchor, MusicAlbumType.Album, anchor.AddDays(30)));
-        Assert.IsFalse(MusicLibraryService.ShouldMonitor(MusicMonitorMode.Future, anchor, MusicAlbumType.Album, null), "An album without a date is not a future album.");
-        Assert.IsFalse(MusicLibraryService.ShouldMonitor(MusicMonitorMode.None, anchor, MusicAlbumType.Album, anchor.AddDays(30)));
-    }
-
-    [TestMethod]
     public async Task AddingAnArtistCreatesOneAlbumWorkPerReleaseGroupAndARefreshNeverDuplicates()
     {
         await using var db = await CreateDbAsync();
         var fake = new FakeMusicProvider();
-        var service = new MusicLibraryService(db, fake, new WorkService(db), new FixedClock(Now));
+        var service = new MusicLibraryService(db, fake, new WorkService(db), MonitoringTestSupport.Commands(db), new FixedClock(Now));
 
         var artist = await service.AddArtistAsync(ArtistId, MusicMonitorMode.All, "owner", CancellationToken.None);
         await service.RefreshArtistAsync(artist.Id, CancellationToken.None);
@@ -91,7 +78,7 @@ public sealed class MusicLibraryTests
         Assert.AreEqual(1, await db.MusicArtists.CountAsync());
         Assert.AreEqual(3, await db.MusicAlbums.CountAsync());
         Assert.AreEqual(3, await db.Works.CountAsync(work => work.MediaType == WorkMediaType.Music));
-        Assert.AreEqual(2, await db.MusicAlbums.CountAsync(album => album.Monitored), "The live album is listed but unmonitored.");
+        Assert.AreEqual(3, (await MonitoringTestSupport.MonitoredMusicAsync(db)).Count, "An artist reaches every release of it, whatever its type.");
         Assert.IsTrue(await db.WorkExternalIdentities.AnyAsync(identity => identity.Provider == "musicbrainz" && identity.ExternalId == "rg-1" && identity.MediaType == WorkMediaType.Music));
         Assert.IsNotNull((await db.MusicArtists.SingleAsync()).LastRefreshedAt);
     }
@@ -101,23 +88,22 @@ public sealed class MusicLibraryTests
     {
         await using var db = await CreateDbAsync();
         var fake = new FakeMusicProvider();
-        var service = new MusicLibraryService(db, fake, new WorkService(db), new FixedClock(Now));
+        var service = new MusicLibraryService(db, fake, new WorkService(db), MonitoringTestSupport.Commands(db), new FixedClock(Now));
         var artist = await service.AddArtistAsync(ArtistId, MusicMonitorMode.Future, "owner", CancellationToken.None);
 
-        Assert.AreEqual(0, await db.MusicAlbums.CountAsync(album => album.Monitored));
+        Assert.AreEqual(0, (await MonitoringTestSupport.MonitoredMusicAsync(db)).Count);
 
         fake.Groups.Add(new MusicReleaseGroupSummary("rg-new", "Next Album", MusicAlbumType.Album, Now.AddDays(60), Now.AddDays(60).Year, false));
         await service.RefreshArtistAsync(artist.Id, CancellationToken.None);
 
         var next = await db.MusicAlbums.SingleAsync(album => album.MusicBrainzReleaseGroupId == "rg-new");
-        Assert.IsTrue(next.Monitored);
-        Assert.AreEqual(1, await db.MusicAlbums.CountAsync(album => album.Monitored));
+        CollectionAssert.AreEqual(new[] { next.WorkId }, (await MonitoringTestSupport.MonitoredMusicAsync(db)).ToArray(), "Only the album that appeared after the artist was added is wanted.");
 
         await service.SetArtistMonitorAsync(artist.Id, MusicMonitorMode.All, CancellationToken.None);
-        Assert.AreEqual(4, await db.MusicAlbums.CountAsync(album => album.Monitored) + await db.MusicAlbums.CountAsync(album => !album.Monitored), "No album is lost when the mode changes.");
-        Assert.AreEqual(3, await db.MusicAlbums.CountAsync(album => album.Monitored));
+        Assert.AreEqual(4, await db.MusicAlbums.CountAsync(), "No album is lost when the mode changes.");
+        Assert.AreEqual(4, (await MonitoringTestSupport.MonitoredMusicAsync(db)).Count);
         await service.SetAlbumMonitoredAsync(next.WorkId, false, CancellationToken.None);
-        Assert.AreEqual(2, await db.MusicAlbums.CountAsync(album => album.Monitored));
+        Assert.AreEqual(3, (await MonitoringTestSupport.MonitoredMusicAsync(db)).Count);
     }
 
     [TestMethod]
@@ -125,7 +111,7 @@ public sealed class MusicLibraryTests
     {
         await using var db = await CreateDbAsync();
         var fake = new FakeMusicProvider();
-        var service = new MusicLibraryService(db, fake, new WorkService(db), new FixedClock(Now));
+        var service = new MusicLibraryService(db, fake, new WorkService(db), MonitoringTestSupport.Commands(db), new FixedClock(Now));
         await service.AddArtistAsync(ArtistId, MusicMonitorMode.All, "owner", CancellationToken.None);
         var withTracks = (await db.MusicAlbums.SingleAsync(album => album.MusicBrainzReleaseGroupId == "rg-3")).WorkId;
         var withoutTracks = (await db.MusicAlbums.SingleAsync(album => album.MusicBrainzReleaseGroupId == "rg-1")).WorkId;
@@ -136,6 +122,28 @@ public sealed class MusicLibraryTests
 
         Assert.AreEqual(2, await db.WorkTracks.CountAsync(track => track.WorkId == withTracks));
         Assert.AreEqual(1, fake.TrackReads["rg-3"], "A stored list is never read again.");
+    }
+
+    [TestMethod]
+    public async Task ARecordingOnTwoAlbumsIsOneRecordingAndATrackWithoutAnIdStaysUnresolved()
+    {
+        await using var db = await CreateDbAsync();
+        var fake = new FakeMusicProvider();
+        fake.Releases["rg-1"] = new MusicAlbumTracks("rel-1", [new MusicTrackInfo(1, 1, "Give Life Back to Music", 274000, "rec-1"), new MusicTrackInfo(1, 2, "The Game of Love", 321000, null)]);
+        var service = new MusicLibraryService(db, fake, new WorkService(db), MonitoringTestSupport.Commands(db), new FixedClock(Now));
+        await service.AddArtistAsync(ArtistId, MusicMonitorMode.All, "owner", CancellationToken.None);
+        var homework = (await db.MusicAlbums.SingleAsync(album => album.MusicBrainzReleaseGroupId == "rg-1")).WorkId;
+        var memories = (await db.MusicAlbums.SingleAsync(album => album.MusicBrainzReleaseGroupId == "rg-3")).WorkId;
+
+        await service.EnsureTracksAsync(homework, CancellationToken.None);
+        await service.EnsureTracksAsync(memories, CancellationToken.None);
+
+        var recordings = await db.MusicRecordings.AsNoTracking().ToListAsync();
+        CollectionAssert.AreEquivalent(new[] { "rec-1", "rec-2" }, recordings.Select(recording => recording.MusicBrainzId).ToArray());
+        var placements = await db.WorkTracks.AsNoTracking().ToListAsync();
+        Assert.AreEqual(2, placements.Count(track => track.MusicRecordingId == recordings.Single(recording => recording.MusicBrainzId == "rec-1").Id), "Both albums place the one recording.");
+        Assert.IsNull(placements.Single(track => track.WorkId == homework && track.Number == 2).MusicRecordingId, "The same title on another album does not make it that recording.");
+        Assert.AreEqual("rel-1", (await db.MusicAlbums.AsNoTracking().SingleAsync(album => album.WorkId == homework)).MusicBrainzReleaseId);
     }
 
     private static MusicBrainzProvider Provider(Func<HttpRequestMessage, HttpResponseMessage> responder)
@@ -178,6 +186,8 @@ public sealed class MusicLibraryTests
 
         public Dictionary<string, int> TrackReads { get; } = [];
 
+        public Dictionary<string, MusicAlbumTracks> Releases { get; } = [];
+
         public Task<IReadOnlyList<MusicArtistSummary>> SearchArtistsAsync(string query, int limit, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<MusicArtistSummary>>([new(ArtistId, "Daft Punk", "Daft Punk", null, "FR", "Group")]);
 
@@ -193,7 +203,7 @@ public sealed class MusicLibraryTests
         public Task<MusicAlbumTracks?> GetTracksAsync(string releaseGroupMusicBrainzId, CancellationToken cancellationToken)
         {
             TrackReads[releaseGroupMusicBrainzId] = TrackReads.GetValueOrDefault(releaseGroupMusicBrainzId) + 1;
-            return Task.FromResult(releaseGroupMusicBrainzId == "rg-3"
+            return Task.FromResult(Releases.TryGetValue(releaseGroupMusicBrainzId, out var release) ? release : releaseGroupMusicBrainzId == "rg-3"
                 ? new MusicAlbumTracks("rel", [new MusicTrackInfo(1, 1, "Give Life Back to Music", 274000, "rec-1"), new MusicTrackInfo(1, 2, "The Game of Love", 321000, "rec-2")])
                 : null);
         }

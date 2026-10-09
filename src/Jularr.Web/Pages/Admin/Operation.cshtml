@@ -207,42 +207,11 @@
         </section>
     }
 
-    @if (Model.Acquisition is { } acquisition && Model.AcquisitionAttempt is { } attempt)
+    @if (Model.BlockedRelease is { } blocked)
     {
         <section class="panel">
-            <div class="panel-heading"><h2>@ui["admin.operation.acquisition"]</h2></div>
-            <div class="status-list">
-                <div><span>@ui["admin.operation.anime"]</span><strong>@acquisition.AnimeTitle</strong></div>
-                <div><span>@ui["admin.operation.episodes"]</span><strong>@Jularr.Web.Features.Acquisition.Sabnzbd.SabnzbdAcquisitionService.FormatEpisodes(acquisition.Episodes)</strong></div>
-                <div><span>@ui["admin.operation.release"]</span><strong>@attempt.ReleaseTitle</strong></div>
-                <div><span>@ui["admin.operation.attempt"]</span><strong>@ui.Format("admin.operation.attemptOf", ("attempt", attempt.Number), ("max", acquisition.MaxAttempts))</strong></div>
-                <div><span>@ui["admin.operation.untriedCandidates"]</span><strong>@acquisition.PendingCandidates.Length</strong></div>
-            </div>
-
-            @if (acquisition.Attempts.Length > 1)
-            {
-                <h3>@ui["admin.operation.attempts"]</h3>
-                <ul>
-                    @foreach (var other in acquisition.Attempts.OrderBy(item => item.Number))
-                    {
-                        <li>
-                            <a asp-page="/Admin/Operation" asp-route-id="@other.OperationId">#@other.Number</a>
-                            @other.ReleaseTitle
-                        </li>
-                    }
-                </ul>
-            }
-
-            @if (Model.AcquisitionBlocklist.Count > 0)
-            {
-                <h3>@ui["admin.operation.blocklistedReleases"]</h3>
-                <ul>
-                    @foreach (var blocked in Model.AcquisitionBlocklist)
-                    {
-                        <li><strong>@blocked.ReleaseTitle</strong> — @blocked.Reason</li>
-                    }
-                </ul>
-            }
+            <div class="panel-heading"><h2>@ui["admin.operation.blocklistedReleases"]</h2></div>
+            <p><strong>@blocked.ReleaseTitle</strong> — @blocked.Reason</p>
         </section>
     }
 </div>

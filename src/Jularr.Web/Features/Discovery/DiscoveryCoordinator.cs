@@ -36,10 +36,11 @@ public sealed class DiscoveryCoordinator(
     private static readonly TimeSpan SearchFreshness = TimeSpan.FromSeconds(45);
 
     /// <param name="Blocked">Set when the source cannot be asked at all (TMDB has no usable credential): the call has no fetch and settles at once with this state.</param>
-    private sealed record SourceCall(DiscoverySource Source, string Key, TimeSpan Freshness, DiscoverySourceFetch? Fetch, DiscoverySourceState? Blocked = null);
+    private sealed record SourceCall(DiscoverySource Source, string Key, TimeSpan Freshness, DiscoverySourceFetch? Fetch, DiscoverySourceState? Blocked = null, bool Persist = false);
 
     public async Task<DiscoveryLoad> LoadAsync(IReadOnlyList<DiscoveryRequest> requests, DiscoveryAudience audience, DiscoveryWait wait, CancellationToken cancellationToken)
     {
+        await flights.HydrateAsync(cancellationToken);
         var instance = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
         var tmdbAvailability = (await tmdbCredentials.GetAsync(cancellationToken)).Availability;
         var started = new Dictionary<string, DiscoverySourceFlight>(StringComparer.Ordinal);
@@ -61,7 +62,7 @@ public sealed class DiscoveryCoordinator(
             {
                 if (call.Blocked is null && !started.ContainsKey(call.Key))
                 {
-                    started[call.Key] = flights.Start(call.Source, call.Key, call.Freshness, wait.Refresh?.Contains(call.Source) == true, call.Fetch!);
+                    started[call.Key] = flights.Start(call.Source, call.Key, call.Freshness, wait.Refresh?.Contains(call.Source) == true, call.Fetch!, call.Persist);
                 }
             }
 
@@ -81,7 +82,7 @@ public sealed class DiscoveryCoordinator(
             batches.Add(personal.TryGetValue(index, out var mine) ? mine : ToBatch(request, calls, started, audience, instance));
         }
 
-        var settled = started.Values.Count(flight => flight.IsSettled);
+        var settled = started.Values.Count(flight => flight.IsFresh);
         return new DiscoveryLoad(batches, settled, started.Count - settled);
     }
 
@@ -106,7 +107,7 @@ public sealed class DiscoveryCoordinator(
             var key = $"{DiscoverySources.Name(source)}|{request.Category}|{request.Mode}|p{request.Page}{(request.Preview ? "s" : "")}|{request.EffectiveFilter.CacheKey}|{request.Query.ToLowerInvariant()}|{CultureInfo.CurrentUICulture.Name}"
                 + (source == DiscoverySource.Reading && audience.IsOwner ? "|owner" : "");
             var freshness = request.Mode == DiscoveryMode.Search ? SearchFreshness : BrowseFreshness;
-            calls.Add(new SourceCall(source, key, freshness, FetchFor(source, request, audience.IsOwner)));
+            calls.Add(new SourceCall(source, key, freshness, FetchFor(source, request, audience.IsOwner), Persist: request.Mode != DiscoveryMode.Search));
         }
 
         return calls;
@@ -202,7 +203,7 @@ public sealed class DiscoveryCoordinator(
         {
             while (true)
             {
-                var open = started.Where(flight => !flight.IsSettled).Select(flight => (Task)flight.Completion).ToList();
+                var open = started.Where(flight => !flight.IsFresh).Select(flight => (Task)flight.Pending).ToList();
                 if (open.Count == 0 || (wait.SettledBefore is { } known && started.Count - open.Count > known))
                 {
                     return;
@@ -239,7 +240,7 @@ public sealed class DiscoveryCoordinator(
                 continue;
             }
 
-            var outcome = flight.Completion.Result;
+            var outcome = flight.Outcome!;
             IReadOnlyList<DiscoveryItem> items = [.. outcome.Items.Where(item => Includes(request.Category, item.Category) && Allowed(item.Category, audience, instance))];
             results.Add(new DiscoverySourceResult(call.Source, outcome.State, items));
         }

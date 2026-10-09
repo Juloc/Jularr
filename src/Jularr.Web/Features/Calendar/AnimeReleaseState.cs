@@ -1,4 +1,6 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Metadata;
 
 namespace Jularr.Web.Features.Calendar;
@@ -28,7 +30,7 @@ public sealed record AnimeReleaseLibraryEntry(
 /// Merges AniList releases with the canonical library and monitoring state. The local episode
 /// slot follows the same rules as the acquisition inventory (episode-range mappings first, the
 /// plain match only for single-season anime without mappings); the state comes from the library
-/// files and the monitoring store, never from the calendar.
+/// files, the Wanted queue and the anime's request, never from the calendar.
 /// </summary>
 public static class AnimeReleaseStateResolver
 {
@@ -89,36 +91,31 @@ public static class AnimeReleaseStateResolver
     public static ReleaseLocalStatus Resolve(
         AnimeReleaseLibraryEntry entry,
         (int Season, int Episode)? slot,
-        AnimeMonitoringState monitoring,
+        AnimeEpisodeStateMap states,
+        WorkMonitoringView view,
         bool released)
     {
         if (slot is not { } place)
         {
-            bool? seriesMonitored = monitoring.Anime.TryGetValue(entry.AnimeKey, out var settings) ? settings.Monitored : false;
-            return new ReleaseLocalStatus(true, seriesMonitored, ReleaseLocalState.None);
+            return new ReleaseLocalStatus(true, view.IsWorkMonitored, ReleaseLocalState.None);
         }
 
         var key = new AnimeEpisodeKey(entry.AnimeKey, place.Season, place.Episode);
-        var monitored = AnimeMonitoringEngine.IsMonitored(monitoring, key);
+        var monitored = AnimeMonitoring.IsUnitMonitored(view, key);
         if (entry.Episodes.TryGetValue(place, out var local) && local.HasFile)
         {
             return new ReleaseLocalStatus(true, monitored, ReleaseLocalState.Available);
         }
 
-        if (monitoring.Attempts.TryGetValue(key.ToString(), out var attempt))
+        switch (states.AttemptOf(key))
         {
-            switch (attempt.Status)
-            {
-                case AnimeAcquisitionAttemptStatus.Grabbed:
-                    return new ReleaseLocalStatus(true, monitored, ReleaseLocalState.Grabbed);
-                case AnimeAcquisitionAttemptStatus.Pending:
-                    return new ReleaseLocalStatus(true, monitored, ReleaseLocalState.Searching);
-                case AnimeAcquisitionAttemptStatus.Failed:
-                    return new ReleaseLocalStatus(true, monitored, ReleaseLocalState.Failed);
-            }
+            case AcquisitionAttemptStatus.Grabbed:
+                return new ReleaseLocalStatus(true, monitored, ReleaseLocalState.Grabbed);
+            case AcquisitionAttemptStatus.Failed:
+                return new ReleaseLocalStatus(true, monitored, ReleaseLocalState.Failed);
         }
 
-        if (monitoring.Wanted.ContainsKey(key.ToString()))
+        if (states.WantedOf(key) is not null)
         {
             return new ReleaseLocalStatus(true, monitored, ReleaseLocalState.Wanted);
         }
@@ -136,7 +133,8 @@ public static class AnimeReleaseStateResolver
     public static IReadOnlyList<ReleaseEvent> ToEvents(
         IEnumerable<CachedRelease> releases,
         IReadOnlyList<AnimeReleaseLibraryEntry> library,
-        AnimeMonitoringState monitoring,
+        AnimeEpisodeStateMap states,
+        IReadOnlyDictionary<string, WorkMonitoringView> views,
         DateTimeOffset now,
         TimeZoneInfo zone)
     {
@@ -169,7 +167,7 @@ public static class AnimeReleaseStateResolver
                     release.Date,
                     release.Provider,
                     release.ExternalId,
-                    Resolve(entry, slot, monitoring, release.Date.IsReleased(now, zone)),
+                    Resolve(entry, slot, states, views[entry.AnimeKey], release.Date.IsReleased(now, zone)),
                     entry.CoverImageUrl));
             }
         }

@@ -70,7 +70,6 @@ public sealed class AcquisitionApiService(
                 string.IsNullOrWhiteSpace(request.QualityProfileId) ? null : request.QualityProfileId.Trim(),
                 request.IndexerIds ?? [],
                 cancellationToken,
-                request.TagIds,
                 request.TargetRootId);
         }
         catch (Exception exception) when (
@@ -86,7 +85,7 @@ public sealed class AcquisitionApiService(
 
         if (update.StartedMonitoring && request.SearchOnAdd)
         {
-            scheduler.RequestRun(update.AnimeKey, AnimeSearchTrigger.SearchOnAdd);
+            scheduler.RequestRun(update.AnimeKey);
         }
 
         var refreshed = await pipeline.GetAnimePanelAsync(animeId, cancellationToken)
@@ -130,7 +129,7 @@ public sealed class AcquisitionApiService(
         // The one canonical run gate every "Search now" request goes through, whether from the
         // owner UI or here; a full queue is reported as a clear refusal instead of being silently
         // dropped.
-        if (!scheduler.RequestRun(animeKey, AnimeSearchTrigger.Manual))
+        if (!scheduler.RequestRun(animeKey))
         {
             throw AcquisitionApiException.Conflict(
                 "Too many searches are already queued; try again once they finish.");
@@ -249,17 +248,6 @@ public sealed class AcquisitionApiService(
             request.Season,
             request.Episode,
             cancellationToken);
-        if (result.Success)
-        {
-            await scheduler.RunExclusiveAsync(
-                async (runner, token) =>
-                {
-                    await runner.ReconcileAttemptsAsync(token);
-                    return true;
-                },
-                cancellationToken);
-        }
-
         return new AcquisitionActionResponse(result.Success, result.Message);
     }
 

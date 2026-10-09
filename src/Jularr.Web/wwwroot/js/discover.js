@@ -1051,5 +1051,16 @@
 
     syncTabs();
     offlineNotice.hidden = navigator.onLine;
-    loadBody();
+
+    // The first response already carries the titles when the server had an answer for them (fresh, stale or from its local snapshot): nothing is fetched
+    // again, the browser only asks for what is renewed since, and a renewed row replaces the old one when it is safe to do so.
+    const rendered = bodyRoot();
+    if (rendered) {
+        activateLiveRequests(body);
+        controller.reset(viewOf(rendered));
+        generation = generationOf(rendered);
+        void followUp.run(requestVersion);
+    } else {
+        loadBody();
+    }
 })();

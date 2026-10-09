@@ -47,7 +47,6 @@
 .admprofiles-chip input { accent-color: var(--accent); margin: 0; }
 .admprofiles-chip .admin-icon { width: 14px; height: 14px; }
 
-.admprofiles-score { width: 5rem; }
 .admprofiles-rules td { vertical-align: middle; }
 .admprofiles-rules .admset-control { min-width: 7rem; }
 
@@ -72,16 +71,8 @@
 [data-repeat] > .button { margin-top: 12px; }
 [data-repeat] > .button .admin-icon { width: 14px; height: 14px; margin-inline-end: 6px; }
 
-.admprofiles-tiers { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-.admprofiles-tiers:empty { display: none; }
 .admprofiles-sources { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .admprofiles-sources li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.admprofiles-tier {
-    display: grid; grid-template-columns: 9rem minmax(0, 1fr) auto; gap: 12px; align-items: start;
-    padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
-}
-.admprofiles-tier-wait input { width: 100%; }
-.admprofiles-tier .admset-label { display: block; margin-bottom: 6px; padding: 0; }
 
 @media (max-width: 860px) {
     .admprofiles { grid-template-columns: minmax(0, 1fr); }
@@ -98,6 +89,4 @@
     .admprofiles-quality-take { grid-row: 2; grid-column: 2; }
     .admprofiles-quality-final { grid-row: 2; grid-column: 3; }
     .admprofiles-quality-take::after, .admprofiles-quality-final::after { content: attr(data-label); }
-    .admprofiles-tier { grid-template-columns: minmax(0, 1fr) auto; }
-    .admprofiles-tier .admprofiles-chips { grid-column: 1 / -1; }
 }

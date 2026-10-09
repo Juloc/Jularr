@@ -1,5 +1,6 @@
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Events;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Instance;
 
 namespace Jularr.Web.Features.Acquisition.Access;
@@ -20,7 +21,8 @@ public sealed class AcquisitionRequestService(
     IJularrEventPublisher events,
     ILogger<AcquisitionRequestService> logger,
     IInstanceModuleService? instanceModules = null,
-    RequestWorkBinder? workBinder = null)
+    RequestWorkBinder? workBinder = null,
+    RequestIntent? intent = null)
 {
     /// <summary>Where a profile finds the state of its requests; decision notifications open it.</summary>
     public const string HistoryPath = "/Requests";
@@ -74,6 +76,12 @@ public sealed class AcquisitionRequestService(
             return new AcquisitionSubmission(open, AlreadyRequested: true);
         }
 
+        // A Series and an Anime request carry the same Work: asking for it again through the other entry point returns the request that is already open.
+        if (intent is not null && await intent.FindOpenSiblingAsync(draft, cancellationToken) is { } siblingId && await store.GetAsync(siblingId, cancellationToken) is { } sibling)
+        {
+            return new AcquisitionSubmission(sibling, AlreadyRequested: true);
+        }
+
         // A new request is the durable decision at which a Book, Light Novel or Manga gets its canonical Work; an unresolvable identity stays unbound.
         if (workBinder is not null && draft.WorkId is null && RequestWorkBinder.Applies(draft.Kind))
         {
@@ -92,7 +100,7 @@ public sealed class AcquisitionRequestService(
         AcquisitionRequest created;
         try
         {
-            created = await store.CreateAsync(draft, account.ProfileId, status, decidedBy, cancellationToken);
+            created = (await RecordedAsync(async () => await store.CreateAsync(draft, account.ProfileId, status, decidedBy, cancellationToken), cancellationToken))!;
         }
         catch (OpenRequestExistsException)
         {
@@ -101,7 +109,12 @@ public sealed class AcquisitionRequestService(
             return new AcquisitionSubmission(winner, AlreadyRequested: true);
         }
 
-        return new AcquisitionSubmission(status == AcquisitionRequestStatus.Pending ? created : await ExecuteAsync(created, cancellationToken), AlreadyRequested: false);
+        if (status == AcquisitionRequestStatus.Pending)
+        {
+            return new AcquisitionSubmission(created, AlreadyRequested: false);
+        }
+
+        return new AcquisitionSubmission(await ExecuteAsync(created, cancellationToken), AlreadyRequested: false);
     }
 
     public async Task<AcquisitionRequest> ApproveAsync(Guid id, CancellationToken cancellationToken)
@@ -121,14 +134,16 @@ public sealed class AcquisitionRequestService(
         }
 
         // Conditional on the status read above: a requester's cancel that landed meanwhile keeps the request cancelled.
-        var decided = await store.TryTransitionStatusAsync(id, [request.Status], AcquisitionRequestStatus.Approved, null, null, null, false, account.ProfileId, cancellationToken);
-        if (decided is null)
+        var approved = await RecordedAsync(
+            async () => await store.TryTransitionStatusAsync(id, [request.Status], AcquisitionRequestStatus.Approved, null, null, null, false, account.ProfileId, cancellationToken) is null ? null : await RequireAsync(id, cancellationToken),
+            cancellationToken);
+        if (approved is null)
         {
             return await RequireAsync(id, cancellationToken);
         }
 
         await PublishDecisionAsync(request, JularrEventCategory.RequestApproved, cancellationToken);
-        return await ExecuteAsync(await RequireAsync(id, cancellationToken), cancellationToken);
+        return await ExecuteAsync(approved, cancellationToken);
     }
 
     /// <summary>
@@ -147,50 +162,6 @@ public sealed class AcquisitionRequestService(
         }
 
         return await ExecuteAsync(request, cancellationToken);
-    }
-
-    /// <summary>
-    /// Brings a request of a monitored media type (<see cref="IMonitoredAcquisitionExecutor"/>) to the state its pipeline is in, as read by
-    /// <paramref name="observation"/>. It only reads that state and never searches or grabs, so repeating it changes nothing. The change is
-    /// conditional on the status the request was read with, so a request somebody else moved on meanwhile (an owner marking it done) keeps its
-    /// new state. A request whose executor has not run yet is reported as such and left as it is.
-    /// </summary>
-    public async Task<MonitoredFollowOutcome> FollowMonitoredAsync(AcquisitionRequest request, IRequestObservation observation, CancellationToken cancellationToken)
-    {
-        if (!request.IsObservedFromMonitoring)
-        {
-            return MonitoredFollowOutcome.Unchanged;
-        }
-
-        if (await observation.ObserveAsync(request, cancellationToken) is not { } observed)
-        {
-            return MonitoredFollowOutcome.NotExecuted;
-        }
-
-        var clearOperation = observed.Status == AcquisitionRequestStatus.Approved;
-        var unchanged = observed.Status == request.Status
-            && observed.Message == request.StatusMessage
-            && (observed.OperationId is null || observed.OperationId == request.OperationId)
-            && (observed.ResultUrl is null || observed.ResultUrl == request.ResultUrl)
-            && !(clearOperation && request.OperationId is not null);
-        if (unchanged)
-        {
-            return MonitoredFollowOutcome.Unchanged;
-        }
-
-        var moved = await store.TryTransitionStatusAsync(request.Id, [request.Status], observed.Status, observed.Message, observed.OperationId, observed.ResultUrl, clearOperation, cancellationToken);
-        if (moved is null)
-        {
-            return MonitoredFollowOutcome.Unchanged;
-        }
-
-        // The requester hears once per download: not when the same download is only seen again, and not on a flap between its stages.
-        if (observed.Status == AcquisitionRequestStatus.Downloading && request.Status == AcquisitionRequestStatus.Approved && observed.OperationId != request.OperationId)
-        {
-            await PublishReleaseAvailableAsync(request, observed, cancellationToken);
-        }
-
-        return MonitoredFollowOutcome.Changed;
     }
 
     public async Task RejectAsync(Guid id, string? note, CancellationToken cancellationToken)
@@ -301,11 +272,11 @@ public sealed class AcquisitionRequestService(
     }
 
     /// <summary>
-    /// Saves new settings of a request that still waits for approval: the series scope of a Tv request, or the audio and subtitle language of
+    /// Saves new settings of a request that still waits for approval: what a Tv request monitors (applied when it is approved), or the audio and subtitle language of
     /// an anime request (its scope and quality profile stay as the request was made). Both are validated by the caller against the title.
     /// The write only lands while the request is still pending, so an approval that wins the race keeps the intent it executed.
     /// </summary>
-    public async Task<RequestEditOutcome> EditAsync(Guid id, VideoRequestPayload? tvScope, AcquisitionRequestOptions? animeLanguages, CancellationToken cancellationToken)
+    public async Task<RequestEditOutcome> EditAsync(Guid id, VideoRequestScopeChoice? tvScope, AcquisitionRequestOptions? animeLanguages, CancellationToken cancellationToken)
     {
         var request = await RequireAsync(id, cancellationToken);
         RequireRequesterOrManager(request);
@@ -316,7 +287,7 @@ public sealed class AcquisitionRequestService(
         }
 
         Func<string?, string?> patch = tvScope is { } scope
-            ? stored => VideoRequestPayload.Parse(stored) is { } current ? current.WithRequesterScope(scope).Serialize() : scope.Serialize()
+            ? stored => VideoRequestPayload.Parse(stored) is { } current ? (current with { Requested = scope, MonitoringRevision = current.MonitoringRevision + 1 }).Serialize() : stored
             : stored => (AcquisitionRequestOptions.FromPayload(stored) with { AudioLanguage = animeLanguages!.AudioLanguage, SubtitleLanguage = animeLanguages.SubtitleLanguage }).Validate().ToPayloadJson();
         return await store.PatchPayloadAsync(id, patch, AcquisitionRequestStatus.Pending, AcquisitionRequestStatus.Pending, null, cancellationToken)
             ? RequestEditOutcome.Saved
@@ -375,6 +346,12 @@ public sealed class AcquisitionRequestService(
         return AutoApprovalEvaluator.Evaluate(rules, kind, profileId, used);
     }
 
+    // The change and what the request it leaves approved names are stored as one unit; that intent counts next to Monitoring, so switching Monitoring off never cancels it.
+    private async Task<AcquisitionRequest?> RecordedAsync(Func<Task<AcquisitionRequest?>> change, CancellationToken cancellationToken) =>
+        intent is null
+            ? await change()
+            : await intent.ChangeAndRecordAsync(change, workBinder is null ? null : request => RequestWorkBinder.Applies(request.Kind) ? workBinder.EnsureBoundAsync(request, cancellationToken) : Task.FromResult(request), cancellationToken);
+
     private async Task<AcquisitionRequest> ExecuteAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
         if (instanceModules is not null)
@@ -417,7 +394,6 @@ public sealed class AcquisitionRequestService(
         }
 
         AcquisitionExecution result;
-        var threw = false;
         try
         {
             result = await executor.ExecuteAsync(request, cancellationToken);
@@ -428,10 +404,9 @@ public sealed class AcquisitionRequestService(
             result = TransientAcquisitionFailure.Describe(exception) is { } problem
                 ? new AcquisitionExecution(AcquisitionRequestStatus.Approved, $"{problem} Trying again soon.")
                 : new AcquisitionExecution(AcquisitionRequestStatus.Failed, exception.Message);
-            threw = true;
         }
 
-        await ApplyExecutionAsync(request, result, threw, cancellationToken);
+        await ApplyExecutionAsync(request, result, cancellationToken);
         return await RequireAsync(request.Id, cancellationToken);
     }
 
@@ -442,7 +417,7 @@ public sealed class AcquisitionRequestService(
     public async Task<AcquisitionRequest> ApplyManualExecutionAsync(Guid id, AcquisitionExecution result, CancellationToken cancellationToken)
     {
         RequireRequestManager();
-        await ApplyExecutionAsync(await RequireAsync(id, cancellationToken), result, threw: false, cancellationToken);
+        await ApplyExecutionAsync(await RequireAsync(id, cancellationToken), result, cancellationToken);
         return await RequireAsync(id, cancellationToken);
     }
 
@@ -452,19 +427,14 @@ public sealed class AcquisitionRequestService(
             ? new AcquisitionStatusOutcome(result.Status, result.Message, result.ResultUrl)
             : new AcquisitionStatusOutcome(AcquisitionRequestStatus.Approved, "The request changed while it was being worked on; searching again.", result.ResultUrl);
 
-    private async Task ApplyExecutionAsync(AcquisitionRequest request, AcquisitionExecution result, bool threw, CancellationToken cancellationToken)
+    private async Task ApplyExecutionAsync(AcquisitionRequest request, AcquisitionExecution result, CancellationToken cancellationToken)
     {
         // Searching is what the run (or the Manual Search claim) set before. If somebody moved the request on meanwhile (an Admin ending it), that
         // is not overwritten, except that a download which was already handed over is always recorded: it exists and its import must complete.
-        // A request of a monitored media type that goes back to waiting, or that its executor fails for good, without a download of its own no
-        // longer has the download it had. A failure the executor threw may be transient, so it keeps the link, and for the other media types the
-        // last download stays linked so the owner can retry it.
-        var clearOperation = result.OperationId is null
-            && (result.Status == AcquisitionRequestStatus.Approved || (result.Status == AcquisitionRequestStatus.Failed && !threw))
-            && executors.OfType<IMonitoredAcquisitionExecutor>().Any(candidate => candidate.Kind == request.Kind);
+        // The last download stays linked, also when the request goes back to waiting or fails, so the owner can retry it.
         var applied = result.StillApplies is { } stillApplies
             ? await store.PatchPayloadAsync(request.Id, stored => stored, AcquisitionRequestStatus.Searching, stored => StatusOf(result, stillApplies(stored)), cancellationToken)
-            : await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], result.Status, result.Message, result.OperationId, result.ResultUrl, clearOperation, cancellationToken) is not null;
+            : await store.TryTransitionStatusAsync(request.Id, [AcquisitionRequestStatus.Searching], result.Status, result.Message, result.OperationId, result.ResultUrl, clearOperation: false, cancellationToken) is not null;
         if (!applied && result.Status == AcquisitionRequestStatus.Downloading)
         {
             await store.UpdateStatusAsync(request.Id, result.Status, result.Message, result.OperationId, result.ResultUrl, null, cancellationToken);

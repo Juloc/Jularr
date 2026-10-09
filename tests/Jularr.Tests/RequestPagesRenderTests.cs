@@ -5,6 +5,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Collections;
 using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Library;
@@ -376,6 +377,9 @@ public sealed class RequestPagesRenderTests
                         services.AddSingleton(new QualityProfileStore(new DirectoryInfo(Path.Combine(data.FullName, "quality"))));
                         services.AddScoped<AcquisitionAccessStore>();
                         services.AddScoped<VideoRequestWorkResolver>();
+                        services.AddMediaCore();
+                        services.AddScoped<RequestWorkBinder>();
+                        services.AddScoped<RequestProfileAssignment>();
                         // The Library page's Collections view.
                         services.AddScoped<Jularr.Web.Features.MediaFacts.MediaFactsService>();
                         services.AddScoped<Jularr.Web.Features.Franchises.FranchiseStore>();
@@ -385,7 +389,7 @@ public sealed class RequestPagesRenderTests
                         services.AddScoped<ConsumerAcquisitionQuery>();
                         services.AddScoped<RequestArtworkResolver>();
                         services.AddScoped<RequestStatusQuery>();
-                        services.AddScoped<VideoRequestScopeResolver>();
+                        services.AddMonitoringForTests();
                         services.AddScoped<AcquisitionRequestService>();
                         services.AddSingleton<IJularrEventPublisher, RecordingEventPublisher>();
                     })

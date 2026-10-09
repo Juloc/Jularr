@@ -2,10 +2,6 @@
 @* The acquisition settings a form does not change itself. The acquisition page saves all of them at once,
    so a form that changes one setting sends the others back unchanged. *@
 <input type="hidden" name="indexerIds" value="@string.Join(", ", Model.IndexerIds)" />
-@foreach (var tagId in Model.TagIds)
-{
-    <input type="hidden" name="tagIds" value="@tagId" />
-}
 @if (Model.TargetRootId is { } rootId)
 {
     <input type="hidden" name="targetRootId" value="@rootId" />

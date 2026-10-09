@@ -136,7 +136,7 @@ public sealed class RequestDetailsHandlerTests
         var second = new WorkSeason { WorkId = work.Id, SeasonNumber = 2 };
         fixture.Db.AddRange(first, second);
         await fixture.Db.SaveChangesAsync();
-        var saved = new VideoRequestPayload(work.Id, work.CanonicalTitle, 2022, VideoRequestScope.Custom, [], true, SelectedSeasonIds: [first.Id]);
+        var saved = MonitoringTestSupport.Choosing(work.Id, work.CanonicalTitle, 2022, VideoRequestScope.Custom, future: true, seasons: [first.Id]);
         var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", "9503", work.CanonicalTitle, null, null, saved.Serialize());
         var request = await fixture.Store.CreateAsync(draft, "alice", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
         var page = Page(fixture, "alice");
@@ -148,8 +148,8 @@ public sealed class RequestDetailsHandlerTests
         await page.OnPostEditAsync(request.Id, new DiscoverRequestForm { Scope = "custom", SeasonIds = [second.Id], MonitorFuture = false }, CancellationToken.None);
 
         var stored = VideoRequestPayload.Parse((await fixture.Store.GetAsync(request.Id, CancellationToken.None))!.PayloadJson)!;
-        CollectionAssert.AreEqual(new[] { second.Id }, stored.SelectedSeasonIds);
-        Assert.IsFalse(stored.MonitorFuture);
+        CollectionAssert.AreEqual(new[] { second.Id }, stored.Requested!.SeasonIds.ToArray());
+        Assert.IsFalse(stored.Requested.MonitorFuture);
 
         var foreignSeason = new DiscoverRequestForm { Scope = "custom", SeasonIds = [Guid.NewGuid()] };
         Assert.IsInstanceOfType<BadRequestResult>(await page.OnPostEditAsync(request.Id, foreignSeason, CancellationToken.None), "A season of another title is refused.");
@@ -162,7 +162,7 @@ public sealed class RequestDetailsHandlerTests
             AcquisitionAccessFixture.Account(profileId, AccountRole.User),
             fixture.StatusQuery(),
             fixture.Service(profileId, AccountRole.User, executors),
-            new VideoRequestScopeResolver(fixture.Db),
+            MonitoringTestSupport.Scopes(fixture.Db),
             TimeProvider.System)
         {
             MetadataProvider = new EmptyModelMetadataProvider(),

@@ -1,13 +1,8 @@
 # Maintainability and AI Coding Discipline
 
-Jularr uses the canonical Juloc engineering and maintainability rules:
+Jularr uses the compact [Agent Control runtime policy](https://github.com/Juloc/agent-control/blob/main/hub/runtime-policy.json) as the binding fast path plus the detailed canonical engineering, maintainability, database and C# documents as on-demand references.
 
-- [Agent Control engineering rules](https://github.com/Juloc/agent-control/blob/main/docs/ENGINEERING_RULES.md)
-- [Agent Control maintainability rules](https://github.com/Juloc/agent-control/blob/main/docs/MAINTAINABILITY_CONVENTIONS.md)
-- [Agent Control database conventions](https://github.com/Juloc/agent-control/blob/main/docs/DATABASE_CONVENTIONS.md)
-- [Agent Control C# conventions](https://github.com/Juloc/agent-control/blob/main/docs/CSHARP_CONVENTIONS.md)
-
-They are mandatory for every implementation task and for all new or intentionally touched code. They are not optional recommendations.
+Agents load the compact policy once per continuous session and read only the detailed sections a concrete task reaches. The detailed rules remain mandatory where applicable; they are not a requirement to reread tens of thousands of tokens before every scoped change.
 
 This document adds the Jularr-specific target architecture and conventions. Repository-specific rules refine the central defaults; they do not weaken security, correctness, data integrity, testing or maintainability requirements.
 
@@ -227,8 +222,11 @@ Code is written for the next human maintainer.
 - Do not split coherent control flow into artificial 1-5 line helpers to satisfy a metric.
 - Do not create forwarding wrappers that only call another method unchanged.
 - Extract a helper/type only for real domain behavior, validation/policy, meaningful complexity, genuine reuse or an architectural/framework boundary.
-- Comments explain intent, invariants, constraints and non-obvious trade-offs; they do not narrate obvious code.
-- Do not add AI-style prose, generated-by commentary or speculative architecture essays inside source files.
+- Default to no comment. Clear names and structure should carry ordinary behavior.
+- Use one short `//` comment only for non-obvious intent, invariants, constraints, trade-offs or external quirks; multi-line prose is exceptional.
+- XML documentation is only for reusable/public contracts whose callers need non-obvious information. Ordinary application types, enums, constants, methods and tests normally need none.
+- Do not add issue numbers, spec/change-history prose, tutorial narration, AI-style commentary or speculative architecture essays inside source files.
+- When touching an area, remove nearby stale/redundant comments that no longer add information.
 
 C# formatting/naming/line-width rules remain the canonical Agent Control C# conventions.
 
@@ -301,6 +299,12 @@ Performance is designed and measured without making the code obscure.
 ## 17. Testing and executable architecture rules
 
 Tests protect behavior and regressions, not implementation wiring.
+
+- Prefer concise `Subject_Condition_Result` names instead of sentence-length prose.
+- Use data-driven/parameterized tests for equivalent variants instead of copying near-identical test methods.
+- Tests normally have no class/method XML summaries or narrative comments.
+- Add assertion messages only when the failed assertion would otherwise be ambiguous.
+- Do not add redundant permutations merely to inflate coverage.
 
 Prefer focused tests for:
 

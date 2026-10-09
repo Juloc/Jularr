@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -35,7 +36,7 @@ public sealed record UsenetIndexerCard(IndexerEntry Entry, AcquisitionHealthStat
 public sealed record UsenetClientCard(DownloadClientEntry Entry, AcquisitionHealthStatus? Health);
 
 /// <summary>One release as the media type's own selector judged it; <see cref="Score"/> 0 means rejected.</summary>
-public sealed record UsenetTestRelease(ProwlarrReleaseCandidate Release, int Score, string? RejectedBecause);
+public sealed record UsenetTestRelease(AcquisitionCandidate Release, int Score, string? RejectedBecause);
 
 /// <summary>The search test result, from the same search and ranking automatic adding uses.</summary>
 public sealed record UsenetSearchTest(
@@ -43,7 +44,7 @@ public sealed record UsenetSearchTest(
     IReadOnlyList<UsenetTestRelease> Ranked,
     IReadOnlyList<IndexerSearchWarning> Warnings,
     bool UsedCategoryFallback,
-    ProwlarrReleaseCandidate? Picked,
+    AcquisitionCandidate? Picked,
     string FailureMessage);
 
 /// <summary>One SABnzbd job for the recent downloads list; <see cref="LocalPathReadable"/> is null when unknown.</summary>
@@ -72,6 +73,7 @@ public sealed class UsenetModel(
     IndexerStore indexerStore,
     IReadOnlyDictionary<IndexerType, IIndexer> indexers,
     IndexerSearchCoordinator searchCoordinator,
+    Jularr.Web.Features.Acquisition.Core.AcquisitionCore core,
     QualityProfileStore qualityProfiles,
     DownloadClientStore clientStore,
     IDownloadClient downloadClient,
@@ -208,22 +210,18 @@ public sealed class UsenetModel(
                 book.FailureMessage);
         }
 
-        var reading = await ReadingUsenetSearch.SearchAsync(
-            searchCoordinator,
-            new ReadingAcquisitionTarget(
-                kind,
-                title.Trim(),
-                [],
-                string.IsNullOrWhiteSpace(author) ? null : author.Trim()),
-            cancellationToken,
-            new SearchOptions { Purpose = SearchPurpose.Interactive });
+        var reading = await core.SearchAsync(
+            ReadingReleaseJudge.Plan(new ReadingAcquisitionTarget(kind, title.Trim(), [], string.IsNullOrWhiteSpace(author) ? null : author.Trim())),
+            ReadingQualityProfiles.For(kind),
+            new SearchOptions { Purpose = SearchPurpose.Interactive },
+            cancellationToken);
         return new UsenetSearchTest(
-            reading.Queries,
-            reading.Ranked.Select(ranked => new UsenetTestRelease(ranked.Release, ranked.Score, ranked.RejectedBecause)).ToArray(),
-            reading.Warnings,
-            reading.UsedCategoryFallback,
-            reading.Picked,
-            reading.FailureMessage);
+            [.. reading.Search.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
+            reading.Releases.Select(evaluation => new UsenetTestRelease(evaluation.Candidate, ReadingReleaseJudge.DisplayScore(evaluation), ReadingReleaseJudge.RejectedBecause(evaluation))).ToArray(),
+            reading.Search.Warnings,
+            reading.Search.Trace.Any(line => line.Stage == "any-category" && line.Results > 0),
+            reading.Grabbable.FirstOrDefault()?.Candidate,
+            ReadingAcquisitionEngine.FailureMessage(reading));
     }
 
     public async Task<IActionResult> OnPostTestIndexerAsync(Guid id, CancellationToken cancellationToken)

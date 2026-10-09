@@ -17,7 +17,25 @@ public sealed class DiscoverySourceFlight(Task<DiscoverySourceOutcome> completio
 
     public bool IsSettled => Completion.IsCompleted;
 
-    public DiscoverySourceOutcome? Outcome => IsSettled ? Completion.Result : null;
+    /// <summary>The remembered answer is old and a new one is being fetched in the background: it is still shown (stale-while-revalidate), but it is not the fresh answer.</summary>
+    public bool IsRefreshing { get; internal set; }
+
+    /// <summary>A settled answer that is not being renewed.</summary>
+    public bool IsFresh => IsSettled && !IsRefreshing;
+
+    /// <summary>The answer that renewed this remembered one in the background; it replaces <see cref="Completion"/> as the current outcome.</summary>
+    internal DiscoverySourceOutcome? Renewed { get; set; }
+
+    /// <summary>Completes when the background renewal has ended, whatever its result; null while nothing is being renewed.</summary>
+    internal TaskCompletionSource? Renewal { get; set; }
+
+    /// <summary>What a caller waits for: the first answer, or the renewal while an old answer is being renewed.</summary>
+    public Task Pending => Renewal?.Task ?? Completion;
+
+    /// <summary>After a failed background refresh the old answer is kept and the next attempt waits until this time.</summary>
+    internal DateTimeOffset? NextRefreshAt { get; set; }
+
+    public DiscoverySourceOutcome? Outcome => Renewed ?? (IsSettled ? Completion.Result : null);
 }
 
 public sealed record DiscoverySourceOutcome(DiscoverySourceState State, IReadOnlyList<DiscoveryItem> Items, DateTimeOffset ExpiresAt);
@@ -27,7 +45,9 @@ public sealed record DiscoverySourceOutcome(DiscoverySourceState State, IReadOnl
 /// (single flight), runs in its own service scope with a hard timeout so it can finish after the request that started it, and is remembered while it is
 /// fresh. A failure is remembered only briefly and never as an empty answer. A viewer's retry replaces a settled failure, never a running or a healthy call,
 /// and at most once per key within <see cref="RetryInterval"/>. The number of remembered calls and of calls running per provider is bounded.
-/// Runtime state only: nothing is persisted, so a restart starts from provider answers again.
+/// Stale-while-revalidate: a successful answer that has aged out is still served while one call renews it in the background, and a renewal that fails keeps it, so
+/// a provider outage never empties Discover. The last successful answer of every browse source is persisted as a local snapshot (<see cref="DiscoverySnapshotStore"/>)
+/// and loaded once after a restart, so the first response already has titles.
 /// </summary>
 public sealed class DiscoverySourceFlights(IServiceScopeFactory scopes, TimeProvider clock, IHostApplicationLifetime lifetime, ILogger<DiscoverySourceFlights> logger)
 {
@@ -35,23 +55,94 @@ public sealed class DiscoverySourceFlights(IServiceScopeFactory scopes, TimeProv
     public static readonly TimeSpan FailureMemory = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(10);
     public const int MaximumFlights = 256;
+
+    /// <summary>How long a persisted answer counts as fresh after it was loaded; it is usually older, so the first use renews it in the background.</summary>
+    public static readonly TimeSpan SnapshotFreshness = TimeSpan.FromMinutes(3);
     public const int MaximumCallsPerProvider = 3;
 
     private readonly Lock gate = new();
     private readonly Dictionary<string, DiscoverySourceFlight> flights = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SemaphoreSlim> providerSlots = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim hydration = new(1, 1);
+    private bool hydrated;
+    private int savedSinceCleanup;
+
+    /// <summary>Loads the persisted snapshots into the remembered answers once, so a restart does not start from an empty page. A snapshot never replaces a newer answer.</summary>
+    public async Task HydrateAsync(CancellationToken cancellationToken)
+    {
+        if (hydrated)
+        {
+            return;
+        }
+
+        await hydration.WaitAsync(cancellationToken);
+        try
+        {
+            if (hydrated)
+            {
+                return;
+            }
+
+            using var scope = scopes.CreateScope();
+            if (scope.ServiceProvider.GetService<DiscoverySnapshotStore>() is not { } store)
+            {
+                hydrated = true;
+                return;
+            }
+
+            try
+            {
+                foreach (var snapshot in await store.LoadAsync(clock.GetUtcNow(), cancellationToken))
+                {
+                    lock (gate)
+                    {
+                        flights.TryAdd(snapshot.Key, new DiscoverySourceFlight(Task.FromResult(new DiscoverySourceOutcome(DiscoverySourceState.Ready, snapshot.Items, snapshot.FetchedAt + SnapshotFreshness)), snapshot.FetchedAt));
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Without the snapshot Discover only starts from the providers again, as it did before it existed.
+                logger.LogWarning(exception, "The local discovery snapshot could not be loaded.");
+            }
+
+            // Marked only once the snapshot is in (or could not be read), so a second caller never starts from an empty page while it is being loaded; a cancelled load tries again.
+            hydrated = true;
+        }
+        finally
+        {
+            hydration.Release();
+        }
+    }
 
     /// <param name="key">Everything the answer depends on; two callers with the same key share one provider call.</param>
     /// <param name="freshFor">How long a successful answer is reused.</param>
     /// <param name="retry">The viewer asked to try again: honoured only for a settled failure that was not retried within <see cref="RetryInterval"/>.</param>
-    public DiscoverySourceFlight Start(DiscoverySource source, string key, TimeSpan freshFor, bool retry, DiscoverySourceFetch fetch)
+    /// <param name="persist">Whether the successful answer is kept as a local snapshot; a search is never persisted.</param>
+    public DiscoverySourceFlight Start(DiscoverySource source, string key, TimeSpan freshFor, bool retry, DiscoverySourceFetch fetch, bool persist = false)
     {
         lock (gate)
         {
             var now = clock.GetUtcNow();
-            if (flights.TryGetValue(key, out var existing) && !CanReplace(existing, retry, now))
+            if (flights.TryGetValue(key, out var existing))
             {
-                return existing;
+                // Stale-while-revalidate: an aged-out answer that has titles is returned as it is while one background call renews it.
+                if (existing.Outcome is { State: DiscoverySourceState.Ready, Items.Count: > 0 } aged && aged.ExpiresAt <= now)
+                {
+                    if (!existing.IsRefreshing && (existing.NextRefreshAt is not { } next || now >= next))
+                    {
+                        existing.IsRefreshing = true;
+                        existing.Renewal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                        _ = Task.Run(() => RefreshAsync(existing, source, key, freshFor, persist, fetch));
+                    }
+
+                    return existing;
+                }
+
+                if (!CanReplace(existing, retry, now))
+                {
+                    return existing;
+                }
             }
 
             if (existing is null && !MakeRoom(now))
@@ -60,7 +151,7 @@ public sealed class DiscoverySourceFlights(IServiceScopeFactory scopes, TimeProv
             }
 
             // The call is created here, in the context of the caller that starts it, so its culture is that of the request it belongs to.
-            var flight = new DiscoverySourceFlight(Task.Run(() => RunAsync(source, key, freshFor, fetch)), now, retry ? now : null);
+            var flight = new DiscoverySourceFlight(Task.Run(() => RunAsync(source, key, freshFor, persist, fetch)), now, retry ? now : null);
             flights[key] = flight;
             return flight;
         }
@@ -115,7 +206,53 @@ public sealed class DiscoverySourceFlights(IServiceScopeFactory scopes, TimeProv
     /// <summary>A call that is not started because too many are running: the source answers busy until there is room again.</summary>
     private DiscoverySourceFlight Refused(DateTimeOffset now) => new(Task.FromResult(Failed(DiscoverySourceState.Busy)), now);
 
-    private async Task<DiscoverySourceOutcome> RunAsync(DiscoverySource source, string key, TimeSpan freshFor, DiscoverySourceFetch fetch)
+    /// <summary>The background renewal of an aged-out answer: a success replaces it, a failure keeps it and only postpones the next attempt.</summary>
+    private async Task RefreshAsync(DiscoverySourceFlight aged, DiscoverySource source, string key, TimeSpan freshFor, bool persist, DiscoverySourceFetch fetch)
+    {
+        var outcome = await RunAsync(source, key, freshFor, persist, fetch);
+        lock (gate)
+        {
+            aged.IsRefreshing = false;
+            if (outcome.State == DiscoverySourceState.Ready)
+            {
+                aged.Renewed = outcome;
+            }
+            else
+            {
+                aged.NextRefreshAt = clock.GetUtcNow() + RetryInterval;
+            }
+
+            aged.Renewal?.TrySetResult();
+        }
+    }
+
+    private async Task PersistAsync(string key, IReadOnlyList<DiscoveryItem> items)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            if (scope.ServiceProvider.GetService<DiscoverySnapshotStore>() is not { } store)
+            {
+                return;
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.ApplicationStopping);
+            timeout.CancelAfter(CallTimeout);
+            var now = clock.GetUtcNow();
+            await store.SaveAsync(key, items, now, timeout.Token);
+            if (Interlocked.Increment(ref savedSinceCleanup) % 32 == 0)
+            {
+                await store.PruneAsync(now, timeout.Token);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The snapshot is a convenience: a failed save costs only the head start after the next restart.
+            logger.LogWarning(exception, "The discovery snapshot of {Key} could not be saved.", key);
+        }
+    }
+
+    private async Task<DiscoverySourceOutcome> RunAsync(DiscoverySource source, string key, TimeSpan freshFor, bool persist, DiscoverySourceFetch fetch)
     {
         var slot = SlotOf(source);
         try
@@ -125,6 +262,11 @@ public sealed class DiscoverySourceFlights(IServiceScopeFactory scopes, TimeProv
 
             // The hard timeout covers waiting for a free slot and a provider that ignores its token: the call ends and the others go on.
             var items = await RunInSlotAsync(slot, source, fetch, timeout.Token).WaitAsync(CallTimeout, clock, timeout.Token);
+            if (persist && items.Count > 0)
+            {
+                _ = PersistAsync(key, items);
+            }
+
             return new DiscoverySourceOutcome(DiscoverySourceState.Ready, items, clock.GetUtcNow() + freshFor);
         }
         catch (ProviderRateLimitedException exception)

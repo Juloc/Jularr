@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Tracking;
 using Jularr.Web.Features.Mapping;
 using Jularr.Web.Features.MediaMapping;
+using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Metadata;
@@ -10,8 +11,42 @@ public sealed class AnimeMetadataService(
     AppDbContext db,
     IEnumerable<IAnimeMetadataProvider> providers,
     AniListAccountStore aniListStore,
-    MediaMappingReviewStore reviewStore)
+    MediaMappingReviewStore reviewStore,
+    WorkService? works = null)
 {
+    /// <summary>
+    /// Mirrors the AniList match of a library anime onto its canonical Work: the entry is the Work's AniList identity only while it covers the whole title. Once episode
+    /// ranges map other entries to parts of it, the ranges (the structural mapping evidence) carry the entries and no entry stands for the whole Work. The AniList
+    /// match is also the classification evidence that the Work is Anime. Idempotent; an owner's identity or classification decision is never overridden.
+    /// </summary>
+    public async Task SyncWorkIdentityAsync(Guid animeId, CancellationToken cancellationToken)
+    {
+        if (works is null)
+        {
+            return;
+        }
+
+        var match = await db.AnimeMetadata.AsNoTracking().FirstOrDefaultAsync(x => x.AnimeId == animeId && x.Provider == AniListMetadataProvider.ProviderKey, cancellationToken);
+        var workId = await db.WorkSourceLinks.AsNoTracking().Where(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == animeId).Select(link => (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
+        if (match is null || workId is null)
+        {
+            return;
+        }
+
+        if ((await aniListStore.LoadEpisodeMappingsAsync(animeId, cancellationToken)).Count > 0)
+        {
+            await db.WorkExternalIdentities
+                .Where(identity => identity.WorkId == workId && identity.MediaType == WorkMediaType.Anime && identity.Provider == match.Provider && identity.ExternalId == match.ExternalId && !identity.IsManualOverride)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+        else
+        {
+            await works.LinkExternalIdentityAsync(workId.Value, WorkMediaType.Anime, match.Provider, match.ExternalId, 1.0, "AniList match of the whole title", isPrimary: true, isManualOverride: false, MappingReviewState.Confirmed, cancellationToken);
+        }
+
+        await works.SetAnimeClassificationAsync(workId.Value, true, match.Provider, match.ExternalId, isManualOverride: false, cancellationToken);
+    }
+
     // Raw-ADO.NET derived-state store (see ProviderRoleAssignmentStore); not DI-registered, so it
     // is constructed inline from the already-injected db context, same as MappingReviewModel does.
     private ProviderRoleAssignmentStore Roles() => new(db);
@@ -325,6 +360,7 @@ public sealed class AnimeMetadataService(
             animeId.ToString(),
             "episode-ranges",
             cancellationToken);
+        await SyncWorkIdentityAsync(animeId, cancellationToken);
 
         return new AutomaticAnimeEpisodeMappingResult(
             true,
@@ -726,6 +762,11 @@ public sealed class AnimeMetadataService(
                 mapping,
                 cancellationToken);
 
+            if (added)
+            {
+                await SyncWorkIdentityAsync(animeId, cancellationToken);
+            }
+
             return added
                 ? new AnimeMetadataMatchResult(true)
                 : new AnimeMetadataMatchResult(
@@ -738,14 +779,19 @@ public sealed class AnimeMetadataService(
         }
     }
 
-    public Task<bool> RemoveEpisodeMappingAsync(
+    public async Task<bool> RemoveEpisodeMappingAsync(
         Guid animeId,
         Guid mappingId,
-        CancellationToken cancellationToken) =>
-        aniListStore.RemoveEpisodeMappingAsync(
-            animeId,
-            mappingId,
-            cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var removed = await aniListStore.RemoveEpisodeMappingAsync(animeId, mappingId, cancellationToken);
+        if (removed)
+        {
+            await SyncWorkIdentityAsync(animeId, cancellationToken);
+        }
+
+        return removed;
+    }
 
     public async Task<ResolvedAnimeEpisodeMetadata?> ResolveEpisodeAsync(
         Guid episodeId,
@@ -898,6 +944,7 @@ public sealed class AnimeMetadataService(
             animeId.ToString(),
             "identity",
             cancellationToken);
+        await SyncWorkIdentityAsync(animeId, cancellationToken);
 
         return new AnimeMetadataMatchResult(true);
     }

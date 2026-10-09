@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Net;
 using System.Text.Json;
 using Jularr.Web.Data;
@@ -124,8 +125,7 @@ public sealed class RequestToPlayTvTests
         var request = await world.RequestAsync(SeveranceTmdb, "Severance", scope: "all");
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status, request.StatusMessage);
         var payload = VideoRequestPayload.Parse(request.PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, payload.Scope);
-        Assert.IsTrue(payload.MonitorFuture);
+        Assert.IsTrue((await new MonitoringResolver(world.Db).LoadAsync(work.Id, CancellationToken.None)).IsWorkMonitored, "The whole Series is monitored, later episodes included.");
         Assert.AreEqual(work.Id, payload.WorkId);
         Assert.AreEqual(episodeIds[0], payload.ActiveWorkEpisodeId, "The first missing aired episode is searched first.");
         Assert.AreEqual(Release(1), world.Sabnzbd.Grabs.Single().NzbName);
@@ -254,9 +254,11 @@ public sealed class RequestToPlayTvTests
         var request = await world.RequestAsync(SeveranceTmdb, "Severance", scope: "custom", episodeIds: [episodeIds[0], episodeIds[2]]);
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status, request.StatusMessage);
         var payload = VideoRequestPayload.Parse(request.PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.Custom, payload.Scope);
-        CollectionAssert.AreEquivalent(new[] { episodeIds[0], episodeIds[2] }, payload.SelectedEpisodeIds);
-        Assert.IsFalse(payload.MonitorFuture);
+        var chosen = await new MonitoringResolver(world.Db).LoadAsync(work.Id, CancellationToken.None);
+        Assert.IsTrue(chosen.IsMonitored(episodeIds[0]) && chosen.IsMonitored(episodeIds[2]));
+        Assert.IsFalse(chosen.IsMonitored(episodeIds[1]));
+        Assert.IsFalse(chosen.IsWorkMonitored, "Later episodes are not picked up.");
+        Assert.IsNotNull(payload);
 
         await ImportAsync(world, request.Id, 1);
         var second = await world.GetRequestAsync(request.Id);
@@ -313,7 +315,7 @@ public sealed class RequestToPlayTvTests
         var request = await world.RequestAsync(SeveranceTmdb, "Severance", scope: "future");
 
         Assert.AreEqual(AcquisitionRequestStatus.Approved, request.Status, "Aired episodes are not part of a Future request, so there is nothing to grab yet.");
-        Assert.AreEqual(VideoRequestScope.FutureOnly, VideoRequestPayload.Parse(request.PayloadJson)!.Scope);
+        Assert.IsTrue((await new MonitoringResolver(world.Db).LoadAsync(work.Id, CancellationToken.None)).IsWorkMonitored, "Future monitors the Series and leaves what already aired alone.");
         Assert.AreEqual(0, world.Sabnzbd.Grabs.Count);
         var waiting = await world.Pages.GetOkAsync($"/Library/Series/{work.Id}");
         RequestToPlayAssert.Contains(Section(Section(waiting, "<section class=\"ad-episodes\"", "</section>"), "S01 E03", "</article>"), "ad-state-requested");

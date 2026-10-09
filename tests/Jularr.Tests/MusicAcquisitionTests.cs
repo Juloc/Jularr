@@ -1,3 +1,5 @@
+using Jularr.Web.Features.Monitoring;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -60,8 +62,8 @@ public sealed class MusicAcquisitionTests
         var owned = await host.AddAlbumAsync("rg-d", "Discovery", 2001, monitored: true);
         await host.AttachAudioAsync(owned, 1);
 
-        var created = await host.Get<MusicMonitoringService>().EnsureRequestsAsync(CancellationToken.None);
-        var again = await host.Get<MusicMonitoringService>().EnsureRequestsAsync(CancellationToken.None);
+        var created = await host.WantedRequestsAsync();
+        var again = await host.WantedRequestsAsync();
 
         Assert.AreEqual(1, created);
         Assert.AreEqual(0, again, "An open request is the Wanted state; nothing is requested twice.");
@@ -76,7 +78,7 @@ public sealed class MusicAcquisitionTests
         Assert.AreNotEqual(unreleased, missing);
 
         await host.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Failed, "Gave up.", null, null, null, CancellationToken.None);
-        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().EnsureRequestsAsync(CancellationToken.None), "A request that gave up waits for the owner.");
+        Assert.AreEqual(0, await host.WantedRequestsAsync(), "A request that gave up waits for the owner.");
     }
 
     [TestMethod]
@@ -119,7 +121,7 @@ public sealed class MusicAcquisitionTests
         Assert.AreEqual(AcquisitionRequestStatus.Completed, done!.Status, done.StatusMessage);
         Assert.AreEqual(1, host.Importer.Imports, "A repeated pass never imports the same download again.");
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
-        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().EnsureRequestsAsync(CancellationToken.None), "An album with files is not wanted any more.");
+        Assert.AreEqual(0, await host.WantedRequestsAsync(), "An album with files is not wanted any more.");
         Assert.IsTrue(await host.Get<MusicAcquisitionEngine>().HasAudioFilesAsync(work, CancellationToken.None));
     }
 
@@ -151,6 +153,26 @@ public sealed class MusicAcquisitionTests
         Assert.IsTrue(payload.NextSearchUtc > same.Clock.GetUtcNow().UtcDateTime);
     }
 
+    private static UpgradeWantedSource UpgradeSource(MusicHost host, UpgradeScanState scans) =>
+        new(MediaAcquisitionKind.Music, host.Get<WantedReconciler>(), host.Requests, host.Get<QualityProfileStore>(), scans);
+
+    [TestMethod]
+    public async Task AnImportedAlbumThatWasNeverRequestedIsRequestedOnceWhenItsProfileWantsBetter()
+    {
+        await using var host = await MusicHost.CreateAsync("Daft Punk - Homework (1997) [FLAC]");
+        var work = await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
+        await host.AttachAudioAsync(work, 1, "MP3-320");
+        var store = host.Get<QualityProfileStore>();
+        await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Music, null)) with { UpgradeCutoffQuality = "FLAC" });
+        var requests = new WantedRequestSource(MediaAcquisitionKind.Music, host.Get<WantedReconciler>(), host.Requests, host.Get<IWantedRequestDrafter>());
+        var now = host.Clock.GetUtcNow().UtcDateTime;
+
+        await UpgradeSource(host, new UpgradeScanState()).PrepareAsync(now, CancellationToken.None);
+
+        Assert.AreEqual(1, await requests.PrepareAsync(now, CancellationToken.None), "The library item is upgradable and has no request, so the canonical lifecycle gets one.");
+        Assert.AreEqual(0, await requests.PrepareAsync(now, CancellationToken.None), "The open request carries it; no second one is opened.");
+    }
+
     [TestMethod]
     public async Task AFinalAlbumStaysCompletedAndARaisedCutoffReopensItsRequestWithoutForgettingTriedReleases()
     {
@@ -164,17 +186,17 @@ public sealed class MusicAcquisitionTests
         var store = host.Get<QualityProfileStore>();
         await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Music, null)) with { UpgradeCutoffQuality = "MP3-320" });
 
-        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(new UpgradeScanState(), host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "320 kbit meets the cutoff now.");
+        Assert.AreEqual(0, await UpgradeSource(host, new UpgradeScanState()).PrepareAsync(host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "320 kbit meets the cutoff now.");
 
         await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Music, null)) with { UpgradeCutoffQuality = "FLAC" });
         var scans = new UpgradeScanState();
-        var reopened = await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(scans, host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None);
+        var reopened = await UpgradeSource(host, scans).PrepareAsync(host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None);
 
         Assert.AreEqual(1, reopened);
         var stored = (await host.Requests.GetAsync(request.Id, CancellationToken.None))!;
         Assert.AreEqual(AcquisitionRequestStatus.Approved, stored.Status);
         CollectionAssert.AreEqual(new[] { "earlier-release" }, MusicRequestPayload.Of(stored).TriedReleases!.ToArray());
-        Assert.AreEqual(0, await host.Get<MusicMonitoringService>().ReopenUpgradesAsync(scans, host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "The scan runs once per interval.");
+        Assert.AreEqual(0, await UpgradeSource(host, scans).PrepareAsync(host.Clock.GetUtcNow().UtcDateTime, CancellationToken.None), "The scan runs once per interval.");
     }
 
     [TestMethod]
@@ -192,22 +214,17 @@ public sealed class MusicAcquisitionTests
     }
 
     [TestMethod]
-    public async Task ALossyReleaseWaitsForItsFallbackTierAndThenIsTakenAsTemporary()
+    public async Task ALossyReleaseIsTakenAtOnceAndTheAlbumStaysWantedForAnUpgrade()
     {
         await using var host = await MusicHost.CreateAsync("Daft Punk - Homework (1997) MP3 256");
-        await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
+        var work = await host.AddAlbumAsync("rg-a", "Homework", 1997, monitored: true);
 
         await host.ProcessAsync();
-        var first = (await host.Requests.ListAsync(MediaAcquisitionKind.Music, null, openOnly: false, 10, CancellationToken.None)).Single();
-        Assert.AreEqual(0, host.Environment.Client.Grabs.Count);
-        Assert.AreEqual(AcquisitionRequestStatus.Approved, first.Status);
 
-        host.Clock.Advance(TimeSpan.FromHours(7));
-        var payload = MusicRequestPayload.Of(first) with { NextSearchUtc = host.Clock.GetUtcNow().UtcDateTime.AddMinutes(-1) };
-        await host.Requests.UpdatePayloadAsync(first.Id, payload.Serialize(), CancellationToken.None);
-        await host.ProcessAsync();
-
-        Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "After its wait, the lower quality is acceptable.");
+        Assert.AreEqual(1, host.Environment.Client.Grabs.Count, "A lossy release the profile allows needs no waiting.");
+        var profile = MusicQualityProfiles.CreateDefaultMusic();
+        Assert.IsTrue(UpgradePolicy.Assess(profile, "MP3-256").IsUpgradable, "Lossless is still the goal, so the album is upgraded later.");
+        Assert.IsNotNull(work);
     }
 
     [TestMethod]
@@ -306,7 +323,7 @@ public sealed class MusicAcquisitionTests
         Assert.AreEqual((6, 5, 2), (artists.Single().Albums, artists.Single().Monitored, artists.Single().Available));
     }
 
-    private static ProwlarrReleaseCandidate Release(string title) =>
+    private static AcquisitionCandidate Release(string title) =>
         new(title, "Music test indexer", 1, "usenet", 400L * 1024 * 1024, null, null, DateTimeOffset.UtcNow, 0, 1, title, null, AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.invalid/download/{Uri.EscapeDataString(title)}"), null);
 
     private sealed class ManualClock(DateTimeOffset start) : TimeProvider
@@ -374,16 +391,20 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton(_ => new AcquisitionAccessStore(db))
                 .AddSingleton(new CurrentAccountContext(new FixedAccessor(new DefaultHttpContext { User = VideoAcquisitionTestHost.OwnerPrincipal() })))
                 .AddSingleton<ReleaseRequestTracker>()
+                .AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>()
                 .AddSingleton<IJularrEventPublisher, RecordingEventPublisher>()
                 .AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(new MediaCapabilityStore(directory.FullName)))
                 .AddSingleton(new AcquisitionRequestSettingsStore(directory.FullName))
                 .AddSingleton<AcquisitionRequestService>()
                 .AddSingleton<IMusicMetadataProvider, MusicLibraryTests.FakeMusicProvider>()
                 .AddSingleton(new WorkService(db))
+                .AddSingleton(MonitoringTestSupport.Resolver(db))
+                .AddSingleton(MonitoringTestSupport.Commands(db))
                 .AddSingleton<MusicLibraryService>()
                 .AddSingleton<CanonicalMediaStorageService>()
                 .AddSingleton<UpgradeScanState>()
-                .AddSingleton<MusicMonitoringService>()
+                .AddSingleton<IUpgradeAssessor, MusicUpgradeAssessor>()
+                .AddSingleton<UpgradeAssessors>()
                 .AddSingleton<MusicAcquisitionEngine>()
                 .AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>()
                 .AddSingleton<MusicManualSearchService>()
@@ -391,6 +412,9 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton<IAcquisitionRequestExecutor, MusicAcquisitionRequestExecutor>()
                 .AddSingleton<IWantedRequestHandler, MusicWantedRequestHandler>()
                 .AddSingleton<IWantedSource, MusicWantedSource>()
+                .AddSingleton<WantedReconciler>()
+                .AddSingleton<IWantedRequestDrafter, MusicRequestDrafter>()
+                .AddSingleton<IWantedSource>(provider => new WantedRequestSource(MediaAcquisitionKind.Music, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<IWantedRequestDrafter>()))
                 .AddSingleton<ICompletedDownloadImportAdapter>(importer)
                 .AddSingleton<CompletedDownloadDispatcher>()
                 .AddSingleton<CompletedDownloadImportService>()
@@ -398,6 +422,8 @@ public sealed class MusicAcquisitionTests
                 .AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
             return new MusicHost(environment, services.BuildServiceProvider(), importer, clock);
         }
+
+        public Task<int> WantedRequestsAsync() => Get<IEnumerable<IWantedSource>>().OfType<WantedRequestSource>().Single().PrepareAsync(DateTime.UtcNow, CancellationToken.None);
 
         public async Task<Guid> AddAlbumAsync(string groupId, string title, int year, bool monitored, DateTime? releaseDate = null)
         {
@@ -412,8 +438,13 @@ public sealed class MusicAcquisitionTests
             var work = new Work { MediaType = WorkMediaType.Music, CanonicalTitle = title, Year = year };
             db.Works.Add(work);
             db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = work.Id, MediaType = WorkMediaType.Music, Provider = "musicbrainz", ExternalId = groupId, IsPrimary = true, Evidence = "test" });
-            db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, Type = MusicAlbumType.Album, ReleaseDate = releaseDate ?? new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc), MusicBrainzReleaseGroupId = groupId, Monitored = monitored });
+            db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, Type = MusicAlbumType.Album, ReleaseDate = releaseDate ?? new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc), MusicBrainzReleaseGroupId = groupId });
             await db.SaveChangesAsync();
+            if (monitored)
+            {
+                await MonitoringTestSupport.Commands(db).SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+            }
+
             return work.Id;
         }
 

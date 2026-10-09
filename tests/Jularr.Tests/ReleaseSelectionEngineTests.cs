@@ -1,6 +1,6 @@
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Prowlarr;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Search;
@@ -29,7 +29,7 @@ public sealed class ReleaseSelectionEngineTests
         };
 
     private static SelectionResult Select(QualityProfile profile, params SelectionCandidate[] candidates) =>
-        ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now), candidates);
+        ReleaseSelectionEngine.Select(profile, candidates);
 
     [TestMethod]
     public void AHighScoreNeverRepairsAWrongIdentity()
@@ -44,6 +44,19 @@ public sealed class ReleaseSelectionEngineTests
         var rejected = result.Ranked.Single(evaluation => evaluation.Candidate.Id == "wrong");
         Assert.AreEqual(SelectionDecision.Rejected, rejected.Decision);
         Assert.IsTrue(rejected.Reasons.Any(reason => reason.Kind == SelectionReasonKind.Identity && reason.Code == "WrongEpisode"));
+    }
+
+    [TestMethod]
+    public void TheLanguageOrderDecidesBetweenReleasesOfTheSameQualityAndNeverOverQuality()
+    {
+        var english = Candidate("english", "Show.S01E01.1080p.WEB-DL.H264-AAA") with { Languages = ["en"] };
+        var german = Candidate("german", "Show.S01E01.1080p.WEB-DL.H264-ZZZ") with { Languages = ["de"] };
+        var germanLow = Candidate("german-low", "Show.S01E01.720p.WEB-DL.H264-ZZZ") with { Languages = ["de"] };
+
+        Assert.AreEqual("german", Select(Profile() with { LanguageOrder = ["de", "en"] }, english, german).Winner!.Candidate.Id);
+        Assert.AreEqual("english", Select(Profile() with { LanguageOrder = ["en", "de"] }, german, english).Winner!.Candidate.Id);
+        Assert.AreEqual("english", Select(Profile() with { LanguageOrder = ["de", "en"] }, german with { Languages = [] }, english).Winner!.Candidate.Id, "A release without a stated language sits after the listed ones.");
+        Assert.AreEqual("english", Select(Profile() with { LanguageOrder = ["de"] }, germanLow, english with { Languages = ["de"] }).Winner!.Candidate.Id, "A better quality still beats a better language.");
     }
 
     [TestMethod]
@@ -84,28 +97,6 @@ public sealed class ReleaseSelectionEngineTests
         Assert.AreEqual(SelectionDecision.ManualReview, strict.Ranked[0].Decision);
         Assert.AreEqual(SelectionOutcome.ManualReviewOnly, strict.Outcome);
         Assert.AreEqual("maybe", lenient.Winner!.Candidate.Id);
-    }
-
-    [TestMethod]
-    public void FallbackTiersOpenOnlyAfterTheirWaitAndTheResultIsTemporary()
-    {
-        var profile = Profile() with
-        {
-            AllowedQualities = ["WEB-1080p"],
-            FallbackTiers = [new FallbackTier(120, ["WEB-720p"]), new FallbackTier(1440, ["HDTV-720p"])]
-        };
-        var hd = Candidate("hd", "Show.S01E01.1080p.WEB-DL.H264-GRP");
-        var lower = Candidate("lower", "Show.S01E01.720p.WEB-DL.H264-GRP");
-
-        var early = ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now.AddMinutes(-30)), [lower]);
-        var later = ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now.AddMinutes(-180)), [lower]);
-        var both = ReleaseSelectionEngine.Select(profile, new SelectionContext(Now, Now.AddMinutes(-180)), [lower, hd]);
-
-        Assert.IsNull(early.Winner);
-        Assert.IsTrue(early.Ranked[0].Reasons.Any(reason => reason.Code == "WaitingForFallbackTier" && reason.Detail.Contains("120 minutes")));
-        Assert.AreEqual(SelectionDecision.Temporary, later.Winner!.Decision);
-        Assert.AreEqual(1, later.Winner.FallbackTier);
-        Assert.AreEqual("hd", both.Winner!.Candidate.Id, "A candidate that fits the profile itself always beats a fallback.");
     }
 
     [TestMethod]
@@ -179,21 +170,6 @@ public sealed class ReleaseSelectionEngineTests
     }
 
     [TestMethod]
-    public void ADelayProfileIsTheSharedEnginesTimedFallbackLadder()
-    {
-        var ladder = AcquisitionDelayEngine.WithDelayAsFallbackTier(AnimeQualityProfiles.CreateDefaultAnime1080p(), new AnimeDelayProfile("delay-1", "Wait for BluRay", 60, null, [], false));
-        var web = Candidate("web", "Show.S01E01.1080p.WEB-DL.H264-GRP");
-        var bluRay = Candidate("bluray", "Show.S01E01.1080p.BluRay.H264-GRP");
-
-        CollectionAssert.AreEqual(new[] { "BLURAY-1080p" }, ladder.AllowedQualities, "Only the qualities that reach the cutoff are allowed at once.");
-        Assert.AreEqual(60, Assert.ContainsSingle(ladder.FallbackTiers).AfterMinutes);
-        Assert.AreEqual(SelectionOutcome.ProfileRejected, ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now), [web]).Outcome, "A release below the cutoff waits.");
-        Assert.AreEqual("bluray", ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now), [web, bluRay]).Winner!.Candidate.Id, "A release that meets the cutoff bypasses the wait.");
-        var afterWait = ReleaseSelectionEngine.Select(ladder, new SelectionContext(Now, Now.AddMinutes(-61)), [web]);
-        Assert.AreEqual(SelectionDecision.Temporary, afterWait.Winner!.Decision, "After the wait the lower quality is taken, and the target stays wanted for an upgrade.");
-    }
-
-    [TestMethod]
     public void AFileWhoseQualityCannotBeReadIsReplacedByAnyKnownQualityOnlyWhereTheMediaTypeAsksForIt()
     {
         var profile = Profile() with { UpgradeCutoffQuality = "BLURAY-1080p" };
@@ -205,34 +181,21 @@ public sealed class ReleaseSelectionEngineTests
     [TestMethod]
     public void UpgradeNeedsAMeaningfulBenefit()
     {
-        var profile = Profile() with { UpgradeMinimumScoreDelta = 10, UpgradeUntilScore = 40, UpgradeCutoffQuality = "BLURAY-1080p" };
+        var profile = Profile() with { UpgradeCutoffQuality = "BLURAY-1080p" };
         ReleaseScoreResult Result(string quality, int rank, int score) => new(new ReleaseCandidate(ReleaseParser.Parse("Show.S01E01.1080p.WEB-DL.H264-GRP")), true, score, quality, rank, [], []);
         var current = Result("WEB-1080p", 1, 10);
 
-        Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, current, Result("WEB-1080p", 1, 14)), "A small score difference never churns files.");
-        Assert.IsTrue(ReleaseScorer.IsUpgrade(profile, current, Result("WEB-1080p", 1, 25)));
+        Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, current, Result("WEB-1080p", 1, 90)), "A better preference within the same quality never churns files.");
         Assert.IsTrue(ReleaseScorer.IsUpgrade(profile, current, Result("BLURAY-1080p", 0, 10)), "A better quality tier is an upgrade.");
-        Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, Result("WEB-1080p", 1, 45), Result("WEB-1080p", 1, 90)), "Upgrades stop at the configured score.");
         Assert.IsFalse(ReleaseScorer.IsUpgrade(profile, current, Result("HDTV-1080p", 2, 99)), "Never a downgrade.");
         Assert.IsFalse(ReleaseScorer.IsUpgrade(Profile() with { UpgradeMinimumQualitySteps = 2, UpgradeCutoffQuality = "BLURAY-1080p" }, current, Result("BLURAY-1080p", 0, 10)), "One step is not enough when two are required.");
-    }
-
-    [TestMethod]
-    public void ProfileValidationRejectsUnorderedFallbackTiersAndUnknownQualities()
-    {
-        var unordered = Profile() with { FallbackTiers = [new FallbackTier(600, ["WEB-720p"]), new FallbackTier(60, ["HDTV-720p"])] };
-        var unknown = Profile() with { FallbackTiers = [new FallbackTier(60, ["WEB-480p"])] };
-
-        Assert.IsTrue(ReleaseScorer.ValidateProfile(unordered).Any(error => error.Contains("wait longer")));
-        Assert.IsTrue(ReleaseScorer.ValidateProfile(unknown).Any(error => error.Contains("WEB-480p")));
-        Assert.AreEqual(0, ReleaseScorer.ValidateProfile(Profile()).Count);
     }
 
     [TestMethod]
     public void AMovieSequelIsAmbiguousAndAWrongYearIsAConflict()
     {
         var parser = SceneReleaseParser.Instance;
-        VideoJudgement Judge(string release, int? year = 2021, IReadOnlyList<QueryProvenance>? origin = null) =>
+        ReleaseJudgement<VideoIdentityMatch> Judge(string release, int? year = 2021, IReadOnlyList<QueryProvenance>? origin = null) =>
             VideoReleaseJudge.Judge(parser, MediaAcquisitionKind.Movie, "Dune", year, null, VideoUnitScope.Empty, Release(release, origin));
 
         Assert.AreEqual(IdentityConfidence.Exact, Judge("Dune.2021.1080p.BluRay.x264-GRP").Evidence.Confidence);
@@ -265,7 +228,7 @@ public sealed class ReleaseSelectionEngineTests
         Assert.AreEqual(3, multi.Coverage.WantedCovered);
     }
 
-    private static ProwlarrReleaseCandidate Release(string title, IReadOnlyList<QueryProvenance>? provenance = null) =>
+    private static AcquisitionCandidate Release(string title, IReadOnlyList<QueryProvenance>? provenance = null) =>
         new(title, "Indexer", null, "usenet", 2_000_000_000, null, null, Now, 1, 24, Guid.NewGuid().ToString("N"), null, ReleaseParser.Parse(title), [], new Uri("http://indexer.example/nzb/1"), null)
         {
             Provenance = provenance ?? []

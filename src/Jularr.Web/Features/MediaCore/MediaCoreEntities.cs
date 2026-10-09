@@ -11,7 +11,14 @@ public sealed class Work
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    /// <summary>The technical type: a video Work is a Movie or a Series, never <see cref="WorkMediaType.Anime"/> (that value is historical).</summary>
     public WorkMediaType MediaType { get; set; }
+
+    /// <summary>
+    /// Whether the Work is classified as Anime: an independent classification of a Movie or Series, set from a trustworthy provider mapping or by the owner (see
+    /// <see cref="WorkService.SetAnimeClassificationAsync"/>), with its evidence in the field provenance <c>classification.anime</c>. It never changes the Work's identity or structure.
+    /// </summary>
+    public bool IsAnime { get; set; }
 
     /// <summary>
     /// Cached display title (the resolved primary <see cref="WorkTitle"/>). The authoritative,
@@ -165,12 +172,32 @@ public sealed class WorkVolume
 
     public string? Title { get; set; }
 
+    /// <summary>The provider that identifies this volume and its id there; both null for a volume nothing external vouches for. Number and title never identify it.</summary>
+    public string? Provider { get; set; }
+
+    public string? ExternalId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>
-/// A track of an album <see cref="Work"/>: logical content that exists without a file, the music equivalent of an episode or chapter.
-/// Not to be confused with the technical stream <c>Track</c> below an Asset.
+/// The underlying audio recording, identified by its MusicBrainz recording id; one recording can be placed on many releases (albums). A track whose
+/// recording id is unknown has no recording: recordings are never matched by title or position.
+/// </summary>
+public sealed class MusicRecording
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public string MusicBrainzId { get; set; } = "";
+
+    public string Title { get; set; } = "";
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// A track of an album <see cref="Work"/> (a release group): the placement of a recording on a release, at a disc and position. Logical content that exists
+/// without a file, the music equivalent of an episode or chapter. Not to be confused with the technical stream <c>Track</c> below an Asset.
 /// </summary>
 public sealed class WorkTrack
 {
@@ -185,8 +212,8 @@ public sealed class WorkTrack
 
     public int? DurationMs { get; set; }
 
-    /// <summary>The provider identity of the recording (MusicBrainz recording id), when known.</summary>
-    public string? MusicBrainzRecordingId { get; set; }
+    /// <summary>The recording placed here, when the provider named it; null while unresolved.</summary>
+    public Guid? MusicRecordingId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
@@ -205,6 +232,39 @@ public sealed class WorkChapter
     public string? Title { get; set; }
 
     public bool IsSpecial { get; set; }
+
+    /// <summary>The provider that identifies this chapter and its id there; both null for a chapter nothing external vouches for. Number and title never identify it.</summary>
+    public string? Provider { get; set; }
+
+    public string? ExternalId { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public enum WorkUnitLocalKind : short
+{
+    NovelVolume = 0,
+    MangaChapter = 1
+}
+
+/// <summary>
+/// Says that a local reading unit (an imported light-novel volume or manga chapter) is a canonical <see cref="WorkVolume"/> or <see cref="WorkChapter"/> (exactly one of the two ids is set).
+/// Only an owner mapping or the import of an acquisition for that unit writes it; a number or title never does.
+/// </summary>
+public sealed class WorkUnitBinding
+{
+    public long Id { get; set; }
+    public Guid WorkId { get; set; }
+    public WorkUnitLocalKind LocalKind { get; set; }
+
+    /// <summary>The id of the local unit (a NovelVolume or MangaChapter id).</summary>
+    public string LocalId { get; set; } = "";
+
+    public Guid? WorkVolumeId { get; set; }
+    public Guid? WorkChapterId { get; set; }
+
+    /// <summary>Whether the owner mapped it or an import of an acquisition made for the unit; the owner's mapping is never replaced by an import.</summary>
+    public bool IsOwnerMapping { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

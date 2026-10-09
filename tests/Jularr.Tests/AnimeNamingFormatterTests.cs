@@ -37,6 +37,14 @@ public sealed class AnimeNamingFormatterTests
     }
 
     [TestMethod]
+    public void ALeadingUnderscoreOfATemplateIsKeptWhereTheSharedEngineWouldTrimIt()
+    {
+        var rendered = AnimeNamingFormatter.Render("_{Series Title}", AnimeNamingScope.SeriesFolder, Default, AnimeNamingSamples.Single(AnimeSeriesType.Standard));
+
+        Assert.AreEqual("_The Series Title's!", rendered);
+    }
+
+    [TestMethod]
     public void RendersSeriesTitleVariantsAndProviderIds()
     {
         var request = AnimeNamingSamples.Single(AnimeSeriesType.Standard);

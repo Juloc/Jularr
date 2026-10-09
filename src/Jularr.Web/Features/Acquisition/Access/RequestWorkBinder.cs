@@ -18,11 +18,11 @@ namespace Jularr.Web.Features.Acquisition.Access;
 public sealed class RequestWorkBinder(AppDbContext db, WorkService works, LegacyWorkBridge bridge, AcquisitionAccessStore store, ILogger<RequestWorkBinder> logger)
 {
     /// <summary>The media types whose requests carry a canonical Work (Movie and TV keep theirs in the video payload, Anime in its own monitoring).</summary>
-    public static bool Applies(MediaAcquisitionKind kind) => kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Manga;
+    public static bool Applies(MediaAcquisitionKind kind) => kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Audiobook or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Manga;
 
     public static WorkMediaType MediaTypeOf(MediaAcquisitionKind kind) => kind switch
     {
-        MediaAcquisitionKind.Book => WorkMediaType.Book,
+        MediaAcquisitionKind.Book or MediaAcquisitionKind.Audiobook => WorkMediaType.Book,
         MediaAcquisitionKind.LightNovel => WorkMediaType.LightNovel,
         MediaAcquisitionKind.Manga => WorkMediaType.Manga,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "This media type has no request Work binding.")
@@ -41,7 +41,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
 
         return kind switch
         {
-            MediaAcquisitionKind.Book => provider.Equals(BookCatalogService.CatalogRequestProvider, StringComparison.OrdinalIgnoreCase),
+            MediaAcquisitionKind.Book or MediaAcquisitionKind.Audiobook => provider.Equals(BookCatalogService.CatalogRequestProvider, StringComparison.OrdinalIgnoreCase),
             MediaAcquisitionKind.Manga => provider.Equals(NovelAniListProvider.ProviderKey, StringComparison.OrdinalIgnoreCase) && long.TryParse(externalId, out var id) && id > 0,
             MediaAcquisitionKind.LightNovel => (provider.Equals(NovelAniListProvider.ProviderKey, StringComparison.OrdinalIgnoreCase) && long.TryParse(externalId, out var anilist) && anilist > 0)
                 || provider.Equals(NcodeNovelSourceProvider.ProviderKey, StringComparison.OrdinalIgnoreCase),
@@ -214,7 +214,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
         {
             sourceKind = WorkSourceKind.NovelWork;
             legacyId = await db.NovelWorks.AsNoTracking()
-                .Where(novel => novel.MetadataProvider == provider && novel.MetadataExternalId == externalId && (novel.SourceProvider == BookCatalogService.ImportedBookProvider) == (kind == MediaAcquisitionKind.Book))
+                .Where(novel => novel.MetadataProvider == provider && novel.MetadataExternalId == externalId && (novel.SourceProvider == BookCatalogService.ImportedBookProvider) == (kind == MediaAcquisitionKind.Book || kind == MediaAcquisitionKind.Audiobook))
                 .Select(novel => (Guid?)novel.Id)
                 .FirstOrDefaultAsync(cancellationToken);
         }

@@ -1,4 +1,5 @@
 using System.Net.Http;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Health;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -150,6 +151,18 @@ public sealed class IndexerSearchCoordinator(
             : entry;
         var categories = SearchPlanner.Categories(kind, entry).ToArray();
 
+        // An indexer that stopped offering the categories of a media type (its caps say so) is not asked for it: its answers would come from some other section.
+        if (capabilities is { Categories.Length: > 0 })
+        {
+            var offered = categories.Where(capabilities.Offers).ToArray();
+            if (offered.Length == 0)
+            {
+                return IndexerRun.Skipped(entry, $"Skipped: the indexer offers none of the categories searched for {kind} ({string.Join(", ", categories)}). Test it again after changing them.");
+            }
+
+            categories = offered;
+        }
+
         var hits = new List<SearchHit>();
         var trace = new List<SearchTraceLine>();
         var queriesRun = 0;
@@ -240,7 +253,7 @@ public sealed class IndexerSearchCoordinator(
             // Only a person browsing candidates reads the evidence cache. Wanted searches run hours apart and must see what appeared since
             // the last one, so an automatic search always asks the indexer and never hides new content behind a remembered answer.
             var useCache = options.Purpose == SearchPurpose.Interactive && !options.Refresh;
-            IReadOnlyList<ProwlarrReleaseCandidate> results;
+            IReadOnlyList<AcquisitionCandidate> results;
             var cached = false;
             if (useCache && cache.TryGet(key, out var remembered))
             {
@@ -290,7 +303,7 @@ public sealed class IndexerSearchCoordinator(
     private sealed class SearchSession(SearchOptions options)
     {
         private readonly object gate = new();
-        private readonly Dictionary<string, ProwlarrReleaseCandidate> distinct = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, AcquisitionCandidate> distinct = new(StringComparer.Ordinal);
         private int raw;
 
         public int RawCount
@@ -304,7 +317,7 @@ public sealed class IndexerSearchCoordinator(
             }
         }
 
-        public bool Add(ProwlarrReleaseCandidate release)
+        public bool Add(AcquisitionCandidate release)
         {
             lock (gate)
             {
@@ -315,7 +328,7 @@ public sealed class IndexerSearchCoordinator(
 
         public int UsableCount()
         {
-            ProwlarrReleaseCandidate[] snapshot;
+            AcquisitionCandidate[] snapshot;
             lock (gate)
             {
                 snapshot = [.. distinct.Values];

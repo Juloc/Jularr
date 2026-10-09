@@ -1,4 +1,5 @@
 using System.Net;
+using Jularr.Web.Features.Acquisition.Core;
 using System.IO.Compression;
 using System.Security.Claims;
 using System.Text;
@@ -138,6 +139,83 @@ public sealed class BookPdfAcquisitionTests
         Assert.AreEqual(0, await environment.Db.BookFiles.CountAsync(file => file.Format == BookFileFormats.Pdf));
     }
 
+    // A direct source whose one candidate is the requested catalog edition; importing it records the call or fails like a dead mirror.
+    private sealed class FakeDirectSource(bool fails) : IDirectSource
+    {
+        public int Imports { get; private set; }
+
+        public string Name => "fake";
+
+        public MediaAcquisitionKind Kind => MediaAcquisitionKind.Book;
+
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(Jularr.Web.Features.Acquisition.Search.SearchIntent intent, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AcquisitionCandidate>>(
+            [
+                new AcquisitionCandidate("Atomic Habits [EPUB]", "Free edition", null, "direct", null, null, null, null, null, null, null, null, AnimeReleaseParser.Parse("Atomic Habits [EPUB]"), [], null, null)
+                {
+                    Type = AcquisitionType.DirectImport,
+                    Offer = new DirectOffer("fake", "edition", IdentityIsExact: true)
+                }
+            ]);
+
+        public Task<AcquisitionExecution> ImportAsync(AcquisitionRequest request, DirectOffer offer, CancellationToken cancellationToken)
+        {
+            Imports++;
+            return fails
+                ? throw new InvalidOperationException("The mirror is gone.")
+                : Task.FromResult(new AcquisitionExecution(AcquisitionRequestStatus.Completed, "Imported a direct/free edition."));
+        }
+    }
+
+    [TestMethod]
+    public async Task ADirectEditionAndAUsenetReleaseCompeteInOneSelectionAndTheWinnerIsRoutedByItsType()
+    {
+        var direct = new FakeDirectSource(fails: false);
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync(direct);
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "epub"));
+
+        var request = await environment.AddAsync();
+
+        var stored = await environment.RequestAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, stored.Status, stored.StatusMessage);
+        Assert.AreEqual(1, direct.Imports, "The free edition won the tie against an equal Usenet EPUB and was imported by its own source.");
+        Assert.IsEmpty(environment.Sabnzbd.Grabs, "Nothing went to the download client.");
+    }
+
+    [TestMethod]
+    public async Task AnAudiobookRequestGrabsTheBestAudioReleaseAndNeverAnEbook()
+    {
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync();
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "ebook"));
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits MP3 Unabridged", "mp3"));
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits M4B Unabridged", "m4b"));
+
+        var request = await environment.AddAudiobookAsync();
+
+        var stored = await environment.RequestAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, stored.Status, stored.StatusMessage);
+        StringAssert.Contains(environment.Sabnzbd.Grabs.Single().NzbUrl.ToString(), "m4b", "The audiobook container is the quality; the e-book is no candidate.");
+    }
+
+    [TestMethod]
+    public async Task ADirectEditionThatFailsIsTriedOnceAndTheNextCandidateIsTaken()
+    {
+        var direct = new FakeDirectSource(fails: true);
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync(direct);
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "epub"));
+
+        var first = await environment.AddAsync();
+        Assert.AreEqual(1, direct.Imports);
+        var waiting = await environment.RequestAsync(first.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, waiting.Status, waiting.StatusMessage);
+        StringAssert.Contains(waiting.StatusMessage, "The mirror is gone.");
+
+        await environment.Services.GetRequiredService<AcquisitionRequestService>().ContinueAsync(first.Id, CancellationToken.None);
+
+        Assert.AreEqual(1, direct.Imports, "The failed edition is never tried again.");
+        Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count, "The Usenet release is the next candidate.");
+    }
+
     [TestMethod]
     public async Task UnsupportedDownloadContinuesWithTheNextReleaseAndNeverResendsABadOne()
     {
@@ -158,9 +236,7 @@ public sealed class BookPdfAcquisitionTests
         StringAssert.Contains(next.StatusMessage, BookCompletedDownloadImportAdapter.NoBookFileReason);
         Assert.AreEqual(2, environment.Sabnzbd.Grabs.Count);
         StringAssert.Contains(environment.Sabnzbd.Grabs[1].NzbUrl.ToString(), "pdf");
-        CollectionAssert.AreEquivalent(
-            new[] { "James Clear - Atomic Habits EPUB", "James Clear - Atomic Habits PDF" },
-            BookAcquisitionExecutor.ReadPayload(next).TriedReleases!.ToArray());
+        Assert.HasCount(2, BookAcquisitionExecutor.ReadPayload(next).TriedReleases!, "Both releases are remembered as tried.");
 
         // The PDF release is unusable too: nothing is left to try, the request waits for new releases.
         Directory.Delete(folder, recursive: true);
@@ -464,7 +540,7 @@ public sealed class BookPdfAcquisitionTests
         Assert.AreEqual(0, await environment.Db.NovelWorks.CountAsync());
     }
 
-    private static ProwlarrReleaseCandidate Release(string title, string key) =>
+    private static AcquisitionCandidate Release(string title, string key) =>
         new(title, "Test indexer", 1, "usenet", 4_000_000, null, null, DateTimeOffset.UtcNow, 1, 1, key, null,
             AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.example/{key}.nzb"), null);
 
@@ -643,7 +719,7 @@ public sealed class BookPdfAcquisitionTests
         public OperationStore Operations => new(Db);
         public string FilesPath => Books.FilesPath;
 
-        public static async Task<BookAcquisitionEnvironment> CreateAsync()
+        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null)
         {
             var root = Path.Combine(Path.GetTempPath(), $"jularr-books-{Guid.NewGuid():N}");
             var data = Directory.CreateDirectory(Path.Combine(root, "data"));
@@ -692,7 +768,7 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton(new IndexerStore(protection, data));
             collection.AddSingleton(new DownloadClientStore(protection, data));
             collection.AddSingleton(new AcquisitionHealthStore(data));
-            collection.AddSingleton(new SabnzbdAcquisitionStore(protection, data));
+            collection.AddSingleton(new SabnzbdAcquisitionStore(data));
             collection.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(provider =>
                 new Dictionary<IndexerType, IIndexer>
                 {
@@ -701,6 +777,7 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton<IDownloadClient>(provider => new SabnzbdDownloadClient(provider.GetRequiredService<ISabnzbdClient>()));
             collection.AddSingleton<IndexerSearchCoordinator>();
             collection.AddSingleton<IMediaAcquisitionRegistration, BookAcquisitionRegistration>();
+            collection.AddSingleton<IMediaAcquisitionRegistration, AudiobookAcquisitionRegistration>();
             collection.AddSingleton<MediaAcquisitionRegistry>();
             collection.AddSingleton(provider => new QualityProfileStore(
                 new DirectoryInfo(Path.Combine(data.FullName, "quality-profiles")),
@@ -712,7 +789,14 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton(owner);
             collection.AddSingleton(TimeProvider.System);
             collection.AddSingleton<ReleaseRequestTracker>();
+            collection.AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>();
+            if (direct is not null)
+            {
+                collection.AddSingleton(direct);
+            }
+
             collection.AddSingleton<IAcquisitionRequestExecutor, BookAcquisitionExecutor>();
+            collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.Audiobooks.AudiobookAcquisitionRequestExecutor>();
             collection.AddSingleton<Jularr.Web.Features.Events.IJularrEventPublisher, RecordingEventPublisher>();
             collection.AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(new MediaCapabilityStore(data.FullName)));
             collection.AddSingleton(new AcquisitionRequestSettingsStore(data.FullName));
@@ -739,7 +823,7 @@ public sealed class BookPdfAcquisitionTests
                 DownloadClientType.Sabnzbd,
                 Enabled: true,
                 Priority: 1,
-                new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Book] = "books", [MediaAcquisitionKind.Anime] = "anime" }),
+                new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Book] = "books", [MediaAcquisitionKind.Audiobook] = "audiobooks", [MediaAcquisitionKind.Anime] = "anime" }),
                 "secret-key"));
             await services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(
                 state => state.WithRemotePathMappings(MediaAcquisitionKind.Book, [new RemotePathMapping("/data/downloads/complete", Path.Combine(root, "mnt", "complete"))]),
@@ -748,6 +832,8 @@ public sealed class BookPdfAcquisitionTests
             await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Book, Path.Combine(root, "library-books"), ImportMode.Copy);
             return new BookAcquisitionEnvironment(root, services, db);
         }
+
+        public IServiceProvider Services => services;
 
         public Task<AcquisitionRequest> AddAsync() =>
             services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(
@@ -761,6 +847,11 @@ public sealed class BookPdfAcquisitionTests
                     System.Text.Json.JsonSerializer.Serialize(
                         new BookRequestPayload(CatalogId, "Atomic Habits", "James Clear"),
                         System.Text.Json.JsonSerializerOptions.Web)),
+                CancellationToken.None);
+
+        public Task<AcquisitionRequest> AddAudiobookAsync() =>
+            services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(
+                new AcquisitionRequestDraft(MediaAcquisitionKind.Audiobook, BookCatalogService.CatalogRequestProvider, CatalogId, "Atomic Habits", "James Clear", null),
                 CancellationToken.None);
 
         public async Task<AcquisitionRequest> RequestAsync(Guid id) =>

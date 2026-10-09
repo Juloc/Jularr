@@ -20,12 +20,12 @@ public sealed class InstantPlayProjectionTests
             Guid.NewGuid(), "video-usenet-download", "External downloads", OperationLane.Normal, status, "bob", "Download TV", "Severance", percent, "SABnzbd: Downloading.", null, true, total, completed, 1_000, null, 1, true,
             "sabnzbd", "SABnzbd_nzo_secret", Now, Now, null, Now);
 
-    private static VideoRequestPayload Payload(DateTime? nextSearch = null, int searches = 0, bool monitorFuture = false) =>
-        new(Guid.NewGuid(), "Severance", 2022, VideoRequestScope.AllCurrentAndFuture, [], monitorFuture) { NextSearchUtc = nextSearch, Searches = searches };
+    private static VideoRequestPayload Payload(DateTime? nextSearch = null, int searches = 0) =>
+        new(Guid.NewGuid(), "Severance", 2022) { NextSearchUtc = nextSearch, Searches = searches };
 
     private static ConsumerAcquisitionView Project(
-        AcquisitionRequest request, VideoRequestPayload? payload = null, OperationSnapshot? download = null, bool local = false, bool episode = true, bool playback = true, Guid? target = null) =>
-        ConsumerAcquisitionProjector.Project(request, payload, download, local, target ?? (episode ? Guid.NewGuid() : null), playback, Now);
+        AcquisitionRequest request, VideoRequestPayload? payload = null, OperationSnapshot? download = null, bool local = false, bool episode = true, bool playback = true, Guid? target = null, bool future = false) =>
+        ConsumerAcquisitionProjector.Project(request, payload, future, download, local, target ?? (episode ? Guid.NewGuid() : null), playback, Now);
 
     [TestMethod]
     public void EveryCanonicalStatusProjectsToTheConsumerVocabulary()
@@ -47,7 +47,7 @@ public sealed class InstantPlayProjectionTests
 
         Assert.AreEqual(ConsumerAcquisitionState.LookingForMedia, Project(approved, Payload(nextSearch: Now.AddHours(-1))).State, "A due search is looking.");
         Assert.AreEqual(ConsumerAcquisitionState.NotAvailableYet, Project(approved, Payload(Now.AddHours(6), searches: 2)).State, "No acceptable release yet; the request keeps looking.");
-        var monitoring = Project(approved, Payload(Now.AddHours(24), searches: 0, monitorFuture: true));
+        var monitoring = Project(approved, Payload(Now.AddHours(24), searches: 0), future: true);
         Assert.AreEqual((ConsumerAcquisitionState.MonitoringFutureReleases, true), (monitoring.State, monitoring.IsMonitoring));
     }
 
@@ -92,11 +92,11 @@ public sealed class InstantPlayProjectionTests
     public void ALocalTargetIsReadyToWatchOrAvailableAndMonitoringCoexists()
     {
         var open = Request(AcquisitionRequestStatus.Approved);
-        var monitored = Payload(Now.AddHours(24), monitorFuture: true);
+        var monitored = Payload(Now.AddHours(24));
 
-        var ready = Project(open, monitored, local: true);
+        var ready = Project(open, monitored, local: true, future: true);
         Assert.AreEqual((ConsumerAcquisitionState.ReadyToWatch, true, null), (ready.State, ready.IsMonitoring, ready.ProgressPercent));
-        Assert.AreEqual(ConsumerAcquisitionState.Available, Project(open, monitored, local: true, playback: false).State, "A manager-only instance never says Ready to watch.");
+        Assert.AreEqual(ConsumerAcquisitionState.Available, Project(open, monitored, local: true, playback: false, future: true).State, "A manager-only instance never says Ready to watch.");
         Assert.AreEqual(ConsumerAcquisitionState.ReadyToWatch, Project(Request(AcquisitionRequestStatus.Completed), local: true).State);
         Assert.IsFalse(Project(Request(AcquisitionRequestStatus.Completed), monitored, local: true).IsMonitoring, "A finished request monitors nothing.");
     }

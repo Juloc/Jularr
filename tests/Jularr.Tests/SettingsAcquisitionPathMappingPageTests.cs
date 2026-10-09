@@ -5,7 +5,6 @@ using Jularr.Web.Features.Acquisition.AniListAutoMonitor;
 using Jularr.Web.Features.Acquisition.Backup;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Indexers;
-using Jularr.Web.Features.Acquisition.Policy;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Storage;
@@ -449,7 +448,6 @@ public sealed class SettingsAcquisitionPathMappingPageTests
                 "test"));
             var page = new AcquisitionModel(
                 Store,
-                new AcquisitionPolicyStore(root),
                 new AniListAutoMonitorSettingsStore(root),
                 new AcquisitionBackupService(root),
                 new IndexerStore(new EphemeralDataProtectionProvider(), new DirectoryInfo(Path.Combine(root, "acquisition"))),

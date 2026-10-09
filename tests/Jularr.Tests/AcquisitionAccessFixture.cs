@@ -39,7 +39,7 @@ internal sealed class AcquisitionAccessFixture : IAsyncDisposable
     {
         clock ??= TimeProvider.System;
         var works = new VideoRequestWorkResolver(Db);
-        return new RequestStatusQuery(Store, new ConsumerAcquisitionQuery(Db, Store, works, clock), new RequestArtworkResolver(Db, works), new InstanceModuleStore(directory), Db, clock, NullLogger<RequestStatusQuery>.Instance);
+        return new RequestStatusQuery(Store, new ConsumerAcquisitionQuery(Db, Store, works, MonitoringTestSupport.Resolver(Db), clock), new RequestArtworkResolver(Db, works), new InstanceModuleStore(directory), Db, clock, NullLogger<RequestStatusQuery>.Instance);
     }
 
     public static async Task<AcquisitionAccessFixture> CreateAsync()

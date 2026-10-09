@@ -11,16 +11,17 @@ public sealed class VideoRequestPayloadParseTests
 
     [TestMethod]
     [DataRow($$"""{"workId":"{{Work}}","title":"Severance"}""")]
-    [DataRow($$"""{"workId":"{{Work}}","title":"Severance","selectedEpisodeIds":null,"selectedSeasonIds":null,"excludedEpisodeIds":null}""")]
+    [DataRow($$"""{"workId":"{{Work}}","title":"Severance","requested":null,"playbackMarkers":null}""")]
     [DataRow($$"""{"workId":"{{Work}}","scope":3}""")]
-    public void NullOrMissingCollectionsReadAsEmpty(string json)
+    public void NullOrMissingFieldsReadWithDefaults(string json)
     {
         var payload = VideoRequestPayload.Parse(json);
 
         Assert.IsNotNull(payload);
-        Assert.AreEqual(0, payload.SelectedEpisodeIds.Length);
+        Assert.IsNull(payload.Requested);
+        Assert.AreEqual(0, payload.MonitoringRevision);
+        Assert.IsFalse(payload.EndedByMonitoring);
         Assert.IsNotNull(payload.Title);
-        Assert.IsTrue(payload.Monitored, "A payload without the Admin fields is monitored.");
     }
 
     [TestMethod]
@@ -31,16 +32,6 @@ public sealed class VideoRequestPayloadParseTests
     public void JsonThatIsNotAPayloadReadsAsNullSoTheDefaultScopeApplies(string json)
     {
         Assert.IsNull(VideoRequestPayload.Parse(json));
-    }
-
-    [TestMethod]
-    public void ASelectionOfAPayloadWithoutCollectionsCoversNothingAndNeverThrows()
-    {
-        var payload = VideoRequestPayload.Parse($$"""{"workId":"{{Work}}","scope":3}""")!;
-
-        var selection = new VideoRequestSelection(payload, DateTime.UtcNow.AddDays(-1));
-
-        Assert.IsFalse(selection.Includes(Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow.AddDays(-10)));
     }
 
     [TestMethod]
@@ -61,7 +52,7 @@ public sealed class VideoRequestPayloadParseTests
         await using var series = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", "Severance.S01E01.1080p.WEB-DL.x264-GROUP");
         await series.AddEpisodeAsync(1, 1);
         var malformed = await series.CreateApprovedAsync();
-        await series.Get<AcquisitionAccessStore>().PatchPayloadAsync(malformed.Id, _ => $$"""{"workId":"{{series.Work.Id}}","title":"Severance","selectedEpisodeIds":null,"selectedSeasonIds":null}""", CancellationToken.None);
+        await series.Get<AcquisitionAccessStore>().PatchPayloadAsync(malformed.Id, _ => $$"""{"workId":"{{series.Work.Id}}","title":"Severance","requested":null,"playbackMarkers":null}""", CancellationToken.None);
         await series.Get<AcquisitionAccessStore>().CreateAsync(
             new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", "other-show", "Other Show", null, null, "{}"),
             "owner",

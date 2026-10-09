@@ -11,6 +11,7 @@ public static class MediaCoreRegistration
     {
         services.AddScoped<WorkService>();
         services.AddScoped<WorkStructureService>();
+        services.AddScoped<ReadingUnits>();
         services.AddScoped<WorkQueryService>();
         services.AddScoped<LegacyWorkBridge>();
         services.AddScoped<WorkMetadataStore>();

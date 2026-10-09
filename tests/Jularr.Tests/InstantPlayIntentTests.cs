@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Security.Claims;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Wanted;
@@ -60,8 +61,8 @@ public sealed class InstantPlayIntentTests
         var executors = host.Services.GetServices<IAcquisitionRequestExecutor>();
         var requests = new AcquisitionRequestService(store, executors, account, capabilities, settings, new RecordingEventPublisher(), NullLogger<AcquisitionRequestService>.Instance, modules);
         var policies = new InstantPlayPolicyService(modules, requests, host.Get<VideoAcquisitionEngine>());
-        var facts = new VideoPlaybackFactsQuery(db, store, new VideoProgressService(db), TimeProvider.System);
-        return new PlaybackIntentService(facts, policies, requests, store, new ConsumerAcquisitionQuery(db, store, host.Get<VideoRequestWorkResolver>(), TimeProvider.System), account, clock ?? TimeProvider.System);
+        var facts = new VideoPlaybackFactsQuery(db, store, new VideoProgressService(db), MonitoringTestSupport.Resolver(db), TimeProvider.System);
+        return new PlaybackIntentService(facts, policies, requests, store, new ConsumerAcquisitionQuery(db, store, host.Get<VideoRequestWorkResolver>(), MonitoringTestSupport.Resolver(db), TimeProvider.System), account, clock ?? TimeProvider.System);
     }
 
     private static async Task<IReadOnlyList<AcquisitionRequest>> AllRequestsAsync(VideoAcquisitionTestHost host) =>
@@ -74,6 +75,8 @@ public sealed class InstantPlayIntentTests
     private static bool HasMarker(VideoRequestPayload payload) => payload.HasPlaybackIntent(DateTime.UtcNow);
 
     private static VideoRequestPayload PayloadOf(AcquisitionRequest request) => VideoRequestPayload.Parse(request.PayloadJson)!;
+
+    private static Task<WorkMonitoringView> MonitoringOfAsync(VideoAcquisitionTestHost host) => host.Get<MonitoringResolver>().LoadAsync(host.Work.Id, CancellationToken.None);
 
     // ---- Local media and permissions ----------------------------------------------------------------------------------
 
@@ -179,7 +182,8 @@ public sealed class InstantPlayIntentTests
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, request.Status, "Auto-approved by policy and executed through the shared pipeline.");
         Assert.AreEqual("owner", request.DecidedByProfileId, "Auto-approved by the profile's own capability, not around an approval.");
         var payload = PayloadOf(request);
-        Assert.AreEqual((VideoRequestScope.WholeWork, false, true), (payload.Scope, payload.MonitorFuture, MarkedUnits(payload).Contains(null)));
+        Assert.IsTrue((await MonitoringOfAsync(host)).IsWorkMonitored);
+        Assert.IsTrue(MarkedUnits(payload).Contains(null));
         Assert.AreEqual(ConsumerAcquisitionState.GettingMedia, result.Acquisition!.State);
         Assert.AreEqual(ConsumerMediaUnit.Movie, result.Acquisition.MediaUnit);
 
@@ -198,9 +202,10 @@ public sealed class InstantPlayIntentTests
         Assert.AreEqual((PlaybackIntentOutcome.Acquiring, PrimaryActionKind.StartWatching, host.EpisodeId), (result.Outcome, result.Action!.Kind, result.Action.WorkEpisodeId), "No history: the first episode.");
         var request = Assert.ContainsSingle(await AllRequestsAsync(host));
         var payload = PayloadOf(request);
-        Assert.AreEqual(VideoRequestScope.Custom, payload.Scope);
-        CollectionAssert.AreEqual(new[] { host.EpisodeId!.Value }, payload.SelectedEpisodeIds, "Exactly the target episode is in the scope.");
-        Assert.IsFalse(payload.MonitorFuture, "No future monitoring from a playback intent.");
+        var view = await MonitoringOfAsync(host);
+        Assert.IsTrue(view.IsMonitored(host.EpisodeId!.Value), "The target episode is monitored.");
+        Assert.IsFalse(view.IsMonitored(host.SecondEpisodeId!.Value), "Nothing else of the Series is.");
+        Assert.IsFalse(view.IsWorkMonitored, "No future monitoring from a playback intent.");
         CollectionAssert.AreEqual(new Guid?[] { host.EpisodeId.Value }, MarkedUnits(payload));
         Assert.AreEqual(ConsumerMediaUnit.Episode, result.Acquisition!.MediaUnit);
         Assert.AreEqual(1, Assert.ContainsSingle(host.Environment.Client.Grabs).Priority);
@@ -217,7 +222,8 @@ public sealed class InstantPlayIntentTests
 
         Assert.AreEqual((PlaybackIntentOutcome.Acquiring, host.SecondEpisodeId), (next.Outcome, next.Action!.WorkEpisodeId));
         var second = (await AllRequestsAsync(host)).Single(x => x.IsOpen);
-        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, PayloadOf(second).SelectedEpisodeIds);
+        Assert.IsNotNull(second);
+        Assert.IsTrue((await MonitoringOfAsync(host)).IsMonitored(host.SecondEpisodeId!.Value));
     }
 
     [TestMethod]
@@ -228,7 +234,9 @@ public sealed class InstantPlayIntentTests
         var result = await Intents(host).StartAsync(host.Work.Id, host.SecondEpisodeId, CancellationToken.None);
 
         Assert.AreEqual((PlaybackIntentOutcome.Acquiring, PrimaryActionKind.WatchNow), (result.Outcome, result.Action!.Kind));
-        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId!.Value }, PayloadOf(Assert.ContainsSingle(await AllRequestsAsync(host))).SelectedEpisodeIds);
+        var view = await MonitoringOfAsync(host);
+        Assert.IsTrue(view.IsMonitored(host.SecondEpisodeId!.Value));
+        Assert.IsFalse(view.IsMonitored(host.EpisodeId!.Value));
         StringAssert.Contains(host.Environment.Client.Grabs.Single().NzbName!, "S01E02");
     }
 
@@ -254,7 +262,7 @@ public sealed class InstantPlayIntentTests
     public async Task AnApprovedRequestThatDoesNotCoverTheTargetTakesItWithoutWideningItsScope()
     {
         await using var host = await SeriesHostAsync();
-        var scope = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.SecondEpisodeId!.Value], MonitorFuture: false);
+        var scope = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.SecondEpisodeId!.Value]);
         var existing = await host.CreateApprovedAsync(scope with { NextSearchUtc = DateTime.UtcNow.AddHours(6), Searches = 1 });
 
         var result = await Intents(host).StartAsync(host.Work.Id, host.EpisodeId, CancellationToken.None);
@@ -263,8 +271,9 @@ public sealed class InstantPlayIntentTests
         Assert.AreEqual(1, (await AllRequestsAsync(host)).Count);
         var after = await host.GetAsync(existing.Id);
         var payload = PayloadOf(after);
-        CollectionAssert.AreEqual(new[] { host.SecondEpisodeId.Value }, payload.SelectedEpisodeIds, "The saved scope is unchanged.");
-        Assert.AreEqual(VideoRequestScope.Custom, payload.Scope);
+        var view = await MonitoringOfAsync(host);
+        Assert.IsTrue(view.IsMonitored(host.SecondEpisodeId!.Value), "The saved selection is unchanged.");
+        Assert.IsFalse(view.IsMonitored(host.EpisodeId!.Value));
         CollectionAssert.AreEqual(new Guid?[] { host.EpisodeId!.Value }, MarkedUnits(payload));
         Assert.AreEqual(AcquisitionRequestStatus.Downloading, after.Status, "An idle request searches for the unit now, ahead of its back-off.");
         StringAssert.Contains(host.Environment.Client.Grabs.Single().NzbName!, "S01E01", "The playback episode is taken before the scoped one.");
@@ -339,7 +348,7 @@ public sealed class InstantPlayIntentTests
         var second = await intents.StartAsync(host.Work.Id, host.SecondEpisodeId, CancellationToken.None);
 
         Assert.AreEqual((PlaybackIntentOutcome.Acquiring, existing.Id), (first.Outcome, first.RequestId));
-        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, payload.Scope, "The scope is untouched.");
+        Assert.IsTrue((await MonitoringOfAsync(host)).IsWorkMonitored, "What is monitored is untouched.");
         CollectionAssert.AreEqual(new Guid?[] { host.SecondEpisodeId!.Value }, MarkedUnits(payload));
         Assert.AreEqual(1, (await AllRequestsAsync(host)).Count);
         Assert.AreEqual(grabs, host.Environment.Client.Grabs.Count, "The running download of the first episode is not interrupted or duplicated.");
@@ -363,8 +372,8 @@ public sealed class InstantPlayIntentTests
     public async Task ARequestWhoseMonitoringWasTurnedOffPromisesNothing()
     {
         await using var host = await SeriesHostAsync();
-        var scope = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true) { Monitored = false };
-        await host.CreateApprovedAsync(scope);
+        await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year));
+        await host.Get<MonitoringCommands>().SetAsync(MonitoringTargetKind.Work, host.Work.Id, false, CancellationToken.None);
 
         var result = await Intents(host).StartAsync(host.Work.Id, host.SecondEpisodeId, CancellationToken.None);
 
@@ -378,7 +387,7 @@ public sealed class InstantPlayIntentTests
         await using var host = await SeriesHostAsync();
         var request = await host.CreateApprovedAsync();
         await host.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Completed, null, null, null, null, CancellationToken.None);
-        var projection = new ConsumerAcquisitionQuery(host.Environment.Db, host.Requests, host.Get<VideoRequestWorkResolver>(), TimeProvider.System);
+        var projection = new ConsumerAcquisitionQuery(host.Environment.Db, host.Requests, host.Get<VideoRequestWorkResolver>(), MonitoringTestSupport.Resolver(host.Environment.Db), TimeProvider.System);
 
         var empty = await projection.ProjectAsync(await host.GetAsync(request.Id), null, playbackEnabled: true, CancellationToken.None);
         await host.AttachFileAsync(host.EpisodeId);
@@ -410,7 +419,7 @@ public sealed class InstantPlayIntentTests
         await host.AddWorkAsync("Arrival", "329865", 2016);
         await host.Requests.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", "329865", "Arrival", null, null), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
         await Task.Delay(20);
-        var waited = new VideoRequestPayload(host.Work.Id, "Dune", 2021, VideoRequestScope.WholeWork, [], MonitorFuture: false) { PlaybackMarkers = [Marker(null)] };
+        var waited = MonitoringTestSupport.Choosing(host.Work.Id, "Dune", 2021, VideoRequestScope.WholeWork) with { PlaybackMarkers = [Marker(null)] };
         var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", host.TmdbId, "Dune", null, null, waited.Serialize());
         await host.Requests.CreateAsync(draft, "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
 
@@ -427,7 +436,7 @@ public sealed class InstantPlayIntentTests
     public async Task AnImportedPlaybackEpisodeLeavesTheRequestsPriorityList()
     {
         await using var host = await SeriesHostAsync();
-        var all = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true) { PlaybackMarkers = [Marker(host.SecondEpisodeId!.Value)] };
+        var all = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, future: true) with { PlaybackMarkers = [Marker(host.SecondEpisodeId!.Value)] };
         var request = await host.StartAsync(all);
         StringAssert.Contains(host.Environment.Client.Grabs.Single().NzbName!, "S01E02", "The playback episode is searched before episode 1.");
 
@@ -443,25 +452,11 @@ public sealed class InstantPlayIntentTests
     // ---- Admin curation, completion races, limits ---------------------------------------------------------------------
 
     [TestMethod]
-    public async Task AnAdminExcludedEpisodeIsNotAcquiredForAProfile()
-    {
-        await using var host = await SeriesHostAsync();
-        var all = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true) { ExcludedEpisodeIds = [host.EpisodeId!.Value] };
-        var request = await host.CreateApprovedAsync(all with { NextSearchUtc = DateTime.UtcNow.AddHours(6), Searches = 1 });
-
-        var result = await Intents(host).StartAsync(host.Work.Id, host.EpisodeId, CancellationToken.None);
-
-        Assert.AreEqual(PlaybackIntentOutcome.NotAvailable, result.Outcome);
-        Assert.IsFalse(HasMarker(PayloadOf(await host.GetAsync(request.Id))), "No marker for an episode the Admin curated out.");
-        Assert.IsEmpty(host.Environment.Client.Grabs);
-    }
-
-    [TestMethod]
     public async Task AdminSavingTheChecklistOrSwitchingMonitoringResetsWhatProfilesWaitFor()
     {
         await using var host = await SeriesHostAsync();
         var monitoring = host.Get<Jularr.Web.Features.Acquisition.Monitoring.VideoMonitoringService>();
-        var marked = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true)
+        var marked = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, future: true) with
         {
             PlaybackMarkers = [Marker(host.SecondEpisodeId!.Value)],
             NextSearchUtc = DateTime.UtcNow.AddHours(6),
@@ -473,7 +468,7 @@ public sealed class InstantPlayIntentTests
         var afterUncheck = PayloadOf(await host.GetAsync(request.Id));
         CollectionAssert.AreEqual(new Guid?[] { host.SecondEpisodeId!.Value }, MarkedUnits(afterUncheck), "Unchecking another episode leaves the waiting one alone.");
         await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, host.SecondEpisodeId.Value, monitored: false, CancellationToken.None);
-        Assert.IsFalse(HasMarker(PayloadOf(await host.GetAsync(request.Id))), "An episode the Admin unchecked is no longer waited for.");
+        Assert.IsTrue(HasMarker(PayloadOf(await host.GetAsync(request.Id))), "A profile's wait is not an Admin monitoring decision: the unchecked episode is still waited for.");
         var third = await host.Environment.Db.WorkEpisodes.SingleAsync(x => x.WorkId == host.Work.Id && x.EpisodeNumber == 3);
         await Intents(host).StartAsync(host.Work.Id, third.Id, CancellationToken.None);
         await Intents(host).StartAsync(host.Work.Id, host.SecondEpisodeId, CancellationToken.None);
@@ -489,7 +484,7 @@ public sealed class InstantPlayIntentTests
     {
         await using var host = await SeriesHostAsync();
         await host.AttachFileAsync(host.EpisodeId);
-        var scope = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.EpisodeId!.Value], MonitorFuture: false);
+        var scope = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.EpisodeId!.Value]);
         var request = await host.CreateApprovedAsync(scope);
 
         // The search has read "episode 1 is available, nothing else requested" when the intent for episode 2 attaches.
@@ -506,7 +501,7 @@ public sealed class InstantPlayIntentTests
         var after = await host.GetAsync(request.Id);
         Assert.IsTrue(after.IsOpen, "The stale 'all available' result must not complete the request over the new playback unit.");
         CollectionAssert.AreEqual(new Guid?[] { host.SecondEpisodeId!.Value }, MarkedUnits(PayloadOf(after)));
-        Assert.AreEqual(1, PayloadOf(after).ScopeRevision, "Attaching is an edit of the request.");
+        Assert.AreEqual(1, PayloadOf(after).MonitoringRevision, "Attaching is an edit of the request.");
     }
 
     [TestMethod]
@@ -517,7 +512,7 @@ public sealed class InstantPlayIntentTests
         for (var index = 0; index < PlaybackIntentService.MaxOutstandingPlaybackMarkers; index++)
         {
             var other = await host.AddWorkAsync($"Other {index}", $"90{index}");
-            var marked = new VideoRequestPayload(other.Id, other.CanonicalTitle, 2020, VideoRequestScope.WholeWork, [], MonitorFuture: false) { PlaybackMarkers = [Marker(null)] };
+            var marked = MonitoringTestSupport.Choosing(other.Id, other.CanonicalTitle, 2020, VideoRequestScope.WholeWork) with { PlaybackMarkers = [Marker(null)] };
             var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", $"90{index}", other.CanonicalTitle, null, null, marked.Serialize());
             await store.CreateAsync(draft, "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
         }
@@ -584,7 +579,7 @@ public sealed class InstantPlayIntentTests
     private static async Task<AcquisitionRequest> MarkedRequestAsync(VideoAcquisitionTestHost host, string title, string tmdbId, PlaybackMarker[] markers, DateTime? nextSearch = null, int searches = 0)
     {
         var work = await host.AddWorkAsync(title, tmdbId);
-        var payload = new VideoRequestPayload(work.Id, title, 2020, VideoRequestScope.WholeWork, [], MonitorFuture: false) { PlaybackMarkers = markers, NextSearchUtc = nextSearch, Searches = searches };
+        var payload = MonitoringTestSupport.Choosing(work.Id, title, 2020, VideoRequestScope.WholeWork) with { PlaybackMarkers = markers, NextSearchUtc = nextSearch, Searches = searches };
         var draft = new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", tmdbId, title, null, null, payload.Serialize());
         return await host.Requests.CreateAsync(draft, "someone", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
     }
@@ -631,16 +626,13 @@ public sealed class InstantPlayIntentTests
     [TestMethod]
     public void ALapsedMarkerNeitherPrioritizesNorCoversItsEpisode()
     {
-        var created = DateTime.UtcNow.AddDays(-1);
         var episode = Guid.NewGuid();
-        var payload = new VideoRequestPayload(Guid.NewGuid(), "T", 2020, VideoRequestScope.Custom, [Guid.NewGuid()], MonitorFuture: false);
+        var payload = new VideoRequestPayload(Guid.NewGuid(), "T", 2020);
         var live = payload with { PlaybackMarkers = [Marker(episode, at: DateTime.UtcNow)] };
         var lapsed = payload with { PlaybackMarkers = [Marker(episode, at: DateTime.UtcNow - VideoRequestPayload.PlaybackTtl - TimeSpan.FromSeconds(1))] };
 
-        Assert.IsTrue(new VideoRequestSelection(live, created).Includes(episode, null, null));
-        Assert.IsTrue(new VideoRequestSelection(live, created).IsPlaybackEpisode(episode));
-        Assert.IsFalse(new VideoRequestSelection(lapsed, created).Includes(episode, null, null), "A stale intent does not stay in the scope.");
-        Assert.IsFalse(new VideoRequestSelection(lapsed, created).IsPlaybackEpisode(episode));
+        Assert.IsTrue(live.IsPlaybackUnit(episode, DateTime.UtcNow));
+        Assert.IsFalse(lapsed.IsPlaybackUnit(episode, DateTime.UtcNow), "A stale intent is no longer waited for.");
         Assert.IsFalse(lapsed.HasPlaybackIntent(DateTime.UtcNow), "Wanted no longer searches the request first.");
     }
 
@@ -649,7 +641,7 @@ public sealed class InstantPlayIntentTests
     {
         await using var host = await SeriesHostAsync();
         var clock = new ManualClock(DateTimeOffset.UtcNow);
-        var scope = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.SecondEpisodeId!.Value], MonitorFuture: false)
+        var scope = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.Custom, [host.SecondEpisodeId!.Value]) with
         {
             NextSearchUtc = DateTime.UtcNow.AddHours(6),
             Searches = 4
@@ -671,7 +663,7 @@ public sealed class InstantPlayIntentTests
 
         Assert.AreEqual(afterFirst.PlaybackResetUtc, afterSecond.PlaybackResetUtc, "The reset time only moves when a reset happens.");
         Assert.AreEqual(2, afterSecond.PlaybackMarkers!.Length);
-        Assert.AreEqual(afterFirst.ScopeRevision + 1, afterSecond.ScopeRevision);
+        Assert.AreEqual(afterFirst.MonitoringRevision + 1, afterSecond.MonitoringRevision);
         Assert.AreEqual(grabsBefore, host.Environment.Client.Grabs.Count, "No inline search inside the interval.");
         Assert.AreEqual(PlaybackIntentOutcome.Acquiring, second.Outcome);
     }
@@ -681,7 +673,7 @@ public sealed class InstantPlayIntentTests
     {
         await using var host = await SeriesHostAsync();
         var markers = Enumerable.Range(0, VideoRequestPayload.MaxPlaybackMarkers).Select(_ => Marker(Guid.NewGuid(), "bob")).ToArray();
-        var scope = new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, [], MonitorFuture: true) { PlaybackMarkers = markers };
+        var scope = MonitoringTestSupport.Choosing(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year, VideoRequestScope.AllCurrentAndFuture, future: true) with { PlaybackMarkers = markers };
         var request = await host.CreateApprovedAsync(scope);
 
         var result = await Intents(host).StartAsync(host.Work.Id, host.EpisodeId, CancellationToken.None);
@@ -694,7 +686,7 @@ public sealed class InstantPlayIntentTests
     public async Task ReApprovingAFailedRequestStartsWithoutTheOldPlaybackMarkers()
     {
         await using var host = await MovieHostAsync();
-        var marked = new VideoRequestPayload(host.Work.Id, "Dune", 2021, VideoRequestScope.WholeWork, [], MonitorFuture: false) { PlaybackMarkers = [Marker(null)] };
+        var marked = MonitoringTestSupport.Choosing(host.Work.Id, "Dune", 2021, VideoRequestScope.WholeWork) with { PlaybackMarkers = [Marker(null)] };
         var request = await host.CreateApprovedAsync(marked);
         await host.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Failed, "gave up", null, null, null, CancellationToken.None);
         var capabilities = new MediaCapabilityService(new MediaCapabilityStore(Directory(host)));

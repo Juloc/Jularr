@@ -23,11 +23,16 @@ namespace Jularr.Web.Features.MediaCore;
 /// </summary>
 public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStructureService structure)
 {
+    /// <summary>The evidence of a library anime: its owner put it in the Anime library.</summary>
+    public const string AnimeLibrarySource = "anime-library";
+
     /// <summary>Ensures the work for an anime record (bridges by <c>Anime.Id</c>).</summary>
     public async Task<Guid> EnsureWorkForAnimeAsync(Anime anime, CancellationToken cancellationToken)
     {
+        // A library anime is an episodic Series classified as Anime; its AniList match is mirrored as an identity by the metadata match, not here.
         var workId = await EnsureWorkAsync(
-            WorkSourceKind.Anime, anime.Id, WorkMediaType.Anime, anime.Title, year: null, cancellationToken);
+            WorkSourceKind.Anime, anime.Id, WorkMediaType.Series, anime.Title, year: null, cancellationToken);
+        await works.SetAnimeClassificationAsync(workId, true, AnimeLibrarySource, null, isManualOverride: false, cancellationToken);
 
         await works.AddOrUpdateTitleAsync(
             workId, WorkTitleType.Primary, "und", anime.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
@@ -124,16 +129,25 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// <see cref="WorkVersion"/> — editions and versions are modelled separately (#592). The Audible ASIN,
     /// when known, is mirrored as a correctable external identity (#440).
     /// </summary>
-    public async Task<Guid> EnsureWorkForAudiobookAsync(Audiobook audiobook, CancellationToken cancellationToken)
+    public async Task<Guid> EnsureWorkForAudiobookAsync(Audiobook audiobook, CancellationToken cancellationToken, Guid? requestedWorkId = null)
     {
+        // An audiobook requested for a Book Work is that Work's audio edition; it does not get a Work of its own or rewrite the Work's titles.
+        if (requestedWorkId is { } requested && !await db.Set<WorkSourceLink>().AnyAsync(x => x.SourceKind == WorkSourceKind.Audiobook && x.SourceId == audiobook.Id, cancellationToken))
+        {
+            await works.LinkSourceAsync(requested, WorkSourceKind.Audiobook, audiobook.Id, cancellationToken);
+        }
+
         var workId = await EnsureWorkAsync(
             WorkSourceKind.Audiobook, audiobook.Id, WorkMediaType.Book, audiobook.Title, audiobook.Year, cancellationToken);
 
-        await works.AddOrUpdateTitleAsync(
-            workId, WorkTitleType.Primary, "und", audiobook.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
-        await works.SetFieldProvenanceAsync(
-            workId, "title", MetadataFieldSources.Local, null, null,
-            isManualOverride: false, preferredProvider: null, cancellationToken);
+        if (requestedWorkId is null)
+        {
+            await works.AddOrUpdateTitleAsync(
+                workId, WorkTitleType.Primary, "und", audiobook.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
+            await works.SetFieldProvenanceAsync(
+                workId, "title", MetadataFieldSources.Local, null, null,
+                isManualOverride: false, preferredProvider: null, cancellationToken);
+        }
 
         var edition = await structure.AddOrUpdateEditionAsync(
             workId,

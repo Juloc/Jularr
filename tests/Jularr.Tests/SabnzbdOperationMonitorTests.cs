@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Operations;
@@ -64,7 +65,7 @@ public sealed class SabnzbdOperationMonitorTests
         await using var environment = await SabnzbdTestSupport.CreateEnvironmentAsync();
         var store = new OperationStore(environment.Db);
         var book = await CreateTrackedAsync(store, CompletedDownloadImportService.ManualDownloadOperationKind, "nzo_book");
-        var anime = await CreateTrackedAsync(store, SabnzbdAcquisitionService.OperationKind, "nzo_anime");
+        var anime = await CreateTrackedAsync(store, AnimeAcquisitionEngine.LegacyOperationKind, "nzo_anime");
 
         var result = await SabnzbdOperationProjector.ApplyAsync(
             store,
@@ -124,8 +125,8 @@ public sealed class SabnzbdOperationMonitorTests
         await using var environment = await SabnzbdTestSupport.CreateEnvironmentAsync();
         var store = new OperationStore(environment.Db);
         var completed = await CreateTrackedAsync(store, CompletedDownloadImportService.ManualDownloadOperationKind, "nzo_done");
-        var processing = await CreateTrackedAsync(store, SabnzbdAcquisitionService.OperationKind, "nzo_pp");
-        var missing = await CreateTrackedAsync(store, SabnzbdAcquisitionService.OperationKind, "nzo_gone");
+        var processing = await CreateTrackedAsync(store, AnimeAcquisitionEngine.LegacyOperationKind, "nzo_pp");
+        var missing = await CreateTrackedAsync(store, AnimeAcquisitionEngine.LegacyOperationKind, "nzo_gone");
 
         var result = await SabnzbdOperationProjector.ApplyAsync(
             store,

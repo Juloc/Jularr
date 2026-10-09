@@ -2,25 +2,27 @@ using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Monitoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Acquisition.Wanted;
 
 /// <summary>
-/// Reads everything Jularr still needs into <see cref="WantedItem"/>s for Admin → Wanted: the
+/// Reads everything Jularr still needs into <see cref="WantedRow"/>s for Admin → Wanted: the
 /// approved requests of every media type (their state is the durable request row) and the monitored
-/// anime episodes the monitoring engine found missing. Read only; searching and retrying go
+/// anime episodes of the Wanted queue. Read only; searching and retrying go
 /// through <see cref="AcquisitionRequestService"/> and the anime acquisition scheduler.
 /// </summary>
 public sealed class WantedListService(
     AcquisitionAccessStore requests,
-    AnimeMonitoringStore monitoring,
     AnimeQualityProfileStore qualityProfiles,
     AppDbContext db,
     VideoRequestWorkResolver videoWorks,
+    MonitoringResolver workMonitoring,
     IEnumerable<IAcquisitionRequestExecutor> executors,
     TimeProvider clock)
 {
@@ -29,12 +31,12 @@ public sealed class WantedListService(
 
     private static readonly JsonSerializerOptions PayloadOptions = JsonSerializerOptions.Web;
 
-    public async Task<IReadOnlyList<WantedItem>> LoadAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<WantedRow>> LoadAsync(CancellationToken cancellationToken)
     {
         var profiles = await qualityProfiles.LoadAsync(cancellationToken);
         var searchable = executors.Select(executor => executor.Kind).ToHashSet();
 
-        var items = new List<WantedItem>();
+        var items = new List<WantedRow>();
         var wanted = new Dictionary<Guid, AcquisitionRequest>();
         foreach (var request in await requests.ListAllAsync(RequestLimit, cancellationToken))
         {
@@ -56,8 +58,8 @@ public sealed class WantedListService(
     /// no Movie or TV row depends on anime keys. The reads are set-based: one identity query, one episode query and one
     /// file query for all video requests together.
     /// </summary>
-    private async Task<List<WantedItem>> LoadVideoRowsAsync(
-        List<WantedItem> items,
+    private async Task<List<WantedRow>> LoadVideoRowsAsync(
+        List<WantedRow> items,
         Dictionary<Guid, AcquisitionRequest> wanted,
         QualityProfileState profiles,
         CancellationToken cancellationToken)
@@ -95,7 +97,8 @@ public sealed class WantedListService(
                 .ToHashSet();
 
         var now = clock.GetUtcNow().UtcDateTime;
-        var rows = new List<WantedItem>(items.Count);
+        var views = await workMonitoring.LoadManyAsync([.. works.Values.Select(work => work.WorkId)], cancellationToken);
+        var rows = new List<WantedRow>(items.Count);
         foreach (var item in items)
         {
             if (item.Kind is not (MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv))
@@ -112,7 +115,7 @@ public sealed class WantedListService(
             }
 
             var workId = work.WorkId;
-            var selection = VideoRequestSelection.For(request, workId);
+            var view = views[workId];
             var profileId = profiles.ResolveProfileId(item.Kind, workId);
             var videoRow = item with
             {
@@ -120,7 +123,7 @@ public sealed class WantedListService(
                 DetailUrl = VideoWorkLinks.DetailPath(item.Kind, workId),
                 ProfileId = profileId,
                 ProfileName = profileId is null ? null : ProfileName(profiles, profileId),
-                CanSearch = item.CanSearch && selection.Payload.Monitored
+                CanSearch = item.CanSearch && view.IsAnyMonitored
             };
             if (item.Kind == MediaAcquisitionKind.Movie)
             {
@@ -129,9 +132,9 @@ public sealed class WantedListService(
                 continue;
             }
 
-            var payload = selection.Payload;
+            var payload = VideoRequestPayload.Of(request, workId, request.Title, null);
             var missing = episodes
-                .Where(episode => episode.WorkId == workId && !withFiles.Contains(episode.Id) && (episode.AiredAt is null || episode.AiredAt <= now) && selection.Includes(episode.Id, episode.SeasonId, episode.AiredAt))
+                .Where(episode => episode.WorkId == workId && !withFiles.Contains(episode.Id) && (episode.AiredAt is null || episode.AiredAt <= now) && view.IsMonitored(episode.Id, episode.SeasonId))
                 .GroupBy(episode => episode.SeasonNumber)
                 .OrderBy(season => season.Key)
                 .ToArray();
@@ -160,17 +163,17 @@ public sealed class WantedListService(
         return rows;
     }
 
-    private async Task<IReadOnlyList<WantedItem>> LoadMonitoredAsync(
+    private async Task<IReadOnlyList<WantedRow>> LoadMonitoredAsync(
         QualityProfileState profiles,
         CancellationToken cancellationToken)
     {
-        var state = await monitoring.LoadAsync(cancellationToken);
-        if (state.Wanted.Count == 0)
+        var episodes = await AnimeCanonicalEpisodes.WantedAsync(db, null, cancellationToken);
+        if (episodes.Count == 0)
         {
             return [];
         }
 
-        var keys = state.Wanted.Values
+        var keys = episodes
             .Select(wanted => wanted.Key.AnimeKey)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -188,16 +191,14 @@ public sealed class WantedListService(
                 .Select(metadata => new { metadata.AnimeId, metadata.CoverImageUrl })
                 .ToDictionaryAsync(metadata => metadata.AnimeId, metadata => metadata.CoverImageUrl, cancellationToken);
 
-        var items = new List<WantedItem>(state.Wanted.Count);
-        foreach (var wanted in state.Wanted.Values)
+        var items = new List<WantedRow>(episodes.Count);
+        foreach (var wanted in episodes)
         {
-            state.Attempts.TryGetValue(wanted.Key.ToString(), out var attempt);
             var known = anime.GetValueOrDefault(wanted.Key.AnimeKey);
             var profileId = profiles.ResolveProfileId(MediaAcquisitionKind.Anime, known?.Id)
                 ?? AnimeQualityProfiles.DefaultAnime1080pId;
             items.Add(FromUnit(
                 wanted,
-                attempt,
                 known?.Title,
                 known?.Id,
                 known is null ? null : AnimeArtworkStore.ResolvePosterUrl(known.Id, covers.GetValueOrDefault(known.Id)),
@@ -213,7 +214,7 @@ public sealed class WantedListService(
     /// owner, finished or rejected. Requests of a media type without an executor have no automatic
     /// search; the owner adds those by hand.
     /// </summary>
-    public static WantedItem? FromRequest(AcquisitionRequest request, bool hasExecutor, QualityProfileState profiles)
+    public static WantedRow? FromRequest(AcquisitionRequest request, bool hasExecutor, QualityProfileState profiles)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(profiles);
@@ -240,7 +241,7 @@ public sealed class WantedListService(
         // A request that never searched has no last search; otherwise its last change is its last search.
         var searched = request.Status != AcquisitionRequestStatus.Approved || state.Searches > 0;
         var updated = AsUtc(request.UpdatedAt);
-        return new WantedItem(
+        return new WantedRow(
             $"r:{request.Id:N}",
             WantedSource.Request,
             request.Kind,
@@ -261,15 +262,14 @@ public sealed class WantedListService(
             NextSearchUtc = state.NextSearchUtc is { } next ? AsUtc(next) : null,
             Note = string.IsNullOrWhiteSpace(request.StatusMessage) ? null : request.StatusMessage,
             CoverUrl = request.CoverImageUrl,
-            DetailUrl = LocalUrl(request.ResultUrl),
+            DetailUrl = request is { Kind: MediaAcquisitionKind.Book or MediaAcquisitionKind.Audiobook, WorkId: { } bookWorkId } ? $"/Admin/Books/Work/{bookWorkId:D}" : LocalUrl(request.ResultUrl),
             CanSearch = hasExecutor && request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed
         };
     }
 
     /// <summary>A monitored unit the engine found missing (or below the cutoff) as a wanted row.</summary>
-    public static WantedItem FromUnit(
+    public static WantedRow FromUnit(
         WantedUnit wanted,
-        AcquisitionAttempt? attempt,
         string? title,
         Guid? animeId,
         string? coverUrl,
@@ -279,13 +279,12 @@ public sealed class WantedListService(
         ArgumentNullException.ThrowIfNull(wanted);
 
         var key = wanted.Key;
-        var failed = attempt?.Status == AcquisitionAttemptStatus.Failed;
-        return new WantedItem(
+        return new WantedRow(
             $"m:{key}",
             WantedSource.Monitored,
             MediaAcquisitionKind.Anime,
             title ?? key.AnimeKey,
-            AdminWantedQuery.StatusOfAttempt(attempt?.Status),
+            WantedStatus.Missing,
             wanted.BecameWantedAtUtc.UtcDateTime)
         {
             AnimeKey = key.AnimeKey,
@@ -295,10 +294,6 @@ public sealed class WantedListService(
             IsUpgrade = wanted.Reason == WantedReason.CutoffUnmet,
             ProfileId = profileId,
             ProfileName = profileName,
-            LastSearchUtc = attempt?.LastAttemptAtUtc?.UtcDateTime,
-            NextSearchUtc = failed ? attempt?.NextRetryAtUtc?.UtcDateTime : null,
-            Failures = attempt?.FailureCount ?? 0,
-            Attempt = attempt?.Status ?? AcquisitionAttemptStatus.None,
             CoverUrl = coverUrl,
             DetailUrl = animeId is { } id ? $"/Library/Anime/{id:D}" : null,
             CanSearch = animeId is not null

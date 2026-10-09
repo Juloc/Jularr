@@ -31,14 +31,6 @@ public enum WantedReason
     CutoffUnmet
 }
 
-public enum MonitoringSearchTrigger
-{
-    SearchOnAdd,
-    PeriodicMissing,
-    Rss,
-    Manual
-}
-
 public enum AcquisitionAttemptStatus
 {
     None,
@@ -81,34 +73,13 @@ public sealed record MonitoredUnitKey(
 }
 
 // IndexerIds restricts automatic and interactive searches for this work to the given indexer ids;
-// null or empty uses the global indexer selection. TagIds are the work's assigned acquisition tags
-// (AcquisitionPolicyStore is the tag catalog); delay profiles and indexer restrictions can target
-// them. TargetRootId is the library root new imports go to when the work has no folder yet; null
-// defaults to the work's current root (or the first enabled root). Both TagIds and TargetRootId ride
-// along whenever MonitoringEngine.RekeyAnime moves this record to a new key after a folder rename.
+// null or empty uses the global indexer selection. TargetRootId is the library root new imports go to
+// when the work has no folder yet; null defaults to the work's current root (or the first enabled root).
 public sealed record MonitorSettings(
     string AnimeKey,
-    bool Monitored,
     bool SearchOnAdd,
-    Dictionary<int, bool> SeasonOverrides,
-    Dictionary<string, bool> EpisodeOverrides,
     int[]? IndexerIds = null,
-    string[]? TagIds = null,
     Guid? TargetRootId = null);
-
-// The one scheduler setting for periodic monitoring runs.
-public sealed record MonitoringSchedule(
-    bool Enabled,
-    int IntervalMinutes)
-{
-    public const int MinimumIntervalMinutes = 5;
-    public const int MaximumIntervalMinutes = 24 * 60;
-
-    public static MonitoringSchedule Default { get; } = new(true, 30);
-
-    public TimeSpan Interval =>
-        TimeSpan.FromMinutes(Math.Clamp(IntervalMinutes, MinimumIntervalMinutes, MaximumIntervalMinutes));
-}
 
 public sealed record MonitoredUnitInventory(
     MonitoredUnitKey Key,
@@ -121,47 +92,12 @@ public sealed record WantedUnit(
     WantedReason Reason,
     DateTimeOffset BecameWantedAtUtc);
 
-public sealed record MonitoringSearchRequest(
-    MonitoredUnitKey Key,
-    WantedReason Reason,
-    MonitoringSearchTrigger Trigger);
-
-// DelayedUntilUtc is set only when a delay profile is holding back an otherwise accepted candidate;
-// it is null for every ordinary accept/reject decision.
 public sealed record AutoGrabDecision(
     bool Grab,
     string Reason,
-    ReleaseScoreResult Candidate,
-    DateTimeOffset? DelayedUntilUtc = null);
+    ReleaseScoreResult Candidate);
 
-public sealed record AcquisitionAttempt(
-    MonitoredUnitKey Key,
-    AcquisitionAttemptStatus Status,
-    string? ReleaseKey,
-    int FailureCount,
-    DateTimeOffset? LastAttemptAtUtc,
-    DateTimeOffset? NextRetryAtUtc);
-
-public sealed record MonitoringHistoryEntry(
-    DateTimeOffset AtUtc,
-    MonitoredUnitKey Key,
-    string Event,
-    string Reason);
-
-public sealed record MonitoringState(
-    int Version,
-    Dictionary<string, MonitorSettings> Anime,
-    Dictionary<string, WantedUnit> Wanted,
-    Dictionary<string, AcquisitionAttempt> Attempts,
-    List<MonitoringHistoryEntry> History)
+public sealed record MonitoringState(int Version, Dictionary<string, MonitorSettings> Anime)
 {
-    public MonitoringSchedule Schedule { get; init; } = MonitoringSchedule.Default;
-
-    public static MonitoringState Empty() =>
-        new(
-            1,
-            new Dictionary<string, MonitorSettings>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, WantedUnit>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, AcquisitionAttempt>(StringComparer.OrdinalIgnoreCase),
-            []);
+    public static MonitoringState Empty() => new(1, new Dictionary<string, MonitorSettings>(StringComparer.OrdinalIgnoreCase));
 }

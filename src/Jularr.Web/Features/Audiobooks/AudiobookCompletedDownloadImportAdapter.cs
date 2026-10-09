@@ -105,7 +105,7 @@ public sealed partial class AudiobookCompletedDownloadImportAdapter(
             var entry = await audiobooks.EnsureAsync(
                 metadata.Title, metadata.Year, metadata.Author, metadata.Narrator, metadata.Asin,
                 durationMs: null, chapterCount: audio.Count > 1 ? audio.Count : null,
-                libraryPath, recorded, cancellationToken);
+                libraryPath, recorded, cancellationToken, request.Request?.WorkId);
             return CompletedDownloadImportResult.Completed(
                 $"Imported audiobook \"{entry.Audiobook.Title}\".", resultUrl: null, placement);
         }

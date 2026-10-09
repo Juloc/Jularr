@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -68,9 +69,9 @@ public sealed record SearchOptions
     /// The media type's own count of candidates that are identity-valid for the target. Expansion stops once enough distinct usable
     /// candidates exist; without a counter every distinct candidate counts, which only stops expansion early.
     /// </summary>
-    public Func<IReadOnlyList<ProwlarrReleaseCandidate>, int>? UsableCount { get; init; }
+    public Func<IReadOnlyList<AcquisitionCandidate>, int>? UsableCount { get; init; }
 
-    /// <summary>Restricts the search to these indexer entries (tag-scoped restrictions); null searches every enabled entry.</summary>
+    /// <summary>Restricts the search to these indexer entries (the profile's allowed sources); null searches every enabled entry.</summary>
     public IReadOnlyCollection<Guid>? AllowedEntryIds { get; init; }
 
     /// <summary>Indexer entries whose releases win a tie against the same release from another entry (a profile's preferred sources).</summary>
@@ -185,7 +186,7 @@ public sealed record SearchTraceLine(
 /// per-indexer outcome and a trace. It says nothing about whether a candidate is acceptable.
 /// </summary>
 public sealed record AcquisitionSearchResult(
-    IReadOnlyList<ProwlarrReleaseCandidate> Releases,
+    IReadOnlyList<AcquisitionCandidate> Releases,
     IReadOnlyList<IndexerSearchOutcome> Outcomes,
     IReadOnlyList<SearchTraceLine> Trace,
     int RawResultCount)
@@ -198,9 +199,13 @@ public sealed record AcquisitionSearchResult(
     /// </summary>
     public string? SourcePolicyBlock { get; init; }
 
+    /// <summary>The problems of the direct sources that did not answer; the others still did.</summary>
+    public IReadOnlyList<IndexerSearchWarning> SourceWarnings { get; init; } = [];
+
     /// <summary>The per-indexer problems in the shape the callers show: a skipped, failed or rate-limited indexer, with the query that failed.</summary>
     public IReadOnlyList<IndexerSearchWarning> Warnings =>
         [.. (SourcePolicyBlock is null ? Array.Empty<IndexerSearchWarning>() : new[] { new IndexerSearchWarning("Acquisition Profile", string.Empty, SourcePolicyBlock) }),
+            .. SourceWarnings,
             .. Outcomes.Where(outcome => outcome.State is not (IndexerSearchState.Searched or IndexerSearchState.NoResults) || outcome.Message is not null)
             .Select(outcome => new IndexerSearchWarning(outcome.IndexerName, string.Empty, outcome.Message ?? outcome.State.ToString()))];
 

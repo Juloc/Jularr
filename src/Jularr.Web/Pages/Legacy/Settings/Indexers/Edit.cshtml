@@ -46,6 +46,11 @@
         <input asp-for="BookCategories" placeholder="7020, 7000" />
         <small>@ui["settings.indexers.field.bookCategoriesHint"]</small>
     </label>
+    <label class="is-wide">
+        <span>@ui["settings.indexers.field.kindCategories"]</span>
+        <textarea asp-for="KindCategories" rows="4" placeholder="movie: 2000, 2040&#10;tv: 5000, 5040&#10;music: 3000, 3040"></textarea>
+        <small>@ui["settings.indexers.field.kindCategoriesHint"]</small>
+    </label>
     <label>
         <span>@ui["settings.indexers.field.indexerIds"]</span>
         <input asp-for="IndexerIds" />

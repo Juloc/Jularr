@@ -115,6 +115,39 @@ namespace Jularr.Web.Data.Migrations
                     b.ToTable("AcquisitionHistory");
                 });
 
+            modelBuilder.Entity("Jularr.Web.Features.Acquisition.Wanted.WantedItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("TargetKind")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("WorkId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkId");
+
+                    b.HasIndex("TargetKind", "TargetId")
+                        .IsUnique();
+
+                    b.ToTable("WantedItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WantedItems_TargetKind", "\"TargetKind\" >= 0 AND \"TargetKind\" <= 6");
+                        });
+                });
+
             modelBuilder.Entity("Jularr.Web.Features.Ai.AiSentenceExplanationCache", b =>
                 {
                     b.Property<string>("CacheKey")
@@ -202,6 +235,52 @@ namespace Jularr.Web.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Audiobooks");
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.Audiobooks.AudiobookEditionMetadata", b =>
+                {
+                    b.Property<Guid>("EditionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Asin")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("CoverUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.PrimitiveCollection<string[]>("Narrators")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SourceUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("EditionId");
+
+                    b.ToTable("AudiobookEditionMetadata");
                 });
 
             modelBuilder.Entity("Jularr.Web.Features.Audiobooks.AudiobookFile", b =>
@@ -1945,6 +2024,33 @@ namespace Jularr.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.MusicRecording", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MusicBrainzId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MusicBrainzId")
+                        .IsUnique();
+
+                    b.ToTable("MusicRecordings");
+                });
+
             modelBuilder.Entity("Jularr.Web.Features.MediaCore.Work", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1959,6 +2065,9 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsAnime")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("MediaType")
                         .HasColumnType("integer");
 
@@ -1969,6 +2078,9 @@ namespace Jularr.Web.Data.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IsAnime")
+                        .HasFilter("\"IsAnime\"");
 
                     b.HasIndex("MediaType");
 
@@ -2057,11 +2169,19 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<bool>("IsSpecial")
                         .HasColumnType("boolean");
 
                     b.Property<double>("Number")
                         .HasColumnType("double precision");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Title")
                         .HasMaxLength(500)
@@ -2080,7 +2200,14 @@ namespace Jularr.Web.Data.Migrations
                     b.HasIndex("WorkId", "Number")
                         .IsUnique();
 
-                    b.ToTable("WorkChapters");
+                    b.HasIndex("WorkId", "Provider", "ExternalId")
+                        .IsUnique()
+                        .HasFilter("\"ExternalId\" IS NOT NULL");
+
+                    b.ToTable("WorkChapters", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkChapters_Identity", "(\"Provider\" IS NULL) = (\"ExternalId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkCredit", b =>
@@ -2746,9 +2873,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<int?>("DurationMs")
                         .HasColumnType("integer");
 
-                    b.Property<string>("MusicBrainzRecordingId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                    b.Property<Guid?>("MusicRecordingId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("Number")
                         .HasColumnType("integer");
@@ -2763,10 +2889,60 @@ namespace Jularr.Web.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MusicRecordingId");
+
                     b.HasIndex("WorkId", "Disc", "Number")
                         .IsUnique();
 
                     b.ToTable("WorkTracks");
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkUnitBinding", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsOwnerMapping")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LocalId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<short>("LocalKind")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid?>("WorkChapterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("WorkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("WorkVolumeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkChapterId");
+
+                    b.HasIndex("WorkId");
+
+                    b.HasIndex("WorkVolumeId");
+
+                    b.HasIndex("LocalKind", "LocalId")
+                        .IsUnique();
+
+                    b.ToTable("WorkUnitBindings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkUnitBindings_OneUnit", "(\"WorkVolumeId\" IS NULL) <> (\"WorkChapterId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkVersion", b =>
@@ -2830,8 +3006,16 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<int>("Number")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Provider")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Title")
                         .HasMaxLength(500)
@@ -2845,7 +3029,14 @@ namespace Jularr.Web.Data.Migrations
                     b.HasIndex("WorkId", "Number")
                         .IsUnique();
 
-                    b.ToTable("WorkVolumes");
+                    b.HasIndex("WorkId", "Provider", "ExternalId")
+                        .IsUnique()
+                        .HasFilter("\"ExternalId\" IS NOT NULL");
+
+                    b.ToTable("WorkVolumes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkVolumes_Identity", "(\"Provider\" IS NULL) = (\"ExternalId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Jularr.Web.Features.MediaSegments.EpisodeMediaSegment", b =>
@@ -3072,10 +3263,11 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("Monitored")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("MusicBrainzReleaseGroupId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("MusicBrainzReleaseId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
@@ -3087,11 +3279,11 @@ namespace Jularr.Web.Data.Migrations
 
                     b.HasKey("WorkId");
 
+                    b.HasIndex("ArtistId");
+
                     b.HasIndex("MusicBrainzReleaseGroupId")
                         .IsUnique()
                         .HasFilter("\"MusicBrainzReleaseGroupId\" IS NOT NULL");
-
-                    b.HasIndex("ArtistId", "Monitored");
 
                     b.ToTable("MusicAlbums");
                 });
@@ -3110,12 +3302,6 @@ namespace Jularr.Web.Data.Migrations
                         .HasColumnType("character varying(64)");
 
                     b.Property<DateTime?>("LastRefreshedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Monitor")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("MonitorFromUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("MusicBrainzId")
@@ -4499,6 +4685,24 @@ namespace Jularr.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Jularr.Web.Features.Acquisition.Wanted.WantedItem", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
+                        .WithMany()
+                        .HasForeignKey("WorkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.Audiobooks.AudiobookEditionMetadata", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.MediaCore.WorkEdition", null)
+                        .WithOne()
+                        .HasForeignKey("Jularr.Web.Features.Audiobooks.AudiobookEditionMetadata", "EditionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Jularr.Web.Features.Audiobooks.AudiobookFile", b =>
                 {
                     b.HasOne("Jularr.Web.Features.Audiobooks.Audiobook", null)
@@ -4976,11 +5180,35 @@ namespace Jularr.Web.Data.Migrations
 
             modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkTrack", b =>
                 {
+                    b.HasOne("Jularr.Web.Features.MediaCore.MusicRecording", null)
+                        .WithMany()
+                        .HasForeignKey("MusicRecordingId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
                         .WithMany()
                         .HasForeignKey("WorkId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkUnitBinding", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.MediaCore.WorkChapter", null)
+                        .WithMany()
+                        .HasForeignKey("WorkChapterId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
+                        .WithMany()
+                        .HasForeignKey("WorkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Jularr.Web.Features.MediaCore.WorkVolume", null)
+                        .WithMany()
+                        .HasForeignKey("WorkVolumeId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Jularr.Web.Features.MediaCore.WorkVersion", b =>

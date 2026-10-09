@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Net;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
@@ -78,7 +79,9 @@ public sealed class InstantPlayPageIntentTests
         Assert.AreEqual(HttpStatusCode.Redirect, two.Status);
         var request = Assert.ContainsSingle(await RequestsAsync(host));
         var payload = VideoRequestPayload.Parse(request.PayloadJson)!;
-        CollectionAssert.AreEqual(new[] { first.Id }, payload.SelectedEpisodeIds, "Exactly the chosen episode.");
+        var requested = payload.Requested!;
+        CollectionAssert.AreEqual(new[] { first.Id }, requested.EpisodeIds.ToArray(), "Exactly the chosen episode, applied when the request first runs.");
+        Assert.IsFalse(requested.MonitorFuture);
         Assert.AreEqual(1, payload.ActivePlaybackMarkers(DateTime.UtcNow).Count());
     }
 
@@ -105,7 +108,7 @@ public sealed class InstantPlayPageIntentTests
         for (var index = 0; index < PlaybackIntentService.MaxOutstandingPlaybackMarkers; index++)
         {
             var marker = new PlaybackMarker(null, VideoDetailPageTestHost.Profile, DateTime.UtcNow);
-            var marked = new VideoRequestPayload(Guid.NewGuid(), $"Other {index}", 2020, VideoRequestScope.WholeWork, [], MonitorFuture: false) { PlaybackMarkers = [marker] };
+            var marked = new VideoRequestPayload(Guid.NewGuid(), $"Other {index}", 2020) { PlaybackMarkers = [marker] };
             await store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", $"80{index}", $"Other {index}", null, null, marked.Serialize()), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
         }
 

@@ -45,6 +45,27 @@ public sealed class WorkService(AppDbContext db)
     }
 
     /// <summary>
+    /// Classifies a Movie or Series Work as Anime (or not). The evidence goes into the field provenance <c>classification.anime</c>, so a provider mapping never
+    /// overrides an owner's decision; returns false when a stronger source already decided. Only the classification changes, never the Work's identity or structure.
+    /// </summary>
+    public async Task<bool> SetAnimeClassificationAsync(Guid workId, bool isAnime, string source, string? providerExternalId, bool isManualOverride, CancellationToken cancellationToken)
+    {
+        var work = await db.Set<Work>().FirstOrDefaultAsync(item => item.Id == workId && (item.MediaType == WorkMediaType.Movie || item.MediaType == WorkMediaType.Series), cancellationToken)
+            ?? throw new InvalidOperationException("Only a Movie or Series Work can be classified as Anime.");
+        if (!await SetFieldProvenanceAsync(workId, AnimeClassificationField, source, providerExternalId, 1.0, isManualOverride, MappingProviders.AniList, cancellationToken))
+        {
+            return false;
+        }
+
+        work.IsAnime = isAnime;
+        work.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public const string AnimeClassificationField = "classification.anime";
+
+    /// <summary>
     /// Resolves the work a provider identity already points at, or creates a new work and links the
     /// identity. Idempotent: the same (media type, provider, external id) always returns the same work.
     /// </summary>
@@ -327,6 +348,8 @@ public sealed class WorkService(AppDbContext db)
             summary: $"Merged \"{source.CanonicalTitle}\" into \"{target.CanonicalTitle}\"",
             details);
         await db.SaveChangesAsync(cancellationToken);
+        await MoveMonitoringAsync(sourceWorkId, targetWorkId, cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "WantedItems" WHERE "WorkId" = {sourceWorkId}""", cancellationToken);
 
         db.Set<Work>().Remove(source);
         await db.SaveChangesAsync(cancellationToken);
@@ -336,6 +359,25 @@ public sealed class WorkService(AppDbContext db)
         return new WorkMergeResult(
             targetWorkId, sourceWorkId, sourceLinks, identities, titles, relations, structure, provenance);
     }
+
+    /// <summary>
+    /// The monitoring decisions follow the structure that moved: a decision of a node the survivor already had goes with that node, the others now belong to
+    /// the survivor, and the absorbed Work's own decision becomes the survivor's unless the survivor decided for itself.
+    /// </summary>
+    private Task<int> MoveMonitoringAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken) =>
+        db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            DELETE FROM "WorkMonitoring" m WHERE m."WorkId" = {sourceWorkId} AND m."TargetId" <> {sourceWorkId}
+              AND NOT EXISTS (SELECT 1 FROM "WorkSeasons" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkEpisodes" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkVolumes" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkChapters" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkTracks" x WHERE x."Id" = m."TargetId");
+            UPDATE "WorkMonitoring" SET "WorkId" = {targetWorkId} WHERE "WorkId" = {sourceWorkId} AND "TargetId" <> {sourceWorkId};
+            DELETE FROM "WorkMonitoring" WHERE "TargetId" = {sourceWorkId} AND EXISTS (SELECT 1 FROM "WorkMonitoring" t WHERE t."TargetId" = {targetWorkId});
+            UPDATE "WorkMonitoring" SET "TargetId" = {targetWorkId}, "WorkId" = {targetWorkId} WHERE "TargetId" = {sourceWorkId}
+            """,
+            cancellationToken);
 
     private async Task<int> MoveSourceLinksAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
     {
