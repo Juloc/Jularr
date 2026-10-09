@@ -11,8 +11,8 @@ import de.juloc.jularr.core.model.DevicePairingPollResult
 import de.juloc.jularr.core.model.DevicePairingSession
 import de.juloc.jularr.core.model.PlaybackHistoryItem
 import de.juloc.jularr.core.model.WatchlistItem
-import de.juloc.jularr.core.model.TvPlaybackPreferences
-import de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate
+import de.juloc.jularr.core.model.ClientPlaybackPreferences
+import de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate
 
 data class TvAppSnapshot(
     val navigation: TvNavigationState,
@@ -28,7 +28,7 @@ data class TvAppSnapshot(
      */
     val activityUsesContinueWatchingFallback: Boolean = false,
     val watchlist: List<WatchlistItem> = emptyList(),
-    val playbackPreferences: TvPlaybackPreferences? = null,
+    val playbackPreferences: ClientPlaybackPreferences? = null,
     val anime: AnimeDetail? = null,
     val episodePage: TvEpisodePageData? = null,
     val episode: TvEpisodeBundle? = null,
@@ -282,7 +282,7 @@ class TvAppController(
             )
         }
 
-    suspend fun changePlaybackPreferences(update: TvPlaybackPreferencesUpdate): TvAppSnapshot =
+    suspend fun changePlaybackPreferences(update: ClientPlaybackPreferencesUpdate): TvAppSnapshot =
         runBusy {
             copy(
                 playbackPreferences = flow.updatePlaybackPreferences(update),
