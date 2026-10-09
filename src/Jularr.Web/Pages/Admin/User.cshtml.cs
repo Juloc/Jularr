@@ -1,7 +1,9 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Admin;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Devices;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Tracking;
@@ -18,7 +20,10 @@ public sealed class UserModel(
     AniListAccountStore aniListAccountStore,
     AdminSessionsService sessionsService,
     PlaybackStreamSessionStore sessionStore,
-    KnownDeviceRegistry deviceRegistry) : PageModel
+    KnownDeviceRegistry deviceRegistry,
+    MediaCapabilityStore? mediaCapabilities = null,
+    AcquisitionRequestSettingsStore? requestSettings = null,
+    IInstanceModuleService? instanceModules = null) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -27,6 +32,14 @@ public sealed class UserModel(
     public IReadOnlyList<AdminSessionRow> Sessions { get; private set; } = [];
 
     public IReadOnlyList<KnownDeviceRow> Devices { get; private set; } = [];
+
+    public bool ShowRequestPolicy { get; private set; }
+
+    public bool RequestPolicyFailed { get; private set; }
+
+    public IReadOnlyList<UserRequestCapabilityRow> RequestCapabilities { get; private set; } = [];
+
+    public IReadOnlyList<UserAutoApprovalRuleRow> AutoApprovalRules { get; private set; } = [];
 
     public async Task<IActionResult> OnGetAsync(
         string id,
@@ -240,6 +253,85 @@ public sealed class UserModel(
         Account = account;
         Sessions = await sessionsService.ListForProfileAsync(id, cancellationToken);
         Devices = await deviceRegistry.ListForProfileAsync(id, cancellationToken);
+        await LoadRequestPolicyAsync(account, cancellationToken);
         return true;
     }
+
+    private async Task LoadRequestPolicyAsync(
+        LocalAccountSummary account,
+        CancellationToken cancellationToken)
+    {
+        if (mediaCapabilities is null || requestSettings is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var instance = instanceModules is null
+                ? InstanceModuleSettings.Default
+                : await instanceModules.GetAsync(cancellationToken);
+            if (!instance.IsEnabled(InstanceModule.Acquisition))
+            {
+                return;
+            }
+
+            var enabledKinds = Enum.GetValues<MediaAcquisitionKind>()
+                .Where(kind => instance.IsEnabled(AcquisitionInstanceModules.For(kind)))
+                .ToArray();
+            if (enabledKinds.Length == 0)
+            {
+                return;
+            }
+
+            var policy = await mediaCapabilities.LoadAsync(cancellationToken);
+            RequestCapabilities = enabledKinds
+                .Select(kind => new UserRequestCapabilityRow(
+                    kind,
+                    policy.Resolve(
+                        account.Role,
+                        account.Id,
+                        AcquisitionAccessNames.WorkType(kind))))
+                .ToArray();
+
+            var settings = await requestSettings.LoadAsync(cancellationToken);
+            AutoApprovalRules = settings.AutoApprovalRules
+                .Where(rule =>
+                    rule.ProfileIds.Count == 0
+                    || rule.ProfileIds.Contains(account.Id, StringComparer.Ordinal))
+                .Where(rule =>
+                    rule.Kinds.Count == 0
+                    || rule.Kinds.Any(enabledKinds.Contains))
+                .Select(rule => new UserAutoApprovalRuleRow(
+                    rule.Id,
+                    rule.Name,
+                    rule.Enabled,
+                    rule.Kinds,
+                    rule.ProfileIds.Count == 0,
+                    rule.Quota))
+                .ToArray();
+
+            ShowRequestPolicy = true;
+        }
+        catch (Exception exception) when (
+            exception is IOException
+            or InvalidDataException
+            or UnauthorizedAccessException)
+        {
+            RequestPolicyFailed = true;
+            ShowRequestPolicy = true;
+        }
+    }
+
+    public sealed record UserRequestCapabilityRow(
+        MediaAcquisitionKind Kind,
+        MediaCapability Capability);
+
+    public sealed record UserAutoApprovalRuleRow(
+        string Id,
+        string Name,
+        bool Enabled,
+        IReadOnlyList<MediaAcquisitionKind> Kinds,
+        bool AppliesToEveryone,
+        AutoApprovalQuota? Quota);
 }

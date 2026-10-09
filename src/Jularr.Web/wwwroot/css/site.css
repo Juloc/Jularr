@@ -483,6 +483,20 @@ main > :is(.panel, .settings-grid) + :is(.panel, .settings-grid) { margin-top: 1
     margin-top: 16px;
 }
 .admin-user-access-actions form { margin: 0; }
+.admin-user-request-policy { margin-top: 16px; }
+.admin-user-request-policy .panel-heading > div { min-width: 0; }
+.admin-user-request-policy .panel-heading > div > span {
+    color: var(--muted); font-size: 11px;
+}
+.admin-user-request-rules { margin-top: 18px; }
+.admin-user-request-rules > h3 { margin: 0 0 10px; font-size: 13px; }
+.admin-user-request-rule {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 12px 14px;
+}
+.admin-user-request-rule > div { min-width: 0; display: grid; gap: 4px; }
+.admin-user-request-rule small { color: var(--muted); }
+
 .admin-user-session-action {
     margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border);
 }

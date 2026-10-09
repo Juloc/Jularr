@@ -1,4 +1,5 @@
 @page "{id}"
+@using Jularr.Web.Features.Acquisition.Access
 @using Jularr.Web.Features.Auth
 @model Jularr.Web.Pages.Admin.UserModel
 @{
@@ -123,6 +124,101 @@
         </form>
     </section>
 </div>
+
+@if (Model.ShowRequestPolicy)
+{
+    <section class="panel admin-user-request-policy" data-admin-user-request-policy>
+        <div class="panel-heading">
+            <div>
+                <h2>@ui["admin.user.requestPolicy.title"]</h2>
+                <span>@ui["admin.user.requestPolicy.subtitle"]</span>
+            </div>
+            <a class="button"
+               asp-page="/Admin/Requests"
+               asp-route-by="@account.Id"
+               asp-fragment="auto-approval">@ui["admin.user.requestPolicy.manage"]</a>
+        </div>
+
+        @if (Model.RequestPolicyFailed)
+        {
+            <div class="empty-state" role="alert">
+                <strong>@ui["admin.user.requestPolicy.unavailable"]</strong>
+            </div>
+        }
+        else
+        {
+            <p class="muted">@ui["admin.user.requestPolicy.hint"]</p>
+
+            <div class="capability-matrix-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>@ui["admin.capabilities.mediaTypeColumn"]</th>
+                            <th>@ui["admin.user.requestPolicy.effective"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.RequestCapabilities)
+                        {
+                            var kindName = AcquisitionAccessNames.Kind(row.Kind);
+                            <tr>
+                                <td>@ui["admin.requests.kind." + kindName]</td>
+                                <td>
+                                    <span class="status-pill">
+                                        @ui["admin.capabilities.level." + MediaCapabilityNames.ToStorage(row.Capability)]
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="admin-user-request-rules">
+                <h3>@ui["admin.user.requestPolicy.autoApproval"]</h3>
+                @if (Model.AutoApprovalRules.Count == 0)
+                {
+                    <p class="muted">@ui["admin.user.requestPolicy.noRules"]</p>
+                }
+                else
+                {
+                    <div class="user-admin-list">
+                        @foreach (var rule in Model.AutoApprovalRules)
+                        {
+                            var media = rule.Kinds.Count == 0
+                                ? ui["admin.requests.autoAllMedia"]
+                                : string.Join(", ", rule.Kinds.Select(kind =>
+                                    ui["admin.requests.kind." + AcquisitionAccessNames.Kind(kind)]));
+                            var quota = rule.Quota is { } limit
+                                ? ui.Format(
+                                    "admin.requests.autoQuotaText",
+                                    ("count", limit.MaxRequests),
+                                    ("days", limit.PeriodDays))
+                                : ui["admin.requests.autoNoLimit"];
+
+                            <div class="user-admin-card admin-user-request-rule">
+                                <div>
+                                    <strong>@rule.Name</strong>
+                                    <small>
+                                        @(rule.AppliesToEveryone
+                                            ? ui["admin.requests.autoEveryone"]
+                                            : ui["admin.user.requestPolicy.thisUser"])
+                                        · @media · @quota
+                                    </small>
+                                </div>
+                                <span class="status-pill @(rule.Enabled ? "status-ok" : "status-warn")">
+                                    @(rule.Enabled
+                                        ? ui["admin.user.enabledLabel"]
+                                        : ui["admin.requests.autoOff"])
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </section>
+}
 
 <section class="panel admin-user-devices-sessions" data-admin-user-devices-sessions>
     <div class="panel-heading">
