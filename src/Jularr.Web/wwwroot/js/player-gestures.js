@@ -1,8 +1,4 @@
-// Tap decisions for the video surface, kept free of DOM so they can be tested on their own.
-// One tap shows or hides the controls; a double tap on the left or right third seeks by that
-// side's step (back and forward differ) and every further tap on that side while the series runs
-// adds another step (YouTube-style). A double tap in the middle is reported for full screen. The single tap is
-// only decided once the double-tap window has passed, so the two never both fire.
+// DOM-independent touch and mouse gesture decisions for the shared video surface.
 (() => {
     const createTapDecider = (options = {}) => {
         const delayMs = options.delayMs ?? 280;
