@@ -541,7 +541,7 @@ fun TvAppHost(
         updatePromptInfo = null
     }
 
-    val focusMemory = remember(sessionStore?.getActiveSession()?.id, snapshot.account?.profileId) {
+    val focusMemory = remember(settings.origin, snapshot.account?.profileId) {
         TvFocusMemory()
     }
 
