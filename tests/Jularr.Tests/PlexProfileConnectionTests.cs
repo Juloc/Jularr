@@ -99,6 +99,37 @@ public sealed class PlexProfileConnectionTests
     }
 
     [TestMethod]
+    public async Task FailedMediaGrantWriteCanBeRetried()
+    {
+        var root = NewDirectory();
+        try
+        {
+            await File.WriteAllTextAsync(root, "blocked-directory");
+            var store = new PlexProfileConnectionStore(
+                new EphemeralDataProtectionProvider(), root);
+
+            await Assert.ThrowsExactlyAsync<IOException>(() =>
+                store.SaveVerifiedAsync(
+                    "profile-one", "100", null, "verified-secret"));
+
+            File.Delete(root);
+            await store.SaveVerifiedAsync(
+                "profile-one", "100", null, "verified-secret");
+
+            Assert.IsTrue((await store.GetStatusAsync("profile-one"))?.IsUsable);
+        }
+        finally
+        {
+            if (File.Exists(root))
+            {
+                File.Delete(root);
+            }
+
+            Remove(root);
+        }
+    }
+
+    [TestMethod]
     public async Task InvalidIdentityOrProfileCannotPersistAConnection()
     {
         var root = NewDirectory();
