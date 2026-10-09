@@ -57,6 +57,7 @@ class TvAppController(
         navigation = TvNavigation.initial(
             hasServerOrigin = settings.origin != null,
             hasMultipleSessions = (sessionStore?.getSessions()?.size ?: 0) > 1,
+            hasSavedSessions = sessionStore?.getSessions()?.isNotEmpty() == true,
         ),
     )
         private set
