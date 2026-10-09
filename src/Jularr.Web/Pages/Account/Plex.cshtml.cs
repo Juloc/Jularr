@@ -302,7 +302,8 @@ public sealed class PlexModel(
                 accountId, verified.AccountId,
                 null, verified.AccessToken, cancellationToken);
         }
-        catch (IOException)
+        catch (Exception error)
+            when (error is IOException or UnauthorizedAccessException)
         {
             await db.PlexLoginAttempts
                 .Where(x => x.Id == attempt.Id && x.Purpose == "media-final")
