@@ -1,5 +1,4 @@
 using Npgsql;
-using NpgsqlTypes;
 
 namespace Jularr.Web.Data;
 
@@ -26,16 +25,10 @@ public sealed record PageRequest
     }
 
     public NpgsqlParameter[] ToSqlParameters() =>
-    [
-        new NpgsqlParameter("PageSize", NpgsqlDbType.Integer)
-        {
-            Value = PageSize
-        },
-        new NpgsqlParameter("Offset", NpgsqlDbType.Bigint)
-        {
-            Value = Offset
-        }
-    ];
+        SqlParams.From(this)
+            .Add(nameof(PageSize))
+            .Add(nameof(Offset))
+            .ToArray();
 }
 
 public sealed record PageResult<T>(
