@@ -27,4 +27,11 @@ Status: *read-only adapter / work matching only*. This **does not** enable the `
 7. Use provider-supported link patterns verified against a real Plex instance; do not invent a stable Plex deep-link contract.
 8. Test with a real configured Plex test server, movies, shows, episodes and shared-library users. Also check client UX on mobile/desktop/TV, access revocation, SSRF and redirect handling.
 
+## Credential lifecycle and failure behavior
+
+- Plex server grants already use the common `ProviderCredentials.ProtectorFor`/ASP.NET Data Protection contract and atomic `/data/integrations` writes; no second token persistence service is introduced.
+- If a restore or key-ring rotation makes a stored grant undecryptable, the grant is treated as disconnected instead of causing an unhandled cryptographic failure during scans. The administrator must reconnect.
+- Server revocation goes through `PlexServerSelectionService.RevokeAsync` with the existing `AdminSystem` authorization policy; it removes the encrypted grant and prevents subsequent scans.
+- Tests cover key loss, the continued visibility of nonsecret connection metadata, admin-only revocation and denial after revocation.
+
 The server adapter can be integrated separately from the Plex login branch #912. Both reuse the universal Work model, not another media catalog.
