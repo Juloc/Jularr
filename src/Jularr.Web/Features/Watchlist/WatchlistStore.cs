@@ -160,7 +160,8 @@ public sealed class WatchlistStore(AppDbContext db)
                             "FranchiseMembers"."MediaType",
                             "FranchiseMembers"."Provider",
                             "FranchiseMembers"."ExternalId",
-                            "Franchises"."Id" AS "FranchiseId"
+                            "Franchises"."Id" AS "FranchiseId",
+                            "Franchises"."Title" AS "FranchiseTitle"
                         FROM
                             "FranchiseMembers"
                         INNER JOIN
@@ -181,7 +182,8 @@ public sealed class WatchlistStore(AppDbContext db)
                             "ProfileWatchlistPreferences"."MediaType",
                             "ProfileWatchlistPreferences"."Provider",
                             "ProfileWatchlistPreferences"."ExternalId",
-                            NULL AS "FranchiseId"
+                            NULL AS "FranchiseId",
+                            NULL AS "FranchiseTitle"
                         FROM
                             "ProfileWatchlistPreferences"
                         WHERE
@@ -221,6 +223,7 @@ public sealed class WatchlistStore(AppDbContext db)
                         "Candidates"."MediaType" ASC,
                         "Candidates"."Provider" ASC,
                         "Candidates"."ExternalId" ASC,
+                        "Candidates"."FranchiseTitle" ASC NULLS LAST,
                         "Candidates"."FranchiseId" ASC NULLS LAST
                     LIMIT
                         @MaxResults
