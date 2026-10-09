@@ -80,6 +80,31 @@ class TvAppControllerTest {
     }
 
     @Test
+    fun failedProfileRestoreCannotExposePreviousAccountData() {
+        val api = FakeApi(failRestore = true)
+        val controller = TvAppController(FakeOriginStore("https://jularr.example")) { api }
+
+        runSuspend { controller.restoreConnection() }
+        runSuspend { controller.login("jessi", "password-password") }
+        assertEquals(1, controller.snapshot.library?.anime?.size)
+
+        val failed = runSuspend {
+            controller.selectSavedSession(
+                TvSavedSession(
+                    id = "another-account",
+                    serverOrigin = "https://jularr.example",
+                    userName = "other",
+                ),
+            )
+        }
+        assertNull(failed.account)
+        assertNull(failed.library)
+        assertTrue(failed.continueWatching.isEmpty())
+        assertTrue(failed.watchlist.isEmpty())
+        assertEquals("Cannot restore account.", failed.error)
+    }
+
+    @Test
     fun settingsLoadAndPersistCanonicalProfilePreferences() {
         val store = FakeOriginStore("https://jularr.example")
         val api = FakeApi()
@@ -193,6 +218,7 @@ class TvAppControllerTest {
 
     private class FakeApi(
         private val failLogin: Boolean = false,
+        private val failRestore: Boolean = false,
         private val advertisePlaybackHistory: Boolean = true,
         private val advertiseWatchlist: Boolean = true,
     ) : JularrClientApi {
@@ -232,11 +258,10 @@ class TvAppControllerTest {
 
         override suspend fun logout() = Unit
 
-        override suspend fun getMe() = ClientAccount(
-            "profile",
-            "jessi",
-            "owner",
-        )
+        override suspend fun getMe(): ClientAccount {
+            if (failRestore) error("Cannot restore account.")
+            return ClientAccount("profile", "jessi", "owner")
+        }
 
         override suspend fun getLibrary() = ClientLibrary(
             anime = listOf(
