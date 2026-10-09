@@ -227,13 +227,15 @@ public sealed class PlaybackPlanService(
                 input.Network?.BufferSeconds,
                 Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
             var server = serverCapabilities.Current();
+            var analyses = await mediaInventory.GetManyAsync(
+                candidates.Select(candidate => candidate.StoredFileId).ToArray(), cancellationToken);
             var bestMode = int.MaxValue;
             var bestBitrate = -1;
 
             foreach (var candidate in candidates)
             {
-                var analysis = await mediaInventory.GetAsync(candidate.StoredFileId, cancellationToken);
-                if (analysis is not { Status: MediaAnalysisStatus.Succeeded, ProbeVersion: MediaInventoryService.CurrentProbeVersion, Technical: { } technical })
+                if (!analyses.TryGetValue(candidate.StoredFileId, out var analysis) ||
+                    analysis is not { Status: MediaAnalysisStatus.Succeeded, ProbeVersion: MediaInventoryService.CurrentProbeVersion, Technical: { } technical })
                 {
                     continue;
                 }
