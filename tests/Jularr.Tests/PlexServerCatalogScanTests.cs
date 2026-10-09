@@ -41,7 +41,7 @@ public sealed class PlexServerCatalogScanTests
                             ? """{"MediaContainer":{"machineIdentifier":"plex-machine-1234"}}"""
                             : isSections
                                 ? """{"MediaContainer":{"Directory":[{"key":"1","type":"movie","title":"Films"}]}}"""
-                                : """{"MediaContainer":{"totalSize":3,"Metadata":[{"ratingKey":"44","type":"movie","title":"Dune","Guid":[{"id":"tmdb://438631"}]}]}}""",
+                                : """{"MediaContainer":{"totalSize":3,"Metadata":[{"ratingKey":"not-valid","type":"movie","title":"Ignored"},{"ratingKey":"44","type":"movie","title":"Dune","Guid":[{"id":"tmdb://438631"}]}]}}""",
                         Encoding.UTF8, "application/json")
                 };
             }));
@@ -66,7 +66,7 @@ public sealed class PlexServerCatalogScanTests
                 "instance-id", CancellationToken.None);
 
             Assert.AreEqual(3, page.TotalSize);
-            Assert.AreEqual(1, page.NextStart);
+            Assert.AreEqual(2, page.NextStart);
             Assert.AreEqual(1, page.Matches.Count);
             Assert.AreEqual(movie.Id, page.Matches[0].WorkId);
 
