@@ -430,6 +430,29 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task StoppingAPausedHlsEncoderKillsItAndReleasesItsSlot()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var lease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
+        Assert.IsNotNull(lease);
+        var session = await cache.Manager.StartAsync(
+            Guid.NewGuid(), "profile-0", 0, cache.Arguments, lease, CancellationToken.None,
+            remainingDurationSeconds: 300);
+        var encoder = cache.Processes.Single();
+
+        encoder.Report(new PlaybackTranscodeSample(6, 60, 34));
+        Assert.IsTrue(encoder.IsPaused);
+        Assert.AreEqual(1, cache.Slots.Active(PlaybackCostClass.SoftwareVideo));
+
+        cache.Manager.Stop(session.SessionId, session.ProfileId);
+
+        Assert.IsTrue(encoder.Killed);
+        Assert.IsTrue(encoder.Disposed);
+        Assert.AreEqual(0, cache.Slots.Active(PlaybackCostClass.SoftwareVideo));
+        Assert.IsFalse(Directory.Exists(cache.SessionDirectory(session.SessionId)));
+    }
+
+    [TestMethod]
     public async Task AForeignFolderIsNeitherAcceptedNorSweptAndAFailedStartLeavesNoDirectory()
     {
         var kit = PlaybackServerTestKit.Create();
