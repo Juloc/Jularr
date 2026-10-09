@@ -173,6 +173,40 @@ public sealed class CanonicalPlaybackPlanTests
     }
 
     [TestMethod]
+    public async Task LosslessFourKRemuxOutranksLowerResolutionDirectPlayOnSafari()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var storage = new CanonicalMediaStorageService(fixture.Db);
+        var work = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Lossless Editions" };
+        fixture.Db.Works.Add(work);
+        await fixture.Db.SaveChangesAsync();
+
+        var high = await AttachAsync(
+            fixture, storage, work.Id, null, "a-4k-hevc.mkv", MediaProbeFixtures.HevcTenBitHdrMultiAudio);
+        var lower = await AttachAsync(
+            fixture, storage, work.Id, null, "b-1080p-h264.mp4", MediaProbeFixtures.H264Stereo);
+        await fixture.Inventory.EnsureAnalyzedAsync(high.StoredFileId, CancellationToken.None);
+        await fixture.Inventory.EnsureAnalyzedAsync(lower.StoredFileId, CancellationToken.None);
+
+        var planner = new PlaybackPlanService(
+            fixture.Db,
+            fixture.Inventory,
+            new PlaybackStreamSessionStore(TimeProvider.System),
+            PlaybackServerTestKit.Create().Capabilities,
+            canonicalStorage: storage);
+        const string safari = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+        var plan = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(work.Id),
+            "reader",
+            new PlaybackPlanInput(null, ClientKinds.Pwa, safari, IPAddress.Loopback),
+            CancellationToken.None);
+
+        Assert.IsNotNull(plan);
+        Assert.AreEqual(high.StoredFileId, plan.MediaFileId);
+        Assert.AreEqual(PlaybackDeliveryMode.DirectStream, plan.Plan.Mode);
+    }
+
+    [TestMethod]
     public async Task CanonicalBootstrapUsesTracksAndWorkEpisodeNavigation()
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();
