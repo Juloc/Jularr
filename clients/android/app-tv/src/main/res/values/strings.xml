@@ -71,6 +71,21 @@
     <string name="tv_watchlist_media_light_novel">Light Novel</string>
     <string name="tv_watchlist_media_book">Book</string>
     <string name="tv_watchlist_in_library">In library</string>
+    <string name="tv_watchlist_filter_books">Books</string>
+    <string name="tv_watchlist_filter_empty">No watchlist items match this category.</string>
+    <string name="tv_watchlist_sort_newest">Recently added</string>
+    <string name="tv_watchlist_sort_oldest">Oldest first</string>
+    <string name="tv_watchlist_sort_title_asc">Title A–Z</string>
+    <string name="tv_watchlist_sort_title_desc">Title Z–A</string>
+    <string name="tv_watchlist_status_airing">Airing</string>
+    <string name="tv_watchlist_status_continuing">Continuing</string>
+    <string name="tv_watchlist_status_ended">Ended</string>
+    <string name="tv_watchlist_status_upcoming">Upcoming</string>
+    <string name="tv_watchlist_status_hiatus">On hiatus</string>
+    <string name="tv_watchlist_status_cancelled">Cancelled</string>
+    <string name="tv_watchlist_episode_number">S%1$02d E%2$02d</string>
+    <string name="tv_watchlist_not_in_library">This title is not in your Jularr library yet.</string>
+    <string name="tv_watchlist_unsupported_media">Opening this media type is not yet supported in the TV app.</string>
 
     <!-- Activity -->
     <string name="tv_activity_title">Activity</string>
