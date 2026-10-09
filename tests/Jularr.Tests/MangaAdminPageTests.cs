@@ -105,6 +105,23 @@ public sealed class MangaAdminPageTests
     }
 
     [TestMethod]
+    public async Task SearchNowForAVolumeTheOwnerSwitchedOffStillSearchesExactlyThatVolume()
+    {
+        var indexer = new BookIndexer("Frieren Vol 1-2 CBZ");
+        var (environment, host, workId, page) = await PartlyInLibraryAsync(indexer);
+        await using var _1 = environment;
+        await using var _2 = host;
+        var third = await environment.Db.WorkVolumes.AsNoTracking().SingleAsync(volume => volume.WorkId == workId && volume.Number == 3);
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=Monitor", [new("scope", "volume"), new("targetId", third.Id.ToString()), new("state", "false")]));
+        indexer.Titles.AddRange(["Frieren v03 CBZ", "Frieren v02 CBZ"]);
+
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=Search", [new("volume", "3")]));
+
+        Assert.AreEqual(2, environment.Sabnzbd.Grabs.Count);
+        StringAssert.Contains(environment.Sabnzbd.Grabs[1].NzbName, "v03", "The owner asked for volume 3, so it is searched although Monitoring is off.");
+    }
+
+    [TestMethod]
     public async Task AFailedRequestIsExplainedWithItsReasonRetryRunsItAgainAndManualSearchIsOneClickAway()
     {
         var indexer = new BookIndexer();

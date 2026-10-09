@@ -118,9 +118,9 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
             $"""SELECT EXISTS (SELECT 1 FROM "RequestTargets" target WHERE target."RequestId" = {requestId.ToString()} AND target."TargetKind" = 0) AS "Value" """).SingleAsync(cancellationToken);
 
     /// <summary>
-    /// What a release is judged against for one request: the wanted units of the Work, narrowed to the requested volume or chapters. Null while the Work has
-    /// no provider-identified structure (or a library chapter nothing is tied to yet), or when the requested unit is not part of it; an empty result means
-    /// nothing is missing.
+    /// What a release is judged against for one request: the wanted units of the Work, or for a request that names a volume or chapters (Search now on one row)
+    /// exactly the missing units it names, whether or not Monitoring wants them. Null while the Work has no provider-identified structure (or a library chapter
+    /// nothing is tied to yet), or when the named unit is not part of it; an empty result means nothing is missing.
     /// </summary>
     public async Task<ReadingWant?> WantAsync(long workId, bool wholeTitleAsked, int? volume, double? chapterStart, double? chapterEnd, CancellationToken cancellationToken)
     {
@@ -130,16 +130,17 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
             return null;
         }
 
-        var want = view.Want;
         if (volume is null && chapterStart is null)
         {
-            return want;
+            return view.Want;
         }
 
-        var narrowed = want with
+        var narrowed = view.Want with
         {
-            Volumes = [.. want.Volumes.Where(number => number == volume)],
-            Chapters = [.. want.Chapters.Where(number => chapterStart is { } first && number >= first && number <= (chapterEnd ?? first))]
+            Volumes = [.. view.Volumes.Where(unit => unit.Number == volume && unit.State != ReadingCoverageState.Installed).Select(unit => unit.Number)],
+            Chapters = [.. view.Volumes.SelectMany(unit => unit.Chapters).Concat(view.LooseChapters)
+                .Where(unit => !unit.Installed && chapterStart is { } first && unit.Number >= first && unit.Number <= (chapterEnd ?? first))
+                .Select(unit => unit.Number).Order()]
         };
         return narrowed.IsEmpty ? null : narrowed;
     }

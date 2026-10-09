@@ -2305,7 +2305,7 @@ public static class UiTranslationResources
         M("admin.books.noRecordings", "No recording of this title was found.", "Admin", "Empty state", "Shown when the providers know no recording of a book.", "neutral empty state", 50),
         M("admin.books.providerUnavailable", "The audiobook provider could not be reached.", "Admin", "Error", "Shown when an audiobook provider does not answer.", "compact error", 50),
         M("admin.books.metadataSaved", "The recording was saved.", "Admin", "Status", "Confirmation after a recording was chosen for an audiobook.", "compact confirmation", 40),
-        M("admin.manga.manage", "Manage", "Admin", "Link", "Link on the Manga series page that opens the Admin page of the title; shown to the owner only.", "short action", 12),
+        M("admin.manga.manage", "Monitoring and downloads", "Admin", "Link", "Link on the Manga series page that opens the Admin page of the title with its monitoring, searches and requests; shown to the owner only.", "short action", 34),
         M("admin.manga.saved", "Saved.", "Admin", "Status", "Confirmation after a monitoring change on the Admin Manga page.", "compact confirmation", 24),
         M("admin.manga.noIdentity", "This Manga has no AniList identity, so it cannot be searched.", "Admin", "Error", "Shown when Search now is used on a Manga Work without a trusted provider identity.", "short error", 70),
         M("admin.manga.search.running", "This Manga is already being searched, downloaded or imported.", "Admin", "Error", "Shown when Search now is used while the request of the Manga is running.", "short error", 70),

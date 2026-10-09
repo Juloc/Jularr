@@ -78,7 +78,11 @@
                     @string.Join(" · ", new[] { view.Status?.Replace("_", " ").ToLowerInvariant(), view.Year?.ToString(System.Globalization.CultureInfo.InvariantCulture) }.Where(part => !string.IsNullOrEmpty(part)))
                     @foreach (var identity in view.Identities.Take(1))
                     {
-                        <span> · </span>
+                        @if (view.Status is not null || view.Year is not null)
+                        {
+                            <span> · </span>
+                        }
+
                         <a class="text-link" href="https://anilist.co/manga/@Uri.EscapeDataString(identity.ExternalId)" target="_blank" rel="noopener noreferrer">AniList @identity.ExternalId</a>
                     }
                 </p>

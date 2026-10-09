@@ -147,6 +147,27 @@ public sealed class MangaUnitCoverageTests
     }
 
     [TestMethod]
+    public async Task ALibraryThatExistedBeforeIsMatchedToItsVolumesByFileNameAndOnlyTheMissingOnesAreFetched()
+    {
+        var indexer = new BookIndexer("Frieren Vol 1-3 CBZ", "Frieren v03 CBZ");
+        await using var environment = await Lifecycle.StartAsync(indexer, new Lifecycle.FakeAniList { Volumes = 3 });
+        var folder = Directory.CreateDirectory(Path.Combine(environment.Root, "existing", "Frieren")).FullName;
+        Lifecycle.WriteVolume(folder, "Frieren v01.cbz");
+        Lifecycle.WriteVolume(folder, "Frieren v02.cbz");
+        var repository = new Jularr.Web.Features.Manga.MangaRepository(environment.Db);
+        var imported = await new Jularr.Web.Features.Manga.MangaImportService(repository, Path.Combine(environment.Root, "cache")).ImportAsync(folder, CancellationToken.None);
+        var existingWork = await environment.Services.GetRequiredService<LegacyWorkBridge>().EnsureWorkForMangaSeriesAsync(imported.SeriesId, "Frieren", null, Lifecycle.AniListId, CancellationToken.None);
+
+        var request = await Lifecycle.SubmitAsync(environment);
+
+        Assert.AreEqual(existingWork, request.WorkId, "The request uses the Work of the library series, never a second one.");
+        Assert.AreEqual(1, await environment.Db.Works.CountAsync(item => item.MediaType == WorkMediaType.Manga));
+        var coverage = await Lifecycle.CoverageAsync(environment, existingWork);
+        CollectionAssert.AreEqual(new[] { ReadingCoverageState.Installed, ReadingCoverageState.Installed, ReadingCoverageState.Missing }, coverage.Volumes.Select(volume => volume.State).ToArray(), "The two volumes in the library are matched by their file names.");
+        StringAssert.Contains(Assert.ContainsSingle(environment.Sabnzbd.Grabs).NzbName, "v03", "The set that repeats two held volumes loses against the missing one.");
+    }
+
+    [TestMethod]
     public async Task AVolumeTheOwnerSwitchedOffIsNeitherWantedNorTakenAndStaysOffAfterTheRequest()
     {
         var indexer = new BookIndexer("Frieren v02 CBZ", "Frieren v01 CBZ");

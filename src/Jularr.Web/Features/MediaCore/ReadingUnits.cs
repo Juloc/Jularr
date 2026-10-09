@@ -158,16 +158,7 @@ public sealed class ReadingUnits(AppDbContext db)
             return false;
         }
 
-        var bindings = await db.WorkUnitBindings.Where(item => item.LocalKind == WorkUnitLocalKind.MangaChapter && item.LocalId == localId).ToListAsync(cancellationToken);
-        if (bindings.Any(binding => binding.IsOwnerMapping))
-        {
-            return false;
-        }
-
-        db.WorkUnitBindings.RemoveRange(bindings);
-        db.WorkUnitBindings.AddRange(chapterIds.Select(chapterId => new WorkUnitBinding { WorkId = workId, LocalKind = WorkUnitLocalKind.MangaChapter, LocalId = localId, WorkChapterId = chapterId }));
-        await db.SaveChangesAsync(cancellationToken);
-        return true;
+        return await ReplaceMangaBindingsAsync(workId, localId, chapterIds, volumes: false, cancellationToken);
     }
 
     /// <summary>
@@ -183,14 +174,34 @@ public sealed class ReadingUnits(AppDbContext db)
             return false;
         }
 
+        return await ReplaceMangaBindingsAsync(workId, localId, volumeIds, volumes: true, cancellationToken);
+    }
+
+    // The local manga unit covers exactly these canonical units afterwards. Repeating the import of the same release changes nothing, and an owner's mapping is never replaced.
+    private async Task<bool> ReplaceMangaBindingsAsync(long workId, string localId, IReadOnlyCollection<Guid> unitIds, bool volumes, CancellationToken cancellationToken)
+    {
         var bindings = await db.WorkUnitBindings.Where(item => item.LocalKind == WorkUnitLocalKind.MangaChapter && item.LocalId == localId).ToListAsync(cancellationToken);
         if (bindings.Any(binding => binding.IsOwnerMapping))
         {
             return false;
         }
 
+        var current = bindings.Select(binding => volumes ? binding.WorkVolumeId : binding.WorkChapterId).Where(id => id is not null).Select(id => id!.Value).ToHashSet();
+        if (bindings.Count == current.Count && current.SetEquals(unitIds))
+        {
+            return true;
+        }
+
         db.WorkUnitBindings.RemoveRange(bindings);
-        db.WorkUnitBindings.AddRange(volumeIds.Select(volumeId => new WorkUnitBinding { WorkId = workId, LocalKind = WorkUnitLocalKind.MangaChapter, LocalId = localId, WorkVolumeId = volumeId }));
+        await db.SaveChangesAsync(cancellationToken);
+        db.WorkUnitBindings.AddRange(unitIds.Select(unitId => new WorkUnitBinding
+        {
+            WorkId = workId,
+            LocalKind = WorkUnitLocalKind.MangaChapter,
+            LocalId = localId,
+            WorkVolumeId = volumes ? unitId : null,
+            WorkChapterId = volumes ? null : unitId
+        }));
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }

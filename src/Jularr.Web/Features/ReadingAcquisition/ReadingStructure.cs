@@ -17,7 +17,8 @@ public sealed record ReadingStructureRefresh(ReadingUnitEnrichment? Volumes, Rea
 /// <summary>
 /// The volumes and chapters AniList states for a Manga Work. Only what AniList counts becomes a unit, each with a stable provider identity: the volumes of a
 /// title whose volumes are counted, else the chapters of a title whose chapters are counted. An ongoing title with neither stays a single wanted unit, and a
-/// count is never guessed; a refresh adds units that became known and never removes or renumbers a unit that has files tied to it.
+/// count is never guessed; a refresh adds units that became known and never removes or renumbers a unit that has files tied to it. Library files of the
+/// Work that name the volume or chapters they hold are tied to those units, so a library that existed before AniList stated them is matched, not fetched again.
 /// </summary>
 public sealed class ReadingStructureService(AppDbContext db, ReadingUnits units, WorkService works, WantedReconciler wanted, IHttpClientFactory httpClientFactory, ILogger<ReadingStructureService> logger)
 {
@@ -59,27 +60,41 @@ public sealed class ReadingStructureService(AppDbContext db, ReadingUnits units,
             await works.AddOrUpdateTitleAsync(workId, WorkTitleType.Alternative, "und", candidate.Title, NovelAniListProvider.ProviderKey, isPrimary: false, cancellationToken);
         }
 
+        ReadingStructureRefresh refresh;
         if (candidate.VolumeCount is > 0 and var volumes)
         {
-            var created = await units.EnrichVolumesAsync(
-                workId,
-                NovelAniListProvider.ProviderKey,
-                [.. Enumerable.Range(1, volumes).Select(number => new ProviderUnit($"{aniListId}:v{number}", number, null))],
-                cancellationToken);
-            return await ReconciledAsync(workId, new ReadingStructureRefresh(created, null, null), cancellationToken);
+            refresh = new ReadingStructureRefresh(
+                await units.EnrichVolumesAsync(
+                    workId,
+                    NovelAniListProvider.ProviderKey,
+                    [.. Enumerable.Range(1, volumes).Select(number => new ProviderUnit($"{aniListId}:v{number}", number, null))],
+                    cancellationToken),
+                null,
+                null);
         }
-
-        if (candidate.ChapterCount is > 0 and var chapters)
+        else if (candidate.ChapterCount is > 0 and var chapters)
         {
-            var created = await units.EnrichChaptersAsync(
-                workId,
-                NovelAniListProvider.ProviderKey,
-                [.. Enumerable.Range(1, chapters).Select(number => new ProviderUnit($"{aniListId}:c{number}", number, null))],
-                cancellationToken);
-            return await ReconciledAsync(workId, new ReadingStructureRefresh(null, created, null), cancellationToken);
+            refresh = new ReadingStructureRefresh(
+                null,
+                await units.EnrichChaptersAsync(
+                    workId,
+                    NovelAniListProvider.ProviderKey,
+                    [.. Enumerable.Range(1, chapters).Select(number => new ProviderUnit($"{aniListId}:c{number}", number, null))],
+                    cancellationToken),
+                null);
+        }
+        else
+        {
+            return new ReadingStructureRefresh(null, null, null);
         }
 
-        return new ReadingStructureRefresh(null, null, null);
+        if (await db.WorkSourceLinks.AsNoTracking().Where(link => link.WorkId == workId && link.SourceKind == WorkSourceKind.MangaSeries).Select(link => (Guid?)link.SourceId).FirstOrDefaultAsync(cancellationToken) is { } seriesId
+            && await new MangaRepository(db).FindByIdAsync(seriesId, cancellationToken) is { } series)
+        {
+            await new ReadingImportTies(db, units).TieAsync(workId, seriesId, series.SourcePath, cancellationToken);
+        }
+
+        return await ReconciledAsync(workId, refresh, cancellationToken);
     }
 
     /// <summary>The other names the Work is known by (native, English, romaji, synonyms): search aliases next to the title the request carries.</summary>
@@ -92,14 +107,10 @@ public sealed class ReadingStructureService(AppDbContext db, ReadingUnits units,
             .Take(12)
             .ToListAsync(cancellationToken);
 
-    // New units are wanted from the moment they exist, not at the next scheduled Wanted pass.
+    // New units and new ties are wanted or dropped from the moment they exist, not at the next scheduled Wanted pass.
     private async Task<ReadingStructureRefresh> ReconciledAsync(long workId, ReadingStructureRefresh refresh, CancellationToken cancellationToken)
     {
-        if (refresh.Changed)
-        {
-            await wanted.ReconcileAsync(workId, cancellationToken);
-        }
-
+        await wanted.ReconcileAsync(workId, cancellationToken);
         return refresh;
     }
 }
