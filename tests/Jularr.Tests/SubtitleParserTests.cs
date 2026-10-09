@@ -61,6 +61,36 @@ public sealed class SubtitleParserTests
     }
 
     [TestMethod]
+    [DataRow(@"Word\h\hword", "Word\u00A0\u00A0word")]
+    [DataRow(@"Hello\hthere\NNext\hline", "Hello\u00A0there Next\u00A0line")]
+    [DataRow(@"{\i1}First\hsecond{\i0}", "First\u00A0second")]
+    [DataRow("path /home", "path /home")]
+    public void ParsesAssHardSpacesWithoutShowingEscapeCodes(string source, string expected)
+    {
+        var content = $"""
+            [Events]
+            Format: Start, End, Text
+            Dialogue: 0:00:01.00,0:00:02.00,{source}
+            """;
+
+        var cue = SubtitleParser.ParseAss(content).Single();
+
+        Assert.AreEqual(expected, cue.Text);
+    }
+
+    [TestMethod]
+    public void AssHardSpacesWithoutDialogueDoNotCreateCues()
+    {
+        const string content = """
+            [Events]
+            Format: Start, End, Text
+            Dialogue: 0:00:01.00,0:00:02.00,\h\h
+            """;
+
+        Assert.AreEqual(0, SubtitleParser.ParseAss(content).Count);
+    }
+
+    [TestMethod]
     public void ParsesSsaV4DialogueThroughFormatDispatch()
     {
         const string content = """

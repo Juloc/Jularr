@@ -143,8 +143,9 @@ public static partial class SubtitleParser
                 continue;
             }
 
-            var text = CleanText(rawText.Replace("\\N", " ", StringComparison.OrdinalIgnoreCase));
-            if (text.Length == 0)
+            var text = CleanText(rawText.Replace("\\N", " ", StringComparison.OrdinalIgnoreCase))
+                .Replace("\\h", "\u00A0", StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(text))
             {
                 continue;
             }
