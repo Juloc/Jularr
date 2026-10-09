@@ -15,6 +15,10 @@
     <header class="watchlist-header">
         <h1>@ui["watchlist.title"]</h1>
         <a class="button button-primary" href="/">@ui["watchlist.discover"]</a>
+        @if (Model.IsTargetView)
+        {
+            <a class="button" href="/Watchlist">@ui["watchlist.title"]</a>
+        }
     </header>
 
     @if (Model.TotalCount == 0)
@@ -117,7 +121,7 @@
         }
     }
 
-    @if (Model.Franchises.Count > 0)
+    @if ((Model.FranchisePage.TotalCount ?? 0) > 0)
     {
         <section class="watchlist-franchises">
             <h2>@ui["watchlist.franchises"]</h2>
