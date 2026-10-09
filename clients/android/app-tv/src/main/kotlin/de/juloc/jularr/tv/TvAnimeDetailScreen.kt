@@ -54,12 +54,20 @@ internal fun currentAnimeResume(
     anime: AnimeDetail,
     items: List<ContinueWatchingItem>,
 ): ContinueWatchingItem? =
-    items.firstOrNull { entry ->
-        entry.animeId == anime.id && entry.percent in 1..99 &&
+    items.filter { entry ->
+        entry.animeId == anime.id &&
+            entry.percent in 1..99 &&
+            entry.resumePositionMs > 0L &&
             anime.seasons.any { season ->
                 season.episodes.any { it.id == entry.episodeId && it.hasMedia }
             }
-    }
+    }.maxByOrNull { it.updatedAtUtc }
+
+internal fun firstTvPlayableEpisode(anime: AnimeDetail): EpisodeSummary? =
+    anime.seasons.sortedWith(compareBy({ it.number == 0 }, { it.number }))
+        .asSequence()
+        .flatMap { it.episodes.sortedBy(EpisodeSummary::number).asSequence() }
+        .firstOrNull(EpisodeSummary::hasMedia)
 
 @Composable
 fun TvAnimeScreen(
@@ -80,14 +88,13 @@ fun TvAnimeScreen(
         mutableStateOf(
             focusMemory.recall("anime-season:${anime.id}")?.toIntOrNull()
                 ?.takeIf { value -> chapters.any { it.number == value } }
+                ?: chapters.firstOrNull { it.number > 0 }?.number
                 ?: chapters.firstOrNull()?.number,
         )
     }
     val episodes = chapters.firstOrNull { it.number == selectedSeason }?.episodes
         ?.sortedBy { it.number }.orEmpty()
-    val firstPlayable = chapters.asSequence()
-        .flatMap { it.episodes.asSequence() }
-        .firstOrNull { it.hasMedia }
+    val firstPlayable = remember(anime) { firstTvPlayableEpisode(anime) }
     val resume = remember(anime, continueWatching) { currentAnimeResume(anime, continueWatching) }
     val resumeEpisode = chapters.asSequence()
         .flatMap { it.episodes.asSequence() }
@@ -251,7 +258,10 @@ fun TvAnimeScreen(
             }
             gridItems(episodes, key = { it.id }) { episode ->
                 val progress = continueWatching.firstOrNull {
-                    it.episodeId == episode.id && it.percent in 1..99
+                    it.animeId == anime.id &&
+                        it.episodeId == episode.id &&
+                        it.percent in 1..99 &&
+                        it.resumePositionMs > 0L
                 }
                 val focusRequester = remember(episode.id) { FocusRequester() }
                 var focused by remember(episode.id) { mutableStateOf(false) }
@@ -275,7 +285,7 @@ fun TvAnimeScreen(
                         },
                 ) {
                     Box(
-                        Modifier.fillMaxWidth().aspectRatio(16f / 8f)
+                        Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                             .background(
                                 Brush.linearGradient(
                                     listOf(
