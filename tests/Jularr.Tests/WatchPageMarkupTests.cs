@@ -134,6 +134,7 @@ public sealed class WatchPageMarkupTests
     {
         var episode = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml"));
         StringAssert.Contains(episode, "PreviousUrl: Model.PreviousEpisodeUrl");
+        StringAssert.Contains(episode, "OffersAutoplay: Model.NextEpisodeUrl is not null");
         StringAssert.Contains(episode, "PreviousLabel: Model.Flow?.Previous");
         StringAssert.Contains(Page, "player-round-seek");
         StringAssert.Contains(Page, "player-seek-count");

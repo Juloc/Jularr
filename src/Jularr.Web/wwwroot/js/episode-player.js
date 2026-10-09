@@ -43,16 +43,17 @@
         }
     })();
 
-    const overlay = root.querySelector("[data-subtitle-overlay]");
-    const data = root.querySelector("[data-cue-data]");
-    const inspector = root.querySelector("[data-word-inspector]");
-    const learningKicker = root.querySelector("[data-learning-kicker]");
-    const word = root.querySelector("[data-word]");
-    const reading = root.querySelector("[data-reading]");
-    const meaning = root.querySelector("[data-meaning]");
-    const state = root.querySelector("[data-state]");
-    const replay = root.querySelector("[data-replay]");
-    const closeLearning = root.querySelector("[data-close-learning]");
+    const learningRoot = window.JularrPlayerLearning ? root : null;
+    const overlay = learningRoot?.querySelector("[data-subtitle-overlay]");
+    const data = learningRoot?.querySelector("[data-cue-data]");
+    const inspector = learningRoot?.querySelector("[data-word-inspector]");
+    const learningKicker = learningRoot?.querySelector("[data-learning-kicker]");
+    const word = learningRoot?.querySelector("[data-word]");
+    const reading = learningRoot?.querySelector("[data-reading]");
+    const meaning = learningRoot?.querySelector("[data-meaning]");
+    const state = learningRoot?.querySelector("[data-state]");
+    const replay = learningRoot?.querySelector("[data-replay]");
+    const closeLearning = learningRoot?.querySelector("[data-close-learning]");
     const error = root.querySelector("[data-player-error]");
     const timeline = root.querySelector("[data-playback-timeline]");
     const timelineCurrent = root.querySelector("[data-playback-current]");

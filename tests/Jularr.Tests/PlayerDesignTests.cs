@@ -109,6 +109,9 @@ public sealed class PlayerDesignTests
         Assert.IsFalse(requiredNodes.Contains("!overlay", StringComparison.Ordinal));
         Assert.IsFalse(requiredNodes.Contains("!data", StringComparison.Ordinal));
         StringAssert.Contains(player, "if (!overlay || !window.JularrPlayerLearning) return;");
+        StringAssert.Contains(player, "const learningRoot = window.JularrPlayerLearning ? root : null;");
+        StringAssert.Contains(player, "learningRoot?.querySelector(\"[data-word-inspector]\")");
+        StringAssert.Contains(player, "learningRoot?.querySelector(\"[data-cue-data]\")");
     }
 
     [TestMethod]

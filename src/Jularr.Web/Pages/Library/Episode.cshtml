@@ -60,7 +60,7 @@ else if (Model.Playback.Media is { } media)
             ? ui.Format("library.episode.previousEpisodeAria", ("season", previous.SeasonNumber.ToString("00")), ("episode", previous.Number.ToString("00")))
             : null,
         AutoplayNext: Model.Flow?.AutoplayNext == true,
-        OffersAutoplay: true,
+        OffersAutoplay: Model.NextEpisodeUrl is not null,
         FinishedKey: "library.episode.episodeFinished",
         Title: Model.AnimeTitle,
         EpisodeLine: $"{episodeCode} – {Model.EpisodeTitle}",
