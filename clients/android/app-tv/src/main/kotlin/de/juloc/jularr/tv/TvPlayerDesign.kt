@@ -22,6 +22,7 @@ data class TvPlayerDesign(
     val subtitlePreferredSp: Int,
     val controlsAutoHideMs: Long,
     val seek: PlayerSeekSteps,
+    val playbackSpeeds: List<Double> = listOf(1.0),
 )
 
 object TvPlayerDesignLoader {
@@ -44,6 +45,7 @@ object TvPlayerDesignLoader {
             subtitlePreferredSp = config.subtitlePreferredSp,
             controlsAutoHideMs = config.controlsAutoHideMs,
             seek = config.seek,
+            playbackSpeeds = config.playbackSpeeds,
         )
     }
 }
