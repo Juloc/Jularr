@@ -26,6 +26,8 @@ data class TvAppSnapshot(
      */
     val activityUsesContinueWatchingFallback: Boolean = false,
     val watchlist: List<WatchlistItem> = emptyList(),
+    val watchlistPage: Int = 1,
+    val watchlistHasMore: Boolean = false,
     val anime: AnimeDetail? = null,
     val episodePage: TvEpisodePageData? = null,
     val episode: TvEpisodeBundle? = null,
@@ -245,13 +247,16 @@ class TvAppController(
                     copy(activityUsesContinueWatchingFallback = true)
                 }
 
-                TvRoute.Watchlist -> copy(
-                    watchlist = if (capabilities?.features?.watchlist == true) {
-                        flow.loadWatchlist()
-                    } else {
-                        emptyList()
-                    },
-                )
+                TvRoute.Watchlist -> if (capabilities?.features?.watchlist == true) {
+                    val page = flow.loadWatchlistPage(1)
+                    copy(
+                        watchlist = page.items,
+                        watchlistPage = page.page,
+                        watchlistHasMore = page.hasMore,
+                    )
+                } else {
+                    copy(watchlist = emptyList(), watchlistPage = 1, watchlistHasMore = false)
+                }
 
                 else -> this
             }
@@ -262,6 +267,18 @@ class TvAppController(
                 episodePage = null,
                 episode = null,
                 storageDecision = null,
+                error = null,
+            )
+        }
+
+    suspend fun loadWatchlistPage(pageNumber: Int): TvAppSnapshot =
+        runBusy {
+            require(pageNumber > 0)
+            val result = flow.loadWatchlistPage(pageNumber)
+            copy(
+                watchlist = result.items,
+                watchlistPage = result.page,
+                watchlistHasMore = result.hasMore,
                 error = null,
             )
         }

@@ -12,11 +12,25 @@ namespace Jularr.Web.Pages.Admin;
 public sealed class UsersModel(
     AppDbContext db,
     OwnerAuthService authService,
+    AdminAccountService adminAccounts,
     ILogger<UsersModel> logger) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
-    public IReadOnlyList<LocalAccountSummary> Users { get; private set; } = [];
+    public PageResult<LocalAccountSummary> UserPage { get; private set; } =
+        PageResult<LocalAccountSummary>.From([], new PageRequest());
+
+    public IReadOnlyList<LocalAccountSummary> Users => UserPage.Items;
+
+    public long TotalCount => UserPage.TotalCount ?? 0;
+
+    public long PageCount => Math.Max(1L, (TotalCount + PageSize - 1) / PageSize);
+
+    [BindProperty(SupportsGet = true, Name = "page")]
+    public int CurrentPage { get; set; } = 1;
+
+    [BindProperty(SupportsGet = true, Name = "pageSize")]
+    public int PageSize { get; set; } = PageRequest.DefaultPageSize;
 
     [BindProperty]
     [Required]
@@ -29,10 +43,20 @@ public sealed class UsersModel(
     [MinLength(12, ErrorMessage = "Password must be at least 12 characters long.")]
     public string Password { get; set; } = "";
 
-    public async Task OnGetAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        await LoadAsync(cancellationToken);
+
+        try
+        {
+            await LoadAsync(cancellationToken);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return BadRequest();
+        }
+
+        return Page();
     }
 
     public async Task<IActionResult> OnPostCreateAsync(CancellationToken cancellationToken)
@@ -101,5 +125,8 @@ public sealed class UsersModel(
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken) =>
-        Users = await authService.ListAsync(cancellationToken);
+        UserPage = await adminAccounts.ReadUsersV1(
+            User,
+            new PageRequest(CurrentPage, PageSize),
+            cancellationToken);
 }

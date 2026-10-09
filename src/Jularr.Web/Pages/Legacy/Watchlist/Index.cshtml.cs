@@ -21,11 +21,44 @@ public sealed class IndexModel(
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
-    public IReadOnlyList<WatchlistItem> Items { get; private set; } = [];
+    [BindProperty(SupportsGet = true, Name = "page")]
+    public int CurrentPage { get; set; } = 1;
 
-    public IReadOnlyList<FranchiseSummary> Franchises { get; private set; } = [];
+    [BindProperty(SupportsGet = true, Name = "mediaType")]
+    public string? TargetMediaType { get; set; }
 
-    public async Task OnGetAsync(CancellationToken cancellationToken)
+    [BindProperty(SupportsGet = true, Name = "provider")]
+    public string? TargetProvider { get; set; }
+
+    [BindProperty(SupportsGet = true, Name = "externalId")]
+    public string? TargetExternalId { get; set; }
+
+    public bool IsTargetView => TargetMediaType is not null
+        || TargetProvider is not null
+        || TargetExternalId is not null;
+
+    public PageResult<WatchlistItem> ItemPage { get; private set; } =
+        PageResult<WatchlistItem>.From([], new PageRequest());
+
+    public IReadOnlyList<WatchlistItem> Items => ItemPage.Items;
+
+    public long TotalCount => ItemPage.TotalCount ?? 0;
+
+    public long PageCount => Math.Max(1L, (TotalCount + PageRequest.DefaultPageSize - 1) / PageRequest.DefaultPageSize);
+
+    [BindProperty(SupportsGet = true, Name = "franchisePage")]
+    public int CurrentFranchisePage { get; set; } = 1;
+
+    public PageResult<FranchiseSummary> FranchisePage { get; private set; } =
+        PageResult<FranchiseSummary>.From([], new PageRequest());
+
+    public IReadOnlyList<FranchiseSummary> Franchises => FranchisePage.Items;
+
+    public long FranchisePageCount =>
+        Math.Max(1L, ((FranchisePage.TotalCount ?? 0) + PageRequest.DefaultPageSize - 1)
+            / PageRequest.DefaultPageSize);
+
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var visible = shell is null
@@ -34,12 +67,55 @@ public sealed class IndexModel(
                 .VisibleMediaTypes
                 .ToHashSet();
 
-        Items = await library.ApplyAsync(
-            (await watchlist.GetEffectiveAsync(account.ProfileId, cancellationToken))
-                .Where(item => visible.Contains(WorkMediaTypes.FromWatchlist(item.Identity.MediaType)))
-                .ToArray(),
-            cancellationToken);
-        Franchises = await franchises.ListFollowedAsync(account.ProfileId, cancellationToken);
+        WatchlistIdentity? target = null;
+        if (IsTargetView)
+        {
+            if (!WatchlistDraftInput.TryIdentity(
+                TargetMediaType,
+                TargetProvider,
+                TargetExternalId,
+                out var resolvedTarget))
+            {
+                return BadRequest();
+            }
+
+            target = resolvedTarget;
+        }
+
+        try
+        {
+            var page = await watchlist.GetEffectivePageAsync(
+                account,
+                new PageRequest(IsTargetView ? 1 : CurrentPage),
+                Enum.GetValues<WatchlistMediaType>()
+                    .Where(type => visible.Contains(WorkMediaTypes.FromWatchlist(type)))
+                    .ToArray(),
+                cancellationToken,
+                target);
+
+            ItemPage = page with
+            {
+                Items = await library.ApplyAsync(page.Items, cancellationToken)
+            };
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return BadRequest();
+        }
+
+        try
+        {
+            FranchisePage = await franchises.ListFollowedAsync(
+                account.ProfileId,
+                new PageRequest(CurrentFranchisePage),
+                cancellationToken);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return BadRequest();
+        }
+
+        return Page();
     }
 
     public async Task<IActionResult> OnPostRemoveAsync(

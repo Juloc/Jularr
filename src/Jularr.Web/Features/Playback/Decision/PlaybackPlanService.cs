@@ -53,6 +53,8 @@ public sealed record PlaybackPlanOutcome(
 
 public static class PlaybackNetworkClassifier
 {
+    private static readonly IPNetwork TailscaleIpv6Range = IPNetwork.Parse("fd7a:115c:a1e0::/48");
+
     // Carrier-grade NAT (100.64/10) is also where overlay VPNs such as Tailscale live; such a
     // client may be anywhere, so it counts as remote.
     public static PlaybackNetworkClass Classify(
@@ -93,6 +95,11 @@ public static class PlaybackNetworkClassifier
 
         if (remote.AddressFamily == AddressFamily.InterNetworkV6)
         {
+            if (TailscaleIpv6Range.Contains(remote))
+            {
+                return PlaybackNetworkClass.Remote;
+            }
+
             var bytes = remote.GetAddressBytes();
             var uniqueLocal = (bytes[0] & 0xfe) == 0xfc;
             return uniqueLocal || remote.IsIPv6LinkLocal

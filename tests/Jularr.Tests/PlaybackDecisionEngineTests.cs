@@ -778,6 +778,8 @@ public sealed class PlaybackDecisionEngineTests
         Assert.AreEqual(PlaybackNetworkClass.Local, PlaybackNetworkClassifier.Classify(IPAddress.Parse("fd12::1"), null));
         Assert.AreEqual(PlaybackNetworkClass.Local, PlaybackNetworkClassifier.Classify(IPAddress.Loopback, null));
         Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("100.101.1.1"), null), "Overlay VPN clients may be anywhere.");
+        Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("fd7a:115c:a1e0::42"), null));
+        Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("fd7a:115c:a1e0:b1a::2"), null));
         Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("203.0.113.9"), null));
         Assert.AreEqual(PlaybackNetworkClass.Remote, PlaybackNetworkClassifier.Classify(IPAddress.Parse("2001:db8::1"), null));
         Assert.AreEqual(

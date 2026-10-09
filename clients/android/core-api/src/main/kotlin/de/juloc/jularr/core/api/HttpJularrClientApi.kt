@@ -125,9 +125,18 @@ class HttpJularrClientApi(
             .mapObjects { it.toPlaybackHistoryItem() }
 
     override suspend fun getWatchlist(): List<WatchlistItem> =
-        requestJson("GET", ClientApiRoutes.Watchlist)
-            .getJSONArray("items")
-            .mapObjects { it.toWatchlistItem() }
+        getWatchlistPage().items
+
+    override suspend fun getWatchlistPage(page: Int, pageSize: Int): WatchlistPage {
+        val json = requestJson("GET", ClientApiRoutes.watchlistPage(page, pageSize))
+        return WatchlistPage(
+            items = json.getJSONArray("items").mapObjects { it.toWatchlistItem() },
+            page = json.getInt("page"),
+            pageSize = json.getInt("pageSize"),
+            totalCount = json.getLong("totalCount"),
+            hasMore = json.getBoolean("hasMore"),
+        )
+    }
 
     override suspend fun getAnime(animeId: String): AnimeDetail =
         requestJson("GET", ClientApiRoutes.anime(animeId)).toAnimeDetail()
