@@ -112,6 +112,14 @@ builder.Services.AddHttpClient<Jularr.Web.Features.ExternalPlayback.Plex.PlexLib
 {
     AllowAutoRedirect = false
 });
+builder.Services.AddHttpClient<Jularr.Web.Features.ExternalPlayback.Plex.PlexResourceDiscoveryClient>(client =>
+{
+    client.BaseAddress = new Uri("https://clients.plex.tv/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false
+});
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexWorkMatcher>();
 
 // Per-media-type capability policy (#436): canonical JSON settings store under /data plus the
