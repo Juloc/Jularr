@@ -16,7 +16,7 @@ public sealed class WantedCoverageTests
     private static async Task<Work> MonitoredWorkAsync(AppDbContext db, WorkMediaType type)
     {
         var work = await new WorkService(db).CreateWorkAsync(type, "Frieren", 2020, CancellationToken.None);
-        await MonitoringTestSupport.Commands(db).SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(db).SetWorkAsync(work.Id, true, CancellationToken.None);
         return work;
     }
 
@@ -85,7 +85,7 @@ public sealed class WantedCoverageTests
         await reconciler.ReconcileAsync(work.Id, CancellationToken.None);
         var item = await db.WantedItems.AsNoTracking().SingleAsync(row => row.WorkId == work.Id);
         Assert.AreEqual(WantedTargetKind.Edition, item.TargetKind, "The request names the audio edition, not the book.");
-        Assert.IsEmpty(await reconciler.WorksWithoutOpenRequestAsync(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book, Guid.Empty, 10, CancellationToken.None), "Book requests do not carry an audio edition.");
+        Assert.IsEmpty(await reconciler.WorksWithoutOpenRequestAsync(Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book, 0, 10, CancellationToken.None), "Book requests do not carry an audio edition.");
 
         var audiobook = new Jularr.Web.Features.Audiobooks.Audiobook { Key = "frieren-2020", Title = "Frieren" };
         db.Add(audiobook);

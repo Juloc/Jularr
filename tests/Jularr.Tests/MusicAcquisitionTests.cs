@@ -260,7 +260,7 @@ public sealed class MusicAcquisitionTests
         var refused = await service.GrabAsync(work, "owner", wrong, CancellationToken.None);
         var first = await service.GrabAsync(work, "owner", mp3, CancellationToken.None);
         var again = await service.GrabAsync(work, "owner", mp3, CancellationToken.None);
-        var unknown = await service.GrabAsync(Guid.NewGuid(), "owner", mp3, CancellationToken.None);
+        var unknown = await service.GrabAsync(Random.Shared.NextInt64(1, long.MaxValue), "owner", mp3, CancellationToken.None);
 
         Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.NotAvailable, refused.Status);
         Assert.AreEqual(Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabStatus.Submitted, first.Status, first.Message);
@@ -288,7 +288,7 @@ public sealed class MusicAcquisitionTests
         Assert.AreEqual(1, host.Environment.Client.Grabs.Count);
         Assert.AreEqual(1, (await host.Requests.ListAsync(MediaAcquisitionKind.Music, null, openOnly: false, 10, CancellationToken.None)).Count);
         Assert.IsNotNull(second);
-        Assert.IsNull(await service.SearchNowAsync(Guid.NewGuid(), "owner", CancellationToken.None));
+        Assert.IsNull(await service.SearchNowAsync(Random.Shared.NextInt64(1, long.MaxValue), "owner", CancellationToken.None));
     }
 
     [TestMethod]
@@ -425,7 +425,7 @@ public sealed class MusicAcquisitionTests
 
         public Task<int> WantedRequestsAsync() => Get<IEnumerable<IWantedSource>>().OfType<WantedRequestSource>().Single().PrepareAsync(DateTime.UtcNow, CancellationToken.None);
 
-        public async Task<Guid> AddAlbumAsync(string groupId, string title, int year, bool monitored, DateTime? releaseDate = null)
+        public async Task<long> AddAlbumAsync(string groupId, string title, int year, bool monitored, DateTime? releaseDate = null)
         {
             var db = Environment.Db;
             var artist = await db.MusicArtists.FirstOrDefaultAsync();
@@ -437,18 +437,19 @@ public sealed class MusicAcquisitionTests
 
             var work = new Work { MediaType = WorkMediaType.Music, CanonicalTitle = title, Year = year };
             db.Works.Add(work);
+            await db.SaveChangesAsync();
             db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = work.Id, MediaType = WorkMediaType.Music, Provider = "musicbrainz", ExternalId = groupId, IsPrimary = true, Evidence = "test" });
             db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, Type = MusicAlbumType.Album, ReleaseDate = releaseDate ?? new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc), MusicBrainzReleaseGroupId = groupId });
             await db.SaveChangesAsync();
             if (monitored)
             {
-                await MonitoringTestSupport.Commands(db).SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+                await MonitoringTestSupport.Commands(db).SetWorkAsync(work.Id, true, CancellationToken.None);
             }
 
             return work.Id;
         }
 
-        public async Task AttachAudioAsync(Guid workId, int number, string? quality = null)
+        public async Task AttachAudioAsync(long workId, int number, string? quality = null)
         {
             var db = Environment.Db;
             var root = await db.LibraryRoots.FirstOrDefaultAsync() ?? db.LibraryRoots.Add(new LibraryRoot { Name = "Music", Path = "/music" }).Entity;
@@ -460,7 +461,7 @@ public sealed class MusicAcquisitionTests
         }
 
         /// <summary>An approved request for the album, nothing searched yet.</summary>
-        public Task<AcquisitionRequest> CreateRequestAsync(Guid workId, string groupId, string title) =>
+        public Task<AcquisitionRequest> CreateRequestAsync(long workId, string groupId, string title) =>
             Requests.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Music, "musicbrainz", groupId, title, "Daft Punk", null, new MusicRequestPayload(workId, "Daft Punk", title, 1997).Serialize()), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
 
         public Task<int> ProcessAsync() => WantedAcquisitionService.ProcessOnceAsync(services, Clock.GetUtcNow().UtcDateTime, CancellationToken.None);

@@ -422,7 +422,7 @@ public sealed class LibraryCanonicalReadTests
     private static Task<LibraryEntries> ReadAsync(EpisodeFlowFixture fixture, string profile) =>
         new LibraryMediaCardQuery(fixture.Db).GetEntriesAsync(profile, AllVideo, CancellationToken.None);
 
-    private static LibraryCardEntry Entry(LibraryEntries read, Guid workId) => read.Entries.Single(x => x.WorkId == workId);
+    private static LibraryCardEntry Entry(LibraryEntries read, long workId) => read.Entries.Single(x => x.WorkId == workId);
 
     private static void AssertAvailability(
         LibraryCardEntry entry,

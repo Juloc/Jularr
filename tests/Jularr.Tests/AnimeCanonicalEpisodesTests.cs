@@ -105,7 +105,7 @@ public sealed class AnimeCanonicalEpisodesTests
 
         var wanted = await environment.Db.WantedItems.AsNoTracking().ToListAsync();
         var episodes = await environment.Db.WorkEpisodes.AsNoTracking().ToDictionaryAsync(episode => episode.Id);
-        CollectionAssert.AreEqual(new[] { 2, 3 }, wanted.Select(item => episodes[item.TargetId].EpisodeNumber).Order().ToArray(), "The episode on disk is covered; the other two are wanted.");
+        CollectionAssert.AreEqual(new[] { 2, 3 }, wanted.Select(item => episodes[item.TargetId!.Value].EpisodeNumber).Order().ToArray(), "The episode on disk is covered; the other two are wanted.");
         Assert.IsTrue(wanted.All(item => item.TargetKind == WantedTargetKind.Episode));
     }
 }

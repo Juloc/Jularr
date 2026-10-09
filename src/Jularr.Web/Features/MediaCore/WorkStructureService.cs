@@ -13,7 +13,7 @@ public sealed class WorkStructureService(AppDbContext db)
 {
     /// <summary>Upserts a season, keyed by (work, season number).</summary>
     public async Task<WorkSeason> AddOrUpdateSeasonAsync(
-        Guid workId,
+        long workId,
         int seasonNumber,
         string? title,
         CancellationToken cancellationToken)
@@ -46,7 +46,7 @@ public sealed class WorkStructureService(AppDbContext db)
     /// and the special flag, so anime that mix season and absolute numbering and carry specials round-trip.
     /// </summary>
     public async Task<WorkEpisode> AddOrUpdateEpisodeAsync(
-        Guid workId,
+        long workId,
         int seasonNumber,
         int episodeNumber,
         int? absoluteNumber,
@@ -90,7 +90,7 @@ public sealed class WorkStructureService(AppDbContext db)
 
     /// <summary>Upserts a volume, keyed by (work, number).</summary>
     public async Task<WorkVolume> AddOrUpdateVolumeAsync(
-        Guid workId,
+        long workId,
         int number,
         string? title,
         CancellationToken cancellationToken)
@@ -113,7 +113,7 @@ public sealed class WorkStructureService(AppDbContext db)
 
     /// <summary>Upserts a chapter, keyed by (work, number). Decimal numbers allow "10.5" specials.</summary>
     public async Task<WorkChapter> AddOrUpdateChapterAsync(
-        Guid workId,
+        long workId,
         double number,
         string? title,
         bool isSpecial,
@@ -147,7 +147,7 @@ public sealed class WorkStructureService(AppDbContext db)
 
     /// <summary>Upserts an edition (editorial variant), keyed by (work, edition key).</summary>
     public async Task<WorkEdition> AddOrUpdateEditionAsync(
-        Guid workId,
+        long workId,
         string editionKey,
         string language,
         string? format,
@@ -197,7 +197,7 @@ public sealed class WorkStructureService(AppDbContext db)
 
     /// <summary>Upserts a concrete version (acquirable variant), keyed by (work, version key).</summary>
     public async Task<WorkVersion> AddOrUpdateVersionAsync(
-        Guid workId,
+        long workId,
         string versionKey,
         string? unitKey,
         Guid? editionId,
@@ -239,7 +239,7 @@ public sealed class WorkStructureService(AppDbContext db)
         return version;
     }
 
-    private async Task ClearPrimaryEditionAsync(Guid workId, CancellationToken cancellationToken)
+    private async Task ClearPrimaryEditionAsync(long workId, CancellationToken cancellationToken)
     {
         var current = await db.Set<WorkEdition>()
             .Where(x => x.WorkId == workId && x.IsPrimary)

@@ -23,7 +23,7 @@ public sealed class AnimeMonitoring(AppDbContext db, MonitoringResolver monitori
             .ToListAsync(cancellationToken);
         var views = await monitoring.LoadManyAsync([.. links.Select(link => link.WorkId)], cancellationToken, withNumbers: true);
         var byKey = links.ToDictionary(link => link.Key, link => views[link.WorkId], StringComparer.OrdinalIgnoreCase);
-        return keys.ToDictionary(key => key, key => byKey.GetValueOrDefault(key) ?? WorkMonitoringView.Unmonitored(Guid.Empty), StringComparer.OrdinalIgnoreCase);
+        return keys.ToDictionary(key => key, key => byKey.GetValueOrDefault(key) ?? WorkMonitoringView.Unmonitored(0), StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<WorkMonitoringView> LoadAsync(string animeKey, CancellationToken cancellationToken) =>
@@ -40,8 +40,8 @@ public sealed class AnimeMonitoring(AppDbContext db, MonitoringResolver monitori
     /// <summary>The keys of the anime that have anything monitored, in key order.</summary>
     public async Task<IReadOnlyList<string>> MonitoredKeysAsync(CancellationToken cancellationToken)
     {
-        var workIds = new List<Guid>();
-        var after = Guid.Empty;
+        var workIds = new List<long>();
+        var after = 0L;
         while (true)
         {
             var page = await monitoring.MonitoredWorkIdsAsync(WorkMediaType.Series, after, 500, cancellationToken, animeOnly: true);
@@ -64,12 +64,12 @@ public sealed class AnimeMonitoring(AppDbContext db, MonitoringResolver monitori
     }
 
     /// <summary>The canonical Work of an anime, created from the anime record when it has none yet.</summary>
-    public async Task<Guid> EnsureWorkAsync(Guid animeId, CancellationToken cancellationToken) =>
+    public async Task<long> EnsureWorkAsync(Guid animeId, CancellationToken cancellationToken) =>
         await bridge.EnsureWorkForAnimeAsync(await db.Anime.AsNoTracking().SingleAsync(anime => anime.Id == animeId, cancellationToken), cancellationToken);
 
     /// <summary>Switches the anime as a whole on or off; the decisions of its seasons and episodes stay as they are.</summary>
     public async Task SetMonitoredAsync(Guid animeId, bool monitored, CancellationToken cancellationToken) =>
-        await commands.SetAsync(MonitoringTargetKind.Work, await EnsureWorkAsync(animeId, cancellationToken), monitored, cancellationToken, replaceChildren: false);
+        await commands.SetWorkAsync(await EnsureWorkAsync(animeId, cancellationToken), monitored, cancellationToken, replaceChildren: false);
 
     /// <summary>Switches seasons and episodes on or off by number in one batch.</summary>
     public async Task SetUnitsAsync(Guid animeId, IReadOnlyCollection<int> seasons, IReadOnlyCollection<(int Season, int Episode)> episodes, bool monitored, CancellationToken cancellationToken)

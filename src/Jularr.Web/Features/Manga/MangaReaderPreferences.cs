@@ -68,7 +68,7 @@ public static class MangaReaderPreferences
     public static async Task<MangaReaderPreset> GetAsync(
         AppDbContext db,
         string profileId,
-        Guid? workId,
+        long? workId,
         CancellationToken cancellationToken)
     {
         var settings = await ReaderPreferenceStore.GetAsync(
@@ -85,14 +85,14 @@ public static class MangaReaderPreferences
     public static async Task SaveAsync(
         AppDbContext db,
         string profileId,
-        Guid? workId,
+        long? workId,
         MangaReaderPreferenceInput input,
         string? changedKey,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var scopeKey = workId is Guid id
+        var scopeKey = workId is { } id
             ? ReaderPreferenceScopes.Work(id)
             : ReaderPreferenceScopes.Type(ReaderContentType.Manga);
         var settings = ToSettingsInput(input);
@@ -122,7 +122,7 @@ public static class MangaReaderPreferences
     public static Task ResetWorkAsync(
         AppDbContext db,
         string profileId,
-        Guid workId,
+        long workId,
         CancellationToken cancellationToken) =>
         ReaderPreferenceStore.ResetWorkAsync(
             db,

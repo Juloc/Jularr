@@ -43,7 +43,7 @@ public sealed class SeriesDetailModel(
 
     public AnimeEpisodeLayout Layout { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(Guid workId, int? season, string? sort, string? view, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(long workId, int? season, string? sort, string? view, CancellationToken cancellationToken)
     {
         if (!await LoadAsync(workId, cancellationToken))
         {

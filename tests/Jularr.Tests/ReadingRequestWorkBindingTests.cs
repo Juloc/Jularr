@@ -61,7 +61,7 @@ public sealed class ReadingRequestWorkBindingTests
         Assert.AreEqual(bound.WorkId, boundAgain.WorkId, "Binding twice (a retry, a restart) lands on the same Work.");
         Assert.AreEqual(bound.WorkId, reloaded!.WorkId, "The binding is stored with the request, not derived from its payload or title.");
         Assert.AreEqual(1, await fixture.Db.Set<Work>().CountAsync());
-        Assert.IsFalse(await new AcquisitionAccessStore(fixture.Db).BindWorkAsync(old.Id, Guid.NewGuid(), CancellationToken.None), "A bound request keeps its Work.");
+        Assert.IsFalse(await new AcquisitionAccessStore(fixture.Db).BindWorkAsync(old.Id, Random.Shared.NextInt64(1, long.MaxValue), CancellationToken.None), "A bound request keeps its Work.");
         Assert.AreEqual(bound.WorkId, (await new AcquisitionAccessStore(fixture.Db).GetAsync(old.Id, CancellationToken.None))!.WorkId);
     }
 
@@ -145,7 +145,7 @@ public sealed class ReadingRequestWorkBindingTests
             var stillOverridden = await profiles.ResolveAsync(kind, request.WorkId);
             await profiles.AssignWorkAsync(request.WorkId.Value, null);
             var afterRemoval = await profiles.ResolveAsync(kind, request.WorkId);
-            var otherWork = await profiles.ResolveAsync(kind, Guid.NewGuid());
+            var otherWork = await profiles.ResolveAsync(kind, Random.Shared.NextInt64(1, long.MaxValue));
 
             Assert.AreEqual(baseline.Id, byKind.Id, "Without an override the media-kind default applies.");
             Assert.AreEqual("strict", byOverride.Id, "The Work's own profile wins.");
@@ -193,7 +193,7 @@ public sealed class ReadingRequestWorkBindingTests
     [TestMethod]
     public void TheVolumeOrChapterAWorkRequestAsksForIsStructuralIntentSeparateFromTheWork()
     {
-        var workId = Guid.NewGuid();
+        var workId = Random.Shared.NextInt64(1, long.MaxValue);
         var volume = new ReadingRequestPayload("Frieren", [], null, RequestedVolume: 8);
         var chapter = new ReadingRequestPayload("Frieren", [], null, RequestedChapterStart: 75, RequestedChapterEnd: 75);
         var request = MangaRequest(JsonSerializer.Serialize(volume, JsonSerializerOptions.Web), workId);
@@ -293,7 +293,7 @@ public sealed class ReadingRequestWorkBindingTests
         Assert.AreEqual(other.Id, await RequestWorkTestSupport.WorkOfLegacyAsync(host.Db, WorkSourceKind.NovelWork, existing.Id));
     }
 
-    private static AcquisitionRequest MangaRequest(string payload, Guid workId)
+    private static AcquisitionRequest MangaRequest(string payload, long workId)
     {
         var now = DateTime.UtcNow;
         return new AcquisitionRequest(Guid.NewGuid(), MediaAcquisitionKind.Manga, "anilist", "202", "Frieren", null, null, payload, "owner", AcquisitionRequestStatus.Approved, null, null, null, now, now, "owner", now, workId);

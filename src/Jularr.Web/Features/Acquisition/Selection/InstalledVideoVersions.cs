@@ -48,21 +48,21 @@ public sealed class InstalledVideoVersions(CanonicalMediaStorageService storage,
         QualityOfName(kind, Path.GetFileNameWithoutExtension(videoPath)) ?? QualityOfName(kind, Path.GetFileName(Path.GetDirectoryName(videoPath)) ?? "");
 
     /// <summary>Every video file of the Work with its installed quality; episodes are told apart by <see cref="InstalledVideoFile.WorkEpisodeId"/>.</summary>
-    public async Task<IReadOnlyList<InstalledVideoFile>> FilesAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<InstalledVideoFile>> FilesAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken) =>
         [.. (await storage.ListVideoFilesAsync(workId, cancellationToken)).Select(file => file with { Quality = file.Quality ?? QualityOfName(kind, Path.GetFileNameWithoutExtension(file.Path)) })];
 
     /// <summary>The best comparable installed quality of every target of the Work (a Movie is the null episode); a target without an installed file is absent.</summary>
-    public async Task<IReadOnlyDictionary<Guid, string?>> BestQualityByEpisodeAsync(MediaAcquisitionKind kind, Guid workId, QualityProfile profile, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyDictionary<Guid, string?>> BestQualityByEpisodeAsync(MediaAcquisitionKind kind, long workId, QualityProfile profile, CancellationToken cancellationToken) =>
         (await FilesAsync(kind, workId, cancellationToken))
             .Where(file => file.WorkEpisodeId is not null)
             .GroupBy(file => file.WorkEpisodeId!.Value)
             .ToDictionary(group => group.Key, group => UpgradePolicy.Best(profile, group.Select(file => file.Quality)));
 
-    public async Task<string?> BestMovieQualityAsync(Guid workId, QualityProfile profile, CancellationToken cancellationToken) =>
+    public async Task<string?> BestMovieQualityAsync(long workId, QualityProfile profile, CancellationToken cancellationToken) =>
         UpgradePolicy.Best(profile, (await FilesAsync(MediaAcquisitionKind.Movie, workId, cancellationToken)).Where(file => file.WorkEpisodeId is null).Select(file => file.Quality));
 
     /// <summary>Decides what an incoming file means for the target it was downloaded for. The profile is the one the Work is acquired with.</summary>
-    public async Task<IncomingVideoJudgement> JudgeIncomingAsync(MediaAcquisitionKind kind, Guid workId, Guid? workEpisodeId, string? incomingQuality, CancellationToken cancellationToken)
+    public async Task<IncomingVideoJudgement> JudgeIncomingAsync(MediaAcquisitionKind kind, long workId, Guid? workEpisodeId, string? incomingQuality, CancellationToken cancellationToken)
     {
         var installed = (await FilesAsync(kind, workId, cancellationToken)).Where(file => file.WorkEpisodeId == workEpisodeId).ToArray();
         if (installed.Length == 0)

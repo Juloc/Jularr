@@ -65,7 +65,7 @@ public sealed class CanonicalMonitoringMigrationTests
     private static async Task<WorkMonitoringView> ViewAfterAsync(AppDbContext db, Guid workId)
     {
         await db.Database.MigrateAsync();
-        return await new MonitoringResolver(db).LoadAsync(workId, CancellationToken.None);
+        return await new MonitoringResolver(db).LoadAsync(await WorkNumberMap.OfAsync(db, workId), CancellationToken.None);
     }
 
     [TestMethod]
@@ -172,8 +172,8 @@ public sealed class CanonicalMonitoringMigrationTests
         await db.Database.MigrateAsync();
         var resolver = new MonitoringResolver(db);
 
-        Assert.IsTrue((await resolver.LoadAsync(movie.WorkId, CancellationToken.None)).IsWorkMonitored);
-        Assert.IsTrue((await resolver.LoadAsync(kept, CancellationToken.None)).IsWorkMonitored, "The artist reaches the album that was monitored.");
-        Assert.IsFalse((await resolver.LoadAsync(off, CancellationToken.None)).IsWorkMonitored, "The album that was switched off keeps its decision.");
+        Assert.IsTrue((await resolver.LoadAsync(await WorkNumberMap.OfAsync(db, movie.WorkId), CancellationToken.None)).IsWorkMonitored);
+        Assert.IsTrue((await resolver.LoadAsync(await WorkNumberMap.OfAsync(db, kept), CancellationToken.None)).IsWorkMonitored, "The artist reaches the album that was monitored.");
+        Assert.IsFalse((await resolver.LoadAsync(await WorkNumberMap.OfAsync(db, off), CancellationToken.None)).IsWorkMonitored, "The album that was switched off keeps its decision.");
     }
 }

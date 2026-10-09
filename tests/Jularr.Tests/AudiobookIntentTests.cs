@@ -39,7 +39,7 @@ public sealed class AudiobookIntentTests
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var work = await BookAsync(db);
-        await MonitoringTestSupport.Commands(db).SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(db).SetWorkAsync(work.Id, true, CancellationToken.None);
 
         var wanted = await WantedAsync(db, work);
 
@@ -63,7 +63,7 @@ public sealed class AudiobookIntentTests
 
         foreach (var bookDecision in new bool?[] { true, false, null })
         {
-            await commands.SetAsync(MonitoringTargetKind.Work, work.Id, bookDecision, CancellationToken.None);
+            await commands.SetWorkAsync(work.Id, bookDecision, CancellationToken.None);
         }
 
         await commands.FutureAsync(work.Id, CancellationToken.None);
@@ -71,7 +71,7 @@ public sealed class AudiobookIntentTests
 
         await commands.SetAudiobookAsync(work.Id, false, CancellationToken.None);
         Assert.IsFalse((await WantedAsync(db, work)).Any(item => item.TargetKind == WantedTargetKind.Edition));
-        Assert.IsNull(await commands.SetAudiobookAsync(Guid.NewGuid(), true, CancellationToken.None), "Only an existing Book has an audiobook.");
+        Assert.IsNull(await commands.SetAudiobookAsync(Random.Shared.NextInt64(1, long.MaxValue), true, CancellationToken.None), "Only an existing Book has an audiobook.");
     }
 
     [TestMethod]
@@ -122,7 +122,7 @@ public sealed class AudiobookIntentTests
         async Task<int> PassAsync(MediaAcquisitionKind kind) =>
             await new WantedRequestSource(kind, new WantedReconciler(db, TimeProvider.System), requests, new IdentityRequestDrafter(kind, db)).PrepareAsync(DateTime.UtcNow, CancellationToken.None);
 
-        await commands.SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+        await commands.SetWorkAsync(work.Id, true, CancellationToken.None);
         Assert.AreEqual(0, await PassAsync(MediaAcquisitionKind.Audiobook), "Monitoring the book asks for no audiobook.");
         Assert.AreEqual(1, await PassAsync(MediaAcquisitionKind.Book));
 

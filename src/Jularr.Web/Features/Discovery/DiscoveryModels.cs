@@ -170,6 +170,8 @@ public sealed record DiscoveryItem(
     string? RequestStatus = null,
     bool IsFollowed = false,
     Guid? LocalMediaId = null,
+    // The canonical Work of a Movie or Series that is in the library; LocalMediaId carries the legacy Anime, Novel and Manga records.
+    long? LocalWorkId = null,
     // A franchise the profile follows that holds this title; set per response.
     Guid? FollowedFranchiseId = null,
     // Books only (#371): the source never fabricates either when it does not supply one.

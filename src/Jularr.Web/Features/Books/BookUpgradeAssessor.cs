@@ -11,7 +11,7 @@ namespace Jularr.Web.Features.Books;
 public static class BookInstalledQuality
 {
     // The best format among the files of the Work's editions, as the profile's quality order names it; null when the Work has no file.
-    public static async Task<string?> BestAsync(AppDbContext db, QualityProfile profile, Guid workId, CancellationToken cancellationToken) =>
+    public static async Task<string?> BestAsync(AppDbContext db, QualityProfile profile, long workId, CancellationToken cancellationToken) =>
         UpgradePolicy.Best(
             profile,
             await (from link in db.WorkSourceLinks.AsNoTracking()
@@ -27,7 +27,7 @@ public sealed class BookUpgradeAssessor(AppDbContext db, QualityProfileStore pro
 
     public WantedTargetKind TargetKind => WantedTargetKind.Work;
 
-    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(long workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
     {
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Book, workId, cancellationToken);
         return UpgradePolicy.Assess(profile, await BookInstalledQuality.BestAsync(db, profile, workId, cancellationToken)).IsUpgradable ? held : [];

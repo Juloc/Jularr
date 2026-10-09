@@ -82,7 +82,7 @@ public sealed record AdminVideoMonitoring(bool Monitored, string Scope, bool Mon
 
 public sealed record AdminVideoMediaDetail(
     MediaAcquisitionKind Kind,
-    Guid WorkId,
+    long WorkId,
     string Title,
     int? Year,
     AdminVideoMonitoring Monitoring,
@@ -131,7 +131,7 @@ public sealed class AdminVideoMediaService(
     IInstanceModuleService? instanceModules = null)
 {
     /// <summary>The detail of one Work, or null when it does not exist or is not a Work of <paramref name="kind"/>.</summary>
-    public async Task<AdminVideoMediaDetail?> LoadAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    public async Task<AdminVideoMediaDetail?> LoadAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         var type = VideoWorkLinks.WorkType(kind);
         var work = await db.Works.AsNoTracking().Where(x => x.Id == workId && x.MediaType == type).Select(x => new { x.CanonicalTitle, x.Year }).SingleOrDefaultAsync(cancellationToken);
@@ -231,7 +231,7 @@ public sealed class AdminVideoMediaService(
     }
 
     private async Task<IReadOnlyList<AdminVideoSeason>> LoadSeasonsAsync(
-        Guid workId,
+        long workId,
         AcquisitionRequest? open,
         WorkMonitoringView view,
         ILookup<Guid, AdminVideoFile> files,
@@ -307,7 +307,7 @@ public sealed class AdminVideoMediaService(
     private sealed record TrackRow(Guid FileId, MediaTrackKind Kind, string Language);
 
     /// <summary>Whether the Work can be acquired at all: its modules are on, an executor exists for the kind and a provider identity names it.</summary>
-    public async Task<bool> CanAcquireAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    public async Task<bool> CanAcquireAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         var type = VideoWorkLinks.WorkType(kind);
         if (instanceModules is not null)

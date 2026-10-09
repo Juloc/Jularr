@@ -7,7 +7,7 @@ using NpgsqlTypes;
 namespace Jularr.Web.Features.MediaCore;
 
 /// <summary>A claimed spool entry: the worker owns it until its lease runs out.</summary>
-public sealed record WorkMetadataRefreshClaim(long Id, Guid WorkId, string Locale, WorkMetadataRefreshPriority Priority, WorkMetadataRefreshStatus Status, int Attempts, WorkMediaType MediaType);
+public sealed record WorkMetadataRefreshClaim(long Id, long WorkId, string Locale, WorkMetadataRefreshPriority Priority, WorkMetadataRefreshStatus Status, int Attempts, WorkMediaType MediaType);
 
 /// <summary>A localized value as the spool needs it to decide whether a provider value may replace it.</summary>
 public sealed record WorkLocalizedValueState(WorkLocalizedField Field, int Position, string Source, bool IsManualOverride);
@@ -26,13 +26,13 @@ public sealed record WorkMetadataRows(
 /// <summary>The card-sized metadata of the Works of a Library page: cached poster/backdrop variants, localized titles and facts.</summary>
 public sealed record WorkCardMetadataRows(IReadOnlyList<WorkCardArtwork> Artwork, IReadOnlyList<WorkCardTitle> Titles, IReadOnlyList<WorkCardFacts> Facts, IReadOnlyList<WorkCardTrailer> Trailers);
 
-public sealed record WorkCardArtwork(Guid WorkId, long ArtworkId, WorkArtworkSlot Slot, string Language, string CacheKey, double? VoteAverage);
+public sealed record WorkCardArtwork(long WorkId, long ArtworkId, WorkArtworkSlot Slot, string Language, string CacheKey, double? VoteAverage);
 
-public sealed record WorkCardTitle(Guid WorkId, string Locale, string Value);
+public sealed record WorkCardTitle(long WorkId, string Locale, string Value);
 
-public sealed record WorkCardFacts(Guid WorkId, string? OriginalLanguage, double? Rating);
+public sealed record WorkCardFacts(long WorkId, string? OriginalLanguage, double? Rating);
 
-public sealed record WorkCardTrailer(Guid WorkId, string Locale, string Key);
+public sealed record WorkCardTrailer(long WorkId, string Locale, string Key);
 
 /// <summary>
 /// The persistence owner of Work metadata and artwork (#820): explicit, parameterized PostgreSQL for the localized values, the
@@ -52,7 +52,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     /// priority or a higher one, or its time to run is already due) writes nothing either, so repeated opens of a Work cause no write churn.
     /// </summary>
     /// <returns>How many entries were added or changed; 0 for a no-op.</returns>
-    public Task<int> EnqueueAsync(Guid workId, string locale, WorkMetadataRefreshPriority priority, DateTime nowUtc, CancellationToken cancellationToken) =>
+    public Task<int> EnqueueAsync(long workId, string locale, WorkMetadataRefreshPriority priority, DateTime nowUtc, CancellationToken cancellationToken) =>
         db.Database.ExecuteSqlAsync(
             $"""
             INSERT INTO "WorkMetadataRefreshes" AS refresh ("WorkId", "Locale", "Priority", "Status", "Attempts", "NextAttemptAt", "CreatedAt", "UpdatedAt")
@@ -172,7 +172,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     }
 
     /// <summary>The TMDB identity the spool fetches a Work by, primary first; null when the Work has none.</summary>
-    public async Task<string?> FindTmdbIdAsync(Guid workId, WorkMediaType mediaType, CancellationToken cancellationToken) =>
+    public async Task<string?> FindTmdbIdAsync(long workId, WorkMediaType mediaType, CancellationToken cancellationToken) =>
         (await db.Database.SqlQuery<string>(
                 $"""
                 SELECT "ExternalId" AS "Value"
@@ -184,7 +184,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
             .ToListAsync(cancellationToken))
         .SingleOrDefault();
 
-    public async Task<IReadOnlyList<WorkLocalizedValueState>> LoadLocalizedStatesAsync(Guid workId, string locale, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkLocalizedValueState>> LoadLocalizedStatesAsync(long workId, string locale, CancellationToken cancellationToken) =>
         [
             .. (await db.Database.SqlQuery<LocalizedStateRow>(
                     $"""
@@ -198,7 +198,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
 
     /// <summary>Replaces one localized field of one locale as a whole (all positions of a list field) with provider values.</summary>
     public async Task ReplaceLocalizedFieldAsync(
-        Guid workId,
+        long workId,
         string locale,
         WorkLocalizedField field,
         IReadOnlyList<string> values,
@@ -221,7 +221,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
             cancellationToken);
     }
 
-    public async Task<WorkMetadataFacts?> LoadFactsAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<WorkMetadataFacts?> LoadFactsAsync(long workId, CancellationToken cancellationToken) =>
         (await db.Set<WorkMetadataFacts>().FromSql(
                 $"""
                 SELECT "Id", "WorkId", "OriginalTitle", "OriginalLanguage", "ReleaseDate", "RuntimeMinutes", "Rating", "RatingCount", "Certification",
@@ -259,7 +259,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     }
 
     /// <summary>Replaces the credits of a Work with the provider's current billing.</summary>
-    public async Task ReplaceCreditsAsync(Guid workId, IReadOnlyList<WorkCreditCandidate> credits, string source, DateTime nowUtc, CancellationToken cancellationToken)
+    public async Task ReplaceCreditsAsync(long workId, IReadOnlyList<WorkCreditCandidate> credits, string source, DateTime nowUtc, CancellationToken cancellationToken)
     {
         var bounded = credits.Take(MaxCredits).ToArray();
         var kinds = bounded.Select(x => (int)x.Kind).ToArray();
@@ -278,7 +278,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
             cancellationToken);
     }
 
-    public async Task<IReadOnlyList<WorkArtworkRow>> LoadArtworkAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkArtworkRow>> LoadArtworkAsync(long workId, CancellationToken cancellationToken) =>
         [
             .. (await db.Database.SqlQuery<ArtworkDbRow>(
                     $"""
@@ -294,7 +294,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     /// Stores the chosen provider image for <c>(Work, slot, language)</c> with its local derivative. An owner-chosen variant is never
     /// replaced. Returns false when the variant was protected.
     /// </summary>
-    public async Task<bool> UpsertArtworkAsync(Guid workId, WorkArtworkCandidate candidate, string source, string cacheKey, DateTime nowUtc, CancellationToken cancellationToken)
+    public async Task<bool> UpsertArtworkAsync(long workId, WorkArtworkCandidate candidate, string source, string cacheKey, DateTime nowUtc, CancellationToken cancellationToken)
     {
         var width = Param("@width", candidate.Width, NpgsqlDbType.Integer);
         var height = Param("@height", candidate.Height, NpgsqlDbType.Integer);
@@ -318,7 +318,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     }
 
     /// <summary>Every persisted metadata row of one Work. Bounded: values per locale and field, credits and artwork variants are capped.</summary>
-    public async Task<WorkMetadataRows> LoadAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<WorkMetadataRows> LoadAsync(long workId, CancellationToken cancellationToken)
     {
         var facts = await LoadFactsAsync(workId, cancellationToken);
         var values = await db.Set<WorkLocalizedValue>().FromSql(
@@ -352,7 +352,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     /// variants, the localized titles of every locale and the facts the fallback and the score use. Works without persisted metadata
     /// yield nothing.
     /// </summary>
-    public async Task<WorkCardMetadataRows> LoadCardMetadataAsync(IReadOnlyCollection<Guid> workIds, CancellationToken cancellationToken)
+    public async Task<WorkCardMetadataRows> LoadCardMetadataAsync(IReadOnlyCollection<long> workIds, CancellationToken cancellationToken)
     {
         if (workIds.Count == 0)
         {
@@ -392,11 +392,11 @@ public sealed class WorkMetadataStore(AppDbContext db)
     /// The synopsis of each given Work in the display fallback of <paramref name="viewerLocale"/>, for surfaces that show one short text
     /// per title (the Home hero). Works without a persisted synopsis are absent.
     /// </summary>
-    public async Task<IReadOnlyDictionary<Guid, string>> LoadOverviewsAsync(IReadOnlyCollection<Guid> workIds, string viewerLocale, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<long, string>> LoadOverviewsAsync(IReadOnlyCollection<long> workIds, string viewerLocale, CancellationToken cancellationToken)
     {
         if (workIds.Count == 0)
         {
-            return new Dictionary<Guid, string>();
+            return new Dictionary<long, string>();
         }
 
         var ids = workIds.ToArray();
@@ -408,7 +408,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
                 WHERE overview."WorkId" = ANY({ids}) AND overview."Field" = {(int)WorkLocalizedField.Overview} AND overview."Position" = 0
                 """)
             .ToListAsync(cancellationToken);
-        var overviews = new Dictionary<Guid, string>();
+        var overviews = new Dictionary<long, string>();
         foreach (var work in rows.GroupBy(x => x.WorkId))
         {
             var order = WorkMetadataLocales.ResolutionOrder(viewerLocale, configuredFallback: null, work.First().OriginalLanguage);
@@ -420,7 +420,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     }
 
     /// <summary>The media type and local derivative of one artwork variant of a Work; null when the Work has no such cached variant.</summary>
-    public async Task<(WorkMediaType MediaType, string CacheKey)?> FindArtworkFileAsync(Guid workId, long artworkId, CancellationToken cancellationToken)
+    public async Task<(WorkMediaType MediaType, string CacheKey)?> FindArtworkFileAsync(long workId, long artworkId, CancellationToken cancellationToken)
     {
         var row = (await db.Database.SqlQuery<ArtworkFileRow>(
                 $"""
@@ -447,7 +447,7 @@ public sealed class WorkMetadataStore(AppDbContext db)
     /// absorbed Work has (a locale's field, the facts, the credits, an artwork slot/language, a spool locale) move over, the rest is
     /// deleted. Runs inside the merge transaction. Deleted variants leave their cache files to the orphan sweep.
     /// </summary>
-    public async Task MoveForMergeAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
+    public async Task MoveForMergeAsync(long sourceWorkId, long targetWorkId, CancellationToken cancellationToken)
     {
         // A refresh writing rows for the absorbed Work holds a key-share lock on it: wait for it to commit so its rows are moved too,
         // and make every later refresh write for that Work wait for the merge (and then fail on the deleted Work, not the merge).
@@ -500,15 +500,15 @@ public sealed class WorkMetadataStore(AppDbContext db)
     private static WorkArtworkRow ToArtwork(ArtworkDbRow row) =>
         new(row.Id, (WorkArtworkSlot)row.Slot, row.Language, row.Source, row.ProviderFilePath, row.Width, row.Height, row.VoteAverage, row.CacheKey, row.IsManualOverride);
 
-    private sealed record ClaimRow(long Id, Guid WorkId, string Locale, int Priority, int Status, int Attempts, int MediaType);
+    private sealed record ClaimRow(long Id, long WorkId, string Locale, int Priority, int Status, int Attempts, int MediaType);
 
     private sealed record LocalizedStateRow(int Field, int Position, string Source, bool IsManualOverride);
 
     private sealed record ArtworkDbRow(long Id, int Slot, string Language, string Source, string ProviderFilePath, int? Width, int? Height, double? VoteAverage, string? CacheKey, bool IsManualOverride);
 
-    private sealed record CardDbRow(Guid WorkId, int Kind, long? ArtworkId, int? Slot, string? Locale, string? Text, double? Number);
+    private sealed record CardDbRow(long WorkId, int Kind, long? ArtworkId, int? Slot, string? Locale, string? Text, double? Number);
 
-    private sealed record OverviewDbRow(Guid WorkId, string Locale, string Value, string? OriginalLanguage);
+    private sealed record OverviewDbRow(long WorkId, string Locale, string Value, string? OriginalLanguage);
 
     private sealed record ArtworkFileRow(int MediaType, string CacheKey);
 }

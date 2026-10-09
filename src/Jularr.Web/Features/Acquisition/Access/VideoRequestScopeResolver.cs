@@ -52,7 +52,7 @@ public sealed class VideoRequestScopeResolver(AppDbContext db, MonitoringCommand
         return scope != VideoRequestScope.WholeWork;
     }
 
-    public async Task<IReadOnlyList<VideoRequestSeason>> LoadStructureAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<VideoRequestSeason>> LoadStructureAsync(long workId, CancellationToken cancellationToken)
     {
         var seasons = await db.WorkSeasons.AsNoTracking().Where(x => x.WorkId == workId).ToListAsync(cancellationToken);
         var episodes = await db.WorkEpisodes.AsNoTracking().Where(x => x.WorkId == workId).OrderBy(x => x.SeasonNumber).ThenBy(x => x.EpisodeNumber).ToListAsync(cancellationToken);
@@ -71,7 +71,7 @@ public sealed class VideoRequestScopeResolver(AppDbContext db, MonitoringCommand
     /// Checks the choice against the Work's own structure and returns it without duplicates. Throws <see cref="ArgumentException"/> for an unknown id,
     /// an empty custom selection or ids sent with a scope that has none.
     /// </summary>
-    public async Task<VideoRequestScopeChoice> ValidateTvAsync(Guid workId, VideoRequestScopeChoice choice, CancellationToken cancellationToken)
+    public async Task<VideoRequestScopeChoice> ValidateTvAsync(long workId, VideoRequestScopeChoice choice, CancellationToken cancellationToken)
     {
         var seasonIds = choice.SeasonIds.Distinct().ToArray();
         var episodeIds = choice.EpisodeIds.Distinct().ToArray();
@@ -105,18 +105,18 @@ public sealed class VideoRequestScopeResolver(AppDbContext db, MonitoringCommand
     }
 
     /// <summary>Applies a validated choice as monitoring decisions: all and the Movie switch the Work on, future and a custom selection write their ordinary decisions.</summary>
-    public Task ApplyAsync(Guid workId, VideoRequestScopeChoice? choice, CancellationToken cancellationToken) => choice?.Scope switch
+    public Task ApplyAsync(long workId, VideoRequestScopeChoice? choice, CancellationToken cancellationToken) => choice?.Scope switch
     {
         VideoRequestScope.FutureOnly => commands.FutureAsync(workId, cancellationToken),
         VideoRequestScope.Custom => commands.ApplySelectionAsync(workId, choice.SeasonIds, choice.EpisodeIds, choice.MonitorFuture, cancellationToken),
-        _ => commands.SetAsync(MonitoringTargetKind.Work, workId, true, cancellationToken)
+        _ => commands.SetWorkAsync(workId, true, cancellationToken)
     };
 
     /// <summary>
     /// The current monitoring of a Series as a choice for the dialog, or null when nothing is monitored. Everything on and nothing decided is "all"; the
     /// Work on with every known episode off is "future"; anything else is a custom selection of the seasons and episodes that are on.
     /// </summary>
-    public async Task<VideoRequestScopeChoice?> ChoiceOfAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<VideoRequestScopeChoice?> ChoiceOfAsync(long workId, CancellationToken cancellationToken)
     {
         var view = await monitoring.LoadAsync(workId, cancellationToken);
         if (!view.IsAnyMonitored)

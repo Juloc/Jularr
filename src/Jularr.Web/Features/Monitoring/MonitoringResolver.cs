@@ -31,21 +31,21 @@ public sealed class MonitoringResolver(AppDbContext db)
         JOIN "WorkMonitoringSources" s ON s."Kind" = 3 AND s."SourceKey" = a."ArtistId"::text
         """;
 
-    public async Task<WorkMonitoringView> LoadAsync(Guid workId, CancellationToken cancellationToken, bool withNumbers = false) =>
+    public async Task<WorkMonitoringView> LoadAsync(long workId, CancellationToken cancellationToken, bool withNumbers = false) =>
         (await LoadManyAsync([workId], cancellationToken, withNumbers))[workId];
 
     /// <summary>
     /// The views of several Works in two queries, or four with <paramref name="withNumbers"/>, whatever their number. With numbers a view can also
     /// answer by season and episode number, which is how Anime names its units.
     /// </summary>
-    public async Task<IReadOnlyDictionary<Guid, WorkMonitoringView>> LoadManyAsync(IReadOnlyCollection<Guid> workIds, CancellationToken cancellationToken, bool withNumbers = false)
+    public async Task<IReadOnlyDictionary<long, WorkMonitoringView>> LoadManyAsync(IReadOnlyCollection<long> workIds, CancellationToken cancellationToken, bool withNumbers = false)
     {
         var ids = workIds.Distinct().ToArray();
         var rows = await db.Database
             .SqlQuery<DecisionRow>($"""SELECT "WorkId", "TargetId", "Kind", "Monitored" FROM "WorkMonitoring" WHERE "WorkId" = ANY({ids})""")
             .ToListAsync(cancellationToken);
         var reached = (await db.Database
-            .SqlQueryRaw<Guid>("SELECT DISTINCT r.\"WorkId\" AS \"Value\" FROM (" + RelationCoveredWorksSql + ") r WHERE r.\"WorkId\" = ANY({0})", (object)ids)
+            .SqlQueryRaw<long>("SELECT DISTINCT r.\"WorkId\" AS \"Value\" FROM (" + RelationCoveredWorksSql + ") r WHERE r.\"WorkId\" = ANY({0})", (object)ids)
             .ToListAsync(cancellationToken)).ToHashSet();
         var byWork = rows.ToLookup(row => row.WorkId);
         var numbers = withNumbers ? await LoadNumbersAsync(ids, cancellationToken) : null;
@@ -53,12 +53,13 @@ public sealed class MonitoringResolver(AppDbContext db)
             id => id,
             id => new WorkMonitoringView(
                 id,
-                byWork[id].ToDictionary(row => row.TargetId, row => new MonitoringDecision((MonitoringTargetKind)row.Kind, row.Monitored)),
+                byWork[id].FirstOrDefault(row => row.Kind == (short)MonitoringTargetKind.Work)?.Monitored,
+                byWork[id].Where(row => row.TargetId is not null).ToDictionary(row => row.TargetId!.Value, row => new MonitoringDecision((MonitoringTargetKind)row.Kind, row.Monitored)),
                 reached.Contains(id),
                 numbers?[id]));
     }
 
-    private async Task<IReadOnlyDictionary<Guid, NumberedDecisions>> LoadNumbersAsync(Guid[] ids, CancellationToken cancellationToken)
+    private async Task<IReadOnlyDictionary<long, NumberedDecisions>> LoadNumbersAsync(long[] ids, CancellationToken cancellationToken)
     {
         var episodes = await db.Database
             .SqlQuery<EpisodeNumberRow>($"""SELECT m."WorkId", e."SeasonNumber", e."EpisodeNumber", m."Monitored" FROM "WorkMonitoring" m JOIN "WorkEpisodes" e ON e."Id" = m."TargetId" WHERE m."Kind" = 2 AND m."WorkId" = ANY({ids})""")
@@ -79,16 +80,16 @@ public sealed class MonitoringResolver(AppDbContext db)
     /// The Works of one media type that have anything monitored, after <paramref name="after"/> in id order: a Work decided as monitored, a Work that has a
     /// node switched on, or a Work with no decision that a monitored relation reaches. <paramref name="animeOnly"/> keeps only the Works classified as Anime.
     /// </summary>
-    public async Task<IReadOnlyList<Guid>> MonitoredWorkIdsAsync(WorkMediaType mediaType, Guid after, int limit, CancellationToken cancellationToken, bool animeOnly = false)
+    public async Task<IReadOnlyList<long>> MonitoredWorkIdsAsync(WorkMediaType mediaType, long after, int limit, CancellationToken cancellationToken, bool animeOnly = false)
     {
         var type = (int)mediaType;
         return await db.Database
-            .SqlQueryRaw<Guid>(
+            .SqlQueryRaw<long>(
                 """
                 SELECT w."Id" AS "Value" FROM "Works" w
                 WHERE w."MediaType" = {0} AND (NOT {3} OR w."IsAnime") AND w."Id" > {1}
                   AND (EXISTS (SELECT 1 FROM "WorkMonitoring" m WHERE m."WorkId" = w."Id" AND m."Monitored")
-                       OR (NOT EXISTS (SELECT 1 FROM "WorkMonitoring" m WHERE m."TargetId" = w."Id")
+                       OR (NOT EXISTS (SELECT 1 FROM "WorkMonitoring" m WHERE m."Kind" = 0 AND m."WorkId" = w."Id")
                            AND EXISTS (SELECT 1 FROM (
                 """ + RelationCoveredWorksSql + """
                            ) r WHERE r."WorkId" = w."Id")))
@@ -101,9 +102,9 @@ public sealed class MonitoringResolver(AppDbContext db)
             .ToListAsync(cancellationToken);
     }
 
-    private sealed record DecisionRow(Guid WorkId, Guid TargetId, short Kind, bool Monitored);
+    private sealed record DecisionRow(long WorkId, Guid? TargetId, short Kind, bool Monitored);
 
-    private sealed record EpisodeNumberRow(Guid WorkId, int SeasonNumber, int EpisodeNumber, bool Monitored);
+    private sealed record EpisodeNumberRow(long WorkId, int SeasonNumber, int EpisodeNumber, bool Monitored);
 
-    private sealed record SeasonNumberRow(Guid WorkId, int SeasonNumber, bool Monitored);
+    private sealed record SeasonNumberRow(long WorkId, int SeasonNumber, bool Monitored);
 }

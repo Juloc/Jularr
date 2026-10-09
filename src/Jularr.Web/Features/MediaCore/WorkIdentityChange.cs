@@ -29,10 +29,10 @@ public sealed class WorkIdentityChange
     public WorkMediaType MediaType { get; set; }
 
     /// <summary>The surviving/destination work the change resolved toward.</summary>
-    public Guid TargetWorkId { get; set; }
+    public long TargetWorkId { get; set; }
 
     /// <summary>The absorbed (merge) or origin (split/reassign) work; null when unknown.</summary>
-    public Guid? SourceWorkId { get; set; }
+    public long? SourceWorkId { get; set; }
 
     /// <summary>Normalized provider of the moved identity, or empty for a whole-work merge.</summary>
     public string Provider { get; set; } = "";

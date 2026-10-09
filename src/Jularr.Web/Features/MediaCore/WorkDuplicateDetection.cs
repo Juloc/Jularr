@@ -1,7 +1,7 @@
 namespace Jularr.Web.Features.MediaCore;
 
 /// <summary>A flattened title of a work, used only for duplicate detection (never display).</summary>
-public sealed record WorkTitleProbe(Guid WorkId, WorkMediaType MediaType, int? Year, string NormalizedValue);
+public sealed record WorkTitleProbe(long WorkId, WorkMediaType MediaType, int? Year, string NormalizedValue);
 
 /// <summary>
 /// One suggested pair of works that look like the same real work (#432 / #437). The pair is ordered so
@@ -9,9 +9,9 @@ public sealed record WorkTitleProbe(Guid WorkId, WorkMediaType MediaType, int? Y
 /// <see cref="MergeWorkId"/> the one to absorb. <see cref="Score"/> ranks stronger matches first.
 /// </summary>
 public sealed record WorkDuplicateSuggestion(
-    Guid KeepWorkId,
+    long KeepWorkId,
     string KeepTitle,
-    Guid MergeWorkId,
+    long MergeWorkId,
     string MergeTitle,
     WorkMediaType MediaType,
     double Score,
@@ -37,11 +37,11 @@ public static class WorkDuplicateDetection
     /// provider has already resolved those, so they are suppressed from the suggestions.
     /// </summary>
     public static IReadOnlyList<WorkDuplicateSuggestion> Suggest(
-        IReadOnlyDictionary<Guid, string> titlesByWork,
+        IReadOnlyDictionary<long, string> titlesByWork,
         IReadOnlyList<WorkTitleProbe> probes,
-        IReadOnlySet<(Guid, Guid)> relatedPairs)
+        IReadOnlySet<(long, long)> relatedPairs)
     {
-        var pairs = new Dictionary<(Guid, Guid), PairEvidence>();
+        var pairs = new Dictionary<(long, long), PairEvidence>();
 
         var byKey = probes
             .Where(p => p.NormalizedValue.Length > 0)
@@ -116,7 +116,7 @@ public static class WorkDuplicateDetection
     }
 
     /// <summary>Unordered key for a work pair, so (a,b) and (b,a) collapse to one suggestion.</summary>
-    public static (Guid, Guid) Key(Guid a, Guid b) =>
+    public static (long, long) Key(long a, long b) =>
         a.CompareTo(b) <= 0 ? (a, b) : (b, a);
 
     private sealed class PairEvidence(WorkMediaType mediaType, int? yearA, int? yearB)

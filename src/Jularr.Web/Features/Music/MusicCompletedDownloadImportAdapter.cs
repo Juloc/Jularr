@@ -80,7 +80,7 @@ public sealed class MusicCompletedDownloadImportAdapter(
         }
 
         var workId = MusicRequestPayload.Of(acquisition).WorkId;
-        var album = await LoadAlbumAsync(workId == Guid.Empty ? null : workId, acquisition.ExternalId, cancellationToken);
+        var album = await LoadAlbumAsync(workId == 0 ? null : workId, acquisition.ExternalId, cancellationToken);
         if (album is null)
         {
             return CompletedDownloadImportResult.Failed("The requested album no longer exists.");
@@ -309,7 +309,7 @@ public sealed class MusicCompletedDownloadImportAdapter(
         return new AlbumPlacement(plan.Length, folder, null);
     }
 
-    private async Task<KnownAlbum?> LoadAlbumAsync(Guid? workId, string releaseGroupId, CancellationToken cancellationToken)
+    private async Task<KnownAlbum?> LoadAlbumAsync(long? workId, string releaseGroupId, CancellationToken cancellationToken)
     {
         var query = from album in db.MusicAlbums.AsNoTracking()
                     join artist in db.MusicArtists.AsNoTracking() on album.ArtistId equals artist.Id
@@ -319,7 +319,7 @@ public sealed class MusicCompletedDownloadImportAdapter(
         return await query.FirstOrDefaultAsync(cancellationToken);
     }
 
-    private sealed record KnownAlbum(Guid WorkId, string Title, string Artist, int? Year);
+    private sealed record KnownAlbum(long WorkId, string Title, string Artist, int? Year);
 
     private sealed record AlbumPlacement(int Placed, string Folder, string? Rejection);
 }

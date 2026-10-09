@@ -116,6 +116,7 @@ public sealed class ManagerAdminPagesRenderTests
         var artist = new MusicArtist { Name = "Daft Punk", SortName = "Daft Punk", MusicBrainzId = "056e4f3e-d505-4dad-8ec1-d04f521cbb56", LastRefreshedAt = DateTime.UtcNow };
         var work = new Work { MediaType = WorkMediaType.Music, CanonicalTitle = "Homework", Year = 1997 };
         db.AddRange(artist, work);
+        await db.SaveChangesAsync();
         db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, MusicBrainzReleaseGroupId = "rg-hw", ReleaseDate = new DateTime(1997, 1, 20, 0, 0, 0, DateTimeKind.Utc) });
         db.WorkTracks.Add(new WorkTrack { WorkId = work.Id, Number = 1, Title = "Daftendirekt" });
         await db.SaveChangesAsync();

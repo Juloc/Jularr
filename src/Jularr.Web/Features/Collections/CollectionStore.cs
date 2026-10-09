@@ -92,7 +92,7 @@ public sealed class CollectionStore(AppDbContext db)
             .ToListAsync(cancellationToken);
 
     /// <summary>Adds a work to a manual collection at the end, ignoring a duplicate.</summary>
-    public async Task<bool> AddManualItemAsync(Guid collectionId, Guid workId, CancellationToken cancellationToken)
+    public async Task<bool> AddManualItemAsync(Guid collectionId, long workId, CancellationToken cancellationToken)
     {
         var exists = await db.CollectionItems
             .AnyAsync(x => x.CollectionId == collectionId && x.WorkId == workId, cancellationToken);
@@ -118,7 +118,7 @@ public sealed class CollectionStore(AppDbContext db)
         return true;
     }
 
-    public async Task<bool> RemoveItemAsync(Guid collectionId, Guid workId, CancellationToken cancellationToken)
+    public async Task<bool> RemoveItemAsync(Guid collectionId, long workId, CancellationToken cancellationToken)
     {
         var item = await db.CollectionItems
             .FirstOrDefaultAsync(x => x.CollectionId == collectionId && x.WorkId == workId, cancellationToken);
@@ -133,7 +133,7 @@ public sealed class CollectionStore(AppDbContext db)
     }
 
     /// <summary>Applies an explicit ordering to a manual collection; unknown works are ignored.</summary>
-    public async Task ReorderAsync(Guid collectionId, IReadOnlyList<Guid> orderedWorkIds, CancellationToken cancellationToken)
+    public async Task ReorderAsync(Guid collectionId, IReadOnlyList<long> orderedWorkIds, CancellationToken cancellationToken)
     {
         var items = await db.CollectionItems
             .Where(x => x.CollectionId == collectionId)
@@ -160,7 +160,7 @@ public sealed class CollectionStore(AppDbContext db)
     /// </summary>
     public async Task ReplaceSmartItemsAsync(
         Guid collectionId,
-        IReadOnlyList<(Guid WorkId, string Reason)> members,
+        IReadOnlyList<(long WorkId, string Reason)> members,
         DateTime materializedAt,
         CancellationToken cancellationToken)
     {

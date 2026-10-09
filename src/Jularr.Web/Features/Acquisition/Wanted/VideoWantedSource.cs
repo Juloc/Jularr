@@ -14,7 +14,7 @@ public sealed class VideoWantedSource(MediaAcquisitionKind kind, WantedReconcile
     {
         await wanted.ReconcileAllIfDueAsync(cancellationToken);
         var opened = 0;
-        var after = Guid.Empty;
+        var after = 0L;
         while (opened < WantedAcquisitionService.MaxRequestsPerKindPerPass)
         {
             var works = await wanted.WorksWithoutOpenRequestAsync(kind, after, PageSize, cancellationToken);

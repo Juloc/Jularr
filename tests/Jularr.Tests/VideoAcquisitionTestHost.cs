@@ -118,6 +118,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
             Year = year
         };
         db.Works.Add(work);
+        await db.SaveChangesAsync();
         db.WorkExternalIdentities.Add(new WorkExternalIdentity
         {
             WorkId = work.Id,
@@ -306,6 +307,7 @@ internal sealed class VideoAcquisitionTestHost : IAsyncDisposable
     {
         var work = new Work { MediaType = Work.MediaType, CanonicalTitle = title, Year = year };
         Environment.Db.Works.Add(work);
+        await Environment.Db.SaveChangesAsync();
         Environment.Db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = work.Id, MediaType = work.MediaType, Provider = "tmdb", ExternalId = tmdbId, IsPrimary = true, Evidence = "test" });
         await Environment.Db.SaveChangesAsync();
         return work;

@@ -34,7 +34,7 @@ public enum MusicAlbumState
 public sealed record MusicArtistRow(Guid Id, string Name, MusicMonitorMode Monitor, int Albums, int Monitored, int Available, DateTime? LastRefreshedAt);
 
 public sealed record MusicAlbumRow(
-    Guid WorkId,
+    long WorkId,
     string Title,
     int? Year,
     MusicAlbumType Type,
@@ -103,7 +103,7 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests,
         return new MusicArtistView(artist, await ToRowsAsync(albums, cancellationToken), ModeOf(await MonitoredArtistIdsAsync(cancellationToken), artistId));
     }
 
-    public async Task<MusicAlbumView?> GetAlbumAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<MusicAlbumView?> GetAlbumAsync(long workId, CancellationToken cancellationToken)
     {
         var row = await (
                 from detail in db.MusicAlbums.AsNoTracking()
@@ -132,7 +132,7 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests,
         return new MusicAlbumView(album, row.Artist, row.Base.GroupId, tracks, request?.Id, request?.Status);
     }
 
-    private IQueryable<Guid> AlbumsWithFiles() =>
+    private IQueryable<long> AlbumsWithFiles() =>
         db.MediaAssets.AsNoTracking()
             .Where(asset => asset.Kind == MediaAssetKind.Audio && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id))
             .Select(asset => asset.WorkId);
@@ -187,7 +187,7 @@ public sealed class MusicQuery(AppDbContext db, AcquisitionAccessStore requests,
         };
     }
 
-    private sealed record AlbumBase(Guid WorkId, string Title, int? Year, MusicAlbumType Type, DateTime? ReleaseDate, string? GroupId);
+    private sealed record AlbumBase(long WorkId, string Title, int? Year, MusicAlbumType Type, DateTime? ReleaseDate, string? GroupId);
 }
 
 /// <summary>How the Admin and the Library pages say what state an album is in, so both read the same derived state the same way.</summary>

@@ -28,7 +28,7 @@ public sealed class PlaybackTelemetryTests
     private static PlaybackStreamSession NewSession(PlaybackStreamSessionStore store) =>
         store.Create(
             Reader,
-            Guid.NewGuid(),
+            new PlaybackVideoTarget(1, Guid.NewGuid()),
             Guid.NewGuid(),
             "/media/episode.mkv",
             1400,
@@ -261,6 +261,7 @@ public sealed class PlaybackTelemetryTests
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();
         var media = await fixture.AddMediaAsync("episode.mkv", new byte[4096]);
+        await fixture.BridgeEpisodeAsync(media);
         fixture.Runner.Returns(media.Path, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
         var clock = new ManualTimeProvider(s_start);
         var store = new PlaybackStreamSessionStore(clock);
@@ -291,7 +292,7 @@ public sealed class PlaybackTelemetryTests
         Assert.AreEqual(PlaybackLimitSource.Network, calm!.Plan.Quality.LimitSource, "What the player reported wins over a stale hint of the request.");
 
         // The evidence of another title's session says nothing about this one: the request's own hint decides.
-        var otherTitle = store.Create(Reader, new PlaybackVideoTarget(Guid.NewGuid(), null), Guid.NewGuid(), media.Path, 1400, first.Plan, firstSession.Selections);
+        var otherTitle = store.Create(Reader, new PlaybackVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), null), Guid.NewGuid(), media.Path, 1400, first.Plan, firstSession.Selections);
         store.ReportTelemetry(otherTitle.Id, Reader, Report(Update(sequence: 1, buffer: 40, stalls: 0), clock.GetUtcNow()));
         var foreign = await service.PlanAsync(media.EpisodeId!.Value, Reader, remote with { ReplacesSessionId = otherTitle.Id, Network = new PlaybackNetworkReport(ThroughputKbps: 20_000, RecentStalls: 4) }, CancellationToken.None);
         Assert.AreEqual(PlaybackLimitSource.Stalls, foreign!.Plan.Quality.LimitSource, "The hint's stalls are used because the replaced session belonged to another title.");

@@ -143,7 +143,7 @@ public sealed class InstantPlayIntentTests
         await host.Environment.Db.SaveChangesAsync();
         var intents = Intents(host);
 
-        foreach (var (workId, episodeId) in new (Guid, Guid?)[] { (Guid.NewGuid(), null), (host.Work.Id, Guid.NewGuid()), (host.Work.Id, foreign.Id) })
+        foreach (var (workId, episodeId) in new (long, Guid?)[] { (Random.Shared.NextInt64(1, long.MaxValue), null), (host.Work.Id, Guid.NewGuid()), (host.Work.Id, foreign.Id) })
         {
             Assert.AreEqual(PlaybackIntentOutcome.TargetNotFound, (await intents.StartAsync(workId, episodeId, CancellationToken.None)).Outcome);
         }
@@ -373,7 +373,7 @@ public sealed class InstantPlayIntentTests
     {
         await using var host = await SeriesHostAsync();
         await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year));
-        await host.Get<MonitoringCommands>().SetAsync(MonitoringTargetKind.Work, host.Work.Id, false, CancellationToken.None);
+        await host.Get<MonitoringCommands>().SetWorkAsync(host.Work.Id, false, CancellationToken.None);
 
         var result = await Intents(host).StartAsync(host.Work.Id, host.SecondEpisodeId, CancellationToken.None);
 
@@ -627,7 +627,7 @@ public sealed class InstantPlayIntentTests
     public void ALapsedMarkerNeitherPrioritizesNorCoversItsEpisode()
     {
         var episode = Guid.NewGuid();
-        var payload = new VideoRequestPayload(Guid.NewGuid(), "T", 2020);
+        var payload = new VideoRequestPayload(Random.Shared.NextInt64(1, long.MaxValue), "T", 2020);
         var live = payload with { PlaybackMarkers = [Marker(episode, at: DateTime.UtcNow)] };
         var lapsed = payload with { PlaybackMarkers = [Marker(episode, at: DateTime.UtcNow - VideoRequestPayload.PlaybackTtl - TimeSpan.FromSeconds(1))] };
 

@@ -143,7 +143,7 @@ public sealed class AcquisitionProfilePolicyTests
             var restricted = baseline with { Id = "restricted", Name = "Restricted", SourcePolicy = new AcquisitionSourcePolicy([Guid.NewGuid()], []) };
             await store.UpsertAsync(waiting);
             await store.UpsertAsync(restricted);
-            var work = Guid.NewGuid();
+            var work = Random.Shared.NextInt64(1, long.MaxValue);
 
             var before = await store.ResolveAsync(kind, work);
             await store.SetKindDefaultAsync(kind, "waits");

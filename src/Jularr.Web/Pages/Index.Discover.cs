@@ -370,7 +370,7 @@ public sealed partial class IndexModel
     {
         // Only the titles on the page are read: a few anime by their legacy record, a few movies and series by their Work.
         Guid[] animeIds = [.. LocalIds(items, "anime")];
-        Guid[] videoIds = [.. LocalIds(items, "movie").Concat(LocalIds(items, "tv"))];
+        long[] videoIds = [.. items.Where(item => item.IsLocal && item.Category is "movie" or "tv" && item.LocalWorkId is not null).Select(item => item.LocalWorkId!.Value).Distinct()];
         if (animeIds.Length == 0 && videoIds.Length == 0)
         {
             return new Dictionary<string, DiscoverLocalFacts>();

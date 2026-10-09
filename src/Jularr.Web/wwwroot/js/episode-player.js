@@ -20,7 +20,7 @@
     // A Movie or Series page plays a canonical target (a Work, or a WorkEpisode within it): the plan, progress and
     // bootstrap routes then take that target in the request body instead of a legacy episode id in the address.
     const videoTarget = root.dataset.videoTargetWork
-        ? { workId: root.dataset.videoTargetWork, workEpisodeId: root.dataset.videoTargetEpisode || null }
+        ? { workId: Number(root.dataset.videoTargetWork), workEpisodeId: root.dataset.videoTargetEpisode || null }
         : null;
     const targetBody = videoTarget ? { target: videoTarget } : {};
     const persistedResumeSeconds = Number(root.dataset.resumeSeconds);

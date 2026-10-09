@@ -540,7 +540,7 @@ public sealed class AdminDashboardPageRenderTests
 
             Sessions.Create(
                 "lisa",
-                episode.Id,
+                new PlaybackVideoTarget(1, episode.Id),
                 Guid.NewGuid(),
                 "/media/dandadan.mkv",
                 1450,

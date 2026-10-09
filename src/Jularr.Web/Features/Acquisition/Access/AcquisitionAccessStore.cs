@@ -478,7 +478,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             Add(command, "@now", now);
             Add(command, "@decidedBy", decidedByProfileId);
             Add(command, "@decidedAt", request.DecidedAt);
-            Add(command, "@workId", request.WorkId?.ToString());
+            Add(command, "@workId", request.WorkId);
             try
             {
                 await command.ExecuteNonQueryAsync(cancellationToken);
@@ -498,13 +498,13 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
     /// Binds a request to its canonical Work once. A request that already has a Work keeps it (the condition is in the statement, so two
     /// concurrent passes cannot overwrite each other); returns whether this call set it.
     /// </summary>
-    public async Task<bool> BindWorkAsync(Guid id, Guid workId, CancellationToken cancellationToken) =>
+    public async Task<bool> BindWorkAsync(Guid id, long workId, CancellationToken cancellationToken) =>
         await WithConnectionAsync(async connection =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText = """UPDATE "AcquisitionRequests" SET "WorkId" = @workId WHERE "Id" = @id AND "WorkId" IS NULL;""";
             Add(command, "@id", id.ToString());
-            Add(command, "@workId", workId.ToString());
+            Add(command, "@workId", workId);
             return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
         }, cancellationToken);
 
@@ -658,7 +658,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                     ParseDate(reader.GetString(14)),
                     NullableString(reader, 15),
                     NullableString(reader, 16) is { } decided ? ParseDate(decided) : null,
-                    NullableString(reader, 17) is { } work ? Guid.Parse(work) : null));
+                    reader.IsDBNull(17) ? null : reader.GetInt64(17)));
             }
 
             return rows;

@@ -14,7 +14,7 @@ public sealed record AudiobookFileInput(
     long? DurationMs = null);
 
 /// <summary>The audiobook a completed download resolved to and the universal work it is bridged to.</summary>
-public sealed record AudiobookLibraryEntry(Audiobook Audiobook, Guid WorkId);
+public sealed record AudiobookLibraryEntry(Audiobook Audiobook, long WorkId);
 
 /// <summary>
 /// Creates and resolves first-class <see cref="Audiobook"/> records (with their <see cref="AudiobookFile"/>
@@ -39,7 +39,7 @@ public sealed class AudiobookLibraryService(
         string? libraryPath,
         IReadOnlyList<AudiobookFileInput> files,
         CancellationToken cancellationToken,
-        Guid? requestedWorkId = null)
+        long? requestedWorkId = null)
     {
         if (instanceModules is not null
             && !await instanceModules.IsEnabledAsync(

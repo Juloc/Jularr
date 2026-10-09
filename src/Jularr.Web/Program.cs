@@ -930,6 +930,7 @@ static async Task InitializeDatabaseAsync(
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
     await DatabaseMigrationBridge.UpgradeAsync(db, log: log);
+    await WorkIdMigrationFollowUp.RunAsync(db, scope.ServiceProvider.GetRequiredService<QualityProfileStore>(), log);
 
 
     if (await db.LibraryRoots.AnyAsync())

@@ -38,14 +38,14 @@ internal static class MonitoringTestSupport
     }
 
     /// <summary>The Music Works the canonical Monitoring state currently wants.</summary>
-    public static async Task<IReadOnlyList<Guid>> MonitoredMusicAsync(AppDbContext db) =>
-        await Resolver(db).MonitoredWorkIdsAsync(WorkMediaType.Music, Guid.Empty, int.MaxValue, CancellationToken.None);
+    public static async Task<IReadOnlyList<long>> MonitoredMusicAsync(AppDbContext db) =>
+        await Resolver(db).MonitoredWorkIdsAsync(WorkMediaType.Music, 0, int.MaxValue, CancellationToken.None);
 
     /// <summary>The payload of a request that still carries what its requester chose to monitor (applied when the request first runs).</summary>
-    public static VideoRequestPayload Choosing(Guid workId, string title, int? year, VideoRequestScope scope, IReadOnlyCollection<Guid>? episodes = null, bool future = false, IReadOnlyCollection<Guid>? seasons = null) =>
+    public static VideoRequestPayload Choosing(long workId, string title, int? year, VideoRequestScope scope, IReadOnlyCollection<Guid>? episodes = null, bool future = false, IReadOnlyCollection<Guid>? seasons = null) =>
         new(workId, title, year) { Requested = new VideoRequestScopeChoice(scope, seasons ?? [], episodes ?? [], future) };
 
     /// <summary>Applies a choice as monitoring decisions of the Work right away, the way the first run of a request does.</summary>
-    public static Task ApplyAsync(AppDbContext db, Guid workId, VideoRequestScope scope, IReadOnlyCollection<Guid>? episodes = null, bool future = false, IReadOnlyCollection<Guid>? seasons = null) =>
+    public static Task ApplyAsync(AppDbContext db, long workId, VideoRequestScope scope, IReadOnlyCollection<Guid>? episodes = null, bool future = false, IReadOnlyCollection<Guid>? seasons = null) =>
         Scopes(db).ApplyAsync(workId, new VideoRequestScopeChoice(scope, seasons ?? [], episodes ?? [], future), CancellationToken.None);
 }

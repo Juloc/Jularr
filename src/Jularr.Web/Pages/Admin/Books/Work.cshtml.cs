@@ -42,7 +42,7 @@ public sealed class WorkModel(
 
     private string? providerProblem;
 
-    public async Task<IActionResult> OnGetAsync(Guid workId, bool find, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(long workId, bool find, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         if (await query.GetAsync(workId, cancellationToken) is not { } view)
@@ -68,13 +68,13 @@ public sealed class WorkModel(
         return Page();
     }
 
-    public async Task<IActionResult> OnPostMonitorAsync(Guid workId, bool audiobook, bool monitored, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostMonitorAsync(long workId, bool audiobook, bool monitored, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var changed = audiobook
-            ? await monitoring.SetAudiobookAsync(workId, monitored, cancellationToken)
-            : await monitoring.SetAsync(MonitoringTargetKind.Work, workId, monitored, cancellationToken);
-        if (changed is null)
+            ? await monitoring.SetAudiobookAsync(workId, monitored, cancellationToken) is not null
+            : await monitoring.SetWorkAsync(workId, monitored, cancellationToken);
+        if (!changed)
         {
             return NotFound();
         }
@@ -84,7 +84,7 @@ public sealed class WorkModel(
         return RedirectToPage(new { workId });
     }
 
-    public async Task<IActionResult> OnPostUseMetadataAsync(Guid workId, string provider, string externalId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostUseMetadataAsync(long workId, string provider, string externalId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         try
@@ -105,7 +105,7 @@ public sealed class WorkModel(
         return RedirectToPage(new { workId });
     }
 
-    public async Task<IActionResult> OnPostRequestAudiobookAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostRequestAudiobookAsync(long workId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         if (await query.GetAsync(workId, cancellationToken) is not { } view || await query.IdentityAsync(workId, cancellationToken) is not var (provider, externalId))

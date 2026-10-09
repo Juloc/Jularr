@@ -153,13 +153,13 @@ public sealed class LibriVoxClient(HttpClient httpClient, ProviderExecutor execu
 /// </summary>
 public sealed class AudiobookMetadataService(AppDbContext db, IEnumerable<IAudiobookMetadataProvider> providers)
 {
-    public async Task<IReadOnlyList<AudiobookCandidate>> FindAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AudiobookCandidate>> FindAsync(long workId, CancellationToken cancellationToken)
     {
         var title = await db.Works.AsNoTracking().Where(work => work.Id == workId && work.MediaType == WorkMediaType.Book).Select(work => work.CanonicalTitle).FirstOrDefaultAsync(cancellationToken);
         return title is null ? [] : [.. (await Task.WhenAll(providers.Select(provider => provider.SearchAsync(title, cancellationToken)))).SelectMany(found => found)];
     }
 
-    public async Task<AudiobookEditionMetadata?> AttachAsync(Guid workId, string provider, string externalId, CancellationToken cancellationToken)
+    public async Task<AudiobookEditionMetadata?> AttachAsync(long workId, string provider, string externalId, CancellationToken cancellationToken)
     {
         var source = providers.FirstOrDefault(item => item.Key == provider);
         if (source is null || !await db.Works.AnyAsync(work => work.Id == workId && work.MediaType == WorkMediaType.Book, cancellationToken) || await source.GetAsync(externalId, cancellationToken) is not { } candidate)
@@ -186,7 +186,7 @@ public sealed class AudiobookMetadataService(AppDbContext db, IEnumerable<IAudio
         return metadata;
     }
 
-    public async Task<AudiobookEditionMetadata?> GetAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<AudiobookEditionMetadata?> GetAsync(long workId, CancellationToken cancellationToken) =>
         await (from edition in db.WorkEditions.AsNoTracking()
                join metadata in db.AudiobookEditionMetadata.AsNoTracking() on edition.Id equals metadata.EditionId
                where edition.WorkId == workId && edition.EditionKey == LegacyWorkBridge.AudiobookEditionKey

@@ -65,7 +65,7 @@ public sealed class CollectionItem
 
     public Guid CollectionId { get; set; }
 
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public CollectionItemSource Source { get; set; }
 

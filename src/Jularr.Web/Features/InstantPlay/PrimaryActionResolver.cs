@@ -60,7 +60,7 @@ public enum PrimaryActionReason
 /// playback intent. <see cref="RequestIsAlternative"/> is set while a playback intent is the primary action of a missing target and the
 /// profile may still ask for it through the explicit Request action instead, which stays the one consumer acquisition action (section 12).
 /// </summary>
-public sealed record PrimaryAction(PrimaryActionKind Kind, PrimaryActionReason Reason, Guid WorkId, Guid? WorkEpisodeId, bool TargetIsLocal = false, bool IsRewatch = false, bool RequestIsAlternative = false);
+public sealed record PrimaryAction(PrimaryActionKind Kind, PrimaryActionReason Reason, long WorkId, Guid? WorkEpisodeId, bool TargetIsLocal = false, bool IsRewatch = false, bool RequestIsAlternative = false);
 
 /// <summary>
 /// What the instance, the profile and the policy allow for one media type: the capability chain of the Instant Play contract
@@ -114,14 +114,14 @@ public sealed record OpenRequestFacts(
 
 /// <summary>The canonical facts about one Movie or Series Work and one profile that the primary action depends on.</summary>
 /// <param name="HasRequestIdentity">The provider identifies the title, so it can be requested.</param>
-public abstract record PlaybackFacts(Guid WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest);
+public abstract record PlaybackFacts(long WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest);
 
 /// <param name="IsReleased">Not announced for a later year: the only release knowledge a Work has is its year, so a movie of the current year counts as released.</param>
-public sealed record MoviePlaybackFacts(Guid WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest, bool HasMedia, MediaProgressSnapshot? Progress, bool IsReleased = true)
+public sealed record MoviePlaybackFacts(long WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest, bool HasMedia, MediaProgressSnapshot? Progress, bool IsReleased = true)
     : PlaybackFacts(WorkId, HasRequestIdentity, OpenRequest);
 
 public sealed record SeriesPlaybackFacts(
-    Guid WorkId,
+    long WorkId,
     bool HasRequestIdentity,
     OpenRequestFacts? OpenRequest,
     IReadOnlyList<SeriesUnit> Units,

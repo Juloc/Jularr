@@ -335,9 +335,7 @@ public sealed class ReleaseCalendarTests
 
     private static WorkMonitoringView View(bool workMonitored, Dictionary<(int, int), bool>? episodes = null)
     {
-        var workId = Guid.NewGuid();
-        var decisions = new Dictionary<Guid, MonitoringDecision> { [workId] = new(MonitoringTargetKind.Work, workMonitored) };
-        return new WorkMonitoringView(workId, decisions, relationMonitored: false, new NumberedDecisions(episodes ?? [], new Dictionary<int, bool>()));
+        return new WorkMonitoringView(7, workMonitored, new Dictionary<Guid, MonitoringDecision>(), relationMonitored: false, new NumberedDecisions(episodes ?? [], new Dictionary<int, bool>()));
     }
 
     [TestMethod]

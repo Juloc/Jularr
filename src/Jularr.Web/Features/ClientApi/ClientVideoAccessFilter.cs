@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Shell;
@@ -40,10 +41,10 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
             })
             .FirstOrDefault(target => target is not null)
             ?? (http.Items[ClientPlaybackIntentBodyFilter.ItemKey] as ClientPlaybackIntentRequest)?.Target;
-        var queryWorkId = Guid.TryParse(http.Request.Query["workId"], out var parsed) ? parsed : (Guid?)null;
+        var queryWorkId = long.TryParse(http.Request.Query["workId"], NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : (long?)null;
         if (bodyTarget is not null || queryWorkId is not null)
         {
-            if (bodyTarget is { IsValid: false } || queryWorkId == Guid.Empty)
+            if (bodyTarget is { IsValid: false } || queryWorkId == 0)
             {
                 return (false, null, false);
             }
@@ -68,7 +69,7 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
             where stored.Id == mediaFileId
             join asset in db.MediaAssets.AsNoTracking() on stored.MediaAssetId equals (Guid?)asset.Id into assets
             from asset in assets.DefaultIfEmpty()
-            join work in db.Works.AsNoTracking() on (Guid?)asset.WorkId equals (Guid?)work.Id into works
+            join work in db.Works.AsNoTracking() on (long?)asset.WorkId equals (long?)work.Id into works
             from work in works.DefaultIfEmpty()
             select new { MediaType = (WorkMediaType?)work.MediaType, IsAnime = work.IsAnime, IsLegacy = stored.EpisodeId != null })
             .SingleOrDefaultAsync(cancellationToken);

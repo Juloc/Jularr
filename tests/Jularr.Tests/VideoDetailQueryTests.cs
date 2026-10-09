@@ -111,7 +111,7 @@ public sealed class VideoDetailQueryTests
 
         Assert.IsNotNull(await Query(fixture.Db).GetAsync(Alice, movie.Id, WorkMediaType.Movie, AllVideo, CancellationToken.None));
         Assert.IsNull(await Query(fixture.Db).GetAsync(Alice, movie.Id, WorkMediaType.Series, AllVideo, CancellationToken.None));
-        Assert.IsNull(await Query(fixture.Db).GetAsync(Alice, Guid.NewGuid(), WorkMediaType.Movie, AllVideo, CancellationToken.None));
+        Assert.IsNull(await Query(fixture.Db).GetAsync(Alice, Random.Shared.NextInt64(1, long.MaxValue), WorkMediaType.Movie, AllVideo, CancellationToken.None));
     }
 
     [TestMethod]

@@ -65,15 +65,15 @@ public sealed class AnimeClassificationTests
         db.WorkSourceLinks.Add(new WorkSourceLink { WorkId = series.Id, SourceKind = WorkSourceKind.Anime, SourceId = Guid.NewGuid() });
         db.WorkEpisodes.Add(new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 1 });
         await db.SaveChangesAsync();
-        await MonitoringTestSupport.Commands(db).SetAsync(MonitoringTargetKind.Work, series.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(db).SetWorkAsync(series.Id, true, CancellationToken.None);
 
         var on = new WantedReconciler(db, TimeProvider.System, modules: await ModulesAsync(true));
         await on.ReconcileAsync(series.Id, CancellationToken.None);
-        CollectionAssert.AreEqual(new[] { series.Id }, (await on.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Anime, Guid.Empty, 10, CancellationToken.None)).ToArray());
-        Assert.IsEmpty(await on.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Tv, Guid.Empty, 10, CancellationToken.None), "The Series kind leaves it to Anime while Anime runs.");
+        CollectionAssert.AreEqual(new[] { series.Id }, (await on.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Anime, 0, 10, CancellationToken.None)).ToArray());
+        Assert.IsEmpty(await on.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Tv, 0, 10, CancellationToken.None), "The Series kind leaves it to Anime while Anime runs.");
 
         var off = new WantedReconciler(db, TimeProvider.System, modules: await ModulesAsync(false));
-        CollectionAssert.AreEqual(new[] { series.Id }, (await off.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Tv, Guid.Empty, 10, CancellationToken.None)).ToArray(), "With Anime off the same Work is carried as a Series; its wanted episodes were kept.");
+        CollectionAssert.AreEqual(new[] { series.Id }, (await off.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Tv, 0, 10, CancellationToken.None)).ToArray(), "With Anime off the same Work is carried as a Series; its wanted episodes were kept.");
     }
 
     [TestMethod]
@@ -129,10 +129,11 @@ public sealed class AnimeClassificationTests
             $"""INSERT INTO "WorkExternalIdentities" ("Id", "WorkId", "MediaType", "Provider", "ExternalId", "IsPrimary", "Confidence", "Evidence", "IsManualOverride", "ReviewState", "CreatedAt", "UpdatedAt") VALUES ({Guid.NewGuid()}, {work}, 2, 'anilist', '154587', TRUE, 1, 'test', FALSE, 1, {now}, {now})""");
 
         await db.Database.MigrateAsync();
+        var workNumber = await WorkNumberMap.OfAsync(db, work);
 
-        var row = await db.Works.AsNoTracking().SingleAsync(item => item.Id == work);
+        var row = await db.Works.AsNoTracking().SingleAsync(item => item.Id == workNumber);
         Assert.AreEqual((WorkMediaType.Series, true), (row.MediaType, row.IsAnime));
-        Assert.AreEqual(1, await db.WorkExternalIdentities.CountAsync(identity => identity.WorkId == work && identity.Provider == "anilist"), "The AniList identity keeps its own namespace.");
-        Assert.IsTrue(await db.WorkFieldProvenance.AnyAsync(item => item.WorkId == work && item.FieldKey == "classification.anime"));
+        Assert.AreEqual(1, await db.WorkExternalIdentities.CountAsync(identity => identity.WorkId == workNumber && identity.Provider == "anilist"), "The AniList identity keeps its own namespace.");
+        Assert.IsTrue(await db.WorkFieldProvenance.AnyAsync(item => item.WorkId == workNumber && item.FieldKey == "classification.anime"));
     }
 }

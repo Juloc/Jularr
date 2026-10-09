@@ -12,7 +12,7 @@ public sealed class MusicRequestDrafter(AppDbContext db) : IWantedRequestDrafter
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Music;
 
-    public async Task<WantedRequestDraft?> DraftAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<WantedRequestDraft?> DraftAsync(long workId, CancellationToken cancellationToken)
     {
         var album = await (
                 from a in db.MusicAlbums.AsNoTracking()

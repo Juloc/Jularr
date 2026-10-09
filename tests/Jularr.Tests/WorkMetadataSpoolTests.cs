@@ -352,7 +352,7 @@ public sealed class WorkMetadataSpoolTests
         await fixture.Queue.RequestMetadataRefreshAsync(library.Id, interactive: true, CancellationToken.None);
 
         var lease = TimeSpan.FromMinutes(10);
-        var order = new List<Guid>();
+        var order = new List<long>();
         while (await fixture.Store.ClaimNextDueAsync([WorkMediaType.Movie, WorkMediaType.Series], now, lease, WorkMetadataRefresher.BaseBackoff, WorkMetadataRefresher.MaxBackoff, CancellationToken.None) is { } claim)
         {
             order.Add(claim.WorkId);

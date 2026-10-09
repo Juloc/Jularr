@@ -33,7 +33,7 @@ public sealed class RequestProfileAssignment(QualityProfileStore profiles, Reque
         return RequestProfileResult.Assigned;
     }
 
-    private async Task<Guid?> WorkOfAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    private async Task<long?> WorkOfAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
         if (RequestWorkBinder.Applies(request.Kind))
         {

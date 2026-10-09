@@ -13,7 +13,7 @@ public interface IWantedRequestDrafter
 {
     MediaAcquisitionKind Kind { get; }
 
-    Task<WantedRequestDraft?> DraftAsync(Guid workId, CancellationToken cancellationToken);
+    Task<WantedRequestDraft?> DraftAsync(long workId, CancellationToken cancellationToken);
 }
 
 // The provider identity a request is made with when its executor needs nothing more than the title.
@@ -21,7 +21,7 @@ public sealed class IdentityRequestDrafter(MediaAcquisitionKind kind, AppDbConte
 {
     public MediaAcquisitionKind Kind => kind;
 
-    public async Task<WantedRequestDraft?> DraftAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<WantedRequestDraft?> DraftAsync(long workId, CancellationToken cancellationToken)
     {
         var type = WantedReconciler.WorkTypeOf(kind);
         var identity = await (
@@ -48,7 +48,7 @@ public sealed class WantedRequestSource(MediaAcquisitionKind kind, WantedReconci
     {
         await wanted.ReconcileAllIfDueAsync(cancellationToken);
         var created = 0;
-        var after = Guid.Empty;
+        var after = 0L;
         while (created < WantedAcquisitionService.MaxRequestsPerKindPerPass)
         {
             var works = await wanted.WorksWithoutOpenRequestAsync(kind, after, PageSize, cancellationToken);

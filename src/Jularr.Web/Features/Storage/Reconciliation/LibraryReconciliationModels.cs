@@ -110,7 +110,7 @@ public sealed class LibraryReconciliationPlanItem
     public DateTime? ObservedLastWriteTimeUtc { get; set; }
 
     /// <summary>Explicitly chosen canonical work; descendants derive a folder default without duplicating this direct choice.</summary>
-    public Guid? AssignedWorkId { get; set; }
+    public long? AssignedWorkId { get; set; }
 
     /// <summary>Explicitly chosen canonical episode for one media file; folder defaults never infer a file-level unit.</summary>
     public Guid? AssignedWorkEpisodeId { get; set; }
@@ -174,7 +174,7 @@ public sealed class LibraryReconciliationFileLink
 
     public Guid LibraryRootId { get; set; }
 
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public Guid? WorkEpisodeId { get; set; }
 
@@ -246,7 +246,7 @@ public sealed record LibraryReconciliationScanResult(
 }
 
 /// <summary>One canonical work result an admin may explicitly select while mapping a reconciliation plan.</summary>
-public sealed record LibraryReconciliationWorkCandidate(Guid Id, string Title, int? Year);
+public sealed record LibraryReconciliationWorkCandidate(long Id, string Title, int? Year);
 
 /// <summary>One existing canonical episode available for explicit selection after a reconciliation file has an effective work.</summary>
 public sealed record LibraryReconciliationEpisodeCandidate(Guid Id, int SeasonNumber, int EpisodeNumber, bool IsSpecial, string? Title, bool IsAssigned);
@@ -264,7 +264,7 @@ public sealed record LibraryReconciliationEditionCandidate(Guid Id, string Editi
 public sealed record LibraryReconciliationVersionCandidate(Guid Id, string VersionKey, string? UnitKey, string? Quality, string? Source, bool IsAssigned);
 
 /// <summary>The effective work of one plan entry, including whether it is inherited from an explicitly mapped parent folder.</summary>
-public sealed record LibraryReconciliationResolvedWork(Guid Id, string Title, int? Year, bool IsInherited, string SourcePath);
+public sealed record LibraryReconciliationResolvedWork(long Id, string Title, int? Year, bool IsInherited, string SourcePath);
 
 /// <summary>One enabled configured library root available as the bounded starting point for a reconciliation plan.</summary>
 public sealed record LibraryReconciliationRoot(Guid Id, string Name);
@@ -273,7 +273,7 @@ public sealed record LibraryReconciliationRoot(Guid Id, string Name);
 public sealed record LibraryReconciliationPlanReview(LibraryReconciliationPlan Plan, string LibraryRootName, IReadOnlyList<LibraryReconciliationPlanItem> Items);
 
 /// <summary>Explicit admin mapping of one or more plan entries to an existing canonical work.</summary>
-public sealed record LibraryReconciliationWorkAssignmentRequest(Guid PlanId, IReadOnlyCollection<Guid> ItemIds, Guid WorkId);
+public sealed record LibraryReconciliationWorkAssignmentRequest(Guid PlanId, IReadOnlyCollection<Guid> ItemIds, long WorkId);
 
 public enum LibraryReconciliationWorkAssignmentOutcome
 {

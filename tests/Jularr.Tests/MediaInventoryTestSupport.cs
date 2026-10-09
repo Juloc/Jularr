@@ -130,6 +130,16 @@ internal sealed class MediaInventoryFixture : IAsyncDisposable
         return new MediaInventoryFixture(tempRoot, options, db, root, anime);
     }
 
+    /// <summary>Bridges the media's legacy Episode record to a Work, as the library does for every Anime episode, so the legacy plan route can find the Work to play it under.</summary>
+    public async Task BridgeEpisodeAsync(MediaFile media)
+    {
+        var work = new Jularr.Web.Features.MediaCore.Work { MediaType = Jularr.Web.Features.MediaCore.WorkMediaType.Series, CanonicalTitle = "Bridged" };
+        Db.Works.Add(work);
+        await Db.SaveChangesAsync();
+        Db.WorkSourceLinks.Add(new Jularr.Web.Features.MediaCore.WorkSourceLink { WorkId = work.Id, SourceKind = Jularr.Web.Features.MediaCore.WorkSourceKind.Episode, SourceId = media.EpisodeId!.Value });
+        await Db.SaveChangesAsync();
+    }
+
     public async Task<MediaFile> AddMediaAsync(string fileName, byte[] content)
     {
         var path = Path.GetFullPath(Path.Combine(Root.Path, fileName));

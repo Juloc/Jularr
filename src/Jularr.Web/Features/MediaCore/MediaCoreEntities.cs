@@ -9,7 +9,7 @@ namespace Jularr.Web.Features.MediaCore;
 /// </summary>
 public sealed class Work
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public long Id { get; set; }
 
     /// <summary>The technical type: a video Work is a Movie or a Series, never <see cref="WorkMediaType.Anime"/> (that value is historical).</summary>
     public WorkMediaType MediaType { get; set; }
@@ -42,7 +42,7 @@ public sealed class Work
 public sealed class WorkTitle
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public WorkTitleType TitleType { get; set; }
 
@@ -71,7 +71,7 @@ public sealed class WorkTitle
 public sealed class WorkExternalIdentity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     /// <summary>Provider's media namespace (a provider can use the same id space per media type).</summary>
     public WorkMediaType MediaType { get; set; }
@@ -104,8 +104,8 @@ public sealed class WorkExternalIdentity
 public sealed class WorkRelation
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid FromWorkId { get; set; }
-    public Guid ToWorkId { get; set; }
+    public long FromWorkId { get; set; }
+    public long ToWorkId { get; set; }
 
     public WorkRelationType RelationType { get; set; }
 
@@ -122,7 +122,7 @@ public sealed class WorkRelation
 public sealed class WorkSeason
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     /// <summary>0 for the specials season, 1-based otherwise.</summary>
     public int SeasonNumber { get; set; }
@@ -141,7 +141,7 @@ public sealed class WorkSeason
 public sealed class WorkEpisode
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     /// <summary>Optional link to the owning <see cref="WorkSeason"/>; null when only flat numbering is known.</summary>
     public Guid? SeasonId { get; set; }
@@ -166,7 +166,7 @@ public sealed class WorkEpisode
 public sealed class WorkVolume
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public int Number { get; set; }
 
@@ -202,7 +202,7 @@ public sealed class MusicRecording
 public sealed class WorkTrack
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public int Disc { get; set; } = 1;
 
@@ -222,7 +222,7 @@ public sealed class WorkTrack
 public sealed class WorkChapter
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     /// <summary>Optional owning <see cref="WorkVolume"/>; null for web serialisation without volumes.</summary>
     public Guid? VolumeId { get; set; }
@@ -254,7 +254,7 @@ public enum WorkUnitLocalKind : short
 public sealed class WorkUnitBinding
 {
     public long Id { get; set; }
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
     public WorkUnitLocalKind LocalKind { get; set; }
 
     /// <summary>The id of the local unit (a NovelVolume or MangaChapter id).</summary>
@@ -277,7 +277,7 @@ public sealed class WorkUnitBinding
 public sealed class WorkEdition
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     /// <summary>Deterministic identity of the edition within the work (re-import refreshes, never duplicates).</summary>
     public string EditionKey { get; set; } = "";
@@ -308,7 +308,7 @@ public sealed class WorkEdition
 public sealed class WorkVersion
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     /// <summary>Optional owning <see cref="WorkEdition"/>.</summary>
     public Guid? EditionId { get; set; }
@@ -336,7 +336,7 @@ public sealed class WorkVersion
 public sealed class WorkFieldProvenance
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     /// <summary>Stable field key, e.g. <c>title</c>, <c>originalTitle</c>, <c>year</c>, <c>description</c>, <c>cover</c>.</summary>
     public string FieldKey { get; set; } = "";
@@ -368,7 +368,7 @@ public sealed class WorkFieldProvenance
 public sealed class WorkSourceLink
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public WorkSourceKind SourceKind { get; set; }
 

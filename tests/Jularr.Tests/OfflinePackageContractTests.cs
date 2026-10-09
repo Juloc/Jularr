@@ -10,7 +10,7 @@ public sealed class OfflinePackageContractTests
     {
         var target = new ClientOfflinePackageTarget(
             ClientApiOfflinePackageContract.WorkTarget,
-            WorkId: Guid.NewGuid(),
+            WorkId: Random.Shared.NextInt64(1, long.MaxValue),
             WorkEpisodeId: Guid.NewGuid());
 
         Assert.IsTrue(ClientApiOfflinePackageContract.TryValidateTarget(target, out var validMessage));
@@ -38,7 +38,7 @@ public sealed class OfflinePackageContractTests
     {
         var target = new ClientOfflinePackageTarget(
             ClientApiOfflinePackageContract.WorkTarget,
-            WorkId: Guid.NewGuid(),
+            WorkId: Random.Shared.NextInt64(1, long.MaxValue),
             WorkEpisodeId: Guid.NewGuid(),
             WorkChapterId: Guid.NewGuid());
 

@@ -17,7 +17,7 @@ public sealed class ReadingUnitTests
     private static async Task<(Work Work, Guid NovelId)> NovelAsync(AppDbContext db, string key = "frieren")
     {
         var work = await new WorkService(db).CreateWorkAsync(WorkMediaType.LightNovel, "Frieren", 2020, CancellationToken.None);
-        await MonitoringTestSupport.Commands(db).SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(db).SetWorkAsync(work.Id, true, CancellationToken.None);
         var novel = new NovelWork { SourceProvider = "upload", SourceKey = key, SourceUrl = "u", Title = "Frieren" };
         db.NovelWorks.Add(novel);
         db.WorkSourceLinks.Add(new WorkSourceLink { WorkId = work.Id, SourceKind = WorkSourceKind.NovelWork, SourceId = novel.Id });
@@ -33,13 +33,13 @@ public sealed class ReadingUnitTests
         return volume.Id.ToString();
     }
 
-    private static async Task<List<(WantedTargetKind Kind, Guid Id)>> WantedAsync(AppDbContext db, Work work)
+    private static async Task<List<(WantedTargetKind Kind, Guid? Id)>> WantedAsync(AppDbContext db, Work work)
     {
         await new WantedReconciler(db, TimeProvider.System).ReconcileAsync(work.Id, CancellationToken.None);
         return (await db.WantedItems.AsNoTracking().Where(item => item.WorkId == work.Id).ToListAsync()).Select(item => (item.TargetKind, item.TargetId)).ToList();
     }
 
-    private static async Task<Guid> VolumeIdAsync(AppDbContext db, Guid workId, int number) =>
+    private static async Task<Guid> VolumeIdAsync(AppDbContext db, long workId, int number) =>
         (await db.WorkVolumes.AsNoTracking().SingleAsync(volume => volume.WorkId == workId && volume.Number == number)).Id;
 
     [TestMethod]
@@ -132,7 +132,7 @@ public sealed class ReadingUnitTests
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var work = await new WorkService(db).CreateWorkAsync(WorkMediaType.Manga, "Frieren", 2020, CancellationToken.None);
-        await MonitoringTestSupport.Commands(db).SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(db).SetWorkAsync(work.Id, true, CancellationToken.None);
         var series = Guid.NewGuid();
         db.WorkSourceLinks.Add(new WorkSourceLink { WorkId = work.Id, SourceKind = WorkSourceKind.MangaSeries, SourceId = series });
         await db.SaveChangesAsync();

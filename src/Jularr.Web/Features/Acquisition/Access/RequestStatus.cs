@@ -142,7 +142,7 @@ public sealed class RequestStatusQuery(
         }
 
         return request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
-            ? VideoRequestPayload.Parse(request.PayloadJson) is { WorkId: var workId } && workId != Guid.Empty ? VideoWorkLinks.DetailPath(request.Kind, workId) : null
+            ? VideoRequestPayload.Parse(request.PayloadJson) is { WorkId: var workId } && workId != 0 ? VideoWorkLinks.DetailPath(request.Kind, workId) : null
             : request.LocalResultPath;
     }
 

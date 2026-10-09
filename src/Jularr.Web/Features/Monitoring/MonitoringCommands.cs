@@ -9,10 +9,9 @@ namespace Jularr.Web.Features.Monitoring;
 /// </summary>
 public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
 {
-    // The node table of each kind and the column that names its Work (a Work is its own Work).
+    // The node table of each kind and the column that names its Work. The Work's own decision has no node id and is written by SetWorkAsync.
     private static readonly IReadOnlyDictionary<MonitoringTargetKind, (string Table, string WorkColumn)> Nodes = new Dictionary<MonitoringTargetKind, (string, string)>
     {
-        [MonitoringTargetKind.Work] = ("Works", "Id"),
         [MonitoringTargetKind.Season] = ("WorkSeasons", "WorkId"),
         [MonitoringTargetKind.Episode] = ("WorkEpisodes", "WorkId"),
         [MonitoringTargetKind.Volume] = ("WorkVolumes", "WorkId"),
@@ -37,19 +36,53 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
     // The decisions a container's own decision replaces: all of a Work, the episodes of a season, the chapters of a volume.
     private static readonly IReadOnlyDictionary<MonitoringTargetKind, string> DescendantsSql = new Dictionary<MonitoringTargetKind, string>
     {
-        [MonitoringTargetKind.Work] = """DELETE FROM "WorkMonitoring" WHERE "WorkId" = {0} AND "TargetId" <> {0} AND "Kind" <> 6""",
         [MonitoringTargetKind.Season] = """DELETE FROM "WorkMonitoring" WHERE "TargetId" IN (SELECT "Id" FROM "WorkEpisodes" WHERE "SeasonId" = {0})""",
         [MonitoringTargetKind.Volume] = """DELETE FROM "WorkMonitoring" WHERE "TargetId" IN (SELECT "Id" FROM "WorkChapters" WHERE "VolumeId" = {0})"""
     };
 
     /// <summary>
-    /// Switches one node on or off, or back to Inherit with null. A container (Work, season, volume) that is switched on or off takes all of its children
-    /// with it (unless <paramref name="replaceChildren"/> is false), so "monitor all" and "unmonitor all" are this call on the Work. Returns the Work the node
-    /// belongs to, or null when the node does not exist.
+    /// Switches the Work itself on or off, or back to Inherit with null. The Work takes all of its decisions below it with it (unless
+    /// <paramref name="replaceChildren"/> is false), so "monitor all" and "unmonitor all" are this call. Returns false when the Work does not exist.
     /// </summary>
-    public async Task<Guid?> SetAsync(MonitoringTargetKind kind, Guid targetId, bool? monitored, CancellationToken cancellationToken, bool replaceChildren = true)
+    public async Task<bool> SetWorkAsync(long workId, bool? monitored, CancellationToken cancellationToken, bool replaceChildren = true)
     {
-        var workId = await db.Database.SqlQueryRaw<Guid?>(WorkOfSql[kind], targetId).FirstOrDefaultAsync(cancellationToken);
+        if (!await db.Works.AnyAsync(work => work.Id == workId, cancellationToken))
+        {
+            return false;
+        }
+
+        if (monitored is null)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "WorkMonitoring" WHERE "Kind" = 0 AND "WorkId" = {workId}""", cancellationToken);
+            return true;
+        }
+
+        var now = clock.GetUtcNow();
+        await db.Database.InTransactionAsync(
+            async () =>
+            {
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"""
+                    INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt") VALUES ({workId}, 0, NULL::uuid, {monitored.Value}, {now})
+                    ON CONFLICT ("WorkId") WHERE "Kind" = 0 DO UPDATE SET "Monitored" = EXCLUDED."Monitored", "UpdatedAt" = EXCLUDED."UpdatedAt"
+                    """,
+                    cancellationToken);
+                if (replaceChildren)
+                {
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "Kind" NOT IN (0, 6)""", cancellationToken);
+                }
+            },
+            cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Switches one node below the Work on or off, or back to Inherit with null. A container (season, volume) that is switched on or off takes all of its
+    /// children with it (unless <paramref name="replaceChildren"/> is false). Returns the Work the node belongs to, or null when the node does not exist.
+    /// </summary>
+    public async Task<long?> SetAsync(MonitoringTargetKind kind, Guid targetId, bool? monitored, CancellationToken cancellationToken, bool replaceChildren = true)
+    {
+        var workId = await db.Database.SqlQueryRaw<long?>(WorkOfSql[kind], targetId).FirstOrDefaultAsync(cancellationToken);
         if (workId is null)
         {
             return null;
@@ -79,7 +112,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
     /// Switches the audiobook of a Book Work on or off (null returns it to not monitored), independent of the Book: the audio edition is made when it is first asked
     /// for, and no decision on the Book touches this one. Returns the Work, or null when it is not a Book.
     /// </summary>
-    public async Task<Guid?> SetAudiobookAsync(Guid workId, bool? monitored, CancellationToken cancellationToken)
+    public async Task<long?> SetAudiobookAsync(long workId, bool? monitored, CancellationToken cancellationToken)
     {
         if (!await db.Works.AnyAsync(work => work.Id == workId && work.MediaType == MediaCore.WorkMediaType.Book, cancellationToken))
         {
@@ -93,7 +126,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
     /// Switches episodes on or off by season and episode number (null returns them to Inherit), creating the canonical episodes and seasons the Work does
     /// not have yet in one pass. That is how a title that is only known by numbers (Anime) gets nodes to decide on; a new node carries nothing but its numbers.
     /// </summary>
-    public async Task SetEpisodesByNumberAsync(Guid workId, IReadOnlyCollection<(int Season, int Episode)> numbers, bool? monitored, CancellationToken cancellationToken)
+    public async Task SetEpisodesByNumberAsync(long workId, IReadOnlyCollection<(int Season, int Episode)> numbers, bool? monitored, CancellationToken cancellationToken)
     {
         if (numbers.Count == 0)
         {
@@ -103,7 +136,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
         await db.Database.InTransactionAsync(() => SetEpisodesByNumberCoreAsync(workId, numbers, monitored, cancellationToken), cancellationToken);
     }
 
-    private async Task SetEpisodesByNumberCoreAsync(Guid workId, IReadOnlyCollection<(int Season, int Episode)> numbers, bool? monitored, CancellationToken cancellationToken)
+    private async Task SetEpisodesByNumberCoreAsync(long workId, IReadOnlyCollection<(int Season, int Episode)> numbers, bool? monitored, CancellationToken cancellationToken)
     {
         var wanted = numbers.Distinct().ToHashSet();
         var seasonNumbers = wanted.Select(pair => pair.Season).Distinct().ToArray();
@@ -132,7 +165,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
     }
 
     /// <summary>Switches whole seasons on or off by number, creating the canonical seasons the Work does not have yet; the decisions of their episodes are replaced by the season's.</summary>
-    public async Task SetSeasonsByNumberAsync(Guid workId, IReadOnlyCollection<int> seasonNumbers, bool monitored, CancellationToken cancellationToken)
+    public async Task SetSeasonsByNumberAsync(long workId, IReadOnlyCollection<int> seasonNumbers, bool monitored, CancellationToken cancellationToken)
     {
         if (seasonNumbers.Count == 0)
         {
@@ -153,7 +186,7 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
             cancellationToken);
     }
 
-    private async Task<Dictionary<int, Guid>> EnsureSeasonsAsync(Guid workId, int[] seasonNumbers, CancellationToken cancellationToken)
+    private async Task<Dictionary<int, Guid>> EnsureSeasonsAsync(long workId, int[] seasonNumbers, CancellationToken cancellationToken)
     {
         var seasons = await db.WorkSeasons.Where(x => x.WorkId == workId && seasonNumbers.Contains(x.SeasonNumber)).ToListAsync(cancellationToken);
         var created = seasonNumbers.Where(number => seasons.All(season => season.SeasonNumber != number))
@@ -179,15 +212,15 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
     /// discovered later, and the episodes that are announced but not aired yet, have no decision and inherit the Work. Containers keep no decision, because a
     /// switched-off season would switch off its future episodes.
     /// </summary>
-    public async Task FutureAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task FutureAsync(long workId, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "TargetId" <> {workId} AND "Kind" <> 6;
+            DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "Kind" NOT IN (0, 6);
             INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
-            SELECT w."Id", 0, w."Id", TRUE, {now} FROM "Works" w WHERE w."Id" = {workId}
-            ON CONFLICT ("TargetId") DO UPDATE SET "Monitored" = TRUE, "UpdatedAt" = EXCLUDED."UpdatedAt";
+            SELECT w."Id", 0, NULL::uuid, TRUE, {now} FROM "Works" w WHERE w."Id" = {workId}
+            ON CONFLICT ("WorkId") WHERE "Kind" = 0 DO UPDATE SET "Monitored" = TRUE, "UpdatedAt" = EXCLUDED."UpdatedAt";
             INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
             SELECT x."WorkId", x."Kind", x."Id", FALSE, {now} FROM (
                 SELECT "WorkId", 2::smallint AS "Kind", "Id" FROM "WorkEpisodes" WHERE "WorkId" = {workId} AND ("AiredAt" IS NULL OR "AiredAt" <= {now})
@@ -202,17 +235,17 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
     /// A custom selection of a Series: the chosen seasons and episodes are on, everything else known today is off, and with
     /// <paramref name="future"/> the Work itself is on so what appears later is monitored. Replaces every earlier decision of the Work.
     /// </summary>
-    public async Task ApplySelectionAsync(Guid workId, IReadOnlyCollection<Guid> seasonIds, IReadOnlyCollection<Guid> episodeIds, bool future, CancellationToken cancellationToken)
+    public async Task ApplySelectionAsync(long workId, IReadOnlyCollection<Guid> seasonIds, IReadOnlyCollection<Guid> episodeIds, bool future, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
         var seasons = seasonIds.Distinct().ToArray();
         var episodes = episodeIds.Distinct().ToArray();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "TargetId" <> {workId} AND "Kind" <> 6;
+            DELETE FROM "WorkMonitoring" WHERE "WorkId" = {workId} AND "Kind" NOT IN (0, 6);
             INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
-            SELECT w."Id", 0, w."Id", {future}, {now} FROM "Works" w WHERE w."Id" = {workId}
-            ON CONFLICT ("TargetId") DO UPDATE SET "Monitored" = EXCLUDED."Monitored", "UpdatedAt" = EXCLUDED."UpdatedAt";
+            SELECT w."Id", 0, NULL::uuid, {future}, {now} FROM "Works" w WHERE w."Id" = {workId}
+            ON CONFLICT ("WorkId") WHERE "Kind" = 0 DO UPDATE SET "Monitored" = EXCLUDED."Monitored", "UpdatedAt" = EXCLUDED."UpdatedAt";
             INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
             SELECT s."WorkId", 1, s."Id", TRUE, {now} FROM "WorkSeasons" s WHERE s."WorkId" = {workId} AND s."Id" = ANY({seasons});
             INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
@@ -256,10 +289,10 @@ public sealed class MonitoringCommands(AppDbContext db, TimeProvider clock)
             await db.Database.ExecuteSqlRawAsync(
                 """
                 INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt")
-                SELECT DISTINCT r."WorkId", 0, r."WorkId", FALSE, {2} FROM (
+                SELECT DISTINCT r."WorkId", 0, NULL::uuid, FALSE, {2} FROM (
                 """ + MonitoringResolver.RelationCoveredWorksSql + """
                 ) r WHERE r."SourceId" = (SELECT "Id" FROM "WorkMonitoringSources" WHERE "Kind" = {0} AND "SourceKey" = {1})
-                ON CONFLICT ("TargetId") DO NOTHING
+                ON CONFLICT ("WorkId") WHERE "Kind" = 0 DO NOTHING
                 """,
                 [(short)source.Kind, source.SourceKey, now],
                 cancellationToken);

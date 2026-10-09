@@ -47,7 +47,7 @@ public sealed class WatchModel(
 
     public bool IsMovie { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(Guid workId, Guid? episodeId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(long workId, Guid? episodeId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var work = await db.Works.AsNoTracking().Where(x => x.Id == workId).Select(x => new { x.MediaType, x.IsAnime, x.CanonicalTitle }).SingleOrDefaultAsync(cancellationToken);

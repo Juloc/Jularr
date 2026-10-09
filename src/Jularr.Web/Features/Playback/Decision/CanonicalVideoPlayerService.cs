@@ -192,7 +192,7 @@ public sealed class CanonicalVideoPlayerService(
     }
 
     private async Task<CanonicalVideoNavigation> ResolveNavigationAsync(
-        Guid workId,
+        long workId,
         Guid currentEpisodeId,
         CancellationToken cancellationToken)
     {

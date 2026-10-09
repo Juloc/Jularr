@@ -53,7 +53,7 @@ public sealed partial class InstantPlayPageMarkupTests
         return Whitespace().Replace(Tags().Replace(withoutCode, " "), " ");
     }
 
-    private static string MoviePayload(Guid workId, string extra = "") =>
+    private static string MoviePayload(long workId, string extra = "") =>
         $$"""{"workId":"{{workId}}","title":"Film","year":2024{{extra}} }""";
 
     private static Task<AcquisitionRequest> OpenRequestAsync(VideoDetailPageTestHost host, MediaAcquisitionKind kind, string tmdbId, AcquisitionRequestStatus status, string? payload = null) =>
@@ -333,7 +333,7 @@ public sealed partial class InstantPlayPageMarkupTests
         await seed.AddVideoAsync(series, episode);
         var payload = MoviePayload(series.Id, ",\"nextSearchUtc\":\"2099-01-01T00:00:00Z\"");
         await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "603", AcquisitionRequestStatus.Approved, payload);
-        await MonitoringTestSupport.Commands(host.Db).SetAsync(MonitoringTargetKind.Work, series.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(host.Db).SetWorkAsync(series.Id, true, CancellationToken.None);
         await host.Modules.SetAsync(InstanceModule.Playback, false);
 
         var hero = VisibleText(Hero(await host.GetOkAsync($"/Library/Series/{series.Id}", asOwner: true)));
@@ -375,9 +375,9 @@ public sealed partial class InstantPlayPageMarkupTests
         var source = File.ReadAllText(Path.Combine(PlayerControlsTests.RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "instant-play.js"));
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var view = new ConsumerAcquisitionView(ConsumerAcquisitionState.GettingMedia, ConsumerMediaUnit.Episode, 42, true);
-        var target = new ClientVideoTarget(Guid.NewGuid(), Guid.NewGuid());
+        var target = new ClientVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), Guid.NewGuid());
         var intent = JsonDocument.Parse(JsonSerializer.Serialize(new ClientPlaybackIntentResponse(PlaybackIntentOutcome.Acquiring, target, Guid.NewGuid(), view), options)).RootElement;
-        var status = JsonDocument.Parse(JsonSerializer.Serialize(new ClientRequestStatusResponse(Guid.NewGuid(), new ClientVideoTarget(Guid.NewGuid(), null), view), options)).RootElement;
+        var status = JsonDocument.Parse(JsonSerializer.Serialize(new ClientRequestStatusResponse(Guid.NewGuid(), new ClientVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), null), view), options)).RootElement;
 
         CollectionAssert.AreEquivalent(new[] { "outcome", "target", "requestId", "acquisition" }, intent.EnumerateObject().Select(x => x.Name).ToArray());
         CollectionAssert.AreEquivalent(new[] { "requestId", "target", "acquisition" }, status.EnumerateObject().Select(x => x.Name).ToArray());

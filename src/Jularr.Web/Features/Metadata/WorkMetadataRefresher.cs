@@ -142,7 +142,7 @@ public sealed partial class WorkMetadataRefresher(
     };
 
     /// <summary>Facts, localized text and credits in one transaction, so a reader never sees half of a refresh.</summary>
-    private async Task PersistTextAsync(Guid workId, WorkMetadataSnapshot snapshot, CancellationToken cancellationToken)
+    private async Task PersistTextAsync(long workId, WorkMetadataSnapshot snapshot, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var source = snapshot.Source;
@@ -230,7 +230,7 @@ public sealed partial class WorkMetadataRefresher(
     /// derivative is on disk is not downloaded again; a replaced variant's old derivative is deleted once the new row is stored.
     /// Returns the first transient download failure, after trying every variant.
     /// </summary>
-    private async Task<Exception?> PersistArtworkAsync(Guid workId, WorkMetadataSnapshot snapshot, CancellationToken cancellationToken)
+    private async Task<Exception?> PersistArtworkAsync(long workId, WorkMetadataSnapshot snapshot, CancellationToken cancellationToken)
     {
         var stored = await store.LoadArtworkAsync(workId, cancellationToken);
         Exception? failure = null;

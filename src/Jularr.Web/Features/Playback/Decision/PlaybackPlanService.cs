@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using Jularr.Web.Data;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Devices;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Playback.Transcoding;
@@ -175,14 +176,17 @@ public sealed class PlaybackPlanService(
                     asset == null ? null : asset.WorkId,
                     asset == null ? null : asset.WorkEpisodeId))
             .FirstOrDefaultAsync(cancellationToken);
-        if (legacy is null)
+        // A file of the legacy Anime record that no canonical asset holds yet plays under the Work its Episode record is bridged to.
+        var workId = legacy?.WorkId ?? await db.WorkSourceLinks.AsNoTracking()
+            .Where(link => link.SourceKind == WorkSourceKind.Episode && link.SourceId == episodeId)
+            .Select(link => (long?)link.WorkId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (legacy is null || workId is null)
         {
             return null;
         }
 
-        var target = legacy.WorkId is { } workId
-            ? new PlaybackVideoTarget(workId, legacy.WorkEpisodeId)
-            : new PlaybackVideoTarget(episodeId, episodeId);
+        var target = new PlaybackVideoTarget(workId.Value, legacy.WorkEpisodeId);
 
         return await PlanResolvedAsync(
             target,
@@ -421,7 +425,7 @@ public sealed class PlaybackPlanService(
         Guid Id,
         string Path,
         long SizeBytes,
-        Guid? WorkId,
+        long? WorkId,
         Guid? WorkEpisodeId);
 
     private static PlaybackPlan UnavailablePlan(

@@ -40,6 +40,6 @@ internal static class RequestWorkTestSupport
             CancellationToken.None);
     }
 
-    public static async Task<Guid?> WorkOfLegacyAsync(AppDbContext db, WorkSourceKind sourceKind, Guid legacyId) =>
-        await db.Set<WorkSourceLink>().AsNoTracking().Where(link => link.SourceKind == sourceKind && link.SourceId == legacyId).Select(link => (Guid?)link.WorkId).FirstOrDefaultAsync();
+    public static async Task<long?> WorkOfLegacyAsync(AppDbContext db, WorkSourceKind sourceKind, Guid legacyId) =>
+        await db.Set<WorkSourceLink>().AsNoTracking().Where(link => link.SourceKind == sourceKind && link.SourceId == legacyId).Select(link => (long?)link.WorkId).FirstOrDefaultAsync();
 }

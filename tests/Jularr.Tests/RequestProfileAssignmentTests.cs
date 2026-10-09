@@ -43,7 +43,7 @@ public sealed class RequestProfileAssignmentTests
             Assert.AreEqual(RequestProfileResult.Assigned, result);
             Assert.IsNotNull(bound.WorkId, "The request is bound to its Work so the profile has somewhere to go.");
             Assert.AreEqual("strict", (await profiles.ResolveAsync(kind, bound.WorkId)).Id, "Every search of the Work resolves the chosen profile.");
-            Assert.AreNotEqual("strict", (await profiles.ResolveAsync(kind, Guid.NewGuid())).Id, "Another Work keeps the default.");
+            Assert.AreNotEqual("strict", (await profiles.ResolveAsync(kind, Random.Shared.NextInt64(1, long.MaxValue))).Id, "Another Work keeps the default.");
         }
         finally
         {

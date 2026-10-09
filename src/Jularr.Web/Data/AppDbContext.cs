@@ -325,12 +325,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<WantedItem>(entity =>
         {
-            entity.ToTable("WantedItems", table => table.HasCheckConstraint("CK_WantedItems_TargetKind", "\"TargetKind\" >= 0 AND \"TargetKind\" <= 6"));
+            entity.ToTable("WantedItems", table =>
+            {
+                table.HasCheckConstraint("CK_WantedItems_TargetKind", "\"TargetKind\" >= 0 AND \"TargetKind\" <= 6");
+                table.HasCheckConstraint("CK_WantedItems_WorkTargetHasNoNode", "(\"TargetKind\" = 0) = (\"TargetId\" IS NULL)");
+            });
             entity.HasKey(x => x.Id);
             entity.Property(x => x.TargetKind).HasConversion<short>();
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasIndex(x => new { x.TargetKind, x.TargetId }).IsUnique();
-            entity.HasIndex(x => x.WorkId);
+            entity.HasIndex(x => new { x.WorkId, x.TargetKind, x.TargetId }).IsUnique().AreNullsDistinct(false);
+            entity.HasIndex(x => new { x.TargetKind, x.TargetId });
         });
 
         modelBuilder.Entity<StoredFile>(entity =>

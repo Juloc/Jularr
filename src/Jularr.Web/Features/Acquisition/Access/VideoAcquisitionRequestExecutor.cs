@@ -28,7 +28,7 @@ public sealed record PlaybackMarker(Guid? WorkEpisodeId, string ProfileId, DateT
 /// (<see cref="Jularr.Web.Features.Monitoring.MonitoringResolver"/>), so the request only carries what its own search is doing.
 /// </summary>
 public sealed record VideoRequestPayload(
-    Guid WorkId,
+    long WorkId,
     string Title,
     int? Year,
     Guid? ActiveWorkEpisodeId = null,
@@ -127,13 +127,13 @@ public sealed record VideoRequestPayload(
     }
 
     /// <summary>The payload a request carries; a request without a readable one starts from <see cref="Default"/>.</summary>
-    public static VideoRequestPayload Of(AcquisitionRequest request, Guid workId, string title, int? year) =>
+    public static VideoRequestPayload Of(AcquisitionRequest request, long workId, string title, int? year) =>
         Parse(request.PayloadJson) is { } stored
             ? stored.Title.Length == 0 ? stored with { Title = title } : stored
             : Default(workId, title, year);
 
     /// <summary>A title requested without a choice: the whole Movie, or every episode of a Series and every future one.</summary>
-    public static VideoRequestPayload Default(Guid workId, string title, int? year) =>
+    public static VideoRequestPayload Default(long workId, string title, int? year) =>
         new(workId, title, year) { Requested = new VideoRequestScopeChoice(VideoRequestScope.AllCurrentAndFuture, [], [], MonitorFuture: true) };
 }
 
@@ -305,7 +305,7 @@ public sealed partial class VideoAcquisitionEngine(
     }
 
     /// <summary>The installed quality of a Movie that its profile still wants to upgrade, or null when the Movie is final (or its quality cannot be compared).</summary>
-    private async Task<string?> FindMovieUpgradeAsync(Guid workId, CancellationToken cancellationToken)
+    private async Task<string?> FindMovieUpgradeAsync(long workId, CancellationToken cancellationToken)
     {
         if (installed is null)
         {
@@ -414,7 +414,7 @@ public sealed partial class VideoAcquisitionEngine(
     /// How a request ends when monitoring is turned off: Completed when the title has local media, otherwise Rejected, so a requester never
     /// sees "available" for a title nothing was acquired for.
     /// </summary>
-    public async Task<AcquisitionRequestStatus> StatusWhenMonitoringStopsAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    public async Task<AcquisitionRequestStatus> StatusWhenMonitoringStopsAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         var hasMedia = kind == MediaAcquisitionKind.Movie
             ? await HasMovieFileAsync(workId, cancellationToken)
@@ -425,7 +425,7 @@ public sealed partial class VideoAcquisitionEngine(
     }
 
     /// <summary>The result of an Off the run read at <paramref name="monitoringRevision"/>; it ends the request only while no monitoring change has followed.</summary>
-    private async Task<AcquisitionExecution> MonitoringOffAsync(MediaAcquisitionKind kind, Guid workId, int monitoringRevision, CancellationToken cancellationToken) =>
+    private async Task<AcquisitionExecution> MonitoringOffAsync(MediaAcquisitionKind kind, long workId, int monitoringRevision, CancellationToken cancellationToken) =>
         new(await StatusWhenMonitoringStopsAsync(kind, workId, cancellationToken), VideoMonitoringService.MonitoringTurnedOff, ResultUrl: VideoWorkLinks.DetailPath(kind, workId))
         {
             StillApplies = VideoRequestPayload.StillAtRevision(monitoringRevision)
@@ -435,7 +435,7 @@ public sealed partial class VideoAcquisitionEngine(
     /// Re-reads the request and its monitoring and returns how the execution ends when monitoring was turned off meanwhile (completed) or the
     /// episode being searched is no longer wanted (back to waiting, so the next pass picks the new selection); null when the search is still wanted.
     /// </summary>
-    private async Task<AcquisitionExecution?> StopWhenNoLongerWantedAsync(AcquisitionRequest request, Guid workId, VideoUnit? unit, CancellationToken cancellationToken)
+    private async Task<AcquisitionExecution?> StopWhenNoLongerWantedAsync(AcquisitionRequest request, long workId, VideoUnit? unit, CancellationToken cancellationToken)
     {
         var fresh = await requestStore.GetAsync(request.Id, cancellationToken) ?? request;
         var payload = VideoRequestPayload.Of(fresh, workId, request.Title, null);
@@ -567,7 +567,7 @@ public sealed partial class VideoAcquisitionEngine(
     private async Task<VideoRequestWork?> ResolveTargetAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
         (await works.ResolveAsync([request], cancellationToken)).GetValueOrDefault(request.Id);
 
-    public async Task<bool> HasMovieFileAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<bool> HasMovieFileAsync(long workId, CancellationToken cancellationToken) =>
         await db.MediaAssets.AsNoTracking()
             .Where(x => x.WorkId == workId
                         && x.WorkEpisodeId == null
@@ -624,7 +624,7 @@ public sealed partial class VideoAcquisitionEngine(
     }
 
     private async Task<IReadOnlyList<VideoUnit>> LoadTvUnitsAsync(
-        Guid workId,
+        long workId,
         CancellationToken cancellationToken)
     {
         var episodes = await db.WorkEpisodes.AsNoTracking()

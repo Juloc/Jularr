@@ -126,25 +126,29 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("TargetId")
+                    b.Property<Guid?>("TargetId")
                         .HasColumnType("uuid");
 
                     b.Property<short>("TargetKind")
                         .HasColumnType("smallint");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("WorkId");
+                    b.HasIndex("TargetKind", "TargetId");
 
-                    b.HasIndex("TargetKind", "TargetId")
+                    b.HasIndex("WorkId", "TargetKind", "TargetId")
                         .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("WorkId", "TargetKind", "TargetId"), false);
 
                     b.ToTable("WantedItems", null, t =>
                         {
                             t.HasCheckConstraint("CK_WantedItems_TargetKind", "\"TargetKind\" >= 0 AND \"TargetKind\" <= 6");
+
+                            t.HasCheckConstraint("CK_WantedItems_WorkTargetHasNoNode", "(\"TargetKind\" = 0) = (\"TargetId\" IS NULL)");
                         });
                 });
 
@@ -617,8 +621,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<int>("Source")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -1840,8 +1844,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<Guid?>("WorkEpisodeId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid?>("WorkTrackId")
                         .HasColumnType("uuid");
@@ -2053,9 +2057,11 @@ namespace Jularr.Web.Data.Migrations
 
             modelBuilder.Entity("Jularr.Web.Features.MediaCore.Work", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<string>("CanonicalTitle")
                         .IsRequired()
@@ -2141,8 +2147,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<int?>("Width")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2190,8 +2196,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<Guid?>("VolumeId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2245,8 +2251,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2300,8 +2306,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2346,8 +2352,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2403,8 +2409,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2451,8 +2457,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2497,16 +2503,16 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
-                    b.Property<Guid?>("SourceWorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long?>("SourceWorkId")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Summary")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("TargetWorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("TargetWorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2574,8 +2580,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2637,8 +2643,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2696,8 +2702,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2725,8 +2731,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("FromWorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("FromWorkId")
+                        .HasColumnType("bigint");
 
                     b.Property<bool>("IsManualOverride")
                         .HasColumnType("boolean");
@@ -2739,8 +2745,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
-                    b.Property<Guid>("ToWorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("ToWorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2771,8 +2777,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2797,8 +2803,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<int>("SourceKind")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2845,8 +2851,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2884,8 +2890,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -2922,8 +2928,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<Guid?>("WorkChapterId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid?>("WorkVolumeId")
                         .HasColumnType("uuid");
@@ -2982,8 +2988,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -3021,8 +3027,8 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -3254,8 +3260,8 @@ namespace Jularr.Web.Data.Migrations
 
             modelBuilder.Entity("Jularr.Web.Features.Music.MusicAlbum", b =>
                 {
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("ArtistId")
                         .HasColumnType("uuid");
@@ -4196,8 +4202,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<Guid?>("WorkEpisodeId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long>("WorkId")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid?>("WorkVersionId")
                         .HasColumnType("uuid");
@@ -4330,8 +4336,8 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<Guid?>("AssignedWorkEpisodeId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("AssignedWorkId")
-                        .HasColumnType("uuid");
+                    b.Property<long?>("AssignedWorkId")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid?>("AssignedWorkVersionId")
                         .HasColumnType("uuid");

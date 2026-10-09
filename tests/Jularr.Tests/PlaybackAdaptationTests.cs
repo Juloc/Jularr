@@ -34,7 +34,7 @@ public sealed class PlaybackAdaptationTests
             Store = new PlaybackStreamSessionStore(Clock);
             Session = Store.Create(
                 Viewer,
-                new PlaybackVideoTarget(Guid.NewGuid(), Guid.NewGuid()),
+                new PlaybackVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), Guid.NewGuid()),
                 Guid.NewGuid(),
                 "/media/episode.mkv",
                 1400,
@@ -406,7 +406,7 @@ public sealed class PlaybackAdaptationTests
     public void AStepUpIsNotAdvisedWhileTheServerAlreadyStrugglesWithAnotherConversion()
     {
         var harness = new Harness(AutoPlan(delivered: 3_900, source: 30_000, limit: 4_000));
-        var other = harness.Store.Create(Viewer, Guid.NewGuid(), Guid.NewGuid(), "/media/other.mkv", 1400, AutoPlan(), harness.Session.Selections);
+        var other = harness.Store.Create(Viewer, new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/other.mkv", 1400, AutoPlan(), harness.Session.Selections);
         harness.PlayUntil(125, throughput: 60_000);
         Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, harness.Advice.Decision.Advice, "Without a struggling neighbour this plan gains from the next tier.");
 

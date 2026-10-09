@@ -18,6 +18,9 @@ public sealed class RequestTargetsMigrationTests
         return db;
     }
 
+    // The payload as it was stored before the Work number migration: its workId is the GUID text.
+    private static string OldPayload(Guid work, string json) => json.Replace("\"workId\":1,", $"\"workId\":\"{work}\",", StringComparison.Ordinal);
+
     private static async Task<Guid> AddWorkAsync(AppDbContext db, int mediaType)
     {
         var id = Guid.NewGuid();
@@ -54,9 +57,10 @@ public sealed class RequestTargetsMigrationTests
         return id;
     }
 
-    private static async Task<List<(short Kind, Guid Target)>> TargetsOfAsync(AppDbContext db, string requestId) =>
-        (await db.Database.SqlQuery<string>($"""SELECT "TargetKind"::text || ':' || "TargetId"::text AS "Value" FROM "RequestTargets" WHERE "RequestId" = {requestId}""").ToListAsync())
-        .Select(row => (short.Parse(row.Split(':')[0]), Guid.Parse(row.Split(':')[1])))
+    // A Work target has no node id: the row names the Work number instead.
+    private static async Task<List<(short Kind, string Target)>> TargetsOfAsync(AppDbContext db, string requestId) =>
+        (await db.Database.SqlQuery<string>($"""SELECT "TargetKind"::text || ':' || COALESCE("TargetId"::text, "WorkId"::text) AS "Value" FROM "RequestTargets" WHERE "RequestId" = {requestId}""").ToListAsync())
+        .Select(row => (short.Parse(row.Split(':')[0]), row.Split(':')[1]))
         .ToList();
 
     [TestMethod]
@@ -76,11 +80,11 @@ public sealed class RequestTargetsMigrationTests
             db,
             "tv",
             "1",
-            new VideoRequestPayload(series, "Harbor", 2024) { Requested = new VideoRequestScopeChoice(VideoRequestScope.Custom, [seasonTwo], [first], MonitorFuture: false) }.Serialize());
-        var whole = await AddRequestAsync(db, "tv", "2", new VideoRequestPayload(series, "Harbor", 2024) { Requested = new VideoRequestScopeChoice(VideoRequestScope.AllCurrentAndFuture, [], [], MonitorFuture: true) }.Serialize());
-        var applied = await AddRequestAsync(db, "tv", "3", new VideoRequestPayload(series, "Harbor", 2024).Serialize());
+            OldPayload(series, new VideoRequestPayload(1, "Harbor", 2024) { Requested = new VideoRequestScopeChoice(VideoRequestScope.Custom, [seasonTwo], [first], MonitorFuture: false) }.Serialize()));
+        var whole = await AddRequestAsync(db, "tv", "2", OldPayload(series, new VideoRequestPayload(1, "Harbor", 2024) { Requested = new VideoRequestScopeChoice(VideoRequestScope.AllCurrentAndFuture, [], [], MonitorFuture: true) }.Serialize()));
+        var applied = await AddRequestAsync(db, "tv", "3", OldPayload(series, new VideoRequestPayload(1, "Harbor", 2024).Serialize()));
         var plainMovie = await AddRequestAsync(db, "movie", "4", null, movie);
-        var appliedMovie = await AddRequestAsync(db, "movie", "5", new VideoRequestPayload(movie, "Harbor", 2024).Serialize(), movie);
+        var appliedMovie = await AddRequestAsync(db, "movie", "5", OldPayload(movie, new VideoRequestPayload(1, "Harbor", 2024).Serialize()), movie);
         var book = await AddRequestAsync(db, "book", "6", null);
         var recordedBook = await AddRequestAsync(db, "book", "8", null);
         await db.Database.ExecuteSqlInterpolatedAsync(
@@ -90,13 +94,13 @@ public sealed class RequestTargetsMigrationTests
 
         await db.Database.MigrateAsync();
 
-        CollectionAssert.AreEquivalent(new[] { first, third, fourth }, (await TargetsOfAsync(db, custom)).Select(target => target.Target).ToArray(), "A custom choice keeps its named episodes and the episodes of its named seasons.");
+        CollectionAssert.AreEquivalent(new[] { first, third, fourth }.Select(id => id.ToString()).ToArray(), (await TargetsOfAsync(db, custom)).Select(target => target.Target).ToArray(), "A custom choice keeps its named episodes and the episodes of its named seasons.");
         Assert.IsTrue((await TargetsOfAsync(db, custom)).All(target => target.Kind == 1));
         Assert.AreEqual((short)0, Assert.ContainsSingle(await TargetsOfAsync(db, whole)).Kind, "A whole-title choice keeps the whole title.");
         Assert.IsEmpty(await TargetsOfAsync(db, applied), "A choice that was applied earlier cannot be recovered, so no scope is invented.");
-        Assert.AreEqual(movie, Assert.ContainsSingle(await TargetsOfAsync(db, plainMovie)).Target, "A request without a payload is a request for the title.");
+        Assert.AreEqual((await WorkNumberMap.OfAsync(db, movie)).ToString(), Assert.ContainsSingle(await TargetsOfAsync(db, plainMovie)).Target, "A request without a payload is a request for the title.");
         Assert.IsEmpty(await TargetsOfAsync(db, appliedMovie), "A Movie request that Monitoring may have opened proves nothing, so the earlier assumption is dropped.");
         Assert.IsEmpty(await TargetsOfAsync(db, book), "A Book request that the Wanted pass may have opened proves nothing, so the earlier assumption is dropped.");
-        Assert.AreEqual(movie, Assert.ContainsSingle(await TargetsOfAsync(db, recordedBook)).Target, "What somebody recorded when submitting a request is kept.");
+        Assert.AreEqual((await WorkNumberMap.OfAsync(db, movie)).ToString(), Assert.ContainsSingle(await TargetsOfAsync(db, recordedBook)).Target, "What somebody recorded when submitting a request is kept.");
     }
 }

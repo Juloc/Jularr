@@ -51,7 +51,7 @@ public sealed class MediaWorkModel(
     public string Name(AdminVideoSeason season) =>
         season.Number == 0 ? Ui["library.anime.specials"] : Ui.Format("library.watch.season", ("number", season.Number));
 
-    public async Task<IActionResult> OnGetAsync(string kind, Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(string kind, long id, CancellationToken cancellationToken)
     {
         if (!VideoWorkLinks.TryParseAdminKind(kind, out var mediaKind) || !await IsEnabledAsync(mediaKind, cancellationToken))
         {
@@ -80,29 +80,29 @@ public sealed class MediaWorkModel(
     }
 
     /// <summary>Monitors or unmonitors a Movie.</summary>
-    public async Task<IActionResult> OnPostMovieMonitorAsync(string kind, Guid id, bool monitored, CancellationToken cancellationToken) =>
+    public async Task<IActionResult> OnPostMovieMonitorAsync(string kind, long id, bool monitored, CancellationToken cancellationToken) =>
         await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetMovieMonitoredAsync(id, monitored, token), cancellationToken, MediaAcquisitionKind.Movie);
 
     /// <summary>Sets what is monitored of a whole Series: all episodes, future episodes only, or nothing. Seasons and episodes have their own switches.</summary>
-    public async Task<IActionResult> OnPostSeriesScopeAsync(string kind, Guid id, string? scope, CancellationToken cancellationToken) =>
+    public async Task<IActionResult> OnPostSeriesScopeAsync(string kind, long id, string? scope, CancellationToken cancellationToken) =>
         await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeriesAsync(id, scope, token), cancellationToken, MediaAcquisitionKind.Tv);
 
     /// <summary>Monitors or unmonitors one season of a Series independently of the others.</summary>
-    public async Task<IActionResult> OnPostSeasonMonitorAsync(string kind, Guid id, int? season, bool monitored, CancellationToken cancellationToken) =>
+    public async Task<IActionResult> OnPostSeasonMonitorAsync(string kind, long id, int? season, bool monitored, CancellationToken cancellationToken) =>
         season is not { } seasonNumber
             ? BadRequest()
             : await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetSeasonMonitoredAsync(id, seasonNumber, monitored, token), cancellationToken, MediaAcquisitionKind.Tv, $"s{seasonNumber}");
 
     /// <summary>Monitors or unmonitors one episode of a Series.</summary>
-    public async Task<IActionResult> OnPostEpisodeMonitorAsync(string kind, Guid id, Guid episodeId, bool monitored, string? open, CancellationToken cancellationToken) =>
+    public async Task<IActionResult> OnPostEpisodeMonitorAsync(string kind, long id, Guid episodeId, bool monitored, string? open, CancellationToken cancellationToken) =>
         await ChangeAsync(kind, id, "admin.media.video.saved", (_, token) => monitoring.SetEpisodeMonitoredAsync(id, episodeId, monitored, token), cancellationToken, MediaAcquisitionKind.Tv, open);
 
     /// <summary>Assigns the quality profile of this Work; a blank profile returns to the default of the media type.</summary>
-    public async Task<IActionResult> OnPostProfileAsync(string kind, Guid id, string? profileId, CancellationToken cancellationToken) =>
+    public async Task<IActionResult> OnPostProfileAsync(string kind, long id, string? profileId, CancellationToken cancellationToken) =>
         await ChangeAsync(kind, id, "admin.media.video.profileSaved", (mediaKind, token) => monitoring.SetProfileAsync(mediaKind, id, profileId, token), cancellationToken);
 
     /// <summary>Searches again right away for the open request of this Work, the same action as "Search now" on Requests and Wanted.</summary>
-    public async Task<IActionResult> OnPostSearchAsync(string kind, Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostSearchAsync(string kind, long id, CancellationToken cancellationToken)
     {
         if (!VideoWorkLinks.TryParseAdminKind(kind, out var mediaKind) || !await IsEnabledAsync(mediaKind, cancellationToken))
         {
@@ -130,7 +130,7 @@ public sealed class MediaWorkModel(
     /// <summary>Forces one local file of this Work through the same analysis path the library uses for all of them.</summary>
     public async Task<IActionResult> OnPostReanalyzeFileAsync(
         string kind,
-        Guid id,
+        long id,
         Guid fileId,
         string? open,
         [FromServices] MediaFileReanalysisService reanalysis,
@@ -169,7 +169,7 @@ public sealed class MediaWorkModel(
     /// </summary>
     private async Task<IActionResult> ChangeAsync(
         string kind,
-        Guid id,
+        long id,
         string savedKey,
         Func<MediaAcquisitionKind, CancellationToken, Task<VideoMonitoringOutcome>> change,
         CancellationToken cancellationToken,
@@ -221,7 +221,7 @@ public sealed class MediaWorkModel(
     }
 
     /// <summary>Back to the page; <paramref name="open"/> names the season or episode that stays open, as an address fragment.</summary>
-    private IActionResult Back(MediaAcquisitionKind kind, Guid id, string? open = null) =>
+    private IActionResult Back(MediaAcquisitionKind kind, long id, string? open = null) =>
         Redirect(string.IsNullOrWhiteSpace(open) ? VideoWorkLinks.AdminPath(kind, id) : $"{VideoWorkLinks.AdminPath(kind, id)}#{Uri.EscapeDataString(open)}");
 
     private async Task<bool> IsEnabledAsync(MediaAcquisitionKind kind, CancellationToken cancellationToken) =>

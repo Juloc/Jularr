@@ -108,7 +108,7 @@ public sealed class KnownDeviceRegistryTests
             await registry.TouchAsync("reader-b", "android", "Phone", null, null, CancellationToken.None);
 
             store.Create(
-                "reader-a", Guid.NewGuid(), Guid.NewGuid(), "/media/a.mkv", 1200,
+                "reader-a", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/a.mkv", 1200,
                 SamplePlan(), SampleSelections("web"));
 
             var all = await registry.ListAllAsync(CancellationToken.None);
@@ -143,7 +143,7 @@ public sealed class KnownDeviceRegistryTests
             var registry = new KnownDeviceRegistry(db, store, TimeProvider.System);
             await registry.TouchAsync("reader-a", "web", "Chrome", null, null, CancellationToken.None);
             var session = store.Create(
-                "reader-a", Guid.NewGuid(), Guid.NewGuid(), "/media/a.mkv", 1200,
+                "reader-a", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/a.mkv", 1200,
                 SamplePlan(), SampleSelections("web"));
 
             var deviceId = (await registry.ListForProfileAsync("reader-a", CancellationToken.None)).Single().Id;
@@ -178,7 +178,7 @@ public sealed class KnownDeviceRegistryTests
             var registry = new KnownDeviceRegistry(db, store, TimeProvider.System);
             await registry.TouchAsync("reader-a", "web", "Chrome", null, null, CancellationToken.None);
             var session = store.Create(
-                "reader-a", Guid.NewGuid(), Guid.NewGuid(), "/media/a.mkv", 1200,
+                "reader-a", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/a.mkv", 1200,
                 SamplePlan(), SampleSelections("web"));
 
             var deviceId = (await registry.ListForProfileAsync("reader-a", CancellationToken.None)).Single().Id;
@@ -208,6 +208,7 @@ public sealed class KnownDeviceRegistryTests
 
         await using var fixture = await MediaInventoryFixture.CreateAsync();
         var media = await fixture.AddMediaAsync("episode.mkv", new byte[4096]);
+        await fixture.BridgeEpisodeAsync(media);
         fixture.Runner.Returns(media.Path, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
         fixture.Db.OwnerAccounts.Add(Account("reader", "Reader"));
         await fixture.Db.SaveChangesAsync();

@@ -17,7 +17,7 @@ public sealed class StreamSessionStatusEndpointTests
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var store = host.Services.GetRequiredService<PlaybackStreamSessionStore>();
-        var session = store.Create(Owner, Guid.NewGuid(), Guid.NewGuid(), "/media/episode.mkv", 1400, Transcode(Video()), new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
+        var session = store.Create(Owner, new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/episode.mkv", 1400, Transcode(Video()), new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
         var lastSeen = session.LastSeenUtc;
 
         var own = await host.SendAsync(HttpMethod.Get, s_path + session.Id, profile: Owner);
@@ -35,7 +35,7 @@ public sealed class StreamSessionStatusEndpointTests
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var store = host.Services.GetRequiredService<PlaybackStreamSessionStore>();
-        var session = store.Create(Owner, Guid.NewGuid(), Guid.NewGuid(), "/media/episode.mkv", 1400, Transcode(Video()), new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
+        var session = store.Create(Owner, new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/episode.mkv", 1400, Transcode(Video()), new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
         session.ReplaceHlsSession(Guid.NewGuid(), 0);
 
         var status = await host.SendAsync(HttpMethod.Get, s_path + session.Id, profile: Owner);

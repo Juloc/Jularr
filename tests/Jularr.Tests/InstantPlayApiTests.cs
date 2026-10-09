@@ -26,7 +26,7 @@ public sealed class InstantPlayApiTests
         return work;
     }
 
-    private static object Target(Guid workId, Guid? episodeId = null) => new { target = new { workId, workEpisodeId = episodeId } };
+    private static object Target(long workId, Guid? episodeId = null) => new { target = new { workId, workEpisodeId = episodeId } };
 
     private static JsonElement Json(string body) => JsonDocument.Parse(body).RootElement.Clone();
 
@@ -51,8 +51,8 @@ public sealed class InstantPlayApiTests
         var anime = await AddTitleAsync(host, WorkMediaType.Anime, "Starfall", "1");
 
         Assert.AreEqual(HttpStatusCode.BadRequest, (await host.SendAsync(HttpMethod.Post, Intents, new { }, asOwner: true)).Status);
-        Assert.AreEqual(HttpStatusCode.BadRequest, (await host.SendAsync(HttpMethod.Post, Intents, Target(Guid.Empty), asOwner: true)).Status);
-        Assert.AreEqual(HttpStatusCode.NotFound, (await host.SendAsync(HttpMethod.Post, Intents, Target(Guid.NewGuid()), asOwner: true)).Status);
+        Assert.AreEqual(HttpStatusCode.BadRequest, (await host.SendAsync(HttpMethod.Post, Intents, Target(0), asOwner: true)).Status);
+        Assert.AreEqual(HttpStatusCode.NotFound, (await host.SendAsync(HttpMethod.Post, Intents, Target(Random.Shared.NextInt64(1, long.MaxValue)), asOwner: true)).Status);
         Assert.AreEqual(HttpStatusCode.NotFound, (await host.SendAsync(HttpMethod.Post, Intents, Target(movie.Id, Guid.NewGuid()), asOwner: true)).Status, "A Movie has no episode.");
         Assert.AreEqual(HttpStatusCode.NotFound, (await host.SendAsync(HttpMethod.Post, Intents, Target(anime.Id), asOwner: true)).Status, "Anime keeps its own player route.");
         Assert.IsEmpty(await new AcquisitionAccessStore(host.Db).ListAllAsync(10, CancellationToken.None));
@@ -126,7 +126,7 @@ public sealed class InstantPlayApiTests
         Assert.AreEqual(HttpStatusCode.OK, status);
         var intent = Json(body);
         Assert.AreEqual("acquiring", intent.GetProperty("outcome").GetString());
-        Assert.AreEqual(movie.Id, intent.GetProperty("target").GetProperty("workId").GetGuid());
+        Assert.AreEqual(movie.Id, intent.GetProperty("target").GetProperty("workId").GetInt64());
         var requestId = intent.GetProperty("requestId").GetGuid();
         Assert.AreEqual(requestId, Json(again.Body).GetProperty("requestId").GetGuid(), "A repeat attaches to the same request.");
         Assert.AreEqual(1, (await new AcquisitionAccessStore(host.Db).ListAllAsync(10, CancellationToken.None)).Count);

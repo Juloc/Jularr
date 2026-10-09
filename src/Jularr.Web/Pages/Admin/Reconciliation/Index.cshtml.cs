@@ -146,7 +146,7 @@ public sealed class IndexModel(AppDbContext db, LibraryReconciliationPlanService
     }
 
     /// <summary>Persists one explicit work choice for the server-rendered selection without creating filesystem or canonical media state.</summary>
-    public async Task<IActionResult> OnPostAssignWorkAsync(Guid planId, Guid workId, Guid[]? itemIds, string? selected, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostAssignWorkAsync(Guid planId, long workId, Guid[]? itemIds, string? selected, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var request = new LibraryReconciliationWorkAssignmentRequest(planId, itemIds ?? [], workId);

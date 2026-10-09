@@ -16,12 +16,12 @@ public sealed class WantedItem
 {
     public long Id { get; set; }
 
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public WantedTargetKind TargetKind { get; set; }
 
-    // The Work id itself for a Work target.
-    public Guid TargetId { get; set; }
+    // The node of the target; null for a Work target, which is the row's own Work.
+    public Guid? TargetId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

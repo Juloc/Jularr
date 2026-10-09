@@ -132,7 +132,7 @@ public static class ConsumerAcquisitionProjector
 }
 
 /// <summary>A request of a Movie or Series and the Work it names, for a consumer read.</summary>
-public sealed record ConsumerRequestRead(AcquisitionRequest Request, Guid WorkId);
+public sealed record ConsumerRequestRead(AcquisitionRequest Request, long WorkId);
 
 /// <summary>
 /// Reads the consumer projection of a request. A pure read: it never advances a request, and a failing operation lookup is not hidden
@@ -199,7 +199,7 @@ public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessS
         var workByRequest = await works.ResolveAsync(requests, cancellationToken);
         var downloadIds = requests.Where(request => request.Status == AcquisitionRequestStatus.Downloading && request.OperationId is not null).Select(request => request.OperationId!.Value).ToArray();
         var downloads = await new OperationStore(db).GetManyAsync(downloadIds, cancellationToken);
-        Guid[] WorkIdsOf(MediaAcquisitionKind kind) => [.. requests.Where(request => request.Kind == kind && workByRequest.ContainsKey(request.Id)).Select(request => workByRequest[request.Id].WorkId).Distinct()];
+        long[] WorkIdsOf(MediaAcquisitionKind kind) => [.. requests.Where(request => request.Kind == kind && workByRequest.ContainsKey(request.Id)).Select(request => workByRequest[request.Id].WorkId).Distinct()];
         var movieWorkIds = WorkIdsOf(MediaAcquisitionKind.Movie);
         var seriesWorkIds = WorkIdsOf(MediaAcquisitionKind.Tv);
         var moviesWithFile = movieWorkIds.Length == 0
@@ -238,7 +238,7 @@ public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessS
         return views;
     }
 
-    private Task<bool> HasFileAsync(Guid workId, Guid? workEpisodeId, CancellationToken cancellationToken) =>
+    private Task<bool> HasFileAsync(long workId, Guid? workEpisodeId, CancellationToken cancellationToken) =>
         db.MediaAssets.AsNoTracking().AnyAsync(
             asset => asset.WorkId == workId && asset.WorkEpisodeId == workEpisodeId && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id),
             cancellationToken);

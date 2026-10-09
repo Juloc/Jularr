@@ -351,7 +351,7 @@ public sealed partial class TmdbDiscoveryProvider(
             .SingleOrDefaultAsync(cancellationToken);
 
         Work work;
-        if (existingWorkId != Guid.Empty)
+        if (existingWorkId != 0)
         {
             work = await db.Works.SingleAsync(x => x.Id == existingWorkId, cancellationToken);
             if (legacyMovie.SingleOrDefault() is { } movie)
@@ -628,7 +628,7 @@ public sealed partial class TmdbDiscoveryProvider(
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
     private async Task MaterializeSeriesStructureAsync(
-        Guid workId,
+        long workId,
         int tmdbId,
         TmdbDetails details,
         string locale,

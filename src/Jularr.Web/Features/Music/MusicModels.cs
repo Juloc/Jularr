@@ -47,7 +47,7 @@ public sealed class MusicArtist
 public sealed class MusicAlbum
 {
     /// <summary>The Work this row describes (primary key and foreign key).</summary>
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public Guid ArtistId { get; set; }
 

@@ -212,7 +212,7 @@ public sealed class RequestStatusTests
     public void TheSavedIntentIsReadBackInTheWordsOfTheRequestDialog()
     {
         var ui = UiTextBundle.English;
-        var series = MonitoringTestSupport.Choosing(Guid.NewGuid(), "T", 2022, VideoRequestScope.FutureOnly, future: true);
+        var series = MonitoringTestSupport.Choosing(Random.Shared.NextInt64(1, long.MaxValue), "T", 2022, VideoRequestScope.FutureOnly, future: true);
         var tv = new AcquisitionRequest(Guid.NewGuid(), MediaAcquisitionKind.Tv, "tmdb", "1", "T", null, null, series.Serialize(), "alice", AcquisitionRequestStatus.Pending, null, null, null, Now, Now, null, null);
         var options = new AcquisitionRequestOptions { Scope = RequestScope.Seasons, Seasons = [1, 2], AudioLanguage = "ja", SubtitleLanguage = "off", QualityProfileId = "profile" };
         var anime = tv with { Kind = MediaAcquisitionKind.Anime, PayloadJson = options.ToPayloadJson() };

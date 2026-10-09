@@ -229,9 +229,9 @@ public sealed class MediaCoreMergeTests
     [TestMethod]
     public void DuplicateDetectorSuppressesAlreadyRelatedWorks()
     {
-        var keep = Guid.NewGuid();
-        var other = Guid.NewGuid();
-        var titles = new Dictionary<Guid, string> { [keep] = "A", [other] = "A alt" };
+        var keep = 1;
+        var other = 2;
+        var titles = new Dictionary<long, string> { [keep] = "A", [other] = "A alt" };
         var probes = new List<WorkTitleProbe>
         {
             new(keep, WorkMediaType.Anime, 2020, "shared"),
@@ -239,10 +239,10 @@ public sealed class MediaCoreMergeTests
         };
 
         var none = WorkDuplicateDetection.Suggest(
-            titles, probes, new HashSet<(Guid, Guid)> { WorkDuplicateDetection.Key(keep, other) });
+            titles, probes, new HashSet<(long, long)> { WorkDuplicateDetection.Key(keep, other) });
         Assert.AreEqual(0, none.Count, "Works already carrying a relation edge are not re-suggested.");
 
-        var suggested = WorkDuplicateDetection.Suggest(titles, probes, new HashSet<(Guid, Guid)>());
+        var suggested = WorkDuplicateDetection.Suggest(titles, probes, new HashSet<(long, long)>());
         Assert.AreEqual(1, suggested.Count);
         Assert.IsTrue(suggested[0].Score > 0.6, "A shared year lifts the score above the shared-title base.");
     }

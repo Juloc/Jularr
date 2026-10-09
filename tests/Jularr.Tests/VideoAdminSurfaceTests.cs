@@ -85,7 +85,7 @@ public sealed class VideoAdminSurfaceTests
         await using var host = await MovieHostAsync();
         var monitoring = host.Get<VideoMonitoringService>();
 
-        Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetMovieMonitoredAsync(Guid.NewGuid(), true, CancellationToken.None));
+        Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetMovieMonitoredAsync(Random.Shared.NextInt64(1, long.MaxValue), true, CancellationToken.None));
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetMovieMonitoredAsync(host.Work.Id, true, CancellationToken.None));
         Assert.AreEqual(VideoMonitoringOutcome.Saved, await monitoring.SetMovieMonitoredAsync(host.Work.Id, true, CancellationToken.None));
 
@@ -375,7 +375,7 @@ public sealed class VideoAdminSurfaceTests
 
         await Assert.ThrowsExactlyAsync<ArgumentException>(() => monitoring.SetSeriesAsync(host.Work.Id, "sideways", CancellationToken.None));
         await Assert.ThrowsExactlyAsync<ArgumentException>(() => monitoring.SetSeriesAsync(host.Work.Id, "custom", CancellationToken.None));
-        Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetSeriesAsync(Guid.NewGuid(), "all", CancellationToken.None));
+        Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetSeriesAsync(Random.Shared.NextInt64(1, long.MaxValue), "all", CancellationToken.None));
         Assert.AreEqual(VideoMonitoringOutcome.NotFound, await monitoring.SetEpisodeMonitoredAsync(host.Work.Id, foreign.Id, true, CancellationToken.None), "An episode of another title is not part of this Series.");
 
         Assert.AreEqual(before, (await host.GetAsync(request.Id)).PayloadJson, "A rejected change leaves the monitoring as it was.");
@@ -661,7 +661,7 @@ public sealed class VideoAdminSurfaceTests
     [TestMethod]
     public void AStalePayloadNeverOverwritesTheMonitoringFieldsAndAChangeKeepsItsWakeUp()
     {
-        var work = Guid.NewGuid();
+        var work = Random.Shared.NextInt64(1, long.MaxValue);
         var stale = new VideoRequestPayload(work, "Show", null) { Searches = 3, NextSearchUtc = DateTime.UtcNow.AddHours(6), TriedReleases = ["tried"] };
         var stored = new VideoRequestPayload(work, "Show", null) { EndedByMonitoring = true, MonitoringRevision = 1 }.Serialize();
 
@@ -1028,7 +1028,7 @@ public sealed class VideoAdminSurfaceTests
 
         Assert.IsFalse((await wanted.LoadAsync(CancellationToken.None)).Single().CanSearch, "A request that is off is not searched or retried.");
 
-        await host.Get<MonitoringCommands>().SetAsync(MonitoringTargetKind.Work, host.Work.Id, true, CancellationToken.None);
+        await host.Get<MonitoringCommands>().SetWorkAsync(host.Work.Id, true, CancellationToken.None);
         Assert.IsTrue((await wanted.LoadAsync(CancellationToken.None)).Single().CanSearch);
         Assert.IsNotNull(failed);
 

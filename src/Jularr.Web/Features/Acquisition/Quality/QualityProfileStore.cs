@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Release;
@@ -61,11 +62,24 @@ public sealed class QualityProfileStore
     /// <summary>Resolves the quality profile for a media type, honouring a per-work override.</summary>
     public async Task<QualityProfile> ResolveAsync(
         MediaAcquisitionKind kind,
-        Guid? workId,
+        long? workId,
         CancellationToken cancellationToken = default)
     {
         var state = await LoadAsync(cancellationToken);
-        var profileId = state.ResolveProfileId(kind, workId);
+        return Resolve(state, kind, state.ResolveProfileId(kind, workId));
+    }
+
+    /// <summary>Back-compat entry point for anime callers.</summary>
+    public async Task<QualityProfile> ResolveAsync(
+        Guid? animeId,
+        CancellationToken cancellationToken = default)
+    {
+        var state = await LoadAsync(cancellationToken);
+        return Resolve(state, MediaAcquisitionKind.Anime, state.ResolveProfileId(MediaAcquisitionKind.Anime, animeId));
+    }
+
+    private QualityProfile Resolve(QualityProfileState state, MediaAcquisitionKind kind, string? profileId)
+    {
         if (profileId is not null)
         {
             var found = state.Profiles.FirstOrDefault(profile =>
@@ -79,12 +93,6 @@ public sealed class QualityProfileStore
         // Kind not configured (or its configured profile is gone): fall back to the registration seed.
         return registry.DefaultProfileFor(kind);
     }
-
-    /// <summary>Back-compat entry point for anime callers.</summary>
-    public Task<QualityProfile> ResolveAsync(
-        Guid? animeId,
-        CancellationToken cancellationToken = default) =>
-        ResolveAsync(MediaAcquisitionKind.Anime, animeId, cancellationToken);
 
     public async Task UpsertAsync(
         QualityProfile profile,
@@ -142,17 +150,59 @@ public sealed class QualityProfileStore
         }
     }
 
+    /// <summary>
+    /// One-time follow-up of the Work number migration: assignments keyed by the old Work GUID are rewritten with the Work number. Returns how many were converted.
+    /// </summary>
+    public async Task<int> ConvertWorkAssignmentsAsync(IReadOnlyDictionary<Guid, long> workNumbers, CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var (state, _) = await ReadUnsafeAsync(cancellationToken);
+            var converted = 0;
+            var assignments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var assignment in state.WorkAssignments)
+            {
+                if (Guid.TryParse(assignment.Key, out var oldId) && workNumbers.TryGetValue(oldId, out var number))
+                {
+                    assignments[number.ToString(CultureInfo.InvariantCulture)] = assignment.Value;
+                    converted++;
+                }
+                else
+                {
+                    assignments[assignment.Key] = assignment.Value;
+                }
+            }
+
+            if (converted > 0)
+            {
+                await WriteUnsafeAsync(state with { WorkAssignments = assignments }, cancellationToken);
+            }
+
+            return converted;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     /// <summary>Assigns (or clears, when profileId is null/blank) a per-work profile override.</summary>
-    public async Task AssignWorkAsync(
-        Guid workId,
+    public Task AssignWorkAsync(
+        long workId,
         string? profileId,
         CancellationToken cancellationToken = default)
     {
-        if (workId == Guid.Empty)
+        if (workId <= 0)
         {
-            throw new ArgumentException("Work ID must not be empty.", nameof(workId));
+            throw new ArgumentException("Work ID must be positive.", nameof(workId));
         }
 
+        return AssignKeyAsync(workId.ToString(CultureInfo.InvariantCulture), profileId, cancellationToken);
+    }
+
+    private async Task AssignKeyAsync(string key, string? profileId, CancellationToken cancellationToken)
+    {
         await gate.WaitAsync(cancellationToken);
         try
         {
@@ -160,7 +210,6 @@ public sealed class QualityProfileStore
             var assignments = new Dictionary<string, string>(
                 state.WorkAssignments,
                 StringComparer.OrdinalIgnoreCase);
-            var key = workId.ToString("D");
 
             if (string.IsNullOrWhiteSpace(profileId))
             {
@@ -187,7 +236,7 @@ public sealed class QualityProfileStore
         Guid animeId,
         string? profileId,
         CancellationToken cancellationToken = default) =>
-        AssignWorkAsync(animeId, profileId, cancellationToken);
+        AssignKeyAsync(animeId.ToString("D"), profileId, cancellationToken);
 
     public async Task<bool> DeleteAsync(
         string profileId,
@@ -442,10 +491,10 @@ public sealed class QualityProfileStore
 
         foreach (var assignment in state.WorkAssignments)
         {
-            if (!Guid.TryParse(assignment.Key, out _))
+            if (!Guid.TryParse(assignment.Key, out _) && !(long.TryParse(assignment.Key, NumberStyles.None, CultureInfo.InvariantCulture, out var workId) && workId > 0))
             {
                 throw new InvalidDataException(
-                    $"Quality profile work assignment key '{assignment.Key}' is not a GUID.");
+                    $"Quality profile work assignment key '{assignment.Key}' is neither an Anime GUID nor a Work number.");
             }
 
             EnsureProfileExists(state, assignment.Value);

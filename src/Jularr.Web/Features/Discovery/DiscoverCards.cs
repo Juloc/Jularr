@@ -455,7 +455,7 @@ public static class DiscoverCanonical
         foreach (var item in items)
         {
             var identity = DiscoveryShelfComposer.IdentityKey(item);
-            var work = item.LocalMediaId is { } id ? $"work:{item.Category}:{id:N}" : null;
+            var work = item.LocalMediaId is { } id ? $"work:{item.Category}:{id:N}" : item.LocalWorkId is { } workId ? $"work:{item.Category}:{workId}" : null;
             if (seen.Contains(identity) || (work is not null && seen.Contains(work)))
             {
                 continue;

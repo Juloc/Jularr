@@ -37,7 +37,7 @@ public sealed record VideoDetailEpisode(
     int? ResumePercent);
 
 /// <summary>A canonical relation of the Work. <see cref="Href"/> is null when the related Work has no consumer page yet.</summary>
-public sealed record VideoDetailRelated(Guid WorkId, WorkMediaType MediaType, string Title, int? Year, string GroupKey, string? Href);
+public sealed record VideoDetailRelated(long WorkId, WorkMediaType MediaType, string Title, int? Year, string GroupKey, string? Href);
 
 /// <summary>What the shared Request flow needs to ask for this Work: the provider identity the dialog posts, and the open request if one exists.</summary>
 public sealed record VideoDetailRequest(MediaAcquisitionKind Kind, string Category, string Provider, string ExternalId, AcquisitionRequest? Open);
@@ -49,7 +49,7 @@ public sealed record VideoDetailRequest(MediaAcquisitionKind Kind, string Catego
 /// fetched it.
 /// </summary>
 public sealed record VideoDetail(
-    Guid WorkId,
+    long WorkId,
     WorkMediaType MediaType,
     string Title,
     string? NativeTitle,
@@ -85,7 +85,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
 
     /// <summary>The detail of one Work, or null when the Work does not exist or is not of <paramref name="mediaType"/>.</summary>
     /// <param name="visibleMediaTypes">The media types the profile may browse; related Works of other types are not shown.</param>
-    public async Task<VideoDetail?> GetAsync(string profileId, Guid workId, WorkMediaType mediaType, IReadOnlyCollection<WorkMediaType> visibleMediaTypes, CancellationToken cancellationToken)
+    public async Task<VideoDetail?> GetAsync(string profileId, long workId, WorkMediaType mediaType, IReadOnlyCollection<WorkMediaType> visibleMediaTypes, CancellationToken cancellationToken)
     {
         var work = await db.Works.AsNoTracking().Where(x => x.Id == workId && x.MediaType == mediaType).Select(x => new { x.CanonicalTitle, x.Year }).SingleOrDefaultAsync(cancellationToken);
         if (work is null)
@@ -176,7 +176,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         return row is null ? LibraryLanguagePreference.None : LibraryLanguagePreference.From(row.PreferredAudioLanguage, row.PreferredSubtitleLanguage);
     }
 
-    private async Task<IReadOnlyList<VideoDetailRelated>> LoadRelatedAsync(Guid workId, IReadOnlyCollection<WorkMediaType> visibleMediaTypes, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<VideoDetailRelated>> LoadRelatedAsync(long workId, IReadOnlyCollection<WorkMediaType> visibleMediaTypes, CancellationToken cancellationToken)
     {
         var rows = await (
             from relation in db.WorkRelations.AsNoTracking()
@@ -207,7 +207,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
     private static string? RelatedHref(RelatedRow row) => row.MediaType switch
     {
         WorkMediaType.Movie or WorkMediaType.Series => LibraryBrowse.DetailHref(row.MediaType, row.WorkId),
-        WorkMediaType.Anime => row.AnimeId is { } animeId ? LibraryBrowse.DetailHref(WorkMediaType.Anime, animeId) : null,
+        WorkMediaType.Anime => row.AnimeId is { } animeId ? LibraryBrowse.AnimeDetailHref(animeId) : null,
         _ => null
     };
 
@@ -227,7 +227,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         tracks.Where(x => x.Kind == kind).Select(x => PlaybackLanguages.Normalize(x.Language)).Where(x => x is not null && x != PlaybackLanguages.SubtitlesOff).Select(x => x!).ToHashSet(StringComparer.Ordinal);
 
     private async Task<(IReadOnlyList<VideoDetailEpisode> Episodes, SeriesPlaybackFacts Playback)> LoadEpisodesAsync(
-        Guid workId,
+        long workId,
         bool hasRequestIdentity,
         IReadOnlyList<FileRow> files,
         IReadOnlyList<TrackRow> tracks,
@@ -298,5 +298,5 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
 
     private sealed record EpisodeRow(Guid Id, Guid? SeasonId, int SeasonNumber, int Number, string? Title, DateTime? AiredAt);
 
-    private sealed record RelatedRow(Guid WorkId, WorkMediaType MediaType, string Title, int? Year, WorkRelationType Relation, bool Outgoing, Guid? AnimeId);
+    private sealed record RelatedRow(long WorkId, WorkMediaType MediaType, string Title, int? Year, WorkRelationType Relation, bool Outgoing, Guid? AnimeId);
 }
