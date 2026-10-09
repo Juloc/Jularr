@@ -3,6 +3,9 @@ package de.juloc.jularr.core.api
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.AnimeSummary
 import de.juloc.jularr.core.model.ClientAccount
+import de.juloc.jularr.core.model.ClientSegmentDescriptor
+import de.juloc.jularr.core.model.ClientMediaSegment
+import de.juloc.jularr.core.model.ClientTrickplayDescriptor
 import de.juloc.jularr.core.model.ClientCapabilities
 import de.juloc.jularr.core.model.ClientFeatureFlags
 import de.juloc.jularr.core.model.ClientLibrary
@@ -533,6 +536,32 @@ class HttpJularrClientApi(
                 seekableWithinStream = fallback.getBoolean("seekableWithinStream"),
                 canRestartAtPosition = fallback.getBoolean("canRestartAtPosition"),
                 url = fallback.stringOrNull("url"),
+            )
+        },
+        segments = objectOrNull("segments")?.let { descriptor ->
+            ClientSegmentDescriptor(
+                segments = descriptor.optJSONArray("segments")?.mapObjects { segment ->
+                    ClientMediaSegment(
+                        kind = segment.getString("kind"),
+                        startMs = segment.getLong("startMs"),
+                        endMs = segment.getLong("endMs"),
+                        canSkip = segment.optBoolean("canSkip", false),
+                    )
+                }.orEmpty(),
+            )
+        },
+        trickplay = objectOrNull("trickplay")?.let { descriptor ->
+            ClientTrickplayDescriptor(
+                state = descriptor.optString("state"),
+                intervalMs = descriptor.intOrNull("intervalMs"),
+                tileWidth = descriptor.intOrNull("tileWidth"),
+                tileHeight = descriptor.intOrNull("tileHeight"),
+                columns = descriptor.intOrNull("columns"),
+                rows = descriptor.intOrNull("rows"),
+                thumbnailCount = descriptor.intOrNull("thumbnailCount"),
+                spriteUrls = descriptor.optJSONArray("spriteUrls")?.let { sprites ->
+                    (0 until sprites.length()).map { index -> sprites.getString(index) }
+                }.orEmpty(),
             )
         },
     )
