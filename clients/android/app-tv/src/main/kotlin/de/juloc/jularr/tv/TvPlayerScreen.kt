@@ -485,6 +485,8 @@ fun TvPlayerScreen(
                     episodeTitle = episodeTitle,
                     isPlaying = isPlaying,
                     playbackEnded = playbackEnded,
+                    skipSegment = skipSegment,
+                    onSkipSegment = { segment -> player.player.seekTo(segment.endMs) },
                     previousEpisodeTitle = previousEpisodeTitle,
                     nextEpisodeTitle = nextEpisodeTitle,
                     onPreviousEpisode = onPreviousEpisode,
@@ -689,31 +691,18 @@ fun TvPlayerScreen(
                 }
             }
 
-            if (skipSegment != null && uiState.learningLayer == TvLearningLayer.CLOSED &&
+            if (skipSegment != null && !uiState.controlsVisible &&
+                uiState.learningLayer == TvLearningLayer.CLOSED &&
                 trackPanel == null && playbackError == null && !companionVisible
             ) {
                 Button(
                     onClick = { player.player.seekTo(skipSegment.endMs) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(
-                            end = 52.dp,
-                            bottom = if (uiState.controlsVisible) 310.dp else 48.dp,
-                        )
+                        .padding(end = 52.dp, bottom = 48.dp)
                         .focusRequester(skipFocus),
                 ) {
-                    Text(
-                        stringResource(
-                            when (skipSegment.kind.lowercase()) {
-                                "intro" -> R.string.tv_player_skip_intro
-                                "recap" -> R.string.tv_player_skip_recap
-                                "outro" -> R.string.tv_player_skip_outro
-                                "credits" -> R.string.tv_player_skip_credits
-                                "preview" -> R.string.tv_player_skip_preview
-                                else -> R.string.tv_player_skip_section
-                            },
-                        ),
-                    )
+                    Text(stringResource(skipLabelRes(skipSegment.kind)))
                 }
             }
 
@@ -748,6 +737,8 @@ private fun PlayerControls(
     episodeTitle: String,
     isPlaying: Boolean,
     playbackEnded: Boolean,
+    skipSegment: ClientMediaSegment?,
+    onSkipSegment: (ClientMediaSegment) -> Unit,
     previousEpisodeTitle: String?,
     nextEpisodeTitle: String?,
     onPreviousEpisode: () -> Unit,
@@ -852,6 +843,16 @@ private fun PlayerControls(
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            if (skipSegment != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    Button(onClick = { onSkipSegment(skipSegment) }) {
+                        Text(stringResource(skipLabelRes(skipSegment.kind)))
+                    }
+                }
+            }
             var scrubFocused by remember { mutableStateOf(false) }
             if (scrubPreviewMs != null) {
                 Text(
@@ -1070,6 +1071,16 @@ private fun PlayerControls(
         }
     }
 }
+
+private fun skipLabelRes(kind: String): Int =
+    when (kind.lowercase()) {
+        "intro" -> R.string.tv_player_skip_intro
+        "recap" -> R.string.tv_player_skip_recap
+        "outro" -> R.string.tv_player_skip_outro
+        "credits" -> R.string.tv_player_skip_credits
+        "preview" -> R.string.tv_player_skip_preview
+        else -> R.string.tv_player_skip_section
+    }
 
 @Composable
 private fun TvSeekScenes(
