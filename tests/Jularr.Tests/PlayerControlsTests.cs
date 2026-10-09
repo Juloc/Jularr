@@ -111,19 +111,31 @@ public sealed class PlayerControlsTests
         Assert.AreEqual(1.0, defaults.DefaultPlaybackSpeed);
         Assert.IsNull(defaults.PreferredAudioLanguage);
         Assert.IsNull(defaults.PreferredSubtitleLanguage);
+        Assert.IsNull(defaults.PreferredSecondarySubtitleLanguage);
+        Assert.AreEqual(100, defaults.SubtitleSizePercent);
+        Assert.AreEqual(0, defaults.SubtitleOffsetMs);
 
         var updated = await reader.UpdatePreferencesAsync(
             new PlaybackPreferencesUpdate(
                 PreferredAudioLanguage: "JPN",
                 PreferredSubtitleLanguage: "Off",
+                PreferredSecondarySubtitleLanguage: "ENG",
+                SubtitleSizePercent: 130,
+                SubtitleOffsetMs: -750,
                 DefaultPlaybackSpeed: 1.5));
         Assert.AreEqual("ja", updated.PreferredAudioLanguage);
         Assert.AreEqual("off", updated.PreferredSubtitleLanguage);
         Assert.AreEqual(1.5, updated.DefaultPlaybackSpeed);
+        Assert.AreEqual("en", updated.PreferredSecondarySubtitleLanguage);
+        Assert.AreEqual(130, updated.SubtitleSizePercent);
+        Assert.AreEqual(-750, updated.SubtitleOffsetMs);
 
         var autoplayOnly = await reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(AutoplayNext: true));
         Assert.AreEqual("ja", autoplayOnly.PreferredAudioLanguage, "Omitted fields keep their stored value.");
         Assert.AreEqual(1.5, autoplayOnly.DefaultPlaybackSpeed);
+        Assert.AreEqual("en", autoplayOnly.PreferredSecondarySubtitleLanguage);
+        Assert.AreEqual(130, autoplayOnly.SubtitleSizePercent);
+        Assert.AreEqual(-750, autoplayOnly.SubtitleOffsetMs);
 
         var cleared = await reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(PreferredAudioLanguage: ""));
         Assert.IsNull(cleared.PreferredAudioLanguage, "An empty language clears back to the file default.");
@@ -134,16 +146,44 @@ public sealed class PlayerControlsTests
             reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(PreferredAudioLanguage: "off")));
         await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
             reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(PreferredSubtitleLanguage: "english")));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(PreferredSecondarySubtitleLanguage: "english")));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(SubtitleSizePercent: 201)));
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
+            reader.UpdatePreferencesAsync(new PlaybackPreferencesUpdate(SubtitleOffsetMs: -10001)));
 
         var stored = await reader.GetPreferencesAsync();
         Assert.AreEqual(1.5, stored.DefaultPlaybackSpeed, "Rejected updates store nothing.");
         Assert.AreEqual("off", stored.PreferredSubtitleLanguage);
+        Assert.AreEqual("en", stored.PreferredSecondarySubtitleLanguage);
+        Assert.AreEqual(130, stored.SubtitleSizePercent);
+        Assert.AreEqual(-750, stored.SubtitleOffsetMs);
 
         Assert.AreEqual(PlaybackPreferencesSnapshot.Default, await other.GetPreferencesAsync());
         Assert.AreEqual(1, await fixture.Db.ProfilePlaybackPreferences.CountAsync());
     }
 
     // ---- Track selection across fallback restarts --------------------------------
+
+    [TestMethod]
+    public void SecondSubtitlePreferenceSelectsAvailableTextWithoutLearning()
+    {
+        var preferences = new PlaybackPreferencesSnapshot(
+            false, PreferredSubtitleLanguage: "ja",
+            PreferredSecondarySubtitleLanguage: "en",
+            SubtitleSizePercent: 125, SubtitleOffsetMs: 500);
+        var controls = PlayerControls.Build(Tracks, 1080, false, null, preferences);
+
+        Assert.AreEqual("stream:5", controls.InitialSubtitle);
+        Assert.AreEqual("stream:4", controls.InitialSecondarySubtitle);
+        Assert.IsFalse(controls.HasLearningCues);
+        Assert.AreEqual(125, controls.Preferences.SubtitleSizePercent);
+
+        var noTextMatch = PlayerControls.Build(Tracks, 1080, false, null,
+            preferences with { PreferredSecondarySubtitleLanguage = "de" });
+        Assert.AreEqual("off", noTextMatch.InitialSecondarySubtitle);
+    }
 
     [TestMethod]
     public void SelectedAudioTrackSurvivesDeviceToServerFallbackRestart()
@@ -294,6 +334,9 @@ public sealed class PlayerControlsTests
         Assert.AreEqual("ja", root.GetProperty("preferredAudioLanguage").GetString());
         Assert.AreEqual("off", root.GetProperty("preferredSubtitleLanguage").GetString());
         Assert.AreEqual(1.25, root.GetProperty("defaultPlaybackSpeed").GetDouble());
+        Assert.AreEqual(100, root.GetProperty("subtitleSizePercent").GetInt32());
+        Assert.AreEqual(0, root.GetProperty("subtitleOffsetMs").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("preferredSecondarySubtitleLanguage").ValueKind);
 
         var features = ClientApiContract.Capabilities().Features;
         Assert.IsTrue(features.PlaybackPreferences);
@@ -326,6 +369,283 @@ public sealed class PlayerControlsTests
     // ---- Cue timing at playback speed ---------------------------------------------
 
     [TestMethod]
+    public void DualSubtitlesRenderIndependentTextTracksOnTheSameClock()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var stage = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "_VideoPlayerStage.cshtml"));
+        StringAssert.Contains(stage, "data-secondary-subtitle-track");
+        StringAssert.Contains(stage, "data-secondary-playback-subtitle");
+        StringAssert.Contains(stage, "track.IsSelectable && !track.IsImage");
+
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    let playbackCues = [];");
+            const end = source.indexOf("    const updateRepeatAvailability = () => {", start);
+            if (start < 0 || end < 0) throw new Error("subtitle owner not found");
+            (async () => {
+                const design = { activeCuesAt: (items, ms) => items.filter(c => c.startMs <= ms && ms <= c.endMs) };
+                const cues = [];
+                let subtitleChoice = "stream:2";
+                let secondarySubtitleChoice = "stream:3";
+                const subtitleSelect = { selectedOptions: [{ dataset: {} }] };
+                const burnInSubtitleTrackId = () => null;
+                const playbackSubtitle = { textContent: "", hidden: true };
+                const secondaryPlaybackSubtitle = { textContent: "", hidden: true };
+                const subtitleCanvas = null;
+                const primaryPositionedSubtitles = null;
+                const secondaryPositionedSubtitles = null;
+                const controlsData = { subtitleCuesUrlTemplate: "/cues/__track__" };
+                const text = {};
+                const showPlayerError = () => {};
+                const urls = [];
+                const fetch = async url => {
+                    urls.push(url);
+                    return { ok: true, json: async () => ({
+                        cues: [{ startMs: 1000, endMs: 2000, text: url.endsWith("stream%3A2") ? "Original" : "Translation" }]
+                    }) };
+                };
+                const result = await eval(source.slice(start, end) + `
+                    (async () => {
+                        playbackCues = await loadSubtitleCues("stream:2");
+                        secondaryPlaybackCues = await loadSubtitleCues("stream:3");
+                        renderPlaybackSubtitle(1500);
+                        const shown = playbackSubtitle.textContent + "|" + secondaryPlaybackSubtitle.textContent;
+                        renderPlaybackSubtitle(3000);
+                        const hidden = playbackSubtitle.hidden && secondaryPlaybackSubtitle.hidden;
+                        secondarySubtitleChoice = subtitleChoice;
+                        const duplicateBlocked = secondaryTrackId() === null;
+                        await loadSubtitleCues("stream:2");
+                        return [shown, hidden, duplicateBlocked].join("|");
+                    })()
+                `);
+                console.log(result + "|" + urls.length);
+            })().catch(error => { console.error(error); process.exitCode = 1; });
+            """;
+
+        Assert.AreEqual("Original|Translation|true|true|2", RunNode(script, player));
+    }
+
+    [TestMethod]
+    public void StyledSubtitlesKeepOverlappingSignAndDialogueIndependent()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    let playbackCues = [];");
+            const end = source.indexOf("    const updateRepeatAvailability = () => {", start);
+            if (start < 0 || end < 0) throw new Error("subtitle renderer missing");
+
+            const fake = () => ({
+                textContent: "", hidden: true, children: [], style: {},
+                replaceChildren(...children) { this.children = children; }
+            });
+            const document = { createElement: () => ({ style: {}, textContent: "" }) };
+            const design = { activeCuesAt: (items, ms) => items.filter(c => c.startMs <= ms && ms <= c.endMs) };
+            const cues = [];
+            let subtitleChoice = "stream:2";
+            let secondarySubtitleChoice = "stream:3";
+            const video = { videoWidth: 640, videoHeight: 360 };
+            const stage = { clientWidth: 640, clientHeight: 360, dataset: { chromeState: "visible" } };
+            const subtitleCanvas = { style: {} };
+            const primaryPositionedSubtitles = fake();
+            const secondaryPositionedSubtitles = fake();
+            const playbackSubtitle = fake();
+            const secondaryPlaybackSubtitle = fake();
+            const subtitleSelect = { selectedOptions: [{ dataset: {} }] };
+            const burnInSubtitleTrackId = () => null;
+            const controlsData = {};
+            const showPlayerError = () => {};
+            const text = {};
+            const output = eval(source.slice(start, end) + `
+                (() => {
+                    playbackCues = [
+                        { startMs: 0, endMs: 2000, text: "駅前",
+                            presentation: { alignment: 7, xPercent: 25, yPercent: 10, layer: 3, color: "#0099FF" } },
+                        { startMs: 0, endMs: 2000, text: "Dialogue" }
+                    ];
+                    secondaryPlaybackCues = [{ startMs: 0, endMs: 2000, text: "Translation" }];
+                    renderPlaybackSubtitle(1500);
+                    return [
+                        primaryPositionedSubtitles.children.length,
+                        playbackSubtitle.children.length,
+                        secondaryPlaybackSubtitle.children.length,
+                        primaryPositionedSubtitles.children[0].style.left,
+                        primaryPositionedSubtitles.children[0].style.top,
+                        primaryPositionedSubtitles.children[0].style.color,
+                        playbackSubtitle.children[0].textContent,
+                        secondaryPlaybackSubtitle.children[0].textContent
+                    ].join("|");
+                })()
+            `);
+            console.log(output);
+            """;
+        Assert.AreEqual("1|1|1|25%|10%|#0099FF|Dialogue|Translation", RunNode(script, player));
+    }
+
+    [TestMethod]
+    public void SubtitleCollisionPolicyMovesSecondaryButKeepsAuthoredPrimaryPosition()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const resolveSubtitleCollisions = () => {");
+            const end = source.indexOf("    const renderPlaybackSubtitle = timeMs => {", start);
+            if (start < 0 || end < 0) throw new Error("collision policy missing");
+
+            const box = (left, top, right, bottom) => ({ left, top, right, bottom, height: bottom - top });
+            const sourceSign = {
+                style: { transform: "translate(0%, 0%)" },
+                getBoundingClientRect: () => box(80, 60, 240, 102)
+            };
+            const translatedSign = {
+                style: { transform: "translate(0%, 0%)" },
+                getBoundingClientRect: () => box(80, 60, 240, 102)
+            };
+            const primaryPositionedSubtitles = {
+                querySelectorAll: () => [sourceSign]
+            };
+            const secondaryPositionedSubtitles = {
+                querySelectorAll: () => [translatedSign]
+            };
+            const subtitleCanvas = { getBoundingClientRect: () => box(0, 0, 640, 360) };
+            const stage = {
+                getBoundingClientRect: () => ({ ...box(0, 0, 640, 360), height: 360 })
+            };
+            const subtitleStack = {
+                style: { bottom: "" },
+                getBoundingClientRect() {
+                    const bottom = Number.parseFloat(this.style.bottom) || 76;
+                    return box(120, 360 - bottom - 50, 520, 360 - bottom);
+                }
+            };
+            const resolve = eval(source.slice(start, end) + "resolveSubtitleCollisions");
+            resolve();
+            const authored = sourceSign.style.transform;
+            const translated = translatedSign.style.transform;
+            primaryPositionedSubtitles.querySelectorAll = () => [{
+                getBoundingClientRect: () => box(140, 245, 500, 272)
+            }];
+            secondaryPositionedSubtitles.querySelectorAll = () => [];
+            resolve();
+            console.log([authored, translated, subtitleStack.style.bottom].join("|"));
+            """;
+
+        Assert.AreEqual("translate(0%, 0%)|translate(0%, 0%) translateY(-48px)|121px", RunNode(script, player));
+    }
+
+    [TestMethod]
+    public void SubtitleMenuRendersBothTrackSelectorsFromSharedOptions()
+    {
+        var root = RepositoryRoot();
+        var chrome = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-chrome.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const renderSettingValues = () => {");
+            const end = source.indexOf('    const setSettings = (open, mode = "all") => {', start);
+            if (start < 0 || end < 0) throw new Error("settings option owner missing");
+
+            const create = tag => ({
+                tag, children: [], attrs: {}, dataset: {},
+                append(...children) { this.children.push(...children); },
+                setAttribute(name, value) { this.attrs[name] = value; },
+                remove() {},
+                textContent: ""
+            });
+            const document = { createElement: create };
+            const primary = [
+                { value: "off", textContent: "Off" },
+                { value: "stream:2", textContent: "German" }
+            ];
+            const secondary = [
+                { value: "off", textContent: "Off" },
+                { value: "stream:3", textContent: "English" }
+            ];
+            const settingSelects = {
+                subtitles: { value: "stream:2", options: primary, selectedOptions: [primary[1]] },
+                secondarySubtitles: { value: "stream:3", options: secondary, selectedOptions: [secondary[1]] }
+            };
+            const settings = {
+                querySelector(query) {
+                    if (query === ".player-settings-header") return { after() {} };
+                    return { textContent: query.includes("secondarySubtitles") ? "Second" : "First" };
+                }
+            };
+            const stage = { querySelectorAll: () => [] };
+            const optionLabel = option => option.textContent.trim();
+            let optionList = null;
+            const result = eval(source.slice(start, end) + `
+                (() => {
+                    renderOptions("subtitles", "Subtitles");
+                    return optionList.children
+                        .filter(row => row.className === "player-options")
+                        .map(row => row.children.map(button =>
+                            button.dataset.settingMode + "=" + button.dataset.value).join(","))
+                        .join("|");
+                })()
+            `);
+            console.log(result);
+            """;
+
+        Assert.AreEqual(
+            "subtitles=off,subtitles=stream:2|secondarySubtitles=off,secondarySubtitles=stream:3",
+            RunNode(script, chrome));
+    }
+
+    [TestMethod]
+    public void SubtitleAppearanceSlidersUpdateBothLanguagesWithoutReloadingPlayback()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const applySubtitleAppearance = () => {");
+            const end = source.indexOf("    const resolveSecondarySelection = () => {", start);
+            if (start < 0 || end < 0) throw new Error("subtitle appearance settings missing");
+
+            const properties = new Map();
+            const handlers = {};
+            const root = { style: { setProperty: (key, value) => properties.set(key, value) } };
+            const subtitleSizeInput = {
+                value: "100", addEventListener: (event, handler) => handlers["size:" + event] = handler
+            };
+            const subtitleOffsetInput = {
+                value: "0", addEventListener: (event, handler) => handlers["offset:" + event] = handler
+            };
+            const subtitleSizeOutput = { textContent: "" };
+            const subtitleOffsetOutput = { textContent: "" };
+            let subtitleSizePercent = 100;
+            let subtitleOffsetMs = 0;
+            let playbackCueKey = "cached";
+            let secondaryCueKey = "cached";
+            let frames = 0;
+            const sync = () => frames++;
+            eval(source.slice(start, end) + "applySubtitleAppearance()");
+            subtitleSizeInput.value = "150";
+            handlers["size:input"]();
+            subtitleOffsetInput.value = "-2500";
+            handlers["offset:input"]();
+            console.log([
+                properties.get("--player-playback-subtitle-size"),
+                properties.get("--player-secondary-subtitle-size"),
+                subtitleSizeOutput.textContent,
+                subtitleOffsetOutput.textContent,
+                frames,
+                playbackCueKey === null && secondaryCueKey === null
+            ].join("|"));
+            """;
+
+        Assert.AreEqual("33.0px|30.0px|150%|-2500 ms|3|true", RunNode(script, player));
+    }
+
+    [TestMethod]
     public void WebCueLookupFollowsTheMediaClockAtEveryPlaybackSpeed()
     {
         var root = RepositoryRoot();
@@ -333,7 +653,7 @@ public sealed class PlayerControlsTests
 
         StringAssert.Contains(player, "video.defaultPlaybackRate = playbackSpeed;", "A source restart must keep the speed.");
         StringAssert.Contains(player, "design.cueIndexAt(cues, nowMs)");
-        StringAssert.Contains(player, "design.activeCuesAt(playbackCues, timeMs)");
+        StringAssert.Contains(player, "design.activeCuesAt(trackCues, timeMs)");
         StringAssert.Contains(player, "const nowMs = Math.floor(absoluteCurrentTime() * 1000);");
         Assert.IsFalse(player.Contains("Date.now() - playbackStarted", StringComparison.Ordinal));
 

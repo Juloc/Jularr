@@ -325,12 +325,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<WantedItem>(entity =>
         {
-            entity.ToTable("WantedItems", table => table.HasCheckConstraint("CK_WantedItems_TargetKind", "\"TargetKind\" >= 0 AND \"TargetKind\" <= 6"));
+            entity.ToTable("WantedItems", table =>
+            {
+                table.HasCheckConstraint("CK_WantedItems_TargetKind", "\"TargetKind\" >= 0 AND \"TargetKind\" <= 6");
+                table.HasCheckConstraint("CK_WantedItems_WorkTargetHasNoNode", "(\"TargetKind\" = 0) = (\"TargetId\" IS NULL)");
+            });
             entity.HasKey(x => x.Id);
             entity.Property(x => x.TargetKind).HasConversion<short>();
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasIndex(x => new { x.TargetKind, x.TargetId }).IsUnique();
-            entity.HasIndex(x => x.WorkId);
+            entity.HasIndex(x => new { x.WorkId, x.TargetKind, x.TargetId }).IsUnique().AreNullsDistinct(false);
+            entity.HasIndex(x => new { x.TargetKind, x.TargetId });
         });
 
         modelBuilder.Entity<StoredFile>(entity =>
@@ -459,11 +463,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<ProfilePlaybackPreferences>(entity =>
         {
+            entity.ToTable("ProfilePlaybackPreferences", table =>
+            {
+                table.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleSizePercent", "\"SubtitleSizePercent\" BETWEEN 75 AND 200");
+                table.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleOffsetMs", "\"SubtitleOffsetMs\" BETWEEN -10000 AND 10000");
+            });
             entity.HasKey(x => x.ProfileId);
             entity.Property(x => x.ProfileId).HasMaxLength(80);
             entity.Property(x => x.PreferredAudioLanguage).HasMaxLength(16);
             entity.Property(x => x.PreferredSubtitleLanguage).HasMaxLength(16);
+            entity.Property(x => x.PreferredSecondarySubtitleLanguage).HasMaxLength(16);
             entity.Property(x => x.DefaultPlaybackSpeed).HasDefaultValue(PlaybackPreferenceRules.DefaultSpeed);
+            entity.Property(x => x.SubtitleSizePercent).HasDefaultValue(100);
+            entity.Property(x => x.SubtitleOffsetMs).HasDefaultValue(0);
         });
 
         LearningCourseModelConfiguration.Configure(modelBuilder);

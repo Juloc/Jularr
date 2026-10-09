@@ -74,7 +74,7 @@ public static class ClientApiOfflinePackageContract
         var kind = target.Kind?.Trim().ToLowerInvariant();
         if (kind == WorkTarget)
         {
-            if (target.WorkId is null || target.WorkId == Guid.Empty)
+            if (target.WorkId is null or <= 0)
             {
                 message = "A work target requires workId.";
                 return false;
@@ -154,7 +154,7 @@ public enum ClientOfflinePackageIntent
 /// </summary>
 public sealed record ClientOfflinePackageTarget(
     string? Kind,
-    Guid? WorkId = null,
+    long? WorkId = null,
     Guid? WorkEpisodeId = null,
     Guid? WorkChapterId = null,
     Guid? EditionId = null,

@@ -24,11 +24,11 @@ public sealed partial class AcquisitionAccessStore
                         FROM jsonb_array_elements(CASE WHEN "Kind" = 'anime' AND payload->>'scope' = 'episodes' THEN payload->'episodes' ELSE '[]'::jsonb END)
                         UNION ALL
                         SELECT s."SeasonNumber" FROM "WorkSeasons" s
-                        WHERE "Kind" = 'tv' AND s."WorkId" = (payload->>'workId')::uuid
+                        WHERE "Kind" = 'tv' AND s."WorkId" = (payload->>'workId')::bigint
                             AND payload->'requested'->'seasonIds' ? s."Id"::text
                         UNION ALL
                         SELECT e."SeasonNumber" FROM "WorkEpisodes" e
-                        WHERE "Kind" = 'tv' AND e."WorkId" = (payload->>'workId')::uuid
+                        WHERE "Kind" = 'tv' AND e."WorkId" = (payload->>'workId')::bigint
                             AND payload->'requested'->'episodeIds' ? e."Id"::text
                         UNION ALL
                         SELECT e."SeasonNumber" FROM "RequestTargets" t JOIN "WorkEpisodes" e ON e."Id" = t."TargetId" AND e."WorkId" = t."WorkId"
@@ -66,7 +66,7 @@ public sealed partial class AcquisitionAccessStore
 
             return counts;
         }, cancellationToken);
-        var tabCounts = Enum.GetValues<AdminRequestTab>().ToDictionary(tab => tab, tab => statuses.Where(pair => tab == AdminRequestTab.All ? pair.Key != AcquisitionRequestStatus.Completed : AdminRequestQuery.TabOf(pair.Key) == tab).Sum(pair => pair.Value));
+        var tabCounts = Enum.GetValues<AdminRequestTab>().ToDictionary(tab => tab, tab => statuses.Where(pair => tab == AdminRequestTab.All || AdminRequestQuery.TabOf(pair.Key) == tab).Sum(pair => pair.Value));
         var total = statuses.Where(pair => MatchesQueueStatus(pair.Key, filter)).Sum(pair => pair.Value);
         var pageCount = Math.Max(1, (total + filter.PageSize - 1) / filter.PageSize);
         filter = filter with { Page = Math.Clamp(filter.Page, 1, pageCount) };
@@ -110,7 +110,7 @@ public sealed partial class AcquisitionAccessStore
     }
 
     private static bool MatchesQueueStatus(AcquisitionRequestStatus status, AdminRequestFilter filter) =>
-        (filter.Tab == AdminRequestTab.All ? filter.Status is not null || status != AcquisitionRequestStatus.Completed : AdminRequestQuery.TabOf(status) == filter.Tab)
+        (filter.Tab == AdminRequestTab.All || AdminRequestQuery.TabOf(status) == filter.Tab)
         && (filter.Status is null || status == filter.Status);
 
     private static void BindQueue(DbCommand command, AdminRequestFilter filter, IReadOnlyCollection<MediaAcquisitionKind> kinds, IReadOnlyDictionary<string, string> names)

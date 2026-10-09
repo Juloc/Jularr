@@ -58,7 +58,11 @@ public sealed class CanonicalPlaybackPlanTests
             EpisodeNumber = 2,
             Title = "TV 2"
         };
-        fixture.Db.AddRange(movie, anime, animeEpisode, series, tvEpisode);
+        fixture.Db.AddRange(movie, anime, series);
+        await fixture.Db.SaveChangesAsync();
+        animeEpisode.WorkId = anime.Id;
+        tvEpisode.WorkId = series.Id;
+        fixture.Db.AddRange(animeEpisode, tvEpisode);
         await fixture.Db.SaveChangesAsync();
 
         var movieFile = await AttachAsync(fixture, storage, movie.Id, null, "movie.mp4", MediaProbeFixtures.H264Stereo);
@@ -145,7 +149,14 @@ public sealed class CanonicalPlaybackPlanTests
         var episode1 = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 1, Title = "One" };
         var episode2 = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 2, Title = "Two" };
         var episode3 = new WorkEpisode { WorkId = series.Id, SeasonNumber = 2, EpisodeNumber = 1, Title = "Three" };
-        fixture.Db.AddRange(movie, series, episode1, episode2, episode3);
+        fixture.Db.AddRange(movie, series);
+        await fixture.Db.SaveChangesAsync();
+        foreach (var episode in new[] { episode1, episode2, episode3 })
+        {
+            episode.WorkId = series.Id;
+        }
+
+        fixture.Db.AddRange(episode1, episode2, episode3);
         await fixture.Db.SaveChangesAsync();
 
         await AttachAsync(fixture, storage, movie.Id, null, "bootstrap-movie.mp4", MediaProbeFixtures.H264Stereo);
@@ -193,7 +204,10 @@ public sealed class CanonicalPlaybackPlanTests
             EpisodeNumber = 1,
             Title = "Episode 1"
         };
-        fixture.Db.AddRange(work, workEpisode);
+        fixture.Db.Add(work);
+        await fixture.Db.SaveChangesAsync();
+        workEpisode.WorkId = work.Id;
+        fixture.Db.Add(workEpisode);
         await fixture.Db.SaveChangesAsync();
 
         var storage = new CanonicalMediaStorageService(fixture.Db);
@@ -242,7 +256,7 @@ public sealed class CanonicalPlaybackPlanTests
     private static async Task<CanonicalPlayableFile> AttachAsync(
         MediaInventoryFixture fixture,
         CanonicalMediaStorageService storage,
-        Guid workId,
+        long workId,
         Guid? workEpisodeId,
         string fileName,
         string probe)

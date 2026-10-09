@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Release;
 
@@ -119,10 +120,12 @@ public sealed record QualityProfileState(
     public string? DefaultProfileIdFor(MediaAcquisitionKind kind) =>
         KindDefaults.TryGetValue(AcquisitionAccessNames.Kind(kind), out var id) ? id : null;
 
-    public string? ResolveProfileId(MediaAcquisitionKind kind, Guid? workId) =>
-        workId is Guid id && WorkAssignments.TryGetValue(id.ToString("D"), out var assigned)
-            ? assigned
-            : DefaultProfileIdFor(kind);
+    public string? ResolveProfileId(MediaAcquisitionKind kind, long? workId) => ResolveProfileId(kind, workId?.ToString(CultureInfo.InvariantCulture));
+
+    public string? ResolveProfileId(MediaAcquisitionKind kind, Guid? animeId) => ResolveProfileId(kind, animeId?.ToString("D"));
+
+    private string? ResolveProfileId(MediaAcquisitionKind kind, string? key) =>
+        key is not null && WorkAssignments.TryGetValue(key, out var assigned) ? assigned : DefaultProfileIdFor(kind);
 }
 
 public sealed record ReleaseCandidate(

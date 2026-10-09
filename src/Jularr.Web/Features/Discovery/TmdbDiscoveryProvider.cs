@@ -351,7 +351,7 @@ public sealed partial class TmdbDiscoveryProvider(
             .SingleOrDefaultAsync(cancellationToken);
 
         Work work;
-        if (existingWorkId != Guid.Empty)
+        if (existingWorkId != 0)
         {
             work = await db.Works.SingleAsync(x => x.Id == existingWorkId, cancellationToken);
             if (legacyMovie.SingleOrDefault() is { } movie)
@@ -464,7 +464,7 @@ public sealed partial class TmdbDiscoveryProvider(
 
         if (mediaType == TmdbDiscoveryMediaType.Series)
         {
-            await MaterializeSeriesStructureAsync(work.Id, tmdbId, details, locale, cancellationToken);
+            await MaterializeSeriesStructureAsync(work.Id, tmdbId, details, locale, refresh: false, cancellationToken);
         }
 
         // The Work is durable from here on: its synopsis, artwork and facts are persisted by the background metadata spool, never by
@@ -627,29 +627,56 @@ public sealed partial class TmdbDiscoveryProvider(
     private static DateOnly? ParseDateOnly(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
+    /// <summary>
+    /// Brings the stored seasons and episodes of a Series up to date with TMDB and says whether the show is still airing, which sets how soon the
+    /// spool looks again. Only a season that is new, differs in episode count from what is stored or is the latest one is fetched, so a long show
+    /// costs one details call plus the seasons that can have changed.
+    /// </summary>
+    public async Task<bool> SyncSeriesStructureAsync(long workId, string externalId, string locale, CancellationToken cancellationToken)
+    {
+        if (!TryNormalizeExternalId(externalId, out var normalized) || !int.TryParse(normalized, NumberStyles.None, CultureInfo.InvariantCulture, out var seriesId))
+        {
+            throw new ArgumentException("A positive TMDB id is required.", nameof(externalId));
+        }
+
+        var details = await GetJsonAsync<TmdbDetails>($"tv/{seriesId}", [("language", locale)], cancellationToken);
+        await MaterializeSeriesStructureAsync(workId, seriesId, details, locale, refresh: true, cancellationToken);
+        return details.Status is "Returning Series" or "In Production" or "Planned" or "Pilot";
+    }
+
     private async Task MaterializeSeriesStructureAsync(
-        Guid workId,
+        long workId,
         int tmdbId,
         TmdbDetails details,
         string locale,
+        bool refresh,
         CancellationToken cancellationToken)
     {
-        foreach (var seasonSummary in (details.Seasons ?? [])
-                     .Where(x => x.SeasonNumber >= 0)
-                     .OrderBy(x => x.SeasonNumber)
-                     .Take(MaxMaterializedSeasons))
+        var summaries = (details.Seasons ?? [])
+            .Where(x => x.SeasonNumber >= 0)
+            .OrderBy(x => x.SeasonNumber)
+            .Take(MaxMaterializedSeasons)
+            .ToList();
+        var storedCounts = refresh
+            ? await db.WorkEpisodes.AsNoTracking().Where(x => x.WorkId == workId).GroupBy(x => x.SeasonNumber).Select(group => new { group.Key, Count = group.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count, cancellationToken)
+            : [];
+        var latest = summaries.Count == 0 ? -1 : summaries[^1].SeasonNumber;
+        foreach (var seasonSummary in summaries)
         {
+            if (refresh && seasonSummary.SeasonNumber != latest && storedCounts.GetValueOrDefault(seasonSummary.SeasonNumber) == seasonSummary.EpisodeCount)
+            {
+                continue;
+            }
+
             var season = await structure.AddOrUpdateSeasonAsync(
                 workId,
                 seasonSummary.SeasonNumber,
                 seasonSummary.Name,
                 cancellationToken);
 
-            var seasonDetails = await GetSeasonAsync(
-                tmdbId,
-                seasonSummary.SeasonNumber,
-                locale,
-                cancellationToken);
+            var seasonDetails = refresh
+                ? await GetJsonAsync<TmdbSeasonDetails>($"tv/{tmdbId}/season/{seasonSummary.SeasonNumber}", [("language", locale)], cancellationToken)
+                : await GetSeasonAsync(tmdbId, seasonSummary.SeasonNumber, locale, cancellationToken);
 
             foreach (var episode in seasonDetails.Episodes ?? [])
             {
@@ -933,6 +960,9 @@ public sealed partial class TmdbDiscoveryProvider(
         [JsonPropertyName("seasons")]
         public List<TmdbSeasonSummary>? Seasons { get; set; }
 
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+
         public string DisplayTitle(TmdbDiscoveryMediaType mediaType) =>
             (mediaType == TmdbDiscoveryMediaType.Movie ? Title : Name)
             ?? OriginalDisplayTitle(mediaType)
@@ -1165,6 +1195,9 @@ public sealed partial class TmdbDiscoveryProvider(
 
         [JsonPropertyName("name")]
         public string? Name { get; set; }
+
+        [JsonPropertyName("episode_count")]
+        public int EpisodeCount { get; set; }
     }
 
     private sealed class TmdbSeasonDetails

@@ -135,7 +135,7 @@ public sealed record AcquisitionRequest(
     DateTime UpdatedAt,
     string? DecidedByProfileId,
     DateTime? DecidedAt,
-    Guid? WorkId = null)
+    long? WorkId = null)
 {
     /// <summary>
     /// Whether the request is bound to its canonical Work: the one Work Library, profile assignment, search and import all use. Provider and external id
@@ -189,7 +189,7 @@ public sealed record AcquisitionRequestDraft(
     string? CoverImageUrl,
     string? PayloadJson = null,
     AcquisitionRequestOptions? Options = null,
-    Guid? WorkId = null);
+    long? WorkId = null);
 
 /// <summary>The request a submit ended with, and whether it was an open request for the title already.</summary>
 public sealed record AcquisitionSubmission(AcquisitionRequest Request, bool AlreadyRequested);

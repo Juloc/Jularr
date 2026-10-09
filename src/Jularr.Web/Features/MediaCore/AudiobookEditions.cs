@@ -10,7 +10,7 @@ namespace Jularr.Web.Features.MediaCore;
 /// </summary>
 public static class AudiobookEditions
 {
-    public static async Task<Guid> EnsureAsync(AppDbContext db, Guid workId, CancellationToken cancellationToken)
+    public static async Task<Guid> EnsureAsync(AppDbContext db, long workId, CancellationToken cancellationToken)
     {
         if (await FindAsync(db, workId, cancellationToken) is { } existing)
         {
@@ -32,7 +32,7 @@ public static class AudiobookEditions
         }
     }
 
-    private static async Task<Guid?> FindAsync(AppDbContext db, Guid workId, CancellationToken cancellationToken) =>
+    private static async Task<Guid?> FindAsync(AppDbContext db, long workId, CancellationToken cancellationToken) =>
         await db.WorkEditions.AsNoTracking()
             .Where(edition => edition.WorkId == workId && edition.EditionKey == LegacyWorkBridge.AudiobookEditionKey)
             .Select(edition => (Guid?)edition.Id)

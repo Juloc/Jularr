@@ -15,12 +15,12 @@ namespace Jularr.Web.Features.Acquisition.Access;
 public sealed class RequestArtworkResolver(AppDbContext db, VideoRequestWorkResolver works)
 {
     /// <summary>The cached poster address of each Work, in the artwork language of the viewer; a Work without a cached poster is left out.</summary>
-    public async Task<IReadOnlyDictionary<Guid, string>> ResolveWorkPostersAsync(IReadOnlyCollection<Guid> workIds, string profileId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<long, string>> ResolveWorkPostersAsync(IReadOnlyCollection<long> workIds, string profileId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
         if (workIds.Count == 0)
         {
-            return new Dictionary<Guid, string>();
+            return new Dictionary<long, string>();
         }
 
         var rows = await new WorkMetadataStore(db).LoadCardMetadataAsync([.. workIds.Distinct()], cancellationToken);

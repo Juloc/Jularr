@@ -48,15 +48,31 @@
          aria-label="@ui["library.watch.playerAria"]">
         <video preload="none" playsinline hidden data-playback-video></video>
         <div class="player-subtitle-stack">
-            <div class="subtitle-overlay"
-                 data-subtitle-overlay
-                 lang="ja"
+            @if (Model.ShowPlayerTools || Model.Controls?.HasLearningCues == true)
+            {
+                <div class="subtitle-overlay"
+                     data-subtitle-overlay
+                     lang="ja"
+                     aria-live="polite"
+                     hidden></div>
+            }
+            <div class="playback-subtitle-overlay"
+                 data-playback-subtitle
+                 data-subtitle-layer="primary"
                  aria-live="polite"
                  hidden></div>
             <div class="playback-subtitle-overlay"
-                 data-playback-subtitle
+                 data-secondary-playback-subtitle
+                 data-subtitle-layer="secondary"
                  aria-live="polite"
                  hidden></div>
+        </div>
+        <div class="player-subtitle-canvas" data-playback-subtitle-canvas>
+            <div class="player-subtitle-positioned-layer"
+                 data-primary-positioned-subtitles hidden></div>
+            <div class="player-subtitle-positioned-layer"
+                 data-subtitle-layer="secondary"
+                 data-secondary-positioned-subtitles hidden></div>
         </div>
 
         @* Double-tap seek feedback on the side that was tapped (player-chrome.js). *@
@@ -279,6 +295,36 @@
                         </select>
                     </label>
                     <small class="player-setting-hint" data-setting-row="subtitles" data-subtitle-hint aria-live="polite"></small>
+                    <label class="player-setting" data-setting-row="secondarySubtitles">
+                        <span><partial name="_PlayerIcon" model="@("subtitles")" /> @ui["library.episode.subtitles"] · 2</span>
+                        <select data-secondary-subtitle-track>
+                            <option value="@PlayerControls.SubtitleOff" selected="@(controls.InitialSecondarySubtitle == PlayerControls.SubtitleOff)">@ui["library.episode.subtitlesOff"]</option>
+                            @foreach (var track in controls.SubtitleTracks.Where(track => track.IsSelectable && !track.IsImage))
+                            {
+                                <option value="@track.Id" data-language="@(track.Language ?? "")"
+                                        selected="@(track.Id == controls.InitialSecondarySubtitle)">@track.Label</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label class="player-setting" data-setting-row="subtitleAppearance">
+                        <span>@ui["reader.settings.fontSize"]</span>
+                        <span class="player-setting-slider">
+                            <input type="range" min="75" max="200" step="5"
+                                   value="@controls.Preferences.SubtitleSizePercent"
+                                   data-subtitle-size-percent aria-label="@ui["reader.settings.fontSize"]" />
+                            <output data-subtitle-size-output>@controls.Preferences.SubtitleSizePercent%</output>
+                        </span>
+                    </label>
+                    <label class="player-setting" data-setting-row="subtitleAppearance">
+                        <span>@ui["library.episode.subtitles"] · ms</span>
+                        <span class="player-setting-slider">
+                            <input type="range" min="-10000" max="10000" step="250"
+                                   value="@controls.Preferences.SubtitleOffsetMs"
+                                   data-subtitle-offset-ms aria-label="@ui["library.episode.subtitles"] (ms)" />
+                            <output data-subtitle-offset-output>@controls.Preferences.SubtitleOffsetMs ms</output>
+                        </span>
+                    </label>
 
                     @if (controls.AudioTracks.Count > 1)
                     {
@@ -430,6 +476,9 @@
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
     }
     <script type="application/json" data-player-icons>@Html.Raw(JsonSerializer.Serialize(PlayerDesign.ScriptIcons, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
-    <script type="application/json" data-cue-data>@Html.Raw(JsonSerializer.Serialize(Model.Controls is { HasLearningCues: true } ? Model.Cues : [], new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
+    @if (Model.Controls is { HasLearningCues: true })
+    {
+        <script type="application/json" data-cue-data>@Html.Raw(JsonSerializer.Serialize(Model.Cues, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
+    }
     <script type="application/json" data-player-text>@Html.Raw(JsonSerializer.Serialize(ui.WithPrefix("playback.")))</script>
 </section>

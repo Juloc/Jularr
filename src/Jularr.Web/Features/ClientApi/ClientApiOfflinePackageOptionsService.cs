@@ -458,7 +458,7 @@ public sealed class ClientApiOfflinePackageOptionsService(
     }
 
     private async Task<(ClientOfflineTrackOption[] Audio, ClientOfflineTrackOption[] Subtitles)> GetSingleVideoTracksAsync(
-        Guid workId,
+        long workId,
         Guid? workEpisodeId,
         CancellationToken cancellationToken)
     {
@@ -507,7 +507,7 @@ public sealed class ClientApiOfflinePackageOptionsService(
     }
 
     private async Task<bool> HasDownloadableWorkSourceAsync(
-        Guid workId,
+        long workId,
         WorkMediaType mediaType,
         ClientOfflinePackageIntent intent,
         Guid? workEpisodeId,
@@ -642,7 +642,7 @@ public sealed class ClientApiOfflinePackageOptionsService(
     }
 
     private async Task<long?> ExactAssetSizeAsync(
-        Guid workId,
+        long workId,
         Guid? workEpisodeId,
         MediaAssetKind kind,
         string? quality,
@@ -663,7 +663,7 @@ public sealed class ClientApiOfflinePackageOptionsService(
     }
 
     private async Task<long?> ExactReadableDocumentSizeAsync(
-        Guid workId,
+        long workId,
         string? quality,
         CancellationToken cancellationToken)
     {

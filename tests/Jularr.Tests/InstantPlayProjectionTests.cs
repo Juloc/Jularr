@@ -21,7 +21,7 @@ public sealed class InstantPlayProjectionTests
             "sabnzbd", "SABnzbd_nzo_secret", Now, Now, null, Now);
 
     private static VideoRequestPayload Payload(DateTime? nextSearch = null, int searches = 0) =>
-        new(Guid.NewGuid(), "Severance", 2022) { NextSearchUtc = nextSearch, Searches = searches };
+        new(Random.Shared.NextInt64(1, long.MaxValue), "Severance", 2022) { NextSearchUtc = nextSearch, Searches = searches };
 
     private static ConsumerAcquisitionView Project(
         AcquisitionRequest request, VideoRequestPayload? payload = null, OperationSnapshot? download = null, bool local = false, bool episode = true, bool playback = true, Guid? target = null, bool future = false) =>
@@ -149,8 +149,8 @@ public sealed class InstantPlayProjectionTests
             Details = "{\"entry\":\"client-1\",\"path\":\"/downloads/movies/Dune\",\"extractor\":\"7z\"}"
         };
         var view = Project(request, Payload(), download);
-        var status = new ClientRequestStatusResponse(request.Id, new ClientVideoTarget(Guid.NewGuid(), Guid.NewGuid()), view);
-        var intent = new ClientPlaybackIntentResponse(Jularr.Web.Features.InstantPlay.PlaybackIntentOutcome.Acquiring, new ClientVideoTarget(Guid.NewGuid(), null), request.Id, view);
+        var status = new ClientRequestStatusResponse(request.Id, new ClientVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), Guid.NewGuid()), view);
+        var intent = new ClientPlaybackIntentResponse(Jularr.Web.Features.InstantPlay.PlaybackIntentOutcome.Acquiring, new ClientVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), null), request.Id, view);
 
         foreach (var json in new[] { JsonSerializer.Serialize(status, JsonSerializerOptions.Web), JsonSerializer.Serialize(intent, JsonSerializerOptions.Web) })
         {

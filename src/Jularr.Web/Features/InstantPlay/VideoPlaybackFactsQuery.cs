@@ -20,7 +20,7 @@ public sealed record VideoPlaybackState(WorkMediaType MediaType, string Title, i
 public sealed class VideoPlaybackFactsQuery(AppDbContext db, AcquisitionAccessStore requests, VideoProgressService progress, MonitoringResolver monitoring, TimeProvider clock)
 {
     /// <summary>The playback state of one Work, or null when it does not exist or is neither a Movie nor a Series.</summary>
-    public async Task<VideoPlaybackState?> GetAsync(string profileId, Guid workId, CancellationToken cancellationToken)
+    public async Task<VideoPlaybackState?> GetAsync(string profileId, long workId, CancellationToken cancellationToken)
     {
         var work = await db.Works
             .AsNoTracking()

@@ -53,7 +53,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
     /// The canonical Work of the evidence, or null when the evidence is not trustworthy or points at two different Works. The Work is created only when
     /// nothing identifies one yet.
     /// </summary>
-    public async Task<Guid?> ResolveAsync(MediaAcquisitionKind kind, string provider, string externalId, string title, CancellationToken cancellationToken)
+    public async Task<long?> ResolveAsync(MediaAcquisitionKind kind, string provider, string externalId, string title, CancellationToken cancellationToken)
     {
         if (!Applies(kind) || !IsTrustworthy(kind, provider, externalId))
         {
@@ -97,7 +97,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
     }
 
     /// <summary>The record of a legacy library (Manga series, Novel work) already linked to the Work, so an import goes into it instead of creating a second one.</summary>
-    public async Task<Guid?> LinkedLegacyIdAsync(Guid workId, WorkSourceKind sourceKind, CancellationToken cancellationToken) =>
+    public async Task<Guid?> LinkedLegacyIdAsync(long workId, WorkSourceKind sourceKind, CancellationToken cancellationToken) =>
         await db.Set<WorkSourceLink>().AsNoTracking()
             .Where(link => link.WorkId == workId && link.SourceKind == sourceKind)
             .OrderBy(link => link.SourceId)
@@ -134,7 +134,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
             return null;
         }
 
-        var owner = await db.Set<WorkSourceLink>().AsNoTracking().Where(link => link.SourceKind == sourceKind && link.SourceId == id).Select(link => (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
+        var owner = await db.Set<WorkSourceLink>().AsNoTracking().Where(link => link.SourceKind == sourceKind && link.SourceId == id).Select(link => (long?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
         return owner is null || owner == workId ? id : null;
     }
 
@@ -189,19 +189,19 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
         }
     }
 
-    private async Task<Guid?> WorkOfIdentityAsync(WorkMediaType mediaType, string provider, string externalId, CancellationToken cancellationToken)
+    private async Task<long?> WorkOfIdentityAsync(WorkMediaType mediaType, string provider, string externalId, CancellationToken cancellationToken)
     {
         var normalizedProvider = provider.Trim().ToLowerInvariant();
         var normalizedId = externalId.Trim();
         var found = await db.Set<WorkExternalIdentity>().AsNoTracking()
             .Where(identity => identity.MediaType == mediaType && identity.Provider == normalizedProvider && identity.ExternalId == normalizedId)
-            .Select(identity => (Guid?)identity.WorkId)
+            .Select(identity => (long?)identity.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
         return found;
     }
 
     /// <summary>The Work of the legacy record that already holds the provider id (an AniList-matched series, a catalog-linked book), when that record is linked to one.</summary>
-    private async Task<Guid?> WorkOfLegacyRecordAsync(MediaAcquisitionKind kind, string provider, string externalId, CancellationToken cancellationToken)
+    private async Task<long?> WorkOfLegacyRecordAsync(MediaAcquisitionKind kind, string provider, string externalId, CancellationToken cancellationToken)
     {
         Guid? legacyId;
         WorkSourceKind sourceKind;
@@ -226,7 +226,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
 
         return await db.Set<WorkSourceLink>().AsNoTracking()
             .Where(link => link.SourceKind == sourceKind && link.SourceId == id)
-            .Select(link => (Guid?)link.WorkId)
+            .Select(link => (long?)link.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
     }
 

@@ -45,7 +45,7 @@ public sealed class MusicManualSearchService(
     QualityProfileStore profiles,
     TimeProvider clock)
 {
-    public async Task<MusicManualSearchResult?> SearchAsync(Guid workId, bool refresh, SearchDepth depth, CancellationToken cancellationToken)
+    public async Task<MusicManualSearchResult?> SearchAsync(long workId, bool refresh, SearchDepth depth, CancellationToken cancellationToken)
     {
         if (await LoadAsync(workId, cancellationToken) is not { } album)
         {
@@ -68,7 +68,7 @@ public sealed class MusicManualSearchService(
     /// "Search now": makes sure the album has a request that waits for a release and runs it through the shared executor right away. An album that
     /// gave up is searched again from the start; one that is downloading or imported is left as it is. Returns the message of the request.
     /// </summary>
-    public async Task<string?> SearchNowAsync(Guid workId, string requestedByProfileId, CancellationToken cancellationToken)
+    public async Task<string?> SearchNowAsync(long workId, string requestedByProfileId, CancellationToken cancellationToken)
     {
         if (await LoadAsync(workId, cancellationToken) is not { } album)
         {
@@ -93,7 +93,7 @@ public sealed class MusicManualSearchService(
             : open.StatusMessage;
     }
 
-    public async Task<ManualGrabOutcome> GrabAsync(Guid workId, string requestedByProfileId, string releaseIdentity, CancellationToken cancellationToken)
+    public async Task<ManualGrabOutcome> GrabAsync(long workId, string requestedByProfileId, string releaseIdentity, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseIdentity);
         if (await LoadAsync(workId, cancellationToken) is not { } album)
@@ -130,7 +130,7 @@ public sealed class MusicManualSearchService(
             cancellationToken);
     }
 
-    private async Task<AlbumRef?> LoadAsync(Guid workId, CancellationToken cancellationToken)
+    private async Task<AlbumRef?> LoadAsync(long workId, CancellationToken cancellationToken)
     {
         var row = await (
                 from album in db.MusicAlbums.AsNoTracking()

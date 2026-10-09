@@ -33,7 +33,8 @@ public sealed record PlayerControls(
     IReadOnlyList<double> Speeds,
     double InitialSpeed,
     int? SourceHeight,
-    PlaybackPreferencesSnapshot Preferences)
+    PlaybackPreferencesSnapshot Preferences,
+    string InitialSecondarySubtitle)
 {
     public const string SubtitleOff = "off";
     public const string SubtitleLearning = "learning";
@@ -87,6 +88,20 @@ public sealed record PlayerControls(
             _ => SubtitleOff
         };
 
+        var initialSecondary = preferences.PreferredSecondarySubtitleLanguage is { Length: > 0 } language &&
+            language != SubtitleOff
+            ? tracks.Where(track =>
+                    track.Kind == PlaybackTrackKind.Subtitle &&
+                    track.IsText &&
+                    SubtitleFormats.IsText(track.Codec) &&
+                    PlaybackTrackIds.Format(track.StreamIndex) != initialSubtitle &&
+                    PlaybackLanguages.Normalize(track.Language) == language)
+                .OrderBy(track => track.IsForced)
+                .ThenBy(track => track.StreamIndex)
+                .Select(track => PlaybackTrackIds.Format(track.StreamIndex))
+                .FirstOrDefault() ?? SubtitleOff
+            : SubtitleOff;
+
         return new PlayerControls(
             audio,
             fileDefaultAudio is null ? null : PlaybackTrackIds.Format(fileDefaultAudio.StreamIndex),
@@ -97,7 +112,8 @@ public sealed record PlayerControls(
             PlaybackPreferenceRules.Speeds,
             preferences.DefaultPlaybackSpeed,
             videoHeight,
-            preferences);
+            preferences,
+            initialSecondary);
     }
 
     // Text subtitles become client cues and picture subtitles a server burn-in; a format the

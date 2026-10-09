@@ -46,7 +46,7 @@ public sealed class WantedModel(
     public bool AnyWanted { get; private set; }
 
     /// <summary>The cached poster of each Movie or Series Work on the page, by Work id.</summary>
-    public IReadOnlyDictionary<Guid, string> WorkPosters { get; private set; } = new Dictionary<Guid, string>();
+    public IReadOnlyDictionary<long, string> WorkPosters { get; private set; } = new Dictionary<long, string>();
 
     /// <summary>The cover of a row: the canonical Work poster of a Movie or Series, the cover the source carries for everything else.</summary>
     public string? CoverOf(WantedRow item) => item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv

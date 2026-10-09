@@ -128,7 +128,7 @@ public sealed class CollectionServiceTests
 
         public void SetVisible(params WorkMediaType[] visible) => shell.SetVisible(visible);
 
-        public async Task<Guid> AddWorkAsync(WorkMediaType mediaType, string title, int year)
+        public async Task<long> AddWorkAsync(WorkMediaType mediaType, string title, int year)
         {
             var work = new Work { MediaType = mediaType, CanonicalTitle = title, Year = year };
             Db.Works.Add(work);

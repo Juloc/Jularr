@@ -46,14 +46,14 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
         LoadEntriesAsync(profileId, [WorkMediaType.Anime], legacyAnimeIds, null, cancellationToken);
 
     /// <summary>The same entries, restricted to the given Movie and Series Works.</summary>
-    public Task<LibraryEntries> GetVideoWorkEntriesAsync(string profileId, IReadOnlyCollection<Guid> workIds, CancellationToken cancellationToken) =>
+    public Task<LibraryEntries> GetVideoWorkEntriesAsync(string profileId, IReadOnlyCollection<long> workIds, CancellationToken cancellationToken) =>
         LoadEntriesAsync(profileId, [WorkMediaType.Movie, WorkMediaType.Series], null, workIds, cancellationToken);
 
     private async Task<LibraryEntries> LoadEntriesAsync(
         string profileId,
         IReadOnlyCollection<WorkMediaType> mediaTypes,
         IReadOnlyCollection<Guid>? onlyLegacyAnimeIds,
-        IReadOnlyCollection<Guid>? onlyWorkIds,
+        IReadOnlyCollection<long>? onlyWorkIds,
         CancellationToken cancellationToken)
     {
         var scope = LibraryBrowse.VideoMediaTypes.Where(mediaTypes.Contains).ToArray();
@@ -81,7 +81,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
             degraded = true;
         }
 
-        var requestByWork = new Dictionary<Guid, AcquisitionRequestStatus>();
+        var requestByWork = new Dictionary<long, AcquisitionRequestStatus>();
         var videoRequestIds = openRequests.Keys.Where(x => x.MediaType != WorkMediaType.Anime).Select(x => x.ExternalId).Distinct().ToArray();
         if (videoRequestIds.Length > 0)
         {
@@ -122,8 +122,8 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
         var episodicWorkIds = works.Where(x => x.Technical == WorkMediaType.Series).Select(x => x.Id).ToArray();
         var movieWorkIds = works.Where(x => x.Technical == WorkMediaType.Movie).Select(x => x.Id).ToArray();
 
-        var animeRows = new Dictionary<Guid, AnimeRow>();
-        var legacyEpisodeIds = new Dictionary<(Guid WorkId, int SeasonNumber, int Number), Guid>();
+        var animeRows = new Dictionary<long, AnimeRow>();
+        var legacyEpisodeIds = new Dictionary<(long WorkId, int SeasonNumber, int Number), Guid>();
         var sidecarSubtitles = new List<LanguageRow>();
         if (animeWorkIds.Length > 0)
         {
@@ -211,7 +211,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
             .ToListAsync(cancellationToken);
 
         // Movie and Series cards show the locally persisted title, artwork and rating (#820); Anime keeps its own until it moves to the Work.
-        IReadOnlyDictionary<Guid, WorkCardMetadata> cardMetadata = new Dictionary<Guid, WorkCardMetadata>();
+        IReadOnlyDictionary<long, WorkCardMetadata> cardMetadata = new Dictionary<long, WorkCardMetadata>();
         var videoWorkIds = works.Select(x => x.Id).ToArray();
         if (videoWorkIds.Length > 0)
         {
@@ -313,7 +313,7 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
                     : null)
             .Max();
 
-        var href = anime is null ? LibraryBrowse.DetailHref(work.Technical, work.Id) : LibraryBrowse.DetailHref(WorkMediaType.Anime, anime.AnimeId);
+        var href = anime is null ? LibraryBrowse.DetailHref(work.Technical, work.Id) : LibraryBrowse.AnimeDetailHref(anime.AnimeId);
         context.CardMetadata.TryGetValue(work.Id, out var metadata);
         var poster = anime is null ? metadata?.PosterUrl : AnimeArtworkStore.ResolvePosterUrl(anime.AnimeId, anime.CoverImageUrl);
         var fanart = anime is null ? metadata?.BackdropUrl : AnimeArtworkStore.ResolveFanartUrl(anime.AnimeId, anime.BannerImageUrl);
@@ -428,10 +428,10 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
     ];
 
     // MediaType is how the title is presented (Anime while the Anime section is shown), Technical what it is (Movie or Series).
-    private sealed record WorkRow(Guid Id, WorkMediaType MediaType, WorkMediaType Technical, string Title, int? Year, DateTime CreatedAt);
+    private sealed record WorkRow(long Id, WorkMediaType MediaType, WorkMediaType Technical, string Title, int? Year, DateTime CreatedAt);
 
     private sealed record AnimeRow(
-        Guid WorkId,
+        long WorkId,
         Guid AnimeId,
         string Title,
         string? Status,
@@ -445,22 +445,22 @@ public sealed class LibraryMediaCardQuery(AppDbContext db, TimeProvider? clock =
         string? Format,
         DateTime CreatedAt);
 
-    private sealed record UnitRow(Guid Id, Guid WorkId, int SeasonNumber, int Number, bool HasMedia, DateTime? AiredAt);
+    private sealed record UnitRow(Guid Id, long WorkId, int SeasonNumber, int Number, bool HasMedia, DateTime? AiredAt);
 
-    private sealed record MovieFileRow(Guid WorkId, double? DurationSeconds);
+    private sealed record MovieFileRow(long WorkId, double? DurationSeconds);
 
-    private sealed record LanguageRow(Guid WorkId, MediaTrackKind Kind, string Language, int Count, int FirstStreamIndex);
+    private sealed record LanguageRow(long WorkId, MediaTrackKind Kind, string Language, int Count, int FirstStreamIndex);
 
     private sealed record ReadContext(
-        ILookup<Guid, UnitRow> Units,
-        IReadOnlyDictionary<(Guid WorkId, int SeasonNumber, int Number), Guid> LegacyEpisodeIds,
+        ILookup<long, UnitRow> Units,
+        IReadOnlyDictionary<(long WorkId, int SeasonNumber, int Number), Guid> LegacyEpisodeIds,
         IReadOnlyDictionary<Guid, EpisodeProgressState> EpisodeProgress,
-        IReadOnlyDictionary<Guid, MediaProgressSnapshot> MovieProgress,
-        ILookup<Guid, MovieFileRow> MovieFiles,
-        ILookup<(Guid WorkId, MediaTrackKind Kind), LanguageRow> Languages,
-        IReadOnlyDictionary<Guid, AnimeRow> Anime,
-        IReadOnlyDictionary<Guid, AcquisitionRequestStatus> RequestByWork,
-        IReadOnlyDictionary<Guid, WorkCardMetadata> CardMetadata,
+        IReadOnlyDictionary<long, MediaProgressSnapshot> MovieProgress,
+        ILookup<long, MovieFileRow> MovieFiles,
+        ILookup<(long WorkId, MediaTrackKind Kind), LanguageRow> Languages,
+        IReadOnlyDictionary<long, AnimeRow> Anime,
+        IReadOnlyDictionary<long, AcquisitionRequestStatus> RequestByWork,
+        IReadOnlyDictionary<long, WorkCardMetadata> CardMetadata,
         DateTime NowUtc);
 }
 

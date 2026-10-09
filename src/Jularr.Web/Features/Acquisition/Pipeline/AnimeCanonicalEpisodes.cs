@@ -41,7 +41,7 @@ public sealed class AnimeCanonicalEpisodes(AppDbContext db, AnimeAcquisitionInve
 
         var workId = await db.WorkSourceLinks.AsNoTracking()
             .Where(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == slots.Anime.Id)
-            .Select(link => (Guid?)link.WorkId)
+            .Select(link => (long?)link.WorkId)
             .FirstOrDefaultAsync(cancellationToken)
             ?? await bridge.EnsureWorkForAnimeAsync(new Anime { Id = slots.Anime.Id, Key = slots.Anime.Key, Title = slots.Anime.Title }, cancellationToken);
         // Identity and classification of the Work follow the match here too, so a library that was matched before they were mirrored catches up.
@@ -145,12 +145,12 @@ public sealed class AnimeCanonicalEpisodes(AppDbContext db, AnimeAcquisitionInve
         ];
     }
 
-    public async Task<Guid?> WorkOfAsync(string animeKey, CancellationToken cancellationToken) =>
+    public async Task<long?> WorkOfAsync(string animeKey, CancellationToken cancellationToken) =>
         await (
                 from link in db.WorkSourceLinks.AsNoTracking()
                 join anime in db.Anime.AsNoTracking() on link.SourceId equals anime.Id
                 where link.SourceKind == WorkSourceKind.Anime && anime.Key == animeKey
-                select (Guid?)link.WorkId)
+                select (long?)link.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
 
     // The monitored anime, each completed once per interval.
@@ -191,7 +191,7 @@ public sealed class AnimeUpgradeAssessor(AppDbContext db, InstalledVideoVersions
 
     public WantedTargetKind TargetKind => WantedTargetKind.Episode;
 
-    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(long workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
     {
         var animeId = await db.WorkSourceLinks.AsNoTracking()
             .Where(link => link.SourceKind == WorkSourceKind.Anime && link.WorkId == workId)
@@ -199,6 +199,6 @@ public sealed class AnimeUpgradeAssessor(AppDbContext db, InstalledVideoVersions
             .FirstOrDefaultAsync(cancellationToken);
         var profile = await profiles.ResolveAsync(animeId, cancellationToken);
         var qualities = await installed.BestQualityByEpisodeAsync(MediaAcquisitionKind.Anime, workId, profile, cancellationToken);
-        return [.. held.Where(target => qualities.TryGetValue(target.TargetId, out var quality) && UpgradePolicy.Assess(profile, quality).IsUpgradable)];
+        return [.. held.Where(target => target.TargetId is { } episodeId && qualities.TryGetValue(episodeId, out var quality) && UpgradePolicy.Assess(profile, quality).IsUpgradable)];
     }
 }

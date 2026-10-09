@@ -25,7 +25,7 @@ internal static class WantedSql
             SELECT DISTINCT reached."WorkId" FROM ({{MonitoringResolver.RelationCoveredWorksSql}}) reached
         ),
         open_request_targets AS (
-            SELECT target."TargetKind", target."TargetId"
+            SELECT target."TargetKind", target."TargetId", target."WorkId"
             FROM "RequestTargets" target
             JOIN "AcquisitionRequests" request ON request."Id" = target."RequestId"
             WHERE request."Status" IN ('approved', 'searching', 'downloading', 'importing')
@@ -80,7 +80,7 @@ internal static class WantedSql
         unit_works AS (
             SELECT work."Id" AS "WorkId", work."MediaType"
             FROM "Works" work
-            WHERE work."MediaType" IN (@lightNovel, @manga) AND (@workId::uuid IS NULL OR work."Id" = @workId)
+            WHERE work."MediaType" IN (@lightNovel, @manga) AND (@workId::bigint IS NULL OR work."Id" = @workId)
               AND CASE work."MediaType"
                     WHEN @lightNovel THEN
                         EXISTS (SELECT 1 FROM "WorkVolumes" unit WHERE unit."WorkId" = work."Id" AND unit."ExternalId" IS NOT NULL)
@@ -104,14 +104,14 @@ internal static class WantedSql
         $$"""
         {{UnitWorks}},
         intended_works AS (
-            SELECT work."Id" AS "WorkId", work."MediaType", 0::smallint AS "TargetKind", work."Id" AS "TargetId", {{WorkInstalled}} AS "Installed"
+            SELECT work."Id" AS "WorkId", work."MediaType", 0::smallint AS "TargetKind", NULL::uuid AS "TargetId", {{WorkInstalled}} AS "Installed"
             FROM "Works" work
-            LEFT JOIN "WorkMonitoring" decision ON decision."TargetId" = work."Id"
+            LEFT JOIN "WorkMonitoring" decision ON decision."Kind" = 0 AND decision."WorkId" = work."Id"
             WHERE work."MediaType" <> @series AND work."MediaType" = ANY(@types)
-              AND (@workId::uuid IS NULL OR work."Id" = @workId)
+              AND (@workId::bigint IS NULL OR work."Id" = @workId)
               AND NOT EXISTS (SELECT 1 FROM unit_works unit WHERE unit."WorkId" = work."Id")
               AND (COALESCE(decision."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = work."Id"))
-                   OR EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 0 AND asked."TargetId" = work."Id"))
+                   OR EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 0 AND asked."WorkId" = work."Id"))
               AND (work."MediaType" <> @music OR EXISTS (
                   SELECT 1 FROM "MusicAlbums" album
                   WHERE album."WorkId" = work."Id" AND album."MusicBrainzReleaseGroupId" IS NOT NULL AND (album."ReleaseDate" IS NULL OR album."ReleaseDate" <= @now)))
@@ -122,11 +122,11 @@ internal static class WantedSql
             JOIN "Works" work ON work."Id" = episode."WorkId" AND work."MediaType" = @series
             LEFT JOIN "WorkMonitoring" own ON own."TargetId" = episode."Id"
             LEFT JOIN "WorkMonitoring" season ON season."TargetId" = episode."SeasonId"
-            LEFT JOIN "WorkMonitoring" whole ON whole."TargetId" = episode."WorkId"
-            WHERE (@workId::uuid IS NULL OR episode."WorkId" = @workId)
+            LEFT JOIN "WorkMonitoring" whole ON whole."Kind" = 0 AND whole."WorkId" = episode."WorkId"
+            WHERE (@workId::bigint IS NULL OR episode."WorkId" = @workId)
               AND (COALESCE(own."Monitored", season."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = episode."WorkId"))
                    OR EXISTS (SELECT 1 FROM open_request_targets asked
-                              WHERE (asked."TargetKind" = 1 AND asked."TargetId" = episode."Id") OR (asked."TargetKind" = 0 AND asked."TargetId" = episode."WorkId")))
+                              WHERE (asked."TargetKind" = 1 AND asked."TargetId" = episode."Id") OR (asked."TargetKind" = 0 AND asked."WorkId" = episode."WorkId")))
               AND (episode."AiredAt" IS NULL OR episode."AiredAt" <= @now)
         ),
         -- The audio edition of a Book Work is its own target: wanted while its own decision monitors it or a request names it, never because the Book is monitored.
@@ -135,7 +135,7 @@ internal static class WantedSql
             FROM "WorkEditions" edition
             JOIN "Works" work ON work."Id" = edition."WorkId"
             LEFT JOIN "WorkMonitoring" decision ON decision."TargetId" = edition."Id"
-            WHERE edition."Format" = '{{LegacyWorkBridge.AudiobookEditionFormat}}' AND (@workId::uuid IS NULL OR edition."WorkId" = @workId)
+            WHERE edition."Format" = '{{LegacyWorkBridge.AudiobookEditionFormat}}' AND (@workId::bigint IS NULL OR edition."WorkId" = @workId)
               AND (COALESCE(decision."Monitored", FALSE)
                    OR EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 4 AND asked."TargetId" = edition."Id"))
         ),
@@ -148,11 +148,11 @@ internal static class WantedSql
             JOIN unit_works ON unit_works."WorkId" = unit."WorkId" AND unit_works."MediaType" = @lightNovel
             JOIN "Works" work ON work."Id" = unit."WorkId"
             LEFT JOIN "WorkMonitoring" own ON own."TargetId" = unit."Id"
-            LEFT JOIN "WorkMonitoring" whole ON whole."TargetId" = unit."WorkId"
+            LEFT JOIN "WorkMonitoring" whole ON whole."Kind" = 0 AND whole."WorkId" = unit."WorkId"
             WHERE unit."ExternalId" IS NOT NULL
               AND (COALESCE(own."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = unit."WorkId"))
                    OR EXISTS (SELECT 1 FROM open_request_targets asked
-                              WHERE (asked."TargetKind" = 2 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."TargetId" = unit."WorkId")))
+                              WHERE (asked."TargetKind" = 2 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."WorkId" = unit."WorkId")))
             UNION ALL
             SELECT unit."WorkId", work."MediaType", 3::smallint, unit."Id",
                    EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
@@ -162,11 +162,11 @@ internal static class WantedSql
             JOIN "Works" work ON work."Id" = unit."WorkId"
             LEFT JOIN "WorkMonitoring" own ON own."TargetId" = unit."Id"
             LEFT JOIN "WorkMonitoring" volume ON volume."TargetId" = unit."VolumeId"
-            LEFT JOIN "WorkMonitoring" whole ON whole."TargetId" = unit."WorkId"
+            LEFT JOIN "WorkMonitoring" whole ON whole."Kind" = 0 AND whole."WorkId" = unit."WorkId"
             WHERE unit."ExternalId" IS NOT NULL
               AND (COALESCE(own."Monitored", volume."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = unit."WorkId"))
                    OR EXISTS (SELECT 1 FROM open_request_targets asked
-                              WHERE (asked."TargetKind" = 3 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."TargetId" = unit."WorkId")))
+                              WHERE (asked."TargetKind" = 3 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."WorkId" = unit."WorkId")))
         ),
         intended AS (
             SELECT * FROM intended_works
@@ -194,14 +194,14 @@ internal static class WantedSql
         added AS (
             INSERT INTO "WantedItems" ("WorkId", "TargetKind", "TargetId", "CreatedAt")
             SELECT "WorkId", "TargetKind", "TargetId", @now FROM wanted
-            ON CONFLICT ("TargetKind", "TargetId") DO NOTHING
+            ON CONFLICT ("WorkId", "TargetKind", "TargetId") DO NOTHING
             RETURNING 1
         )
         DELETE FROM "WantedItems" item
-        WHERE (@workId::uuid IS NULL OR item."WorkId" = @workId)
+        WHERE (@workId::bigint IS NULL OR item."WorkId" = @workId)
           AND EXISTS (SELECT 1 FROM "Works" work WHERE work."Id" = item."WorkId" AND work."MediaType" = ANY(@types))
-          AND NOT EXISTS (SELECT 1 FROM wanted still WHERE still."TargetKind" = item."TargetKind" AND still."TargetId" = item."TargetId")
-          AND NOT EXISTS (SELECT 1 FROM held kept WHERE kept."TargetKind" = item."TargetKind" AND kept."TargetId" = item."TargetId")
+          AND NOT EXISTS (SELECT 1 FROM wanted still WHERE still."WorkId" = item."WorkId" AND still."TargetKind" = item."TargetKind" AND still."TargetId" IS NOT DISTINCT FROM item."TargetId")
+          AND NOT EXISTS (SELECT 1 FROM held kept WHERE kept."WorkId" = item."WorkId" AND kept."TargetKind" = item."TargetKind" AND kept."TargetId" IS NOT DISTINCT FROM item."TargetId")
         """;
 
     // The targets of one Work that Monitoring or a request wants and the library already holds: what an upgrade assessment looks at.
@@ -221,19 +221,19 @@ internal static class WantedSql
         upgradable AS (
             SELECT held."WorkId", held."TargetKind", held."TargetId"
             FROM intended held
-            JOIN unnest(@upgradeKinds, @upgradeIds) AS chosen ("TargetKind", "TargetId") ON chosen."TargetKind" = held."TargetKind" AND chosen."TargetId" = held."TargetId"
+            JOIN unnest(@upgradeKinds, @upgradeIds) AS chosen ("TargetKind", "TargetId") ON chosen."TargetKind" = held."TargetKind" AND chosen."TargetId" IS NOT DISTINCT FROM held."TargetId"
             WHERE held."Installed"
         ),
         added AS (
             INSERT INTO "WantedItems" ("WorkId", "TargetKind", "TargetId", "CreatedAt")
             SELECT "WorkId", "TargetKind", "TargetId", @now FROM upgradable
-            ON CONFLICT ("TargetKind", "TargetId") DO NOTHING
+            ON CONFLICT ("WorkId", "TargetKind", "TargetId") DO NOTHING
             RETURNING 1
         )
         DELETE FROM "WantedItems" item
         WHERE item."WorkId" = @workId
-          AND EXISTS (SELECT 1 FROM intended held WHERE held."Installed" AND held."TargetKind" = item."TargetKind" AND held."TargetId" = item."TargetId")
-          AND NOT EXISTS (SELECT 1 FROM upgradable still WHERE still."TargetKind" = item."TargetKind" AND still."TargetId" = item."TargetId")
+          AND EXISTS (SELECT 1 FROM intended held WHERE held."Installed" AND held."WorkId" = item."WorkId" AND held."TargetKind" = item."TargetKind" AND held."TargetId" IS NOT DISTINCT FROM item."TargetId")
+          AND NOT EXISTS (SELECT 1 FROM upgradable still WHERE still."WorkId" = item."WorkId" AND still."TargetKind" = item."TargetKind" AND still."TargetId" IS NOT DISTINCT FROM item."TargetId")
         """;
 
     // @mediaType: the Work type, @after: the last Work of the previous page, @kind: the request kind name, @musicBrainz: its provider key, @limit,
@@ -242,7 +242,7 @@ internal static class WantedSql
     // item); one that has a request is continued through it (see UpgradeWantedSource), so an upgrade never opens a second request.
     private const string RequestMatchesWork =
         """
-        (request."WorkId" = work."Id"::text
+        (request."WorkId" = work."Id"
                OR EXISTS (SELECT 1 FROM "WorkExternalIdentities" identity WHERE identity."WorkId" = work."Id" AND identity."Provider" = request."Provider" AND identity."ExternalId" = request."ExternalId")
                OR EXISTS (SELECT 1 FROM "MusicAlbums" album
                           WHERE album."WorkId" = work."Id" AND request."Provider" = @musicBrainz AND request."ExternalId" = album."MusicBrainzReleaseGroupId")
@@ -306,7 +306,7 @@ internal static class WantedSql
             LEFT JOIN "WorkExternalIdentities" identity
                    ON identity."WorkId" = work."Id" AND identity."Provider" = request."Provider" AND identity."ExternalId" = request."ExternalId"
             WHERE request."Kind" = ANY(@kinds)
-              AND (request."WorkId" = work."Id"::text
+              AND (request."WorkId" = work."Id"
                    OR identity."WorkId" IS NOT NULL
                    OR EXISTS (SELECT 1 FROM "MusicAlbums" album
                               WHERE album."WorkId" = work."Id" AND request."Provider" = @musicBrainz AND request."ExternalId" = album."MusicBrainzReleaseGroupId")
@@ -321,7 +321,7 @@ internal static class WantedSql
     public const string RecordWork =
         """
         INSERT INTO "RequestTargets" ("RequestId", "WorkId", "TargetKind", "TargetId", "CreatedAt")
-        SELECT @requestId, work."Id", 0, work."Id", @now FROM "Works" work WHERE work."Id" = @workId
+        SELECT @requestId, work."Id", 0, NULL::uuid, @now FROM "Works" work WHERE work."Id" = @workId
         ON CONFLICT DO NOTHING
         """;
 

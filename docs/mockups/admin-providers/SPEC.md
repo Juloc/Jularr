@@ -538,3 +538,19 @@ Games owns:
 Do not put emulator/runtime/BIOS configuration into Metadata providers.
 
 When the Games module is disabled at instance level, Games-specific provider capabilities may be hidden/disabled without deleting provider configuration.
+
+
+---
+
+## Plex identity/connection capability split (approved planning extension, #911)
+
+Plex is the first targeted external-identity adapter. Expose **separate** Admin-controlled capabilities, only after they exist in the real provider:
+
+- Allow sign-in with Plex.
+- Allow existing signed-in Jularr Accounts to link a Plex login identity.
+- Allow auto-provisioning a new local Jularr Account for a *new verified Plex identity* (default off until explicitly configured), optionally requiring Admin approval.
+- Configure the narrow default User/Request/Browse capabilities for auto-provisioned Accounts. Never grant Owner/Admin or unrestricted acquisition/Playback as a side effect of Plex authentication.
+- Configure Plex server connection and selected libraries independently of identity sign-in.
+- Configure Profile-scoped media access, opening matched content externally (#886), Watchlist/Progress Sync, and their permissions separately.
+
+Enforce instance settings **server-side**, not only through UI button visibility. Disable Login/Sync independently without deleting existing Jularr Accounts, Profile states or unrelated Login identities. The adapter must use the canonical Auth/Account/Profile contract, verified stable Plex identity and safe tokens/state handling. No second identity store/cookie engine and no email-only linking. Full implementation gate: #911.

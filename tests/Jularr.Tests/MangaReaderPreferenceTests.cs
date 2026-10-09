@@ -18,7 +18,7 @@ public sealed class MangaReaderPreferenceTests
         {
             await using var db = await CreateDatabaseAsync(path);
             var seriesId = Guid.NewGuid();
-            var workId = Guid.NewGuid();
+            var workId = Random.Shared.NextInt64(1, long.MaxValue);
 
             db.ReaderPreferences.Add(new ReaderPreference
             {
@@ -73,7 +73,7 @@ public sealed class MangaReaderPreferenceTests
         {
             await using var db = await CreateDatabaseAsync(path);
             var seriesId = Guid.NewGuid();
-            var workId = Guid.NewGuid();
+            var workId = Random.Shared.NextInt64(1, long.MaxValue);
             var input = new MangaReaderPreferenceInput
             {
                 Mode = "horizontal",

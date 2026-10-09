@@ -1,8 +1,10 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Auth;
-using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Operations;
 using Microsoft.EntityFrameworkCore;
@@ -38,7 +40,7 @@ public sealed class RequestManagementTests
         Assert.ContainsSingle(await fixture.Db.Works.ToListAsync());
         Assert.AreEqual(RequestDeleteOutcome.AlreadyDeleted, await manager.DeleteAsync(request.Id, CancellationToken.None));
 
-        await MonitoringTestSupport.Commands(fixture.Db).SetAsync(MonitoringTargetKind.Work, work.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(fixture.Db).SetWorkAsync(work.Id, true, CancellationToken.None);
         var monitored = await fixture.Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", "438631", "Dune", null, null, WorkId: work.Id), "bob", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
         await intent.RecordAsync(monitored, CancellationToken.None);
         await wanted.ReconcileAsync(work.Id, CancellationToken.None);
@@ -107,6 +109,67 @@ public sealed class RequestManagementTests
         Assert.AreEqual(AcquisitionRequestStatus.Completed, (await fixture.Store.GetAsync(done.Id, CancellationToken.None))!.Status);
         await Assert.ThrowsExactlyAsync<AcquisitionAccessDeniedException>(() => fixture.Service("alice", false).BulkAsync([first.Id], RequestBulkAction.Delete, null, null, CancellationToken.None));
         await Assert.ThrowsExactlyAsync<ArgumentException>(() => manager.BulkAsync(Enumerable.Range(0, 101).Select(_ => Guid.NewGuid()).ToArray(), RequestBulkAction.Delete, null, null, CancellationToken.None));
+    }
+
+    [TestMethod]
+    [DataRow(RequestBulkAction.Retry, AcquisitionRequestStatus.Failed, AcquisitionRequestStatus.Pending, AcquisitionRequestStatus.Downloading)]
+    [DataRow(RequestBulkAction.Cancel, AcquisitionRequestStatus.Pending, AcquisitionRequestStatus.Approved, AcquisitionRequestStatus.Rejected)]
+    [DataRow(RequestBulkAction.Complete, AcquisitionRequestStatus.Pending, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Completed)]
+    [DataRow(RequestBulkAction.Delete, AcquisitionRequestStatus.Pending, AcquisitionRequestStatus.Downloading, AcquisitionRequestStatus.Pending)]
+    public async Task BulkActionsApplyOnlyToEligibleRequests(RequestBulkAction action, AcquisitionRequestStatus eligibleStatus, AcquisitionRequestStatus blockedStatus, AcquisitionRequestStatus expectedStatus)
+    {
+        await using var fixture = await AcquisitionAccessFixture.CreateAsync();
+        var eligible = await fixture.Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Book, "test", "eligible", "Eligible", null, null), "alice", eligibleStatus, null, CancellationToken.None);
+        var blocked = await fixture.Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Book, "test", "blocked", "Blocked", null, null), "alice", blockedStatus, null, CancellationToken.None);
+        var executor = new RecordingExecutor(MediaAcquisitionKind.Book);
+        var results = await Manager(fixture, executor).BulkAsync([eligible.Id, blocked.Id, eligible.Id], action, null, null, CancellationToken.None);
+        Assert.AreEqual(2, results.Count);
+        Assert.AreEqual(RequestActionDisposition.Succeeded, results[0].Disposition);
+        Assert.AreEqual(RequestActionDisposition.Skipped, results[1].Disposition);
+        Assert.AreEqual(blockedStatus, (await fixture.Store.GetAsync(blocked.Id, CancellationToken.None))!.Status);
+        var updated = await fixture.Store.GetAsync(eligible.Id, CancellationToken.None);
+        if (action == RequestBulkAction.Delete)
+        {
+            Assert.IsNull(updated);
+        }
+        else
+        {
+            Assert.AreEqual(expectedStatus, updated!.Status);
+        }
+
+        Assert.AreEqual(action == RequestBulkAction.Retry ? 1 : 0, executor.Runs);
+    }
+
+    [TestMethod]
+    public async Task BulkProfileUsesTheNumericWorkAssignmentAndSkipsActiveRequests()
+    {
+        await using var fixture = await AcquisitionAccessFixture.CreateAsync();
+        var directory = Directory.CreateTempSubdirectory("jularr-bulk-profile-");
+        try
+        {
+            var registry = new MediaAcquisitionRegistry([new BookAcquisitionRegistration()]);
+            var profiles = new QualityProfileStore(directory, registry);
+            await profiles.UpsertAsync(registry.DefaultProfileFor(MediaAcquisitionKind.Book) with { Id = "strict", Name = "Strict" });
+            var work = new Work { CanonicalTitle = "Book", MediaType = WorkMediaType.Book };
+            fixture.Db.Works.Add(work);
+            await fixture.Db.SaveChangesAsync();
+            var eligible = await fixture.Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Book, "test", "eligible", "Book", null, null, WorkId: work.Id), "alice", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+            var active = await fixture.Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Book, "test", "active", "Active", null, null, WorkId: work.Id), "alice", AcquisitionRequestStatus.Downloading, null, CancellationToken.None);
+            var assignment = new RequestProfileAssignment(profiles, RequestWorkTestSupport.Binder(fixture.Db), new VideoRequestWorkResolver(fixture.Db), fixture.Store);
+            var manager = new AcquisitionRequestService(fixture.Store, [], AcquisitionAccessFixture.Account("owner", AccountRole.Owner), new MediaCapabilityService(fixture.Capabilities), fixture.Settings, fixture.Events,
+                NullLogger<AcquisitionRequestService>.Instance, profileAssignment: assignment);
+            var results = await manager.BulkAsync([eligible.Id, active.Id], RequestBulkAction.Profile, null, "strict", CancellationToken.None);
+            Assert.AreEqual(RequestActionDisposition.Succeeded, results[0].Disposition);
+            Assert.AreEqual(RequestActionDisposition.Skipped, results[1].Disposition);
+            Assert.AreEqual("strict", (await profiles.ResolveAsync(MediaAcquisitionKind.Book, work.Id)).Id);
+            Assert.AreEqual(AcquisitionRequestStatus.Pending, (await fixture.Store.GetAsync(eligible.Id, CancellationToken.None))!.Status);
+            Assert.AreEqual(AcquisitionRequestStatus.Downloading, (await fixture.Store.GetAsync(active.Id, CancellationToken.None))!.Status);
+            Assert.AreEqual(1, await fixture.Db.Works.CountAsync());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [TestMethod]

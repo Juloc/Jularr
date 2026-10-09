@@ -18,7 +18,7 @@ public sealed record ReadingUnitEnrichment(int Created, int Updated, int Conflic
 /// </summary>
 public sealed class ReadingUnits(AppDbContext db)
 {
-    public async Task<ReadingUnitEnrichment> EnrichVolumesAsync(Guid workId, string provider, IReadOnlyList<ProviderUnit> units, CancellationToken cancellationToken)
+    public async Task<ReadingUnitEnrichment> EnrichVolumesAsync(long workId, string provider, IReadOnlyList<ProviderUnit> units, CancellationToken cancellationToken)
     {
         var identified = Identified(units, volumes: true);
         var existing = await db.WorkVolumes.Where(volume => volume.WorkId == workId).ToListAsync(cancellationToken);
@@ -64,7 +64,7 @@ public sealed class ReadingUnits(AppDbContext db)
         return new ReadingUnitEnrichment(created, updated, conflicts);
     }
 
-    public async Task<ReadingUnitEnrichment> EnrichChaptersAsync(Guid workId, string provider, IReadOnlyList<ProviderUnit> units, CancellationToken cancellationToken)
+    public async Task<ReadingUnitEnrichment> EnrichChaptersAsync(long workId, string provider, IReadOnlyList<ProviderUnit> units, CancellationToken cancellationToken)
     {
         var identified = Identified(units, volumes: false);
         var existing = await db.WorkChapters.Where(chapter => chapter.WorkId == workId).ToListAsync(cancellationToken);
@@ -113,7 +113,7 @@ public sealed class ReadingUnits(AppDbContext db)
     /// Ties a local unit to a canonical volume (a NovelVolume) or chapter (a MangaChapter) of the same Work. An owner mapping replaces any earlier binding of the
     /// local unit; an import-made one never replaces an owner's. Returns false when the units do not belong to the Work or the owner's mapping stands.
     /// </summary>
-    public async Task<bool> TieAsync(Guid workId, WorkUnitLocalKind localKind, string localId, Guid unitId, bool isOwnerMapping, CancellationToken cancellationToken)
+    public async Task<bool> TieAsync(long workId, WorkUnitLocalKind localKind, string localId, Guid unitId, bool isOwnerMapping, CancellationToken cancellationToken)
     {
         var volume = localKind == WorkUnitLocalKind.NovelVolume;
         var unitOfWork = volume
@@ -150,10 +150,10 @@ public sealed class ReadingUnits(AppDbContext db)
         return true;
     }
 
-    public async Task UnbindAsync(Guid workId, WorkUnitLocalKind localKind, string localId, CancellationToken cancellationToken) =>
+    public async Task UnbindAsync(long workId, WorkUnitLocalKind localKind, string localId, CancellationToken cancellationToken) =>
         await db.WorkUnitBindings.Where(binding => binding.WorkId == workId && binding.LocalKind == localKind && binding.LocalId == localId).ExecuteDeleteAsync(cancellationToken);
 
-    private async Task<bool> LocalBelongsToWorkAsync(Guid workId, WorkUnitLocalKind localKind, string localId, CancellationToken cancellationToken)
+    private async Task<bool> LocalBelongsToWorkAsync(long workId, WorkUnitLocalKind localKind, string localId, CancellationToken cancellationToken)
     {
         if (localKind == WorkUnitLocalKind.NovelVolume)
         {

@@ -28,7 +28,11 @@ public sealed class OfflinePackageOptionsTests
             LastWriteTimeUtc = DateTime.UtcNow
         };
 
-        db.AddRange(work, version, asset, root, file);
+        db.Add(work);
+        await db.SaveChangesAsync();
+        version.WorkId = work.Id;
+        asset.WorkId = work.Id;
+        db.AddRange(version, asset, root, file);
         db.MediaTracks.AddRange(
             new MediaTrack { MediaFileId = file.Id, StreamIndex = 1, Kind = MediaTrackKind.Audio, Language = "ja", IsDefault = true },
             new MediaTrack { MediaFileId = file.Id, StreamIndex = 2, Kind = MediaTrackKind.Subtitle, Language = "de" });
@@ -119,7 +123,10 @@ public sealed class OfflinePackageOptionsTests
         var requested = new Work { MediaType = WorkMediaType.Book, CanonicalTitle = "Requested" };
         var other = new Work { MediaType = WorkMediaType.Book, CanonicalTitle = "Other" };
         var chapter = new WorkChapter { WorkId = other.Id, Number = 1, Title = "Wrong Work" };
-        db.AddRange(requested, other, chapter);
+        db.AddRange(requested, other);
+        await db.SaveChangesAsync();
+        chapter.WorkId = other.Id;
+        db.Add(chapter);
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
 

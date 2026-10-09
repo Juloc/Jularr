@@ -63,8 +63,8 @@ public sealed class ClientVideoAccessTests
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
 
-        var unknown = await host.SendAsync(HttpMethod.Post, $"{Api}/video/player", new { target = new { workId = Guid.NewGuid() } });
-        var invalid = await host.SendAsync(HttpMethod.Post, $"{Api}/video/player", new { target = new { workId = Guid.Empty } });
+        var unknown = await host.SendAsync(HttpMethod.Post, $"{Api}/video/player", new { target = new { workId = 987654321L } });
+        var invalid = await host.SendAsync(HttpMethod.Post, $"{Api}/video/player", new { target = new { workId = 0L } });
 
         Assert.AreEqual(HttpStatusCode.NotFound, unknown.Status);
         StringAssert.Contains(unknown.Body, Denied);
@@ -112,10 +112,10 @@ public sealed class ClientVideoAccessTests
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var movie = await AddMovieAsync(host, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
-        string Cues(string track, Guid workId) => $"{Api}/video/subtitle-tracks/{track}/cues?workId={workId}";
+        string Cues(string track, long workId) => $"{Api}/video/subtitle-tracks/{track}/cues?workId={workId}";
 
         var badTrack = await host.SendAsync(HttpMethod.Get, Cues("not-a-track", movie.Id));
-        var unknownTarget = await host.SendAsync(HttpMethod.Get, Cues("stream:3", Guid.NewGuid()));
+        var unknownTarget = await host.SendAsync(HttpMethod.Get, Cues("stream:3", Random.Shared.NextInt64(1, long.MaxValue)));
         var pictureStream = await host.SendAsync(HttpMethod.Get, Cues("stream:4", movie.Id));
         var missingStream = await host.SendAsync(HttpMethod.Get, Cues("stream:9", movie.Id));
 

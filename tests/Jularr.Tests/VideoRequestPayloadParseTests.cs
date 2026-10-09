@@ -7,12 +7,12 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class VideoRequestPayloadParseTests
 {
-    private const string Work = "00000000-0000-0000-0000-000000000abc";
+    private const long Work = 2748;
 
     [TestMethod]
-    [DataRow($$"""{"workId":"{{Work}}","title":"Severance"}""")]
-    [DataRow($$"""{"workId":"{{Work}}","title":"Severance","requested":null,"playbackMarkers":null}""")]
-    [DataRow($$"""{"workId":"{{Work}}","scope":3}""")]
+    [DataRow("""{"workId":2748,"title":"Severance"}""")]
+    [DataRow("""{"workId":2748,"title":"Severance","requested":null,"playbackMarkers":null}""")]
+    [DataRow("""{"workId":2748,"scope":3}""")]
     public void NullOrMissingFieldsReadWithDefaults(string json)
     {
         var payload = VideoRequestPayload.Parse(json);
@@ -38,10 +38,10 @@ public sealed class VideoRequestPayloadParseTests
     public void TheFallbackTitleFillsAPayloadThatCarriedNone()
     {
         var request = new AcquisitionRequest(
-            Guid.NewGuid(), MediaAcquisitionKind.Tv, "tmdb", "1", "Severance", null, null, $$"""{"workId":"{{Work}}"}""",
+            Guid.NewGuid(), MediaAcquisitionKind.Tv, "tmdb", "1", "Severance", null, null, $$"""{"workId":{{Work}}}""",
             "owner", AcquisitionRequestStatus.Approved, null, null, null, DateTime.UtcNow, DateTime.UtcNow, null, null);
 
-        var payload = VideoRequestPayload.Of(request, Guid.Parse(Work), request.Title, null);
+        var payload = VideoRequestPayload.Of(request, Work, request.Title, null);
 
         Assert.AreEqual("Severance", payload.Title);
     }
@@ -52,7 +52,7 @@ public sealed class VideoRequestPayloadParseTests
         await using var series = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", "Severance.S01E01.1080p.WEB-DL.x264-GROUP");
         await series.AddEpisodeAsync(1, 1);
         var malformed = await series.CreateApprovedAsync();
-        await series.Get<AcquisitionAccessStore>().PatchPayloadAsync(malformed.Id, _ => $$"""{"workId":"{{series.Work.Id}}","title":"Severance","requested":null,"playbackMarkers":null}""", CancellationToken.None);
+        await series.Get<AcquisitionAccessStore>().PatchPayloadAsync(malformed.Id, _ => $$"""{"workId":{{series.Work.Id}},"title":"Severance","requested":null,"playbackMarkers":null}""", CancellationToken.None);
         await series.Get<AcquisitionAccessStore>().CreateAsync(
             new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", "other-show", "Other Show", null, null, "{}"),
             "owner",

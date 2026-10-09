@@ -27,7 +27,7 @@ public sealed class AnimeMetadataService(
         }
 
         var match = await db.AnimeMetadata.AsNoTracking().FirstOrDefaultAsync(x => x.AnimeId == animeId && x.Provider == AniListMetadataProvider.ProviderKey, cancellationToken);
-        var workId = await db.WorkSourceLinks.AsNoTracking().Where(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == animeId).Select(link => (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
+        var workId = await db.WorkSourceLinks.AsNoTracking().Where(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == animeId).Select(link => (long?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
         if (match is null || workId is null)
         {
             return;

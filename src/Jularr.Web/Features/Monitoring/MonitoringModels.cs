@@ -1,6 +1,6 @@
 namespace Jularr.Web.Features.Monitoring;
 
-/// <summary>The canonical node a monitoring decision is about; the id is the node's own canonical id (the Work id for <see cref="Work"/>).</summary>
+/// <summary>The canonical node a monitoring decision is about; the id is the node's own canonical id. A <see cref="Work"/> decision has no node id: it belongs to the Work of the row.</summary>
 public enum MonitoringTargetKind : short
 {
     Work = 0,
@@ -43,13 +43,13 @@ public sealed record MonitoringRelationSource(MonitoringRelationKind Kind, strin
 /// only place an effective state is derived: the explicit decision of the node, then of its parent, then the Work's own state,
 /// which is itself an explicit decision or else the relation.
 /// </summary>
-public sealed class WorkMonitoringView(Guid workId, IReadOnlyDictionary<Guid, MonitoringDecision> decisions, bool relationMonitored, NumberedDecisions? numbered = null)
+public sealed class WorkMonitoringView(long workId, bool? workDecision, IReadOnlyDictionary<Guid, MonitoringDecision> decisions, bool relationMonitored, NumberedDecisions? numbered = null)
 {
-    public Guid WorkId { get; } = workId;
+    public long WorkId { get; } = workId;
 
     public bool IsRelationMonitored { get; } = relationMonitored;
 
-    public bool IsWorkMonitored => DecisionOf(WorkId) ?? IsRelationMonitored;
+    public bool IsWorkMonitored => workDecision ?? IsRelationMonitored;
 
     /// <summary>Whether anything of the Work is monitored: the Work itself, or a node that was switched on while the Work is not.</summary>
     public bool IsAnyMonitored => IsWorkMonitored || decisions.Values.Any(decision => decision.Monitored);
@@ -58,7 +58,7 @@ public sealed class WorkMonitoringView(Guid workId, IReadOnlyDictionary<Guid, Mo
     public bool ReachesFutureNodes => IsWorkMonitored || decisions.Values.Any(decision => decision.Monitored && decision.Kind is MonitoringTargetKind.Season or MonitoringTargetKind.Volume);
 
     /// <summary>Whether any season, episode, volume, chapter or track carries a decision of its own.</summary>
-    public bool HasNodeDecisions => decisions.Values.Any(decision => decision.Kind != MonitoringTargetKind.Work);
+    public bool HasNodeDecisions => decisions.Count > 0;
 
     /// <summary>Whether the audio edition is monitored: only its own decision says so, whatever the Book itself is.</summary>
     public bool IsEditionMonitored(Guid editionId) => DecisionOf(editionId) ?? false;
@@ -85,5 +85,5 @@ public sealed class WorkMonitoringView(Guid workId, IReadOnlyDictionary<Guid, Mo
             ? throw new InvalidOperationException("The view was loaded without numbers.")
             : numbered.Seasons.TryGetValue(seasonNumber, out var season) ? season : IsWorkMonitored;
 
-    public static WorkMonitoringView Unmonitored(Guid workId) => new(workId, new Dictionary<Guid, MonitoringDecision>(), relationMonitored: false, new NumberedDecisions(new Dictionary<(int, int), bool>(), new Dictionary<int, bool>()));
+    public static WorkMonitoringView Unmonitored(long workId) => new(workId, null, new Dictionary<Guid, MonitoringDecision>(), relationMonitored: false, new NumberedDecisions(new Dictionary<(int, int), bool>(), new Dictionary<int, bool>()));
 }

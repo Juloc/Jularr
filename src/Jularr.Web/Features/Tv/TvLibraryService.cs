@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Tv;
 
 /// <summary>The series a completed download resolved to and the universal work it is bridged to.</summary>
-public sealed record TvSeriesEntry(TvSeries Series, Guid WorkId);
+public sealed record TvSeriesEntry(TvSeries Series, long WorkId);
 
 /// <summary>
 /// Creates and resolves first-class <see cref="TvSeries"/> records and bridges each to the universal media
@@ -99,7 +99,7 @@ public sealed class TvLibraryService(
     /// number) is kept: the structure the Request was made against must not lose its facts when the file arrives.
     /// </summary>
     public async Task<WorkEpisode> EnsureEpisodeAsync(
-        Guid workId,
+        long workId,
         int seasonNumber,
         int episodeNumber,
         string? episodeTitle,

@@ -1,4 +1,4 @@
-@page "/Admin/Media/{kind}/{id:guid}"
+@page "/Admin/Media/{kind}/{id:long}"
 @model Jularr.Web.Pages.Admin.MediaWorkModel
 @using Jularr.Web.Features.Acquisition.Access
 @using Jularr.Web.Features.Acquisition.Monitoring
@@ -89,7 +89,21 @@
         <div class="admmd-hero-top">
             <div class="admmd-titles">
                 <h1 id="admmd-title">@detail.Title</h1>
-                <p class="admmd-meta">@meta</p>
+                <p class="admmd-meta">
+                    @meta
+                    @if (detail.Provider is { } provider)
+                    {
+                        <span> · </span>
+                        @if (provider.Url is { } providerUrl)
+                        {
+                            <a class="text-link" href="@providerUrl" target="_blank" rel="noopener noreferrer">@provider.Name @provider.ExternalId</a>
+                        }
+                        else
+                        {
+                            <span>@provider.Name @provider.ExternalId</span>
+                        }
+                    }
+                </p>
             </div>
             <div class="admmd-hero-actions">
                 @if (acquisition.CanAcquire)
@@ -177,6 +191,23 @@
 @if (!acquisition.CanAcquire)
 {
     <p class="admmd-note">@ui["admin.media.video.noAcquisition"]</p>
+}
+@if (detail.UnavailableRoots.Count > 0)
+{
+    <p class="admmd-notice admmd-notice-error" role="alert">@ui.Format("admin.media.storageOffline", ("roots", string.Join(", ", detail.UnavailableRoots)))</p>
+}
+@if (detail.EndedRequest is { } ended)
+{
+    <p class="admmd-note" role="status">
+        @ui.Format("admin.media.requestFailed", ("message", string.IsNullOrWhiteSpace(ended.StatusMessage) ? ui["requests.status.failed"] : ended.StatusMessage))
+        <a class="text-link" asp-page="/Admin/ManualSearch" asp-route-id="@ended.Id" asp-route-tab="history">@ui["admin.media.requestHistory"]</a>
+    </p>
+    @if (acquisition.CanAcquire)
+    {
+        <form method="post" asp-page-handler="Retry" class="admmd-note">
+            <button class="button" type="submit">@ui["admin.requests.retry"]</button>
+        </form>
+    }
 }
 
 @if (isMovie)
@@ -339,7 +370,7 @@ else
                                             <strong>@episodeName</strong>
                                             @if (episode.AiredAt is { } airs)
                                             {
-                                                <small>@(episode.IsUpcoming ? upcoming + " · " : "")<time datetime="@airs.ToString("yyyy-MM-dd")">@airs.ToString("yyyy-MM-dd")</time></small>
+                                                <small>@(episode.IsUpcoming && episode.State != AdminMediaState.Missing ? upcoming + " · " : "")<time datetime="@airs.ToString("yyyy-MM-dd")">@airs.ToString("yyyy-MM-dd")</time></small>
                                             }
                                         </span>
                                         <span class="admmd-ep-status" data-col="status">
@@ -351,8 +382,12 @@ else
                                             {
                                                 <span class="admin-tag admin-tag-@AdminStatusTone.Of(episode.State)"><partial name="_AdminMediaIcon" model="stateName" />@StateLabel(episode.State)</span>
                                             }
+                                            @if (episode.UpgradeWanted)
+                                            {
+                                                <span class="admin-tag admin-tag-warning">@ui["admin.media.upgradeWanted"]</span>
+                                            }
                                         </span>
-                                        <span class="admmd-ep-quality" data-col="quality">@(quality ?? "—")</span>
+                                        <span class="admmd-ep-quality" data-col="quality">@quality</span>
                                         <span class="admmd-ep-langs" data-col="audio" title="@ui["admin.media.col.audio"]">
                                             @foreach (var language in episode.Files.SelectMany(file => file.Audio).Distinct(StringComparer.OrdinalIgnoreCase))
                                             {
@@ -365,8 +400,8 @@ else
                                                 <span class="admmd-lang admmd-lang-quiet">@language.ToUpperInvariant()</span>
                                             }
                                         </span>
-                                        <span class="admmd-ep-files" data-col="files">@episode.Files.Count</span>
-                                        <span class="admmd-ep-size" data-col="size">@(episode.Files.Count > 0 ? Bytes(episode.SizeBytes) : "—")</span>
+                                        <span class="admmd-ep-files admmd-hide-compact" data-col="files">@(episode.Files.Count > 0 ? episode.Files.Count.ToString() : "")</span>
+                                        <span class="admmd-ep-size" data-col="size">@(episode.Files.Count > 0 ? Bytes(episode.SizeBytes) : "")</span>
                                         <span class="admmd-ep-monitor">
                                             @if (manualHref is not null && !episode.IsUpcoming && episode.State != AdminMediaState.Available)
                                             {

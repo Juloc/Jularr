@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,9 +26,9 @@ public sealed class WorkArtworkCache(string rootPath, IReadOnlyCollection<string
     public string RootPath { get; } = rootPath;
 
     /// <summary>The deterministic key of one variant's derivative: 32 lower-case hex characters.</summary>
-    public static string CacheKey(Guid workId, WorkArtworkSlot slot, string language, string source, string providerFilePath)
+    public static string CacheKey(long workId, WorkArtworkSlot slot, string language, string source, string providerFilePath)
     {
-        var identity = string.Join('\u001f', DerivativeVersion, workId.ToString("N"), slot.ToString(), language, source, providerFilePath);
+        var identity = string.Join('\u001f', DerivativeVersion, workId.ToString(CultureInfo.InvariantCulture), slot.ToString(), language, source, providerFilePath);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..32];
     }
 

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Jularr.Web.Features.Movies;
 
 /// <summary>The movie a completed download resolved to and the universal work it is bridged to.</summary>
-public sealed record MovieLibraryEntry(Movie Movie, Guid WorkId);
+public sealed record MovieLibraryEntry(Movie Movie, long WorkId);
 
 /// <summary>
 /// Creates and resolves first-class <see cref="Movie"/> records and bridges each to the universal media

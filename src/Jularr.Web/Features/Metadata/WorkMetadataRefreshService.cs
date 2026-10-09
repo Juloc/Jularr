@@ -19,7 +19,7 @@ public sealed class WorkMetadataRefreshSignal : BackgroundWakeSignal;
 /// </summary>
 public sealed class WorkMetadataRefreshQueue(WorkMetadataStore store, WorkMetadataRefreshSignal signal, TimeProvider clock)
 {
-    public async Task RequestMetadataRefreshAsync(Guid workId, bool interactive, CancellationToken cancellationToken)
+    public async Task RequestMetadataRefreshAsync(long workId, bool interactive, CancellationToken cancellationToken)
     {
         var priority = interactive ? WorkMetadataRefreshPriority.Interactive : WorkMetadataRefreshPriority.Requested;
         var changed = await store.EnqueueAsync(workId, WorkMetadataLocales.InstanceDefault, priority, clock.GetUtcNow().UtcDateTime, cancellationToken);

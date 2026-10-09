@@ -160,7 +160,7 @@ public sealed class RequestsModel(
             var effectiveProfiles = new Dictionary<Guid, string>();
             foreach (var request in Queue.Items)
             {
-                var workId = request.WorkId ?? (VideoWorks.TryGetValue(request.Id, out var videoWork) ? videoWork.WorkId : (Guid?)null);
+                var workId = request.WorkId ?? (VideoWorks.TryGetValue(request.Id, out var videoWork) ? videoWork.WorkId : (long?)null);
                 var effective = request.Options.QualityProfileId ?? qualityState.ResolveProfileId(request.Kind, workId);
                 effectiveProfiles[request.Id] = effective is not null ? QualityProfileNames.GetValueOrDefault(effective) ?? effective : "—";
             }

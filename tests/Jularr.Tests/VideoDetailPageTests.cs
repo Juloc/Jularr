@@ -334,7 +334,7 @@ public sealed class VideoDetailPageTests
         await using var host = await VideoDetailPageTestHost.CreateAsync();
         var series = await SeedSeriesAsync(host);
         await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "1399", "Dark Harbor", AcquisitionRequestStatus.Approved);
-        await MonitoringTestSupport.Commands(host.Db).SetAsync(MonitoringTargetKind.Work, series.Work.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(host.Db).SetWorkAsync(series.Work.Id, true, CancellationToken.None);
 
         var html = await host.GetOkAsync($"/Library/Series/{series.Work.Id}");
 

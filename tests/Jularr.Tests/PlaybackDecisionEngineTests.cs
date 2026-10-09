@@ -801,20 +801,20 @@ public sealed class PlaybackDecisionEngineTests
         var plan = PlaybackDecisionEngine.Decide(Request(H264AacMp4, Chromium));
         var selections = new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web");
 
-        var mine = store.Create("reader", Guid.NewGuid(), Guid.NewGuid(), "/media/a.mp4", 1440, plan, selections);
+        var mine = store.Create("reader", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/a.mp4", 1440, plan, selections);
         Assert.IsNotNull(store.Get(mine.Id, "reader"));
         Assert.IsNull(store.Get(mine.Id, "other"), "Another profile never sees the session.");
         Assert.IsFalse(store.Remove(mine.Id, "other"));
 
         time.Advance(TimeSpan.FromSeconds(1));
-        var replacement = store.Create("reader", mine.EpisodeId, mine.MediaFileId, mine.SourcePath, 1440, plan, selections, replaces: mine.Id);
+        var replacement = store.Create("reader", new PlaybackVideoTarget(1, mine.EpisodeId), mine.MediaFileId, mine.SourcePath, 1440, plan, selections, replaces: mine.Id);
         CollectionAssert.Contains(removed, mine.Id, "A re-plan replaces the previous session.");
         Assert.IsNull(store.Get(mine.Id, "reader"));
 
         for (var i = 0; i < PlaybackStreamSessionStore.MaxSessionsPerProfile + 2; i++)
         {
             time.Advance(TimeSpan.FromSeconds(1));
-            store.Create("reader", Guid.NewGuid(), Guid.NewGuid(), "/media/b.mp4", 1440, plan, selections);
+            store.Create("reader", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/b.mp4", 1440, plan, selections);
         }
 
         Assert.IsTrue(store.Count <= PlaybackStreamSessionStore.MaxSessionsPerProfile);
@@ -832,7 +832,7 @@ public sealed class PlaybackDecisionEngineTests
         var plan = PlaybackDecisionEngine.Decide(Request(HevcHdrMkv, Safari));
         var session = store.Create(
             "reader",
-            Guid.NewGuid(),
+            new PlaybackVideoTarget(1, Guid.NewGuid()),
             Guid.NewGuid(),
             "/media/a.mkv",
             1420,
@@ -853,6 +853,7 @@ public sealed class PlaybackDecisionEngineTests
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();
         var media = await fixture.AddMediaAsync("episode.mkv", new byte[4096]);
+        await fixture.BridgeEpisodeAsync(media);
         fixture.Runner.Returns(media.Path, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
         var store = new PlaybackStreamSessionStore(TimeProvider.System);
         var service = new PlaybackPlanService(

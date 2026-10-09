@@ -528,10 +528,28 @@ public static class ReaderPreferenceStore
             ReaderContentType.LightNovel,
             cancellationToken);
 
-    public static async Task<ReaderSettingsSnapshot> GetAsync(
+    public static Task<ReaderSettingsSnapshot> GetAsync(
         AppDbContext db,
         string profileId,
         Guid? workId,
+        string? genresJson,
+        ReaderContentType contentType,
+        CancellationToken cancellationToken) =>
+        ReadAsync(db, profileId, workId is { } id ? ReaderPreferenceScopes.Work(id) : null, genresJson, contentType, cancellationToken);
+
+    public static Task<ReaderSettingsSnapshot> GetAsync(
+        AppDbContext db,
+        string profileId,
+        long? workId,
+        string? genresJson,
+        ReaderContentType contentType,
+        CancellationToken cancellationToken) =>
+        ReadAsync(db, profileId, workId is { } id ? ReaderPreferenceScopes.Work(id) : null, genresJson, contentType, cancellationToken);
+
+    private static async Task<ReaderSettingsSnapshot> ReadAsync(
+        AppDbContext db,
+        string profileId,
+        string? workScope,
         string? genresJson,
         ReaderContentType contentType,
         CancellationToken cancellationToken)
@@ -546,7 +564,6 @@ public static class ReaderPreferenceStore
             .Select(ReaderPreferenceScopes.NormalizeGenreKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var typeScope = ReaderPreferenceScopes.Type(contentType);
-        var workScope = workId is Guid id ? ReaderPreferenceScopes.Work(id) : null;
 
         var global = preferences.FirstOrDefault(
             x => x.ScopeKey == ReaderPreferenceRules.UserDefaultScope);
@@ -948,6 +965,17 @@ public static class ReaderPreferenceStore
         AppDbContext db,
         string profileId,
         Guid workId,
+        CancellationToken cancellationToken) =>
+        ResetScopeAsync(
+            db,
+            profileId,
+            ReaderPreferenceScopes.Work(workId),
+            cancellationToken);
+
+    public static Task ResetWorkAsync(
+        AppDbContext db,
+        string profileId,
+        long workId,
         CancellationToken cancellationToken) =>
         ResetScopeAsync(
             db,

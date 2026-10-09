@@ -13,7 +13,9 @@ public static class ReaderPreferenceScopes
     public static string Genre(string genre, int priority = DefaultGenrePriority) =>
         $"genre:{Math.Clamp(priority, 0, 999):000}:{NormalizeGenreKey(genre)}";
 
-    public static string Work(Guid workId) => $"work:{workId:N}";
+    public static string Work(Guid novelWorkId) => $"work:{novelWorkId:N}";
+
+    public static string Work(long workId) => $"work:{workId}";
 
     public static string ResolveTarget(
         string? target,

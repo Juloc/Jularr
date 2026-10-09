@@ -305,7 +305,7 @@ public sealed class HomeVideoCanonicalTests
         return home;
     }
 
-    private static async Task SeedMetadataAsync(AppDbContext db, Guid workId, string overview, bool withBackdrop)
+    private static async Task SeedMetadataAsync(AppDbContext db, long workId, string overview, bool withBackdrop)
     {
         var now = DateTime.UtcNow;
         await db.Database.ExecuteSqlAsync(

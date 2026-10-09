@@ -498,3 +498,19 @@ Two Login references are expected in this folder:
 The owner will upload the approved images.
 
 Text specification wins over imagery on conflict.
+
+
+---
+
+## Plex-first Account Login and verified linking (approved planning extension, #911)
+
+This is an explicit refinement of sections 5–7, not a new login/session model. Preserve the existing Jularr Account/Profile architecture, including pre-existing local users and all stored profile state.
+
+Supported entry points:
+
+1. **Sign in with Plex:** after a verified Plex provider authentication, look up a stable `(Plex, PlexAccountId)` login identity. An existing link signs in to that Jularr Account with the canonical session and Profile selection. If no link exists, show a neutral choice **I already have a Jularr account — sign in to link** or **Create my Jularr account**, without disclosing whether an email is already registered. Creating a new Account requires Admin-enabled auto-provisioning and applies safe default permissions/approval policy. An external-only Account does not require a fictitious local password.
+2. **Link Plex while already signed in:** after step-up verification where appropriate, authenticate the Plex identity and explicitly confirm that it should be linked to the **current** Jularr Account. Keep the same Account ID, profiles, library/watch history, preferences, requests and privileges. If that verified Plex identity belongs to another Account, refuse; do not merge.
+3. **Email matches:** matching Plex/Jularr email, username or display name is **never** sufficient to automatically merge or attach Accounts. Email is a hint, not proof. Requiring current-account login plus provider verification also avoids public Account-existence disclosure. A later merge of two already-created Jularr Accounts is a separate reviewed recovery process, not part of login.
+4. **Login vs Connections:** Account-level linked login identity is separate from Profile-level Plex watchlist/progress/media Connection; using Plex Login must not silently enable sync. Disconnecting a Profile Connection must not remove the login method. Removing the last functional Account credential requires an explicit recovery path or must be denied.
+5. **Security:** use supported Plex hosted authentication/PIN flow with single-use state and robust timeout/replay protection. Only verified stable Plex IDs are trusted; all tokens remain server-side. Disabled/unapproved local accounts cannot bypass policy by Plex sign-in. No Plex-originated Owner/Admin elevation.
+6. Only render Plex Login when implemented, healthy, and enabled by Admin. The Plex app account and the Jularr Account remain different identities. Related implementation checklist: #911. Media item opening: #886.

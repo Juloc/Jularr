@@ -63,7 +63,7 @@ public sealed class VideoMonitoringService(
     private const int MaxAttempts = 4;
 
     /// <summary>The open request of the Work under any of its provider identities, or null.</summary>
-    public async Task<AcquisitionRequest?> FindOpenRequestAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    public async Task<AcquisitionRequest?> FindOpenRequestAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         foreach (var identity in await IdentitiesAsync(kind, workId, cancellationToken))
         {
@@ -77,14 +77,14 @@ public sealed class VideoMonitoringService(
     }
 
     /// <summary>Switches monitoring of a Movie.</summary>
-    public async Task<VideoMonitoringOutcome> SetMovieMonitoredAsync(Guid workId, bool monitored, CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome> SetMovieMonitoredAsync(long workId, bool monitored, CancellationToken cancellationToken)
     {
         if (!await db.Works.AsNoTracking().AnyAsync(x => x.Id == workId && x.MediaType == WorkMediaType.Movie, cancellationToken))
         {
             return VideoMonitoringOutcome.NotFound;
         }
 
-        await commands.SetAsync(MonitoringTargetKind.Work, workId, monitored, cancellationToken);
+        await commands.SetWorkAsync(workId, monitored, cancellationToken);
         return await ReconcileAsync(workId, MediaAcquisitionKind.Movie, wake: true, cancellationToken);
     }
 
@@ -93,7 +93,7 @@ public sealed class VideoMonitoringService(
     /// <see cref="OffScope"/>. It replaces every decision made below the Series before. Throws <see cref="ArgumentException"/> for any other scope;
     /// a custom selection is made one season or episode at a time with <see cref="SetSeasonMonitoredAsync"/> and <see cref="SetEpisodeMonitoredAsync"/>.
     /// </summary>
-    public async Task<VideoMonitoringOutcome> SetSeriesAsync(Guid workId, string? scope, CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome> SetSeriesAsync(long workId, string? scope, CancellationToken cancellationToken)
     {
         if (!await db.Works.AsNoTracking().AnyAsync(x => x.Id == workId && x.MediaType == WorkMediaType.Series, cancellationToken))
         {
@@ -102,11 +102,11 @@ public sealed class VideoMonitoringService(
 
         if (scope == OffScope)
         {
-            await commands.SetAsync(MonitoringTargetKind.Work, workId, false, cancellationToken);
+            await commands.SetWorkAsync(workId, false, cancellationToken);
         }
         else if (VideoRequestScopeResolver.TryParseScope(scope, out var parsed) && parsed != VideoRequestScope.Custom)
         {
-            await (parsed == VideoRequestScope.FutureOnly ? commands.FutureAsync(workId, cancellationToken) : commands.SetAsync(MonitoringTargetKind.Work, workId, true, cancellationToken));
+            await (parsed == VideoRequestScope.FutureOnly ? commands.FutureAsync(workId, cancellationToken) : commands.SetWorkAsync(workId, true, cancellationToken));
         }
         else
         {
@@ -121,7 +121,7 @@ public sealed class VideoMonitoringService(
     /// that season later. Returns <see cref="VideoMonitoringOutcome.NotFound"/> for a season the Series does not have and
     /// <see cref="VideoMonitoringOutcome.Unchanged"/> when every episode of it already is as asked.
     /// </summary>
-    public async Task<VideoMonitoringOutcome> SetSeasonMonitoredAsync(Guid workId, int seasonNumber, bool monitored, CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome> SetSeasonMonitoredAsync(long workId, int seasonNumber, bool monitored, CancellationToken cancellationToken)
     {
         if (!await db.Works.AsNoTracking().AnyAsync(x => x.Id == workId && x.MediaType == WorkMediaType.Series, cancellationToken))
         {
@@ -158,7 +158,7 @@ public sealed class VideoMonitoringService(
     /// Monitors or unmonitors one episode and leaves the rest of the Series as it is. An episode only carries a decision of its own when it differs from what it
     /// inherits, so switching it back to the inherited state removes the decision; a switch that changes nothing writes and wakes nothing.
     /// </summary>
-    public async Task<VideoMonitoringOutcome> SetEpisodeMonitoredAsync(Guid workId, Guid episodeId, bool monitored, CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome> SetEpisodeMonitoredAsync(long workId, Guid episodeId, bool monitored, CancellationToken cancellationToken)
     {
         var episode = await db.WorkEpisodes.AsNoTracking().Where(x => x.Id == episodeId && x.WorkId == workId).Select(x => new { x.SeasonId }).FirstOrDefaultAsync(cancellationToken);
         if (episode is null)
@@ -178,7 +178,7 @@ public sealed class VideoMonitoringService(
     }
 
     /// <summary>Assigns the quality profile of one Work, or clears the override with a blank id.</summary>
-    public async Task<VideoMonitoringOutcome> SetProfileAsync(MediaAcquisitionKind kind, Guid workId, string? profileId, CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome> SetProfileAsync(MediaAcquisitionKind kind, long workId, string? profileId, CancellationToken cancellationToken)
     {
         var type = VideoWorkLinks.WorkType(kind);
         if (!await db.Works.AsNoTracking().AnyAsync(x => x.Id == workId && x.MediaType == type, cancellationToken))
@@ -196,7 +196,7 @@ public sealed class VideoMonitoringService(
     /// Work that became monitored through a relation. Every write is conditional on the status it was decided from, so a concurrent change makes it look
     /// again instead of leaving a status and a payload that disagree.
     /// </summary>
-    public async Task<VideoMonitoringOutcome> ReconcileAsync(Guid workId, MediaAcquisitionKind kind, bool wake, CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome> ReconcileAsync(long workId, MediaAcquisitionKind kind, bool wake, CancellationToken cancellationToken)
     {
         var work = await db.Works.AsNoTracking().SingleOrDefaultAsync(x => x.Id == workId && x.MediaType == VideoWorkLinks.WorkType(kind), cancellationToken);
         if (work is null)
@@ -322,7 +322,7 @@ public sealed class VideoMonitoringService(
     /// Whether the title's latest request ended in a way only a person undoes (it gave up, or an owner rejected it), so the Wanted pass leaves it alone
     /// instead of opening a fresh request every time. A request that only monitoring Off ended is not one of them.
     /// </summary>
-    public async Task<bool> IsLeftToOwnerAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    public async Task<bool> IsLeftToOwnerAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         AcquisitionRequest? latest = null;
         foreach (var identity in await IdentitiesAsync(kind, workId, cancellationToken))
@@ -338,7 +338,7 @@ public sealed class VideoMonitoringService(
     }
 
     /// <summary>The newest request monitoring Off ended for the Work, which turning monitoring on reopens.</summary>
-    private async Task<AcquisitionRequest?> FindStoppedRequestAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    private async Task<AcquisitionRequest?> FindStoppedRequestAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         AcquisitionRequest? stopped = null;
         foreach (var identity in await IdentitiesAsync(kind, workId, cancellationToken))
@@ -354,7 +354,7 @@ public sealed class VideoMonitoringService(
         return stopped;
     }
 
-    private async Task<List<WorkIdentity>> IdentitiesAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    private async Task<List<WorkIdentity>> IdentitiesAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         var type = VideoWorkLinks.WorkType(kind);
         return await db.WorkExternalIdentities

@@ -30,7 +30,7 @@ public enum LibraryWorkResolution
     WorkRepresentsAnotherEntry
 }
 
-public sealed record LibraryWorkCandidate(Guid WorkId, string Title, string Evidence);
+public sealed record LibraryWorkCandidate(long WorkId, string Title, string Evidence);
 
 public sealed record LibraryWorkReviewItem(
     Guid EntryId,
@@ -66,7 +66,7 @@ public sealed class LibraryWorkBackfill(AppDbContext db, WorkService works, Lega
         Review
     }
 
-    private sealed record Evaluation(Decision Decision, WorkMediaType MediaType, IReadOnlyList<ProviderId> Identities, Guid? WorkId, LibraryWorkReviewReason? Reason, IReadOnlyList<LibraryWorkCandidate> Candidates);
+    private sealed record Evaluation(Decision Decision, WorkMediaType MediaType, IReadOnlyList<ProviderId> Identities, long? WorkId, LibraryWorkReviewReason? Reason, IReadOnlyList<LibraryWorkCandidate> Candidates);
 
     public static WorkMediaType MediaTypeOf(NovelWork entry) => entry.SourceProvider == BookCatalogService.ImportedBookProvider ? WorkMediaType.Book : WorkMediaType.LightNovel;
 
@@ -161,7 +161,7 @@ public sealed class LibraryWorkBackfill(AppDbContext db, WorkService works, Lega
     }
 
     /// <summary>The owner's decision to link an entry to a Work that exists: refused when it would leave an id of the entry with another Work, or make the Work stand for two entries.</summary>
-    public async Task<LibraryWorkResolution> LinkToWorkAsync(Guid entryId, Guid workId, CancellationToken cancellationToken)
+    public async Task<LibraryWorkResolution> LinkToWorkAsync(Guid entryId, long workId, CancellationToken cancellationToken)
     {
         var entry = await db.NovelWorks.AsNoTracking().FirstOrDefaultAsync(item => item.Id == entryId, cancellationToken);
         var work = await db.Works.AsNoTracking().FirstOrDefaultAsync(item => item.Id == workId, cancellationToken);
@@ -199,7 +199,7 @@ public sealed class LibraryWorkBackfill(AppDbContext db, WorkService works, Lega
     }
 
     /// <summary>The owner's decision that an entry is a Work of its own: refused when an id of the entry already names a Work, because then the entry belongs to that Work or the Works are merged.</summary>
-    public async Task<(LibraryWorkResolution Resolution, Guid? WorkId)> CreateWorkAsync(Guid entryId, CancellationToken cancellationToken)
+    public async Task<(LibraryWorkResolution Resolution, long? WorkId)> CreateWorkAsync(Guid entryId, CancellationToken cancellationToken)
     {
         var entry = await db.NovelWorks.AsNoTracking().FirstOrDefaultAsync(item => item.Id == entryId, cancellationToken);
         if (entry is null)
@@ -231,11 +231,11 @@ public sealed class LibraryWorkBackfill(AppDbContext db, WorkService works, Lega
     private Task<bool> IsBoundAsync(Guid entryId, CancellationToken cancellationToken) =>
         db.WorkSourceLinks.AnyAsync(link => link.SourceKind == WorkSourceKind.NovelWork && link.SourceId == entryId, cancellationToken);
 
-    private Task<bool> RepresentsAnotherEntryAsync(Guid workId, Guid entryId, CancellationToken cancellationToken) =>
+    private Task<bool> RepresentsAnotherEntryAsync(long workId, Guid entryId, CancellationToken cancellationToken) =>
         db.WorkSourceLinks.AnyAsync(link => link.WorkId == workId && link.SourceKind == WorkSourceKind.NovelWork && link.SourceId != entryId, cancellationToken);
 
     /// <summary>Links the entry to the Work and lets the bridge mirror its titles and ids; an id the Work does not hold yet is added, one that another Work holds stays where it is.</summary>
-    private async Task BindAsync(NovelWork entry, WorkMediaType mediaType, Guid workId, CancellationToken cancellationToken)
+    private async Task BindAsync(NovelWork entry, WorkMediaType mediaType, long workId, CancellationToken cancellationToken)
     {
         await works.LinkSourceAsync(workId, WorkSourceKind.NovelWork, entry.Id, cancellationToken);
         await bridge.EnsureWorkForNovelAsync(entry, mediaType, cancellationToken);
@@ -259,13 +259,13 @@ public sealed class LibraryWorkBackfill(AppDbContext db, WorkService works, Lega
         return identities;
     }
 
-    private async Task<Guid?> HolderOfAsync(WorkMediaType mediaType, ProviderId identity, CancellationToken cancellationToken)
+    private async Task<long?> HolderOfAsync(WorkMediaType mediaType, ProviderId identity, CancellationToken cancellationToken)
     {
         var provider = MediaCoreNormalization.NormalizeProvider(identity.Provider);
         var externalId = MediaCoreNormalization.NormalizeExternalId(identity.ExternalId);
         return await db.WorkExternalIdentities.AsNoTracking()
             .Where(item => item.MediaType == mediaType && item.Provider == provider && item.ExternalId == externalId)
-            .Select(item => (Guid?)item.WorkId)
+            .Select(item => (long?)item.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -278,7 +278,7 @@ public sealed class LibraryWorkBackfill(AppDbContext db, WorkService works, Lega
             return new Evaluation(Decision.Review, mediaType, identities, null, LibraryWorkReviewReason.NoProviderIdentity, []);
         }
 
-        var evidence = new Dictionary<Guid, string>();
+        var evidence = new Dictionary<long, string>();
         foreach (var identity in identities)
         {
             if (await HolderOfAsync(mediaType, identity, cancellationToken) is { } holder)
@@ -306,7 +306,7 @@ public sealed class LibraryWorkBackfill(AppDbContext db, WorkService works, Lega
         return new Evaluation(Decision.Bind, mediaType, identities, workId, null, []);
     }
 
-    private async Task<IReadOnlyList<LibraryWorkCandidate>> CandidatesAsync(Dictionary<Guid, string> evidence, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<LibraryWorkCandidate>> CandidatesAsync(Dictionary<long, string> evidence, CancellationToken cancellationToken)
     {
         var ids = evidence.Keys.ToArray();
         var titles = await db.Works.AsNoTracking().Where(work => ids.Contains(work.Id)).ToDictionaryAsync(work => work.Id, work => work.CanonicalTitle, cancellationToken);

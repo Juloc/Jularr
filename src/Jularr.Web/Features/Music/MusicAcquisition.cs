@@ -23,7 +23,7 @@ namespace Jularr.Web.Features.Music;
 /// What a Music request searches for: one album of one artist. The Usenet search state (tried releases, searches, next search, last
 /// problem) is the shared <see cref="ReleaseRequestPayload"/>; the Work is the album's canonical identity.
 /// </summary>
-public sealed record MusicRequestPayload(Guid WorkId, string Artist, string Album, int? Year) : ReleaseRequestPayload
+public sealed record MusicRequestPayload(long WorkId, string Artist, string Album, int? Year) : ReleaseRequestPayload
 {
     /// <summary>The payload of a request; one that carries none (or a broken one) is rebuilt from the request fields so an old row never breaks a page.</summary>
     public static MusicRequestPayload Of(AcquisitionRequest request)
@@ -42,14 +42,14 @@ public sealed record MusicRequestPayload(Guid WorkId, string Artist, string Albu
             }
         }
 
-        return new MusicRequestPayload(Guid.Empty, request.Subtitle ?? string.Empty, request.Title, null);
+        return new MusicRequestPayload(0, request.Subtitle ?? string.Empty, request.Title, null);
     }
 }
 
 public static class MusicLinks
 {
     /// <summary>The Admin address of an album, built from the Work id and never from a title or a path.</summary>
-    public static string AlbumPath(Guid workId) => $"/Admin/Music/Album/{workId:D}";
+    public static string AlbumPath(long workId) => $"/Admin/Music/Album/{workId:D}";
 
     public static string ArtistPath(Guid artistId) => $"/Admin/Music/Artist/{artistId:D}";
 }
@@ -174,7 +174,7 @@ public sealed class MusicAcquisitionEngine(
         }
 
         var payload = MusicRequestPayload.Of(request);
-        var workId = payload.WorkId != Guid.Empty ? payload.WorkId : await ResolveWorkIdAsync(request, cancellationToken);
+        var workId = payload.WorkId != 0 ? payload.WorkId : await ResolveWorkIdAsync(request, cancellationToken);
         if (workId is null)
         {
             return new AcquisitionExecution(AcquisitionRequestStatus.Failed, "The canonical album for this request no longer exists.");
@@ -232,7 +232,7 @@ public sealed class MusicAcquisitionEngine(
     }
 
     /// <summary>The installed quality of an album that its profile still wants to upgrade, or null when the album is final (or its quality cannot be compared).</summary>
-    private async Task<string?> FindUpgradeAsync(Guid workId, CancellationToken cancellationToken)
+    private async Task<string?> FindUpgradeAsync(long workId, CancellationToken cancellationToken)
     {
         if (storage is null)
         {
@@ -272,16 +272,16 @@ public sealed class MusicAcquisitionEngine(
     }
 
     /// <summary>Whether any track file of the album is already in the library, so a request never downloads what exists.</summary>
-    public async Task<bool> HasAudioFilesAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<bool> HasAudioFilesAsync(long workId, CancellationToken cancellationToken) =>
         await db.MediaAssets.AsNoTracking()
             .Where(asset => asset.WorkId == workId && asset.Kind == MediaAssetKind.Audio)
             .AnyAsync(asset => db.StoredFiles.Any(file => file.MediaAssetId == asset.Id), cancellationToken);
 
-    private async Task<Guid?> ResolveWorkIdAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    private async Task<long?> ResolveWorkIdAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
         var id = await db.WorkExternalIdentities.AsNoTracking()
             .Where(identity => identity.MediaType == WorkMediaType.Music && identity.Provider == request.Provider.ToLower() && identity.ExternalId == request.ExternalId.Trim().ToLower())
-            .Select(identity => (Guid?)identity.WorkId)
+            .Select(identity => (long?)identity.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
         return id;
     }

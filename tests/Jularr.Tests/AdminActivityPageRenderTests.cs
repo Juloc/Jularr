@@ -193,8 +193,9 @@ public sealed class AdminActivityPageRenderTests
         await using var host = await ActivityHost.CreateAsync();
         var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Dune" };
         var series = new Work { MediaType = WorkMediaType.Series, CanonicalTitle = "Severance" };
-        var episode = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 2 };
         host.Db.Works.AddRange(movie, series);
+        await host.Db.SaveChangesAsync();
+        var episode = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 2 };
         host.Db.WorkEpisodes.Add(episode);
         await host.Db.SaveChangesAsync();
         var store = new OperationStore(host.Db);

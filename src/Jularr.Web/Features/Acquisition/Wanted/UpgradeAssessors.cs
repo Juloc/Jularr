@@ -10,7 +10,7 @@ public sealed class HeldTarget
 {
     public short TargetKind { get; init; }
 
-    public Guid TargetId { get; init; }
+    public Guid? TargetId { get; init; }
 }
 
 // How one acquisition kind tells which of the targets it holds its profile still wants better versions of; it reads the installed quality and the profile, stores nothing.
@@ -21,7 +21,7 @@ public interface IUpgradeAssessor
 
     WantedTargetKind TargetKind { get; }
 
-    Task<IReadOnlyList<HeldTarget>> UpgradableAsync(Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken);
+    Task<IReadOnlyList<HeldTarget>> UpgradableAsync(long workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken);
 }
 
 // The kinds whose installed targets can be upgraded; an installed target nobody assesses simply leaves the Wanted queue.
@@ -32,7 +32,7 @@ public sealed class UpgradeAssessors(IEnumerable<IUpgradeAssessor> assessors)
     public IReadOnlyCollection<WorkMediaType> Types => [.. all.Select(assessor => WantedReconciler.WorkTypeOf(assessor.Kind)).Distinct()];
 
     // The held targets of a Work that its profiles still want better versions of: every assessor of the Work's type judges its own kind of target.
-    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(WorkMediaType type, bool isAnime, Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(WorkMediaType type, bool isAnime, long workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
     {
         var upgradable = new List<HeldTarget>();
         // A Series is judged by the Anime assessor while it runs as Anime and by the Series assessor otherwise.
@@ -56,7 +56,7 @@ public sealed class VideoUpgradeAssessor(MediaAcquisitionKind kind, InstalledVid
 
     public WantedTargetKind TargetKind => kind == MediaAcquisitionKind.Movie ? WantedTargetKind.Work : WantedTargetKind.Episode;
 
-    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(long workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
     {
         var profile = await profiles.ResolveAsync(kind, workId, cancellationToken);
         if (kind == MediaAcquisitionKind.Movie)
@@ -65,6 +65,6 @@ public sealed class VideoUpgradeAssessor(MediaAcquisitionKind kind, InstalledVid
         }
 
         var qualities = await installed.BestQualityByEpisodeAsync(kind, workId, profile, cancellationToken);
-        return [.. held.Where(target => qualities.TryGetValue(target.TargetId, out var quality) && UpgradePolicy.Assess(profile, quality).IsUpgradable)];
+        return [.. held.Where(target => target.TargetId is { } episodeId && qualities.TryGetValue(episodeId, out var quality) && UpgradePolicy.Assess(profile, quality).IsUpgradable)];
     }
 }

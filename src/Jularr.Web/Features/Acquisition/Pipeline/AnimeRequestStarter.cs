@@ -13,7 +13,7 @@ public sealed class AnimeRequestDrafter(AppDbContext db) : IWantedRequestDrafter
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Anime;
 
-    public async Task<WantedRequestDraft?> DraftAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<WantedRequestDraft?> DraftAsync(long workId, CancellationToken cancellationToken)
     {
         var match = await (
                 from link in db.WorkSourceLinks.AsNoTracking()

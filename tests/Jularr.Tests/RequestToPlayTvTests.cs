@@ -20,7 +20,7 @@ namespace Jularr.Tests;
 /// monitoring survives a restart and progress is the profile's own. Each stage consumes what the previous one produced.
 /// </summary>
 [TestClass]
-public sealed class RequestToPlayTvTests
+public sealed partial class RequestToPlayTvTests
 {
     private const string SeveranceTmdb = "95396";
     private const string Viewer = VideoDetailPageTestHost.Profile;
@@ -70,14 +70,14 @@ public sealed class RequestToPlayTvTests
         return await world.GetRequestAsync(requestId);
     }
 
-    private static async Task<JsonElement> PostAsync(VideoRequestToPlayWorld world, string route, Guid workId, Guid episodeId, string? profile = null)
+    private static async Task<JsonElement> PostAsync(VideoRequestToPlayWorld world, string route, long workId, Guid episodeId, string? profile = null)
     {
         var response = await world.Pages.SendAsync(HttpMethod.Post, $"{Api}/video/{route}", new { target = new { workId, workEpisodeId = episodeId } }, profile: profile);
         Assert.AreEqual(HttpStatusCode.OK, response.Status, response.Body);
         return JsonDocument.Parse(response.Body).RootElement.Clone();
     }
 
-    private static async Task<JsonElement> PutProgressAsync(VideoRequestToPlayWorld world, Guid workId, Guid episodeId, long positionMs, bool completed, string? profile = null)
+    private static async Task<JsonElement> PutProgressAsync(VideoRequestToPlayWorld world, long workId, Guid episodeId, long positionMs, bool completed, string? profile = null)
     {
         var response = await world.Pages.SendAsync(HttpMethod.Put, $"{Api}/video/progress", new { target = new { workId, workEpisodeId = episodeId }, positionMs, durationMs = 1_440_000, completed }, profile: profile);
         Assert.AreEqual(HttpStatusCode.OK, response.Status, response.Body);
@@ -85,7 +85,7 @@ public sealed class RequestToPlayTvTests
     }
 
     /// <summary>The player offers exactly these episodes before and after one, in canonical season/episode order.</summary>
-    private static async Task AssertNavigationAsync(VideoRequestToPlayWorld world, Guid workId, Guid episodeId, Guid? previous, Guid? next)
+    private static async Task AssertNavigationAsync(VideoRequestToPlayWorld world, long workId, Guid episodeId, Guid? previous, Guid? next)
     {
         var navigation = (await PostAsync(world, "player", workId, episodeId)).GetProperty("navigation");
         Guid? Neighbour(string name) => navigation.GetProperty(name) is { ValueKind: JsonValueKind.Object } item ? item.GetProperty("target").GetProperty("workEpisodeId").GetGuid() : null;

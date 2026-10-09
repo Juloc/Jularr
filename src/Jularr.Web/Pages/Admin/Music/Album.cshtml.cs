@@ -31,7 +31,7 @@ public sealed class AlbumModel(AppDbContext db, MusicQuery query, MusicManualSea
 
     public string? Error => TempData["MusicError"] as string;
 
-    public async Task<IActionResult> OnGetAsync(Guid workId, string? search, bool refresh, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(long workId, string? search, bool refresh, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         View = await query.GetAlbumAsync(workId, cancellationToken);
@@ -55,7 +55,7 @@ public sealed class AlbumModel(AppDbContext db, MusicQuery query, MusicManualSea
         return Page();
     }
 
-    public async Task<IActionResult> OnPostSearchNowAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostSearchNowAsync(long workId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var message = await manualSearch.SearchNowAsync(workId, ProfileId, cancellationToken);
@@ -68,7 +68,7 @@ public sealed class AlbumModel(AppDbContext db, MusicQuery query, MusicManualSea
         return RedirectToPage(new { workId });
     }
 
-    public async Task<IActionResult> OnPostMonitorAsync(Guid workId, bool monitored, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostMonitorAsync(long workId, bool monitored, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         try
@@ -84,7 +84,7 @@ public sealed class AlbumModel(AppDbContext db, MusicQuery query, MusicManualSea
         return RedirectToPage(new { workId });
     }
 
-    public async Task<IActionResult> OnPostGrabAsync(Guid workId, string? releaseIdentity, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostGrabAsync(long workId, string? releaseIdentity, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         if (string.IsNullOrWhiteSpace(releaseIdentity))

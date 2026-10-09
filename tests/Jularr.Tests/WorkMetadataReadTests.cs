@@ -102,7 +102,7 @@ public sealed class WorkMetadataReadTests
             response.RequestMessage ??= request;
             return response;
         })));
-        var key = WorkArtworkCache.CacheKey(Guid.NewGuid(), WorkArtworkSlot.Poster, "en", "tmdb", "/a.jpg");
+        var key = WorkArtworkCache.CacheKey(Random.Shared.NextInt64(1, long.MaxValue), WorkArtworkSlot.Poster, "en", "tmdb", "/a.jpg");
         try
         {
             Assert.IsFalse(await cache.EnsureAsync(new Uri("https://evil.example/a.jpg"), WorkArtworkSlot.Poster, key, CancellationToken.None));
@@ -149,7 +149,7 @@ public sealed class WorkMetadataReadTests
     [TestMethod]
     public void CacheKeysAreDeterministicHexAndNothingElseBecomesAPath()
     {
-        var workId = Guid.NewGuid();
+        var workId = Random.Shared.NextInt64(1, long.MaxValue);
         var key = WorkArtworkCache.CacheKey(workId, WorkArtworkSlot.Poster, "en", "tmdb", "/a.jpg");
         Assert.AreEqual(key, WorkArtworkCache.CacheKey(workId, WorkArtworkSlot.Poster, "en", "tmdb", "/a.jpg"));
         Assert.AreNotEqual(key, WorkArtworkCache.CacheKey(workId, WorkArtworkSlot.Poster, "en", "tmdb", "/b.jpg"));
@@ -291,7 +291,7 @@ public sealed class WorkMetadataReadTests
         var root = Path.Combine(Path.GetTempPath(), $"jularr-work-artwork-{Guid.NewGuid():N}");
         var stalling = new WorkMetadataFixture.StubHandler(request => StallingResponse("image/png", request));
         var cache = new WorkArtworkCache(root, ["image.tmdb.org"], new WorkMetadataFixture.StubHttpClientFactory(stalling, TimeSpan.FromSeconds(1)));
-        var key = WorkArtworkCache.CacheKey(Guid.NewGuid(), WorkArtworkSlot.Poster, "en", "tmdb", "/a.jpg");
+        var key = WorkArtworkCache.CacheKey(Random.Shared.NextInt64(1, long.MaxValue), WorkArtworkSlot.Poster, "en", "tmdb", "/a.jpg");
         var watch = System.Diagnostics.Stopwatch.StartNew();
 
         await Assert.ThrowsExactlyAsync<TimeoutException>(() => cache.EnsureAsync(new Uri("https://image.tmdb.org/t/p/w780/a.jpg"), WorkArtworkSlot.Poster, key, CancellationToken.None));
@@ -368,7 +368,7 @@ public sealed class WorkMetadataReadTests
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
-    private static async Task SeedArtworkAsync(WorkMetadataFixture fixture, Guid workId)
+    private static async Task SeedArtworkAsync(WorkMetadataFixture fixture, long workId)
     {
         var now = DateTime.UtcNow;
         foreach (var slot in new[] { WorkArtworkSlot.Poster, WorkArtworkSlot.Backdrop })

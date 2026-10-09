@@ -55,7 +55,7 @@ public sealed class AnimeRequestScopeReader(
         var inScope = slots.Slots.Where(slot => options.Includes(slot.Key.SeasonNumber, slot.Key.EpisodeNumber) && AnimeMonitoring.IsUnitMonitored(view, slot.Key)).ToArray();
         var requested = inScope.Where(slot => !IsKnownNotAired(slot, airedUpTo)).ToArray();
         var missing = requested.Where(slot => !slot.HasFile).Select(slot => slot.Key).ToArray();
-        if (await db.WorkSourceLinks.AsNoTracking().Where(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == slots.Anime.Id).Select(link => (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken) is { } workId)
+        if (await db.WorkSourceLinks.AsNoTracking().Where(link => link.SourceKind == WorkSourceKind.Anime && link.SourceId == slots.Anime.Id).Select(link => (long?)link.WorkId).FirstOrDefaultAsync(cancellationToken) is { } workId)
         {
             await wanted.ReconcileAsync(workId, cancellationToken);
         }

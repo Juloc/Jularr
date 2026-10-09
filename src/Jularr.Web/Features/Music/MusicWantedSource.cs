@@ -55,7 +55,7 @@ public sealed class MusicUpgradeAssessor(QualityProfileStore profiles, Canonical
 
     public WantedTargetKind TargetKind => WantedTargetKind.Work;
 
-    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(long workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
     {
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId, cancellationToken);
         return UpgradePolicy.Assess(profile, MusicInstalledQuality.OfAlbum(profile, await storage.ListAudioFilesAsync(workId, cancellationToken))).IsUpgradable ? held : [];

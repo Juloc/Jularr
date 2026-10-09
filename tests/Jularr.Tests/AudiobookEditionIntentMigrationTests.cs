@@ -28,11 +28,13 @@ public sealed class AudiobookEditionIntentMigrationTests
         await db.Database.ExecuteSqlInterpolatedAsync($"""INSERT INTO "WantedItems" ("WorkId", "TargetKind", "TargetId", "CreatedAt") VALUES ({work}, 4, {work}, now())""");
 
         await db.Database.MigrateAsync();
+        var workNumber = await WorkNumberMap.OfAsync(db, work);
+        var otherNumber = await WorkNumberMap.OfAsync(db, otherWork);
 
-        var edition = await db.Database.SqlQuery<Guid>($"""SELECT "Id" AS "Value" FROM "WorkEditions" WHERE "WorkId" = {work} AND "EditionKey" = 'audiobook' AND "Format" = 'audiobook'""").SingleAsync();
+        var edition = await db.Database.SqlQuery<Guid>($"""SELECT "Id" AS "Value" FROM "WorkEditions" WHERE "WorkId" = {workNumber} AND "EditionKey" = 'audiobook' AND "Format" = 'audiobook'""").SingleAsync();
         Assert.AreEqual(edition, await db.Database.SqlQuery<Guid>($"""SELECT "TargetId" AS "Value" FROM "RequestTargets" WHERE "RequestId" = {request} AND "TargetKind" = 4""").SingleAsync(), "The request names the edition now.");
         Assert.AreEqual(0, await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WantedItems" WHERE "TargetKind" = 4""").SingleAsync(), "The rows of edition targets are rebuilt by the next reconcile.");
-        Assert.AreEqual(0, await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WorkEditions" WHERE "WorkId" = {otherWork}""").SingleAsync(), "A Work no request named gets no edition.");
-        await db.Database.ExecuteSqlInterpolatedAsync($"""INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt") VALUES ({work}, 6, {edition}, TRUE, now())""");
+        Assert.AreEqual(0, await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WorkEditions" WHERE "WorkId" = {otherNumber}""").SingleAsync(), "A Work no request named gets no edition.");
+        await db.Database.ExecuteSqlInterpolatedAsync($"""INSERT INTO "WorkMonitoring" ("WorkId", "Kind", "TargetId", "Monitored", "UpdatedAt") VALUES ({workNumber}, 6, {edition}, TRUE, now())""");
     }
 }

@@ -25,6 +25,6 @@ public sealed class MovieDetailModel(
 {
     protected override WorkMediaType MediaType => WorkMediaType.Movie;
 
-    public async Task<IActionResult> OnGetAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IActionResult> OnGetAsync(long workId, CancellationToken cancellationToken) =>
         await LoadAsync(workId, cancellationToken) ? Page() : NotFound();
 }

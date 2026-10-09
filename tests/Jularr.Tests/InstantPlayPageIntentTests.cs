@@ -108,7 +108,7 @@ public sealed class InstantPlayPageIntentTests
         for (var index = 0; index < PlaybackIntentService.MaxOutstandingPlaybackMarkers; index++)
         {
             var marker = new PlaybackMarker(null, VideoDetailPageTestHost.Profile, DateTime.UtcNow);
-            var marked = new VideoRequestPayload(Guid.NewGuid(), $"Other {index}", 2020) { PlaybackMarkers = [marker] };
+            var marked = new VideoRequestPayload(Random.Shared.NextInt64(1, long.MaxValue), $"Other {index}", 2020) { PlaybackMarkers = [marker] };
             await store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "tmdb", $"80{index}", $"Other {index}", null, null, marked.Serialize()), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
         }
 

@@ -20,7 +20,7 @@
     // A Movie or Series page plays a canonical target (a Work, or a WorkEpisode within it): the plan, progress and
     // bootstrap routes then take that target in the request body instead of a legacy episode id in the address.
     const videoTarget = root.dataset.videoTargetWork
-        ? { workId: root.dataset.videoTargetWork, workEpisodeId: root.dataset.videoTargetEpisode || null }
+        ? { workId: Number(root.dataset.videoTargetWork), workEpisodeId: root.dataset.videoTargetEpisode || null }
         : null;
     const targetBody = videoTarget ? { target: videoTarget } : {};
     const persistedResumeSeconds = Number(root.dataset.resumeSeconds);
@@ -79,9 +79,19 @@
     const autoplayDelaySeconds = 10;
 
     const playbackSubtitle = root.querySelector("[data-playback-subtitle]");
+    const subtitleCanvas = root.querySelector("[data-playback-subtitle-canvas]");
+    const subtitleStack = root.querySelector(".player-subtitle-stack");
+    const primaryPositionedSubtitles = root.querySelector("[data-primary-positioned-subtitles]");
+    const secondaryPositionedSubtitles = root.querySelector("[data-secondary-positioned-subtitles]");
+    const secondaryPlaybackSubtitle = root.querySelector("[data-secondary-playback-subtitle]");
     const speedSelect = root.querySelector("[data-playback-speed]");
     const audioSelect = root.querySelector("[data-audio-track]");
     const subtitleSelect = root.querySelector("[data-subtitle-track]");
+    const secondarySubtitleSelect = root.querySelector("[data-secondary-subtitle-track]");
+    const subtitleSizeInput = root.querySelector("[data-subtitle-size-percent]");
+    const subtitleOffsetInput = root.querySelector("[data-subtitle-offset-ms]");
+    const subtitleSizeOutput = root.querySelector("[data-subtitle-size-output]");
+    const subtitleOffsetOutput = root.querySelector("[data-subtitle-offset-output]");
     const qualitySelect = root.querySelector("[data-quality-cap]");
     const qualityHint = root.querySelector("[data-quality-hint]");
     const saveDefaults = root.querySelector("[data-save-playback-defaults]");
@@ -146,7 +156,10 @@
     let selectedAudioTrackId = audioSelect?.value || controlsData.initialAudioTrackId || null;
     let qualityPreset = readQualityPreset();
     let playbackSpeed = Number(speedSelect?.value) > 0 ? Number(speedSelect.value) : 1;
-    let subtitleChoice = subtitleSelect?.value || "learning";
+    let subtitleChoice = subtitleSelect?.value || "off";
+    let secondarySubtitleChoice = secondarySubtitleSelect?.value || "off";
+    let subtitleSizePercent = Number(subtitleSizeInput?.value) || 100;
+    let subtitleOffsetMs = Number(subtitleOffsetInput?.value) || 0;
     if (qualitySelect) {
         qualitySelect.value = qualityPreset || "auto";
     }
@@ -1333,7 +1346,7 @@
 
     let cues = [];
     try {
-        cues = JSON.parse(data.textContent || "[]");
+        cues = JSON.parse(data?.textContent || "[]");
     } catch {
         if (error) {
             error.hidden = false;
@@ -1350,11 +1363,13 @@
     // It is independent of the learning overlay: when it differs from the
     // learning text, both stay visible.
     let playbackCues = [];
+    let secondaryPlaybackCues = [];
     let playbackCueKey = "";
+    let secondaryCueKey = "";
+    let subtitleRenderGeneration = 0;
+    let subtitleCanvasSizeKey = "";
     const playbackCueCache = new Map();
 
-    // The learning overlay belongs to the "learning" choice (or the embedded stream
-    // that is the learning source); any other track is a plain subtitle.
     const learningOverlayVisible = () =>
         cues.length > 0 && (subtitleChoice === "learning" || selectedSubtitleIsLearningSource());
 
@@ -1362,60 +1377,180 @@
         return subtitleSelect?.selectedOptions[0]?.dataset.learningSource === "true";
     }
 
-    // Text tracks become cues drawn here; picture tracks are burned in by the server instead.
     const playbackTrackId = () =>
         subtitleChoice.startsWith("stream:") && !selectedSubtitleIsLearningSource() && !burnInSubtitleTrackId()
             ? subtitleChoice
             : null;
 
-    const renderPlaybackSubtitle = (timeMs) => {
-        if (!playbackSubtitle) {
-            return;
+    const secondaryTrackId = () =>
+        secondarySubtitleChoice.startsWith("stream:") && secondarySubtitleChoice !== subtitleChoice
+            ? secondarySubtitleChoice
+            : null;
+
+    const sizeSubtitleCanvas = () => {
+        if (!subtitleCanvas || !stage.clientWidth || !stage.clientHeight ||
+            !video.videoWidth || !video.videoHeight) {
+            return false;
         }
 
-        const lines = playbackTrackId()
-            ? design.activeCuesAt(playbackCues, timeMs).map(cue => cue.text)
-            : [];
-        const key = lines.join("\n");
-        if (key === playbackCueKey) {
-            return;
-        }
-
-        playbackCueKey = key;
-        playbackSubtitle.textContent = key;
-        playbackSubtitle.hidden = key.length === 0;
+        const width = stage.clientWidth;
+        const height = stage.clientHeight;
+        const key = `${width}:${height}:${video.videoWidth}:${video.videoHeight}:${stage.dataset.chromeState || ""}`;
+        if (key === subtitleCanvasSizeKey) return false;
+        subtitleCanvasSizeKey = key;
+        const scale = Math.min(width / video.videoWidth, height / video.videoHeight);
+        const imageWidth = video.videoWidth * scale;
+        const imageHeight = video.videoHeight * scale;
+        subtitleCanvas.style.left = `${(width - imageWidth) / 2}px`;
+        subtitleCanvas.style.top = `${(height - imageHeight) / 2}px`;
+        subtitleCanvas.style.width = `${imageWidth}px`;
+        subtitleCanvas.style.height = `${imageHeight}px`;
+        return true;
     };
 
-    const loadPlaybackCues = async (trackId) => {
-        if (!trackId) {
-            playbackCues = [];
-            return;
+    const resolveSubtitleCollisions = () => {
+        if (!subtitleCanvas?.getBoundingClientRect) return;
+        const canvas = subtitleCanvas.getBoundingClientRect();
+        const positions = layer => layer?.querySelectorAll
+            ? [...layer.querySelectorAll(".player-subtitle-positioned-cue")]
+            : [];
+        const primary = positions(primaryPositionedSubtitles);
+        const secondary = positions(secondaryPositionedSubtitles);
+        const gap = 6;
+        const overlaps = (left, right) =>
+            left.left < right.right + gap && left.right + gap > right.left &&
+            left.top < right.bottom + gap && left.bottom + gap > right.top;
+
+        const placed = primary.map(element => element.getBoundingClientRect());
+        for (const element of secondary) {
+            const original = element.getBoundingClientRect();
+            const height = original.height + gap;
+            for (const shift of [0, -1, 1, -2, 2, -3, 3]) {
+                const offset = shift * height;
+                const rect = {
+                    left: original.left, right: original.right,
+                    top: original.top + offset, bottom: original.bottom + offset
+                };
+                if (rect.top < canvas.top + gap || rect.bottom > canvas.bottom - gap) continue;
+                if (placed.some(other => overlaps(rect, other))) continue;
+                if (offset) element.style.transform += ` translateY(${offset}px)`;
+                placed.push(rect);
+                break;
+            }
         }
 
-        if (playbackCueCache.has(trackId)) {
-            playbackCues = playbackCueCache.get(trackId);
-            return;
+        if (!subtitleStack?.getBoundingClientRect) return;
+        subtitleStack.style.transition = "none";
+        subtitleStack.style.bottom = "";
+        const stageBox = stage.getBoundingClientRect();
+        let caption = subtitleStack.getBoundingClientRect();
+        for (let attempt = 0; attempt < 8; attempt++) {
+            const blocker = [...primary, ...secondary]
+                .map(element => element.getBoundingClientRect())
+                .filter(rect => overlaps(rect, caption))
+                .sort((a, b) => b.bottom - a.bottom)[0];
+            if (!blocker) break;
+            const bottom = stageBox.bottom - blocker.top + gap;
+            const limit = Math.max(76, stageBox.height - caption.height - gap);
+            if (bottom > limit) break;
+            subtitleStack.style.bottom = `${Math.max(76, bottom)}px`;
+            caption = subtitleStack.getBoundingClientRect();
+        }
+    };
+
+    const renderPlaybackSubtitle = timeMs => {
+        const canvasChanged = sizeSubtitleCanvas();
+        const primaryCueBefore = playbackCueKey;
+        const secondaryCueBefore = secondaryCueKey;
+        const render = (element, positionedLayer, trackId, trackCues, cachedKey) => {
+            if (!element) return cachedKey;
+
+            const active = trackId
+                ? design.activeCuesAt(trackCues, timeMs)
+                : [];
+            const key = active.map(cue => `${cue.startMs}:${cue.endMs}:${cue.text}`).join("\u001f");
+            if (key === cachedKey && !canvasChanged) return key;
+
+            if (typeof element.replaceChildren !== "function") {
+                element.textContent = active.map(cue => cue.text).join("\n");
+                element.hidden = active.length === 0;
+                return key;
+            }
+
+            const regular = [];
+            const positioned = [];
+            for (const cue of active.slice().sort((a, b) =>
+                (a.presentation?.layer || 0) - (b.presentation?.layer || 0))) {
+                const layout = cue.presentation || {};
+                const alignment = Number.isInteger(layout.alignment) && layout.alignment >= 1 &&
+                    layout.alignment <= 9 ? layout.alignment : 2;
+                const explicitPosition = Number.isFinite(layout.xPercent) && Number.isFinite(layout.yPercent);
+                const isPositioned = positionedLayer && (explicitPosition || alignment >= 4);
+                const line = document.createElement("div");
+                line.className = isPositioned ? "player-subtitle-positioned-cue" : "playback-subtitle-cue";
+                line.textContent = cue.text;
+
+                if (layout.bold === true) line.style.fontWeight = "700";
+                if (layout.bold === false) line.style.fontWeight = "400";
+                if (layout.italic === true) line.style.fontStyle = "italic";
+                if (layout.fontFamily && layout.fontFamily.length <= 100) line.style.fontFamily = layout.fontFamily;
+                if (typeof layout.color === "string" && /^#[0-9a-f]{6}$/i.test(layout.color)) {
+                    line.style.color = layout.color;
+                }
+
+                if (isPositioned) {
+                    const column = (alignment - 1) % 3;
+                    const row = Math.floor((alignment - 1) / 3);
+                    line.style.left = `${explicitPosition ? layout.xPercent : [12, 50, 88][column]}%`;
+                    line.style.top = `${explicitPosition ? layout.yPercent : [87, 50, 10][row]}%`;
+                    line.style.transform = `translate(${[0, -50, -100][column]}%, ${[-100, -50, 0][row]}%)`;
+                    positioned.push(line);
+                } else {
+                    regular.push(line);
+                }
+            }
+
+            element.replaceChildren(...regular);
+            element.hidden = regular.length === 0;
+            if (positionedLayer) {
+                positionedLayer.replaceChildren(...positioned);
+                positionedLayer.hidden = positioned.length === 0;
+            }
+            return key;
+        };
+
+        playbackCueKey = render(playbackSubtitle, primaryPositionedSubtitles,
+            playbackTrackId(), playbackCues, playbackCueKey);
+        secondaryCueKey = render(secondaryPlaybackSubtitle, secondaryPositionedSubtitles,
+            secondaryTrackId(), secondaryPlaybackCues, secondaryCueKey);
+        if (primaryCueBefore !== playbackCueKey || secondaryCueBefore !== secondaryCueKey || canvasChanged) {
+            resolveSubtitleCollisions();
+        }
+    };
+
+    const loadSubtitleCues = async trackId => {
+        if (!trackId) return [];
+
+        if (!playbackCueCache.has(trackId)) {
+            const template = controlsData.subtitleCuesUrlTemplate || "";
+            const loading = (async () => {
+                const response = await fetch(template.replace("__track__", encodeURIComponent(trackId)), {
+                    credentials: "same-origin",
+                    headers: { "Accept": "application/json" }
+                });
+                if (!response.ok) throw new Error("Subtitle track unavailable.");
+                const payload = await response.json();
+                return (payload.cues || []).slice().sort((a, b) => a.startMs - b.startMs);
+            })();
+            playbackCueCache.set(trackId, loading);
         }
 
-        const template = controlsData.subtitleCuesUrlTemplate || "";
         try {
-            const response = await fetch(template.replace("__track__", encodeURIComponent(trackId)), {
-                credentials: "same-origin",
-                headers: { "Accept": "application/json" }
-            });
-            if (!response.ok) {
-                throw new Error("Subtitle track unavailable.");
-            }
-
-            const payload = await response.json();
-            const loaded = (payload.cues || []).slice().sort((a, b) => a.startMs - b.startMs);
-            playbackCueCache.set(trackId, loaded);
-            if (playbackTrackId() === trackId) {
-                playbackCues = loaded;
-            }
+            return await playbackCueCache.get(trackId);
         } catch {
-            playbackCues = [];
+            playbackCueCache.delete(trackId);
             showPlayerError(text["playback.subtitle.loadFailed"] || "");
+            return [];
         }
     };
 
@@ -1436,9 +1571,10 @@
     // learning sheet wherever the resolved scope renders it; the sheet below
     // stays only as the fallback for scopes without PlayerTools.
     const sharedInspector = window.JularrLanguageInspector;
-    const sharedInspectorAvailable = sharedInspector?.available === true;
+    const sharedInspectorAvailable = sharedInspector?.available === true && Boolean(overlay && window.JularrPlayerLearning);
 
     const openLearning = (cue, token = null, selectedElement = null) => {
+        if (!overlay || !window.JularrPlayerLearning || !cue) return;
         overlay.querySelectorAll('[aria-pressed="true"]').forEach(element =>
             element.removeAttribute("aria-pressed"));
         if (selectedElement instanceof HTMLElement) {
@@ -1503,7 +1639,8 @@
     };
 
     const renderCue = (index) => {
-        design.renderCue(root, overlay, index < 0 ? null : cues[index]);
+        if (!overlay || !window.JularrPlayerLearning) return;
+        window.JularrPlayerLearning.renderCue(root, overlay, index < 0 ? null : cues[index]);
     };
 
     if (sharedInspectorAvailable) {
@@ -1605,7 +1742,7 @@
     // cue timing exact; the frame loop only raises the sampling rate.
     const sync = () => {
         const nowMs = Math.floor(absoluteCurrentTime() * 1000);
-        renderPlaybackSubtitle(nowMs);
+        renderPlaybackSubtitle(nowMs + subtitleOffsetMs);
 
         const index = learningOverlayVisible() ? design.cueIndexAt(cues, nowMs) : -1;
         if (index === activeIndex) {
@@ -1639,17 +1776,64 @@
     };
 
     const applySubtitleChoice = async () => {
+        const generation = ++subtitleRenderGeneration;
         activeIndex = -2;
         playbackCueKey = null;
-        await loadPlaybackCues(playbackTrackId());
+        secondaryCueKey = null;
+        playbackCues = [];
+        secondaryPlaybackCues = [];
         updateRepeatAvailability();
         sync();
+        const [primary, secondary] = await Promise.all([
+            loadSubtitleCues(playbackTrackId()),
+            loadSubtitleCues(secondaryTrackId())
+        ]);
+        if (generation !== subtitleRenderGeneration) return;
+        playbackCues = primary;
+        secondaryPlaybackCues = secondary;
+        updateRepeatAvailability();
+        sync();
+    };
+
+    const applySubtitleAppearance = () => {
+        root.style.setProperty("--player-playback-subtitle-size", `${(22 * subtitleSizePercent / 100).toFixed(1)}px`);
+        root.style.setProperty("--player-secondary-subtitle-size", `${(20 * subtitleSizePercent / 100).toFixed(1)}px`);
+        if (subtitleSizeOutput) subtitleSizeOutput.textContent = `${subtitleSizePercent}%`;
+        if (subtitleOffsetOutput) subtitleOffsetOutput.textContent = `${subtitleOffsetMs} ms`;
+        playbackCueKey = null;
+        secondaryCueKey = null;
+        sync();
+    };
+
+    subtitleSizeInput?.addEventListener("input", () => {
+        const value = Number(subtitleSizeInput.value);
+        if (!Number.isFinite(value) || value < 75 || value > 200) return;
+        subtitleSizePercent = value;
+        applySubtitleAppearance();
+    });
+    subtitleOffsetInput?.addEventListener("input", () => {
+        const value = Number(subtitleOffsetInput.value);
+        if (!Number.isFinite(value) || value < -10000 || value > 10000) return;
+        subtitleOffsetMs = value;
+        applySubtitleAppearance();
+    });
+
+    const resolveSecondarySelection = () => {
+        if (!secondarySubtitleSelect) return;
+        for (const option of secondarySubtitleSelect.options) {
+            option.disabled = option.value !== "off" && option.value === subtitleChoice;
+        }
+        if (secondarySubtitleChoice === subtitleChoice) {
+            secondarySubtitleChoice = "off";
+            secondarySubtitleSelect.value = "off";
+        }
     };
 
     // The first plan already carries a picture subtitle chosen before playback.
     let plannedBurnIn = burnInSubtitleTrackId();
     subtitleSelect?.addEventListener("change", () => {
         subtitleChoice = subtitleSelect.value;
+        resolveSecondarySelection();
         showPlayerError(null);
         void applySubtitleChoice();
         // Picture subtitles change the stream itself, so they need a new plan.
@@ -1659,6 +1843,14 @@
         }
         renderSubtitleHint();
     });
+
+    secondarySubtitleSelect?.addEventListener("change", () => {
+        secondarySubtitleChoice = secondarySubtitleSelect.value;
+        resolveSecondarySelection();
+        showPlayerError(null);
+        void applySubtitleChoice();
+    });
+    resolveSecondarySelection();
 
     speedSelect?.addEventListener("change", () => {
         const requested = Number(speedSelect.value);
@@ -1697,6 +1889,11 @@
         const body = {
             preferredAudioLanguage: audioSelect?.selectedOptions[0]?.dataset.language || "",
             preferredSubtitleLanguage: subtitleLanguage,
+            preferredSecondarySubtitleLanguage: secondarySubtitleChoice === "off"
+                ? "off"
+                : secondarySubtitleSelect?.selectedOptions[0]?.dataset.language || "",
+            subtitleSizePercent,
+            subtitleOffsetMs,
             defaultPlaybackSpeed: playbackSpeed
         };
         if (!audioSelect) {
@@ -2157,6 +2354,7 @@
 
     updateTimeline();
     applySpeed();
+    applySubtitleAppearance();
     void applyPlayback();
     void applySubtitleChoice();
 })();

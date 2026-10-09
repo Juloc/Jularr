@@ -69,7 +69,7 @@ public sealed class PlaybackIntentService(
     private const int MarkedRequestScanLimit = 100;
 
     /// <param name="workEpisodeId">A Series episode to watch; null means the next required episode of a Series, or the Movie itself.</param>
-    public async Task<PlaybackIntentResult> StartAsync(Guid workId, Guid? workEpisodeId, CancellationToken cancellationToken)
+    public async Task<PlaybackIntentResult> StartAsync(long workId, Guid? workEpisodeId, CancellationToken cancellationToken)
     {
         var state = await facts.GetAsync(account.ProfileId, workId, cancellationToken);
         if (state is null || state.Facts is MoviePlaybackFacts && workEpisodeId is not null)

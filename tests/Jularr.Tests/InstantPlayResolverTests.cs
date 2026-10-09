@@ -11,7 +11,7 @@ namespace Jularr.Tests;
 public sealed class InstantPlayResolverTests
 {
     private static readonly DateTime Base = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
-    private static readonly Guid WorkId = Guid.NewGuid();
+    private static readonly long WorkId = 4242;
 
     private static readonly InstantPlayPolicy Everything = new(true, true, true, CanRequest: true, AutoApproves: true, AcquisitionReady: true);
     private static readonly InstantPlayPolicy ApprovalNeeded = Everything with { AutoApproves = false };

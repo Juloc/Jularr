@@ -22,7 +22,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock, WantedRec
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         // Approval locks the request before its intent; deletion uses the same order and freezes linked recovery state until commit.
         await db.Database.ExecuteSqlRawAsync(WantedSql.LockRequestForDeletion, [new NpgsqlParameter("requestId", requestId.ToString())], cancellationToken);
-        var workIds = await db.Database.SqlQueryRaw<Guid>(WantedSql.RemoveRequestTargets, new NpgsqlParameter("requestId", requestId.ToString())).ToListAsync(cancellationToken);
+        var workIds = await db.Database.SqlQueryRaw<long>(WantedSql.RemoveRequestTargets, new NpgsqlParameter("requestId", requestId.ToString())).ToListAsync(cancellationToken);
         if (!await deleteRequest())
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -116,7 +116,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock, WantedRec
         await db.Database.SqlQueryRaw<bool>(WantedSql.HasRequestTargets, new NpgsqlParameter("requestId", requestId.ToString())).SingleAsync(cancellationToken);
 
     // The Work row says the whole title.
-    private async Task InsertWorkAsync(string requestId, Guid workId, DateTime now, CancellationToken cancellationToken) =>
+    private async Task InsertWorkAsync(string requestId, long workId, DateTime now, CancellationToken cancellationToken) =>
         await db.Database.ExecuteSqlRawAsync(
             WantedSql.RecordWork,
             [new NpgsqlParameter("requestId", requestId), new NpgsqlParameter("workId", workId), new NpgsqlParameter("now", now)],
@@ -124,7 +124,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock, WantedRec
 
     // The canonical Work a request is about: the bound Work, else the one its payload names (video and music payloads carry it), else the one its
     // provider identity points to (a video request made without a payload).
-    private async Task<Guid?> WorkOfAsync(Guid? boundWorkId, string? payloadJson, MediaAcquisitionKind kind, string provider, string externalId, CancellationToken cancellationToken)
+    private async Task<long?> WorkOfAsync(long? boundWorkId, string? payloadJson, MediaAcquisitionKind kind, string provider, string externalId, CancellationToken cancellationToken)
     {
         if (boundWorkId is { } bound)
         {
@@ -136,7 +136,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock, WantedRec
             try
             {
                 using var document = JsonDocument.Parse(payloadJson);
-                if (document.RootElement.TryGetProperty("workId", out var value) && value.TryGetGuid(out var id) && id != Guid.Empty)
+                if (document.RootElement.TryGetProperty("workId", out var value) && value.TryGetInt64(out var id) && id > 0)
                 {
                     return id;
                 }
@@ -152,7 +152,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock, WantedRec
             return await (from match in db.AnimeMetadata.AsNoTracking()
                           join link in db.WorkSourceLinks.AsNoTracking() on match.AnimeId equals link.SourceId
                           where match.Provider == provider && match.ExternalId == externalId && link.SourceKind == WorkSourceKind.Anime
-                          select (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
+                          select (long?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
         }
 
         if (kind is not (MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv))
@@ -163,7 +163,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock, WantedRec
         var type = VideoWorkLinks.WorkType(kind);
         return await db.WorkExternalIdentities.AsNoTracking()
             .Where(identity => identity.Provider == provider && identity.ExternalId == externalId && identity.MediaType == type)
-            .Select(identity => (Guid?)identity.WorkId)
+            .Select(identity => (long?)identity.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
     }
 

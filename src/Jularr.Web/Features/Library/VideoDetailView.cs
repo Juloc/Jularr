@@ -64,7 +64,7 @@ public static class VideoDetailView
     }
 
     /// <summary>The canonical web player of a Movie (a Work) or one episode (a WorkEpisode).</summary>
-    public static string WatchHref(Guid workId, Guid? workEpisodeId) => workEpisodeId is { } episodeId ? $"{WatchPath}/{workId}/{episodeId}" : $"{WatchPath}/{workId}";
+    public static string WatchHref(long workId, Guid? workEpisodeId) => workEpisodeId is { } episodeId ? $"{WatchPath}/{workId}/{episodeId}" : $"{WatchPath}/{workId}";
 
     /// <summary>The catalog key of a media type's name, for the hero, the Request dialog's identity and related Works.</summary>
     public static string KindKey(WorkMediaType mediaType) => mediaType switch

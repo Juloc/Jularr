@@ -15,8 +15,8 @@ public sealed record WorkExternalIdentityView(
 
 /// <summary>A directed relation edge from the queried work to another work.</summary>
 public sealed record WorkRelationView(
-    Guid FromWorkId,
-    Guid ToWorkId,
+    long FromWorkId,
+    long ToWorkId,
     WorkRelationType RelationType,
     string Source,
     bool IsManualOverride);
@@ -27,7 +27,7 @@ public sealed record WorkRelationView(
 /// external identities, typed relations and bridged legacy sources.
 /// </summary>
 public sealed record WorkSummary(
-    Guid Id,
+    long Id,
     WorkMediaType MediaType,
     string CanonicalTitle,
     int? Year,
@@ -39,7 +39,7 @@ public sealed record WorkSummary(
 /// <summary>An external identity flagged for the owner to resolve, joined to its work for display (#437).</summary>
 public sealed record WorkConflictView(
     Guid IdentityId,
-    Guid WorkId,
+    long WorkId,
     string WorkTitle,
     WorkMediaType MediaType,
     string Provider,
@@ -51,8 +51,8 @@ public sealed record WorkConflictView(
 public sealed record WorkIdentityChangeView(
     WorkIdentityChangeType ChangeType,
     WorkMediaType MediaType,
-    Guid TargetWorkId,
-    Guid? SourceWorkId,
+    long TargetWorkId,
+    long? SourceWorkId,
     string Provider,
     string ExternalId,
     string Actor,
@@ -84,7 +84,7 @@ public sealed class WorkQueryService(AppDbContext db)
     }
 
     /// <summary>Resolves the stable Jularr work id a provider identity points at, or null.</summary>
-    public async Task<Guid?> FindWorkIdByExternalIdentityAsync(
+    public async Task<long?> FindWorkIdByExternalIdentityAsync(
         WorkMediaType mediaType,
         string provider,
         string externalId,
@@ -98,16 +98,16 @@ public sealed class WorkQueryService(AppDbContext db)
             .Where(x => x.MediaType == mediaType
                 && x.Provider == normalizedProvider
                 && x.ExternalId == normalizedExternalId)
-            .Select(x => (Guid?)x.WorkId)
+            .Select(x => (long?)x.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
 
         return id;
     }
 
-    public Task<Work?> GetWorkAsync(Guid workId, CancellationToken cancellationToken) =>
+    public Task<Work?> GetWorkAsync(long workId, CancellationToken cancellationToken) =>
         db.Set<Work>().AsNoTracking().FirstOrDefaultAsync(x => x.Id == workId, cancellationToken);
 
-    public async Task<IReadOnlyList<WorkTitle>> GetTitlesAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkTitle>> GetTitlesAsync(long workId, CancellationToken cancellationToken) =>
         await db.Set<WorkTitle>().AsNoTracking()
             .Where(x => x.WorkId == workId)
             .OrderByDescending(x => x.IsPrimary)
@@ -115,7 +115,7 @@ public sealed class WorkQueryService(AppDbContext db)
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<WorkExternalIdentityView>> GetIdentitiesAsync(
-        Guid workId,
+        long workId,
         CancellationToken cancellationToken) =>
         await db.Set<WorkExternalIdentity>().AsNoTracking()
             .Where(x => x.WorkId == workId)
@@ -127,7 +127,7 @@ public sealed class WorkQueryService(AppDbContext db)
 
     /// <summary>All relation edges touching the work, in both directions.</summary>
     public async Task<IReadOnlyList<WorkRelationView>> GetRelationsAsync(
-        Guid workId,
+        long workId,
         CancellationToken cancellationToken) =>
         await db.Set<WorkRelation>().AsNoTracking()
             .Where(x => x.FromWorkId == workId || x.ToWorkId == workId)
@@ -135,39 +135,39 @@ public sealed class WorkQueryService(AppDbContext db)
                 x.FromWorkId, x.ToWorkId, x.RelationType, x.Source, x.IsManualOverride))
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<WorkSeason>> GetSeasonsAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkSeason>> GetSeasonsAsync(long workId, CancellationToken cancellationToken) =>
         await db.Set<WorkSeason>().AsNoTracking()
             .Where(x => x.WorkId == workId)
             .OrderBy(x => x.SeasonNumber)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<WorkEpisode>> GetEpisodesAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkEpisode>> GetEpisodesAsync(long workId, CancellationToken cancellationToken) =>
         await db.Set<WorkEpisode>().AsNoTracking()
             .Where(x => x.WorkId == workId)
             .OrderBy(x => x.SeasonNumber)
             .ThenBy(x => x.EpisodeNumber)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<WorkVolume>> GetVolumesAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkVolume>> GetVolumesAsync(long workId, CancellationToken cancellationToken) =>
         await db.Set<WorkVolume>().AsNoTracking()
             .Where(x => x.WorkId == workId)
             .OrderBy(x => x.Number)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<WorkChapter>> GetChaptersAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkChapter>> GetChaptersAsync(long workId, CancellationToken cancellationToken) =>
         await db.Set<WorkChapter>().AsNoTracking()
             .Where(x => x.WorkId == workId)
             .OrderBy(x => x.Number)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<WorkEdition>> GetEditionsAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkEdition>> GetEditionsAsync(long workId, CancellationToken cancellationToken) =>
         await db.Set<WorkEdition>().AsNoTracking()
             .Where(x => x.WorkId == workId)
             .OrderByDescending(x => x.IsPrimary)
             .ThenBy(x => x.EditionKey)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<WorkVersion>> GetVersionsAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<WorkVersion>> GetVersionsAsync(long workId, CancellationToken cancellationToken) =>
         await db.Set<WorkVersion>().AsNoTracking()
             .Where(x => x.WorkId == workId)
             .OrderBy(x => x.UnitKey)
@@ -175,7 +175,7 @@ public sealed class WorkQueryService(AppDbContext db)
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<WorkFieldProvenance>> GetProvenanceAsync(
-        Guid workId,
+        long workId,
         CancellationToken cancellationToken) =>
         await db.Set<WorkFieldProvenance>().AsNoTracking()
             .Where(x => x.WorkId == workId)
@@ -183,24 +183,24 @@ public sealed class WorkQueryService(AppDbContext db)
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<WorkSourceLink>> GetSourceLinksAsync(
-        Guid workId,
+        long workId,
         CancellationToken cancellationToken) =>
         await db.Set<WorkSourceLink>().AsNoTracking()
             .Where(x => x.WorkId == workId)
             .ToListAsync(cancellationToken);
 
     /// <summary>Resolves the Jularr work bridged to a given legacy per-type record, or null.</summary>
-    public async Task<Guid?> ResolveWorkForSourceAsync(
+    public async Task<long?> ResolveWorkForSourceAsync(
         WorkSourceKind sourceKind,
         Guid sourceId,
         CancellationToken cancellationToken) =>
         await db.Set<WorkSourceLink>().AsNoTracking()
             .Where(x => x.SourceKind == sourceKind && x.SourceId == sourceId)
-            .Select(x => (Guid?)x.WorkId)
+            .Select(x => (long?)x.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
 
     /// <summary>The aggregate read model other #556 children consume.</summary>
-    public async Task<WorkSummary?> GetSummaryAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<WorkSummary?> GetSummaryAsync(long workId, CancellationToken cancellationToken)
     {
         var work = await GetWorkAsync(workId, cancellationToken);
         if (work is null)
@@ -266,7 +266,7 @@ public sealed class WorkQueryService(AppDbContext db)
 
     /// <summary>The identity-change log, newest first; filtered to one work when <paramref name="workId"/> is set.</summary>
     public async Task<IReadOnlyList<WorkIdentityChangeView>> GetIdentityChangesAsync(
-        Guid? workId,
+        long? workId,
         int limit,
         CancellationToken cancellationToken) =>
         await db.Set<WorkIdentityChange>().AsNoTracking()

@@ -14,7 +14,7 @@ public readonly record struct MediaReanalysis(bool Found, MediaAnalysisStatus? S
 public sealed class MediaFileReanalysisService(AppDbContext db, MediaInventoryService inventory, OperationRunner operations)
 {
     /// <summary>Re-analyses a local video file of a Movie or Series Work.</summary>
-    public async Task<MediaReanalysis> ReanalyzeVideoFileAsync(Guid workId, Guid fileId, OperationDescriptor descriptor, CancellationToken cancellationToken)
+    public async Task<MediaReanalysis> ReanalyzeVideoFileAsync(long workId, Guid fileId, OperationDescriptor descriptor, CancellationToken cancellationToken)
     {
         var owned = await (
                 from asset in db.MediaAssets.AsNoTracking()

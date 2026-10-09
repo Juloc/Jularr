@@ -187,7 +187,7 @@ public sealed class ReadModel(
             scope,
             "media",
             StringComparison.OrdinalIgnoreCase);
-        Guid? workId = await workQueries.ResolveWorkForSourceAsync(
+        long? workId = await workQueries.ResolveWorkForSourceAsync(
             WorkSourceKind.MangaSeries,
             chapter.SeriesId,
             cancellationToken);
@@ -233,7 +233,7 @@ public sealed class ReadModel(
             WorkSourceKind.MangaSeries,
             chapter.SeriesId,
             cancellationToken);
-        if (workId is Guid resolvedWorkId)
+        if (workId is { } resolvedWorkId)
         {
             await MangaReaderPreferences.ResetWorkAsync(
                 db,

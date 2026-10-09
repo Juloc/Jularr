@@ -100,24 +100,24 @@ public sealed class MusicLibraryService(AppDbContext db, IMusicMetadataProvider 
         var artist = await db.MusicArtists.AsNoTracking().FirstOrDefaultAsync(candidate => candidate.Id == artistId, cancellationToken)
             ?? throw new InvalidOperationException("The artist no longer exists.");
         await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""DELETE FROM "WorkMonitoring" WHERE "Kind" = 0 AND "TargetId" IN (SELECT "WorkId" FROM "MusicAlbums" WHERE "ArtistId" = {artistId})""",
+            $"""DELETE FROM "WorkMonitoring" WHERE "Kind" = 0 AND "WorkId" IN (SELECT "WorkId" FROM "MusicAlbums" WHERE "ArtistId" = {artistId})""",
             cancellationToken);
         var source = new MonitoringRelationSource(MonitoringRelationKind.Artist, artistId.ToString(), artist.Name, null, artist.AddedByProfileId ?? "owner");
         await commands.SetRelationAsync(source, mode != MusicMonitorMode.None, onlyFuture: mode == MusicMonitorMode.Future, cancellationToken);
     }
 
-    public async Task SetAlbumMonitoredAsync(Guid workId, bool monitored, CancellationToken cancellationToken)
+    public async Task SetAlbumMonitoredAsync(long workId, bool monitored, CancellationToken cancellationToken)
     {
         if (!await db.MusicAlbums.AnyAsync(candidate => candidate.WorkId == workId, cancellationToken))
         {
             throw new InvalidOperationException("The album no longer exists.");
         }
 
-        await commands.SetAsync(MonitoringTargetKind.Work, workId, monitored, cancellationToken);
+        await commands.SetWorkAsync(workId, monitored, cancellationToken);
     }
 
     /// <summary>Stores the track list of an album when it has none yet. Returns false while the provider knows no tracks, so the caller waits instead of importing against an unknown list.</summary>
-    public async Task<bool> EnsureTracksAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<bool> EnsureTracksAsync(long workId, CancellationToken cancellationToken)
     {
         if (await db.WorkTracks.AnyAsync(track => track.WorkId == workId, cancellationToken))
         {

@@ -16,16 +16,16 @@ public sealed class UpgradeScanState
     public static readonly TimeSpan Interval = TimeSpan.FromHours(1);
 
     private readonly ConcurrentDictionary<MediaAcquisitionKind, DateTime> next = new();
-    private readonly ConcurrentDictionary<MediaAcquisitionKind, Guid> cursors = new();
+    private readonly ConcurrentDictionary<MediaAcquisitionKind, long> cursors = new();
     private readonly ConcurrentDictionary<MediaAcquisitionKind, DateTime> profiles = new();
 
     /// <summary>The last title the previous scan looked at (empty before the first one), so a library larger than one scan is walked in turns instead of its first titles every hour.</summary>
-    public Guid CursorOf(MediaAcquisitionKind kind) => cursors.GetValueOrDefault(kind);
+    public long CursorOf(MediaAcquisitionKind kind) => cursors.GetValueOrDefault(kind);
 
     /// <summary>Continues after <paramref name="last"/> next time (at the next pass, as the library is not finished), or from the start when the scan reached the end of the library.</summary>
-    public void Continue(MediaAcquisitionKind kind, Guid last, bool reachedEnd)
+    public void Continue(MediaAcquisitionKind kind, long last, bool reachedEnd)
     {
-        cursors[kind] = reachedEnd ? Guid.Empty : last;
+        cursors[kind] = reachedEnd ? 0 : last;
         if (!reachedEnd)
         {
             next[kind] = DateTime.MinValue;
@@ -42,7 +42,7 @@ public sealed class UpgradeScanState
         profiles[kind] = profilesChangedAt;
         if (profilesChanged)
         {
-            cursors[kind] = Guid.Empty;
+            cursors[kind] = 0;
         }
         else if (next.TryGetValue(kind, out var due) && due > nowUtc)
         {
@@ -74,7 +74,7 @@ public sealed class UpgradeWantedSource(MediaAcquisitionKind kind, WantedReconci
         }
 
         var page = await wanted.ReconcileUpgradesAsync(kind, scans.CursorOf(kind), MaxTitlesPerPass, cancellationToken);
-        scans.Continue(kind, page.Works.Count == 0 ? Guid.Empty : page.Works[^1], page.ReachedEnd);
+        scans.Continue(kind, page.Works.Count == 0 ? 0 : page.Works[^1], page.ReachedEnd);
         var reopened = 0;
         foreach (var workId in page.Works)
         {

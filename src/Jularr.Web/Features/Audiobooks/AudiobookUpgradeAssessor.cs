@@ -16,7 +16,7 @@ public sealed class AudiobookUpgradeAssessor(AppDbContext db, QualityProfileStor
 
     public WantedTargetKind TargetKind => WantedTargetKind.Edition;
 
-    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(long workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
     {
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Audiobook, workId, cancellationToken);
         var formats = await (from link in db.WorkSourceLinks.AsNoTracking()

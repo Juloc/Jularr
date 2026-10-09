@@ -7,7 +7,7 @@ namespace Jularr.Web.Features.Acquisition.Access;
 
 /// <summary>The canonical Work, effective payload and episode a Manual Search of one Movie/TV request targets.</summary>
 public sealed record VideoManualTarget(
-    Guid WorkId,
+    long WorkId,
     string Title,
     int? Year,
     VideoRequestPayload Payload,

@@ -9,7 +9,7 @@ namespace Jularr.Web.Features.Books;
 
 public sealed record BookTargetState(bool Monitored, bool Wanted, bool Installed, AcquisitionRequestStatus? RequestStatus, string? RequestMessage);
 
-public sealed record BookWorkAdminView(Guid WorkId, string Title, int? Year, BookTargetState Book, BookTargetState Audiobook, AcquisitionRequest? LatestAudiobookRequest);
+public sealed record BookWorkAdminView(long WorkId, string Title, int? Year, BookTargetState Book, BookTargetState Audiobook, AcquisitionRequest? LatestAudiobookRequest);
 
 /// <summary>
 /// Where the Book and the audiobook of one Book Work stand. They are two targets with their own Monitoring decision, Wanted row, installed state and request:
@@ -17,7 +17,7 @@ public sealed record BookWorkAdminView(Guid WorkId, string Title, int? Year, Boo
 /// </summary>
 public sealed class BookWorkAdminQuery(AppDbContext db, MonitoringResolver monitoring, AcquisitionAccessStore requests)
 {
-    public async Task<BookWorkAdminView?> GetAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<BookWorkAdminView?> GetAsync(long workId, CancellationToken cancellationToken)
     {
         var work = await db.Works.AsNoTracking().Where(item => item.Id == workId && item.MediaType == WorkMediaType.Book).Select(item => new { item.CanonicalTitle, item.Year }).SingleOrDefaultAsync(cancellationToken);
         if (work is null)
@@ -58,7 +58,7 @@ public sealed class BookWorkAdminQuery(AppDbContext db, MonitoringResolver monit
     }
 
     /// <summary>The provider identity an audiobook request of the Work is made with: the Work's primary Book identity, null when it has none.</summary>
-    public async Task<(string Provider, string ExternalId)?> IdentityAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<(string Provider, string ExternalId)?> IdentityAsync(long workId, CancellationToken cancellationToken)
     {
         var identity = await db.WorkExternalIdentities.AsNoTracking().Where(item => item.WorkId == workId && item.MediaType == WorkMediaType.Book && item.IsPrimary).Select(item => new { item.Provider, item.ExternalId }).FirstOrDefaultAsync(cancellationToken);
         return identity is null ? null : (identity.Provider, identity.ExternalId);

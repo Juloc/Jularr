@@ -31,9 +31,9 @@ public sealed class WantedReconcilerTests
 
         Assert.IsEmpty(await ListAsync(host));
 
-        await commands.SetAsync(MonitoringTargetKind.Work, host.Work.Id, true, CancellationToken.None);
+        await commands.SetWorkAsync(host.Work.Id, true, CancellationToken.None);
         var target = Assert.ContainsSingle(await ListAsync(host));
-        Assert.AreEqual((WantedTargetKind.Work, host.Work.Id), (target.TargetKind, target.TargetId));
+        Assert.AreEqual((WantedTargetKind.Work, host.Work.Id, (Guid?)null), (target.TargetKind, target.WorkId, target.TargetId));
 
         var again = await ListAsync(host);
         Assert.AreEqual(target.Id, Assert.ContainsSingle(again).Id, "A second reconcile keeps the same item.");
@@ -41,7 +41,7 @@ public sealed class WantedReconcilerTests
         await host.AttachFileAsync(null);
         Assert.IsEmpty(await ListAsync(host));
 
-        await commands.SetAsync(MonitoringTargetKind.Work, host.Work.Id, false, CancellationToken.None);
+        await commands.SetWorkAsync(host.Work.Id, false, CancellationToken.None);
         Assert.IsEmpty(await ListAsync(host));
     }
 
@@ -51,7 +51,7 @@ public sealed class WantedReconcilerTests
         await using var host = await SeriesAsync();
         var commands = MonitoringTestSupport.Commands(host.Environment.Db);
         var upcoming = await host.AddEpisodeAsync(1, 3, DateTime.UtcNow.AddDays(5));
-        await commands.SetAsync(MonitoringTargetKind.Work, host.Work.Id, true, CancellationToken.None);
+        await commands.SetWorkAsync(host.Work.Id, true, CancellationToken.None);
 
         var ids = (await ListAsync(host)).Select(x => x.TargetId).ToHashSet();
         CollectionAssert.AreEquivalent(new[] { host.EpisodeId!.Value, host.SecondEpisodeId!.Value }, ids.ToArray());
@@ -96,7 +96,7 @@ public sealed class WantedReconcilerTests
     public async Task Source_AFailedRequestOfAMonitoredMovieIsNotOpenedAgainByThePass()
     {
         await using var host = await MovieAsync();
-        await MonitoringTestSupport.Commands(host.Environment.Db).SetAsync(MonitoringTargetKind.Work, host.Work.Id, true, CancellationToken.None);
+        await MonitoringTestSupport.Commands(host.Environment.Db).SetWorkAsync(host.Work.Id, true, CancellationToken.None);
         var failed = await host.CreateApprovedAsync(new VideoRequestPayload(host.Work.Id, host.Work.CanonicalTitle, host.Work.Year));
         await host.Requests.UpdateStatusAsync(failed.Id, AcquisitionRequestStatus.Failed, "Gave up.", null, null, null, CancellationToken.None);
         var source = new VideoWantedSource(MediaAcquisitionKind.Movie, host.Get<WantedReconciler>(), host.Get<Jularr.Web.Features.Acquisition.Monitoring.VideoMonitoringService>());
@@ -137,11 +137,11 @@ public sealed class WantedReconcilerTests
     {
         await using var movie = await MovieAsync();
         var commands = MonitoringTestSupport.Commands(movie.Environment.Db);
-        await commands.SetAsync(MonitoringTargetKind.Work, movie.Work.Id, true, CancellationToken.None);
+        await commands.SetWorkAsync(movie.Work.Id, true, CancellationToken.None);
         await ApprovedWithChoiceAsync(movie, MonitoringTestSupport.Choosing(movie.Work.Id, movie.Work.CanonicalTitle, movie.Work.Year, VideoRequestScope.WholeWork));
 
-        await commands.SetAsync(MonitoringTargetKind.Work, movie.Work.Id, false, CancellationToken.None);
-        Assert.AreEqual(movie.Work.Id, Assert.ContainsSingle(await ListAsync(movie)).TargetId, "The request still wants the movie.");
+        await commands.SetWorkAsync(movie.Work.Id, false, CancellationToken.None);
+        Assert.AreEqual(WantedTargetKind.Work, Assert.ContainsSingle(await ListAsync(movie)).TargetKind, "The request still wants the movie.");
 
         await using var pending = await MovieAsync();
         await ApprovedWithChoiceAsync(pending, MonitoringTestSupport.Choosing(pending.Work.Id, pending.Work.CanonicalTitle, pending.Work.Year, VideoRequestScope.WholeWork), AcquisitionRequestStatus.Pending);
@@ -196,7 +196,7 @@ public sealed class WantedReconcilerTests
         await using var plain = await MovieAsync();
         var plainRequest = await plain.Requests.CreateAsync(new AcquisitionRequestDraft(plain.Kind, "tmdb", plain.TmdbId, plain.Work.CanonicalTitle, null, null), "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
         await plain.Get<RequestIntent>().RecordAsync(plainRequest, CancellationToken.None);
-        Assert.AreEqual(plain.Work.Id, Assert.ContainsSingle(await ListAsync(plain)).TargetId, "Without a payload the executor reads the request as the whole title.");
+        Assert.AreEqual(WantedTargetKind.Work, Assert.ContainsSingle(await ListAsync(plain)).TargetKind, "Without a payload the executor reads the request as the whole title.");
 
         await using var opened = await MovieAsync();
         var seed = new VideoRequestPayload(opened.Work.Id, opened.Work.CanonicalTitle, opened.Work.Year);

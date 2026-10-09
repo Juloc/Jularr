@@ -14,7 +14,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class CanonicalMonitoringTests
 {
-    private sealed record Series(Guid WorkId, Guid[] SeasonIds, Guid[][] EpisodeIds);
+    private sealed record Series(long WorkId, Guid[] SeasonIds, Guid[][] EpisodeIds);
 
     private static MonitoringCommands Commands(AppDbContext db) => new(db, TimeProvider.System);
 
@@ -41,7 +41,7 @@ public sealed class CanonicalMonitoringTests
         return new Series(work.Id, [.. seasons], [.. episodes]);
     }
 
-    private static async Task AddCreditAsync(AppDbContext db, Guid workId, string personId, WorkCreditKind kind, string? role)
+    private static async Task AddCreditAsync(AppDbContext db, long workId, string personId, WorkCreditKind kind, string? role)
     {
         db.Set<WorkCredit>().Add(new WorkCredit { WorkId = workId, Kind = kind, Position = 0, Name = personId, Role = role, Source = "tmdb", ProviderPersonId = personId, FetchedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
@@ -57,7 +57,7 @@ public sealed class CanonicalMonitoringTests
 
         Assert.IsFalse((await resolver.LoadAsync(series.WorkId, CancellationToken.None)).IsMonitored(series.EpisodeIds[0][0], series.SeasonIds[0]), "Nothing decided and no relation: not monitored.");
 
-        await commands.SetAsync(MonitoringTargetKind.Work, series.WorkId, true, CancellationToken.None);
+        await commands.SetWorkAsync(series.WorkId, true, CancellationToken.None);
         await commands.SetAsync(MonitoringTargetKind.Season, series.SeasonIds[0], false, CancellationToken.None);
         await commands.SetAsync(MonitoringTargetKind.Episode, series.EpisodeIds[0][1], true, CancellationToken.None);
         var view = await resolver.LoadAsync(series.WorkId, CancellationToken.None);
@@ -83,7 +83,7 @@ public sealed class CanonicalMonitoringTests
 
         Assert.AreEqual(1, await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WorkMonitoring" WHERE "WorkId" = {series.WorkId}""").SingleAsync(), "The season's own decision replaced the episode decisions.");
 
-        await commands.SetAsync(MonitoringTargetKind.Work, series.WorkId, true, CancellationToken.None);
+        await commands.SetWorkAsync(series.WorkId, true, CancellationToken.None);
         var view = await resolver.LoadAsync(series.WorkId, CancellationToken.None);
 
         Assert.IsTrue(series.EpisodeIds.SelectMany(ids => ids).All(id => view.IsMonitored(id)));
@@ -103,9 +103,9 @@ public sealed class CanonicalMonitoringTests
             CREATE TRIGGER fail_monitoring_delete BEFORE DELETE ON "WorkMonitoring" FOR EACH ROW EXECUTE FUNCTION fail_monitoring_delete();
             """);
 
-        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => commands.SetAsync(MonitoringTargetKind.Work, series.WorkId, true, CancellationToken.None));
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => commands.SetWorkAsync(series.WorkId, true, CancellationToken.None));
 
-        var workDecisions = await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WorkMonitoring" WHERE "TargetId" = {series.WorkId}""").SingleAsync();
+        var workDecisions = await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WorkMonitoring" WHERE "Kind" = 0 AND "WorkId" = {series.WorkId}""").SingleAsync();
         Assert.AreEqual(0, workDecisions, "The Work's own decision was written before the episode decisions could be replaced, so it must have been rolled back with them.");
     }
 
@@ -143,20 +143,20 @@ public sealed class CanonicalMonitoringTests
         var resolver = new MonitoringResolver(db);
 
         await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Person, "p1", "Pat", ["director", "Writer"], "owner"), true, false, CancellationToken.None);
-        await commands.SetAsync(MonitoringTargetKind.Work, overridden.Id, false, CancellationToken.None);
+        await commands.SetWorkAsync(overridden.Id, false, CancellationToken.None);
         var views = await resolver.LoadManyAsync([directed.Id, acted.Id, overridden.Id], CancellationToken.None);
 
         Assert.IsTrue(views[directed.Id].IsWorkMonitored, "A directing credit matches the allowed role.");
         Assert.IsFalse(views[acted.Id].IsWorkMonitored, "An acting credit is not an allowed role.");
         Assert.IsFalse(views[overridden.Id].IsWorkMonitored, "The Work's own decision beats the relation.");
-        CollectionAssert.AreEqual(new[] { directed.Id }, (await resolver.MonitoredWorkIdsAsync(WorkMediaType.Movie, Guid.Empty, 50, CancellationToken.None)).ToArray());
+        CollectionAssert.AreEqual(new[] { directed.Id }, (await resolver.MonitoredWorkIdsAsync(WorkMediaType.Movie, 0, 50, CancellationToken.None)).ToArray());
 
         await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Person, "p1", "Pat", ["Actor"], "owner"), true, false, CancellationToken.None);
         Assert.IsTrue((await resolver.LoadAsync(acted.Id, CancellationToken.None)).IsWorkMonitored, "Actor reaches every cast credit; the role list was replaced, not added to.");
         Assert.IsFalse((await resolver.LoadAsync(directed.Id, CancellationToken.None)).IsWorkMonitored);
 
         await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Person, "p1", "Pat", null, "owner"), false, false, CancellationToken.None);
-        Assert.AreEqual(0, (await resolver.MonitoredWorkIdsAsync(WorkMediaType.Movie, Guid.Empty, 50, CancellationToken.None)).Count);
+        Assert.AreEqual(0, (await resolver.MonitoredWorkIdsAsync(WorkMediaType.Movie, 0, 50, CancellationToken.None)).Count);
     }
 
     [TestMethod]
@@ -177,7 +177,7 @@ public sealed class CanonicalMonitoringTests
         await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Person, "p1", "Pat", null, "owner"), true, false, CancellationToken.None);
         await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Studio, "studio x", "Studio X", null, "owner"), true, false, CancellationToken.None);
         await commands.SetRelationAsync(new MonitoringRelationSource(MonitoringRelationKind.Collection, collectionId.ToString(), "Saga", null, "owner"), true, false, CancellationToken.None);
-        var monitored = await new MonitoringResolver(db).MonitoredWorkIdsAsync(WorkMediaType.Movie, Guid.Empty, 50, CancellationToken.None);
+        var monitored = await new MonitoringResolver(db).MonitoredWorkIdsAsync(WorkMediaType.Movie, 0, 50, CancellationToken.None);
 
         CollectionAssert.AreEquivalent(new[] { movie.Id, other.Id }, monitored.ToArray(), "Two sources reach the shared movie and it is listed once; the collection reaches the other one.");
     }
@@ -220,10 +220,10 @@ public sealed class CanonicalMonitoringTests
         var series = await AddSeriesAsync(db, "Harbor", 2);
         await AddSeriesAsync(db, "Quiet", 2);
         var commands = Commands(db);
-        await commands.SetAsync(MonitoringTargetKind.Work, series.WorkId, false, CancellationToken.None);
+        await commands.SetWorkAsync(series.WorkId, false, CancellationToken.None);
         await commands.SetAsync(MonitoringTargetKind.Episode, series.EpisodeIds[0][0], true, CancellationToken.None);
 
-        var monitored = await new MonitoringResolver(db).MonitoredWorkIdsAsync(WorkMediaType.Series, Guid.Empty, 50, CancellationToken.None);
+        var monitored = await new MonitoringResolver(db).MonitoredWorkIdsAsync(WorkMediaType.Series, 0, 50, CancellationToken.None);
 
         CollectionAssert.AreEqual(new[] { series.WorkId }, monitored.ToArray());
     }
@@ -261,9 +261,9 @@ public sealed class CanonicalMonitoringTests
         var absorbedA = await works.CreateWorkAsync(WorkMediaType.Movie, "Absorbed A", 2020, CancellationToken.None);
         var undecided = await works.CreateWorkAsync(WorkMediaType.Movie, "Undecided", 2021, CancellationToken.None);
         var absorbedB = await works.CreateWorkAsync(WorkMediaType.Movie, "Absorbed B", 2021, CancellationToken.None);
-        await commands.SetAsync(MonitoringTargetKind.Work, decided.Id, false, CancellationToken.None);
-        await commands.SetAsync(MonitoringTargetKind.Work, absorbedA.Id, true, CancellationToken.None);
-        await commands.SetAsync(MonitoringTargetKind.Work, absorbedB.Id, true, CancellationToken.None);
+        await commands.SetWorkAsync(decided.Id, false, CancellationToken.None);
+        await commands.SetWorkAsync(absorbedA.Id, true, CancellationToken.None);
+        await commands.SetWorkAsync(absorbedB.Id, true, CancellationToken.None);
 
         await works.MergeWorksAsync(decided.Id, absorbedA.Id, "test", CancellationToken.None);
         await works.MergeWorksAsync(undecided.Id, absorbedB.Id, "test", CancellationToken.None);

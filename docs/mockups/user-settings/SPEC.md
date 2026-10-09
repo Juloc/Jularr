@@ -813,3 +813,19 @@ This exception does not waive final UX review before merging a materially differ
 - no data deletion when a user merely turns a module Off
 
 Text specification wins over implementation interpretation if a conflict appears.
+
+
+---
+
+## Plex first: personal connection and linked Login identities (approved planning extension, #911)
+
+Under **Settings → Connections → Plex**, expose the service's actually enabled capabilities, rather than treating all Plex features as one switch:
+
+- **Personal Plex Connection**: Connect / Reconnect / Disconnect, connected Plex identity and sync status, scoped to the active Profile. Show watchlist/progress/ratings controls only when the adapter and current policy support them, with clear consent and conflict behavior.
+- **Use Plex to sign in to Jularr**: a **separate Account-level login identity** action. An authenticated current Jularr user may add this verified method, requiring appropriate reauthentication/confirmation. Signing into Jularr with Plex and linking Plex to a Profile for sync must remain independently optional.
+- **Account-linked identity exists**: show a clear distinction between `Connected for playback/sync` and `Linked for login` rather than incorrectly treating them as the same state.
+- **Unlink/revoke**: disconnecting the Profile Connection must not delete the Account login identity. Unlinking the Account login identity must not silently delete a permitted Profile Connection, and must never lock the user out without another verified sign-in/recovery path.
+- If the Plex provider is disabled by Admin or permission denies linking, hide/restrict relevant actions without losing the unrelated Jularr Account or profile state.
+- Plex account names/emails are display-only, never proof that two Account identities belong together.
+
+The Account Login entry flow and same-email verification are owned by the binding login spec and #911. Plex item-opening UX is owned by #886. No extra provider-specific User Settings product or parallel authentication UI.

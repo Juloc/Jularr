@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 895" width="1440" height="895" role="img" aria-label="Jularr external destinations mockup: playback enabled, manager-only request, mobile bottom sheet, connections settings">
+<defs>
+<linearGradient id="bg" x2="0" y2="1"><stop stop-color="#0b0d16"/><stop offset="1" stop-color="#131522"/></linearGradient>
+<linearGradient id="hero" x2="1" y2="1"><stop stop-color="#28233e"/><stop offset=".42" stop-color="#25273e"/><stop offset="1" stop-color="#10131e"/></linearGradient>
+<linearGradient id="purple" x2="1" y2="1"><stop stop-color="#8f72ed"/><stop offset="1" stop-color="#7457d6"/></linearGradient>
+<filter id="shadow" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="7" stdDeviation="12" flood-opacity=".45"/></filter>
+<style>
+text{font-family:Inter,'Segoe UI',Arial,sans-serif;fill:#e9e9f4} .muted{fill:#a3a7bf}.fine{fill:#777d98}.heading{font-size:23px;font-weight:700}.h2{font-size:18px;font-weight:700}.item{font-size:15px;font-weight:600}.small{font-size:12px}.badge{font-size:11px}.over{font-size:12px;letter-spacing:1.4px;font-weight:700;fill:#ab92ff}.line{stroke:#45485d;stroke-width:1}.panel{fill:#191c2a;stroke:#34384b;stroke-width:1}.btntext{fill:white;font-size:15px;font-weight:700}
+</style>
+</defs>
+<rect width="1440" height="895" fill="url(#bg)"/>
+<rect x="33" y="27" width="5" height="37" rx="2.5" fill="#9072f0"/>
+<text x="53" y="49" class="heading">External Watch Destinations</text>
+<text x="53" y="72" class="muted small">Jularr UX concept · Issue #886 · later / planning only</text>
+<!-- desktop playback -->
+<text x="35" y="115" class="over">01  PLAYBACK ENABLED · DESKTOP</text>
+<rect x="30" y="131" width="680" height="392" rx="16" class="panel"/>
+<rect x="46" y="147" width="648" height="359" rx="12" fill="url(#hero)"/>
+<circle cx="606" cy="216" r="108" fill="#705a9e" opacity=".13"/>
+<circle cx="556" cy="206" r="63" fill="#9481b6" opacity=".11"/>
+<path d="M468 325L580 177L694 325" stroke="#745e9a" stroke-width="55" opacity=".12" fill="none"/>
+<text x="70" y="203" fill="#b2a3f6" font-size="14" font-weight="700">SERIES</text>
+<text x="70" y="248" font-size="37" font-weight="750">The Last of Us</text>
+<text x="70" y="276" class="muted" font-size="14">2023  ·  Drama  ·  2 Seasons  ·  TV-MA</text>
+<rect x="70" y="302" width="153" height="43" rx="9" fill="url(#purple)"/>
+<text x="94" y="330" class="btntext">▶  Continue</text>
+<rect x="233" y="302" width="194" height="43" rx="9" fill="#242737" stroke="#555972"/>
+<text x="250" y="329" font-size="14" font-weight="650">Ansehen auf…  ▾</text>
+<rect x="438" y="302" width="47" height="43" rx="9" fill="#232636" stroke="#4e5268"/>
+<text x="455" y="330" font-size="21">+</text>
+<text x="72" y="377" class="muted" font-size="13">Play auf Jularr bleibt die primäre Aktion.</text>
+<text x="72" y="400" class="fine" font-size="12">Das externe Menü ist eine eigene, optionale Aktion.</text>
+<rect x="234" y="354" width="268" height="145" rx="12" fill="#202331" stroke="#4c4f64" filter="url(#shadow)"/>
+<text x="254" y="380" class="over">VERFÜGBARE ZIELE</text>
+<rect x="249" y="396" width="24" height="24" rx="6" fill="#292e48"/>
+<text x="257" y="412" font-weight="900" fill="#e3b477" font-size="15">P</text>
+<text x="285" y="412" class="item">In Plex öffnen</text>
+<text x="479" y="413" class="muted" font-size="15">↗</text>
+<line x1="250" y1="427" x2="483" y2="427" stroke="#373a4f"/>
+<rect x="249" y="437" width="24" height="24" rx="6" fill="#283046"/>
+<text x="256" y="453" font-weight="900" fill="#99a5ff" font-size="14">J</text>
+<text x="285" y="453" class="item">In Jellyfin öffnen</text>
+<text x="479" y="454" class="muted" font-size="15">↗</text>
+<text x="256" y="484" class="fine small">Nur bei gültigem Titel-Match</text>
+<!-- desktop manager -->
+<text x="733" y="115" class="over">02  REQUEST / MANAGER-ONLY</text>
+<rect x="730" y="131" width="680" height="392" rx="16" class="panel"/>
+<rect x="746" y="147" width="648" height="359" rx="12" fill="url(#hero)"/>
+<text x="770" y="203" fill="#b2a3f6" font-size="14" font-weight="700">MOVIE</text>
+<text x="770" y="248" font-size="37" font-weight="750">Dune</text>
+<text x="770" y="276" class="muted" font-size="14">2021  ·  Sci-Fi  ·  2 h 35 min</text>
+<rect x="770" y="302" width="153" height="43" rx="9" fill="url(#purple)"/>
+<text x="804" y="330" class="btntext">Request</text>
+<rect x="934" y="302" width="194" height="43" rx="9" fill="#242737" stroke="#555972"/>
+<text x="952" y="329" font-size="14" font-weight="650">Ansehen auf…  ▾</text>
+<text x="772" y="381" class="muted" font-size="13">Kein Jularr-Player: Request bleibt unabhängig.</text>
+<text x="772" y="407" class="fine small">Externer Link löst keinen Download und keine Freigabe aus.</text>
+<rect x="933" y="356" width="282" height="141" rx="12" fill="#202331" stroke="#4c4f64" filter="url(#shadow)"/>
+<text x="954" y="379" class="over">WO ANSEHEN?</text>
+<rect x="950" y="397" width="24" height="24" rx="6" fill="#381f2c"/>
+<text x="957" y="415" font-weight="900" fill="#e34f60">N</text>
+<text x="986" y="414" class="item">Netflix*</text>
+<text x="1190" y="414" class="muted">↗</text>
+<line x1="948" y1="427" x2="1197" y2="427" stroke="#373a4f"/>
+<text x="955" y="451" font-size="13" class="muted">Weitere verfügbare Dienste</text>
+<text x="955" y="478" class="fine small">* Regionale Verfügbarkeit, kein Abo-Nachweis</text>
+<!-- mobile -->
+<text x="35" y="556" class="over">03  MOBILE · BOTTOM SHEET</text>
+<rect x="30" y="571" width="680" height="288" rx="16" class="panel"/>
+<rect x="58" y="586" width="260" height="253" rx="28" fill="#0b0e18" stroke="#66677a" stroke-width="3"/>
+<rect x="78" y="606" width="220" height="214" rx="16" fill="#202330"/>
+<rect x="159" y="614" width="58" height="4" rx="2" fill="#5a5e71"/>
+<text x="94" y="648" font-weight="700" font-size="16">Ansehen auf…</text>
+<line x1="94" y1="660" x2="283" y2="660" stroke="#4c4f64"/>
+<text x="95" y="695" class="item">Plex <tspan fill="#aaaec3">↗</tspan></text>
+<line x1="94" y1="705" x2="283" y2="705" stroke="#363a4d"/>
+<text x="95" y="735" class="item">Jellyfin <tspan fill="#aaaec3">↗</tspan></text>
+<line x1="94" y1="748" x2="283" y2="748" stroke="#363a4d"/>
+<text x="95" y="779" class="item">Weitere Anbieter</text>
+<text x="350" y="642" class="h2">Kompaktes Auswahlmenü</text>
+<text x="350" y="683" class="muted" font-size="15">• Nur tatsächlich verfügbare Optionen</text>
+<text x="350" y="711" class="muted" font-size="15">• App-Link mit Browser-Fallback</text>
+<text x="350" y="739" class="muted" font-size="15">• Keine separaten Buttons auf Cards</text>
+<text x="350" y="767" class="muted" font-size="15">• Kein Geräte-Casting in diesem Menü</text>
+<!-- settings -->
+<text x="733" y="556" class="over">04  CONFIGURATION · SETTINGS</text>
+<rect x="730" y="571" width="680" height="288" rx="16" class="panel"/>
+<text x="755" y="609" class="h2">User Settings → Connections</text>
+<text x="755" y="635" class="muted" font-size="14">Plex / Jellyfin: Profilzugriff, Verknüpfung, Berechtigungen.</text>
+<line x1="755" y1="653" x2="1377" y2="653" stroke="#363a4d"/>
+<text x="755" y="681" class="h2">Admin → Providers</text>
+<text x="755" y="708" class="muted" font-size="14">Server, Anbieter, erlaubte Ziele und Watch-Discovery konfigurieren.</text>
+<line x1="755" y1="729" x2="1377" y2="729" stroke="#363a4d"/>
+<text x="755" y="760" class="muted" font-size="14">Streaminganbieter: öffentliche Watch-Links / Discovery,</text>
+<text x="755" y="786" class="muted" font-size="14">keine erzwungene Netflix-/Prime-Kontoverknüpfung.</text>
+<text x="755" y="821" class="fine small">Konzeptionelles UI, kein implementierter Funktionsstand.</text>
+</svg>

@@ -213,8 +213,8 @@ public sealed class PlaybackTranscodeMeterTests
     {
         var store = new PlaybackStreamSessionStore(new ManualTimeProvider(s_start));
         var selections = new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web");
-        var transcoding = store.Create("p", Guid.NewGuid(), Guid.NewGuid(), "/m/a.mkv", 1400, Transcode(Video()), selections);
-        var remuxing = store.Create("p", Guid.NewGuid(), Guid.NewGuid(), "/m/b.mkv", 1400, Remux(), selections);
+        var transcoding = store.Create("p", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/m/a.mkv", 1400, Transcode(Video()), selections);
+        var remuxing = store.Create("p", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/m/b.mkv", 1400, Remux(), selections);
 
         var progress = transcoding.BeginTranscodeRun(PlaybackHardwareBackend.Software);
         progress!(Sample(2.0));

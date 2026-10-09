@@ -25,7 +25,7 @@ public sealed class WantedReconcileState
 
 // Queues what Monitoring or an open request wants and the library lacks, plus what it holds but its profile still wants better (decided by the
 // media type's <see cref="IUpgradeAssessor"/>, only when one Work is reconciled or an upgrade scan reaches it).
-public sealed record UpgradePage(IReadOnlyList<Guid> Works, bool ReachedEnd);
+public sealed record UpgradePage(IReadOnlyList<long> Works, bool ReachedEnd);
 
 public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, WantedReconcileState? state = null, UpgradeAssessors? upgrades = null, IInstanceModuleService? modules = null)
 {
@@ -72,7 +72,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
 
     // Brings the items of one Work, or of every Work of the reconciled types, in line with the current intent and installed coverage. One Work is also
     // assessed for upgrades; the full run leaves that to the upgrade scan so it stays one statement.
-    public async Task ReconcileAsync(Guid? workId, CancellationToken cancellationToken)
+    public async Task ReconcileAsync(long? workId, CancellationToken cancellationToken)
     {
         var upgradeTypes = upgrades?.Types.Select(type => (int)type).ToArray() ?? [];
         await db.Database.ExecuteSqlRawAsync(WantedSql.Reconcile, [.. CoverageParameters(workId), new NpgsqlParameter("upgradeTypes", upgradeTypes)], cancellationToken);
@@ -83,10 +83,10 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
     }
 
     // Looks at a page of the Works of one kind that hold something wanted, in id order, and says whether the library ended with it.
-    public async Task<UpgradePage> ReconcileUpgradesAsync(MediaAcquisitionKind kind, Guid after, int limit, CancellationToken cancellationToken)
+    public async Task<UpgradePage> ReconcileUpgradesAsync(MediaAcquisitionKind kind, long after, int limit, CancellationToken cancellationToken)
     {
         var works = await db.Database
-            .SqlQueryRaw<Guid>(WantedSql.HeldWorks, [.. CoverageParameters(null), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("classification", await ClassificationOfAsync(kind, cancellationToken)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit)])
+            .SqlQueryRaw<long>(WantedSql.HeldWorks, [.. CoverageParameters(null), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("classification", await ClassificationOfAsync(kind, cancellationToken)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit)])
             .ToListAsync(cancellationToken);
         foreach (var workId in works)
         {
@@ -96,7 +96,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
         return new UpgradePage(works, works.Count < limit);
     }
 
-    private async Task SyncUpgradesAsync(Guid workId, CancellationToken cancellationToken)
+    private async Task SyncUpgradesAsync(long workId, CancellationToken cancellationToken)
     {
         var work = await db.Works.AsNoTracking().Where(item => item.Id == workId).Select(item => new { item.MediaType, item.IsAnime }).FirstOrDefaultAsync(cancellationToken);
         if (work is null || upgrades is null || !upgrades.Types.Contains(work.MediaType))
@@ -125,9 +125,9 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
     }
 
     // The reconciled Work (null for all) and the media type numbers the coverage rules distinguish; each statement needs its own parameter objects.
-    private NpgsqlParameter[] CoverageParameters(Guid? workId) =>
+    private NpgsqlParameter[] CoverageParameters(long? workId) =>
     [
-        new NpgsqlParameter("workId", NpgsqlDbType.Uuid) { Value = workId.HasValue ? workId.Value : DBNull.Value },
+        new NpgsqlParameter("workId", NpgsqlDbType.Bigint) { Value = workId.HasValue ? workId.Value : DBNull.Value },
         new NpgsqlParameter("now", clock.GetUtcNow().UtcDateTime),
         new NpgsqlParameter("types", Reconciled.Select(entry => (int)entry.Type).ToArray()),
         new NpgsqlParameter<int>("movie", (int)WorkMediaType.Movie),
@@ -139,25 +139,25 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
     ];
 
     // The episodes the open requests of a Work explicitly ask for, independent of Monitoring.
-    public async Task<IReadOnlySet<Guid>> RequestedEpisodeIdsAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlySet<Guid>> RequestedEpisodeIdsAsync(long workId, CancellationToken cancellationToken) =>
         (await db.Database.SqlQueryRaw<Guid>(WantedSql.RequestedEpisodes, new NpgsqlParameter("workId", workId)).ToListAsync(cancellationToken)).ToHashSet();
 
-    public async Task<bool> AnyAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<bool> AnyAsync(long workId, CancellationToken cancellationToken) =>
         await db.WantedItems.AsNoTracking().AnyAsync(x => x.WorkId == workId, cancellationToken);
 
-    public async Task<IReadOnlySet<Guid>> TargetIdsAsync(Guid workId, WantedTargetKind kind, CancellationToken cancellationToken) =>
-        (await db.WantedItems.AsNoTracking().Where(x => x.WorkId == workId && x.TargetKind == kind).Select(x => x.TargetId).ToListAsync(cancellationToken)).ToHashSet();
+    public async Task<IReadOnlySet<Guid>> TargetIdsAsync(long workId, WantedTargetKind kind, CancellationToken cancellationToken) =>
+        (await db.WantedItems.AsNoTracking().Where(x => x.WorkId == workId && x.TargetKind == kind).Where(x => x.TargetId != null).Select(x => x.TargetId!.Value).ToListAsync(cancellationToken)).ToHashSet();
 
     // The Works of one kind that miss something and have no open request to carry it, in id order.
-    public async Task<IReadOnlyList<Guid>> WorksWithoutOpenRequestAsync(MediaAcquisitionKind kind, Guid after, int limit, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<long>> WorksWithoutOpenRequestAsync(MediaAcquisitionKind kind, long after, int limit, CancellationToken cancellationToken) =>
         await db.Database
-            .SqlQueryRaw<Guid>(
+            .SqlQueryRaw<long>(
                 WantedSql.WorksWithoutOpenRequest,
                 [.. CoverageParameters(null), .. RequestParameters(kind), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("classification", await ClassificationOfAsync(kind, cancellationToken)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit), new NpgsqlParameter("editions", kind == MediaAcquisitionKind.Audiobook)])
             .ToListAsync(cancellationToken);
 
     // The request of the Work that ended Completed as its latest one, or null.
-    public async Task<string?> CompletedRequestOfAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken) =>
+    public async Task<string?> CompletedRequestOfAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken) =>
         await db.Database.SqlQueryRaw<string>(WantedSql.CompletedRequestOf, [new NpgsqlParameter("workId", workId), .. RequestParameters(kind)]).FirstOrDefaultAsync(cancellationToken);
 
     private static NpgsqlParameter[] RequestParameters(MediaAcquisitionKind kind) =>

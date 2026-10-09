@@ -19,7 +19,7 @@ public sealed record SetAnimeClassificationRequest(bool Anime);
 
 public sealed record SetRelationMonitoringRequest(string Label, IReadOnlyList<string>? Roles, bool Monitored, bool OnlyFuture);
 
-public sealed record WorkMonitoringResponse(Guid WorkId, bool Monitored, bool ReachedByRelation, IReadOnlyList<WorkMonitoringDecisionResponse> Decisions);
+public sealed record WorkMonitoringResponse(long WorkId, bool Monitored, bool ReachedByRelation, IReadOnlyList<WorkMonitoringDecisionResponse> Decisions);
 
 public sealed record WorkMonitoringDecisionResponse(Guid TargetId, MonitoringTargetKind Kind, bool Monitored);
 
@@ -40,13 +40,23 @@ public static class MonitoringEndpoints
                 .RequireRole(AccountRoles.Owner))
             .RequireRateLimiting("acquisitionApi");
 
-        group.MapGet("/works/{workId:guid}", async (Guid workId, MonitoringResolver monitoring, CancellationToken cancellationToken) =>
+        group.MapGet("/works/{workId:long}", async (long workId, MonitoringResolver monitoring, CancellationToken cancellationToken) =>
         {
             var view = await monitoring.LoadAsync(workId, cancellationToken);
             return Results.Ok(new WorkMonitoringResponse(workId, view.IsWorkMonitored, view.IsRelationMonitored, [
                 .. Enum.GetValues<MonitoringTargetKind>().SelectMany(kind => new[] { true, false }.SelectMany(value => view.DecidedIds(kind, value).Select(id => new WorkMonitoringDecisionResponse(id, kind, value))))
             ]));
         });
+
+        group.MapPut("/works/{workId:long}", async (
+            long workId,
+            SetTargetMonitoringRequest request,
+            MonitoringCommands commands,
+            MonitoringFollower follower,
+            CancellationToken cancellationToken) =>
+            await commands.SetWorkAsync(workId, request.Monitored, cancellationToken)
+                ? Results.Ok(await follower.FollowAsync(workId, cancellationToken))
+                : Results.NotFound());
 
         group.MapPut("/targets/{kind}/{targetId:guid}", async (
             MonitoringTargetKind kind,
@@ -55,15 +65,17 @@ public static class MonitoringEndpoints
             MonitoringCommands commands,
             MonitoringFollower follower,
             CancellationToken cancellationToken) =>
-            await commands.SetAsync(kind, targetId, request.Monitored, cancellationToken) is { } workId
-                ? Results.Ok(await follower.FollowAsync(workId, cancellationToken))
-                : Results.NotFound());
+            kind == MonitoringTargetKind.Work
+                ? Results.BadRequest()
+                : await commands.SetAsync(kind, targetId, request.Monitored, cancellationToken) is { } workId
+                    ? Results.Ok(await follower.FollowAsync(workId, cancellationToken))
+                    : Results.NotFound());
 
-        group.MapPut("/works/{workId:guid}/audiobook", async (Guid workId, SetTargetMonitoringRequest request, MonitoringCommands commands, CancellationToken cancellationToken) =>
+        group.MapPut("/works/{workId:long}/audiobook", async (long workId, SetTargetMonitoringRequest request, MonitoringCommands commands, CancellationToken cancellationToken) =>
             await commands.SetAudiobookAsync(workId, request.Monitored, cancellationToken) is null ? Results.NotFound() : Results.NoContent());
 
         // The owner's classification of a Movie or Series Work as Anime (or not); it survives provider refreshes and never changes the Work's identity or structure.
-        group.MapPut("/works/{workId:guid}/anime", async (Guid workId, SetAnimeClassificationRequest request, WorkService works, CancellationToken cancellationToken) =>
+        group.MapPut("/works/{workId:long}/anime", async (long workId, SetAnimeClassificationRequest request, WorkService works, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -77,7 +89,7 @@ public static class MonitoringEndpoints
         });
 
         // The owner's mapping of a local light-novel volume or manga chapter to a canonical unit of the same Work; the Work is wanted again at once.
-        group.MapPut("/works/{workId:guid}/reading-units/{localKind}/{localId}", async (Guid workId, WorkUnitLocalKind localKind, string localId, MapReadingUnitRequest request, ReadingUnits units, WantedReconciler wanted, CancellationToken cancellationToken) =>
+        group.MapPut("/works/{workId:long}/reading-units/{localKind}/{localId}", async (long workId, WorkUnitLocalKind localKind, string localId, MapReadingUnitRequest request, ReadingUnits units, WantedReconciler wanted, CancellationToken cancellationToken) =>
         {
             if (!await units.TieAsync(workId, localKind, localId, request.UnitId, isOwnerMapping: true, cancellationToken))
             {
@@ -88,14 +100,14 @@ public static class MonitoringEndpoints
             return Results.NoContent();
         });
 
-        group.MapDelete("/works/{workId:guid}/reading-units/{localKind}/{localId}", async (Guid workId, WorkUnitLocalKind localKind, string localId, ReadingUnits units, WantedReconciler wanted, CancellationToken cancellationToken) =>
+        group.MapDelete("/works/{workId:long}/reading-units/{localKind}/{localId}", async (long workId, WorkUnitLocalKind localKind, string localId, ReadingUnits units, WantedReconciler wanted, CancellationToken cancellationToken) =>
         {
             await units.UnbindAsync(workId, localKind, localId, cancellationToken);
             await wanted.ReconcileAsync(workId, cancellationToken);
             return Results.NoContent();
         });
 
-        group.MapPost("/works/{workId:guid}/future", async (Guid workId, MonitoringCommands commands, MonitoringFollower follower, CancellationToken cancellationToken) =>
+        group.MapPost("/works/{workId:long}/future", async (long workId, MonitoringCommands commands, MonitoringFollower follower, CancellationToken cancellationToken) =>
         {
             await commands.FutureAsync(workId, cancellationToken);
             return Results.Ok(await follower.FollowAsync(workId, cancellationToken));
@@ -120,7 +132,7 @@ public static class MonitoringEndpoints
 /// <summary>Lets the request of a Work follow its monitoring after a command: the Movie or Series request is woken, ended or opened as the Work now says.</summary>
 public sealed class MonitoringFollower(AppDbContext db, VideoMonitoringService video)
 {
-    public async Task<VideoMonitoringOutcome?> FollowAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<VideoMonitoringOutcome?> FollowAsync(long workId, CancellationToken cancellationToken)
     {
         var type = await db.Works.AsNoTracking().Where(work => work.Id == workId).Select(work => (WorkMediaType?)work.MediaType).FirstOrDefaultAsync(cancellationToken);
         return type switch

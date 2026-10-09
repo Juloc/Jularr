@@ -19,7 +19,7 @@ public sealed record WorkFactLanguage(string Code, bool IsComplete);
 /// snapshot, so what a rule matched and what the shelf shows can never disagree.
 /// </summary>
 public sealed record WorkFactSnapshot(
-    Guid WorkId,
+    long WorkId,
     WorkMediaType MediaType,
     string Title,
     int? Year,

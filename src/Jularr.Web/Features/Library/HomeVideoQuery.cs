@@ -13,7 +13,7 @@ namespace Jularr.Web.Features.Library;
 /// </summary>
 public sealed record HomeVideoTitle(
     WorkMediaType MediaType,
-    Guid WorkId,
+    long WorkId,
     string Title,
     string DetailHref,
     string? PosterUrl,
@@ -179,12 +179,12 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
     /// The display facts of the given Works. Movie and Series come from the persisted Work metadata, Anime from its legacy record and
     /// provider metadata; a Work without a displayable identity (an Anime without legacy record, which has no page to open) is absent.
     /// </summary>
-    private async Task<IReadOnlyDictionary<Guid, HomeVideoTitle>> LoadTitlesAsync(string profileId, Guid[] workIds, bool includeDescriptions, bool animeVisible, CancellationToken cancellationToken)
+    private async Task<IReadOnlyDictionary<long, HomeVideoTitle>> LoadTitlesAsync(string profileId, long[] workIds, bool includeDescriptions, bool animeVisible, CancellationToken cancellationToken)
     {
         var works = await db.Database.SqlQuery<WorkDbRow>($"""SELECT "Id", "MediaType", "IsAnime", "CanonicalTitle", "Year" FROM "Works" WHERE "Id" = ANY({workIds})""").ToListAsync(cancellationToken);
         var animeWorkIds = works.Where(work => work.IsAnime && animeVisible).Select(work => work.Id).ToArray();
         var animeRows = animeWorkIds.Length == 0
-            ? new Dictionary<Guid, AnimeDbRow>()
+            ? new Dictionary<long, AnimeDbRow>()
             : (await db.Database.SqlQuery<AnimeDbRow>(
                     $"""
                     SELECT DISTINCT ON (link."WorkId")
@@ -215,8 +215,8 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
             .ToDictionary(row => row.WorkId, row => row.Seasons);
 
         var videoWorkIds = works.Where(work => work.MediaType is (int)WorkMediaType.Movie or (int)WorkMediaType.Series).Select(work => work.Id).ToArray();
-        IReadOnlyDictionary<Guid, WorkCardMetadata> cardMetadata = new Dictionary<Guid, WorkCardMetadata>();
-        IReadOnlyDictionary<Guid, string> overviews = new Dictionary<Guid, string>();
+        IReadOnlyDictionary<long, WorkCardMetadata> cardMetadata = new Dictionary<long, WorkCardMetadata>();
+        IReadOnlyDictionary<long, string> overviews = new Dictionary<long, string>();
         if (videoWorkIds.Length > 0)
         {
             var locale = await WorkMetadataLocales.ForProfileAsync(db, profileId, cancellationToken);
@@ -226,7 +226,7 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
             overviews = includeDescriptions ? await metadataStore.LoadOverviewsAsync(videoWorkIds, locale, cancellationToken) : overviews;
         }
 
-        var titles = new Dictionary<Guid, HomeVideoTitle>();
+        var titles = new Dictionary<long, HomeVideoTitle>();
         foreach (var work in works)
         {
             var mediaType = (WorkMediaType)work.MediaType;
@@ -241,7 +241,7 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
                         mediaType,
                         work.Id,
                         anime.Title,
-                        LibraryBrowse.DetailHref(WorkMediaType.Anime, anime.AnimeId),
+                        LibraryBrowse.AnimeDetailHref(anime.AnimeId),
                         AnimeArtworkStore.ResolvePosterUrl(anime.AnimeId, anime.CoverImageUrl),
                         string.IsNullOrWhiteSpace(backdrop) ? null : backdrop,
                         includeDescriptions && !string.IsNullOrWhiteSpace(anime.Description) ? anime.Description.Trim() : null,
@@ -269,11 +269,11 @@ public sealed class HomeVideoQuery(AppDbContext db, VideoProgressService videoPr
         return titles;
     }
 
-    private sealed record RecentDbRow(Guid WorkId, Guid? WorkEpisodeId, DateTime AddedAt, int? SeasonNumber, int? EpisodeNumber);
+    private sealed record RecentDbRow(long WorkId, Guid? WorkEpisodeId, DateTime AddedAt, int? SeasonNumber, int? EpisodeNumber);
 
-    private sealed record WorkDbRow(Guid Id, int MediaType, bool IsAnime, string CanonicalTitle, int? Year);
+    private sealed record WorkDbRow(long Id, int MediaType, bool IsAnime, string CanonicalTitle, int? Year);
 
-    private sealed record AnimeDbRow(Guid WorkId, Guid AnimeId, string Title, string? CoverImageUrl, string? BannerImageUrl, string? Description, int? SeasonYear, int? AverageScore);
+    private sealed record AnimeDbRow(long WorkId, Guid AnimeId, string Title, string? CoverImageUrl, string? BannerImageUrl, string? Description, int? SeasonYear, int? AverageScore);
 
-    private sealed record SeasonCountDbRow(Guid WorkId, int Seasons);
+    private sealed record SeasonCountDbRow(long WorkId, int Seasons);
 }

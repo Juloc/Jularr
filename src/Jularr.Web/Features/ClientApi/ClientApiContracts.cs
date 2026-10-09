@@ -7,6 +7,7 @@ using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Speech;
 using Jularr.Web.Features.Storage;
+using Jularr.Web.Features.Subtitles;
 using Jularr.Web.Features.Watchlist;
 
 namespace Jularr.Web.Features.ClientApi;
@@ -407,7 +408,10 @@ public sealed record ClientPlaybackPreferences(
     bool AutoplayNext,
     string? PreferredAudioLanguage,
     string? PreferredSubtitleLanguage,
-    double DefaultPlaybackSpeed);
+    double DefaultPlaybackSpeed,
+    string? PreferredSecondarySubtitleLanguage = null,
+    int SubtitleSizePercent = 100,
+    int SubtitleOffsetMs = 0);
 
 /// <summary>
 /// Partial update: omitted/null fields keep their stored value; an empty
@@ -417,7 +421,10 @@ public sealed record ClientPlaybackPreferencesUpdate(
     bool? AutoplayNext = null,
     string? PreferredAudioLanguage = null,
     string? PreferredSubtitleLanguage = null,
-    double? DefaultPlaybackSpeed = null);
+    double? DefaultPlaybackSpeed = null,
+    string? PreferredSecondarySubtitleLanguage = null,
+    int? SubtitleSizePercent = null,
+    int? SubtitleOffsetMs = null);
 
 public sealed record ClientPlaybackHistoryResponse(
     int Limit,
@@ -579,7 +586,8 @@ public sealed record ClientEmbeddedSubtitleCues(
 public sealed record ClientPlainCue(
     int StartMs,
     int EndMs,
-    string Text);
+    string Text,
+    SubtitleCuePresentation? Presentation = null);
 
 public sealed record ClientPlayerEpisode(
     Guid Id,
@@ -768,7 +776,10 @@ public static class ClientApiMappings
             preferences.AutoplayNext,
             preferences.PreferredAudioLanguage,
             preferences.PreferredSubtitleLanguage,
-            preferences.DefaultPlaybackSpeed);
+            preferences.DefaultPlaybackSpeed,
+            preferences.PreferredSecondarySubtitleLanguage,
+            preferences.SubtitleSizePercent,
+            preferences.SubtitleOffsetMs);
 
     public static ClientTtsPreferences ToClientTtsPreferences(
         TtsPreferencesSnapshot preferences) =>
@@ -797,7 +808,7 @@ public static class ClientApiMappings
         new(
             cues.TrackId,
             cues.Language,
-            cues.Cues.Select(x => new ClientPlainCue(x.StartMs, x.EndMs, x.Text)).ToArray());
+            cues.Cues.Select(x => new ClientPlainCue(x.StartMs, x.EndMs, x.Text, x.Presentation)).ToArray());
 
     public static ClientMediaTrack ToClientTrack(PlaybackMediaTrack track) =>
         new(

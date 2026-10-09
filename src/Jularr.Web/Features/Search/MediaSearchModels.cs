@@ -177,7 +177,7 @@ public sealed record MediaSearchFacts(
 public sealed record MediaSearchResult(
     MediaSearchResultKind Kind,
     Guid Id,
-    Guid? WorkId,
+    long? WorkId,
     MediaSearchType? Type,
     string Title,
     double Score,
