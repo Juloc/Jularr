@@ -6,6 +6,7 @@ public sealed record PageRequest
 {
     public const int DefaultPageSize = 25;
     public const int MaximumPageSize = 100;
+    public const long MaximumOffset = 100_000;
 
     public int Page { get; }
 
@@ -19,9 +20,17 @@ public sealed record PageRequest
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pageSize);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumPageSize);
 
+        var offset = checked(((long)page - 1) * pageSize);
+        if (offset > MaximumOffset)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(page),
+                "Page exceeds the maximum offset. Use a bounded sequential query instead.");
+        }
+
         Page = page;
         PageSize = pageSize;
-        Offset = ((long)page - 1) * pageSize;
+        Offset = offset;
     }
 
     public NpgsqlParameter[] ToSqlParameters() =>
