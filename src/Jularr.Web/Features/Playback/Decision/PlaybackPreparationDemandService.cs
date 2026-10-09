@@ -62,7 +62,7 @@ public sealed class PlaybackPreparationDemandService(VideoProgressService progre
             .Distinct()
             .ToArray();
 
-        var resume = workIds.Length == 0
+        IReadOnlyList<VideoResumeDemandCount> resume = workIds.Length == 0
             ? []
             : await progress.GetRecentResumeDemandAsync(workIds, sinceUtc, cancellationToken);
 
