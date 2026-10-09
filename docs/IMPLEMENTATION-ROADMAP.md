@@ -1,10 +1,10 @@
 # Jularr dependency-ordered implementation roadmap
 
-Status: planning roadmap. This does not authorize skipping screen/spec approval gates.
+Status: planning roadmap. **The owner-approved clean-cut target is [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md).** This roadmap must be read using that target; its former legacy-backfill phases are superseded. This does not authorize editing existing migrations or resetting current instances before a separately approved cutover.
 
 ## Phase 0 — Freeze and contracts
 
-1. Freeze new dependencies on legacy Anime/Novel/Movie/TV/Audiobook identity and per-type progress/acquisition models.
+1. Freeze new dependencies on duplicate Anime/Novel/Movie/TV/Audiobook/**Game** identities and per-type progress/acquisition models; new target features follow the clean-cut contract.
 2. Finalize explicit Account/Profile identity, linked login identity, active-Profile selection and capability contracts.
 3. Finalize canonical MediaCore semantics: Work, Structure, Edition, Version and canonical target references.
 4. Finalize Library layer: Asset, Stored File, Track, technical analysis and LibraryRoot association.
@@ -13,14 +13,15 @@ Status: planning roadmap. This does not authorize skipping screen/spec approval 
 
 Exit gate: migrations can target stable canonical contracts; no unresolved polymorphic-target or progress identity design.
 
-## Phase 1 — Canonical persistence foundation
+## Phase 1 — Single clean-cut PostgreSQL persistence foundation
 
-1. PostgreSQL-first module-owned EF configurations/indexes/constraints.
-2. Add missing canonical Account/LoginIdentity/Profile/ProfileConnection/Asset/File/Track/Progress/Job/Collection schemas plus persistent provider evidence/snapshot storage needed by durable linked features.
-3. Build reversible backfill/validation tooling and migration audit reports.
-4. Keep legacy bridges read-compatible but migration-only.
+1. Inventory all EF and raw SQL tables and their owners; finalize the complete target field/FK/constraint/enum/index inventory for **every** approved module, including Games-as-Works, Account/Profile auth, reading/game positions, image assignments and media segment detection.
+2. Ensure all current feature consumers have an explicit target destination. Confirm data-retention policy and separate cutover authorization for test-only state.
+3. As **one coordinated cutover**, remove the old EF migration chain, old runtime bridges/duplicate stores and obsolete entity models, create a single fresh PostgreSQL baseline with canonical enum seeds and accurate EF snapshot, and reset only the authorized test database.
+4. Adapt Account/Profile, MediaCore/Games, Learning, Library, acquisition, player/reader, web/Android/TV contracts and tests together. No dual-source read/write or legacy-compatibility path.
+5. Validate clean setup, canonical FKs/uniques/CHECKs, initial seed/setup, login/passkeys/2FA, profile transfer, watchlist, all media, reader/game progress, files, artwork, localization, jobs, segments and performance-critical SQL.
 
-Exit gate: canonical records can represent all existing media/files/tracks/progress without data loss.
+Exit gate: full greenfield PostgreSQL install and all affected clients use **one** canonical model; no old-schema bridge is still required. Future small changes use normal migrations from this baseline.
 
 ## Phase 2 — Shared application/API contracts
 
@@ -131,21 +132,9 @@ Order:
 
 Legacy route redirects are parity-gated; do not replace a functioning page with a redirect before its canonical owner can perform the same supported work.
 
-## Phase 9 — Controlled legacy migration
+## Phase 9 — Clean-cut verification and removal
 
-For one legacy domain at a time:
-1. backfill Work/Structure/Edition;
-2. migrate files/technical analysis to Asset/File/Track;
-3. migrate subtitles/segments;
-4. migrate progress/history/bookmarks/highlights;
-5. migrate acquisition references;
-6. switch reads, then writes, to canonical contracts;
-7. validate counts/IDs/files/progress/provider mappings;
-8. remove legacy write path;
-9. remove bridge/read path only after validation;
-10. drop obsolete schema after supported migration window.
-
-Suggested order: Anime/Series video -> Books/LN/Manga -> Movies/TV legacy additions -> Audiobooks, adjusted by actual production data risk.
+This is a **verification** phase, not a backfill of old Jularr database data. The initial cutover is test-only, requires explicit reset authorization, and happens atomically in Phase 1. Verify no old `Games.Id`, Anime/Novel/Manga roots, old progress, image, session, `WorkSourceLinks`, obsolete SQL tables or migrations remain. Verify all supported features use the new canonical owners and the required release/CI gates pass. If a capability is missing, fix the target implementation instead of restoring a second legacy path.
 
 ## Phase 10 — Migration Center and external-stack migration
 

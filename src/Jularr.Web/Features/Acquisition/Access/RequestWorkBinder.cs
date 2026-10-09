@@ -92,13 +92,13 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
             // The identity may still be unlinked when the Work was found through its legacy record; linking is a no-op when it is already there.
             await works.LinkExternalIdentityAsync(existing, mediaType, provider, externalId, 1.0, "request provider id", false, false, MappingReviewState.Confirmed, cancellationToken);
             await LinkAlsoKnownAsAsync(mediaType, existing, alsoKnownAs, cancellationToken);
-            await MonitorRequestedBookAsync(kind, existing, cancellationToken);
+            await MonitorRequestedWorkAsync(kind, existing, cancellationToken);
             return existing;
         }
 
         var created = (await works.EnsureWorkByExternalIdentityAsync(mediaType, provider, externalId, title, null, cancellationToken)).Id;
         await LinkAlsoKnownAsAsync(mediaType, created, alsoKnownAs, cancellationToken);
-        await MonitorRequestedBookAsync(kind, created, cancellationToken);
+        await MonitorRequestedWorkAsync(kind, created, cancellationToken);
         return created;
     }
 
@@ -135,11 +135,11 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
         }
     }
 
-    // Requesting a Book monitors it unless somebody already decided: that is what keeps a better format wanted after the first import. An audiobook
-    // request says nothing about the Book, and a decision the owner made (also "off") is never overwritten.
-    private async Task MonitorRequestedBookAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
+    // Requesting a Book or Manga monitors it unless somebody already decided: that is what keeps a better format of a Book and the volumes still missing of a
+    // Manga wanted after the first import. An audiobook request says nothing about the Book, and a decision the owner made (also "off") is never overwritten.
+    private async Task MonitorRequestedWorkAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
-        if (kind == MediaAcquisitionKind.Book && monitoring is not null && monitoringState is not null && (await monitoringState.LoadAsync(workId, cancellationToken)).WorkDecision is null)
+        if (kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Manga && monitoring is not null && monitoringState is not null && (await monitoringState.LoadAsync(workId, cancellationToken)).WorkDecision is null)
         {
             await monitoring.SetWorkAsync(workId, true, cancellationToken, replaceChildren: false);
         }

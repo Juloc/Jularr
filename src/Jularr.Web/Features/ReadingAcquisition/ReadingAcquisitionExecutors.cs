@@ -32,7 +32,9 @@ public sealed class ReadingAcquisitionEngine(
     DownloadClientStore downloadClients,
     AcquisitionCore core,
     QualityProfileStore? profiles = null,
-    RequestWorkBinder? binder = null)
+    RequestWorkBinder? binder = null,
+    ReadingCoverageService? coverage = null,
+    ReadingStructureService? structure = null)
 {
     public const string OperationKind = "reading-usenet-download";
 
@@ -51,7 +53,11 @@ public sealed class ReadingAcquisitionEngine(
         // A request made before the Work binding, or one whose identity could not be resolved then, is bound now; the profile below is the Work's.
         request = binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken);
         var payload = ReadPayload(request, initialTarget);
-        var target = ToTarget(request.Kind, payload);
+        var target = await TargetAsync(request, payload, refreshStructure: payload.Searches == 0, cancellationToken);
+        if (target.Want is { IsEmpty: true })
+        {
+            return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "Nothing is missing: every wanted volume and chapter is in the library.");
+        }
 
         // Without Usenet configured only a direct source (a public web copy) can serve the request.
         var usenetProblem = !await indexers.HasEnabledIndexerAsync(cancellationToken)
@@ -65,6 +71,29 @@ public sealed class ReadingAcquisitionEngine(
         return grabbable.Length == 0 && usenetProblem is not null
             ? new AcquisitionExecution(AcquisitionRequestStatus.Failed, usenetProblem)
             : await GrabAsync(request, payload, grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);
+    }
+
+    // Manual Search builds its target here too, so it ranks releases exactly as the automatic search does.
+    public async Task<ReadingAcquisitionTarget> TargetAsync(AcquisitionRequest request, ReadingRequestPayload payload, bool refreshStructure, CancellationToken cancellationToken)
+    {
+        var target = ToTarget(request.Kind, payload);
+        if (request.Kind != MediaAcquisitionKind.Manga || coverage is null || request.WorkId is not { } workId)
+        {
+            return target;
+        }
+
+        if (refreshStructure && structure is not null)
+        {
+            await structure.RefreshAsync(workId, cancellationToken);
+        }
+
+        var aliases = structure is null ? [] : await structure.AliasesAsync(workId, cancellationToken);
+        var wholeTitleAsked = await coverage.WholeTitleAskedAsync(request.Id, cancellationToken);
+        return target with
+        {
+            Aliases = [.. (target.Aliases ?? []).Concat(aliases).Where(alias => !string.IsNullOrWhiteSpace(alias) && !alias.Equals(target.Title, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase)],
+            Want = await coverage.WantAsync(workId, wholeTitleAsked, payload.RequestedVolume, payload.RequestedChapterStart, payload.RequestedChapterEnd, cancellationToken)
+        };
     }
 
     // Runs the shared grab over the releases (best first); Manual Search passes the one the owner selected.

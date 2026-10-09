@@ -104,7 +104,14 @@ public sealed class PlayerDesignTests
             StringAssert.Contains(stage, selector);
         }
         StringAssert.Contains(player, "data?.textContent || \"[]\"");
+        var requiredNodes = player[player.IndexOf("if (!video || !stage", StringComparison.Ordinal)..];
+        requiredNodes = requiredNodes[..requiredNodes.IndexOf("return;", StringComparison.Ordinal)];
+        Assert.IsFalse(requiredNodes.Contains("!overlay", StringComparison.Ordinal));
+        Assert.IsFalse(requiredNodes.Contains("!data", StringComparison.Ordinal));
         StringAssert.Contains(player, "if (!overlay || !window.JularrPlayerLearning) return;");
+        StringAssert.Contains(player, "const learningRoot = window.JularrPlayerLearning ? root : null;");
+        StringAssert.Contains(player, "learningRoot?.querySelector(\"[data-word-inspector]\")");
+        StringAssert.Contains(player, "learningRoot?.querySelector(\"[data-cue-data]\")");
     }
 
     [TestMethod]

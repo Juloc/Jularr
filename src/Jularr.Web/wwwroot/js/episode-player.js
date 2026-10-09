@@ -10,8 +10,7 @@
     }
 
     const profileId = document.body?.dataset.profileId || "unknown";
-    // Device-local choices (mode override, quality) live in this browser only.
-    const preferenceKey = `jularr.profile.${profileId}.playbackMode`;
+    // Device-local quality choices are separate from profile-wide defaults.
     const legacyQualityKey = `jularr.profile.${profileId}.qualityCap`;
     const qualityKey = `jularr.profile.${profileId}.qualityPreset`;
     const progressUrl = root.dataset.progressUrl || "";
@@ -31,7 +30,6 @@
     const playbackStatus = root.querySelector("[data-playback-status]");
     const playbackSummary = root.querySelector("[data-playback-summary]");
     const playbackBadge = root.querySelector("[data-playback-badge]");
-    const modeSelect = root.querySelector("[data-playback-mode]");
     const reasonsBlock = root.querySelector("[data-playback-reasons]");
     const reasonList = root.querySelector("[data-playback-reason-list]");
     const diagnosticsBlock = root.querySelector("[data-playback-diagnostics]");
@@ -45,16 +43,17 @@
         }
     })();
 
-    const overlay = root.querySelector("[data-subtitle-overlay]");
-    const data = root.querySelector("[data-cue-data]");
-    const inspector = root.querySelector("[data-word-inspector]");
-    const learningKicker = root.querySelector("[data-learning-kicker]");
-    const word = root.querySelector("[data-word]");
-    const reading = root.querySelector("[data-reading]");
-    const meaning = root.querySelector("[data-meaning]");
-    const state = root.querySelector("[data-state]");
-    const replay = root.querySelector("[data-replay]");
-    const closeLearning = root.querySelector("[data-close-learning]");
+    const learningRoot = window.JularrPlayerLearning ? root : null;
+    const overlay = learningRoot?.querySelector("[data-subtitle-overlay]");
+    const data = learningRoot?.querySelector("[data-cue-data]");
+    const inspector = learningRoot?.querySelector("[data-word-inspector]");
+    const learningKicker = learningRoot?.querySelector("[data-learning-kicker]");
+    const word = learningRoot?.querySelector("[data-word]");
+    const reading = learningRoot?.querySelector("[data-reading]");
+    const meaning = learningRoot?.querySelector("[data-meaning]");
+    const state = learningRoot?.querySelector("[data-state]");
+    const replay = learningRoot?.querySelector("[data-replay]");
+    const closeLearning = learningRoot?.querySelector("[data-close-learning]");
     const error = root.querySelector("[data-player-error]");
     const timeline = root.querySelector("[data-playback-timeline]");
     const timelineCurrent = root.querySelector("[data-playback-current]");
@@ -70,7 +69,6 @@
     const nextUrl = root.dataset.nextUrl || "";
     const preferencesUrl = root.dataset.playbackPreferencesUrl || "";
     let autoplayNext = root.dataset.autoplayNext === "true";
-    const restartButton = root.querySelector("[data-restart]");
     const autoplayToggle = root.querySelector("[data-autoplay-toggle]");
     const postPlay = root.querySelector("[data-post-play]");
     const postPlayReplay = root.querySelector("[data-post-play-replay]");
@@ -106,7 +104,7 @@
     const seekSeconds = design.seekSeconds(root);
 
     if (!video || !stage || !placeholder || !playbackStatus ||
-        !playbackSummary || !playbackBadge || !modeSelect || !overlay || !data ||
+        !playbackSummary || !playbackBadge ||
         !timeline || !timelineCurrent || !timelineDuration) {
         return;
     }
@@ -129,13 +127,6 @@
             window.localStorage.setItem(key, value);
         } catch {
         }
-    };
-
-    // Earlier player versions stored "device"/"server"; device-only maps onto Direct only.
-    const modePreferences = ["auto", "direct_only", "always_transcode"];
-    const readPreference = () => {
-        const value = readStored(preferenceKey);
-        return value === "device" ? "direct_only" : modePreferences.includes(value) ? value : "auto";
     };
 
     const qualityPresets = ["auto", "original", "20mbps", "12mbps", "8mbps", "4mbps", "2mbps", "1mbps"];
@@ -198,7 +189,6 @@
         return milliseconds / 1000;
     };
 
-    let preference = readPreference();
     const sceneStartSeconds = readSceneStartSeconds();
     let pendingResumeTime = sceneStartSeconds !== null
         ? sceneStartSeconds
@@ -220,7 +210,6 @@
     let storageHealth = root.dataset.storageHealth || "";
     let storageDiagnostic = "";
     let storageWakeRequested = false;
-    modeSelect.value = preference;
 
     const clampToDuration = (seconds) => {
         const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
@@ -1231,7 +1220,7 @@
                 audioTrackId: selectedAudioTrackId,
                 subtitleTrackId: burnInSubtitleTrackId(),
                 quality: qualityPreset,
-                mode: preference,
+                mode: "auto",
                 network: capabilityProbe?.networkReport() || null,
                 failedModes: [...failedModes],
                 replacesSessionId: streamSessionId,
@@ -1326,19 +1315,6 @@
         showPlayerError(null);
         showVideo();
     };
-
-    modeSelect.addEventListener("change", () => {
-        const resumeAt = absoluteCurrentTime();
-        const shouldResume = !video.paused && !video.ended;
-
-        preference = modePreferences.includes(modeSelect.value) ? modeSelect.value : "auto";
-        failedModes.clear();
-        pendingResumeTime = resumeAt;
-        resumeShouldPlay = shouldResume;
-        store(preferenceKey, preference);
-        showPlayerError(null);
-        void applyPlayback();
-    });
 
     let cues = [];
     try {
@@ -1929,21 +1905,6 @@
         postPlayReplay?.focus();
     });
 
-    restartButton?.addEventListener("click", () => {
-        hidePostPlay();
-        pendingResumeTime = null;
-        seekToAbsolute(0, true);
-        if (video.paused) {
-            void video.play().catch(() => {});
-        }
-
-        if (progressUrl) {
-            sendProgress(0, false, false);
-        }
-
-        restartButton.hidden = true;
-    });
-
     autoplayToggle?.addEventListener("change", async () => {
         const requested = autoplayToggle.checked;
         if (!preferencesUrl) {
@@ -2059,9 +2020,6 @@
     video.addEventListener("ended", () => {
         persistProgress(true, true);
         playbackWasRequested = false;
-        if (restartButton) {
-            restartButton.hidden = true;
-        }
         showPostPlay();
     });
 

@@ -919,7 +919,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<WorkVolume>().WithMany().HasForeignKey(x => x.WorkVolumeId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<WorkChapter>().WithMany().HasForeignKey(x => x.WorkChapterId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasIndex(x => new { x.LocalKind, x.LocalId }).IsUnique();
+            // One local unit can cover several canonical ones (a package of chapters 17-24), but covers each only once.
+            entity.HasIndex(x => new { x.LocalKind, x.LocalId, x.WorkChapterId }).IsUnique().HasFilter("\"WorkChapterId\" IS NOT NULL");
+            entity.HasIndex(x => new { x.LocalKind, x.LocalId, x.WorkVolumeId }).IsUnique().HasFilter("\"WorkVolumeId\" IS NOT NULL");
+            entity.HasIndex(x => new { x.LocalKind, x.LocalId });
             entity.HasIndex(x => x.WorkVolumeId);
             entity.HasIndex(x => x.WorkChapterId);
             entity.HasIndex(x => x.WorkId);

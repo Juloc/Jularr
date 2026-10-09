@@ -128,20 +128,20 @@
                     @* Keeps Play/Pause in the middle when only one of the two steps exists. *@
                     <span class="player-round-step" aria-hidden="true"></span>
                 }
-                <button class="player-round-button" type="button" data-player-action="seekBack10"
+                <button class="player-round-button player-round-seek" type="button" data-player-action="seekBack10"
                         aria-label="@ui.Format("library.episode.seekBack", ("seconds", seekBack))">
                     <partial name="_PlayerIcon" model="@("seekBack")" />
-                    <span>@seekBack</span>
+                    <span class="player-seek-count" aria-hidden="true">@seekBack</span>
                 </button>
                 <button class="player-round-button player-round-button-main" type="button" data-chrome-play
                         aria-label="@ui["library.watch.play"]"
                         data-label-play="@ui["library.watch.play"]" data-label-pause="@ui["library.watch.pause"]">
                     <partial name="_PlayerIcon" model="@("play")" />
                 </button>
-                <button class="player-round-button" type="button" data-player-action="seekForward10"
+                <button class="player-round-button player-round-seek" type="button" data-player-action="seekForward10"
                         aria-label="@ui.Format("library.episode.seekForward", ("seconds", seekForward))">
                     <partial name="_PlayerIcon" model="@("seekForward")" />
-                    <span>@seekForward</span>
+                    <span class="player-seek-count" aria-hidden="true">@seekForward</span>
                 </button>
                 @if (Model.NextUrl is { } playerNextUrl)
                 {
@@ -355,14 +355,6 @@
                     <small class="player-setting-hint" data-setting-row="quality" data-quality-hint aria-live="polite"></small>
                 }
 
-                <label class="player-setting" data-setting-row="more">
-                    <span>@ui["library.episode.playbackLabel"]</span>
-                    <select data-playback-mode>
-                        <option value="auto">@ui["playback.preference.auto"]</option>
-                        <option value="direct_only">@ui["playback.preference.direct_only"]</option>
-                        <option value="always_transcode">@ui["playback.preference.always_transcode"]</option>
-                    </select>
-                </label>
                 @* Compact status for everyone ("Direct Play · HEVC · 1080p · AAC"); the reasons only
                    appear when the original is not played untouched. *@
                 <div class="player-setting-status" data-setting-row="more">
@@ -396,10 +388,6 @@
                 </div>
 
                 <div class="player-settings-actions" data-setting-row="more">
-                    <button class="button"
-                            type="button"
-                            data-restart
-                            hidden="@(Model.ResumeSeconds <= 0)">↺ @ui["library.episode.restartFromBeginning"]</button>
                     @if (Model.Controls is not null)
                     {
                         <button class="button"

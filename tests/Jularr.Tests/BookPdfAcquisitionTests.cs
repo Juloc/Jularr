@@ -719,8 +719,9 @@ public sealed class BookPdfAcquisitionTests
         public OperationStore Operations => new(Db);
         public string FilesPath => Books.FilesPath;
 
-        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null, HttpMessageHandler? newznab = null, bool canonicalWorks = false)
+        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null, HttpMessageHandler? newznab = null, bool canonicalWorks = false, HttpMessageHandler? aniList = null)
         {
+            canonicalWorks |= aniList is not null;
             var root = Path.Combine(Path.GetTempPath(), $"jularr-books-{Guid.NewGuid():N}");
             var data = Directory.CreateDirectory(Path.Combine(root, "data"));
             Directory.CreateDirectory(Path.Combine(root, "mnt", "complete", "books"));
@@ -818,6 +819,11 @@ public sealed class BookPdfAcquisitionTests
                 collection.AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(MediaAcquisitionKind.Book, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<QualityProfileStore>(), provider.GetRequiredService<UpgradeScanState>()));
             }
 
+            if (aniList is not null)
+            {
+                AddManga(collection, db, root, aniList);
+            }
+
             collection.AddSingleton<IAcquisitionRequestExecutor, BookAcquisitionExecutor>();
             collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.Audiobooks.AudiobookAcquisitionRequestExecutor>();
             collection.AddSingleton<Jularr.Web.Features.Events.IJularrEventPublisher, RecordingEventPublisher>();
@@ -849,14 +855,60 @@ public sealed class BookPdfAcquisitionTests
                 DownloadClientType.Sabnzbd,
                 Enabled: true,
                 Priority: 1,
-                new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Book] = "books", [MediaAcquisitionKind.Audiobook] = "audiobooks", [MediaAcquisitionKind.Anime] = "anime" }),
+                new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Book] = "books", [MediaAcquisitionKind.Audiobook] = "audiobooks", [MediaAcquisitionKind.Manga] = "manga", [MediaAcquisitionKind.Anime] = "anime" }),
                 "secret-key"));
             await services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(
                 state => state.WithRemotePathMappings(MediaAcquisitionKind.Book, [new RemotePathMapping("/data/downloads/complete", Path.Combine(root, "mnt", "complete"))]),
                 CancellationToken.None);
 
             await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Book, Path.Combine(root, "library-books"), ImportMode.Copy);
+            if (aniList is not null)
+            {
+                Directory.CreateDirectory(Path.Combine(root, "mnt", "complete", "manga"));
+                await services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(
+                    state => state.WithRemotePathMappings(MediaAcquisitionKind.Manga, [new RemotePathMapping("/data/downloads/complete", Path.Combine(root, "mnt", "complete"))]),
+                    CancellationToken.None);
+                await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Manga, Path.Combine(root, "library-manga"), ImportMode.Copy);
+            }
+
             return new BookAcquisitionEnvironment(root, services, db);
+        }
+
+        // The Manga half of the shared Reading pipeline, wired as Program.cs does it.
+        private static void AddManga(ServiceCollection collection, AppDbContext db, string root, HttpMessageHandler aniList)
+        {
+            collection.AddSingleton<IHttpClientFactory>(new FixedHttpClientFactory(aniList));
+            collection.AddSingleton<Jularr.Web.Features.MediaCore.ReadingUnits>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingStructureService>();
+            collection.AddSingleton<IMediaAcquisitionRegistration, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRegistration>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
+            collection.AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
+            collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
+            collection.AddSingleton<IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.MangaWantedRequestHandler>();
+            collection.AddSingleton<IWantedSource>(provider => new WantedRequestSource(
+                MediaAcquisitionKind.Manga,
+                provider.GetRequiredService<WantedReconciler>(),
+                provider.GetRequiredService<AcquisitionAccessStore>(),
+                new IdentityRequestDrafter(MediaAcquisitionKind.Manga, db)));
+            collection.AddSingleton<ICompletedDownloadImportAdapter>(provider => new Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter(
+                db,
+                provider.GetRequiredService<IHttpClientFactory>(),
+                null!,
+                null!,
+                provider.GetRequiredService<AnimeImportSettingsStore>(),
+                provider.GetRequiredService<IHardLinkCreator>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>.Instance,
+                Path.Combine(root, "manga-cache"),
+                routing: provider.GetRequiredService<Jularr.Web.Features.Storage.LibraryRootRoutingService>(),
+                binder: provider.GetRequiredService<RequestWorkBinder>(),
+                wanted: provider.GetRequiredService<WantedReconciler>()));
+        }
+
+        private sealed class FixedHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+        {
+            public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
         }
 
         public IServiceProvider Services => services;
@@ -906,6 +958,9 @@ public sealed class BookPdfAcquisitionTests
         /// <summary>The job folder as Jularr sees it (under the mapped mount).</summary>
         public string CompletedFolder(string job) =>
             Directory.CreateDirectory(Path.Combine(Root, "mnt", "complete", "books", job)).FullName;
+
+        public string MangaFolder(string job) =>
+            Directory.CreateDirectory(Path.Combine(Root, "mnt", "complete", "manga", job)).FullName;
 
         /// <summary>
         /// SABnzbd finishes the request's job at <paramref name="reportedPath"/> (the monitor

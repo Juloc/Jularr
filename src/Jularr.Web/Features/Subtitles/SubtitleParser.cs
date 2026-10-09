@@ -227,7 +227,7 @@ public static partial class SubtitleParser
             }
 
             var presentation = alignment is not null || xPercent is not null || layer is not null ||
-                bold is not null || italic is not null || fontSize is not null || color is not null
+                bold is not null || italic is not null || fontFamily is not null || fontSize is not null || color is not null
                 ? new SubtitleCuePresentation(alignment, xPercent, yPercent, layer,
                     fontFamily, fontSize, bold, italic, color)
                 : null;

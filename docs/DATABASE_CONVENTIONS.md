@@ -2,6 +2,8 @@
 
 Jularr uses the canonical Juloc database and persistence conventions defined in [Juloc/agent-control `docs/DATABASE_CONVENTIONS.md`](https://github.com/Juloc/agent-control/blob/main/docs/DATABASE_CONVENTIONS.md).
 
+**Binding clean-cut target:** [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md) defines the owner-approved target schema and rules for future feature designs. It is a planning contract; the existing database remains authoritative for current runtime code until the coordinated cutover.
+
 These rules are mandatory for all new SQL/persistence code and whenever existing persistence code is intentionally changed. Existing untouched persistence code does not require a bulk rewrite.
 
 Jularr-specific non-negotiable defaults:
@@ -20,6 +22,148 @@ Jularr-specific non-negotiable defaults:
 - Measure important PostgreSQL queries with `EXPLAIN (ANALYZE, BUFFERS)`.
 - Do not introduce a blind SQL Server-style periodic rebuild/reorganize service; use autovacuum/analyze and evidence-driven reindexing.
 
+
+## Mandatory SQL statement style (owner decision)
+
+**This applies to every new or intentionally modified hand-authored SQL statement, including reads and writes, EF Core `SqlQueryRaw`/`FromSqlRaw`, `ExecuteSqlRaw`, ADO.NET/Npgsql and SQL inside feature stores.**
+
+1. **Never interpolate values into SQL.** No C# `$"..."`, `$"""..."""`, `string.Format`, concatenation or computed fragments for SQL text. Do not substitute EF Core interpolated-string query APIs for this rule. Define **static, inspectable SQL text** (`const string` / non-interpolated `"""..."""`) and supply values using **explicit named, typed parameters** (`@AccountId`, `@ProfileId`, etc.).
+2. Format SQL as multiline statements, with uppercase SQL keywords. **One selected column per line**; use clear newlines for `SELECT`, `FROM`, `JOIN`, `WHERE`, `GROUP BY`, `ORDER BY`, `UPDATE`, `SET`, `INSERT INTO`, `VALUES`, etc. Align indentation and keep each predicate/update assignment readable. Avoid `SELECT *`; select only needed columns.
+3. With **more than one table** in the query, **qualify every column** with its real table name (or a clear explicitly declared alias if unavoidable): in `SELECT`, `ON`, `WHERE`, `SET` expressions, `GROUP BY`, `ORDER BY` and `RETURNING`. Prefer the actual table name for unambiguous review; a multi-table query must never have naked `Id`, `Status` or `WorkId` columns.
+4. PostgreSQL owns the dialect: use `"Accounts"`, `"Id"`, not SQL Server three-part names such as `Main.dbo.Accounts`. PascalCase identifiers require PostgreSQL double-quoting. Parameters use `@Name`, **never** quoted SQL literals derived from input.
+5. Static SQL query variants may be separate named constants for genuinely different shapes. Do not build table names, column names, schema names, `ORDER BY` fragments, joins, or `WHERE` clauses by arbitrary string concatenation/interpolation; choose a reviewed static variant instead. Pagination sizes/filters/sort values are bound parameters; choosing from a fixed set of static SQL variants is acceptable.
+6. SQL may live **directly in its owning feature service** when that service owns the data access; do not add a Store/Repository merely to pass calls through. The Razor Page calls the same backend method as HTTP endpoints through DI, without an HTTP round trip. Public user/admin operations own different READ projections and authorizations; shared internal mutation code handles common invariants and SQL UPDATE. A generic unrestricted `UpdateUser(Data)` exposed to API callers is forbidden.
+7. Include focused tests for parameter values containing quotes/metacharacters, SQL correctness, authorization, query cardinality and all affected write invariants. The real database constraint remains the last line of defense against concurrent writes.
+
+**Example: one-table READ** (`UserAccountService.ReadUserV1`):
+
+```csharp
+private const string ReadAccountSql = """
+    SELECT
+        "Id",
+        "Email",
+        "DisplayName",
+        "AccountRoleTypeId",
+        "IsEnabled"
+    FROM
+        "Accounts"
+    WHERE
+        "Id" = @AccountId
+    """;
+
+var account = await db.Database.SqlQueryRaw<UserAccountV1>(
+        ReadAccountSql,
+        new NpgsqlParameter("AccountId", NpgsqlDbType.Bigint)
+        {
+            Value = accountId
+        })
+    .SingleOrDefaultAsync(cancellationToken);
+```
+
+**Example: multi-table READ** (every selected/joined/filtered/sorted column qualified):
+
+```sql
+SELECT
+    "Accounts"."Id" AS "AccountId",
+    "Accounts"."DisplayName" AS "AccountDisplayName",
+    "Profiles"."Id" AS "ProfileId",
+    "Profiles"."DisplayName" AS "ProfileDisplayName"
+FROM
+    "Accounts"
+INNER JOIN
+    "AccountProfiles"
+        ON "AccountProfiles"."AccountId" = "Accounts"."Id"
+INNER JOIN
+    "Profiles"
+        ON "Profiles"."Id" = "AccountProfiles"."ProfileId"
+WHERE
+    "Accounts"."Id" = @AccountId
+ORDER BY
+    "Profiles"."Id"
+```
+
+**Example: shared internal UPDATE** (validated/authorized callers only):
+
+```csharp
+private const string UpdateDisplayNameSql = """
+    UPDATE
+        "Accounts"
+    SET
+        "DisplayName" = @DisplayName,
+        "UpdatedAt" = @UpdatedAt
+    WHERE
+        "Id" = @AccountId
+    """;
+
+await db.Database.ExecuteSqlRawAsync(
+    UpdateDisplayNameSql,
+    [
+        new NpgsqlParameter("DisplayName", NpgsqlDbType.Text)
+        {
+            Value = displayName
+        },
+        new NpgsqlParameter("UpdatedAt", NpgsqlDbType.TimestampTz)
+        {
+            Value = updatedAt
+        },
+        new NpgsqlParameter("AccountId", NpgsqlDbType.Bigint)
+        {
+            Value = accountId
+        }
+    ],
+    cancellationToken);
+```
+
+This example presumes the owner-approved `Accounts` target schema; do not copy it against current `OwnerAccounts` runtime without the separately authorized clean cut. Higher-level services must still enforce effective actor/target permission, DTO field allowlists, domain invariants, and transactional session effects. Static parameterized SQL is a **necessary**, not sufficient, protection.
+
+### Compact SQL parameter builder (implemented)
+
+When hand-authored statements would otherwise repeat parameter boilerplate, use the small shared `SqlParams` helper in `src/Jularr.Web/Data/SqlParams.cs`, covered by `tests/Jularr.Tests/SqlParamsTests.cs`. Prefer Npgsql's built-in inference for ordinary non-null values; the helper adds **declared-type-safe null handling**, stable mappings for persisted `enum : byte` to PostgreSQL `smallint`, and a limited explicit override for database-specific types. This helper does **not** build or execute SQL, update arbitrary properties, determine permission, choose columns, create repositories or replace ordinary Npgsql/EF calls.
+
+Preferred call site:
+
+```csharp
+var parameters = SqlParams.From(data)
+    .Add(nameof(data.AccountId))
+    .Add(nameof(data.DisplayName))
+    .ToArray();
+
+await db.Database.ExecuteSqlRawAsync(
+    UpdateUserSql,
+    parameters,
+    cancellationToken);
+```
+
+For a parameter not originating in a DTO:
+
+```csharp
+var parameters = SqlParams.Create()
+    .Add("AccountId", accountId)
+    .ToArray();
+```
+
+Both yield **named, typed `NpgsqlParameter` objects** matching SQL placeholders `@AccountId` and `@DisplayName`. The original SQL constant remains static and fully formatted. The builder must not inspect SQL text or interpolate SQL syntax. The explicitly named property must exist on the transport DTO; the implementation caches reflected public property metadata per concrete DTO type/property instead of repeatedly discovering the property. Only properties explicitly listed via `.Add(nameof(data.Property))` are bound; **never** mass-bind the complete request object. A missing property, duplicate parameter or unsupported type fails immediately, without guessing.
+
+Minimum default CLR -> PostgreSQL mapping:
+
+| CLR declared property type | PostgreSQL parameter type |
+| --- | --- |
+| `long` / `long?` | `bigint` |
+| `int` / `int?` | `integer` |
+| `short`, `byte`, persisted `enum : byte` and nullable equivalents | `smallint` (convert enum value to numeric `short`) |
+| `string` | `text` by convention |
+| `bool` | `boolean` |
+| `Guid` | `uuid` |
+| `decimal` | `numeric` |
+| `float` / `double` | `real` / `double precision` |
+| UTC `DateTime`, UTC `DateTimeOffset` | `timestamptz` |
+| `DateOnly` / `TimeOnly` | `date` / `time` |
+| `byte[]` | `bytea` |
+
+Use `Nullable.GetUnderlyingType` and the **declared** generic/property type to determine `NpgsqlDbType` even when the value is null; set `DBNull.Value` rather than sending an untyped null. Validate/normalize UTC timestamps and enum storage conversions. Treat `citext`, `jsonb`, PostgreSQL arrays and any other column-specific type as explicit, reviewed overrides (e.g. `.Add(nameof(data.Json), NpgsqlDbType.Jsonb)`), **never** blindly interpret any `string` as JSON. Map only the limited set actually used, extend with tested cases; do not introduce a universal type-conversion framework or source generator prematurely.
+
+The helper only handles **parameters**; it is not a generic UPDATE builder. User and admin inputs continue to use distinct DTO allowlists and authorization, with one internal owner of the mutation rules. For PATCH requests, track **absent versus explicitly null** independently from SQL null mapping. Required tests: non-null + nullable values, every supported type, enum `: byte` coercion, explicit jsonb/citext override, escaped/untrusted content, rejected unknown/duplicate properties, and PostgreSQL execution. Use the single shared helper only where it reduces boilerplate; direct explicit Npgsql parameters remain valid when simpler.
+
 The canonical Agent Control document is the source of truth when this summary and the central rules differ.
 
 Canonical Work identity (owner decision, mandatory):
@@ -27,4 +171,76 @@ Canonical Work identity (owner decision, mandatory):
 - `Works.Id` is `BIGINT GENERATED BY DEFAULT AS IDENTITY`; in code the canonical Work id is `long` everywhere (`Work.Id: long`, `WorkId: long`).
 - Every column that names a canonical Work is `BIGINT` with a foreign key to `Works`. No GUID, text or other representation of a Work id is stored, routed or serialized; request payload JSON carries `workId` as a number.
 - A target that is the Work itself (monitoring, request and wanted targets) has no node id: its `TargetId` is NULL and the row's `WorkId` names it.
-- Per-module legacy records (Anime, Novel, Manga) keep their own identifiers; they reach a Work through `WorkSourceLink`, never by sharing its id.
+- **Target-state clean cut:** Movie/Series/Anime classification, Book/Manga/LightNovel, Music **and Game** use canonical `Works.Id bigint`. The old per-module source identity/`WorkSourceLink` bridge is **not part of the fresh baseline**. Existing legacy records remain in the current runtime only until the coordinated cutover.
+- **Target IDs:** ordinary internal entity IDs default to bigint, including Account, Profile and newly canonical MediaCore nodes. FKs use exact target-specific `...Id` names; persisted fixed enums map from C# `: byte` to PostgreSQL `smallint` with a seeded `...Types` table and real FK.
+- **Target junctions:** use `SingularFirst + PluralSecond` (e.g. `AccountProfiles`, `FranchiseWorks`), except documented semantic entities such as `WorkRelations`.
+- **Target local authentication:** required unique Account email, non-unique display names, Account/Profile split and separate authenticator/session tables. Profile-owned state references `ProfileId`, never Account credentials.
+
+## Mandatory outward-facing pagination and bounded reads (owner decision)
+
+**No unbounded result lists leave the backend.** Every query that returns a collection to an HTTP API, Razor page, PWA, Android/TV client or other interactive external caller **must** use *server-side* pagination. This applies even to admin, search, watchlist, history, metadata, jobs, downloads, library, accounts and episode/chapter lists. A Razor Page calls the same bounded backend service directly; it is not allowed to load all database rows then paginate only in UI. The user approves **no blanket list-endpoint exceptions**. A single-entity read by ID is not a list. A genuinely fixed, explicitly capped nested payload is not a replacement for a potentially unbounded independent list endpoint; split any growing child collection into its own paginated read. Bulk/internal jobs process bounded batches and cannot justify returning an unlimited HTTP response.
+
+### One consistent Page/PageSize contract
+
+- **API inputs:** `Page` (1-based, default **1**) and `PageSize` (default **25**, allowed **1..100**) and explicitly supported optional filters/sorts. HTTP query parameters are `page` and `pageSize`; the client **never** supplies a raw `Offset`. Invalid values (negative/zero/above cap/overflow) return a localized `400` problem response. Omitting either parameter does **not** request every row. Example: `GET /api/v1/admin/accounts?page=3&pageSize=25`.
+- **Service inputs:** use one tiny `PageRequest(Page, PageSize)` with shared validation; one `PageResult<T>` with `Items`, `Page`, `PageSize` and optional `TotalCount` / `HasMore` only when actually computed. Every externally consumed `Read*List*`/`List*` operation receives or internally creates a bounded PageRequest. Query-specific read DTOs and their SQL remain owned by their service. No generic query builder, custom ORM or list-specific paging framework.
+- **Default SQL strategy:** **numbered OFFSET pagination** with `ORDER BY ... LIMIT @PageSize OFFSET @Offset`. Backend calculates `Offset = checked(((long)Page - 1) * PageSize)`, validates any path-specific operational ceiling where needed, and binds `@PageSize` and `@Offset` as **named typed SQL parameters**. `OFFSET @Page` is **wrong** if `Page` is a 1-based page number; for page 3 with size 25, the offset is 50. Never interpolate either value.
+- **ORDER BY is mandatory on every paged SELECT**, including queries with no user-selected sort: use `ORDER BY "Id" ASC` (or a comparably stable unique key). When sorting by potentially non-unique `DisplayName`, `CreatedAt`, rating, title, etc., append a unique key such as `"Id"` as the last tie-breaker and explicitly decide ASC/DESC and NULL behavior. A SQL relation has no implicit row order. Add matching composite indexes when justified by real access paths.
+- **Performance exception:** Where benchmarked depth/concurrent-churn shows OFFSET is unsuitable for a high-volume **sequential** feed, a service may deliberately use **keyset/seek** pagination with `WHERE "Id" > @LastId ORDER BY "Id" ASC LIMIT @PageSize`, or the appropriate composite seek condition for its actual ordering. This is an **explicitly documented exception**, not the default for all services. It is more efficient for deep forward scrolling, but does not provide random numbered page jumps. Do not silently mix incompatible `Page` and cursor semantics on one route.
+- **Read shape:** authorize and filter by Account/Profile **in SQL before paging**; root pagination comes before any collection expansion or artwork/track/language aggregations. Project only necessary data. N+1 reads and fetching everything followed by in-memory `Skip/Take` are forbidden. A stable unique ordering prevents ties from randomly changing the page; it does **not** turn changing multi-request data into a snapshot. Where consistency across all pages matters (e.g. export), use a dedicated snapshot/stream/batch workflow with an appropriate boundary rather than assuming OFFSET stability.
+- **Counts:** `TotalCount` is optional and computed by a separate *filtered* count only if the user interface needs the exact number of pages. No default count on every page. `HasMore` may be returned only when its truth is actually established (e.g. an explicit next-row check or intentional limit+1 variant). Exactly `PageSize` returned items alone **cannot** prove that another page exists.
+- **SQL authoring:** all variants remain static, neatly formatted, with uppercase keywords, explicit `@Named` bound parameters and qualified multi-table columns. For different allowed sorts, use reviewed fixed query variants; never interpolate `ORDER BY` columns/directions.
+- **Client behavior:** always return a bounded, stable shape for empty pages (`Items = []` plus requested `Page`/`PageSize`); next page is requested only when needed, not by automatically fetching every page. Validate page sizes, scopes and authorization in the backend. Single-row `ReadUserV1`/detail reads do not require paging; any potentially unbounded nested collection gets its own paginated operation.
+
+**Example: target-schema admin account list**, for `AdminAccountService.ReadUsersV1`. `@PageSize` is validated; `@Offset` is the internally calculated row offset; both are explicit typed Npgsql parameters (or passed through the approved limited `SqlParams` helper). The SQL statement is **never interpolated**:
+
+```sql
+SELECT
+    "Id",
+    "Email",
+    "DisplayName",
+    "AccountRoleTypeId",
+    "IsEnabled"
+FROM
+    "Accounts"
+ORDER BY
+    "Id" ASC
+LIMIT
+    @PageSize
+OFFSET
+    @Offset
+```
+
+An allowed alternate sort by creation date uses its own static SQL with `ORDER BY "CreatedAt" DESC, "Id" DESC`. Growing chapter, episode, release, history, job and media WorkCard lists receive the same Page/PageSize contract. Search/filter scopes are always applied in PostgreSQL **before** ORDER BY and LIMIT/OFFSET.
+
+### Implemented reusable pagination types
+
+The shared implementation lives in `src/Jularr.Web/Data/Pagination.cs` and is covered by `tests/Jularr.Tests/PaginationTests.cs`. Its `ToSqlParameters()` now reuses `SqlParams.From(this)`; there is no second parameter-creation framework. Use it for new or intentionally updated list operations; older endpoints are **not yet automatically migrated** just because the helper exists.
+
+```csharp
+var paging = new PageRequest(page, pageSize);
+
+var rows = await db.Database
+    .SqlQueryRaw<AdminAccountV1>(
+        ReadUsersSql,
+        paging.ToSqlParameters())
+    .ToListAsync(cancellationToken);
+
+return PageResult<AdminAccountV1>.From(rows, paging);
+```
+
+The `ReadUsersSql` constant is the fixed, formatted `SELECT ... ORDER BY ... LIMIT @PageSize OFFSET @Offset` shown above; no interpolated SQL. `PageRequest` rejects invalid page numbers/sizes, calculates a 64-bit `Offset` and supplies two named typed `NpgsqlParameter` objects. HTTP/Razor callers must translate invalid input into a localized client error instead of letting an argument exception become HTTP 500. `PageResult<T>.From` accepts no more than `PageSize` items and does not guess `HasMore` or run an automatic `COUNT(*)`. When the same query also has filter parameters, add explicitly bound parameters alongside `paging.ToSqlParameters()`; never assemble SQL text or bind unrelated DTO fields by reflection. The helper does not implement DB queries, enforce caller authorization or paginate results after a full-table fetch.
+
+### Other shared API / database correctness practices
+
+1. **Explicit outward DTOs and field allowlists.** Do not expose EF/domain entities, credentials, internal state or secret fields directly. User and Admin `ReadUserV1` may use **different SELECT projections** and access checks. Public `UpdateUserV1` accepts only permitted change fields; shared internal mutation owner performs read-for-update if required, verifies invariants and writes in one transaction.
+2. **HTTP/API and Razor use the same backend operation.** Direct DI call from Razor, HTTP wrapper for remote clients; no internal HTTP loop. Keep `/api/v1/account` for the own-account singleton; list routes (e.g. `/api/v1/admin/accounts`) take paging.
+3. **Validate at the boundary, verify again at the mutation owner and let PostgreSQL enforce structural invariants.** For PATCH, distinguish omitted fields from explicit null; no arbitrary client-selected columns. Use typed operation-specific DTOs; keep AccountId and ProfileId distinct.
+4. **Optimistic concurrency where user edits may race** (version/check in UPDATE and conflict result), or `FOR UPDATE` / appropriate isolation for short transactional state transitions. Never hold transactions over network I/O/filesystem/AI. Idempotency keys protect repeatable external mutations where retries can duplicate effects.
+5. **Use async I/O and propagate `CancellationToken` and real timeouts** to SQL, providers, jobs. Fail/timeout clearly, and keep expensive queries limited and index-supported.
+6. **Uniform HTTP status and `ProblemDetails` errors** with stable error codes and localized client-safe messages; do not return exception messages/stack traces or secrets. Use `400` for invalid paging input, `401` unauthenticated, `403` denied, `404` unknown/hidden resources, `409` for applicable conflicts, `429` for rate limits. Preserve Razor anti-forgery for state-changing forms.
+7. **Rate limiting and resource budgets** by Account/IP/provider and operation cost for externally accessible or costly routes; limits protect availability but do not substitute for permissions.
+8. **Explicit query/transaction tests:** page 1/last/empty, invalid page and page-size/offset overflow, filters/sorts changed mid-pagination, duplicate sort keys, unauthorized scope, new/deleted rows between pages, pagination indexes with representative data, null/enum SQL mapping, read-only projections and concurrent conflicting updates. Review actual PostgreSQL plans for expensive paths.
+
+Microsoft references for these patterns: [Web API design](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design), [EF Core pagination](https://learn.microsoft.com/en-us/ef/core/querying/pagination), [EF Core efficient querying](https://learn.microsoft.com/en-us/ef/core/performance/efficient-querying), [ASP.NET Core Problem Details](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/error-handling-api?view=aspnetcore-10.0), [Rate limiting](https://learn.microsoft.com/en-us/aspnet/core/performance/rate-limit?view=aspnetcore-10.0). These are general recommendations; Jularr's mandatory numbered OFFSET paging, 25/100 caps, ORDER BY and service naming are owner product rules. Microsoft also documents the trade-offs of deep OFFSET scans and recommends keyset paging for sequential feeds; Jularr uses that only as a reviewed exception.
+

@@ -87,6 +87,17 @@ public sealed class HomePageContinueReadingTests
     }
 
     [TestMethod]
+    public void ContinueTileWithoutCoverHasNoPlaceholderElement()
+    {
+        var view = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "Jularr.Web", "Pages", "Shared", "_HomeContinueTile.cshtml"));
+
+        StringAssert.Contains(view, "@if (hasImage)");
+        StringAssert.Contains(view, "<img class=\"home-continue-cover\"");
+        Assert.IsFalse(view.Contains("home-continue-initial", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public void ContinueReadingKeysAreInTheTranslationCatalog()
     {
         string[] keys =

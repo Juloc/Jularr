@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Manga;
@@ -33,7 +34,8 @@ public sealed class MangaCompletedDownloadImportAdapter(
     ReadingNamingProfileStore? namingStore = null,
     ReadingCoverArtwork? coverArtwork = null,
     LibraryRootRoutingService? routing = null,
-    RequestWorkBinder? binder = null)
+    RequestWorkBinder? binder = null,
+    WantedReconciler? wanted = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     public MediaAcquisitionKind Kind =>
@@ -191,6 +193,16 @@ public sealed class MangaCompletedDownloadImportAdapter(
                 && await binder.BindImportedAsync(acquisition, WorkSourceKind.MangaSeries, imported.SeriesId, cancellationToken) is { } conflict)
             {
                 return CompletedDownloadImportResult.NeedsReview(conflict, placement);
+            }
+
+            // What the release brought is tied to the volumes and chapters it holds, and Wanted drops what is now in the library.
+            if (acquisition?.WorkId is { } workId)
+            {
+                await new ReadingImportTies(db, new ReadingUnits(db)).TieAsync(workId, imported.SeriesId, releaseTarget, cancellationToken);
+                if (wanted is not null)
+                {
+                    await wanted.ReconcileAsync(workId, cancellationToken);
+                }
             }
 
             return CompletedDownloadImportResult.Completed(

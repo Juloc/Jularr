@@ -376,23 +376,21 @@ namespace Jularr.Web.Data.Migrations
 
             modelBuilder.Entity("Jularr.Web.Features.Auth.AccountLoginIdentity", b =>
                 {
+                    b.Property<string>("Provider")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("ExternalAccountId")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
                     b.Property<string>("AccountId")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
-                    b.Property<string>("ExternalAccountId")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
                     b.Property<DateTime>("LinkedAtUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
 
                     b.HasKey("Provider", "ExternalAccountId");
 
@@ -3020,8 +3018,15 @@ namespace Jularr.Web.Data.Migrations
 
                     b.HasIndex("WorkVolumeId");
 
-                    b.HasIndex("LocalKind", "LocalId")
-                        .IsUnique();
+                    b.HasIndex("LocalKind", "LocalId");
+
+                    b.HasIndex("LocalKind", "LocalId", "WorkChapterId")
+                        .IsUnique()
+                        .HasFilter("\"WorkChapterId\" IS NOT NULL");
+
+                    b.HasIndex("LocalKind", "LocalId", "WorkVolumeId")
+                        .IsUnique()
+                        .HasFilter("\"WorkVolumeId\" IS NOT NULL");
 
                     b.ToTable("WorkUnitBindings", null, t =>
                         {
@@ -4021,33 +4026,34 @@ namespace Jularr.Web.Data.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
-                    b.Property<string>("PreferredSubtitleLanguage")
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
                     b.Property<string>("PreferredSecondarySubtitleLanguage")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
-                    b.Property<int>("SubtitleSizePercent")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(100);
+                    b.Property<string>("PreferredSubtitleLanguage")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
 
                     b.Property<int>("SubtitleOffsetMs")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
+                    b.Property<int>("SubtitleSizePercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(100);
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("ProfileId");
 
-                    b.ToTable("ProfilePlaybackPreferences", t =>
+                    b.ToTable("ProfilePlaybackPreferences", null, t =>
                         {
-                            t.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleSizePercent", "\"SubtitleSizePercent\" BETWEEN 75 AND 200");
                             t.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleOffsetMs", "\"SubtitleOffsetMs\" BETWEEN -10000 AND 10000");
+
+                            t.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleSizePercent", "\"SubtitleSizePercent\" BETWEEN 75 AND 200");
                         });
                 });
 
@@ -4787,23 +4793,6 @@ namespace Jularr.Web.Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Jularr.Web.Features.Auth.PlexLoginAttempt", b =>
-                {
-                    b.HasOne("Jularr.Web.Features.Auth.OwnerAccount", null)
-                        .WithMany()
-                        .HasForeignKey("StartedAccountId")
-                        .OnDelete(DeleteBehavior.Cascade);
-                });
-
-            modelBuilder.Entity("Jularr.Web.Features.Auth.AccountLoginIdentity", b =>
-                {
-                    b.HasOne("Jularr.Web.Features.Auth.OwnerAccount", null)
-                        .WithMany()
-                        .HasForeignKey("AccountId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Jularr.Web.Features.Acquisition.Wanted.WantedItem", b =>
                 {
                     b.HasOne("Jularr.Web.Features.MediaCore.Work", null)
@@ -4838,6 +4827,23 @@ namespace Jularr.Web.Data.Migrations
                         .HasForeignKey("AudiobookId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.Auth.AccountLoginIdentity", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.Auth.OwnerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.Auth.PlexLoginAttempt", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.Auth.OwnerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("StartedAccountId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Jularr.Web.Features.Books.BookEdition", b =>

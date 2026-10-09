@@ -84,6 +84,11 @@
                 @ui["manga.series.languageToolsLink"]
             </a>
 
+            @if (Model.ManageWorkId is { } manageWorkId)
+            {
+                <a class="button" href="/Admin/Manga/Work/@manageWorkId">@ui["admin.manga.manage"]</a>
+            }
+
             @if (Model.IsOwner)
             {
                 Func<dynamic?, IHtmlContent> metadataGroup = @<div>

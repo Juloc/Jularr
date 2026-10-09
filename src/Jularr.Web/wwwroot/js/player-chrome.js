@@ -408,16 +408,26 @@
             : settingsTitle?.dataset.titleAll || "";
         settings.dataset.settingsMode = mode;
         if (settingsTitle) settingsTitle.textContent = title;
-        // In the single-choice view the select row is replaced by the option list; its hint (burn-in, quality limit) stays.
+        const directSettings = new Set([...stage.querySelectorAll("[data-chrome-open-setting]")]
+            .filter(control => !control.hidden && control.getClientRects().length > 0)
+            .map(control => control.dataset.chromeOpenSetting));
+        const parentSetting = name => name === "secondarySubtitles" || name === "subtitleAppearance"
+            ? "subtitles" : name;
         for (const row of settingRows) {
-            row.toggleAttribute("data-filtered", single && (row.dataset.settingRow !== mode || row.classList.contains("player-setting")));
+            const parent = parentSetting(row.dataset.settingRow);
+            const appearance = mode === "subtitles" && row.dataset.settingRow === "subtitleAppearance";
+            const filtered = single
+                ? (parent !== mode || (row.classList.contains("player-setting") && !appearance))
+                : directSettings.has(parent);
+            row.toggleAttribute("data-filtered", filtered);
         }
         renderOptions(single ? mode : "", title);
         stage.dataset.chromeState = "visible";
         window.clearTimeout(hideTimer);
         const first = optionList
             ? optionList.querySelector('[aria-checked="true"]') || optionList.querySelector(".player-option")
-            : settings.querySelector("select, input, button:not([data-chrome-settings-close])");
+            : [...settings.querySelectorAll("select, input, button:not([data-chrome-settings-close])")]
+                .find(control => control.getClientRects().length > 0);
         first?.focus({ preventScroll: true });
     };
 

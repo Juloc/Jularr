@@ -1,6 +1,6 @@
 # Jularr target architecture
 
-Status: planning baseline. This document defines architecture boundaries before major feature implementation resumes. `DOMAIN.md` is authoritative for domain meaning; `DOMAIN-AUDIT.md` defines the transition from current models.
+Status: architecture context. **Owner-approved clean-cut database target and new-feature data rules: [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md).** That target contract overrides contradictory older domain assumptions below (especially Games, progress, Account/Profile and old backfills), but does not change the running schema yet.
 
 ## 1. Goals
 
@@ -42,7 +42,7 @@ Owns canonical shared media identity:
 - metadata provenance
 - artwork identity
 
-No feature may create a second canonical Anime/Movie/Book/etc. identity model.
+No feature may create a second canonical Anime/Movie/Book/**Game** identity model. Games shares `Works.Id`; only genuinely game-specific platform/release behavior is specialized.
 
 ### Library
 Owns locally available content:
@@ -188,7 +188,7 @@ Owns cross-provider discovery/recommendation presentation data:
 
 For watch/read/listen media, that target is canonical `Work` plus optional presentation/structure context.
 
-Games remains deliberately outside MediaCore. Games discovery resolves through an explicit Games application port to canonical `Game` identity; Discovery must not force Game/GameRelease into Work/Edition merely to share Search UI.
+In the clean-cut target, Games discovery resolves to canonical `Works.Id` with media type Game. A Games application port still owns game-specific platform/release behavior and adapters, not a separate Game identity.
 
 A discovery result is not automatically a library item.
 
@@ -210,7 +210,7 @@ Boundary rules:
 - cross-media is normal Collection behavior, not a separate Collection type;
 - franchise/adaptation grouping uses canonical Work relations through Smart/derived views;
 - CollectionEntry stores WorkId, never provider identity as canonical membership;
-- Games is outside the V1 Work-based Collection boundary; adding it later requires an explicit typed cross-domain collection contract;
+- Games is a Work media type in the clean-cut target and may use normal Work-based Collection membership;
 - Smart render/preview performs no provider network calls;
 - Linked render performs no provider network calls;
 - Linked sync persists provider list/item evidence first, resolves to canonical Work IDs, then updates local membership;
@@ -222,7 +222,7 @@ Owns authentication, Accounts, Profiles, linked login identities, profile select
 
 Boundary rules:
 - Jularr Account ID is always internal/provider-independent.
-- External login adapters authenticate/link `AccountLoginIdentity`; they do not become Account IDs.
+- External login adapters authenticate/link `AccountExternalLogins` in the clean-cut target; they do not become Account IDs or implicitly enable profile provider sync.
 - Login establishes an Account session; the selected Profile is a separate server-authoritative context.
 - Profile-scoped progress/history/ratings/preferences/connections resolve through the active Profile.
 - Account roles/capabilities and security remain Account-level unless a policy explicitly restricts a Profile.
