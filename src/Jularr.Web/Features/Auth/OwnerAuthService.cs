@@ -105,6 +105,181 @@ public sealed class OwnerAuthService(
         return account;
     }
 
+    public async Task<OwnerAccount?> GetByExternalIdentityAsync(
+        string provider,
+        string externalAccountId,
+        CancellationToken cancellationToken = default)
+    {
+        var (normalizedProvider, normalizedExternalId) = ValidateExternalIdentity(
+            provider,
+            externalAccountId);
+
+        var account = await db.AccountLoginIdentities
+            .AsNoTracking()
+            .Where(x => x.Provider == normalizedProvider
+                && x.ExternalAccountId == normalizedExternalId)
+            .Join(
+                db.OwnerAccounts.AsNoTracking(),
+                identity => identity.AccountId,
+                account => account.Id,
+                (_, account) => account)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (account is null || !account.IsEnabled)
+        {
+            return null;
+        }
+
+        account.SessionVersion = await GetSessionVersionAsync(
+            account.Id,
+            cancellationToken);
+        return account;
+    }
+
+    public async Task LinkExternalIdentityAsync(
+        string accountId,
+        string provider,
+        string externalAccountId,
+        CancellationToken cancellationToken = default)
+    {
+        var (normalizedProvider, normalizedExternalId) = ValidateExternalIdentity(
+            provider,
+            externalAccountId);
+
+        var account = await db.OwnerAccounts
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.Id == accountId && x.IsEnabled,
+                cancellationToken);
+        if (account is null)
+        {
+            throw new InvalidOperationException("The account is not available.");
+        }
+
+        var existing = await db.AccountLoginIdentities
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.Provider == normalizedProvider
+                    && x.ExternalAccountId == normalizedExternalId,
+                cancellationToken);
+
+        if (existing is not null)
+        {
+            if (existing.AccountId == accountId)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                "This external identity is linked to a different account.");
+        }
+
+        if (await db.AccountLoginIdentities.AnyAsync(
+            x => x.Provider == normalizedProvider && x.AccountId == accountId,
+            cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "This account already has a linked identity for this provider.");
+        }
+
+        db.AccountLoginIdentities.Add(new AccountLoginIdentity
+        {
+            AccountId = accountId,
+            Provider = normalizedProvider,
+            ExternalAccountId = normalizedExternalId
+        });
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<OwnerAccount> CreateExternalAccountAsync(
+        string provider,
+        string externalAccountId,
+        string userName,
+        bool isEnabled,
+        CancellationToken cancellationToken = default)
+    {
+        var (normalizedProvider, normalizedExternalId) = ValidateExternalIdentity(
+            provider,
+            externalAccountId);
+        var cleanedUserName = CleanUserName(userName);
+        var normalizedUserName = NormalizeUserName(cleanedUserName);
+
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            cancellationToken);
+
+        if (await db.AccountLoginIdentities.AnyAsync(
+            x => x.Provider == normalizedProvider
+                && x.ExternalAccountId == normalizedExternalId,
+            cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "This external identity already has a Jularr account.");
+        }
+
+        if (await db.OwnerAccounts.AnyAsync(
+            x => x.NormalizedUserName == normalizedUserName,
+            cancellationToken))
+        {
+            throw new InvalidOperationException("This user name already exists.");
+        }
+
+        var account = new OwnerAccount
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            UserName = cleanedUserName,
+            NormalizedUserName = normalizedUserName,
+            PasswordHash = string.Empty,
+            Role = AccountRole.User,
+            IsEnabled = isEnabled,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        db.OwnerAccounts.Add(account);
+        db.AccountLoginIdentities.Add(new AccountLoginIdentity
+        {
+            AccountId = account.Id,
+            Provider = normalizedProvider,
+            ExternalAccountId = normalizedExternalId
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+        account.SessionVersion = await GetSessionVersionAsync(
+            account.Id,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return account;
+    }
+
+    private static (string Provider, string ExternalId) ValidateExternalIdentity(
+        string provider,
+        string externalAccountId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        ArgumentException.ThrowIfNullOrWhiteSpace(externalAccountId);
+
+        var normalizedProvider = provider.Trim().ToLowerInvariant();
+        var normalizedExternalId = externalAccountId.Trim();
+
+        if (normalizedProvider.Length > 40 ||
+            normalizedProvider.Any(c => c is not (>= 'a' and <= 'z')
+                && c is not (>= '0' and <= '9')
+                && c != '-'))
+        {
+            throw new ArgumentException(
+                "The identity provider is invalid.",
+                nameof(provider));
+        }
+
+        if (normalizedExternalId.Length > 160)
+        {
+            throw new ArgumentException(
+                "The external account identifier is too long.",
+                nameof(externalAccountId));
+        }
+
+        return (normalizedProvider, normalizedExternalId);
+    }
+
     public async Task<IReadOnlyList<LocalAccountSummary>> ListAsync(
         CancellationToken cancellationToken = default) =>
         await db.OwnerAccounts
@@ -278,6 +453,11 @@ public sealed class OwnerAuthService(
                 cancellationToken);
 
         if (account is null || !account.IsEnabled)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(account.PasswordHash))
         {
             return null;
         }
