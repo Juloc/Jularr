@@ -125,6 +125,7 @@ builder.Services.AddSingleton(services =>
         services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
         services.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerSelectionService>();
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerCatalogScanService>();
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexWorkMatcher>();
 
 // Per-media-type capability policy (#436): canonical JSON settings store under /data plus the
