@@ -50,9 +50,9 @@ public sealed class WatchModel(
     public async Task<IActionResult> OnGetAsync(Guid workId, Guid? episodeId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        var work = await db.Works.AsNoTracking().Where(x => x.Id == workId).Select(x => new { x.MediaType, x.CanonicalTitle }).SingleOrDefaultAsync(cancellationToken);
+        var work = await db.Works.AsNoTracking().Where(x => x.Id == workId).Select(x => new { x.MediaType, x.IsAnime, x.CanonicalTitle }).SingleOrDefaultAsync(cancellationToken);
         var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
-        if (work is null || work.MediaType is not (WorkMediaType.Movie or WorkMediaType.Series) || !access.IsVisible(work.MediaType))
+        if (work is null || work.MediaType is not (WorkMediaType.Movie or WorkMediaType.Series) || !access.IsWorkVisible(work.MediaType, work.IsAnime))
         {
             return NotFound();
         }

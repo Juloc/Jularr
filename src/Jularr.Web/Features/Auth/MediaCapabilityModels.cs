@@ -196,6 +196,13 @@ public sealed record MediaCapabilityView(
 
     public bool CanBrowse(WorkMediaType mediaType) => Allows(mediaType, MediaCapability.Browse);
 
+    /// <summary>Whether the Anime module runs; while it is off a title classified as Anime is just the Movie or Series it is.</summary>
+    public bool AnimeModuleEnabled { get; init; } = true;
+
+    /// <summary>Whether a Work may be browsed: a Movie or Series classified as Anime follows the Anime capability while the Anime module runs, and its own type otherwise.</summary>
+    public bool CanBrowseWork(WorkMediaType technical, bool isAnime) =>
+        isAnime && AnimeModuleEnabled && technical is WorkMediaType.Movie or WorkMediaType.Series ? CanBrowse(WorkMediaType.Anime) : CanBrowse(technical);
+
     public bool CanRequest(WorkMediaType mediaType) => Allows(mediaType, MediaCapability.Request);
 
     public bool CanUseInstantly(WorkMediaType mediaType) => Allows(mediaType, MediaCapability.Instant);

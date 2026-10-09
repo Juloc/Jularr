@@ -11,6 +11,8 @@ Canonical owners
 - Migration `RequestTargetsRepair` keeps only provable intent for existing requests (a Movie or TV request that still carries its choice or has no payload); a choice applied earlier is not recoverable and stays Monitoring-driven.
 - `WantedRequestSource` + `IWantedRequestDrafter`: opens the request that carries each wanted Work (`VideoWantedSource` does it for Movie and Tv through `VideoMonitoringService`).
 
+Anime is a classification (`Work.IsAnime`, evidence in the field provenance `classification.anime`), not a Work type: a video Work is a Movie or a Series. A Series that is classified and has a legacy Anime record is carried by the Anime kind while the Anime module runs and by the Series kind otherwise (`WantedReconciler.ClassificationOfAsync`, SQL `AnimeOwned`); the Series and Anime kinds count each other's open request (`RequestIntent.FindOpenSiblingAsync`), so one Work has one request owner.
+
 Intent sources (read, never copied)
 - Monitoring: effective state from `Features/Monitoring` (see its CODEMAP).
 - Requests: open approved requests (`RequestTargets`) want their target even when Monitoring is off or switched off later; a pending request wants nothing.

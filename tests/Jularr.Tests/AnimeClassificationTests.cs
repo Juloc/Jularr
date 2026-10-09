@@ -5,6 +5,7 @@ using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Monitoring;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Jularr.Tests;
 
@@ -73,6 +74,47 @@ public sealed class AnimeClassificationTests
 
         var off = new WantedReconciler(db, TimeProvider.System, modules: await ModulesAsync(false));
         CollectionAssert.AreEqual(new[] { series.Id }, (await off.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Tv, Guid.Empty, 10, CancellationToken.None)).ToArray(), "With Anime off the same Work is carried as a Series; its wanted episodes were kept.");
+    }
+
+    [TestMethod]
+    public async Task RequestingAClassifiedSeriesThroughTheSeriesEntryReturnsTheOpenAnimeRequest()
+    {
+        await using var fixture = await AcquisitionAccessFixture.CreateAsync();
+        var db = fixture.Db;
+        var works = new WorkService(db);
+        var series = await works.CreateWorkAsync(WorkMediaType.Series, "Frieren", 2023, CancellationToken.None);
+        await works.LinkExternalIdentityAsync(series.Id, WorkMediaType.Series, "tmdb", "209867", 1.0, "test", true, false, MappingReviewState.Confirmed, CancellationToken.None);
+        var anime = new Jularr.Web.Features.Library.Anime { Key = "frieren", Title = "Frieren" };
+        db.Anime.Add(anime);
+        db.AnimeMetadata.Add(new Jularr.Web.Features.Metadata.AnimeMetadata { AnimeId = anime.Id, Provider = "anilist", ExternalId = "154587", PreferredTitle = "Frieren" });
+        db.WorkSourceLinks.Add(new WorkSourceLink { WorkId = series.Id, SourceKind = WorkSourceKind.Anime, SourceId = anime.Id });
+        await db.SaveChangesAsync();
+        var open = await fixture.Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Anime, "anilist", "154587", "Frieren", null, null) { WorkId = series.Id }, "owner", AcquisitionRequestStatus.Approved, "owner", CancellationToken.None);
+        var service = new AcquisitionRequestService(
+            fixture.Store, [], AcquisitionAccessFixture.Account("owner", Jularr.Web.Features.Auth.AccountRole.Owner), new Jularr.Web.Features.Auth.MediaCapabilityService(fixture.Capabilities), fixture.Settings, fixture.Events,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AcquisitionRequestService>.Instance, null, null, new RequestIntent(db, TimeProvider.System));
+
+        var submission = await service.SubmitWithOutcomeAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Tv, "tmdb", "209867", "Frieren", null, null), CancellationToken.None);
+
+        Assert.IsTrue(submission.AlreadyRequested);
+        Assert.AreEqual(open.Id, submission.Request.Id, "One Work, one open request, whichever entry point asked.");
+    }
+
+    [TestMethod]
+    public async Task AnAniListEntryIsTheWorksIdentityOnlyWhileItCoversTheWholeTitle()
+    {
+        await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
+        await environment.SeedFrierenAsync();
+        async Task SyncAsync() => await environment.WithScopeAsync<int>(async services => { await services.GetRequiredService<Jularr.Web.Features.Metadata.AnimeMetadataService>().SyncWorkIdentityAsync(environment.AnimeId, CancellationToken.None); return 0; });
+        async Task<int> IdentitiesAsync() => await environment.Db.WorkExternalIdentities.CountAsync(identity => identity.Provider == "anilist" && identity.MediaType == WorkMediaType.Anime);
+
+        await SyncAsync();
+        Assert.AreEqual(1, await IdentitiesAsync(), "A match without ranges identifies the whole title.");
+        Assert.IsTrue(await environment.Db.Works.AnyAsync(work => work.IsAnime && work.MediaType == WorkMediaType.Series));
+
+        await environment.AniListAccounts.TryAddEpisodeMappingAsync(new Jularr.Web.Features.Metadata.AnimeEpisodeMetadataMapping(Guid.NewGuid(), environment.AnimeId, 2, 1, 12, 13, "anilist", "154587", "Frieren", 12, DateTimeOffset.UtcNow), CancellationToken.None);
+        await SyncAsync();
+        Assert.AreEqual(0, await IdentitiesAsync(), "Once ranges map the entry to part of the Work, the ranges carry it and it no longer stands for the Work.");
     }
 
     [TestMethod]

@@ -126,7 +126,8 @@ public abstract class VideoDetailPageModel(
         // The same guard as the read: the Work must be of this page's media type and the type visible to the profile, so a page of a
         // visible type cannot be used to start the acquisition of a Work of a hidden one.
         var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
-        if (!access.IsVisible(MediaType) || !await db.Works.AsNoTracking().AnyAsync(x => x.Id == workId && x.MediaType == MediaType, cancellationToken))
+        var isAnime = await db.Works.AsNoTracking().Where(x => x.Id == workId && x.MediaType == MediaType).Select(x => (bool?)x.IsAnime).SingleOrDefaultAsync(cancellationToken);
+        if (isAnime is null || !access.IsWorkVisible(MediaType, isAnime.Value))
         {
             return NotFound();
         }

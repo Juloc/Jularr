@@ -184,9 +184,10 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             join other in db.Works.AsNoTracking() on (relation.FromWorkId == workId ? relation.ToWorkId : relation.FromWorkId) equals other.Id
             join link in db.WorkSourceLinks.AsNoTracking().Where(x => x.SourceKind == WorkSourceKind.Anime) on other.Id equals link.WorkId into animeLinks
             from animeLink in animeLinks.DefaultIfEmpty()
-            select new RelatedRow(other.Id, other.MediaType, other.CanonicalTitle, other.Year, relation.RelationType, relation.FromWorkId == workId, (Guid?)animeLink.SourceId))
+            select new RelatedRow(other.Id, other.IsAnime && other.MediaType == WorkMediaType.Series && animeLink != null ? WorkMediaType.Anime : other.MediaType, other.CanonicalTitle, other.Year, relation.RelationType, relation.FromWorkId == workId, (Guid?)animeLink.SourceId))
             .ToListAsync(cancellationToken);
 
+        // A classified title with a legacy Anime record is an Anime here (its page is keyed by that record) and follows the Anime visibility; any other is an ordinary Movie or Series.
         // Both directions of an edge are stored; an incoming edge reads from this Work's side through the inverse relation, and when
         // a Work is related twice the edge this Work declared wins, so the group never depends on row order.
         return

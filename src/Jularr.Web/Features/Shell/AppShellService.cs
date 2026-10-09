@@ -24,6 +24,9 @@ public sealed record ShellMediaAccess(MediaCapabilityView Capabilities)
 
     public bool IsVisible(WorkMediaType mediaType) => Capabilities.CanBrowse(mediaType);
 
+    /// <summary>Whether the profile may open a Work: a title classified as Anime is gated as Anime while the Anime module runs.</summary>
+    public bool IsWorkVisible(WorkMediaType technical, bool isAnime) => Capabilities.CanBrowseWork(technical, isAnime);
+
     /// <summary>True when at least one of <paramref name="mediaTypes"/> is visible (a hub serving several types).</summary>
     public bool IsAnyVisible(IEnumerable<WorkMediaType> mediaTypes) => mediaTypes.Any(IsVisible);
 

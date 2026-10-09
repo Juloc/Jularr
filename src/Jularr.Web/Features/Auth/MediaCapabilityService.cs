@@ -32,9 +32,11 @@ public sealed class MediaCapabilityService(
             type => type,
             type => policy.Resolve(role, profileId, type));
 
+        var animeModuleEnabled = true;
         if (instanceModules is not null)
         {
             var instance = await instanceModules.GetAsync(cancellationToken);
+            animeModuleEnabled = InstanceModuleMedia.IsCapabilityFamilyEnabled(instance, WorkMediaType.Anime);
             foreach (var mediaType in WorkMediaTypes.All)
             {
                 if (!InstanceModuleMedia.IsCapabilityFamilyEnabled(instance, mediaType))
@@ -44,7 +46,7 @@ public sealed class MediaCapabilityService(
             }
         }
 
-        return new MediaCapabilityView(role == AccountRole.Owner, capabilities);
+        return new MediaCapabilityView(role == AccountRole.Owner, capabilities) { AnimeModuleEnabled = animeModuleEnabled };
     }
 
     public async Task<MediaCapability> GetEffectiveCapabilityAsync(

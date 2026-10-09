@@ -32,7 +32,7 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
 
     public async Task RecordAsync(AcquisitionRequest request, CancellationToken cancellationToken)
     {
-        if (request.Status == AcquisitionRequestStatus.Pending || await WorkOfAsync(request, cancellationToken) is not { } workId)
+        if (request.Status == AcquisitionRequestStatus.Pending || await WorkOfAsync(request.WorkId, request.PayloadJson, request.Kind, request.Provider, request.ExternalId, cancellationToken) is not { } workId)
         {
             return;
         }
@@ -98,18 +98,18 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
 
     // The canonical Work a request is about: the bound Work, else the one its payload names (video and music payloads carry it), else the one its
     // provider identity points to (a video request made without a payload).
-    private async Task<Guid?> WorkOfAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    private async Task<Guid?> WorkOfAsync(Guid? boundWorkId, string? payloadJson, MediaAcquisitionKind kind, string provider, string externalId, CancellationToken cancellationToken)
     {
-        if (request.WorkId is { } bound)
+        if (boundWorkId is { } bound)
         {
             return bound;
         }
 
-        if (!string.IsNullOrWhiteSpace(request.PayloadJson))
+        if (!string.IsNullOrWhiteSpace(payloadJson))
         {
             try
             {
-                using var document = JsonDocument.Parse(request.PayloadJson);
+                using var document = JsonDocument.Parse(payloadJson);
                 if (document.RootElement.TryGetProperty("workId", out var value) && value.TryGetGuid(out var id) && id != Guid.Empty)
                 {
                     return id;
@@ -120,15 +120,43 @@ public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
             }
         }
 
-        if (request.Kind is not (MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv))
+        if (kind == MediaAcquisitionKind.Anime)
+        {
+            // An anime request names its entry at the provider: the Work of the library anime that entry is matched to.
+            return await (from match in db.AnimeMetadata.AsNoTracking()
+                          join link in db.WorkSourceLinks.AsNoTracking() on match.AnimeId equals link.SourceId
+                          where match.Provider == provider && match.ExternalId == externalId && link.SourceKind == WorkSourceKind.Anime
+                          select (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
+        }
+
+        if (kind is not (MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv))
         {
             return null;
         }
 
-        var type = VideoWorkLinks.WorkType(request.Kind);
+        var type = VideoWorkLinks.WorkType(kind);
         return await db.WorkExternalIdentities.AsNoTracking()
-            .Where(identity => identity.Provider == request.Provider && identity.ExternalId == request.ExternalId && identity.MediaType == type)
+            .Where(identity => identity.Provider == provider && identity.ExternalId == externalId && identity.MediaType == type)
             .Select(identity => (Guid?)identity.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    // The open request another entry point already made for the Work a Series or Anime draft is about (the two kinds carry the same Work), or null.
+    public async Task<Guid?> FindOpenSiblingAsync(AcquisitionRequestDraft draft, CancellationToken cancellationToken)
+    {
+        if (draft.Kind is not (MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime)
+            || await WorkOfAsync(draft.WorkId, draft.PayloadJson, draft.Kind, draft.Provider, draft.ExternalId, cancellationToken) is not { } workId)
+        {
+            return null;
+        }
+
+        var found = await db.Database
+            .SqlQueryRaw<string>(
+                WantedSql.OpenRequestOfWork,
+                new NpgsqlParameter("workId", workId),
+                new NpgsqlParameter("kinds", new[] { AcquisitionAccessNames.Kind(MediaAcquisitionKind.Tv), AcquisitionAccessNames.Kind(MediaAcquisitionKind.Anime) }),
+                new NpgsqlParameter("musicBrainz", Jularr.Web.Features.Providers.ProviderKeys.MusicBrainz))
+            .ToListAsync(cancellationToken);
+        return found.Count == 0 ? null : Guid.Parse(found[0]);
     }
 }

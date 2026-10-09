@@ -76,6 +76,12 @@ public sealed class AcquisitionRequestService(
             return new AcquisitionSubmission(open, AlreadyRequested: true);
         }
 
+        // A Series and an Anime request carry the same Work: asking for it again through the other entry point returns the request that is already open.
+        if (intent is not null && await intent.FindOpenSiblingAsync(draft, cancellationToken) is { } siblingId && await store.GetAsync(siblingId, cancellationToken) is { } sibling)
+        {
+            return new AcquisitionSubmission(sibling, AlreadyRequested: true);
+        }
+
         // A new request is the durable decision at which a Book, Light Novel or Manga gets its canonical Work; an unresolvable identity stays unbound.
         if (workBinder is not null && draft.WorkId is null && RequestWorkBinder.Applies(draft.Kind))
         {

@@ -5,6 +5,7 @@ using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Library;
+using Jularr.Web.Features.Metadata;
 using Jularr.Web.Features.MediaCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +30,7 @@ public sealed class AnimeCanonicalEpisodesState
 /// stay in the mapping evidence (a Jularr season is never an AniList entry), and an anime whose slots are unknown (no match, several local seasons without
 /// mappings) gets nothing until the owner maps it.
 /// </summary>
-public sealed class AnimeCanonicalEpisodes(AppDbContext db, AnimeAcquisitionInventory inventory, AnimeMonitoring monitoring, LegacyWorkBridge bridge)
+public sealed class AnimeCanonicalEpisodes(AppDbContext db, AnimeAcquisitionInventory inventory, AnimeMonitoring monitoring, LegacyWorkBridge bridge, AnimeMetadataService metadata)
 {
     public async Task<int> EnsureAsync(string animeKey, CancellationToken cancellationToken)
     {
@@ -43,6 +44,8 @@ public sealed class AnimeCanonicalEpisodes(AppDbContext db, AnimeAcquisitionInve
             .Select(link => (Guid?)link.WorkId)
             .FirstOrDefaultAsync(cancellationToken)
             ?? await bridge.EnsureWorkForAnimeAsync(new Anime { Id = slots.Anime.Id, Key = slots.Anime.Key, Title = slots.Anime.Title }, cancellationToken);
+        // Identity and classification of the Work follow the match here too, so a library that was matched before they were mirrored catches up.
+        await metadata.SyncWorkIdentityAsync(slots.Anime.Id, cancellationToken);
         var existing = await db.WorkEpisodes.Where(episode => episode.WorkId == workId).ToListAsync(cancellationToken);
         var known = existing.ToDictionary(episode => (episode.SeasonNumber, episode.EpisodeNumber));
 

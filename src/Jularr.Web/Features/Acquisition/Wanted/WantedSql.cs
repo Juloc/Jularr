@@ -230,18 +230,28 @@ internal static class WantedSql
     // @editions: whether the audio editions (an Audiobook request) or the other targets are listed.
     // Works with something still missing are listed, and so are Works that hold something upgradable and were never requested (an installed library
     // item); one that has a request is continued through it (see UpgradeWantedSource), so an upgrade never opens a second request.
-    private const string RequestOf =
+    private const string RequestMatchesWork =
         """
-        SELECT 1 FROM "AcquisitionRequests" request
-        LEFT JOIN "WorkExternalIdentities" identity
-               ON identity."WorkId" = work."Id" AND identity."Provider" = request."Provider" AND identity."ExternalId" = request."ExternalId"
-        WHERE request."Kind" = ANY(@kinds)
-          AND (request."WorkId" = work."Id"::text
-               OR identity."WorkId" IS NOT NULL
+        (request."WorkId" = work."Id"::text
+               OR EXISTS (SELECT 1 FROM "WorkExternalIdentities" identity WHERE identity."WorkId" = work."Id" AND identity."Provider" = request."Provider" AND identity."ExternalId" = request."ExternalId")
                OR EXISTS (SELECT 1 FROM "MusicAlbums" album
                           WHERE album."WorkId" = work."Id" AND request."Provider" = @musicBrainz AND request."ExternalId" = album."MusicBrainzReleaseGroupId")
                OR EXISTS (SELECT 1 FROM "WorkSourceLinks" anime JOIN "AnimeMetadata" match ON match."AnimeId" = anime."SourceId"
                           WHERE anime."WorkId" = work."Id" AND anime."SourceKind" = 0 AND request."Provider" = match."Provider" AND request."ExternalId" = match."ExternalId"))
+        """;
+
+    private const string RequestOf =
+        $$"""
+        SELECT 1 FROM "AcquisitionRequests" request WHERE request."Kind" = ANY(@kinds) AND {{RequestMatchesWork}}
+        """;
+
+    // The open request of the Work under any of @kinds, so a Series and an Anime entry point never both request the same Work.
+    public const string OpenRequestOfWork =
+        $$"""
+        SELECT request."Id" AS "Value" FROM "Works" work
+        JOIN "AcquisitionRequests" request ON request."Kind" = ANY(@kinds) AND request."Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing')
+        WHERE work."Id" = @workId AND {{RequestMatchesWork}}
+        LIMIT 1
         """;
 
     public const string WorksWithoutOpenRequest =

@@ -15,6 +15,8 @@ public sealed record SetTargetMonitoringRequest(bool? Monitored);
 
 public sealed record MapReadingUnitRequest(Guid UnitId);
 
+public sealed record SetAnimeClassificationRequest(bool Anime);
+
 public sealed record SetRelationMonitoringRequest(string Label, IReadOnlyList<string>? Roles, bool Monitored, bool OnlyFuture);
 
 public sealed record WorkMonitoringResponse(Guid WorkId, bool Monitored, bool ReachedByRelation, IReadOnlyList<WorkMonitoringDecisionResponse> Decisions);
@@ -59,6 +61,20 @@ public static class MonitoringEndpoints
 
         group.MapPut("/works/{workId:guid}/audiobook", async (Guid workId, SetTargetMonitoringRequest request, MonitoringCommands commands, CancellationToken cancellationToken) =>
             await commands.SetAudiobookAsync(workId, request.Monitored, cancellationToken) is null ? Results.NotFound() : Results.NoContent());
+
+        // The owner's classification of a Movie or Series Work as Anime (or not); it survives provider refreshes and never changes the Work's identity or structure.
+        group.MapPut("/works/{workId:guid}/anime", async (Guid workId, SetAnimeClassificationRequest request, WorkService works, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await works.SetAnimeClassificationAsync(workId, request.Anime, MetadataFieldSources.Owner, null, isManualOverride: true, cancellationToken);
+                return Results.NoContent();
+            }
+            catch (InvalidOperationException)
+            {
+                return Results.NotFound();
+            }
+        });
 
         // The owner's mapping of a local light-novel volume or manga chapter to a canonical unit of the same Work; the Work is wanted again at once.
         group.MapPut("/works/{workId:guid}/reading-units/{localKind}/{localId}", async (Guid workId, WorkUnitLocalKind localKind, string localId, MapReadingUnitRequest request, ReadingUnits units, WantedReconciler wanted, CancellationToken cancellationToken) =>

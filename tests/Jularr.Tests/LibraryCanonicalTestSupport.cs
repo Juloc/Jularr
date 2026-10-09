@@ -102,7 +102,8 @@ internal sealed class LibraryCanonicalSeed(AppDbContext db)
     {
         var anime = new Anime { Key = Guid.NewGuid().ToString("N"), Title = title };
         db.Add(anime);
-        var work = await AddWorkAsync(WorkMediaType.Anime, title);
+        var work = await AddWorkAsync(WorkMediaType.Series, title);
+        work.IsAnime = true;
         db.Add(new WorkSourceLink { WorkId = work.Id, SourceKind = WorkSourceKind.Anime, SourceId = anime.Id });
 
         var seeded = new List<SeededEpisode>();

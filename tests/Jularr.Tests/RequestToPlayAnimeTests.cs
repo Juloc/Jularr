@@ -200,7 +200,7 @@ public sealed class RequestToPlayAnimeTests
 
         // One canonical Work, WorkEpisode, Asset and File: the same identity from request to import.
         var work = await environment.Db.Works.AsNoTracking().SingleAsync();
-        Assert.AreEqual(WorkMediaType.Anime, work.MediaType);
+        Assert.AreEqual((WorkMediaType.Series, true), (work.MediaType, work.IsAnime), "One canonical Series Work classified as Anime.");
         var workEpisode = await environment.Db.WorkEpisodes.AsNoTracking().SingleAsync(x => x.WorkId == work.Id && x.EpisodeNumber == 1);
         var asset = await environment.Db.MediaAssets.AsNoTracking().SingleAsync();
         Assert.AreEqual(work.Id, asset.WorkId);
