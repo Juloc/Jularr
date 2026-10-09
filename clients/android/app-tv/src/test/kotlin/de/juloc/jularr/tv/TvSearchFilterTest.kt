@@ -53,6 +53,16 @@ class TvSearchFilterTest {
     }
 
     @Test
+    fun selectedTypeFiltersSearchResults() {
+        val series = anime("series", "Frieren")
+        val movie = series.copy(id = "movie", title = "Frieren Movie", format = "MOVIE")
+        val all = listOf(series, movie)
+
+        assertEquals(listOf(movie), TvSearchFilter.matches(all, "frieren", TvContentFilter.MOVIES))
+        assertEquals(listOf(series), TvSearchFilter.matches(all, "frieren", TvContentFilter.SERIES))
+    }
+
+    @Test
     fun noMatchesReturnsEmptyList() {
         val library = listOf(anime("1", "Frieren"))
         assertEquals(emptyList<AnimeSummary>(), TvSearchFilter.matches(library, "nonexistent"))
