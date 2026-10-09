@@ -206,13 +206,24 @@ class TvAppController(
                 account = signedIn.account,
                 library = signedIn.library,
                 continueWatching = signedIn.continueWatching,
+                watchlist = emptyList(),
+                activity = emptyList(),
+                activityUsesContinueWatchingFallback = false,
+                anime = null,
+                episodePage = null,
+                episode = null,
+                storageDecision = null,
                 error = null,
             )
         }
 
     fun openProfileSelect(): TvAppSnapshot {
         snapshot = snapshot.copy(
-            navigation = TvNavigationState(TvRoute.ProfileSelect),
+            navigation = if (snapshot.account != null) {
+                TvNavigation.openProfileSelect(snapshot.navigation)
+            } else {
+                TvNavigationState(TvRoute.ProfileSelect)
+            },
             error = null,
         )
         return snapshot
@@ -235,15 +246,6 @@ class TvAppController(
                         emptyList()
                     },
                 )
-
-                TvRoute.Activity -> if (capabilities?.features?.playbackHistory == true) {
-                    copy(
-                        activity = flow.loadPlaybackHistory(),
-                        activityUsesContinueWatchingFallback = false,
-                    )
-                } else {
-                    copy(activityUsesContinueWatchingFallback = true)
-                }
 
                 TvRoute.Watchlist -> copy(
                     watchlist = if (capabilities?.features?.watchlist == true) {
