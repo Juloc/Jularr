@@ -146,6 +146,20 @@ data class WatchlistItem(
     val addedAtUtc: String?,
 )
 
+data class TvPlaybackPreferences(
+    val autoplayNext: Boolean,
+    val preferredAudioLanguage: String?,
+    val preferredSubtitleLanguage: String?,
+    val defaultPlaybackSpeed: Double,
+)
+
+data class TvPlaybackPreferencesUpdate(
+    val autoplayNext: Boolean? = null,
+    val preferredAudioLanguage: String? = null,
+    val preferredSubtitleLanguage: String? = null,
+    val defaultPlaybackSpeed: Double? = null,
+)
+
 data class AnimeDetail(
     val id: String,
     val title: String,
